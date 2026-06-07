@@ -128,7 +128,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}
