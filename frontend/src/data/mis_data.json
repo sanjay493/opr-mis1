@@ -237,7 +237,7 @@
   },
   {
     "page": 4,
-    "title": "w.r.t  APP",
+    "title": "Production Performance for November 2025 w.r.t APP",
     "subtitle": "Te",
     "type": "table",
     "headers": [
@@ -259,7 +259,7 @@
     ],
     "rows": [
       {
-        "label": "OVEN BSP",
+        "label": "Oven Pushing (Nos./day) BSP",
         "values": [
           "750",
           "745",
@@ -277,7 +277,7 @@
         ]
       },
       {
-        "label": "PUSHING DSP",
+        "label": "Oven Pushing (Nos./day) DSP",
         "values": [
           "315",
           "320",
@@ -295,7 +295,7 @@
         ]
       },
       {
-        "label": "(Nos./day) RSP",
+        "label": "Oven Pushing (Nos./day) RSP",
         "values": [
           "543",
           "548",
@@ -313,7 +313,7 @@
         ]
       },
       {
-        "label": "BSL",
+        "label": "Oven Pushing (Nos./day) BSL",
         "values": [
           "510",
           "510",
@@ -331,7 +331,7 @@
         ]
       },
       {
-        "label": "ISP",
+        "label": "Oven Pushing (Nos./day) ISP",
         "values": [
           "274",
           "274",
@@ -349,7 +349,7 @@
         ]
       },
       {
-        "label": "SAIL",
+        "label": "Oven Pushing (Nos./day) SAIL",
         "values": [
           "2391",
           "2397",
@@ -367,7 +367,7 @@
         ]
       },
       {
-        "label": "SINTER BSP",
+        "label": "Sinter BSP",
         "values": [
           "9200",
           "777",
@@ -385,7 +385,7 @@
         ]
       },
       {
-        "label": "DSP",
+        "label": "Sinter DSP",
         "values": [
           "3660",
           "320",
@@ -403,17 +403,12 @@
         ]
       },
       {
-        "label": "RSP",
+        "label": "Sinter RSP",
         "values": [
           "7200",
           "555",
           "526",
-          "-2"
-        ]
-      },
-      {
-        "label": "9",
-        "values": [
+          "-29",
           "95",
           "506",
           "4",
@@ -426,7 +421,7 @@
         ]
       },
       {
-        "label": "BSL",
+        "label": "Sinter BSL",
         "values": [
           "5740",
           "446",
@@ -444,7 +439,7 @@
         ]
       },
       {
-        "label": "ISP",
+        "label": "Sinter ISP",
         "values": [
           "4363",
           "376",
@@ -462,7 +457,7 @@
         ]
       },
       {
-        "label": "SAIL",
+        "label": "Sinter SAIL",
         "values": [
           "30163",
           "2474",
@@ -480,7 +475,7 @@
         ]
       },
       {
-        "label": "HOT BSP",
+        "label": "Hot Metal BSP",
         "values": [
           "6600",
           "542",
@@ -498,7 +493,7 @@
         ]
       },
       {
-        "label": "METAL DSP",
+        "label": "Hot Metal DSP",
         "values": [
           "2600",
           "230",
@@ -516,7 +511,7 @@
         ]
       },
       {
-        "label": "RSP",
+        "label": "Hot Metal RSP",
         "values": [
           "4730",
           "375",
@@ -534,7 +529,7 @@
         ]
       },
       {
-        "label": "BSL",
+        "label": "Hot Metal BSL",
         "values": [
           "5145",
           "360",
@@ -552,7 +547,7 @@
         ]
       },
       {
-        "label": "ISP",
+        "label": "Hot Metal ISP",
         "values": [
           "2950",
           "252",
@@ -570,37 +565,7 @@
         ]
       },
       {
-        "label": "Plants",
-        "values": [
-          "22025",
-          "1759",
-          "1681",
-          "-7"
-        ]
-      },
-      {
-        "label": "8",
-        "values": [
-          "96",
-          "1392",
-          "21",
-          "14432",
-          "13380",
-          "-1052",
-          "93",
-          "13213",
-          "1"
-        ]
-      },
-      {
-        "label": "VISL 0 0 0 0 #### 0 #DIV/0! 0 0 0 #####",
-        "values": [
-          "0",
-          "#DIV/0!"
-        ]
-      },
-      {
-        "label": "SAIL",
+        "label": "Hot Metal 5 Plants",
         "values": [
           "22025",
           "1759",
@@ -618,7 +583,43 @@
         ]
       },
       {
-        "label": "CRUDE BSP",
+        "label": "Hot Metal VISL",
+        "values": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "",
+          "0",
+          "#DIV/0!",
+          "0",
+          "0",
+          "0",
+          "",
+          "0",
+          "#DIV/0!"
+        ]
+      },
+      {
+        "label": "Hot Metal SAIL",
+        "values": [
+          "22025",
+          "1759",
+          "1681",
+          "-78",
+          "96",
+          "1392",
+          "21",
+          "14432",
+          "13380",
+          "-1052",
+          "93",
+          "13213",
+          "1"
+        ]
+      },
+      {
+        "label": "Crude Steel BSP",
         "values": [
           "6415",
           "527",
@@ -636,7 +637,7 @@
         ]
       },
       {
-        "label": "STEEL DSP",
+        "label": "Crude Steel DSP",
         "values": [
           "2400",
           "212",
@@ -654,7 +655,7 @@
         ]
       },
       {
-        "label": "RSP",
+        "label": "Crude Steel RSP",
         "values": [
           "4390",
           "350",
@@ -672,7 +673,7 @@
         ]
       },
       {
-        "label": "BSL",
+        "label": "Crude Steel BSL",
         "values": [
           "4885",
           "346",
@@ -690,7 +691,7 @@
         ]
       },
       {
-        "label": "ISP",
+        "label": "Crude Steel ISP",
         "values": [
           "2770",
           "237",
@@ -708,17 +709,12 @@
         ]
       },
       {
-        "label": "Plants",
+        "label": "Crude Steel 5 Plants",
         "values": [
           "20860",
           "1672",
           "1577",
-          "-9"
-        ]
-      },
-      {
-        "label": "5",
-        "values": [
+          "-95",
           "94",
           "1305",
           "21",
@@ -731,7 +727,7 @@
         ]
       },
       {
-        "label": "ASP",
+        "label": "Crude Steel ASP",
         "values": [
           "138",
           "11.447",
@@ -749,7 +745,7 @@
         ]
       },
       {
-        "label": "SSP",
+        "label": "Crude Steel SSP",
         "values": [
           "180",
           "15.000",
@@ -767,14 +763,25 @@
         ]
       },
       {
-        "label": "VISL 0 0.000 0.000 0 #### 0.000 #DIV/0! 0.000 0.000 0 #####",
+        "label": "Crude Steel VISL",
         "values": [
+          "0",
+          "0.000",
+          "0.000",
+          "0",
+          "",
+          "0.000",
+          "#DIV/0!",
+          "0.000",
+          "0.000",
+          "0",
+          "",
           "0.000",
           "#DIV/0!"
         ]
       },
       {
-        "label": "SAIL",
+        "label": "Crude Steel SAIL",
         "values": [
           "21178",
           "1699",
@@ -792,7 +799,7 @@
         ]
       },
       {
-        "label": "SALEABLE BSP",
+        "label": "Saleable Steel BSP",
         "values": [
           "5900",
           "465",
@@ -810,7 +817,7 @@
         ]
       },
       {
-        "label": "STEEL DSP",
+        "label": "Crude Steel DSP",
         "values": [
           "2289",
           "201",
@@ -828,7 +835,7 @@
         ]
       },
       {
-        "label": "RSP",
+        "label": "Crude Steel RSP",
         "values": [
           "4400",
           "354",
@@ -846,7 +853,7 @@
         ]
       },
       {
-        "label": "BSL",
+        "label": "Crude Steel BSL",
         "values": [
           "4745",
           "395",
@@ -864,7 +871,7 @@
         ]
       },
       {
-        "label": "ISP",
+        "label": "Crude Steel ISP",
         "values": [
           "2675",
           "229",
@@ -875,29 +882,19 @@
           "432",
           "1744",
           "1731",
-          "-1"
-        ]
-      },
-      {
-        "label": "3",
-        "values": [
+          "-13",
           "99",
           "1418",
           "22"
         ]
       },
       {
-        "label": "Plants",
+        "label": "Crude Steel 5 Plants",
         "values": [
           "20009",
           "1644",
           "1492",
-          "-1"
-        ]
-      },
-      {
-        "label": "52",
-        "values": [
+          "-152",
           "91",
           "1273",
           "17",
@@ -910,7 +907,7 @@
         ]
       },
       {
-        "label": "ASP",
+        "label": "Crude Steel ASP",
         "values": [
           "140",
           "11.716",
@@ -928,7 +925,7 @@
         ]
       },
       {
-        "label": "SSP",
+        "label": "Crude Steel SSP",
         "values": [
           "320",
           "26.700",
@@ -946,7 +943,7 @@
         ]
       },
       {
-        "label": "VISL",
+        "label": "Crude Steel VISL",
         "values": [
           "55",
           "4.510",
@@ -964,7 +961,7 @@
         ]
       },
       {
-        "label": "SAIL",
+        "label": "Crude Steel SAIL",
         "values": [
           "20523",
           "1687",
@@ -982,14 +979,25 @@
         ]
       },
       {
-        "label": "PIG BSP 0 0 0 0 #### 1 -76 0 13 13 #####",
+        "label": "Pig Iron BSP",
         "values": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "",
+          "1",
+          "-76",
+          "0",
+          "13",
+          "13",
+          "",
           "28",
           "-54"
         ]
       },
       {
-        "label": "IRON DSP",
+        "label": "Pig Iron DSP",
         "values": [
           "16",
           "2",
@@ -1007,7 +1015,7 @@
         ]
       },
       {
-        "label": "RSP",
+        "label": "Pig Iron RSP",
         "values": [
           "133",
           "8",
@@ -1025,7 +1033,7 @@
         ]
       },
       {
-        "label": "BSL",
+        "label": "Pig Iron BSL",
         "values": [
           "54",
           "0",
@@ -1043,7 +1051,7 @@
         ]
       },
       {
-        "label": "ISP",
+        "label": "Pig Iron ISP",
         "values": [
           "14",
           "1",
@@ -1051,52 +1059,17 @@
           "-1",
           "17",
           "2",
-          "-9"
-        ]
-      },
-      {
-        "label": "1",
-        "values": [
+          "-9",
+          "1",
           "11",
           "18",
           "7",
           "166",
-          "14",
-          "32"
+          "14"
         ]
       },
       {
-        "label": "Plants",
-        "values": [
-          "218",
-          "10",
-          "23",
-          "13",
-          "222",
-          "32",
-          "-2"
-        ]
-      },
-      {
-        "label": "8",
-        "values": [
-          "129",
-          "236",
-          "107",
-          "183",
-          "317",
-          "-26"
-        ]
-      },
-      {
-        "label": "VISL 0 0 0 0 #### 0 #DIV/0! 0 0 0 #####",
-        "values": [
-          "0",
-          "#DIV/0!"
-        ]
-      },
-      {
-        "label": "SAIL",
+        "label": "Pig Iron 5 Plants",
         "values": [
           "218",
           "10",
@@ -1114,7 +1087,43 @@
         ]
       },
       {
-        "label": "nished BSP",
+        "label": "Pig Iron VISL",
+        "values": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "",
+          "0",
+          "#DIV/0!",
+          "0",
+          "0",
+          "0",
+          "",
+          "0",
+          "#DIV/0!"
+        ]
+      },
+      {
+        "label": "Pig Iron SAIL",
+        "values": [
+          "218",
+          "10",
+          "23",
+          "13",
+          "222",
+          "32",
+          "-28",
+          "129",
+          "236",
+          "107",
+          "183",
+          "317",
+          "-26"
+        ]
+      },
+      {
+        "label": "Finished Steel BSP",
         "values": [
           "5410",
           "411",
@@ -1132,7 +1141,7 @@
         ]
       },
       {
-        "label": "eel DSP",
+        "label": "Finished Steel DSP",
         "values": [
           "1422",
           "130",
@@ -1150,17 +1159,12 @@
         ]
       },
       {
-        "label": "RSP",
+        "label": "Finished Steel RSP",
         "values": [
           "4400",
           "354",
           "305",
-          "-4"
-        ]
-      },
-      {
-        "label": "9",
-        "values": [
+          "-49",
           "86",
           "290",
           "5",
@@ -1173,7 +1177,7 @@
         ]
       },
       {
-        "label": "BSL",
+        "label": "Finished Steel BSL",
         "values": [
           "4345",
           "363",
@@ -1191,7 +1195,7 @@
         ]
       },
       {
-        "label": "ISP",
+        "label": "Finished Steel ISP",
         "values": [
           "2150",
           "184",
@@ -1209,17 +1213,12 @@
         ]
       },
       {
-        "label": "Plants",
+        "label": "Finished Steel 5 Plants",
         "values": [
           "17727",
           "1441",
           "1306",
-          "-1"
-        ]
-      },
-      {
-        "label": "35",
-        "values": [
+          "-135",
           "91",
           "1118",
           "17",
@@ -1232,7 +1231,7 @@
         ]
       },
       {
-        "label": "ASP",
+        "label": "Finished Steel ASP",
         "values": [
           "7",
           "0.615",
@@ -1250,7 +1249,7 @@
         ]
       },
       {
-        "label": "SSP",
+        "label": "Finished Steel SSP",
         "values": [
           "320",
           "26.700",
@@ -1268,7 +1267,7 @@
         ]
       },
       {
-        "label": "VISL",
+        "label": "Finished Steel VISL",
         "values": [
           "55",
           "4.510",
@@ -1286,7 +1285,7 @@
         ]
       },
       {
-        "label": "SAIL",
+        "label": "Finished Steel SAIL",
         "values": [
           "18109",
           "1473",
@@ -1297,12 +1296,7 @@
           "16",
           "11873",
           "10791",
-          "-1"
-        ]
-      },
-      {
-        "label": "082",
-        "values": [
+          "-1082",
           "91",
           "10003",
           "8"
