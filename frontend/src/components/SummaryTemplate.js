@@ -48,7 +48,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
               <th colSpan="3">{monthName} {yearStr}</th>
               <th colSpan="2">{shortMonth}’{shortPrevYear}</th>
               <th colSpan="3">April - {monthName} {yearStr} </th>
-              <th colSpan="2">April-{shortMonth}’{shortYear}</th>
+              <th colSpan="2">April-{shortMonth}’{shortPrevYear}</th>
             </tr>
             <tr>
               <th>APP</th>
