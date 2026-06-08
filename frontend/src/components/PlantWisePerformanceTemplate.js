@@ -1,64 +1,170 @@
+'use client';
 import React from 'react';
 
-export default function PlantWisePerformanceTemplate({ data, onCellChange }) {
-  const { headers = [], rows = [] } = data || {};
+const COL_W = {
+  plant:   '4%',
+  item:    '20%',
+  annual:  '8%',
+  mPlan:   '5.5%',
+  mAct:    '5.5%',
+  mPct:    '5%',
+  cplyAct: '6%',
+  mGr:     '6%',
+  ytdPlan: '6%',
+  ytdAct:  '6%',
+  ytdPct:  '5%',
+  ytdCply: '6%',
+  ytdGr:   '6%',
+};
 
-  const handleValueChange = (rowIndex, valIndex, newVal) => {
-    const updatedRows = [...rows];
-    updatedRows[rowIndex] = {
-      ...updatedRows[rowIndex],
-      values: [...updatedRows[rowIndex].values]
-    };
-    updatedRows[rowIndex].values[valIndex] = newVal;
-    onCellChange({ ...data, rows: updatedRows });
+const TH = { padding: '2px 3px', fontSize: '6.5pt', verticalAlign: 'middle', lineHeight: '1.2' };
+const TD = { padding: '1px 3px', fontSize: '6.5pt', lineHeight: '1.2', overflow: 'hidden' };
+const INPUT = {
+  width: '100%', minWidth: 0, padding: '0 1px',
+  background: 'transparent', border: 'none',
+  color: 'black', fontSize: 'inherit', textAlign: 'right',
+};
+
+const PLANT_BG = {
+  SAIL: '#dbeafe', BSP: '#fef9c3', DSP: '#dcfce7',
+  RSP: '#fce7f3', BSL: '#ede9fe', ISP: '#ffedd5',
+  ASP: '#f1f5f9', SSP: '#f1f5f9', VISP: '#f1f5f9',
+};
+
+export default function PlantWisePerformanceTemplate({ data, onCellChange, selectedMonth }) {
+  const { rows = [] } = data || {};
+
+  const [mName, yStr] = selectedMonth ? selectedMonth.split(' ') : ['November', '2025'];
+  const shortM = mName ? mName.substring(0, 3) : 'Nov';
+  const shortY = yStr  ? yStr.substring(2)      : '25';
+  const prevY  = yStr  ? (Number(yStr) - 1).toString().substring(2) : '24';
+
+  const monthsOrder = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December',
+  ];
+  const mIdx    = monthsOrder.indexOf(mName);
+  const fyStart = (mIdx >= 0 && mIdx < 3) ? Number(yStr) - 1 : Number(yStr);
+  const fyEnd   = (fyStart + 1) % 100;
+  const fyStr   = `${fyStart}-${fyEnd.toString().padStart(2, '0')}`;
+
+  const handleValChange = (rowIdx, valIdx, val) => {
+    const updated = rows.map((r, i) =>
+      i === rowIdx ? { ...r, values: r.values.map((v, vi) => (vi === valIdx ? val : v)) } : r
+    );
+    onCellChange({ ...data, rows: updated });
   };
 
-  const handleLabelChange = (rowIndex, newLabel) => {
-    const updatedRows = [...rows];
-    updatedRows[rowIndex] = {
-      ...updatedRows[rowIndex],
-      label: newLabel
-    };
-    onCellChange({ ...data, rows: updatedRows });
+  const handleLabelChange = (rowIdx, val) => {
+    const updated = rows.map((r, i) => (i === rowIdx ? { ...r, label: val } : r));
+    onCellChange({ ...data, rows: updated });
   };
+
+  // Group consecutive rows by plant for rowspan
+  const grouped = [];
+  let i = 0;
+  while (i < rows.length) {
+    const plant = rows[i].plant;
+    let size = 1;
+    while (i + size < rows.length && rows[i + size].plant === plant) size++;
+    for (let g = 0; g < size; g++) {
+      grouped.push({ row: rows[i + g], rIdx: i + g, isFirst: g === 0, size });
+    }
+    i += size;
+  }
 
   return (
-    <div className="report-table-wrapper">
-      <table className="report-table">
+    <div className="report-table-wrapper" style={{ marginTop: '4px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2px' }}>
+        <h2 style={{ fontSize: '10pt', fontWeight: '850', color: '#060177', margin: 0, textTransform: 'uppercase' }}>
+          PLANT-WISE PRODUCTION PERFORMANCE :{shortM}'{shortY} and Apr-{shortM}'{shortY}
+        </h2>
+        <span style={{ fontSize: '7pt', fontWeight: '600', color: '#475569' }}>Unit:000 T</span>
+      </div>
+
+      <table className="report-table" style={{ tableLayout: 'fixed', width: '100%', fontSize: '6.5pt' }}>
+        <colgroup>
+          <col style={{ width: COL_W.plant }} />
+          <col style={{ width: COL_W.item }} />
+          <col style={{ width: COL_W.annual }} />
+          <col style={{ width: COL_W.mPlan }} />
+          <col style={{ width: COL_W.mAct }} />
+          <col style={{ width: COL_W.mPct }} />
+          <col style={{ width: COL_W.cplyAct }} />
+          <col style={{ width: COL_W.mGr }} />
+          <col style={{ width: COL_W.ytdPlan }} />
+          <col style={{ width: COL_W.ytdAct }} />
+          <col style={{ width: COL_W.ytdPct }} />
+          <col style={{ width: COL_W.ytdCply }} />
+          <col style={{ width: COL_W.ytdGr }} />
+        </colgroup>
+
         <thead>
           <tr>
-            {headers.map((h, idx) => (
-              <th key={idx}>{h}</th>
+            <th rowSpan="2" style={TH}></th>
+            <th rowSpan="2" style={{ ...TH, textAlign: 'left', paddingLeft: '4px' }}></th>
+            <th rowSpan="2" style={TH}>{fyStr}<br />Plan</th>
+            <th colSpan="3" style={TH}>{shortM}'{shortY}</th>
+            <th rowSpan="2" style={TH}>{shortM}'{prevY}<br />Act</th>
+            <th rowSpan="2" style={TH}>%Gr.<br />{shortM}'{prevY}</th>
+            <th colSpan="3" style={TH}>Apr-{shortM}'{shortY}</th>
+            <th rowSpan="2" style={TH}>Apr-{shortM}'{prevY}<br />Act</th>
+            <th rowSpan="2" style={TH}>%Gr.<br />Apr-{shortM}'{prevY}</th>
+          </tr>
+          <tr>
+            {['Plan', 'Actual', '%Ful', 'Plan', 'Actual', '%Ful'].map((h, idx) => (
+              <th key={idx} style={TH}>{h}</th>
             ))}
           </tr>
         </thead>
+
         <tbody>
-          {rows.map((row, rIdx) => (
-            <tr key={rIdx}>
-              {/* Plant / Items Column */}
-              <td className="label-cell" style={{ minWidth: '150px' }}>
-                <input
-                  type="text"
-                  className="editor-input"
-                  style={{ color: 'black', fontWeight: '500', width: '100%', fontFamily: 'inherit' }}
-                  value={row.label}
-                  onChange={(e) => handleLabelChange(rIdx, e.target.value)}
-                />
-              </td>
-              {/* 11 Value Columns */}
-              {row.values.map((val, vIdx) => (
-                <td key={vIdx}>
+          {grouped.map(({ row, rIdx, isFirst, size }) => {
+            const plantBg = PLANT_BG[row.plant] || '#f8fafc';
+            return (
+              <tr
+                key={rIdx}
+                style={row.bold ? { fontWeight: '700', backgroundColor: '#f0f4f8' } : {}}
+              >
+                {isFirst && (
+                  <td
+                    rowSpan={size}
+                    style={{
+                      ...TD,
+                      fontWeight: '800',
+                      fontSize: '6pt',
+                      textAlign: 'center',
+                      verticalAlign: 'middle',
+                      backgroundColor: plantBg,
+                      borderRight: '1px solid #94a3b8',
+                    }}
+                  >
+                    {row.plant}
+                  </td>
+                )}
+                <td style={{ ...TD, textAlign: 'left', paddingLeft: '4px', fontWeight: row.bold ? '700' : '400' }}>
                   <input
                     type="text"
                     className="editor-input"
-                    style={{ color: 'black', textAlign: 'right' }}
-                    value={val}
-                    onChange={(e) => handleValueChange(rIdx, vIdx, e.target.value)}
+                    style={{ ...INPUT, textAlign: 'left', fontWeight: 'inherit' }}
+                    value={row.label || ''}
+                    onChange={(e) => handleLabelChange(rIdx, e.target.value)}
                   />
                 </td>
-              ))}
-            </tr>
-          ))}
+                {(row.values || []).map((val, vIdx) => (
+                  <td key={vIdx} style={{ ...TD, textAlign: 'right' }}>
+                    <input
+                      type="text"
+                      className="editor-input"
+                      style={INPUT}
+                      value={val}
+                      onChange={(e) => handleValChange(rIdx, vIdx, e.target.value)}
+                    />
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -155,7 +155,67 @@ export default function LandingPage() {
             </div>
           </Link>
 
-          {/* Card 2: Report Editor */}
+          {/* Card 2: Manual Data Entry */}
+          <Link href="/data-entry" style={{ textDecoration: 'none' }}>
+            <div style={{
+              height: '100%',
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: '12px',
+              padding: '30px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+            }}
+            className="portal-card"
+            >
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#6366f1'
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <path d="M3 9h18M9 21V9"/>
+                </svg>
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: '14pt', fontWeight: '800', color: '#f1f5f9', margin: '0 0 8px 0' }}>
+                  Manual Data Entry
+                </h3>
+                <p style={{ fontSize: '9.5pt', color: '#94a3b8', lineHeight: '1.5', margin: 0 }}>
+                  Directly enter or correct actual production values per plant and month. Items are pre-loaded from ABP plan targets for easy comparison.
+                </p>
+              </div>
+
+              <div style={{
+                marginTop: 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '9.5pt',
+                color: '#6366f1',
+                fontWeight: '600'
+              }}>
+                Open Entry Form
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </div>
+            </div>
+          </Link>
+
+          {/* Card 3: Report Editor */}
           <Link href="/report" style={{ textDecoration: 'none' }}>
             <div style={{
               height: '100%',
