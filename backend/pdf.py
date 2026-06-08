@@ -10,85 +10,52 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <title>SAIL MIS Report - {{ month }}</title>
     <style>
+        * { box-sizing: border-box; }
+
         body {
             font-family: Arial, Helvetica, sans-serif;
             color: #0f172a;
             margin: 0;
             padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         @page {
             size: A4 portrait;
-            margin: 20mm 15mm 20mm 15mm;
-            @top-center {
-                content: "Steel Authority of India Limited - Operations Monthly Informatics";
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 7.5pt;
-                font-weight: 500;
-                color: #64748b;
-                border-bottom: 0.5px solid #e2e8f0;
-                padding-bottom: 5px;
-            }
-            @bottom-left {
-                content: "Prepared by: MIS Group";
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 7.5pt;
-                color: #64748b;
-            }
-            @bottom-right {
-                content: "Page " counter(page) " of " counter(pages);
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 7.5pt;
-                color: #64748b;
-            }
-        }
-
-        @page landscape_layout {
-            size: A4 landscape;
-            margin: 15mm 20mm 15mm 20mm;
-            @top-center {
-                content: "Steel Authority of India Limited - Operations Monthly Informatics";
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 7.5pt;
-                font-weight: 500;
-                color: #64748b;
-                border-bottom: 0.5px solid #e2e8f0;
-                padding-bottom: 5px;
-            }
-            @bottom-left {
-                content: "Prepared by: MIS Group";
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 7.5pt;
-                color: #64748b;
-            }
-            @bottom-right {
-                content: "Page " counter(page) " of " counter(pages);
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 7.5pt;
-                color: #64748b;
-            }
-        }
-
-        .page-landscape {
-            page: landscape_layout;
-            width: 297mm;
-            height: 210mm;
-        }
-
-        @page:first {
-            margin: 0;
-            @top-center { content: none; }
-            @bottom-left { content: none; }
-            @bottom-right { content: none; }
+            margin: 15mm 15mm 15mm 15mm;
         }
 
         .page {
             page-break-after: always;
+            break-after: page;
             page-break-inside: avoid;
-            box-sizing: border-box;
+            padding: 5mm 0 3mm 0;
+        }
+
+        .page:last-child {
+            page-break-after: auto;
+        }
+
+        /* Running header/footer for non-cover pages */
+        .page-header-bar {
+            text-align: center;
+            font-size: 7.5pt;
+            font-weight: 500;
+            color: #64748b;
+            border-bottom: 0.5px solid #e2e8f0;
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+        }
+
+        .page-footer-bar {
             display: flex;
-            flex-direction: column;
-            height: 100%;
+            justify-content: space-between;
+            font-size: 7.5pt;
+            color: #64748b;
+            border-top: 0.5px solid #e2e8f0;
+            padding-top: 4px;
+            margin-top: 8px;
         }
 
         .cover-container {
@@ -96,7 +63,7 @@ HTML_TEMPLATE = """
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100%;
+            min-height: 250mm;
             text-align: center;
             padding: 40mm 20mm;
         }
@@ -161,7 +128,7 @@ HTML_TEMPLATE = """
         .report-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 7.5pt;
+            font-size: 11pt;
             margin-top: 10px;
         }
 
@@ -170,7 +137,7 @@ HTML_TEMPLATE = """
             color: #0f172a;
             font-weight: 700;
             text-transform: uppercase;
-            font-size: 6.5pt;
+            font-size: 9.5pt;
             padding: 5px 4px;
             border: 1px solid #94a3b8;
             text-align: center;
@@ -180,25 +147,25 @@ HTML_TEMPLATE = """
             padding: 4px 4px;
             border: 1px solid #cbd5e1;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 7.0pt;
+            font-size: 11pt;
             text-align: right;
         }
 
         .report-table td.label-cell {
             text-align: left;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 7.5pt;
+            font-size: 11pt;
             font-weight: 500;
         }
 
         .index-table th {
-            font-size: 10pt !important;
-            padding: 6px 10px !important;
+            font-size: 12pt !important;
+            padding: 9px 10px !important;
         }
 
         .index-table td {
-            font-size: 10pt !important;
-            padding: 5px 10px !important;
+            font-size: 12pt !important;
+            padding: 9px 10px !important;
             font-family: 'Inter', sans-serif !important;
             text-align: left !important;
         }
@@ -251,8 +218,9 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
+    {% set total_pages = pages|length %}
     {% for page in pages %}
-    <div class="page {% if page.orientation == 'landscape' %}page-landscape{% endif %}">
+    <div class="page">
 
         {% if page.type == 'cover' %}
             <div class="cover-container">
@@ -271,7 +239,12 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-        {% elif page.type == 'index' %}
+        {% else %}
+        <div class="page-header-bar">
+            Steel Authority of India Limited - Operations Monthly Informatics
+        </div>
+
+        {% if page.type == 'index' %}
             <div class="report-title-section"><h2>{{ page.title }}</h2></div>
             <table class="report-table index-table" style="margin-top: 15px; width: 100%;">
                 <thead>
@@ -522,6 +495,12 @@ HTML_TEMPLATE = """
             </table>
         {% endif %}
 
+        <div class="page-footer-bar">
+            <span>Prepared by: MIS Group</span>
+            <span>Page {{ loop.index }} of {{ total_pages }}</span>
+        </div>
+
+        {% endif %}{# end non-cover #}
     </div>
     {% endfor %}
 </body>
@@ -598,11 +577,33 @@ def _group_page4_rows(rows: list) -> list:
     return grouped
 
 
-async def build_pdf_response(request: PDFRequest) -> StreamingResponse:
-    try:
-        from weasyprint import HTML
-        from jinja2 import Template
+def _render_pdf_sync(html: str) -> bytes:
+    """Run Playwright synchronously (called from a thread to avoid event-loop conflicts)."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page()
+        page.set_content(html, wait_until="domcontentloaded")
+        pdf_bytes = page.pdf(
+            format="A4",
+            print_background=True,
+            margin={
+                "top": "15mm",
+                "right": "15mm",
+                "bottom": "15mm",
+                "left": "15mm",
+            },
+        )
+        browser.close()
+    return pdf_bytes
 
+
+async def build_pdf_response(request: PDFRequest) -> StreamingResponse:
+    import asyncio
+    import traceback as tb
+    from jinja2 import Template
+
+    try:
         vars = _resolve_month_vars(request.month)
 
         pages_to_render = []
@@ -620,19 +621,22 @@ async def build_pdf_response(request: PDFRequest) -> StreamingResponse:
             **vars,
         )
 
-        pdf_io = io.BytesIO()
-        HTML(string=rendered_html).write_pdf(pdf_io)
-        pdf_io.seek(0)
+        # Run sync Playwright in a thread so it doesn't fight the asyncio event loop
+        loop = asyncio.get_event_loop()
+        pdf_bytes = await loop.run_in_executor(None, _render_pdf_sync, rendered_html)
 
         return StreamingResponse(
-            pdf_io,
+            io.BytesIO(pdf_bytes),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename=SAIL_MIS_Report_{request.month.replace(' ', '_')}.pdf",
+                "Content-Disposition": (
+                    f"attachment; filename=SAIL_MIS_Report_"
+                    f"{request.month.replace(' ', '_')}.pdf"
+                ),
                 "X-Content-Type-Options": "nosniff",
             },
         )
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"PDF Compilation failed: {str(e)}")
+        detail = f"PDF Compilation failed: {type(e).__name__}: {e}\n{tb.format_exc()}"
+        print(detail)
+        raise HTTPException(status_code=500, detail=detail)

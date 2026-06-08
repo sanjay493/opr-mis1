@@ -247,11 +247,10 @@ select.form-control {
   background-color: white;
   color: black;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
-  padding: 20mm 15mm 20mm 15mm;
+  padding: 20mm 15mm 5mm 15mm;
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   overflow: hidden;
   box-sizing: border-box;
   margin-bottom: 40px;
@@ -260,7 +259,7 @@ select.form-control {
 .a4-page.landscape {
   width: 297mm;
   height: 210mm;
-  padding: 15mm 20mm 15mm 20mm;
+  padding: 15mm 20mm 5mm 20mm;
 }
 
 
@@ -291,26 +290,19 @@ select.form-control {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 10px;
 }
 
 .report-footer {
-  position: absolute;
-  bottom: 10mm;
-  left: 15mm;
-  right: 15mm;
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-sans);
   font-size: 7.5pt;
   color: #64748b;
-}
-
-.a4-page.landscape .report-footer {
-  bottom: 7mm;
-  left: 20mm;
-  right: 20mm;
+  border-top: 0.5px solid #e2e8f0;
+  padding-top: 4px;
+  margin-top: 6px;
 }
 
 .report-title-section {
@@ -343,7 +335,7 @@ select.form-control {
 .report-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 8pt;
+  font-size: 9pt;
   line-height: 1.2;
 }
 
@@ -352,7 +344,7 @@ select.form-control {
   color: #0f172a;
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 7pt;
+  font-size: 9.5pt;
   padding: 6px 4px;
   border: 1px solid #94a3b8;
   text-align: center;
@@ -362,14 +354,14 @@ select.form-control {
   padding: 5px 4px;
   border: 1px solid #cbd5e1;
   font-family: var(--font-mono);
-  font-size: 7.5pt;
+  font-size: 11pt;
   text-align: right;
 }
 
 .report-table td.label-cell {
   text-align: left;
   font-family: var(--font-sans);
-  font-size: 8pt;
+  font-size: 11pt;
   font-weight: 500;
 }
 
@@ -384,7 +376,7 @@ select.form-control {
   padding: 12px;
   border-radius: 4px;
   margin: 15px 0;
-  font-size: 8.5pt;
+  font-size: 10pt;
 }
 
 .highlights-box h4 {
@@ -392,7 +384,7 @@ select.form-control {
   text-transform: uppercase;
   color: #0f172a;
   margin-bottom: 6px;
-  font-size: 9pt;
+  font-size: 11pt;
 }
 
 .highlights-box ul {

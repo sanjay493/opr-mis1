@@ -19,22 +19,22 @@ function IndexTemplate({ data, onCellChange }) {
   };
 
   return (
-    <div className="report-table-wrapper" style={{ marginTop: '15px' }}>
-      <h3 style={{ fontSize: '12pt', fontWeight: '700', textTransform: 'uppercase', marginBottom: '12px', color: '#0f172a', textAlign: 'center' }}>
+    <div className="report-table-wrapper" style={{ marginTop: '8px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <h3 style={{ fontSize: '12pt', fontWeight: '700', textTransform: 'uppercase', marginBottom: '10px', color: '#0f172a', textAlign: 'center', flexShrink: 0 }}>
         Table of Contents
       </h3>
-      <table className="report-table" style={{ fontSize: '12pt', width: '100%', lineHeight: '13pt' }}>
+      <table className="report-table" style={{ fontSize: '12pt', width: '100%', lineHeight: '13pt', height: '100%', tableLayout: 'fixed' }}>
         <thead>
           <tr>
-            <th style={{ width: '10%', textAlign: 'center', padding: '6px 10px' }}>S.No.</th>
-            <th style={{ width: '75%', textAlign: 'left', paddingLeft: '15px', padding: '6px 10px' }}>Contents</th>
-            <th style={{ width: '15%', textAlign: 'center', padding: '6px 10px' }}>Page</th>
+            <th style={{ width: '10%', textAlign: 'center', padding: '9px 10px' }}>S.No.</th>
+            <th style={{ width: '75%', textAlign: 'left', padding: '9px 14px' }}>Contents</th>
+            <th style={{ width: '15%', textAlign: 'center', padding: '9px 10px' }}>Page</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, idx) => (
-            <tr key={idx}>
-              <td style={{ textAlign: 'center', fontFamily: 'inherit', padding: '5px 8px' }}>
+            <tr key={idx} style={{ height: `${Math.floor(100 / (rows.length || 1))}%` }}>
+              <td style={{ textAlign: 'center', fontFamily: 'inherit', padding: '9px 10px', verticalAlign: 'middle' }}>
                 <input
                   type="text"
                   className="editor-input"
@@ -43,7 +43,7 @@ function IndexTemplate({ data, onCellChange }) {
                   onChange={(e) => handleRowChange(idx, 'sno', e.target.value)}
                 />
               </td>
-              <td style={{ textAlign: 'left', fontFamily: 'inherit', padding: '5px 8px', paddingLeft: '15px', fontWeight: row.sno ? '600' : '400', wordWrap: 'break-word', whiteSpace: 'normal' }}>
+              <td style={{ textAlign: 'left', fontFamily: 'inherit', padding: '9px 14px', fontWeight: row.sno ? '600' : '400', wordWrap: 'break-word', whiteSpace: 'normal', verticalAlign: 'middle' }}>
                 <textarea
                   className="editor-input"
                   style={{
@@ -64,7 +64,7 @@ function IndexTemplate({ data, onCellChange }) {
                   onChange={(e) => handleRowChange(idx, 'title', e.target.value)}
                 />
               </td>
-              <td style={{ textAlign: 'center', fontFamily: 'inherit', padding: '5px 8px' }}>
+              <td style={{ textAlign: 'center', fontFamily: 'inherit', padding: '9px 10px', verticalAlign: 'middle' }}>
                 <input
                   type="text"
                   className="editor-input"
@@ -128,7 +128,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}

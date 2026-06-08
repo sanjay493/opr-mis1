@@ -38,7 +38,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
 
       {/* Production Summary Table */}
       <div>
-        <h3 style={{ fontSize: '9pt', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '6px', color: '#0f172a' }}>
+        <h3 style={{ fontSize: '12pt', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '6px', color: '#0f172a' }}>
           Production Performance Summary (Unit: '000 T)
         </h3>
         <table className="report-table">
@@ -98,7 +98,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
 
       {/* Techno-Economic parameters Table */}
       <div>
-        <h3 style={{ fontSize: '9pt', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '6px', color: '#0f172a' }}>
+        <h3 style={{ fontSize: '12pt', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '6px', color: '#0f172a' }}>
           Major Techno-Economic Parameters
         </h3>
         <table className="report-table">

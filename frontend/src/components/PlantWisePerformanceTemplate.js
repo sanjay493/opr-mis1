@@ -31,6 +31,8 @@ const PLANT_BG = {
   ASP: '#f1f5f9', SSP: '#f1f5f9', VISP: '#f1f5f9',
 };
 
+const BOLD_PLANTS = new Set(['SAIL', 'BSP', 'DSP', 'RSP', 'BSL', 'ISP']);
+
 export default function PlantWisePerformanceTemplate({ data, onCellChange, selectedMonth }) {
   const { rows = [] } = data || {};
 
@@ -82,7 +84,7 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
         <span style={{ fontSize: '7pt', fontWeight: '600', color: '#475569' }}>Unit:000 T</span>
       </div>
 
-      <table className="report-table" style={{ tableLayout: 'fixed', width: '100%', fontSize: '6.5pt' }}>
+      <table className="report-table" style={{ tableLayout: 'fixed', width: '100%', fontSize: '11.5pt' }}>
         <colgroup>
           <col style={{ width: COL_W.plant }} />
           <col style={{ width: COL_W.item }} />
@@ -121,10 +123,14 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
         <tbody>
           {grouped.map(({ row, rIdx, isFirst, size }) => {
             const plantBg = PLANT_BG[row.plant] || '#f8fafc';
+            const isHighlight = BOLD_PLANTS.has(row.plant);
             return (
               <tr
                 key={rIdx}
-                style={row.bold ? { fontWeight: '700', backgroundColor: '#f0f4f8' } : {}}
+                style={{
+                  fontWeight: isHighlight || row.bold ? '700' : '400',
+                  backgroundColor: isHighlight ? plantBg : (row.bold ? '#f0f4f8' : 'transparent'),
+                }}
               >
                 {isFirst && (
                   <td
@@ -142,7 +148,7 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
                     {row.plant}
                   </td>
                 )}
-                <td style={{ ...TD, textAlign: 'left', paddingLeft: '4px', fontWeight: row.bold ? '700' : '400' }}>
+                <td style={{ ...TD, textAlign: 'left', paddingLeft: '4px', fontWeight: 'inherit' }}>
                   <input
                     type="text"
                     className="editor-input"
