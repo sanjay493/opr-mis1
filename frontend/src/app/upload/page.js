@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
 const months = [
@@ -26,7 +26,7 @@ const defaultFY = () => {
   return `${startYear}-${endYear.toString().padStart(2, '0')}`;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const getDefaultDate = () => {
   const d = new Date();
@@ -52,6 +52,19 @@ export default function UploadPage() {
   const [logs, setLogs] = useState([
     { type: 'info', text: 'System ready. Select a spreadsheet and click "Extract Data".' }
   ]);
+  const [extractionLog, setExtractionLog] = useState([]);
+
+  const fetchExtractionLog = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/extraction-log?limit=30`);
+      if (res.ok) {
+        const data = await res.json();
+        setExtractionLog(data.logs || []);
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => { fetchExtractionLog(); }, [fetchExtractionLog]);
 
   const addLog = (type, text) => {
     setLogs((prev) => [...prev, { type, text, time: new Date().toLocaleTimeString() }]);
@@ -87,7 +100,8 @@ export default function UploadPage() {
       if (response.ok) {
         addLog('success', `Excel file uploaded successfully!`);
         addLog('success', `Extractor Status: ${result.message}`);
-        addLog('success', `Database tables production_table and techno_table successfully updated.`);
+        addLog('success', `Database table production_table updated. Extraction logged.`);
+        fetchExtractionLog();
         alert(result.message || "Excel sheet parsed and extracted successfully!");
       } else {
         const errMsg = result.detail || "Database write failure.";
@@ -199,14 +213,14 @@ export default function UploadPage() {
                 value={uploadPlantName}
                 onChange={(e) => setUploadPlantName(e.target.value)}
               >
-                <option value="RSP">RSP (Steel Plant)</option>
+                <option value="RSP">RSP</option>
                 <option value="BSP">BSP</option>
-                <option value="DSP">DSP</option>
-                <option value="BSL">BSL</option>
                 <option value="ISP">ISP</option>
-                <option value="ASP">ASP</option>
-                <option value="SSP">SSP</option>
-                <option value="VISL">VISL</option>
+                <option value="BSL">BSL</option>
+                <option value="DSP">DSP</option>
+                <option value="ASP">ASP (not yet supported)</option>
+                <option value="SSP">SSP (not yet supported)</option>
+                <option value="VISL">VISL (not yet supported)</option>
               </select>
             </div>
 
@@ -237,15 +251,29 @@ export default function UploadPage() {
             </div>
 
             <div className="form-group" style={{ marginBottom: '15px' }}>
-              <label>Excel File (.xlsx)</label>
+              <label>
+                Excel File&nbsp;
+                {(uploadPlantName === 'BSP' || uploadPlantName === 'DSP') ? '(.xls — tab-separated)' : '(.xlsx)'}
+              </label>
               <input
                 id="excel-file-input"
                 type="file"
                 className="form-control"
-                accept=".xlsx"
+                accept={(uploadPlantName === 'BSP' || uploadPlantName === 'DSP') ? '.xls' : '.xlsx'}
                 style={{ padding: '4px', fontSize: '0.8rem' }}
                 onChange={(e) => setUploadFile(e.target.files[0])}
               />
+              {(uploadPlantName === 'BSP' || uploadPlantName === 'BSL' || uploadPlantName === 'DSP' || uploadPlantName === 'ISP') && (
+                <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
+                  {uploadPlantName === 'BSP'
+                    ? 'Month auto-detected from cell N1 (sheet S1). Month selector ignored.'
+                    : uploadPlantName === 'BSL'
+                    ? 'Month auto-detected from cell O1 (sheet DPR). Month selector ignored.'
+                    : uploadPlantName === 'DSP'
+                    ? 'Month auto-detected from date in MCR-I header row. Month selector ignored.'
+                    : 'Morning Report (DAILYREPORT1): month auto-detected from K5. Final Monthly (Maj Production Summ): set month above.'}
+                </div>
+              )}
             </div>
 
             <button
@@ -285,6 +313,7 @@ export default function UploadPage() {
                 <option value="ISP">ISP (Steel Plant)</option>
                 <option value="BSP">BSP (Steel Plant)</option>
                 <option value="DSP">DSP (Steel Plant)</option>
+                <option value="BSL">BSL (Steel Plant)</option>
               </select>
             </div>
 
@@ -361,19 +390,24 @@ export default function UploadPage() {
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
               <div>
-                <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#10b981', margin: '0 0 6px 0' }}>RSP & ISP Actuals Ingestion (Monthly)</h4>
+                <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#10b981', margin: '0 0 6px 0' }}>RSP, ISP, BSP, BSL & DSP Actuals Ingestion</h4>
                 <ul style={{ fontSize: '8.5pt', color: '#cbd5e1', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
-                  <li>Spreadsheet files must be in <strong>.xlsx</strong> format.</li>
-                  <li>RSP requires sheets <strong>page-9</strong> and <strong>page 1-8</strong>.</li>
-                  <li>ISP requires sheet <strong>Maj Production Summ</strong>.</li>
-                  <li>Converts Tonnes to '000 T where required.</li>
+                  <li><strong>RSP — Final Monthly (.xlsx):</strong> Sheets <strong>page-9</strong> + <strong>page 1-8</strong>. Set month manually.</li>
+                  <li><strong>RSP — Morning Report (.xlsx):</strong> Sheet starts with <strong>"RSP Morning Report Data for-"</strong>. Month from <strong>A2</strong>. Auto-detected.</li>
+                  <li><strong>ISP — Final Monthly (.xlsx):</strong> Sheet <strong>Maj Production Summ</strong>. Set month manually.</li>
+                  <li><strong>ISP — Morning Report (.xlsx):</strong> Sheet <strong>DAILYREPORT1</strong>. Month from <strong>K5</strong>. Auto-detected. 19 items extracted.</li>
+                  <li><strong>BSP — PPC MIS (.xls):</strong> Sheet <strong>S1</strong>. Month from <strong>N1</strong>. Auto-detected.</li>
+                  <li><strong>BSL — DPR Mail (.xlsx):</strong> Sheet <strong>DPR</strong>. Month from <strong>O1</strong>. Auto-detected.</li>
+                  <li><strong>DSP — MCR-I (.xls):</strong> Tab-separated text file (<em>mcr1_*.xls</em>). Month from header row. Auto-detected. 21 items extracted.</li>
+                  <li>All tonnage values converted Tonnes → '000 T automatically. Every upload is logged below.</li>
                 </ul>
               </div>
               <div>
-                <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#3b82f6', margin: '0 0 6px 0' }}>RSP, ISP, BSP & DSP ABP Targets Ingestion (Annual)</h4>
+                <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#3b82f6', margin: '0 0 6px 0' }}>RSP, ISP, BSP, DSP & BSL ABP Targets Ingestion (Annual)</h4>
                 <ul style={{ fontSize: '8.5pt', color: '#cbd5e1', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
                   <li>Spreadsheet files must be in <strong>.xlsx</strong> format.</li>
-                  <li>RSP requires sheet <strong>sheet1</strong>; ISP requires <strong>SUMM PROD</strong>; BSP requires <strong>Table 1</strong>; DSP requires <strong>Monthwise</strong>.</li>
+                  <li><strong>RSP</strong> — sheet <strong>sheet1</strong>; <strong>ISP</strong> — sheet <strong>SUMM PROD</strong>; <strong>BSP</strong> — sheet <strong>Table 1</strong>; <strong>DSP</strong> — sheet <strong>Monthwise</strong>.</li>
+                  <li><strong>BSL</strong> — sheet <strong>Monthwise</strong> or <strong>Sheet1</strong>. Confirm row mapping before upload (see <code>excel_extractor_bsl_plan.py</code>).</li>
                   <li>Extracts and populates targets for all 12 months in a single upload.</li>
                   <li>Preserves the plan sheet scale.</li>
                 </ul>
@@ -428,6 +462,61 @@ export default function UploadPage() {
               </div>
             )}
           </div>
+
+          {/* Extraction Audit Log */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <h2 style={{ fontSize: '12pt', fontWeight: '700', color: '#f1f5f9', margin: 0 }}>
+                Extraction Audit Log
+              </h2>
+              <button
+                onClick={fetchExtractionLog}
+                style={{ background: 'none', border: '1px solid #334155', borderRadius: '4px', color: '#94a3b8', fontSize: '8pt', padding: '4px 10px', cursor: 'pointer' }}
+              >
+                Refresh
+              </button>
+            </div>
+
+            {extractionLog.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#475569', fontSize: '9pt', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '6px' }}>
+                No extractions recorded yet.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: '6px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#1e293b' }}>
+                      {['Timestamp', 'Plant', 'Month', 'Source Type', 'File Name', 'Sheet', 'Items'].map(h => (
+                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#94a3b8', fontWeight: '600', borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {extractionLog.map((entry, idx) => (
+                      <tr key={entry.id} style={{ backgroundColor: idx % 2 === 0 ? '#0f172a' : '#1e293b', borderBottom: '1px solid #1e293b' }}>
+                        <td style={{ padding: '7px 12px', color: '#64748b', whiteSpace: 'nowrap' }}>{entry.logged_at}</td>
+                        <td style={{ padding: '7px 12px', color: '#38bdf8', fontWeight: '600' }}>{entry.plant_name}</td>
+                        <td style={{ padding: '7px 12px', color: '#f1f5f9', whiteSpace: 'nowrap' }}>{entry.report_month}</td>
+                        <td style={{ padding: '7px 12px' }}>
+                          <span style={{
+                            padding: '2px 7px', borderRadius: '4px', fontSize: '7.5pt', fontWeight: '600',
+                            backgroundColor: entry.source_type?.includes('Monthly') ? 'rgba(16,185,129,0.15)' : entry.source_type?.includes('Morning') ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.15)',
+                            color: entry.source_type?.includes('Monthly') ? '#34d399' : entry.source_type?.includes('Morning') ? '#fbbf24' : '#a5b4fc',
+                          }}>
+                            {entry.source_type}
+                          </span>
+                        </td>
+                        <td style={{ padding: '7px 12px', color: '#94a3b8', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.file_name}>{entry.file_name}</td>
+                        <td style={{ padding: '7px 12px', color: '#64748b', fontFamily: 'monospace' }}>{entry.sheet_name}</td>
+                        <td style={{ padding: '7px 12px', color: '#34d399', textAlign: 'right', fontWeight: '700' }}>{entry.items_extracted}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </main>

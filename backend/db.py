@@ -55,7 +55,21 @@ def init_db():
             PRIMARY KEY (report_month, plant_name, parameter_name)
         )
     """)
-    
+
+    # 5. Extraction audit log
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS extraction_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            logged_at TEXT NOT NULL,
+            plant_name TEXT NOT NULL,
+            report_month TEXT NOT NULL,
+            file_name TEXT,
+            sheet_name TEXT,
+            source_type TEXT,
+            items_extracted INTEGER
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -92,6 +106,26 @@ def get_ytd_months(report_month: str) -> List[str]:
         ytd_list.append(f"{cur_m} {cur_y}")
         
     return ytd_list
+
+def get_fy_months(report_month: str) -> List[str]:
+    """Returns all 12 months of the financial year that contains report_month."""
+    months_order = [
+        "April", "May", "June", "July", "August", "September",
+        "October", "November", "December", "January", "February", "March"
+    ]
+    try:
+        m_name, y_str = report_month.split()
+        year = int(y_str)
+    except ValueError:
+        return []
+    idx = months_order.index(m_name) if m_name in months_order else 0
+    fy_start = year - 1 if idx >= 9 else year
+    result = []
+    for i, m in enumerate(months_order):
+        fy_year = fy_start + 1 if i >= 9 else fy_start
+        result.append(f"{m} {fy_year}")
+    return result
+
 
 def get_cply_month(report_month: str) -> str:
     """Returns the month name for the previous year (e.g. November 2025 -> November 2024)."""
@@ -312,11 +346,40 @@ def save_techno_parameter(month: str, plant: str, parameter: str, unit: str, mon
     cursor.execute("""
         INSERT INTO techno_table (report_month, plant_name, parameter_name, unit, month_actual, ytd_actual)
         VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(report_month, plant_name, parameter_name) 
-        DO UPDATE SET 
+        ON CONFLICT(report_month, plant_name, parameter_name)
+        DO UPDATE SET
             unit = excluded.unit,
             month_actual = excluded.month_actual,
             ytd_actual = excluded.ytd_actual
     """, (month, plant, parameter, unit, month_val, ytd_val))
     conn.commit()
     conn.close()
+
+
+def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: str,
+                   source_type: str, items_extracted: int):
+    """Appends a record to the extraction audit log."""
+    init_db()
+    from datetime import datetime
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        INSERT INTO extraction_log (logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), plant, report_month, file_name, sheet_name, source_type, items_extracted))
+    conn.commit()
+    conn.close()
+
+
+def get_extraction_logs(limit: int = 60) -> List[Dict[str, Any]]:
+    """Returns the most recent extraction log entries, newest first."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT id, logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted
+        FROM extraction_log
+        ORDER BY id DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
