@@ -224,9 +224,9 @@ async def upload_excel_plan(
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
 
-        if plant_name not in ("RSP", "ISP", "BSP", "DSP", "BSL"):
+        if plant_name not in ("RSP", "ISP", "BSP", "DSP", "BSL", "ASP_SSP_VISL"):
             raise ValueError(
-                f"Plan Excel extraction is currently only supported for RSP, ISP, BSP, DSP and BSL, not {plant_name}."
+                f"Plan Excel extraction is currently only supported for RSP, ISP, BSP, DSP, BSL and ASP_SSP_VISL, not {plant_name}."
             )
 
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -243,6 +243,9 @@ async def upload_excel_plan(
         elif plant_name == "BSL":
             import excel_extractor_bsl_plan
             success = excel_extractor_bsl_plan.extract_and_save_excel_plan(tmp_path, financial_year)
+        elif plant_name == "ASP_SSP_VISL":
+            import excel_extractor_asp_ssp_visl_plan
+            success = excel_extractor_asp_ssp_visl_plan.extract_and_save_excel_plan(tmp_path, financial_year)
         else:
             import excel_extractor_dsp_plan
             success = excel_extractor_dsp_plan.extract_and_save_excel_plan(tmp_path, financial_year)
