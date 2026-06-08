@@ -3,7 +3,46 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import PageRenderer from '../../components/PageRenderer';
-import initialPagesData from '../../data/mis_data.json';
+
+// Edit these labels to change what appears in the Page Selector dropdown
+const PAGE_LABELS = {
+   1: 'Cover Page',
+   2: 'Index / Contents',
+   3: 'SAIL Performance Summary',
+   4: 'Production Performance vs APP (Month)',
+   5: 'Plant-Wise Production Performance',
+   6: 'Plant-Wise Production (Month & YTD)',
+   7: 'Month-Wise Trend – Oven Pushing',
+   8: 'Month-Wise Trend – Sinter',
+   9: 'Month-Wise Trend – Hot Metal',
+  10: 'Month-Wise Trend – Pig Iron',
+  11: 'Month-Wise Trend – Crude Steel',
+  12: 'Month-Wise Trend – Saleable Steel',
+  13: 'Month-Wise Trend – Finished Steel',
+  14: 'Plant-Wise Production Performance (Detailed)',
+  15: 'Production by Process (BOF / EAF / CC)',
+  16: 'Category-Wise Production – BSP (Bhilai)',
+  17: 'Category-Wise Production – DSP (Durgapur)',
+  18: 'Category-Wise Production – BSL (Bokaro)',
+  19: 'Category-Wise Production – RSP (Rourkela)',
+  20: 'Despatches & Orders – Rails',
+  21: 'Despatches & Orders – Structural / TLT',
+  22: 'Despatches & Orders – Export',
+  23: 'Despatches & Orders – Plates',
+  24: 'Despatches & Orders – By Item',
+  25: 'Despatches & Orders – By Plant',
+  26: 'Opening Stock at SAIL Plants & Stockyards',
+  27: 'Raw Material Movement',
+  28: 'Major Techno-Economic Parameters',
+  29: 'Month-Wise TE Parameters – Coke & Sinter',
+  30: 'Month-Wise TE Parameters – Blast Furnace',
+  31: 'Month-Wise TE Parameters – BOF Shop',
+  32: 'Mill-Wise TE Parameters – BSP (Bhilai)',
+  33: 'Mill-Wise TE Parameters – DSP (Durgapur)',
+  34: 'Mill-Wise TE Parameters – RSP (Rourkela)',
+  35: 'Mill-Wise TE Parameters – BSL (Bokaro)',
+  36: 'Mill-Wise TE Parameters – ISP (IISCO)',
+};
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -116,7 +155,7 @@ function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
   });
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 console.log('API_BASE_URL:', API_BASE_URL);
 
 // In browser environments, failing to fetch is often due to CORS/origin/host reachability.
@@ -180,7 +219,7 @@ export default function ReportPage() {
               return p;
             });
             const formatted = getFormattedPagesData(normalized, selectedMonthName, selectedYear, 'November', '2025');
-            setPagesData(formatted);
+            setPagesData(formatted.filter((p) => p.page <= 36));
             setPagesDataMonth({ name: selectedMonthName, year: selectedYear });
           }
         }
@@ -238,7 +277,8 @@ export default function ReportPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate PDF from Python backend');
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.error || `HTTP ${response.status}`);
       }
 
       const blob = await response.blob();
@@ -252,7 +292,7 @@ export default function ReportPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert('Error generating PDF on Python backend. Make sure the FastAPI server is running.');
+      alert(`PDF generation failed: ${error.message}`);
     } finally {
       setIsBackendGenerating(false);
     }
@@ -335,7 +375,7 @@ export default function ReportPage() {
             >
               {pagesData.map((page) => (
                 <option key={page.page} value={page.page}>
-                  Page {page.page}: {page.title ? page.title.substring(0, 32) : 'Cover/Index'}
+                  {page.page}. {PAGE_LABELS[page.page] || page.title || 'Page ' + page.page}
                 </option>
               ))}
             </select>
@@ -353,7 +393,7 @@ export default function ReportPage() {
             <button
               className="btn btn-secondary"
               style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => Math.min(pagesData.length, prev + 1))}
+              onClick={() => setActivePageNum((prev) => Math.min(36, pagesData.length, prev + 1))}
               disabled={activePageNum === pagesData.length}
             >
               Next
