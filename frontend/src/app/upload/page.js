@@ -314,6 +314,7 @@ export default function UploadPage() {
                 <option value="BSP">BSP (Steel Plant)</option>
                 <option value="DSP">DSP (Steel Plant)</option>
                 <option value="BSL">BSL (Steel Plant)</option>
+                <option value="ASP_SSP_VISL">ASP / SSP / VISL (combined file)</option>
               </select>
             </div>
 
@@ -407,7 +408,8 @@ export default function UploadPage() {
                 <ul style={{ fontSize: '8.5pt', color: '#cbd5e1', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
                   <li>Spreadsheet files must be in <strong>.xlsx</strong> format.</li>
                   <li><strong>RSP</strong> — sheet <strong>sheet1</strong>; <strong>ISP</strong> — sheet <strong>SUMM PROD</strong>; <strong>BSP</strong> — sheet <strong>Table 1</strong>; <strong>DSP</strong> — sheet <strong>Monthwise</strong>.</li>
-                  <li><strong>BSL</strong> — sheet <strong>Monthwise</strong> or <strong>Sheet1</strong>. Confirm row mapping before upload (see <code>excel_extractor_bsl_plan.py</code>).</li>
+                  <li><strong>BSL</strong> — sheet <strong>PLAN SUMMARY</strong>. Months in rows (Apr row 10 → Mar row 24), items in columns B–R. Quarter rows auto-skipped.</li>
+                  <li><strong>ASP / SSP / VISL</strong> — single combined <code>.xlsx</code> file (sheet <strong>APP 26-27</strong>). Row 1 has month dates (col C onward); col A = plant name, col B = item. All three plants extracted in one upload.</li>
                   <li>Extracts and populates targets for all 12 months in a single upload.</li>
                   <li>Preserves the plan sheet scale.</li>
                 </ul>

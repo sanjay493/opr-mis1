@@ -136,7 +136,7 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
         style={{ tableLayout: 'fixed', width: '100%', fontSize: '6.5pt' }}
       >
         <colgroup>
-          <col style={{ width: COL_W.items }} />
+          <col wrapping="true" style={{ width: COL_W.items }} />
           <col style={{ width: COL_W.plant }} />
           <col style={{ width: COL_W.annualApp }} />
           <col style={{ width: COL_W.mApp }} />
