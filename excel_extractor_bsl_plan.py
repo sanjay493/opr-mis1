@@ -21,36 +21,32 @@ def clean_val(val) -> Optional[float]:
 def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
     """
     Extracts BSL ABP plan data for all 12 months.
-    Writes to production_plan_table with plant_name='BSL'.
+    Expected file: BSLABP26-27.xlsx (or similar), sheet 'PLAN SUMMARY'.
 
-    Expected sheet: 'Monthwise' or 'Sheet1'
+    Layout: months in rows, items in columns.
+      Row 10 = APR, 11 = MAY, 12 = JUN,  (13 = Q1 skip)
+      Row 14 = JUL, 15 = AUG, 16 = SEP,  (17 = Q2 skip)
+      Row 18 = OCT, 19 = NOV, 20 = DEC,  (21 = Q3 skip)
+      Row 22 = JAN, 23 = FEB, 24 = MAR,  (25 = Q4 skip, 26 = Total skip)
 
-    Column layout (0-based after skipping index/label cols):
-      APR | MAY | JUN | [Q1] | JUL | AUG | SEP | [Q2] | OCT | NOV | DEC | [Q3] | JAN | FEB | MAR | [Q4/Annual]
+    Columns (values already in '000 T per sheet header; B is nos/day):
+      B = Oven Pushing (nos/d)   C = Total Sinter        D = Hot Metal
+      E = Total Crude Steel      F = SMS-1 CCM-1         G = SMS-2 CCM-1&2
+      H = HSM Total HR Coil      J = CRC&S(1&2)          K = CRC(3)
+      L = CR Saleable            M = Saleable Steel       N = Pig Iron
+      O = Saleable Semis         P = HSM HR Coil (Sale)  Q = HSM HR Plate
+      R = HR Sheet
 
-    Month columns (1-based):
-      Col B=APR, C=MAY, D=JUN, F=JUL, G=AUG, H=SEP, J=OCT, K=NOV, L=DEC, N=JAN, O=FEB, P=MAR
-
-    Row map (1-based) — adjust to match actual BSL ABP layout:
-      Row 7:  Oven Pushing(nos/d)   — nos/day average, no /1000
-      Row 11: Total Sinter          — '000 T
-      Row 14: Hot Metal             — '000 T
-      Row 20: Pig Iron              — '000 T
-      Row 21: Total Crude Steel     — '000 T
-      Row 30: Saleable Semis        — '000 T
-      Row 31: Finished Steel        — '000 T
-      Row 32: Saleable Steel        — '000 T
-
-    NOTE: Verify row numbers against the actual BSL ABP Excel before uploading.
+    Finished Steel is derived: Saleable Steel (M) − Saleable Semis (O).
     """
     try:
         wb = openpyxl.load_workbook(file_path, data_only=True)
         sheet_names = wb.sheetnames
         logger.info(f"BSL Plan: loading file. Sheets: {sheet_names}")
 
-        # Detect sheet
         sheet_key = None
-        for candidate in ("Monthwise", "Sheet1", "MONTHWISE", "sheet1"):
+        for candidate in ("PLAN SUMMARY", "Plan Summary", "plan summary",
+                          "Monthwise", "MONTHWISE", "Sheet1", "sheet1"):
             if candidate in sheet_names:
                 sheet_key = candidate
                 break
@@ -58,7 +54,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         if not sheet_key:
             raise ValueError(
                 f"BSL Plan Excel missing expected sheet. "
-                f"Found: {sheet_names}. Expected 'Monthwise' or 'Sheet1'."
+                f"Found: {sheet_names}. Expected 'PLAN SUMMARY'."
             )
 
         logger.info(f"BSL Plan: using sheet '{sheet_key}'")
@@ -68,34 +64,42 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         else:
             year_val = int(financial_year)
 
-        # Month code → (column letter, month name, year offset)
-        col_map = {
-            "04": ("B", "April",     0),
-            "05": ("C", "May",       0),
-            "06": ("D", "June",      0),
-            "07": ("F", "July",      0),
-            "08": ("G", "August",    0),
-            "09": ("H", "September", 0),
-            "10": ("J", "October",   0),
-            "11": ("K", "November",  0),
-            "12": ("L", "December",  0),
-            "01": ("N", "January",   1),
-            "02": ("O", "February",  1),
-            "03": ("P", "March",     1),
+        # (row_number) → (full_month_name, year_offset)
+        # Quarter rows (13, 17, 21, 25) and total row (26) are intentionally absent.
+        row_month_map = {
+            10: ("April",     0),
+            11: ("May",       0),
+            12: ("June",      0),
+            14: ("July",      0),
+            15: ("August",    0),
+            16: ("September", 0),
+            18: ("October",   0),
+            19: ("November",  0),
+            20: ("December",  0),
+            22: ("January",   1),
+            23: ("February",  1),
+            24: ("March",     1),
         }
 
-        NO_CONVERT = {"Oven Pushing(nos/d)"}
-
-        # Row offsets (1-based) — VERIFY against actual BSL ABP Excel layout
-        production_cells = {
-            "Oven Pushing(nos/d)":  7,
-            "Total Sinter":        11,
-            "Hot Metal":           14,
-            "Pig Iron":            20,
-            "Total Crude Steel":   21,
-            "Saleable Semis":      30,
-            "Finished Steel":      31,
-            "Saleable Steel":      32,
+        # (column_letter) → (db_item_name, nos_per_day)
+        # nos_per_day=True → store as-is; False → round to 3 dp (already '000 T)
+        col_item_map = {
+            "B": ("Oven Pushing(nos/d)",  True),
+            "C": ("Total Sinter",         False),
+            "D": ("Hot Metal",            False),
+            "E": ("Total Crude Steel",    False),
+            "F": ("SMS-1 CCM-1",          False),
+            "G": ("SMS-2 CCM-1&2",        False),
+            "H": ("HSM Total HR Coil",    False),
+            "J": ("CRC&S(1&2)",           False),
+            "K": ("CRC(3)",               False),
+            "L": ("CR Saleable",          False),
+            "M": ("Saleable Steel",       False),
+            "N": ("Pig Iron",             False),
+            "O": ("Saleable Semis",       False),
+            "P": ("HSM HR Coil (Sale)",   False),
+            "Q": ("HSM HR Plate",         False),
+            "R": ("HR Sheet",             False),
         }
 
         ws = wb[sheet_key]
@@ -103,35 +107,62 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         cursor = conn.cursor()
         vals_extracted = 0
 
-        for m_code, (col, m_name, yr_off) in col_map.items():
+        for row_num, (m_name, yr_off) in row_month_map.items():
             db_report_month = f"{m_name} {year_val + yr_off}"
+            raw_row = {}
 
-            for db_item, row_num in production_cells.items():
-                cell_coord = f"{col}{row_num}"
-                raw_val = ws[cell_coord].value
+            for col_letter, (db_item, is_rate) in col_item_map.items():
+                raw_val = ws[f"{col_letter}{row_num}"].value
                 val = clean_val(raw_val)
+                raw_row[db_item] = val
 
                 if val is not None:
                     vals_extracted += 1
-                    if db_item not in NO_CONVERT:
-                        val = round(val, 3)
+                    stored = val if is_rate else round(val, 3)
+                else:
+                    stored = None
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
                     VALUES (?, ?, ?, ?)
                     ON CONFLICT(report_month, plant_name, item_name)
                     DO UPDATE SET month_actual = excluded.month_actual
-                """, (db_report_month, "BSL", db_item, val))
+                    """,
+                    (db_report_month, "BSL", db_item, stored),
+                )
+
+            # Derived: Finished Steel = Saleable Steel − Saleable Semis
+            sal_steel = raw_row.get("Saleable Steel")
+            sal_semis = raw_row.get("Saleable Semis")
+            finished = (
+                round(sal_steel - sal_semis, 3)
+                if sal_steel is not None and sal_semis is not None
+                else None
+            )
+            cursor.execute(
+                """
+                INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(report_month, plant_name, item_name)
+                DO UPDATE SET month_actual = excluded.month_actual
+                """,
+                (db_report_month, "BSL", "Finished Steel", finished),
+            )
 
         if vals_extracted == 0:
             raise ValueError(
                 "No numeric data extracted from BSL Plan Excel. "
-                "Verify that the sheet name, row numbers, and column mapping match the actual file."
+                "Verify sheet name ('PLAN SUMMARY'), row numbers (10–24), "
+                "and column mapping (B–R) against the actual file."
             )
 
         conn.commit()
         conn.close()
-        logger.info(f"BSL Plan extraction done: {vals_extracted} values for FY {financial_year}.")
+        logger.info(
+            f"BSL Plan extraction done: {vals_extracted} values + 12 Finished Steel "
+            f"derived rows for FY {financial_year}."
+        )
         return True
 
     except ValueError as ve:
