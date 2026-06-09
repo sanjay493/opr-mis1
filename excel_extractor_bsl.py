@@ -97,13 +97,13 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     if isinstance(o1_raw, datetime):
         m_num = str(o1_raw.month).zfill(2)
         year  = str(o1_raw.year)
-        db_report_month = f"{MONTH_NAMES[m_num]} {year}"
+        db_report_month = f"{year}-{m_num}"
     elif o1_raw:
         # Fallback: try to parse date string formats DD.MM.YYYY or YYYY-MM-DD
         date_match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", str(o1_raw))
         if date_match:
             _d, m_num, year = date_match.groups()
-            db_report_month = f"{MONTH_NAMES[m_num]} {year}"
+            db_report_month = f"{year}-{m_num}"
         else:
             raise ValueError(
                 f"Cannot parse date from cell O1: {repr(o1_raw)}. "

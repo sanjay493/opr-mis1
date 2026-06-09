@@ -75,7 +75,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None, source_file
         n1_raw = ws.cell_value(0, 13)
         if n1_raw and isinstance(n1_raw, float) and n1_raw > 0:
             y, m, *_ = xlrd.xldate_as_tuple(n1_raw, wb.datemode)
-            db_report_month = f"{MONTH_NAMES[m]} {y}"
+            db_report_month = f"{y}-{m:02d}"
             logger.info(f"BSP: month auto-detected from N1 → {db_report_month}")
         elif report_month:
             db_report_month = report_month

@@ -1,0 +1,397 @@
+report_month,plant_name,item_name,month_actual
+April 2025,BSP,Oven Pushing(nos/d),709.0
+May 2025,BSP,Oven Pushing(nos/d),747.0
+June 2025,BSP,Oven Pushing(nos/d),763.0
+July 2025,BSP,Oven Pushing(nos/d),702.0
+August 2025,BSP,Oven Pushing(nos/d),731.0
+September 2025,BSP,Oven Pushing(nos/d),742.0
+October 2025,BSP,Oven Pushing(nos/d),753.0
+November 2025,BSP,Oven Pushing(nos/d),762.0
+December 2025,BSP,Oven Pushing(nos/d),773.0
+January 2026,BSP,Oven Pushing(nos/d),775.0
+February 2026,BSP,Oven Pushing(nos/d),798.0
+March 2026,BSP,Oven Pushing(nos/d),804.0
+April 2025,DSP,Oven Pushing(nos/d),320.43333333333334
+May 2025,DSP,Oven Pushing(nos/d),314.5483870967742
+June 2025,DSP,Oven Pushing(nos/d),306.56666666666666
+July 2025,DSP,Oven Pushing(nos/d),322.0
+August 2025,DSP,Oven Pushing(nos/d),322.51612903225805
+September 2025,DSP,Oven Pushing(nos/d),304.3333333333333
+October 2025,DSP,Oven Pushing(nos/d),313.8709677419355
+November 2025,DSP,Oven Pushing(nos/d),327.3666666666667
+December 2025,DSP,Oven Pushing(nos/d),335.2258064516129
+January 2026,DSP,Oven Pushing(nos/d),339.0
+February 2026,DSP,Oven Pushing(nos/d),335.0
+March 2026,DSP,Oven Pushing(nos/d),327.0
+April 2025,RSP,Oven Pushing(nos/d),532.2675
+May 2025,RSP,Oven Pushing(nos/d),520.3379032258065
+June 2025,RSP,Oven Pushing(nos/d),508.6425
+July 2025,RSP,Oven Pushing(nos/d),499.77016129032256
+August 2025,RSP,Oven Pushing(nos/d),505.86370967741937
+September 2025,RSP,Oven Pushing(nos/d),505.525
+October 2025,RSP,Oven Pushing(nos/d),507.955
+November 2025,RSP,Oven Pushing(nos/d),515.255
+December 2025,RSP,Oven Pushing(nos/d),519.89
+January 2026,RSP,Oven Pushing(nos/d),527.6475
+February 2026,RSP,Oven Pushing(nos/d),530.3625
+March 2026,RSP,Oven Pushing(nos/d),534.0025
+April 2025,BSL,Oven Pushing(nos/d),476.0
+May 2025,BSL,Oven Pushing(nos/d),519.0
+June 2025,BSL,Oven Pushing(nos/d),476.3
+July 2025,BSL,Oven Pushing(nos/d),472.51612903225805
+August 2025,BSL,Oven Pushing(nos/d),445.6774193548387
+September 2025,BSL,Oven Pushing(nos/d),440.56666666666666
+October 2025,BSL,Oven Pushing(nos/d),450.7741935483871
+November 2025,BSL,Oven Pushing(nos/d),513.9
+December 2025,BSL,Oven Pushing(nos/d),525.4516129032259
+January 2026,BSL,Oven Pushing(nos/d),526.3225806451613
+February 2026,BSL,Oven Pushing(nos/d),527.5357142857143
+March 2026,BSL,Oven Pushing(nos/d),530.0645161290323
+April 2025,ISP,Oven Pushing(nos/d),275.3107558139535
+May 2025,ISP,Oven Pushing(nos/d),276.4277944486122
+June 2025,ISP,Oven Pushing(nos/d),276.6843023255814
+July 2025,ISP,Oven Pushing(nos/d),277.0152850712678
+August 2025,ISP,Oven Pushing(nos/d),278.7083645911478
+September 2025,ISP,Oven Pushing(nos/d),279.1679263565892
+October 2025,ISP,Oven Pushing(nos/d),274.8307389347337
+November 2025,ISP,Oven Pushing(nos/d),275.21782945736436
+December 2025,ISP,Oven Pushing(nos/d),275.21933608402105
+January 2026,ISP,Oven Pushing(nos/d),274.36365341335335
+February 2026,ISP,Oven Pushing(nos/d),274.2557101328904
+March 2026,ISP,Oven Pushing(nos/d),279.0042198049512
+April 2025,BSP,Total Sinter,695.76
+May 2025,BSP,Total Sinter,790.636
+June 2025,BSP,Total Sinter,753.822
+July 2025,BSP,Total Sinter,682.3
+August 2025,BSP,Total Sinter,679.127
+September 2025,BSP,Total Sinter,655.059
+October 2025,BSP,Total Sinter,781.696
+November 2025,BSP,Total Sinter,750.199
+December 2025,BSP,Total Sinter,739.5360000000001
+January 2026,BSP,Total Sinter,769.4639999999999
+February 2026,BSP,Total Sinter,748.439
+March 2026,BSP,Total Sinter,834.656
+April 2025,DSP,Total Sinter,318.26300000000003
+May 2025,DSP,Total Sinter,289.91700000000003
+June 2025,DSP,Total Sinter,262.38
+July 2025,DSP,Total Sinter,321.1
+August 2025,DSP,Total Sinter,293.295
+September 2025,DSP,Total Sinter,286.747
+October 2025,DSP,Total Sinter,260.293
+November 2025,DSP,Total Sinter,269.206
+December 2025,DSP,Total Sinter,288.557
+January 2026,DSP,Total Sinter,288.312
+February 2026,DSP,Total Sinter,274.487
+March 2026,DSP,Total Sinter,311.028
+April 2025,RSP,Total Sinter,586.792
+May 2025,RSP,Total Sinter,611.863
+June 2025,RSP,Total Sinter,590.826
+July 2025,RSP,Total Sinter,501.039
+August 2025,RSP,Total Sinter,634.21
+September 2025,RSP,Total Sinter,561.5329999999999
+October 2025,RSP,Total Sinter,611.0730000000001
+November 2025,RSP,Total Sinter,526.4010000000001
+December 2025,RSP,Total Sinter,615.8230000000001
+January 2026,RSP,Total Sinter,607.952
+February 2026,RSP,Total Sinter,544.534
+March 2026,RSP,Total Sinter,644.141
+April 2025,BSL,Total Sinter,452.605
+May 2025,BSL,Total Sinter,593.314
+June 2025,BSL,Total Sinter,518.388
+July 2025,BSL,Total Sinter,509.621
+August 2025,BSL,Total Sinter,476.045
+September 2025,BSL,Total Sinter,466.626
+October 2025,BSL,Total Sinter,501.078
+November 2025,BSL,Total Sinter,527.481
+December 2025,BSL,Total Sinter,565.702
+January 2026,BSL,Total Sinter,602.468
+February 2026,BSL,Total Sinter,538.075
+March 2026,BSL,Total Sinter,602.558
+April 2025,ISP,Total Sinter,321.83
+May 2025,ISP,Total Sinter,355.306
+June 2025,ISP,Total Sinter,376.274
+July 2025,ISP,Total Sinter,397.96
+August 2025,ISP,Total Sinter,383.179
+September 2025,ISP,Total Sinter,374.784
+October 2025,ISP,Total Sinter,301.448
+November 2025,ISP,Total Sinter,366.206
+December 2025,ISP,Total Sinter,360.713
+January 2026,ISP,Total Sinter,366.58
+February 2026,ISP,Total Sinter,314.846
+March 2026,ISP,Total Sinter,379.828
+April 2025,BSP,Hot Metal,468.669
+May 2025,BSP,Hot Metal,538.47
+June 2025,BSP,Hot Metal,523.022
+July 2025,BSP,Hot Metal,489.408
+August 2025,BSP,Hot Metal,455.594
+September 2025,BSP,Hot Metal,466.647
+October 2025,BSP,Hot Metal,530.671
+November 2025,BSP,Hot Metal,512.081
+December 2025,BSP,Hot Metal,489.786
+January 2026,BSP,Hot Metal,515.353
+February 2026,BSP,Hot Metal,492.095
+March 2026,BSP,Hot Metal,559.77
+April 2025,DSP,Hot Metal,208.014
+May 2025,DSP,Hot Metal,187.658
+June 2025,DSP,Hot Metal,183.02
+July 2025,DSP,Hot Metal,214.123
+August 2025,DSP,Hot Metal,198.43
+September 2025,DSP,Hot Metal,192.761
+October 2025,DSP,Hot Metal,175.257
+November 2025,DSP,Hot Metal,187.043
+December 2025,DSP,Hot Metal,210.792
+January 2026,DSP,Hot Metal,213.365
+February 2026,DSP,Hot Metal,193.999
+March 2026,DSP,Hot Metal,209.263
+April 2025,RSP,Hot Metal,360.016
+May 2025,RSP,Hot Metal,375.03
+June 2025,RSP,Hot Metal,356.128
+July 2025,RSP,Hot Metal,308.444
+August 2025,RSP,Hot Metal,387.339
+September 2025,RSP,Hot Metal,362.535
+October 2025,RSP,Hot Metal,375.333
+November 2025,RSP,Hot Metal,330.054
+December 2025,RSP,Hot Metal,375.56
+January 2026,RSP,Hot Metal,362.968
+February 2026,RSP,Hot Metal,335.008
+March 2026,RSP,Hot Metal,388.325
+April 2025,BSL,Hot Metal,348.271
+May 2025,BSL,Hot Metal,453.078
+June 2025,BSL,Hot Metal,383.234
+July 2025,BSL,Hot Metal,381.002
+August 2025,BSL,Hot Metal,342.4
+September 2025,BSL,Hot Metal,340.209
+October 2025,BSL,Hot Metal,383.69
+November 2025,BSL,Hot Metal,407.588
+December 2025,BSL,Hot Metal,434.498
+January 2026,BSL,Hot Metal,469.2
+February 2026,BSL,Hot Metal,414.021
+March 2026,BSL,Hot Metal,494.092
+April 2025,ISP,Hot Metal,226.12559999999993
+May 2025,ISP,Hot Metal,255.73090000000002
+June 2025,ISP,Hot Metal,261.4899
+July 2025,ISP,Hot Metal,268.14230000000003
+August 2025,ISP,Hot Metal,253.2636
+September 2025,ISP,Hot Metal,243.2974
+October 2025,ISP,Hot Metal,202.96209999999996
+November 2025,ISP,Hot Metal,244.14819999999997
+December 2025,ISP,Hot Metal,251.56099999999998
+January 2026,ISP,Hot Metal,244.85139999999998
+February 2026,ISP,Hot Metal,196.5753
+March 2026,ISP,Hot Metal,251.87170000000003
+April 2025,BSP,Total Crude Steel,448.671
+May 2025,BSP,Total Crude Steel,529.403
+June 2025,BSP,Total Crude Steel,504.293
+July 2025,BSP,Total Crude Steel,471.064
+August 2025,BSP,Total Crude Steel,431.77500000000003
+September 2025,BSP,Total Crude Steel,447.56100000000004
+October 2025,BSP,Total Crude Steel,506.25399999999996
+November 2025,BSP,Total Crude Steel,490.40700000000004
+December 2025,BSP,Total Crude Steel,460.12600000000003
+January 2026,BSP,Total Crude Steel,483.197
+February 2026,BSP,Total Crude Steel,469.23199999999997
+March 2026,BSP,Total Crude Steel,536.636
+April 2025,DSP,Total Crude Steel,187.251
+May 2025,DSP,Total Crude Steel,171.03
+June 2025,DSP,Total Crude Steel,169.94
+July 2025,DSP,Total Crude Steel,199.898
+August 2025,DSP,Total Crude Steel,185.609
+September 2025,DSP,Total Crude Steel,181.04
+October 2025,DSP,Total Crude Steel,161.031
+November 2025,DSP,Total Crude Steel,173.385
+December 2025,DSP,Total Crude Steel,195.28
+January 2026,DSP,Total Crude Steel,195.164
+February 2026,DSP,Total Crude Steel,174.711
+March 2026,DSP,Total Crude Steel,190.739
+April 2025,RSP,Total Crude Steel,338.123
+May 2025,RSP,Total Crude Steel,339.138
+June 2025,RSP,Total Crude Steel,332.396
+July 2025,RSP,Total Crude Steel,291.461
+August 2025,RSP,Total Crude Steel,359.789
+September 2025,RSP,Total Crude Steel,331.346
+October 2025,RSP,Total Crude Steel,350.759
+November 2025,RSP,Total Crude Steel,309.485
+December 2025,RSP,Total Crude Steel,359.193
+January 2026,RSP,Total Crude Steel,347.533
+February 2026,RSP,Total Crude Steel,317.0
+March 2026,RSP,Total Crude Steel,370.124
+April 2025,BSL,Total Crude Steel,325.089
+May 2025,BSL,Total Crude Steel,406.692
+June 2025,BSL,Total Crude Steel,341.273
+July 2025,BSL,Total Crude Steel,353.933
+August 2025,BSL,Total Crude Steel,311.629
+September 2025,BSL,Total Crude Steel,299.415
+October 2025,BSL,Total Crude Steel,347.181
+November 2025,BSL,Total Crude Steel,374.217
+December 2025,BSL,Total Crude Steel,404.25100000000003
+January 2026,BSL,Total Crude Steel,440.159
+February 2026,BSL,Total Crude Steel,384.148
+March 2026,BSL,Total Crude Steel,451.385
+April 2025,ISP,Total Crude Steel,207.02
+May 2025,ISP,Total Crude Steel,236.638
+June 2025,ISP,Total Crude Steel,243.453
+July 2025,ISP,Total Crude Steel,253.662
+August 2025,ISP,Total Crude Steel,237.622
+September 2025,ISP,Total Crude Steel,226.847
+October 2025,ISP,Total Crude Steel,179.201
+November 2025,ISP,Total Crude Steel,229.502
+December 2025,ISP,Total Crude Steel,234.365
+January 2026,ISP,Total Crude Steel,228.047
+February 2026,ISP,Total Crude Steel,185.016
+March 2026,ISP,Total Crude Steel,241.24
+April 2025,ASP,Total Crude Steel,9.236
+May 2025,ASP,Total Crude Steel,10.736
+June 2025,ASP,Total Crude Steel,9.786
+July 2025,ASP,Total Crude Steel,11.073
+August 2025,ASP,Total Crude Steel,13.469
+September 2025,ASP,Total Crude Steel,12.091
+October 2025,ASP,Total Crude Steel,11.421
+November 2025,ASP,Total Crude Steel,9.483
+December 2025,ASP,Total Crude Steel,7.655
+January 2026,ASP,Total Crude Steel,9.197
+February 2026,ASP,Total Crude Steel,10.051
+March 2026,ASP,Total Crude Steel,11.762
+April 2025,SSP,Total Crude Steel,15.523
+May 2025,SSP,Total Crude Steel,15.312
+June 2025,SSP,Total Crude Steel,12.776
+July 2025,SSP,Total Crude Steel,10.542
+August 2025,SSP,Total Crude Steel,14.691
+September 2025,SSP,Total Crude Steel,6.324
+October 2025,SSP,Total Crude Steel,15.016
+November 2025,SSP,Total Crude Steel,14.002
+December 2025,SSP,Total Crude Steel,14.625
+January 2026,SSP,Total Crude Steel,15.026
+February 2026,SSP,Total Crude Steel,8.502
+March 2026,SSP,Total Crude Steel,13.762
+April 2025,VISL,Total Crude Steel,0.0
+May 2025,VISL,Total Crude Steel,0.0
+June 2025,VISL,Total Crude Steel,0.0
+July 2025,VISL,Total Crude Steel,0.0
+August 2025,VISL,Total Crude Steel,0.0
+September 2025,VISL,Total Crude Steel,0.0
+October 2025,VISL,Total Crude Steel,0.0
+November 2025,VISL,Total Crude Steel,0.0
+December 2025,VISL,Total Crude Steel,0.0
+January 2026,VISL,Total Crude Steel,0.0
+February 2026,VISL,Total Crude Steel,0.0
+March 2026,VISL,Total Crude Steel,0.0
+April 2025,BSP,Saleable Steel,437.464
+May 2025,BSP,Saleable Steel,416.368
+June 2025,BSP,Saleable Steel,438.883
+July 2025,BSP,Saleable Steel,448.882
+August 2025,BSP,Saleable Steel,519.627
+September 2025,BSP,Saleable Steel,439.071
+October 2025,BSP,Saleable Steel,466.684
+November 2025,BSP,Saleable Steel,444.211
+December 2025,BSP,Saleable Steel,447.456
+January 2026,BSP,Saleable Steel,435.709
+February 2026,BSP,Saleable Steel,444.565
+March 2026,BSP,Saleable Steel,479.82
+April 2025,DSP,Saleable Steel,179.087
+May 2025,DSP,Saleable Steel,168.719
+June 2025,DSP,Saleable Steel,159.625
+July 2025,DSP,Saleable Steel,190.167
+August 2025,DSP,Saleable Steel,183.719
+September 2025,DSP,Saleable Steel,167.579
+October 2025,DSP,Saleable Steel,149.569
+November 2025,DSP,Saleable Steel,169.952
+December 2025,DSP,Saleable Steel,188.027
+January 2026,DSP,Saleable Steel,185.403
+February 2026,DSP,Saleable Steel,169.021
+March 2026,DSP,Saleable Steel,181.59
+April 2025,RSP,Saleable Steel,341.942
+May 2025,RSP,Saleable Steel,339.255
+June 2025,RSP,Saleable Steel,345.634
+July 2025,RSP,Saleable Steel,315.727
+August 2025,RSP,Saleable Steel,363.865
+September 2025,RSP,Saleable Steel,346.567
+October 2025,RSP,Saleable Steel,361.795
+November 2025,RSP,Saleable Steel,304.892
+December 2025,RSP,Saleable Steel,363.685
+January 2026,RSP,Saleable Steel,374.399
+February 2026,RSP,Saleable Steel,330.388
+March 2026,RSP,Saleable Steel,377.073
+April 2025,BSL,Saleable Steel,357.587
+May 2025,BSL,Saleable Steel,408.261
+June 2025,BSL,Saleable Steel,375.182
+July 2025,BSL,Saleable Steel,383.618
+August 2025,BSL,Saleable Steel,344.886
+September 2025,BSL,Saleable Steel,374.312
+October 2025,BSL,Saleable Steel,373.98
+November 2025,BSL,Saleable Steel,358.204
+December 2025,BSL,Saleable Steel,349.877
+January 2026,BSL,Saleable Steel,421.169
+February 2026,BSL,Saleable Steel,384.914
+March 2026,BSL,Saleable Steel,432.942
+April 2025,ISP,Saleable Steel,198.79795000000001
+May 2025,ISP,Saleable Steel,228.30257900000007
+June 2025,ISP,Saleable Steel,227.89399800000004
+July 2025,ISP,Saleable Steel,243.2137770000001
+August 2025,ISP,Saleable Steel,219.02552800000004
+September 2025,ISP,Saleable Steel,222.81190100000006
+October 2025,ISP,Saleable Steel,176.4517220000001
+November 2025,ISP,Saleable Steel,214.4750590000001
+December 2025,ISP,Saleable Steel,231.66229500000017
+January 2026,ISP,Saleable Steel,224.56212800000014
+February 2026,ISP,Saleable Steel,184.2004180000001
+March 2026,ISP,Saleable Steel,233.33289499999998
+April 2025,ASP,Saleable Steel,8.366
+May 2025,ASP,Saleable Steel,10.885
+June 2025,ASP,Saleable Steel,9.409
+July 2025,ASP,Saleable Steel,10.307
+August 2025,ASP,Saleable Steel,12.007
+September 2025,ASP,Saleable Steel,11.782
+October 2025,ASP,Saleable Steel,10.764
+November 2025,ASP,Saleable Steel,9.33
+December 2025,ASP,Saleable Steel,7.264
+January 2026,ASP,Saleable Steel,9.133
+February 2026,ASP,Saleable Steel,9.148
+March 2026,ASP,Saleable Steel,10.744
+April 2025,SSP,Saleable Steel,17.835
+May 2025,SSP,Saleable Steel,18.586
+June 2025,SSP,Saleable Steel,15.447
+July 2025,SSP,Saleable Steel,16.593
+August 2025,SSP,Saleable Steel,20.628
+September 2025,SSP,Saleable Steel,12.52
+October 2025,SSP,Saleable Steel,13.287
+November 2025,SSP,Saleable Steel,13.355
+December 2025,SSP,Saleable Steel,11.713
+January 2026,SSP,Saleable Steel,15.075
+February 2026,SSP,Saleable Steel,10.969
+March 2026,SSP,Saleable Steel,11.534
+April 2025,VISL,Saleable Steel,2.257
+May 2025,VISL,Saleable Steel,3.2867899999999994
+June 2025,VISL,Saleable Steel,2.50023
+July 2025,VISL,Saleable Steel,2.13926
+August 2025,VISL,Saleable Steel,2.99959
+September 2025,VISL,Saleable Steel,2.9526
+October 2025,VISL,Saleable Steel,2.56436
+November 2025,VISL,Saleable Steel,2.482
+December 2025,VISL,Saleable Steel,2.48328
+January 2026,VISL,Saleable Steel,2.416
+February 2026,VISL,Saleable Steel,2.5299050000000003
+March 2026,VISL,Saleable Steel,5.365
+April 2025,VISL,Pig Iron,29.645726838
+May 2025,VISL,Pig Iron,49.105968478
+June 2025,VISL,Pig Iron,32.677457772000004
+July 2025,VISL,Pig Iron,10.724
+August 2025,VISL,Pig Iron,25.899408404
+September 2025,VISL,Pig Iron,30.783810796
+October 2025,VISL,Pig Iron,35.609268639999996
+November 2025,VISL,Pig Iron,23.363216226
+December 2025,VISL,Pig Iron,13.996725159999999
+January 2026,VISL,Pig Iron,18.324507267999998
+February 2026,VISL,Pig Iron,15.906080000000001
+March 2026,VISL,Pig Iron,14.751634348
+April 2025,VISL,Finished Steel,1255.0074120000002
+May 2025,VISL,Finished Steel,1345.0616190000003
+June 2025,VISL,Finished Steel,1367.628328
+July 2025,VISL,Finished Steel,1374.192137
+August 2025,VISL,Finished Steel,1400.534028
+September 2025,VISL,Finished Steel,1353.3891710000003
+October 2025,VISL,Finished Steel,1374.366132
+November 2025,VISL,Finished Steel,1322.0170590000002
+December 2025,VISL,Finished Steel,1403.04228
+January 2026,VISL,Finished Steel,1462.6350000000002
+February 2026,VISL,Finished Steel,1357.2723230000001
+March 2026,VISL,Finished Steel,1523.737996

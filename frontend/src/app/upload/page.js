@@ -8,6 +8,12 @@ const months = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const MONTH_NUM = {
+  'January': '01', 'February': '02', 'March': '03', 'April': '04',
+  'May': '05', 'June': '06', 'July': '07', 'August': '08',
+  'September': '09', 'October': '10', 'November': '11', 'December': '12',
+};
+
 const years = Array.from({ length: 16 }, (_, i) => (2020 + i).toString());
 
 const financialYears = Array.from({ length: 16 }, (_, i) => {
@@ -78,7 +84,7 @@ export default function UploadPage() {
     }
 
     setIsUploading(true);
-    const targetPeriod = `${uploadMonthName} ${uploadYear}`;
+    const targetPeriod = `${uploadYear}-${MONTH_NUM[uploadMonthName]}`;
     
     setLogs([]);
     addLog('info', `Starting extraction job for ${uploadPlantName} (${targetPeriod})...`);

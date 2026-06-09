@@ -17,8 +17,8 @@ const COL_W = {
   ytdGr:   '6%',
 };
 
-const TH = { padding: '2px 3px', fontSize: '6.5pt', verticalAlign: 'middle', lineHeight: '1.2' };
-const TD = { padding: '1px 3px', fontSize: '6.5pt', lineHeight: '1.2', overflow: 'hidden' };
+const TH = { padding: '2px 3px', fontSize: '11pt', verticalAlign: 'middle', lineHeight: '1.2' };
+const TD = { padding: '1px 3px', fontSize: '11pt', lineHeight: '1.2', overflow: 'hidden' };
 const INPUT = {
   width: '100%', minWidth: 0, padding: '0 1px',
   background: 'transparent', border: 'none',
@@ -78,10 +78,10 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
   return (
     <div className="report-table-wrapper" style={{ marginTop: '4px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2px' }}>
-        <h2 style={{ fontSize: '10pt', fontWeight: '850', color: '#060177', margin: 0, textTransform: 'uppercase' }}>
+        <h2 style={{ fontSize: '11pt', fontWeight: '850', color: '#060177', margin: 0, textTransform: 'uppercase' }}>
           PLANT-WISE PRODUCTION PERFORMANCE :{shortM}'{shortY} and Apr-{shortM}'{shortY}
         </h2>
-        <span style={{ fontSize: '7pt', fontWeight: '600', color: '#475569' }}>Unit:000 T</span>
+        <span style={{ fontSize: '1pt', fontWeight: '600', color: '#475569' }}>Unit:000 T</span>
       </div>
 
       <table className="report-table" style={{ tableLayout: 'fixed', width: '100%', fontSize: '11.5pt' }}>
@@ -138,7 +138,7 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
                     style={{
                       ...TD,
                       fontWeight: '800',
-                      fontSize: '6pt',
+                      fontSize: '11pt',
                       textAlign: 'center',
                       verticalAlign: 'middle',
                       backgroundColor: plantBg,

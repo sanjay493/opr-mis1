@@ -27,13 +27,13 @@ def clean_val(val) -> Optional[float]:
 
 
 def _parse_report_month(report_month: str):
-    """Returns (db_report_month, month_num_str) from 'Month Year' or 'YYYY-MM'."""
-    if "-" in report_month:
-        y_str, m_num = report_month.split("-")
-        return f"{MONTH_NAMES[m_num]} {y_str}", m_num
+    """Returns (db_report_month_yyyymm, month_num_str) from 'YYYY-MM' or legacy 'Month Year'."""
+    if len(report_month) == 7 and report_month[4] == "-":
+        return report_month, report_month[5:7]
     parts = report_month.split()
     m_name, y_str = parts[0], parts[1]
-    return report_month, MONTH_NUMS.get(m_name, "11")
+    m_num = MONTH_NUMS.get(m_name, "11")
+    return f"{y_str}-{m_num}", m_num
 
 
 def extract_and_save_excel(file_path: str, report_month: str, source_file_name: str = "") -> bool:
@@ -277,7 +277,7 @@ def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
             "Expected format DD.MM.YYYY inside the cell text."
         )
     _day, m_num, year = date_match.groups()
-    db_report_month = f"{MONTH_NAMES[m_num]} {year}"
+    db_report_month = f"{year}-{m_num}"
     logger.info(f"RSP Morning Report: month auto-detected from A2 → {db_report_month}")
 
     NO_CONVERT = {"Oven Pushing(nos/d)", "COB#6", "COB#1-5"}
