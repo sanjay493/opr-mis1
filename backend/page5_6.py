@@ -151,17 +151,10 @@ def _sum_items(cur, table, plant, items, month):
 
 import calendar as _cal
 
-_MONTH_NUM = {
-    "January": 1, "February": 2, "March": 3, "April": 4,
-    "May": 5, "June": 6, "July": 7, "August": 8,
-    "September": 9, "October": 10, "November": 11, "December": 12,
-}
-
-
 def _days(month_str):
     try:
-        mn, yr = month_str.split()
-        return _cal.monthrange(int(yr), _MONTH_NUM[mn])[1]
+        y, m = int(month_str[:4]), int(month_str[5:7])
+        return _cal.monthrange(y, m)[1]
     except Exception:
         return 30
 

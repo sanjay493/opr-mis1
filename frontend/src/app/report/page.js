@@ -49,6 +49,12 @@ const months = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const MONTH_NUM = {
+  'January': '01', 'February': '02', 'March': '03', 'April': '04',
+  'May': '05', 'June': '06', 'July': '07', 'August': '08',
+  'September': '09', 'October': '10', 'November': '11', 'December': '12',
+};
+
 const years = Array.from({ length: 16 }, (_, i) => (2020 + i).toString());
 
 function replaceTimeStrings(text, newMonth, newYear, oldMonth, oldYear) {
@@ -198,7 +204,7 @@ export default function ReportPage() {
   const [pagesDataMonth, setPagesDataMonth] = useState({ name: defaultDate.month, year: defaultDate.year });
   const [isBackendGenerating, setIsBackendGenerating] = useState(false);
 
-  const selectedMonth = `${selectedMonthName} ${selectedYear}`;
+  const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
   const activePage = pagesData.find((p) => p.page === activePageNum) || pagesData[0];
 
   // Fetch report data dynamically from DB when month/year changes
@@ -285,7 +291,7 @@ export default function ReportPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `SAIL_MIS_Report_${selectedMonth.replace(' ', '_')}.pdf`;
+      a.download = `SAIL_MIS_Report_${selectedMonthName}_${selectedYear}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();

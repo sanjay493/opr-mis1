@@ -137,7 +137,7 @@ HTML_TEMPLATE = """
             color: #0f172a;
             font-weight: 700;
             text-transform: uppercase;
-            font-size: 9.5pt;
+            font-size: 11.5pt;
             padding: 5px 4px;
             border: 1px solid #94a3b8;
             text-align: center;
@@ -147,14 +147,14 @@ HTML_TEMPLATE = """
             padding: 4px 4px;
             border: 1px solid #cbd5e1;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 11pt;
+            font-size: 11.5pt;
             text-align: right;
         }
 
         .report-table td.label-cell {
             text-align: left;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 11pt;
+            font-size: 11.5pt;
             font-weight: 500;
         }
 
@@ -206,6 +206,47 @@ HTML_TEMPLATE = """
         .trend-table th { font-size: 5pt !important; padding: 3px 1.5px; }
         .trend-table td { font-size: 5.5pt !important; padding: 2.5px 1.5px; }
 
+        /* Pages 7-13 month-wise yearly trend */
+        .trend-yearly-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+        .trend-yearly-table th {
+            font-size: 11.5pt; padding: 3px 2px; line-height: 1.15;
+            background: #1e3a5f; color: #fff; text-align: center; white-space: nowrap; font-weight: 700;
+        }
+        .trend-yearly-table th.qtr-hdr { background: #2d4f7f; }
+        .trend-yearly-table th.tot-hdr { background: #1a3050; }
+        .trend-yearly-table td {
+            font-size: 11.5pt; padding: 2px 2px; line-height: 1.2;
+            text-align: right; border: 0.3pt solid #cbd5e1;
+        }
+        .trend-yearly-table td.plant-cell {
+            font-size: 11.5pt; font-weight: 700; text-align: center;
+            vertical-align: middle; background: #e8edf3; color: #1e3a5f;
+        }
+        .trend-yearly-table td.plant-cell.agg-sail  { background: #bbf7d0; }
+        .trend-yearly-table td.plant-cell.agg-5p    { background: #fef08a; }
+        .trend-yearly-table td.year-cell {
+            font-size: 11.5pt; text-align: left; padding-left: 3px; white-space: nowrap;
+        }
+        .trend-yearly-table tr.plan-row   { background: #dbeafe; font-weight: 700; }
+        .trend-yearly-table tr.sail-row   { background: #dcfce7; font-weight: 700; }
+        .trend-yearly-table tr.fp-row     { background: #fef9c3; font-weight: 700; }
+        .trend-yearly-table tr.plant-first { border-top: 1.5pt solid #64748b; }
+        .trend-yearly-table td.qtr-cell   { background: #f0f5ff; font-weight: 600; }
+        .trend-yearly-table td.total-cell { background: #e8f0fb; font-weight: 700; }
+
+        /* Continuous trend section (pages 7-13 grouped into one PDF flow) */
+        .trend-section-page {
+            page-break-before: always;
+            break-before: page;
+            padding: 5mm 0 3mm 0;
+        }
+        .trend-item-block { margin-bottom: 12pt; }
+        .trend-item-separator {
+            border: none;
+            border-top: 1.5pt solid #0f172a;
+            margin: 10pt 0 6pt 0;
+        }
+
         /* Page 4 — tight layout to fit 15 cols on A4 portrait */
         .page4-table { table-layout: fixed; width: 100%; }
         .page4-table th { font-size: 5.5pt; padding: 2px 2px; line-height: 1.15; }
@@ -218,8 +259,79 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
-    {% set total_pages = pages|length %}
+    {% set total_pages = total_report_pages %}
     {% for page in pages %}
+    {% if page.type == 'trend_section' %}
+    <div class="trend-section-page">
+        <div class="page-header-bar">
+            Steel Authority of India Limited - Operations Monthly Informatics
+        </div>
+        {% for item in page['items'] %}
+        {% if not loop.first %}<hr class="trend-item-separator">{% endif %}
+        <div class="trend-item-block">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;
+                        border-bottom:2px solid #0f172a;padding-bottom:4px;margin-bottom:5px;">
+                <h2 style="font-size:9pt;font-weight:800;color:#060177;margin:0;text-transform:uppercase;">
+                    MONTH-WISE PRODUCTION TREND : {{ item.item_display }}
+                </h2>
+                <span style="font-size:7.5pt;font-weight:600;color:#475569;">Unit: {{ item.unit }}</span>
+            </div>
+            <table class="trend-yearly-table">
+                <colgroup>
+                    <col style="width:4.5%"/>
+                    <col style="width:10%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:5.5%"/>
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Plant</th><th>Year</th>
+                        <th>Apr</th><th>May</th><th>Jun</th><th class="qtr-hdr">Q1</th>
+                        <th>Jul</th><th>Aug</th><th>Sep</th><th class="qtr-hdr">Q2</th>
+                        <th>Oct</th><th>Nov</th><th>Dec</th><th class="qtr-hdr">Q3</th>
+                        <th>Jan</th><th>Feb</th><th>Mar</th><th class="qtr-hdr">Q4</th>
+                        <th class="tot-hdr">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in item.rows %}
+                    {% set v = row['values'] %}
+                    {% set plant = row['plant'] %}
+                    {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
+                    <tr class="{{ row_cls }}">
+                        {% if row['is_first_in_plant'] %}
+                        {% set pcls %}plant-cell{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{% endset %}
+                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{{ plant }}</td>
+                        {% endif %}
+                        <td class="year-cell" style="{{ 'font-weight:700;' if row['is_plan'] else '' }}">{{ row['year_label'] }}</td>
+                        <td>{{ v[0] }}</td><td>{{ v[1] }}</td><td>{{ v[2] }}</td>
+                        <td class="qtr-cell">{{ v[3] }}</td>
+                        <td>{{ v[4] }}</td><td>{{ v[5] }}</td><td>{{ v[6] }}</td>
+                        <td class="qtr-cell">{{ v[7] }}</td>
+                        <td>{{ v[8] }}</td><td>{{ v[9] }}</td><td>{{ v[10] }}</td>
+                        <td class="qtr-cell">{{ v[11] }}</td>
+                        <td>{{ v[12] }}</td><td>{{ v[13] }}</td><td>{{ v[14] }}</td>
+                        <td class="qtr-cell">{{ v[15] }}</td>
+                        <td class="total-cell">{{ v[16] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+        <div class="page-footer-bar">
+            <span>Prepared by: MIS Group</span>
+            <span>Pages {{ page.page_range }} of {{ total_pages }}</span>
+        </div>
+    </div>
+    {% else %}
     <div class="page">
 
         {% if page.type == 'cover' %}
@@ -348,6 +460,63 @@ HTML_TEMPLATE = """
                 </tbody>
             </table>
 
+        {% elif page.type == 'trend_yearly' %}
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;
+                        border-bottom:2px solid #0f172a;padding-bottom:4px;margin-bottom:5px;">
+                <h2 style="font-size:9pt;font-weight:800;color:#060177;margin:0;text-transform:uppercase;">
+                    MONTH-WISE PRODUCTION TREND : {{ page.item_display }}
+                </h2>
+                <span style="font-size:7.5pt;font-weight:600;color:#475569;">Unit: {{ page.unit }}</span>
+            </div>
+            <table class="trend-yearly-table">
+                <colgroup>
+                    <col style="width:4.5%"/>
+                    <col style="width:10%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:5.5%"/>
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Plant</th><th>Year</th>
+                        <th>Apr</th><th>May</th><th>Jun</th><th class="qtr-hdr">Q1</th>
+                        <th>Jul</th><th>Aug</th><th>Sep</th><th class="qtr-hdr">Q2</th>
+                        <th>Oct</th><th>Nov</th><th>Dec</th><th class="qtr-hdr">Q3</th>
+                        <th>Jan</th><th>Feb</th><th>Mar</th><th class="qtr-hdr">Q4</th>
+                        <th class="tot-hdr">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page.rows %}
+                    {% set v = row['values'] %}
+                    {% set plant = row['plant'] %}
+                    {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
+                    <tr class="{{ row_cls }}">
+                        {% if row['is_first_in_plant'] %}
+                        {% set pcls %}plant-cell{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{% endset %}
+                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{{ plant }}</td>
+                        {% endif %}
+                        <td class="year-cell" style="{{ 'font-weight:700;' if row['is_plan'] else '' }}">{{ row['year_label'] }}</td>
+                        <td>{{ v[0] }}</td><td>{{ v[1] }}</td><td>{{ v[2] }}</td>
+                        <td class="qtr-cell">{{ v[3] }}</td>
+                        <td>{{ v[4] }}</td><td>{{ v[5] }}</td><td>{{ v[6] }}</td>
+                        <td class="qtr-cell">{{ v[7] }}</td>
+                        <td>{{ v[8] }}</td><td>{{ v[9] }}</td><td>{{ v[10] }}</td>
+                        <td class="qtr-cell">{{ v[11] }}</td>
+                        <td>{{ v[12] }}</td><td>{{ v[13] }}</td><td>{{ v[14] }}</td>
+                        <td class="qtr-cell">{{ v[15] }}</td>
+                        <td class="total-cell">{{ v[16] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
         {% elif page.type == 'page4_table' %}
             <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid #0f172a; padding-bottom: 3px; margin-bottom: 4px;">
                 <h2 style="font-size: 9.5pt; font-weight: 800; color: #060177; margin: 0; text-transform: uppercase;">
@@ -412,10 +581,10 @@ HTML_TEMPLATE = """
 
         {% elif page.type == 'performance_summary_table' %}
             <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2px;">
-                <h2 style="font-size:9pt;font-weight:850;color:#060177;margin:0;text-transform:uppercase;">
+                <h2 style="font-size:11.5pt;font-weight:850;color:#060177;margin:0;text-transform:uppercase;">
                     PLANT-WISE PRODUCTION PERFORMANCE :{{ short_m }}'{{ short_y }} and Apr-{{ short_m }}'{{ short_y }}
                 </h2>
-                <span style="font-size:6.5pt;font-weight:600;color:#475569;">Unit:000 T</span>
+                <span style="font-size:11.5pt;font-weight:600;color:#475569;">Unit:000 T</span>
             </div>
             <table class="report-table" style="table-layout:fixed;width:100%;font-size:6pt;">
                 <colgroup>
@@ -461,7 +630,7 @@ HTML_TEMPLATE = """
                             {% set ns.cur_plant = row.plant %}
                             {% set plant_size = page.rows | selectattr('plant','equalto',row.plant) | list | length %}
                             <tr style="{{ 'font-weight:700;background:#f0f4f8;' if row.bold else '' }}">
-                                <td rowspan="{{ plant_size }}" style="font-size:5.5pt;font-weight:800;text-align:center;vertical-align:middle;padding:1px 2px;">{{ row.plant }}</td>
+                                <td rowspan="{{ plant_size }}" style="font-size:11.5pt;font-weight:800;text-align:center;vertical-align:middle;padding:1px 2px;">{{ row.plant }}</td>
                                 <td style="text-align:left;padding:1px 3px;font-weight:{{ '700' if row.bold else '400' }};">{{ row.label }}</td>
                                 {% for val in row['values'] %}<td style="text-align:right;padding:1px 2px;">{{ val }}</td>{% endfor %}
                             </tr>
@@ -497,11 +666,12 @@ HTML_TEMPLATE = """
 
         <div class="page-footer-bar">
             <span>Prepared by: MIS Group</span>
-            <span>Page {{ loop.index }} of {{ total_pages }}</span>
+            <span>Page {{ page.page }} of {{ total_pages }}</span>
         </div>
 
         {% endif %}{# end non-cover #}
     </div>
+    {% endif %}{# end else (non-trend_section) #}
     {% endfor %}
 </body>
 </html>
@@ -514,23 +684,34 @@ _MONTHS_ORDER = [
     "July", "August", "September", "October", "November", "December",
 ]
 
+_MONTH_NAMES = {
+    1: "January", 2: "February", 3: "March", 4: "April",
+    5: "May", 6: "June", 7: "July", 8: "August",
+    9: "September", 10: "October", 11: "November", 12: "December",
+}
+
 
 def _resolve_month_vars(month: str) -> dict:
     try:
-        m_name, y_str = month.split()
+        year = int(month[:4])
+        m_num = int(month[5:7])
+        m_name = _MONTH_NAMES[m_num]
         short_m = m_name[:3]
-        m_idx = _MONTHS_ORDER.index(m_name) if m_name in _MONTHS_ORDER else 10
-        target_fy_start = int(y_str) - (1 if 0 <= m_idx < 3 else 0)
-        target_fy_end = (target_fy_start + 1) % 100
+        y_str = str(year)
         short_y = y_str[2:]
-        prev_y_str = str(int(y_str) - 1)
+        prev_y_str = str(year - 1)
         short_prev_y = prev_y_str[2:]
+        # FY: Jan-Mar belong to FY of previous calendar year
+        target_fy_start = year if m_num >= 4 else year - 1
+        target_fy_end = (target_fy_start + 1) % 100
         target_header = f"Target {target_fy_start}-{target_fy_end:02d}"
+        fy_str = f"{target_fy_start}-{target_fy_end:02d}"
     except Exception:
         m_name, y_str = "November", "2025"
         short_m, short_y, prev_y_str, short_prev_y = "Nov", "25", "2024", "24"
+        target_fy_start, target_fy_end = 2025, 26
         target_header = "Target 2025-26"
-    fy_str = f"{target_fy_start}-{target_fy_end:02d}"
+        fy_str = "2025-26"
     return dict(
         m_name=m_name, y_str=y_str, short_m=short_m,
         short_y=short_y, prev_y_str=prev_y_str, short_prev_y=short_prev_y,
@@ -606,18 +787,49 @@ async def build_pdf_response(request: PDFRequest) -> StreamingResponse:
     try:
         vars = _resolve_month_vars(request.month)
 
-        pages_to_render = []
+        total_report_pages = len(request.pages)
+
+        flat_pages = []
         for p_data in request.pages:
             p = p_data.dict()
             if p.get("page", 0) > 36:
                 continue
             if p.get("type") == "page4_table":
                 p["rows"] = _group_page4_rows(p.get("rows", []))
-            pages_to_render.append(p)
+            flat_pages.append(p)
+
+        # Group consecutive trend pages (trend_yearly / trend_combined) into one continuous PDF section
+        pages_to_render = []
+        i = 0
+        while i < len(flat_pages):
+            p = flat_pages[i]
+            if p.get("type") in ("trend_yearly", "trend_combined"):
+                start_i = i
+                trend_items = []
+                while i < len(flat_pages) and flat_pages[i].get("type") in ("trend_yearly", "trend_combined"):
+                    tp = flat_pages[i]
+                    if tp.get("type") == "trend_combined":
+                        # Expand sub-items so the template renders each as a separate table
+                        for sub in tp.get("items", []):
+                            trend_items.append(sub)
+                    else:
+                        trend_items.append(tp)
+                    i += 1
+                first_pg = flat_pages[start_i].get("page", "?")
+                last_pg  = flat_pages[i - 1].get("page", "?")
+                pages_to_render.append({
+                    "type": "trend_section",
+                    "items": trend_items,
+                    "page_range": f"{first_pg}-{last_pg}",
+                })
+            else:
+                pages_to_render.append(p)
+                i += 1
 
         rendered_html = Template(HTML_TEMPLATE).render(
             month=request.month,
             pages=pages_to_render,
+            total_report_pages=total_report_pages,
             **vars,
         )
 

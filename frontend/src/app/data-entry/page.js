@@ -8,6 +8,12 @@ const MONTHS = [
   'April', 'May', 'June', 'July', 'August', 'September',
   'October', 'November', 'December', 'January', 'February', 'March'
 ];
+
+const MONTH_NUM = {
+  'January': '01', 'February': '02', 'March': '03', 'April': '04',
+  'May': '05', 'June': '06', 'July': '07', 'August': '08',
+  'September': '09', 'October': '10', 'November': '11', 'December': '12',
+};
 const YEARS = Array.from({ length: 8 }, (_, i) => (2023 + i).toString());
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -29,7 +35,8 @@ export default function DataEntryPage() {
   const [status, setStatus] = useState(null); // {type: 'success'|'error', text}
   const [loaded, setLoaded] = useState(false);
 
-  const reportMonth = `${month} ${year}`;
+  const reportMonth = `${year}-${MONTH_NUM[month]}`;
+  const reportMonthDisplay = `${month} ${year}`;
 
   const handleLoad = useCallback(async () => {
     setLoading(true);
@@ -42,7 +49,7 @@ export default function DataEntryPage() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       if (data.items.length === 0) {
-        setStatus({ type: 'error', text: `No plan items found for ${plant} in ${reportMonth}. Upload ABP plan first.` });
+        setStatus({ type: 'error', text: `No plan items found for ${plant} in ${reportMonthDisplay}. Upload ABP plan first.` });
         setItems([]);
       } else {
         setItems(data.items.map(it => ({
@@ -86,7 +93,7 @@ export default function DataEntryPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const result = await res.json();
-      setStatus({ type: 'success', text: `Saved ${result.count} value(s) for ${plant} — ${reportMonth}.` });
+      setStatus({ type: 'success', text: `Saved ${result.count} value(s) for ${plant} — ${reportMonthDisplay}.` });
       // Refresh to show updated values
       await handleLoad();
     } catch (err) {
@@ -212,7 +219,7 @@ export default function DataEntryPage() {
           {loaded && items.length > 0 && (
             <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
               <div style={{ padding: '14px 20px', backgroundColor: '#1e293b', color: '#f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: '700', fontSize: '10pt' }}>{plant} — {reportMonth}</span>
+                <span style={{ fontWeight: '700', fontSize: '10pt' }}>{plant} — {reportMonthDisplay}</span>
                 <span style={{ fontSize: '9pt', color: '#94a3b8' }}>{items.length} items</span>
               </div>
               <div style={{ overflowX: 'auto' }}>

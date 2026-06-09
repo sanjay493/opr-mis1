@@ -3,6 +3,7 @@ import CoverTemplate from './CoverTemplate';
 import SummaryTemplate from './SummaryTemplate';
 import TableTemplate from './TableTemplate';
 import TrendTemplate from './TrendTemplate';
+import TrendYearlyTemplate from './TrendYearlyTemplate';
 import MonthWiseProductionTemplate from './MonthWiseProductionTemplate';
 import PlantWisePerformanceTemplate from './PlantWisePerformanceTemplate';
 
@@ -106,6 +107,9 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <TableTemplate data={pageData} onCellChange={onCellChange} />;
       case 'trend':
         return <TrendTemplate data={pageData} onCellChange={onCellChange} />;
+      case 'trend_yearly':
+      case 'trend_combined':
+        return <TrendYearlyTemplate data={pageData} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>
@@ -128,7 +132,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}
@@ -141,7 +145,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
       {pageData.type !== 'cover' && (
         <div className="report-footer">
           <div>Prepared by: MIS Group</div>
-          <div>Page {pageData.page} of {totalPages || 49}</div>
+          <div>Page {pageData.page} of {totalPages || 48}</div>
         </div>
       )}
     </div>

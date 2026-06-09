@@ -9,6 +9,7 @@ from models import PDFRequest, ProductionEntry, ProductionEntryRequest
 from report_utils import compute_item_row, blank_out_page_data
 from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
+from page7_13 import generate_trend_page_rows, generate_combined_trend_items, TREND_PAGES
 from pdf import build_pdf_response
 
 db.init_db()
@@ -49,7 +50,7 @@ FRONTEND_DATA_PATH = os.path.join(os.path.dirname(__file__), "mis_data.json")
 # ---------------------------------------------------------------------------
 
 @app.get("/api/data")
-def get_data(month: str = "November 2025"):
+def get_data(month: str = "2025-11"):
     if not os.path.exists(FRONTEND_DATA_PATH):
         raise HTTPException(status_code=404, detail="Template data source not found.")
     try:
@@ -80,6 +81,23 @@ def get_data(month: str = "November 2025"):
                 if page.get("page") == 6:
                     page["rows"] = generate_page6_rows(month)
                     page["type"] = "performance_summary_table"
+                pg = page.get("page")
+                if isinstance(pg, int) and 7 <= pg <= 12:
+                    cfg = TREND_PAGES.get(pg, {})
+                    if cfg.get("combined_items"):
+                        # Page 11: Pig Iron + Finished Steel combined
+                        page["type"] = "trend_combined"
+                        page["title"] = f"MONTH-WISE PRODUCTION TREND : {cfg.get('display', '')}"
+                        page["item_display"] = cfg.get("display", "")
+                        page["unit"] = ""
+                        page["rows"] = []
+                        page["items"] = generate_combined_trend_items(month, pg)
+                    else:
+                        page["type"] = "trend_yearly"
+                        page["title"] = f"MONTH-WISE PRODUCTION TREND : {cfg.get('display', '')}"
+                        page["item_display"] = cfg.get("display", "")
+                        page["unit"] = cfg.get("unit", "")
+                        page["rows"] = generate_trend_page_rows(month, pg)
 
         return pages_config
     except Exception as e:
