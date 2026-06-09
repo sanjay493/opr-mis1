@@ -55,36 +55,29 @@ PAGE4_ITEMS = [
     },
 ]
 
-_MONTH_NUM = {
-    "January": 1, "February": 2, "March": 3, "April": 4,
-    "May": 5, "June": 6, "July": 7, "August": 8,
-    "September": 9, "October": 10, "November": 11, "December": 12,
-}
-
-
 def _days_in_month(month_str: str) -> int:
     try:
-        m, y = month_str.split()
-        return calendar.monthrange(int(y), _MONTH_NUM[m])[1]
+        y, m = int(month_str[:4]), int(month_str[5:7])
+        return calendar.monthrange(y, m)[1]
     except Exception:
         return 30
 
 
 def _fy_months(month: str) -> list:
-    """All 12 months of the financial year that contains `month`."""
-    FY_ORDER = ["April", "May", "June", "July", "August", "September",
-                "October", "November", "December", "January", "February", "March"]
+    """All 12 YYYY-MM strings of the financial year that contains `month`."""
     try:
-        m_name, y_str = month.split()
-        year = int(y_str)
+        y, m = int(month[:4]), int(month[5:7])
     except Exception:
         return []
-    idx = FY_ORDER.index(m_name) if m_name in FY_ORDER else 0
-    fy_start = year if idx < 9 else year - 1
+    fy_start = y if m >= 4 else y - 1
     result = []
-    for i, m in enumerate(FY_ORDER):
-        fy_year = fy_start + 1 if i >= 9 else fy_start
-        result.append(f"{m} {fy_year}")
+    cur_y, cur_m = fy_start, 4
+    for _ in range(12):
+        result.append(f"{cur_y}-{cur_m:02d}")
+        cur_m += 1
+        if cur_m > 12:
+            cur_m = 1
+            cur_y += 1
     return result
 
 

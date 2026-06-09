@@ -8,6 +8,12 @@ logger = logging.getLogger("excel_extractor_plan")
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "mis_reports.db")
 
+_MONTH_NUM = {
+    "April": "04", "May": "05", "June": "06", "July": "07",
+    "August": "08", "September": "09", "October": "10", "November": "11",
+    "December": "12", "January": "01", "February": "02", "March": "03",
+}
+
 
 def clean_val(val) -> Optional[float]:
     if val is None or str(val).strip().lower() in ("nan", "###", "-", "#div/0!"):
@@ -108,7 +114,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         vals_extracted = 0
 
         for row_num, (m_name, yr_off) in row_month_map.items():
-            db_report_month = f"{m_name} {year_val + yr_off}"
+            db_report_month = f"{year_val + yr_off}-{_MONTH_NUM[m_name]}"
             raw_row = {}
 
             for col_letter, (db_item, is_rate) in col_item_map.items():
