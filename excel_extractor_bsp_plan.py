@@ -118,7 +118,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         
         # Loop over each of the 12 months
         for m_code, (m_name, year_offset) in months_map.items():
-            db_report_month = f"{m_name} {year_val + year_offset}"
+            db_report_month = f"{year_val + year_offset}-{m_code}"
             col_p9 = col_map_p9.get(m_code)
             if not col_p9:
                 continue

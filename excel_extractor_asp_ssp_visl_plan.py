@@ -70,7 +70,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
             if val is None:
                 break
             if isinstance(val, dt):
-                month_label = f"{_MONTH_NAMES[val.month]} {val.year}"
+                month_label = f"{val.year}-{val.month:02d}"
                 month_cols.append((col_idx + 1, month_label))  # 1-based column number
             else:
                 # Non-datetime (e.g., "FY 26-27" annual total) — stop
@@ -82,8 +82,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                 "Could not find datetime month headers in row 1 starting from column C. "
                 "Ensure the sheet matches the expected ASP/SSP/VISL ABP format."
             )
-        logger.info(f"Detected {len(month_cols)} month columns: "
-                    f"{month_cols[0][1]} → {month_cols[-1][1]}")
+        logger.info(f"Detected {len(month_cols)} month columns: {month_cols[0][1]} → {month_cols[-1][1]}")
 
         # --- Scan data rows ---
         # Col A: plant name (carried forward when blank)

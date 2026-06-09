@@ -36,6 +36,9 @@ class PageData(BaseModel):
     te_table: Optional[List[Dict[str, Any]]] = []
     date: Optional[str] = None
     orientation: Optional[str] = "portrait"
+    item_display: Optional[str] = ""
+    unit: Optional[str] = ""
+    items: Optional[List[Dict[str, Any]]] = []
 
 
 class PDFRequest(BaseModel):

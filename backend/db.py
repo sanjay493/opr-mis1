@@ -74,66 +74,48 @@ def init_db():
     conn.close()
 
 def get_ytd_months(report_month: str) -> List[str]:
-    """
-    Returns a list of month strings ('Month Year') from April of the 
-    current financial year up to the report month.
-    """
-    months_order = [
-        "April", "May", "June", "July", "August", "September",
-        "October", "November", "December", "January", "February", "March"
-    ]
+    """Returns YYYY-MM strings from April of the current FY up to report_month."""
     try:
-        m_name, y_str = report_month.split()
-        year = int(y_str)
-    except ValueError:
+        y, m = int(report_month[:4]), int(report_month[5:7])
+    except (ValueError, IndexError):
         return [report_month]
-        
-    if m_name not in months_order:
-        return [report_month]
-        
-    idx = months_order.index(m_name)
-    
-    # Determine starting year of the financial year
-    if idx >= 9:  # Jan, Feb, Mar belong to the FY starting in previous calendar year
-        fy_start_year = year - 1
-    else:
-        fy_start_year = year
-        
-    ytd_list = []
-    for i in range(idx + 1):
-        cur_m = months_order[i]
-        cur_y = fy_start_year + 1 if i >= 9 else fy_start_year
-        ytd_list.append(f"{cur_m} {cur_y}")
-        
-    return ytd_list
+    fy_start_year = y if m >= 4 else y - 1
+    result = []
+    cur_y, cur_m = fy_start_year, 4
+    while True:
+        result.append(f"{cur_y}-{cur_m:02d}")
+        if cur_y == y and cur_m == m:
+            break
+        cur_m += 1
+        if cur_m > 12:
+            cur_m = 1
+            cur_y += 1
+    return result
 
 def get_fy_months(report_month: str) -> List[str]:
-    """Returns all 12 months of the financial year that contains report_month."""
-    months_order = [
-        "April", "May", "June", "July", "August", "September",
-        "October", "November", "December", "January", "February", "March"
-    ]
+    """Returns all 12 YYYY-MM strings of the financial year that contains report_month."""
     try:
-        m_name, y_str = report_month.split()
-        year = int(y_str)
-    except ValueError:
+        y, m = int(report_month[:4]), int(report_month[5:7])
+    except (ValueError, IndexError):
         return []
-    idx = months_order.index(m_name) if m_name in months_order else 0
-    fy_start = year - 1 if idx >= 9 else year
+    fy_start_year = y if m >= 4 else y - 1
     result = []
-    for i, m in enumerate(months_order):
-        fy_year = fy_start + 1 if i >= 9 else fy_start
-        result.append(f"{m} {fy_year}")
+    cur_y, cur_m = fy_start_year, 4
+    for _ in range(12):
+        result.append(f"{cur_y}-{cur_m:02d}")
+        cur_m += 1
+        if cur_m > 12:
+            cur_m = 1
+            cur_y += 1
     return result
 
 
 def get_cply_month(report_month: str) -> str:
-    """Returns the month name for the previous year (e.g. November 2025 -> November 2024)."""
+    """Returns same month in the previous year (e.g. 2025-11 -> 2024-11)."""
     try:
-        m_name, y_str = report_month.split()
-        year = int(y_str)
-        return f"{m_name} {year - 1}"
-    except ValueError:
+        y, m = int(report_month[:4]), int(report_month[5:7])
+        return f"{y - 1}-{m:02d}"
+    except (ValueError, IndexError):
         return report_month
 
 def get_sail_production_actual(month: str, item: str) -> Optional[float]:

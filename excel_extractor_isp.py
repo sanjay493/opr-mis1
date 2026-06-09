@@ -28,15 +28,13 @@ def clean_val(val) -> Optional[float]:
 
 
 def _parse_report_month(report_month: str):
-    """Returns (db_report_month, month_num_str) from 'Month Year' or 'YYYY-MM' string."""
-    if "-" in report_month:
-        y_str, m_num = report_month.split("-", 1)
-        return f"{MONTH_NAMES[m_num]} {y_str}", m_num
-    else:
-        parts = report_month.split()
-        m_name, y_str = parts[0], parts[1]
-        m_num = MONTHS_MAP.get(m_name, "01")
-        return report_month, m_num
+    """Returns (db_report_month_yyyymm, month_num_str) from 'YYYY-MM' or legacy 'Month Year'."""
+    if len(report_month) == 7 and report_month[4] == "-":
+        return report_month, report_month[5:7]
+    parts = report_month.split()
+    m_name, y_str = parts[0], parts[1]
+    m_num = MONTHS_MAP.get(m_name, "01")
+    return f"{y_str}-{m_num}", m_num
 
 
 def extract_and_save_excel(file_path: str, report_month: str = "", source_file_name: str = "") -> bool:
@@ -113,12 +111,12 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
     if isinstance(k5_raw, datetime):
         m_num = str(k5_raw.month).zfill(2)
         year  = str(k5_raw.year)
-        db_report_month = f"{MONTH_NAMES[m_num]} {year}"
+        db_report_month = f"{year}-{m_num}"
     elif k5_raw:
         date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', str(k5_raw))
         if date_match:
             _d, m_num, year = date_match.groups()
-            db_report_month = f"{MONTH_NAMES[m_num]} {year}"
+            db_report_month = f"{year}-{m_num}"
         else:
             raise ValueError(
                 f"Cannot parse date from K5: {repr(k5_raw)}. "

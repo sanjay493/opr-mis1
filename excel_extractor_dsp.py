@@ -122,7 +122,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str) -> bool:
             "Expected format DD.MM.YYYY (e.g. 31.05.2026)."
         )
     _d, m_num, year = date_match.groups()
-    db_report_month = f"{MONTH_NAMES[m_num]} {year}"
+    db_report_month = f"{year}-{m_num}"
     logger.info(f"DSP MCR: month auto-detected → {db_report_month}")
 
     COL_D = 3  # Actual To Date (cumulative)
