@@ -1,8 +1,7 @@
 import calendar
 import sqlite3
 import db
-
-_5P = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+from constants import FIVE_PLANTS as _5P
 
 PAGE4_ITEMS = [
     {

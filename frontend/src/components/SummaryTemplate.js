@@ -3,18 +3,27 @@ import React from 'react';
 export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
   const { production_table = [], te_table = [], highlights = [] } = data || {};
 
-  const [monthName, yearStr] = (selectedMonth || 'November 2025').split(' ');
-  const shortMonth = monthName ? monthName.substring(0, 3) : 'Nov';
-  const prevYear = yearStr ? (Number(yearStr) - 1).toString() : '2024';
-  const shortYear = yearStr ? yearStr.substring(2) : '25';
-  const shortPrevYear = prevYear ? prevYear.substring(2) : '24';
-
-  const monthIndex = [
+  const monthsOrder = [
     'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ].indexOf(monthName);
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
 
-  let targetYearStart = yearStr ? Number(yearStr) : 2025;
+  const _def = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+  let monthName = monthsOrder[_def.getMonth()];
+  let yearStr   = _def.getFullYear().toString();
+  if (selectedMonth && /^\d{4}-\d{2}$/.test(selectedMonth)) {
+    yearStr   = selectedMonth.substring(0, 4);
+    monthName = monthsOrder[parseInt(selectedMonth.substring(5, 7), 10) - 1] || monthName;
+  }
+
+  const shortMonth     = monthName.substring(0, 3);
+  const prevYear       = (Number(yearStr) - 1).toString();
+  const shortYear      = yearStr.substring(2);
+  const shortPrevYear  = prevYear.substring(2);
+
+  const monthIndex = monthsOrder.indexOf(monthName);
+
+  let targetYearStart = Number(yearStr);
   if (monthIndex >= 0 && monthIndex < 3) {
     targetYearStart -= 1;
   }
@@ -38,7 +47,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
 
       {/* Production Summary Table */}
       <div>
-        <h3 style={{ fontSize: '12pt', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '6px', color: '#0f172a' }}>
+        <h3 className="page3-section-heading">
           Production Performance Summary (Unit: '000 T)
         </h3>
         <table className="report-table">
@@ -98,7 +107,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
 
       {/* Techno-Economic parameters Table */}
       <div>
-        <h3 style={{ fontSize: '12pt', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '6px', color: '#0f172a' }}>
+        <h3 className="page3-section-heading">
           Major Techno-Economic Parameters
         </h3>
         <table className="report-table">
