@@ -25,7 +25,7 @@ const TD_STYLE = { padding: '1px 2px', fontSize: '6.5pt', lineHeight: '1.15' };
 const INPUT_STYLE = {
   width: '100%', minWidth: 0, padding: '0 1px',
   background: 'transparent', border: 'none',
-  color: 'black', fontFamily: 'var(--font-mono)',
+  color: 'black', fontFamily: 'var(--font-sans)',
   fontSize: 'inherit', textAlign: 'right',
 };
 const LABEL_INPUT_STYLE = {
@@ -37,19 +37,27 @@ const LABEL_INPUT_STYLE = {
 export default function MonthWiseProductionTemplate({ data, onCellChange, selectedMonth }) {
   const { rows = [] } = data || {};
 
-  const [mName, yStr] = selectedMonth ? selectedMonth.split(' ') : ['November', '2025'];
-  const shortM = mName ? mName.substring(0, 3) : 'Nov';
-  const shortY = yStr ? yStr.substring(2) : '25';
-  const prevY  = yStr ? (Number(yStr) - 1).toString().substring(2) : '24';
-
   const monthsOrder = [
     'January','February','March','April','May','June',
     'July','August','September','October','November','December',
   ];
-  const mIdx   = monthsOrder.indexOf(mName);
+
+  const _def = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+  let mName = monthsOrder[_def.getMonth()];
+  let yStr  = _def.getFullYear().toString();
+  if (selectedMonth && /^\d{4}-\d{2}$/.test(selectedMonth)) {
+    yStr  = selectedMonth.substring(0, 4);
+    mName = monthsOrder[parseInt(selectedMonth.substring(5, 7), 10) - 1] || mName;
+  }
+
+  const shortM  = mName.substring(0, 3);
+  const shortY  = yStr.substring(2);
+  const prevY   = (Number(yStr) - 1).toString().substring(2);
+
+  const mIdx    = monthsOrder.indexOf(mName);
   const fyStart = (mIdx >= 0 && mIdx < 3) ? Number(yStr) - 1 : Number(yStr);
   const fyEnd   = (fyStart + 1) % 100;
-  const fyStr   = `${fyStart}-${fyEnd.toString().padStart(2, '0')}`;
+  const fyStr   = `${(fyStart % 100).toString().padStart(2, '0')}-${fyEnd.toString().padStart(2, '0')}`;
 
   const PLANTS = ['BSP','DSP','RSP','BSL','ISP','SAIL','ASP','SSP','VISL','5 Plants'];
 
@@ -119,21 +127,20 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
     <div className="report-table-wrapper" style={{ marginTop: '4px' }}>
       {/* Title */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2px' }}>
-        <h2 style={{ fontSize: '10pt', fontWeight: '850', color: '#060177', margin: 0, textTransform: 'uppercase' }}>
+        <h2 className="page4-heading">
           SAIL: Production Performance during {mName}'{shortY} and Apr-{shortM}'{shortY}
         </h2>
-        <h2 style={{ fontSize: '10pt', fontWeight: '850', color: '#0f172a', margin: 0, textTransform: 'uppercase' }}>
+        <h2 className="page4-heading" style={{ color: '#0f172a' }}>
           w.r.t APP
         </h2>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7pt', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>
+      <div className="page4-meta" style={{ display: 'flex', justifyContent: 'space-between' }}>
         <span>Tentative</span>
         <span>Unit: '000 T</span>
       </div>
 
       <table
-        className="report-table"
-        style={{ tableLayout: 'fixed', width: '100%', fontSize: '6.5pt' }}
+        className="report-table page4-table"
       >
         <colgroup>
           <col wrapping="true" style={{ width: COL_W.items }} />
@@ -207,6 +214,7 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
                   textAlign: 'center',
                   backgroundColor: '#f8fafc',
                   overflow: 'hidden',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 <input

@@ -1,4 +1,4 @@
-import openpyxl
+﻿import openpyxl
 import logging
 import sqlite3
 import os
@@ -6,7 +6,7 @@ from typing import Optional
 
 logger = logging.getLogger("excel_extractor_plan")
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "mis_reports.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
 
 def clean_val(val) -> Optional[float]:
     if val is None or str(val).strip().lower() in ("nan", "###", "-", "#div/0!"):
@@ -29,16 +29,16 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         # Validation: Verify required sheet exists (checking case-insensitively)
         sheet_key = None
         for s in sheet_names:
-            if s.lower() == "sheet1":
+            if s.lower() == "table 1":
                 sheet_key = s
                 break
                 
         if not sheet_key:
             raise ValueError(
-                "Uploaded Plan Excel file is missing the required sheet 'sheet1'."
+                "Uploaded Plan Excel file is missing the required sheet 'Table 1'."
             )
             
-        logger.info(f"Running custom RSP coordinate-based ABP plan parser on sheet '{sheet_key}'...")
+        logger.info(f"Running custom BSP coordinate-based ABP plan parser on sheet '{sheet_key}'...")
         
         # Parse starting year from financial_year (supports e.g., "2026-27", "2026")
         if "-" in financial_year:
@@ -46,10 +46,10 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         else:
             year_val = int(financial_year)
             
-        # Map months to column letters in sheet1
+        # Map months to column letters in Table 1
         col_map_p9 = {
-            "04": "B", "05": "C", "06": "D", "07": "F", "08": "G", "09": "H",
-            "10": "J", "11": "K", "12": "L", "01": "N", "02": "O", "03": "P"
+            "04": "C", "05": "D", "06": "E", "07": "F", "08": "G", "09": "H",
+            "10": "I", "11": "J", "12": "K", "01": "L", "02": "M", "03": "N"
         }
         
         # Mapping from month code to month name and year offset from starting fiscal year
@@ -70,33 +70,42 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         
         # Cell row offsets
         production_cells = {
-            "COB#6": 6,
-            "COB#1-5": 5,
-            "Oven Pushing(nos/d)": 7,
-            "SP-1": 8,
-            "SP-2": 9,
-            "SP-3": 10,
-            "Total Sinter": 11,
-            "BF-1": 15,
-            "BF-4": 16,
-            "BF-5": 17,
-            "Hot Metal": 18,
-            "Pig Iron": 20,
-            "SMS-1 CCM-1": 21,
-            "SMS-2 CCM-1&2": 22,
-            "SMS-2 CCM-3": 23,
-            "SMS-2 CCM-4": 24,
-            "Total Crude Steel": 26,
-            "HSM-2 Total HR Coil": 28,
-            "HSM-2 HR Coil (Sale)": 43,
-            "HSM-2 HR Plate": 44,
-            "OPM Plate": 41,
-            "NPM Plate": 42,
-            "CRNO Coils": 47,
-            "ERW Pipes": 45,
-            "SW Pipes": 46,
-            "Saleable Steel": 48,
-            "Finished Steel": 48,
+            "COB#1-8": 6,
+            "COB#9-10": 7,
+            "COB#11": 8,
+            "Oven Pushing(nos/d)": 9,
+             "SP-2": 11,
+             "SP-3": 12,
+             "Total Sinter": 13,
+            
+            "BF#1-7": 14,
+            "BF#8": 15,
+            "Hot Metal": 16,
+            "Pig Iron": 17,
+            "SMS-2": 18,
+            "SMS-3": 19,
+            "SMS-2 BLOOM ": 22,
+            "SMS-2 SLAB ": 23,
+            "SMS-3 BLOOM(CV1&2)": 26,
+            "SMS-3 BILLET105 ": 27,
+            "SMS-3 BILLET150 ": 28,
+            "Total Crude Steel": 20,
+            "RSM_RAIL": 31,
+            "URM_RAIL": 32,
+            "MM": 33,
+            "WIRERODS": 34,
+            "BARS&RODMILL": 35,
+            "PLATEMILL": 36,
+            "Finished Steel": 37,
+            "SEMIS SLABS": 39,
+            "SEMIS BLOOM": 40,
+            "SEMIS BILLETS": 41,
+            "Saleable Semis": 42,
+            
+            "Saleable Steel": 43,
+            "RSMPRIME": 45,
+            "URMPRIME": 46,
+        
         }
         
         vals_extracted = 0
@@ -123,7 +132,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                     vals_extracted += 1
                     # In plan sheet, if numbers are already in thousands, preserve them
                     # (only round to 3 decimal places to keep precision)
-                    if db_item not in ("Oven Pushing(nos/d)", "COB#6", "COB#1-5"):
+                    if db_item not in ("Oven Pushing(nos/d)", "COB#1-8", "COB#9-10", "COB#11"):
                         val = round(val, 3)
                 
                 # Insert or replace in production_plan_table (using column 'month_actual' as per DB schema)
@@ -132,17 +141,18 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                     VALUES (?, ?, ?, ?)
                     ON CONFLICT(report_month, plant_name, item_name) 
                     DO UPDATE SET month_actual = excluded.month_actual
-                """, (db_report_month, "RSP", db_item, val))
+                """, (db_report_month, "BSP", db_item, val))
                 
         # Validation: Verify that we extracted some numeric values
         if vals_extracted == 0:
             raise ValueError(
-                "No numeric data could be extracted from sheet1. Please verify the contents of the Excel file."
+                "No numeric data could be extracted from Table 1. Please verify the contents of the Excel file."
             )
+
             
         conn.commit()
         conn.close()
-        logger.info(f"Custom coordinate RSP ABP Excel plan parsing completed successfully for 12 months starting {year_val}!")
+        logger.info(f"Custom coordinate BSP ABP Excel plan parsing completed successfully for 12 months starting {year_val}!")
         return True
             
     except ValueError as ve:
@@ -151,3 +161,4 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
     except Exception as e:
         logger.error(f"Error parsing Excel file: {e}")
         return False
+

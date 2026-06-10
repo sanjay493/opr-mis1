@@ -186,8 +186,7 @@ const fetchWithTimeout = (url, options = {}, timeoutMs = 8000) => {
 };
 
 const getDefaultDate = () => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 2);
+  const d = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
   return {
     month: months[d.getMonth()],
     year: d.getFullYear().toString()

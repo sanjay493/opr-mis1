@@ -21,55 +21,51 @@ function IndexTemplate({ data, onCellChange }) {
 
   return (
     <div className="report-table-wrapper" style={{ marginTop: '8px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <h3 style={{ fontSize: '12pt', fontWeight: '700', textTransform: 'uppercase', marginBottom: '10px', color: '#0f172a', textAlign: 'center', flexShrink: 0 }}>
-        Table of Contents
-      </h3>
-      <table className="report-table" style={{ fontSize: '12pt', width: '100%', lineHeight: '13pt', height: '100%', tableLayout: 'fixed' }}>
+      <h2 className="page2-heading">Index</h2>
+      <table className="report-table page2-table" style={{ width: '100%', height: '100%', tableLayout: 'fixed' }}>
         <thead>
           <tr>
-            <th style={{ width: '10%', textAlign: 'center', padding: '9px 10px' }}>S.No.</th>
-            <th style={{ width: '75%', textAlign: 'left', padding: '9px 14px' }}>Contents</th>
-            <th style={{ width: '15%', textAlign: 'center', padding: '9px 10px' }}>Page</th>
+            <th style={{ width: '8%', textAlign: 'center' }}>S.No.</th>
+            <th style={{ width: '77%', textAlign: 'left' }}>Contents</th>
+            <th style={{ width: '15%', textAlign: 'center' }}>Page</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, idx) => (
             <tr key={idx} style={{ height: `${Math.floor(100 / (rows.length || 1))}%` }}>
-              <td style={{ textAlign: 'center', fontFamily: 'inherit', padding: '9px 10px', verticalAlign: 'middle' }}>
+              <td className="sno" style={{ verticalAlign: 'top' }}>
                 <input
                   type="text"
                   className="editor-input"
-                  style={{ color: 'black', textAlign: 'center', width: '100%', fontSize: '12pt' }}
+                  style={{ color: 'black', textAlign: 'center', width: '100%', fontWeight: 'bold' }}
                   value={row.sno}
                   onChange={(e) => handleRowChange(idx, 'sno', e.target.value)}
                 />
               </td>
-              <td style={{ textAlign: 'left', fontFamily: 'inherit', padding: '9px 14px', fontWeight: row.sno ? '600' : '400', wordWrap: 'break-word', whiteSpace: 'normal', verticalAlign: 'middle' }}>
+              <td style={{ textAlign: 'left', wordWrap: 'break-word', whiteSpace: 'normal', verticalAlign: 'top' }}>
                 <textarea
                   className="editor-input"
                   style={{
                     color: 'black',
                     textAlign: 'left',
                     width: '100%',
-                    fontWeight: row.sno ? '600' : '400',
-                    fontSize: '12pt',
                     resize: 'none',
                     background: 'transparent',
                     border: 'none',
                     fontFamily: 'inherit',
-                    lineHeight: '1.3',
-                    verticalAlign: 'middle'
+                    lineHeight: '1.4',
+                    verticalAlign: 'top'
                   }}
                   rows={Math.max(1, Math.ceil((row.title || '').length / 50))}
                   value={row.title}
                   onChange={(e) => handleRowChange(idx, 'title', e.target.value)}
                 />
               </td>
-              <td style={{ textAlign: 'center', fontFamily: 'inherit', padding: '9px 10px', verticalAlign: 'middle' }}>
+              <td className="center" style={{ textAlign: 'center', verticalAlign: 'top' }}>
                 <input
                   type="text"
                   className="editor-input"
-                  style={{ color: 'black', textAlign: 'center', width: '100%', fontSize: '12pt' }}
+                  style={{ color: 'black', textAlign: 'center', width: '100%' }}
                   value={row.page_range}
                   onChange={(e) => handleRowChange(idx, 'page_range', e.target.value)}
                 />

@@ -1,4 +1,4 @@
-import re
+﻿import re
 import openpyxl
 import logging
 import sqlite3
@@ -8,7 +8,7 @@ from typing import Optional
 
 logger = logging.getLogger("excel_extractor")
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "mis_reports.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
 
 MONTH_NAMES = {
     "01": "January", "02": "February", "03": "March", "04": "April",
@@ -297,3 +297,4 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
     )
     logger.info(f"ISP Monthly Report extraction done: {vals_extracted} values saved for {db_report_month}.")
     return True
+

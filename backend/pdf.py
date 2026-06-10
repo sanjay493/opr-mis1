@@ -10,10 +10,12 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <title>SAIL MIS Report - {{ month }}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap');
+
         * { box-sizing: border-box; }
 
         body {
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: 'Roboto', Arial, Helvetica, sans-serif;
             color: #0f172a;
             margin: 0;
             padding: 0;
@@ -26,11 +28,24 @@ HTML_TEMPLATE = """
             margin: 15mm 15mm 15mm 15mm;
         }
 
+        /* Page 4 gets tighter top/bottom margins so all rows fit */
+        @page page4-layout {
+            size: A4 portrait;
+            margin: 8mm 12mm 8mm 12mm;
+        }
+
+        .page4-page {
+            page: page4-layout;
+        }
+
         .page {
             page-break-after: always;
             break-after: page;
             page-break-inside: avoid;
             padding: 5mm 0 3mm 0;
+            position: relative;
+            min-height: calc(297mm - 30mm);
+            padding-bottom: 8mm;
         }
 
         .page:last-child {
@@ -48,62 +63,35 @@ HTML_TEMPLATE = """
             margin-bottom: 8px;
         }
 
+        /* Page 4 — compact header bar gap */
+        .page4-page .page-header-bar {
+            padding-bottom: 0px;
+            margin-bottom: 0px;
+            font-size: 7pt;
+        }
+
         .page-footer-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
             display: flex;
             justify-content: space-between;
             font-size: 7.5pt;
             color: #64748b;
             border-top: 0.5px solid #e2e8f0;
             padding-top: 4px;
-            margin-top: 8px;
         }
 
-        .cover-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 250mm;
-            text-align: center;
-            padding: 40mm 20mm;
+        /* Page 4 — compact footer to reclaim vertical space for the table */
+        .page4-page .page-footer-bar {
+            padding-top: 1px;
+            font-size: 7pt;
         }
 
-        .cover-accent {
-            width: 80px;
-            height: 6px;
-            background-color: #0284c7;
-            margin-bottom: 30px;
-            border-radius: 3px;
-        }
-
-        .cover-title {
-            font-size: 30pt;
-            font-weight: 900;
-            color: #0f172a;
-            line-height: 1.1;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
-
-        .cover-subtitle {
-            font-size: 14pt;
-            font-weight: 500;
-            color: #475569;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            margin-bottom: 60px;
-        }
-
-        .cover-meta {
-            margin-top: auto;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 30px;
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            font-size: 9pt;
-            color: #64748b;
-        }
+        /* ══════════════════════════════════════════════════════
+           COMMON STYLES
+           ══════════════════════════════════════════════════════ */
 
         .report-title-section {
             text-align: center;
@@ -111,15 +99,15 @@ HTML_TEMPLATE = """
         }
 
         .report-title-section h2 {
-            font-size: 13pt;
-            font-weight: 800;
+            font-size: 18pt;
+            font-weight: 700;
             color: #0f172a;
             text-transform: uppercase;
             margin: 0;
         }
 
         .report-title-section h3 {
-            font-size: 10pt;
+            font-size: 12pt;
             font-weight: 600;
             color: #475569;
             margin: 4px 0 0 0;
@@ -128,7 +116,7 @@ HTML_TEMPLATE = """
         .report-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 11pt;
+            font-size: 12pt;
             margin-top: 10px;
         }
 
@@ -137,7 +125,7 @@ HTML_TEMPLATE = """
             color: #0f172a;
             font-weight: 700;
             text-transform: uppercase;
-            font-size: 11.5pt;
+            font-size: 12pt;
             padding: 5px 4px;
             border: 1px solid #94a3b8;
             text-align: center;
@@ -146,32 +134,16 @@ HTML_TEMPLATE = """
         .report-table td {
             padding: 4px 4px;
             border: 1px solid #cbd5e1;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 11.5pt;
+            font-family: 'Roboto', Arial, Helvetica, sans-serif;
+            font-size: 12pt;
             text-align: right;
         }
 
         .report-table td.label-cell {
             text-align: left;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 11.5pt;
+            font-family: 'Roboto', Arial, Helvetica, sans-serif;
+            font-size: 12pt;
             font-weight: 500;
-        }
-
-        .index-table th {
-            font-size: 12pt !important;
-            padding: 9px 10px !important;
-        }
-
-        .index-table td {
-            font-size: 12pt !important;
-            padding: 9px 10px !important;
-            font-family: 'Inter', sans-serif !important;
-            text-align: left !important;
-        }
-
-        .index-table td.center-align {
-            text-align: center !important;
         }
 
         .highlights-box {
@@ -180,7 +152,7 @@ HTML_TEMPLATE = """
             padding: 10px;
             border-radius: 4px;
             margin: 10px 0;
-            font-size: 8pt;
+            font-size: 12pt;
         }
 
         .highlights-box h4 {
@@ -188,7 +160,7 @@ HTML_TEMPLATE = """
             text-transform: uppercase;
             color: #0f172a;
             margin: 0 0 5px 0;
-            font-size: 8.5pt;
+            font-size: 13pt;
         }
 
         .highlights-box ul {
@@ -202,81 +174,248 @@ HTML_TEMPLATE = """
             line-height: 1.3;
         }
 
-        .trend-table { font-size: 6pt !important; }
-        .trend-table th { font-size: 5pt !important; padding: 3px 1.5px; }
-        .trend-table td { font-size: 5.5pt !important; padding: 2.5px 1.5px; }
+        /* ══════════════════════════════════════════════════════
+           PAGE-SPECIFIC STYLES  (pages 1 – 14)
+           Naming: .pageN-{element}  |  common stays in .report-table
+           ══════════════════════════════════════════════════════ */
 
-        /* Pages 7-13 month-wise yearly trend */
-        .trend-yearly-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
-        .trend-yearly-table th {
-            font-size: 11.5pt; padding: 3px 2px; line-height: 1.15;
-            background: #1e3a5f; color: #fff; text-align: center; white-space: nowrap; font-weight: 700;
-        }
-        .trend-yearly-table th.qtr-hdr { background: #2d4f7f; }
-        .trend-yearly-table th.tot-hdr { background: #1a3050; }
-        .trend-yearly-table td {
-            font-size: 11.5pt; padding: 2px 2px; line-height: 1.2;
-            text-align: right; border: 0.3pt solid #cbd5e1;
-        }
-        .trend-yearly-table td.plant-cell {
-            font-size: 11.5pt; font-weight: 700; text-align: center;
-            vertical-align: middle; background: #e8edf3; color: #1e3a5f;
-        }
-        .trend-yearly-table td.plant-cell.agg-sail  { background: #bbf7d0; }
-        .trend-yearly-table td.plant-cell.agg-5p    { background: #fef08a; }
-        .trend-yearly-table td.year-cell {
-            font-size: 11.5pt; text-align: left; padding-left: 3px; white-space: nowrap;
-        }
-        .trend-yearly-table tr.plan-row   { background: #dbeafe; font-weight: 700; }
-        .trend-yearly-table tr.sail-row   { background: #dcfce7; font-weight: 700; }
-        .trend-yearly-table tr.fp-row     { background: #fef9c3; font-weight: 700; }
-        .trend-yearly-table tr.plant-first { border-top: 1.5pt solid #64748b; }
-        .trend-yearly-table td.qtr-cell   { background: #f0f5ff; font-weight: 600; }
-        .trend-yearly-table td.total-cell { background: #e8f0fb; font-weight: 700; }
-
-        /* Continuous trend section (pages 7-13 grouped into one PDF flow) */
-        .trend-section-page {
-            page-break-before: always;
-            break-before: page;
-            padding: 5mm 0 3mm 0;
-        }
-        .trend-item-block { margin-bottom: 12pt; }
-        .trend-item-separator {
-            border: none;
-            border-top: 1.5pt solid #0f172a;
-            margin: 10pt 0 6pt 0;
+        /* ─── Page 1 – Cover ────────────────────────────────── */
+        .page1-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 250mm;
+            text-align: center;
+            padding: 40mm 20mm;
         }
 
-        /* Page 4 — tight layout to fit 15 cols on A4 portrait */
-        .page4-table { table-layout: fixed; width: 100%; }
-        .page4-table th { font-size: 5.5pt; padding: 2px 2px; line-height: 1.15; }
-        .page4-table td { font-size: 6pt;   padding: 1px 2px; line-height: 1.15; }
+        .page1-accent {
+            width: 80px;
+            height: 6px;
+            background-color: #0284c7;
+            margin-bottom: 30px;
+            border-radius: 3px;
+        }
+
+        .page1-title {
+            font-size: 30pt;
+            font-weight: 900;
+            color: #0f172a;
+            line-height: 1.1;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .page1-subtitle {
+            font-size: 14pt;
+            font-weight: 500;
+            color: #475569;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 60px;
+        }
+
+        .page1-meta {
+            margin-top: auto;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 30px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            color: #64748b;
+        }
+
+        /* ─── Page 2 – Index ────────────────────────────────── */
+        .page2-heading {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #333;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #000;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        .page2-table {
+            line-height: 1.4;
+            background-color: white;
+        }
+
+        .page2-table th {
+            background-color: #f0f0f0;
+            border: 1px solid #000;
+            color: #333;
+            text-transform: none;
+            font-size: 10.5pt;
+            padding: 8px 10px;
+            font-weight: bold;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .page2-table td {
+            border: 1px solid #000;
+            font-size: 10.5pt;
+            padding: 8px 10px;
+            font-family: 'Roboto', Arial, Helvetica, sans-serif;
+            text-align: left;
+            vertical-align: top;
+            color: #333;
+            font-weight: normal;
+        }
+
+        .page2-table td.center {
+            text-align: center;
+        }
+
+        .page2-table td.sno {
+            font-weight: bold;
+            text-align: center;
+        }
+
+        /* ─── Page 3 – SAIL Performance Summary ─────────────── */
+        .page3-section-heading {
+            font-size: 13pt;
+            font-weight: 700;
+            margin: 10px 0 4px 0;
+            text-transform: uppercase;
+            color: #0f172a;
+        }
+
+        /* ─── Page 4 – Production Performance vs APP ─────────── */
+        .page4-heading {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #060177;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .page4-meta {
+            font-size: 9pt;
+            font-weight: 500;
+            color: #475569;
+            margin-bottom: 3px;
+        }
+
+        .page4-table { table-layout: fixed; width: 100%; height: 100%; }
+        .page4-table th { font-size: 11.5pt; padding: 2px 3px; line-height: 1; }
+        .page4-table td { font-size: 11pt;   padding: 2px 3px; line-height: 1; }
         .page4-table col.c-items    { width: 13%; }
         .page4-table col.c-plant    { width:  5%; }
         .page4-table col.c-ann      { width:  7%; }
         .page4-table col.c-num      { width:  6%; }
         .page4-table col.c-num-sm   { width:5.5%; }
+
+        /* ─── Pages 5–6 – Plant-Wise Performance ─────────────── */
+        .page5-6-heading {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #060177;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .page5-6-unit {
+            font-size: 9pt;
+            font-weight: 500;
+            color: #475569;
+        }
+
+        .page5-6-table { table-layout: fixed; width: 100%; }
+        .page5-6-table th { font-size: 12pt; padding: 2px 2px; }
+        .page5-6-table td { font-size: 12pt; padding: 1px 2px; }
+
+        .page5-6-plant-cell {
+            font-size: 12pt;
+            font-weight: 700;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        /* ─── Pages 7–13 – Month-wise Production Trend ──────── */
+        .page7-13-heading {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #060177;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .page7-13-unit {
+            font-size: 9pt;
+            font-weight: 500;
+            color: #475569;
+        }
+
+        .page7-13-trend-table { font-size: 6pt !important; }
+        .page7-13-trend-table th { font-size: 5pt !important; padding: 3px 1.5px; }
+        .page7-13-trend-table td { font-size: 5.5pt !important; padding: 2.5px 1.5px; }
+
+        .page7-13-yearly-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+        .page7-13-yearly-table th {
+            font-size: 12pt; padding: 3px 2px; line-height: 1.15;
+            background: #1e3a5f; color: #fff; text-align: center; white-space: nowrap; font-weight: 700;
+        }
+        .page7-13-yearly-table th.qtr-hdr { background: #2d4f7f; }
+        .page7-13-yearly-table th.tot-hdr { background: #1a3050; }
+        .page7-13-yearly-table td {
+            font-size: 12pt; padding: 2px 2px; line-height: 1.2;
+            text-align: right; border: 0.3pt solid #cbd5e1;
+        }
+        .page7-13-yearly-table td.plant-cell {
+            font-size: 12pt; font-weight: 700; text-align: center;
+            vertical-align: middle; background: #e8edf3; color: #1e3a5f;
+        }
+        .page7-13-yearly-table td.plant-cell.agg-sail  { background: #bbf7d0; }
+        .page7-13-yearly-table td.plant-cell.agg-5p    { background: #fef08a; }
+        .page7-13-yearly-table td.year-cell {
+            font-size: 12pt; text-align: left; padding-left: 3px; white-space: nowrap;
+        }
+        .page7-13-yearly-table tr.plan-row   { background: #dbeafe; font-weight: 700; }
+        .page7-13-yearly-table tr.sail-row   { background: #dcfce7; font-weight: 700; }
+        .page7-13-yearly-table tr.fp-row     { background: #fef9c3; font-weight: 700; }
+        .page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid #64748b; }
+        .page7-13-yearly-table td.qtr-cell   { background: #f0f5ff; font-weight: 600; }
+        .page7-13-yearly-table td.total-cell { background: #e8f0fb; font-weight: 700; }
+
+        .page7-13-section-page {
+            page-break-before: always;
+            break-before: page;
+            padding: 5mm 0 3mm 0;
+            position: relative;
+            min-height: calc(297mm - 30mm);
+            padding-bottom: 8mm;
+        }
+        .page7-13-item-block { margin-bottom: 12pt; }
+        .page7-13-separator {
+            border: none;
+            border-top: 1.5pt solid #0f172a;
+            margin: 10pt 0 6pt 0;
+        }
     </style>
 </head>
 <body>
     {% set total_pages = total_report_pages %}
     {% for page in pages %}
     {% if page.type == 'trend_section' %}
-    <div class="trend-section-page">
+    <div class="page7-13-section-page">
         <div class="page-header-bar">
             Steel Authority of India Limited - Operations Monthly Informatics
         </div>
         {% for item in page['items'] %}
-        {% if not loop.first %}<hr class="trend-item-separator">{% endif %}
-        <div class="trend-item-block">
+        {% if not loop.first %}<hr class="page7-13-separator">{% endif %}
+        <div class="page7-13-item-block">
             <div style="display:flex;justify-content:space-between;align-items:flex-end;
                         border-bottom:2px solid #0f172a;padding-bottom:4px;margin-bottom:5px;">
-                <h2 style="font-size:9pt;font-weight:800;color:#060177;margin:0;text-transform:uppercase;">
+                <h2 class="page7-13-heading">
                     MONTH-WISE PRODUCTION TREND : {{ item.item_display }}
                 </h2>
-                <span style="font-size:7.5pt;font-weight:600;color:#475569;">Unit: {{ item.unit }}</span>
+                <span class="page7-13-unit">Unit: {{ item.unit }}</span>
             </div>
-            <table class="trend-yearly-table">
+            <table class="page7-13-yearly-table">
                 <colgroup>
                     <col style="width:4.5%"/>
                     <col style="width:10%"/>
@@ -328,18 +467,18 @@ HTML_TEMPLATE = """
         {% endfor %}
         <div class="page-footer-bar">
             <span>Prepared by: MIS Group</span>
-            <span>Pages {{ page.page_range }} of {{ total_pages }}</span>
+            <span>Page {{ page.page }} of {{ total_pages }}</span>
         </div>
     </div>
     {% else %}
-    <div class="page">
+    <div class="page{% if page.type == 'page4_table' %} page4-page{% endif %}">
 
         {% if page.type == 'cover' %}
-            <div class="cover-container">
-                <div class="cover-accent"></div>
-                <h1 class="cover-title">{{ page.title }}</h1>
-                <p class="cover-subtitle">O P E R A T I O N S   D I R E C T O R A T E</p>
-                <div class="cover-meta">
+            <div class="page1-container">
+                <div class="page1-accent"></div>
+                <h1 class="page1-title">{{ page.title }}</h1>
+                <p class="page1-subtitle">O P E R A T I O N S   D I R E C T O R A T E</p>
+                <div class="page1-meta">
                     <div>
                         <strong>Prepared By:</strong>
                         <div style="margin-top: 4px;">MIS Group</div>
@@ -357,21 +496,21 @@ HTML_TEMPLATE = """
         </div>
 
         {% if page.type == 'index' %}
-            <div class="report-title-section"><h2>{{ page.title }}</h2></div>
-            <table class="report-table index-table" style="margin-top: 15px; width: 100%;">
+            <h2 class="page2-heading">{{ page.title }}</h2>
+            <table class="report-table page2-table" style="width: 100%;">
                 <thead>
                     <tr>
-                        <th style="width: 10%; text-align: center;">S.No.</th>
-                        <th style="width: 75%; text-align: left; padding-left: 10px;">Contents</th>
+                        <th style="width: 8%; text-align: center;">S.No.</th>
+                        <th style="width: 77%; text-align: left;">Contents</th>
                         <th style="width: 15%; text-align: center;">Page</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in page.rows %}
                     <tr>
-                        <td class="center-align" style="font-family: inherit;">{{ row.sno }}</td>
-                        <td style="font-family: inherit; font-weight: {% if row.sno %}600{% else %}400{% endif %};">{{ row.title }}</td>
-                        <td class="center-align" style="font-family: inherit;">{{ row.page_range }}</td>
+                        <td class="sno" style="font-family: inherit;">{{ row.sno }}</td>
+                        <td style="font-family: inherit;">{{ row.title }}</td>
+                        <td class="center" style="font-family: inherit;">{{ row.page_range }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -382,7 +521,7 @@ HTML_TEMPLATE = """
                 <h2>{{ page.title }}</h2>
                 <h3>{{ month }}</h3>
             </div>
-            <h4 style="font-size: 8pt; font-weight: bold; margin: 10px 0 4px 0; text-transform: uppercase;">
+            <h4 class="page3-section-heading">
                 Production Performance Summary (Unit: '000 T)
             </h4>
             <table class="report-table">
@@ -416,7 +555,7 @@ HTML_TEMPLATE = """
                 <ul>{% for h in page.highlights %}<li>{{ h }}</li>{% endfor %}</ul>
             </div>
             {% endif %}
-            <h4 style="font-size: 8pt; font-weight: bold; margin: 10px 0 4px 0; text-transform: uppercase;">
+            <h4 class="page3-section-heading">
                 Major Techno-Economic Parameters
             </h4>
             <table class="report-table">
@@ -446,7 +585,7 @@ HTML_TEMPLATE = """
                 <h2>{{ page.title }}</h2>
                 {% if page.subtitle %}<h3>{{ page.subtitle }}</h3>{% endif %}
             </div>
-            <table class="report-table trend-table">
+            <table class="report-table page7-13-trend-table">
                 <thead>
                     <tr>{% for h in page.headers %}<th>{{ h }}</th>{% endfor %}</tr>
                 </thead>
@@ -463,12 +602,12 @@ HTML_TEMPLATE = """
         {% elif page.type == 'trend_yearly' %}
             <div style="display:flex;justify-content:space-between;align-items:flex-end;
                         border-bottom:2px solid #0f172a;padding-bottom:4px;margin-bottom:5px;">
-                <h2 style="font-size:9pt;font-weight:800;color:#060177;margin:0;text-transform:uppercase;">
+                <h2 class="page7-13-heading">
                     MONTH-WISE PRODUCTION TREND : {{ page.item_display }}
                 </h2>
-                <span style="font-size:7.5pt;font-weight:600;color:#475569;">Unit: {{ page.unit }}</span>
+                <span class="page7-13-unit">Unit: {{ page.unit }}</span>
             </div>
-            <table class="trend-yearly-table">
+            <table class="page7-13-yearly-table">
                 <colgroup>
                     <col style="width:4.5%"/>
                     <col style="width:10%"/>
@@ -519,14 +658,14 @@ HTML_TEMPLATE = """
 
         {% elif page.type == 'page4_table' %}
             <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid #0f172a; padding-bottom: 3px; margin-bottom: 4px;">
-                <h2 style="font-size: 9.5pt; font-weight: 800; color: #060177; margin: 0; text-transform: uppercase;">
+                <h2 class="page4-heading">
                     SAIL: Production Performance during {{ m_name }}'{{ short_y }} and Apr-{{ short_m }}'{{ short_y }}
                 </h2>
-                <h2 style="font-size: 9.5pt; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase;">
+                <h2 class="page4-heading" style="color: #0f172a;">
                     w.r.t APP
                 </h2>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 6.5pt; font-weight: 600; color: #475569; margin-bottom: 3px;">
+            <div class="page4-meta" style="display: flex; justify-content: space-between;">
                 <span>Tentative</span><span>Unit: '000 T</span>
             </div>
             <table class="report-table page4-table">
@@ -561,16 +700,17 @@ HTML_TEMPLATE = """
                     <tr>
                         {% if row.is_first_in_group %}
                         <td class="label-cell" rowspan="{{ row.group_size }}"
-                            style="font-weight: 700; font-size: 5.5pt; vertical-align: middle;
-                                   background-color: #f8fafc; padding: 1px 2px 1px 3px;
-                                   overflow: hidden; font-family: Arial, Helvetica, sans-serif;">
+                            style="font-weight: 700; font-size: 11.5pt; vertical-align: middle;
+                                   background-color: #f8fafc; padding: 4px 3px 4px 4px;
+                                   overflow: hidden; font-family: 'Roboto', Arial, Helvetica, sans-serif;">
                             {{ row.item }}
                         </td>
                         {% endif %}
                         <td class="label-cell"
-                            style="font-weight: 600; font-size: 5.5pt; text-align: center;
-                                   background-color: #f8fafc; padding: 1px 2px;
-                                   font-family: Arial, Helvetica, sans-serif;">
+                            style="font-weight: 600; font-size: 11.5pt; text-align: center;
+                                   background-color: #f8fafc; padding: 4px 3px;
+                                   font-family: 'Roboto', Arial, Helvetica, sans-serif;
+                                   white-space: nowrap; overflow: hidden;">
                             {{ row.plant }}
                         </td>
                         {% for val in row['values'] %}<td>{{ val }}</td>{% endfor %}
@@ -581,12 +721,12 @@ HTML_TEMPLATE = """
 
         {% elif page.type == 'performance_summary_table' %}
             <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2px;">
-                <h2 style="font-size:11.5pt;font-weight:850;color:#060177;margin:0;text-transform:uppercase;">
+                <h2 class="page5-6-heading">
                     PLANT-WISE PRODUCTION PERFORMANCE :{{ short_m }}'{{ short_y }} and Apr-{{ short_m }}'{{ short_y }}
                 </h2>
-                <span style="font-size:11.5pt;font-weight:600;color:#475569;">Unit:000 T</span>
+                <span class="page5-6-unit">Unit:000 T</span>
             </div>
-            <table class="report-table" style="table-layout:fixed;width:100%;font-size:6pt;">
+            <table class="report-table page5-6-table" style="table-layout:fixed;width:100%;">
                 <colgroup>
                     <col style="width:4%"/>
                     <col style="width:20%"/>
@@ -630,7 +770,7 @@ HTML_TEMPLATE = """
                             {% set ns.cur_plant = row.plant %}
                             {% set plant_size = page.rows | selectattr('plant','equalto',row.plant) | list | length %}
                             <tr style="{{ 'font-weight:700;background:#f0f4f8;' if row.bold else '' }}">
-                                <td rowspan="{{ plant_size }}" style="font-size:11.5pt;font-weight:800;text-align:center;vertical-align:middle;padding:1px 2px;">{{ row.plant }}</td>
+                                <td rowspan="{{ plant_size }}" class="page5-6-plant-cell" style="padding:1px 2px;">{{ row.plant }}</td>
                                 <td style="text-align:left;padding:1px 3px;font-weight:{{ '700' if row.bold else '400' }};">{{ row.label }}</td>
                                 {% for val in row['values'] %}<td style="text-align:right;padding:1px 2px;">{{ val }}</td>{% endfor %}
                             </tr>
@@ -798,30 +938,24 @@ async def build_pdf_response(request: PDFRequest) -> StreamingResponse:
                 p["rows"] = _group_page4_rows(p.get("rows", []))
             flat_pages.append(p)
 
-        # Group consecutive trend pages (trend_yearly / trend_combined) into one continuous PDF section
+        # Each trend page becomes its own section so it gets its own header and footer
         pages_to_render = []
         i = 0
         while i < len(flat_pages):
             p = flat_pages[i]
             if p.get("type") in ("trend_yearly", "trend_combined"):
-                start_i = i
-                trend_items = []
-                while i < len(flat_pages) and flat_pages[i].get("type") in ("trend_yearly", "trend_combined"):
-                    tp = flat_pages[i]
-                    if tp.get("type") == "trend_combined":
-                        # Expand sub-items so the template renders each as a separate table
-                        for sub in tp.get("items", []):
-                            trend_items.append(sub)
-                    else:
-                        trend_items.append(tp)
-                    i += 1
-                first_pg = flat_pages[start_i].get("page", "?")
-                last_pg  = flat_pages[i - 1].get("page", "?")
+                tp = flat_pages[i]
+                if tp.get("type") == "trend_combined":
+                    items = [sub for sub in tp.get("items", [])]
+                else:
+                    items = [tp]
                 pages_to_render.append({
                     "type": "trend_section",
-                    "items": trend_items,
-                    "page_range": f"{first_pg}-{last_pg}",
+                    "page": tp.get("page", "?"),
+                    "items": items,
+                    "page_range": str(tp.get("page", "?")),
                 })
+                i += 1
             else:
                 pages_to_render.append(p)
                 i += 1

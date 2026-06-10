@@ -2,9 +2,9 @@ import sqlite3
 import json
 import os
 from typing import List, Dict, Any, Optional
+from constants import ALL_PLANTS as PLANTS
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "mis_reports.db")
-PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'VISL']
 
 def init_db():
     """Initializes the database and creates the production tables if they don't exist."""

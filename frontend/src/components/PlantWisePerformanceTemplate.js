@@ -17,8 +17,8 @@ const COL_W = {
   ytdGr:   '6%',
 };
 
-const TH = { padding: '2px 3px', fontSize: '11pt', verticalAlign: 'middle', lineHeight: '1.2' };
-const TD = { padding: '1px 3px', fontSize: '11pt', lineHeight: '1.2', overflow: 'hidden' };
+const TH = { padding: '2px 3px', fontSize: '12pt', verticalAlign: 'middle', lineHeight: '1.2' };
+const TD = { padding: '1px 3px', fontSize: '12pt', lineHeight: '1.2', overflow: 'hidden' };
 const INPUT = {
   width: '100%', minWidth: 0, padding: '0 1px',
   background: 'transparent', border: 'none',
@@ -36,19 +36,26 @@ const BOLD_PLANTS = new Set(['SAIL', 'BSP', 'DSP', 'RSP', 'BSL', 'ISP']);
 export default function PlantWisePerformanceTemplate({ data, onCellChange, selectedMonth }) {
   const { rows = [] } = data || {};
 
-  const [mName, yStr] = selectedMonth ? selectedMonth.split(' ') : ['November', '2025'];
-  const shortM = mName ? mName.substring(0, 3) : 'Nov';
-  const shortY = yStr  ? yStr.substring(2)      : '25';
-  const prevY  = yStr  ? (Number(yStr) - 1).toString().substring(2) : '24';
-
   const monthsOrder = [
     'January','February','March','April','May','June',
     'July','August','September','October','November','December',
   ];
+
+  // selectedMonth is "YYYY-MM" format (e.g. "2026-04")
+  let mName = 'November', yStr = '2025';
+  if (selectedMonth && /^\d{4}-\d{2}$/.test(selectedMonth)) {
+    yStr  = selectedMonth.substring(0, 4);
+    mName = monthsOrder[parseInt(selectedMonth.substring(5, 7), 10) - 1] || 'November';
+  }
+
+  const shortM  = mName.substring(0, 3);
+  const shortY  = yStr.substring(2);
+  const prevY   = (Number(yStr) - 1).toString().substring(2);
+
   const mIdx    = monthsOrder.indexOf(mName);
   const fyStart = (mIdx >= 0 && mIdx < 3) ? Number(yStr) - 1 : Number(yStr);
   const fyEnd   = (fyStart + 1) % 100;
-  const fyStr   = `${fyStart}-${fyEnd.toString().padStart(2, '0')}`;
+  const fyStr   = `${(fyStart % 100).toString().padStart(2, '0')}-${fyEnd.toString().padStart(2, '0')}`;
 
   const handleValChange = (rowIdx, valIdx, val) => {
     const updated = rows.map((r, i) =>
@@ -78,13 +85,13 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
   return (
     <div className="report-table-wrapper" style={{ marginTop: '4px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2px' }}>
-        <h2 style={{ fontSize: '11pt', fontWeight: '850', color: '#060177', margin: 0, textTransform: 'uppercase' }}>
+        <h2 className="page5-6-heading">
           PLANT-WISE PRODUCTION PERFORMANCE :{shortM}'{shortY} and Apr-{shortM}'{shortY}
         </h2>
-        <span style={{ fontSize: '1pt', fontWeight: '600', color: '#475569' }}>Unit:000 T</span>
+        <span className="page5-6-unit">Unit:000 T</span>
       </div>
 
-      <table className="report-table" style={{ tableLayout: 'fixed', width: '100%', fontSize: '11.5pt' }}>
+      <table className="report-table page5-6-table" style={{ tableLayout: 'fixed', width: '100%' }}>
         <colgroup>
           <col style={{ width: COL_W.plant }} />
           <col style={{ width: COL_W.item }} />
@@ -135,12 +142,9 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
                 {isFirst && (
                   <td
                     rowSpan={size}
+                    className="page5-6-plant-cell"
                     style={{
                       ...TD,
-                      fontWeight: '800',
-                      fontSize: '11pt',
-                      textAlign: 'center',
-                      verticalAlign: 'middle',
                       backgroundColor: plantBg,
                       borderRight: '1px solid #94a3b8',
                     }}
