@@ -33,10 +33,10 @@ function TrendTable({ rows, item_display, unit }) {
         display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
         borderBottom: '2px solid #0f172a', paddingBottom: '4px', marginBottom: '6px',
       }}>
-        <h2 style={{ fontSize: '10pt', fontWeight: '800', color: '#060177', margin: 0, textTransform: 'uppercase' }}>
+        <h2 className="page7-13-heading">
           MONTH-WISE PRODUCTION TREND : {item_display}
         </h2>
-        <span style={{ fontSize: '8pt', fontWeight: '600', color: '#475569' }}>Unit: {unit}</span>
+        <span className="page7-13-unit">Unit: {unit}</span>
       </div>
 
       {/* Table */}

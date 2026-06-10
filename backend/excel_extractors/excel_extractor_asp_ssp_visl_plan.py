@@ -1,4 +1,4 @@
-import openpyxl
+﻿import openpyxl
 import logging
 import sqlite3
 import os
@@ -6,7 +6,7 @@ from typing import Optional
 
 logger = logging.getLogger("excel_extractor_plan")
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "mis_reports.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
 
 _MONTH_NAMES = {
     1: "January", 2: "February", 3: "March", 4: "April",
@@ -141,3 +141,4 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
     except Exception as e:
         logger.error(f"ASP/SSP/VISL Plan extraction error: {e}")
         return False
+
