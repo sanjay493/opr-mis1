@@ -2,4 +2,7 @@ frontend/node_modules/
 frontend/.next/
 backend/node_modules/
 *.pdf
-backend/mis_report.db
+backend/mis_reports.db
+archive/
+backend/__pycache__/
+backend/venv/

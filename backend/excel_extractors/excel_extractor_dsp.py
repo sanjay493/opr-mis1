@@ -1,4 +1,4 @@
-import re
+﻿import re
 import logging
 import sqlite3
 import os
@@ -6,7 +6,7 @@ from typing import Optional
 
 logger = logging.getLogger("excel_extractor")
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "mis_reports.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
 
 MONTH_NAMES = {
     "01": "January", "02": "February", "03": "March", "04": "April",
@@ -205,3 +205,4 @@ def _extract_mcr_report(file_path: str, source_file_name: str) -> bool:
 # def _extract_monthly_report(file_path: str, report_month: str, source_file_name: str) -> bool:
 #     """Extracts production data from DSP final monthly consolidated report."""
 #     pass
+

@@ -18,9 +18,7 @@ import db
 #   ("AGG_NOS", item, [plants]) – weighted-average aggregate for nos/day
 # ---------------------------------------------------------------------------
 
-_5P  = ["BSP", "DSP", "RSP", "BSL", "ISP"]
-_5PV = ["BSP", "DSP", "RSP", "BSL", "ISP", "VISL"]
-_ALL = ["BSP", "DSP", "RSP", "BSL", "ISP", "ASP", "SSP", "VISL"]
+from constants import FIVE_PLANTS as _5P, FIVE_PLANTS_VISL as _5PV, ALL_PLANTS as _ALL
 
 PAGE5_PLANTS = [
     ("SAIL", [
@@ -112,15 +110,15 @@ PAGE6_PLANTS = [
     ("ASP", [
         ("Ingot steel",         None,                    False, False),
         ("Concast (total)",     None,                    False, False),
-        ("Crude Steel(Tot)",    None,                    True,  False),
-        ("Saleable Steel",      None,                    True,  False),
+        ("Crude Steel(Tot)",    "Total Crude Steel",     True,  False),
+        ("Saleable Steel",      "Saleable Steel",        True,  False),
     ]),
     ("SSP", [
-        ("Crude Steel",         None,                    True,  False),
-        ("Saleable Steel",      None,                    True,  False),
+        ("Crude Steel",         "Total Crude Steel",     True,  False),
+        ("Saleable Steel",      "Saleable Steel",        True,  False),
     ]),
-    ("VISP", [
-        ("Saleable Steel",      None,                    True,  False),
+    ("VISL", [
+        ("Saleable Steel",      "Saleable Steel",        True,  False),
     ]),
 ]
 

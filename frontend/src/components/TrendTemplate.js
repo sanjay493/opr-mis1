@@ -16,8 +16,8 @@ export default function TrendTemplate({ data, onCellChange }) {
   };
 
   return (
-    <div className="report-table-wrapper trend-table-container">
-      <table className="report-table trend-table">
+    <div className="report-table-wrapper page7-13-table-container">
+      <table className="report-table page7-13-trend-table">
         <thead>
           <tr>
             {headers.map((h, idx) => (

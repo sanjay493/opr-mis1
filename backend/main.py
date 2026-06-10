@@ -181,7 +181,7 @@ async def upload_excel(
             )
 
         original_filename = file.filename or "unknown"
-        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
 
         if plant_name == "RSP":
             import excel_extractor_rsp
@@ -247,7 +247,7 @@ async def upload_excel_plan(
                 f"Plan Excel extraction is currently only supported for RSP, ISP, BSP, DSP, BSL and ASP_SSP_VISL, not {plant_name}."
             )
 
-        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
 
         if plant_name == "RSP":
             import excel_extractor_rsp_plan
