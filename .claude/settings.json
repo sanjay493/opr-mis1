@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(python -c ' *)",
-      "Bash(python -c \"import json; data=json.load\\(open\\('d:/opr-mis1/backend/mis_data.json'\\)\\); pages=[p for p in data if isinstance\\(p.get\\('page'\\), int\\) and 11 <= p['page'] <= 20]; [print\\(f\\\\\"Page {p['page']}: type={p.get\\('type','?'\\)} title={p.get\\('title','?'\\)[:60]}\\\\\"\\) for p in pages]\")"
+      "Bash(python -c \"import json; data=json.load\\(open\\('d:/opr-mis1/backend/mis_data.json'\\)\\); pages=[p for p in data if isinstance\\(p.get\\('page'\\), int\\) and 11 <= p['page'] <= 20]; [print\\(f\\\\\"Page {p['page']}: type={p.get\\('type','?'\\)} title={p.get\\('title','?'\\)[:60]}\\\\\"\\) for p in pages]\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('h:/opr-mis1/backend/mis_data.json'\\)\\); pages=[p.get\\('page'\\) for p in d]; print\\('page count:', len\\(d\\)\\); print\\('page nums:', pages[-5:]\\); last=d[-1]; print\\('last page keys:', list\\(last.keys\\(\\)\\)[:10]\\); p13=[p for p in d if p.get\\('page'\\)==13]; print\\('page 13:', list\\(p13[0].keys\\(\\)\\) if p13 else 'not found'\\)\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('h:/opr-mis1/backend/mis_data.json'\\)\\); p13=d[-1]; import json; print\\(json.dumps\\(p13, indent=2\\)\\)\")",
+      "Bash(python -c \"import main; print\\('main.py OK'\\)\")",
+      "Read(//h/opr-mis/frontend/**)"
     ]
   }
 }

@@ -28,13 +28,13 @@ HTML_TEMPLATE = """
             margin: 18mm 15mm 18mm 15mm;
         }
 
-        /* Page 4: tighter L/R for columns + reduced top to fit all rows */
+        /* Page 4: tighter margins to maximise usable area while keeping footer clear */
         @page page4-layout {
             size: A4 portrait;
-            margin-top: 10mm;
-            margin-right: 12mm;
-            margin-bottom: 0mm;
-            margin-left: 12mm;
+            margin-top: 12mm;
+            margin-right: 10mm;
+            margin-bottom: 12mm;
+            margin-left: 10mm;
         }
 
         .page4-page {
@@ -251,7 +251,7 @@ HTML_TEMPLATE = """
 
         /* ─── Page 4 – Production Performance vs APP ─────────── */
         .page4-heading {
-            font-size: 11.5pt;
+            font-size: 10pt;
             font-weight: 700;
             color: #060177;
             margin: 0;
@@ -265,9 +265,9 @@ HTML_TEMPLATE = """
             margin-bottom: 2px;
         }
 
-        .page4-table { table-layout: fixed; width: 100%; height: 100%; border: 2.5px solid #1e293b; }
-        .page4-table th { font-size: 10pt; padding: 2px 2px; line-height: 1.0; }
-        .page4-table td { font-size: 10pt; padding: 2px 2px; line-height: 1.0; }
+        .page4-table { table-layout: fixed; width: 100%; border: 2.5px solid #1e293b; }
+        .page4-table th { font-size: 8pt; padding: 1.5px 2px; line-height: 1.0; }
+        .page4-table td { font-size: 8pt; padding: 1.5px 2px; line-height: 1.0; }
         .page4-table col.c-items    { width: 13%; }
         .page4-table col.c-plant    { width:  5%; }
         .page4-table col.c-ann      { width:  7%; }
@@ -428,6 +428,55 @@ HTML_TEMPLATE = """
             border-top: 1.5pt solid #0f172a;
             margin: 16pt 0 10pt 0;
         }
+
+        /* ─── Page 14 – Production by Process ───────────────── */
+        .page14-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; margin-bottom: 10pt; }
+        .page14-table th { font-size: 8pt; padding: 2px 3px; line-height: 1.1; text-align: center; vertical-align: middle; border: 1px solid #94a3b8; }
+        .page14-table td { font-size: 8.5pt; padding: 2px 3px; line-height: 1.1; text-align: right; border: 1px solid #cbd5e1; }
+        .page14-table td.plant-col { text-align: left; font-weight: 600; background-color: #f8fafc; }
+        .page14-table tr.agg-row td { font-weight: 700; background-color: #fef9c3 !important; }
+        .page14-table tr.sail-row td { font-weight: 700; background-color: #dcfce7 !important; }
+        .page14-table td.cs-col { background-color: #dbeafe !important; }
+        .page14-table td.cc-col { background-color: #d1fae5 !important; }
+        .page14-table td.prev-sep { border-left: 2.5px solid #1e293b; }
+
+        /* ── pages 15-17: Category Wise Saleable Steel ──────────────────── */
+        .catwise-wrap { margin-bottom: 6pt; }
+        .catwise-plant-title { font-weight: 700; font-size: 10pt; text-decoration: underline; margin: 4pt 0 3pt 0; }
+        .catwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; margin-bottom: 6pt; font-size: 7.5pt; }
+        .catwise-table col.col-lbl { width: 33%; }
+        .catwise-table col.col-num { width: 11.2%; }
+        .catwise-table th { background-color: #1e3a5f; color: #fff; padding: 2px 3px; text-align: center; vertical-align: middle; border: 1px solid #334155; font-size: 7pt; line-height: 1.2; font-weight: 600; }
+        .catwise-table th.lbl-th { text-align: left; }
+        .catwise-table td { padding: 1.5px 4px; border: 1px solid #cbd5e1; line-height: 1.2; }
+        .catwise-table td.lbl-td { text-align: left; }
+        .catwise-table td.num-td { text-align: right; }
+        .catwise-table tr.cw-data td { background-color: #f8fafc; }
+        .catwise-table tr.cw-section-data td { background-color: #eff6ff; font-weight: 600; }
+        .catwise-table tr.cw-section-hdr td { background-color: #e2e8f0; font-weight: 700; font-size: 7.5pt; }
+        .catwise-table tr.cw-subtotal td { background-color: #fef9c3; font-weight: 700; }
+        .catwise-table tr.cw-pct td { background-color: #f1f5f9; font-style: italic; font-size: 6.8pt; }
+        .catwise-table tr.cw-total td { background-color: #dcfce7; font-weight: 700; }
+        .catwise-table tr.cw-separator { height: 3px; }
+        .catwise-table tr.cw-separator td { border: none; background: transparent; padding: 0; }
+
+        /* ── page 18: Segment Wise Production ───────────────────────────── */
+        .segwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; font-size: 7.5pt; }
+        .segwise-table col.col-lbl { width: 27%; }
+        .segwise-table col.col-num { width: 12.2%; }
+        .segwise-table th { background-color: #1e3a5f; color: #fff; padding: 2px 3px; text-align: center; vertical-align: middle; border: 1px solid #334155; font-size: 7pt; line-height: 1.2; font-weight: 600; }
+        .segwise-table th.lbl-th { text-align: left; }
+        .segwise-table td { padding: 1.5px 4px; border: 1px solid #cbd5e1; line-height: 1.2; }
+        .segwise-table td.lbl-td { text-align: left; }
+        .segwise-table td.num-td { text-align: right; }
+        .segwise-table tr.sw-data td { background-color: #f8fafc; }
+        .segwise-table tr.sw-seg-hdr td { background-color: #1e3a5f; color: #fff; font-weight: 700; font-size: 8pt; padding: 3px 5px; border: 1px solid #334155; }
+        .segwise-table tr.sw-plant-lbl td { background-color: #dbeafe; font-weight: 700; font-size: 7.5pt; }
+        .segwise-table tr.sw-seg-total td { background-color: #fef9c3; font-weight: 700; }
+        .segwise-table tr.sw-seg-pct td { background-color: #f1f5f9; font-weight: 700; font-style: italic; }
+        .segwise-table tr.sw-grand-total td { background-color: #dcfce7; font-weight: 700; font-size: 8pt; }
+        .segwise-table tr.sw-separator { height: 3px; }
+        .segwise-table tr.sw-separator td { border: none; background: transparent; padding: 0; }
     </style>
 </head>
 <body>
@@ -718,14 +767,14 @@ HTML_TEMPLATE = """
                     <tr class="{% if row.is_first_in_group %}group-first {% endif %}{% if row.plant == 'SAIL' %}sail-row{% endif %}">
                         {% if row.is_first_in_group %}
                         <td class="label-cell" rowspan="{{ row.group_size }}"
-                            style="font-weight: 700; font-size: 10.5pt; vertical-align: middle;
+                            style="font-weight: 700; font-size: 8pt; vertical-align: middle;
                                    background-color: #f8fafc; padding: 1px 2px 1px 4px;
                                    overflow: hidden; font-family: 'Roboto', Arial, Helvetica, sans-serif;">
                             {{ row.item }}
                         </td>
                         {% endif %}
                         <td class="label-cell"
-                            style="font-weight: 600; font-size: 10.5pt; text-align: center;
+                            style="font-weight: 600; font-size: 8pt; text-align: center;
                                    background-color: #f8fafc; padding: 1px 2px;
                                    font-family: 'Roboto', Arial, Helvetica, sans-serif;
                                    white-space: nowrap; overflow: hidden;">
@@ -738,6 +787,12 @@ HTML_TEMPLATE = """
             </table>
 
         {% elif page.type == 'concast_performance' %}{# rendered in the block below #}
+
+        {% elif page.type == 'prod_by_process' %}{# rendered in the block below #}
+
+        {% elif page.type == 'catwise_saleable' %}{# rendered in the block below #}
+
+        {% elif page.type == 'segment_wise' %}{# rendered in the block below #}
 
         {% elif page.type == 'performance_summary_table' %}
             <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2px;">
@@ -916,6 +971,188 @@ HTML_TEMPLATE = """
             </table>
         {% endif %}{# end concast_performance #}
 
+        {% if page.type == 'prod_by_process' %}
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.5px solid #0f172a;padding-bottom:3px;margin-bottom:6px;">
+                <h2 style="font-size:12pt;font-weight:700;color:#060177;margin:0;text-transform:uppercase;">
+                    PRODUCTION BY PROCESS
+                </h2>
+                <span style="font-size:8pt;color:#475569;font-weight:500;">Unit: Tonnes</span>
+            </div>
+
+            {# ── Monthly Table ── #}
+            <table class="page14-table">
+                <colgroup>
+                    <col style="width:9%"/>
+                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                </colgroup>
+                <thead>
+                    <tr style="background:#1e3a5f;color:#fff;">
+                        <th rowspan="2">PLANT</th>
+                        <th colspan="6">{{ short_m }}'{{ short_y }}</th>
+                        <th colspan="6" style="border-left:2.5px solid #5a7fa0;">{{ short_m }}'{{ short_prev_y }}</th>
+                    </tr>
+                    <tr style="background:#2d4f7f;color:#fff;">
+                        <th>BOF</th><th>EAF</th><th class="cc-col">CC</th><th class="cs-col">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                        <th style="border-left:2.5px solid #5a7fa0;">BOF</th><th>EAF</th><th class="cc-col">CC</th><th class="cs-col">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page.monthly %}
+                    {% set pr = page.monthly_prev[loop.index0] %}
+                    <tr class="{% if row.plant == 'SAIL' %}sail-row{% elif row.bold %}agg-row{% endif %}">
+                        <td class="plant-col">{{ row.plant }}</td>
+                        <td>{{ row.bof }}</td><td>{{ row.eaf }}</td>
+                        <td class="cc-col">{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
+                        <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td>
+                        <td class="prev-sep">{{ pr.bof }}</td><td>{{ pr.eaf }}</td>
+                        <td class="cc-col">{{ pr.cc }}</td><td class="cs-col">{{ pr.cs }}</td>
+                        <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {# ── YTD Table ── #}
+            <table class="page14-table">
+                <colgroup>
+                    <col style="width:9%"/>
+                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                </colgroup>
+                <thead>
+                    <tr style="background:#1e3a5f;color:#fff;">
+                        <th rowspan="2">PLANT</th>
+                        <th colspan="6">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th colspan="6" style="border-left:2.5px solid #5a7fa0;">Apr-{{ short_m }}'{{ short_prev_y }}</th>
+                    </tr>
+                    <tr style="background:#2d4f7f;color:#fff;">
+                        <th>BOF</th><th>EAF</th><th class="cc-col">CC</th><th class="cs-col">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                        <th style="border-left:2.5px solid #5a7fa0;">BOF</th><th>EAF</th><th class="cc-col">CC</th><th class="cs-col">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page.ytd %}
+                    {% set pr = page.ytd_prev[loop.index0] %}
+                    <tr class="{% if row.plant == 'SAIL' %}sail-row{% elif row.bold %}agg-row{% endif %}">
+                        <td class="plant-col">{{ row.plant }}</td>
+                        <td>{{ row.bof }}</td><td>{{ row.eaf }}</td>
+                        <td class="cc-col">{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
+                        <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td>
+                        <td class="prev-sep">{{ pr.bof }}</td><td>{{ pr.eaf }}</td>
+                        <td class="cc-col">{{ pr.cc }}</td><td class="cs-col">{{ pr.cs }}</td>
+                        <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}{# end prod_by_process #}
+
+        {% if page.type == 'catwise_saleable' %}
+        <div class="catwise-wrap">
+        {% for section in page.sections %}
+            <div class="catwise-plant-title">{{ section.label }}</div>
+            <table class="catwise-table">
+                <colgroup>
+                    <col class="col-lbl">
+                    <col class="col-num"><col class="col-num"><col class="col-num">
+                    <col class="col-num"><col class="col-num"><col class="col-num">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="lbl-th">CATEGORY</th>
+                        <th rowspan="2">2026-27<br/>Plan</th>
+                        <th colspan="3">{{ page.month_label }}</th>
+                        <th rowspan="2">{{ page.cply_label }}<br/>Actual</th>
+                        <th rowspan="2">% Gr.<br/>over<br/>{{ page.cply_label }}</th>
+                    </tr>
+                    <tr>
+                        <th>Plan</th><th>Actual</th><th>% Ful</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in section.rows %}
+                    {% if row.type == 'separator' %}
+                    <tr class="cw-separator"><td colspan="7"></td></tr>
+                    {% elif row.type == 'section-hdr' %}
+                    <tr class="cw-section-hdr">
+                        <td colspan="7" class="lbl-td">{{ row.label }}</td>
+                    </tr>
+                    {% else %}
+                    <tr class="cw-{{ row.type }}">
+                        <td class="lbl-td">{{ row.label }}</td>
+                        <td class="num-td">{{ row.ann_plan }}</td>
+                        <td class="num-td">{{ row.m_plan }}</td>
+                        <td class="num-td">{{ row.m_act }}</td>
+                        <td class="num-td">{{ row.m_pct }}</td>
+                        <td class="num-td">{{ row.cply_act }}</td>
+                        <td class="num-td">{{ row.m_growth }}</td>
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endfor %}
+        </div>
+        {% endif %}{# end catwise_saleable #}
+
+        {% if page.type == 'segment_wise' %}
+        <table class="segwise-table">
+            <colgroup>
+                <col class="col-lbl">
+                <col class="col-num"><col class="col-num"><col class="col-num">
+                <col class="col-num"><col class="col-num"><col class="col-num">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th rowspan="2" class="lbl-th">CATEGORY</th>
+                    <th rowspan="2">2026-27<br/>Plan</th>
+                    <th colspan="3">{{ page.month_label }}</th>
+                    <th rowspan="2">{{ page.cply_label }}<br/>Actual</th>
+                    <th rowspan="2">% Gr.<br/>over<br/>{{ page.cply_label }}</th>
+                </tr>
+                <tr>
+                    <th>Plan</th><th>Actual</th><th>% Ful</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in page.rows %}
+                {% if row.type == 'separator' %}
+                <tr class="sw-separator"><td colspan="7"></td></tr>
+                {% elif row.type == 'seg-hdr' %}
+                <tr class="sw-seg-hdr">
+                    <td colspan="7" class="lbl-td">{{ row.label }}</td>
+                </tr>
+                {% elif row.type == 'plant-lbl' %}
+                <tr class="sw-plant-lbl">
+                    <td colspan="7" class="lbl-td">{{ row.label }}</td>
+                </tr>
+                {% elif row.type == 'seg-pct' %}
+                <tr class="sw-seg-pct">
+                    <td class="lbl-td">{{ row.label }}</td>
+                    <td class="num-td">{{ row.ann_plan }}</td>
+                    <td class="num-td">{{ row.m_plan }}</td>
+                    <td class="num-td">{{ row.m_act }}</td>
+                    <td class="num-td"></td>
+                    <td class="num-td">{{ row.cply_act }}</td>
+                    <td class="num-td"></td>
+                </tr>
+                {% else %}
+                <tr class="sw-{{ row.type }}">
+                    <td class="lbl-td">{{ row.label }}</td>
+                    <td class="num-td">{{ row.ann_plan }}</td>
+                    <td class="num-td">{{ row.m_plan }}</td>
+                    <td class="num-td">{{ row.m_act }}</td>
+                    <td class="num-td">{{ row.m_pct }}</td>
+                    <td class="num-td">{{ row.cply_act }}</td>
+                    <td class="num-td">{{ row.m_growth }}</td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}{# end segment_wise #}
+
         {% endif %}{# end non-cover #}
     </div>
     {% endif %}{# end else (non-trend_section) #}
@@ -1045,7 +1282,7 @@ def _render_pdf_sync(html: str) -> bytes:
     return pdf_bytes
 
 
-async def build_pdf_response(request: PDFRequest) -> StreamingResponse:
+async def build_pdf_response(request: PDFRequest, pages_override: list = None) -> StreamingResponse:
     import asyncio
     import traceback as tb
     from jinja2 import Template
@@ -1056,9 +1293,9 @@ async def build_pdf_response(request: PDFRequest) -> StreamingResponse:
         total_report_pages = len(request.pages)
 
         flat_pages = []
-        for p_data in request.pages:
-            p = p_data.dict()
-            if p.get("page", 0) > 13:
+        src = pages_override if pages_override is not None else [p_data.dict() for p_data in request.pages]
+        for p in src:
+            if p.get("page", 0) > 18:
                 continue
             if p.get("type") == "page4_table":
                 p["rows"] = _group_page4_rows(p.get("rows", []))
