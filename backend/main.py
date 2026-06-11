@@ -11,6 +11,9 @@ from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
 from page7_13 import generate_trend_page_rows, generate_combined_trend_items, TREND_PAGES
 from page17_concast import generate_concast_data
+from page_prod_by_process import generate_prod_by_process
+from page_catwise_saleable import generate_catwise_saleable
+from page_segment_wise import generate_segment_wise
 from pdf import build_pdf_response
 
 db.init_db()
@@ -108,6 +111,41 @@ def get_data(month: str = "2025-11"):
                     concast = generate_concast_data(month)
                     page["monthly"] = concast["monthly"]
                     page["ytd"]     = concast["ytd"]
+                if pg == 14:
+                    page["type"] = "prod_by_process"
+                    page["title"] = "PRODUCTION BY PROCESS"
+                    pbp = generate_prod_by_process(month)
+                    page["monthly"]      = pbp["monthly"]
+                    page["monthly_prev"] = pbp["monthly_prev"]
+                    page["ytd"]          = pbp["ytd"]
+                    page["ytd_prev"]     = pbp["ytd_prev"]
+                if pg in (15, 16, 17, 18):
+                    import datetime as _dt
+                    dt = _dt.datetime.strptime(month, "%Y-%m")
+                    ml = dt.strftime("%b'%y")
+                    cl = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
+                    page["month_label"] = ml
+                    page["cply_label"]  = cl
+                if pg == 15:
+                    page["type"]     = "catwise_saleable"
+                    page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
+                    page["subtitle"] = "BHILAI STEEL PLANT"
+                    page["sections"] = generate_catwise_saleable(month, ["BSP"])
+                if pg == 16:
+                    page["type"]     = "catwise_saleable"
+                    page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
+                    page["subtitle"] = ""
+                    page["sections"] = generate_catwise_saleable(month, ["DSP", "RSP"])
+                if pg == 17:
+                    page["type"]     = "catwise_saleable"
+                    page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
+                    page["subtitle"] = ""
+                    page["sections"] = generate_catwise_saleable(month, ["BSL", "ISP"])
+                if pg == 18:
+                    page["type"]  = "segment_wise"
+                    page["title"] = "SEGMENT WISE PRODUCTION"
+                    sw = generate_segment_wise(month)
+                    page["rows"]  = sw["rows"]
 
         return pages_config
     except Exception as e:
@@ -159,7 +197,39 @@ def save_data(request: PDFRequest):
 
 @app.post("/api/generate-pdf")
 async def generate_pdf(request: PDFRequest):
-    return await build_pdf_response(request)
+    import datetime as _dt
+    enriched = []
+    for page in request.pages:
+        p = page.dict()
+        pg = p.get("page", 0)
+        if pg == 13:
+            concast = generate_concast_data(request.month)
+            p["monthly"] = concast["monthly"]
+            p["ytd"]     = concast["ytd"]
+        if pg == 14:
+            pbp = generate_prod_by_process(request.month)
+            p["monthly"]      = pbp["monthly"]
+            p["monthly_prev"] = pbp["monthly_prev"]
+            p["ytd"]          = pbp["ytd"]
+            p["ytd_prev"]     = pbp["ytd_prev"]
+        if pg in (15, 16, 17, 18):
+            dt = _dt.datetime.strptime(request.month, "%Y-%m")
+            p["month_label"] = dt.strftime("%b'%y")
+            p["cply_label"]  = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
+        if pg == 15:
+            p["type"]     = "catwise_saleable"
+            p["sections"] = generate_catwise_saleable(request.month, ["BSP"])
+        if pg == 16:
+            p["type"]     = "catwise_saleable"
+            p["sections"] = generate_catwise_saleable(request.month, ["DSP", "RSP"])
+        if pg == 17:
+            p["type"]     = "catwise_saleable"
+            p["sections"] = generate_catwise_saleable(request.month, ["BSL", "ISP"])
+        if pg == 18:
+            p["type"] = "segment_wise"
+            p["rows"]  = generate_segment_wise(request.month)["rows"]
+        enriched.append(p)
+    return await build_pdf_response(request, pages_override=enriched)
 
 
 # ---------------------------------------------------------------------------

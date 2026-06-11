@@ -12249,5 +12249,49 @@
     "title": "CONCAST PRODUCTION PERFORMANCE",
     "monthly": [],
     "ytd": []
+  },
+  {
+    "page": 14,
+    "type": "prod_by_process",
+    "title": "PRODUCTION BY PROCESS",
+    "monthly": [],
+    "monthly_prev": [],
+    "ytd": [],
+    "ytd_prev": []
+  },
+  {
+    "page": 15,
+    "type": "catwise_saleable",
+    "title": "CATEGORY WISE PRODUCTION OF SALEABLE STEEL",
+    "subtitle": "BHILAI STEEL PLANT",
+    "month_label": "",
+    "cply_label": "",
+    "sections": []
+  },
+  {
+    "page": 16,
+    "type": "catwise_saleable",
+    "title": "CATEGORY WISE PRODUCTION OF SALEABLE STEEL",
+    "subtitle": "",
+    "month_label": "",
+    "cply_label": "",
+    "sections": []
+  },
+  {
+    "page": 17,
+    "type": "catwise_saleable",
+    "title": "CATEGORY WISE PRODUCTION OF SALEABLE STEEL",
+    "subtitle": "",
+    "month_label": "",
+    "cply_label": "",
+    "sections": []
+  },
+  {
+    "page": 18,
+    "type": "segment_wise",
+    "title": "SEGMENT WISE PRODUCTION",
+    "month_label": "",
+    "cply_label": "",
+    "rows": []
   }
 ]
