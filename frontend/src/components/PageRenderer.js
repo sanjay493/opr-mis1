@@ -6,6 +6,7 @@ import TrendTemplate from './TrendTemplate';
 import TrendYearlyTemplate from './TrendYearlyTemplate';
 import MonthWiseProductionTemplate from './MonthWiseProductionTemplate';
 import PlantWisePerformanceTemplate from './PlantWisePerformanceTemplate';
+import ConcastPerformanceTemplate from './ConcastPerformanceTemplate';
 
 function IndexTemplate({ data, onCellChange }) {
   const { rows = [] } = data || {};
@@ -20,9 +21,9 @@ function IndexTemplate({ data, onCellChange }) {
   };
 
   return (
-    <div className="report-table-wrapper" style={{ marginTop: '8px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="report-table-wrapper" style={{ marginTop: '8px' }}>
       <h2 className="page2-heading">Index</h2>
-      <table className="report-table page2-table" style={{ width: '100%', height: '100%', tableLayout: 'fixed' }}>
+      <table className="report-table page2-table" style={{ width: '100%', tableLayout: 'fixed' }}>
         <thead>
           <tr>
             <th style={{ width: '8%', textAlign: 'center' }}>S.No.</th>
@@ -32,7 +33,7 @@ function IndexTemplate({ data, onCellChange }) {
         </thead>
         <tbody>
           {rows.map((row, idx) => (
-            <tr key={idx} style={{ height: `${Math.floor(100 / (rows.length || 1))}%` }}>
+            <tr key={idx}>
               <td className="sno" style={{ verticalAlign: 'top' }}>
                 <input
                   type="text"
@@ -56,7 +57,7 @@ function IndexTemplate({ data, onCellChange }) {
                     lineHeight: '1.4',
                     verticalAlign: 'top'
                   }}
-                  rows={Math.max(1, Math.ceil((row.title || '').length / 50))}
+                  rows={1}
                   value={row.title}
                   onChange={(e) => handleRowChange(idx, 'title', e.target.value)}
                 />
@@ -106,6 +107,8 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
       case 'trend_yearly':
       case 'trend_combined':
         return <TrendYearlyTemplate data={pageData} />;
+      case 'concast_performance':
+        return <ConcastPerformanceTemplate data={pageData} selectedMonth={selectedMonth} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>
@@ -128,7 +131,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}

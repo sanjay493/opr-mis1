@@ -12,36 +12,13 @@ const PAGE_LABELS = {
    4: 'Production Performance vs APP (Month)',
    5: 'Plant-Wise Production Performance',
    6: 'Plant-Wise Production (Month & YTD)',
-   7: 'Month-Wise Trend – Oven Pushing',
-   8: 'Month-Wise Trend – Sinter',
-   9: 'Month-Wise Trend – Hot Metal',
-  10: 'Month-Wise Trend – Pig Iron',
-  11: 'Month-Wise Trend – Crude Steel',
-  12: 'Month-Wise Trend – Saleable Steel',
-  13: 'Month-Wise Trend – Finished Steel',
-  14: 'Plant-Wise Production Performance (Detailed)',
-  15: 'Production by Process (BOF / EAF / CC)',
-  16: 'Category-Wise Production – BSP (Bhilai)',
-  17: 'Category-Wise Production – DSP (Durgapur)',
-  18: 'Category-Wise Production – BSL (Bokaro)',
-  19: 'Category-Wise Production – RSP (Rourkela)',
-  20: 'Despatches & Orders – Rails',
-  21: 'Despatches & Orders – Structural / TLT',
-  22: 'Despatches & Orders – Export',
-  23: 'Despatches & Orders – Plates',
-  24: 'Despatches & Orders – By Item',
-  25: 'Despatches & Orders – By Plant',
-  26: 'Opening Stock at SAIL Plants & Stockyards',
-  27: 'Raw Material Movement',
-  28: 'Major Techno-Economic Parameters',
-  29: 'Month-Wise TE Parameters – Coke & Sinter',
-  30: 'Month-Wise TE Parameters – Blast Furnace',
-  31: 'Month-Wise TE Parameters – BOF Shop',
-  32: 'Mill-Wise TE Parameters – BSP (Bhilai)',
-  33: 'Mill-Wise TE Parameters – DSP (Durgapur)',
-  34: 'Mill-Wise TE Parameters – RSP (Rourkela)',
-  35: 'Mill-Wise TE Parameters – BSL (Bokaro)',
-  36: 'Mill-Wise TE Parameters – ISP (IISCO)',
+   7: 'Month-Wise Production Trend – Oven Pushing',
+   8: 'Month-Wise Production Trend – Sinter',
+   9: 'Month-Wise Production Trend – Hot Metal',
+  10: 'Month-Wise Production Trend – Crude Steel',
+  11: 'Month-Wise Production Trend – Pig Iron & Finished Steel',
+  12: 'Month-Wise Production Trend – Saleable Steel',
+  13: 'Concast Production Performance',
 };
 
 const months = [
@@ -224,7 +201,7 @@ export default function ReportPage() {
               return p;
             });
             const formatted = getFormattedPagesData(normalized, selectedMonthName, selectedYear, 'November', '2025');
-            setPagesData(formatted.filter((p) => p.page <= 36));
+            setPagesData(formatted.filter((p) => p.page <= 13));
             setPagesDataMonth({ name: selectedMonthName, year: selectedYear });
           }
         }
@@ -398,7 +375,7 @@ export default function ReportPage() {
             <button
               className="btn btn-secondary"
               style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => Math.min(36, pagesData.length, prev + 1))}
+              onClick={() => setActivePageNum((prev) => Math.min(13, pagesData.length, prev + 1))}
               disabled={activePageNum === pagesData.length}
             >
               Next

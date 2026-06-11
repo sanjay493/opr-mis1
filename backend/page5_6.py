@@ -25,13 +25,13 @@ PAGE5_PLANTS = [
         ("Oven Pushing(nos/d)", ("AGG_NOS", "Oven Pushing(nos/d)", _5P),  False, True),
         ("Sinter",              ("AGG",     "Total Sinter",         _5P),  False, False),
         ("Hot Metal",           ("AGG",     "Hot Metal",            _5PV), True,  False),
-        ("Ingot",               None,                                       False, False),
-        ("Concast",             None,                                       False, False),
+        ("Ingot",               ("AGG",     "BOTTOM_POURING_INGOT", _5P),  False, False),
+        ("Concast",             ("AGG",     "Total Caster",         _5P),  False, False),
         ("Crude Steel(Tot)",    ("AGG",     "Total Crude Steel",    _ALL), True,  False),
         ("Saleable Steel",      ("AGG",     "Saleable Steel",       _ALL), True,  False),
         ("Finished Steel",      ("AGG",     "Finished Steel",       _ALL), True,  False),
-        ("Semi-finished steel", None,                                       False, False),
-        ("HR Coils rolling(Tot)", None,                                     False, False),
+        ("Semi-finished steel", ("AGG",     "Saleable Semis",       _ALL), False, False),
+        ("HR Coils rolling(Tot)", ("AGG",     ["HSM-2 Total HR Coil","HSM Total HR Coil"], _ALL), False, False),
         ("Pig Iron",            ("AGG",     "Pig Iron",             _5PV), False, False),
     ]),
     ("BSP", [
@@ -148,6 +148,7 @@ def _sum_items(cur, table, plant, items, month):
 
 
 import calendar as _cal
+import math as _math
 
 def _days(month_str):
     try:
@@ -169,10 +170,13 @@ def _get_single(cur, table, plant, item, month):
 
 
 def _get_agg(cur, table, item, plants, month):
-    """Sum across multiple plants."""
+    """Sum across multiple plants. item may be a string or list of strings."""
     total, found = 0.0, False
     for p in plants:
-        v = _get_single(cur, table, p, item, month)
+        if isinstance(item, list):
+            v = _sum_items(cur, table, p, item, month)
+        else:
+            v = _get_single(cur, table, p, item, month)
         if v is not None:
             total += v
             found = True
@@ -218,7 +222,10 @@ def _fmt(v):
         return ""
     try:
         f = float(v)
-        return str(round(f))
+        if f < 1000:
+            one_dec = int(_math.floor(f * 10 + 0.5)) / 10
+            return f"{one_dec:.1f}"
+        return str(int(_math.floor(f + 0.5)))
     except Exception:
         return ""
 
@@ -227,7 +234,7 @@ def _pct(a, p):
     if a is None or p is None or p == 0:
         return ""
     try:
-        return str(round(float(a) / float(p) * 100))
+        return str(int(_math.floor(float(a) / float(p) * 100 + 0.5)))
     except Exception:
         return ""
 
@@ -236,7 +243,7 @@ def _growth(curr, prev):
     if curr is None or prev is None or prev == 0:
         return ""
     try:
-        return str(round((float(curr) - float(prev)) / abs(float(prev)) * 100))
+        return str(int(_math.floor((float(curr) - float(prev)) / abs(float(prev)) * 100 + 0.5)))
     except Exception:
         return ""
 
