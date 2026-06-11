@@ -39,6 +39,8 @@ class PageData(BaseModel):
     item_display: Optional[str] = ""
     unit: Optional[str] = ""
     items: Optional[List[Dict[str, Any]]] = []
+    monthly: Optional[List[Dict[str, Any]]] = []
+    ytd: Optional[List[Dict[str, Any]]] = []
 
 
 class PDFRequest(BaseModel):
