@@ -63,7 +63,7 @@ def _days_in_month(month_str: str) -> int:
 
 
 def _fy_months(month: str) -> list:
-    """All 12 YYYY-MM strings of the financial year that contains `month`."""
+    """All 12 YY-MM strings of the financial year that contains `month`."""
     try:
         y, m = int(month[:4]), int(month[5:7])
     except Exception:

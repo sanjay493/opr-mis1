@@ -243,34 +243,31 @@ select.form-control {
 /* Realistic A4 Page */
 .a4-page {
   width: 210mm;
-  height: 297mm;
+  min-height: 297mm;
   background-color: white;
   color: black;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
-  padding: 20mm 15mm 5mm 15mm;
-  position: relative;
+  padding: 15mm;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   box-sizing: border-box;
   margin-bottom: 40px;
 }
 
 .a4-page.landscape {
   width: 297mm;
-  height: 210mm;
-  padding: 15mm 20mm 5mm 20mm;
+  min-height: 210mm;
+  padding: 15mm 20mm 15mm 20mm;
 }
 
 
 /* Report Styles inside A4 Page */
 .report-header {
-  position: absolute;
-  top: 10mm;
-  left: 15mm;
-  right: 15mm;
+  flex-shrink: 0;
   border-bottom: 0.5px solid #e2e8f0;
-  padding-bottom: 5px;
+  padding-bottom: 4px;
+  margin-bottom: 8px;
   text-align: center;
   font-family: var(--font-sans);
   font-size: 7.5pt;
@@ -278,21 +275,15 @@ select.form-control {
   color: #64748b;
 }
 
-.a4-page.landscape .report-header {
-  top: 7mm;
-  left: 20mm;
-  right: 20mm;
-}
-
 .report-body {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 .report-footer {
+  margin-top: auto;
   flex-shrink: 0;
   display: flex;
   justify-content: space-between;
@@ -302,7 +293,6 @@ select.form-control {
   color: #64748b;
   border-top: 0.5px solid #e2e8f0;
   padding-top: 4px;
-  margin-top: 6px;
 }
 
 .report-title-section {

@@ -10,6 +10,7 @@ from report_utils import compute_item_row, blank_out_page_data
 from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
 from page7_13 import generate_trend_page_rows, generate_combined_trend_items, TREND_PAGES
+from page17_concast import generate_concast_data
 from pdf import build_pdf_response
 
 db.init_db()
@@ -98,6 +99,15 @@ def get_data(month: str = "2025-11"):
                         page["item_display"] = cfg.get("display", "")
                         page["unit"] = cfg.get("unit", "")
                         page["rows"] = generate_trend_page_rows(month, pg)
+                if pg == 13:
+                    page["type"] = "concast_performance"
+                    page["title"] = "CONCAST PRODUCTION PERFORMANCE"
+                    page["subtitle"] = ""
+                    page["rows"] = []
+                    page["headers"] = []
+                    concast = generate_concast_data(month)
+                    page["monthly"] = concast["monthly"]
+                    page["ytd"]     = concast["ytd"]
 
         return pages_config
     except Exception as e:

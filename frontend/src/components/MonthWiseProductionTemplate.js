@@ -5,8 +5,8 @@ import React from 'react';
 const COL_W = {
   items:      '13%',
   plant:       '5%',
-  annualApp:   '7%',
-  mApp:        '6%',
+  annualApp:   '8%',
+  mApp:        '5%',
   mActual:     '6%',
   mVar:       '5.5%',
   mPct:       '5.5%',

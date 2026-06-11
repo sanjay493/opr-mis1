@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import json; data=json.load\\(open\\('d:/opr-mis1/backend/mis_data.json'\\)\\); pages=[p for p in data if isinstance\\(p.get\\('page'\\), int\\) and 11 <= p['page'] <= 20]; [print\\(f\\\\\"Page {p['page']}: type={p.get\\('type','?'\\)} title={p.get\\('title','?'\\)[:60]}\\\\\"\\) for p in pages]\")"
     ]
   }
 }
