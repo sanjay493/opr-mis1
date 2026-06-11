@@ -7,6 +7,9 @@ import TrendYearlyTemplate from './TrendYearlyTemplate';
 import MonthWiseProductionTemplate from './MonthWiseProductionTemplate';
 import PlantWisePerformanceTemplate from './PlantWisePerformanceTemplate';
 import ConcastPerformanceTemplate from './ConcastPerformanceTemplate';
+import ProductionByProcessTemplate from './ProductionByProcessTemplate';
+import CatWiseSaleableTemplate from './CatWiseSaleableTemplate';
+import SegmentWiseTemplate from './SegmentWiseTemplate';
 
 function IndexTemplate({ data, onCellChange }) {
   const { rows = [] } = data || {};
@@ -109,6 +112,12 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <TrendYearlyTemplate data={pageData} />;
       case 'concast_performance':
         return <ConcastPerformanceTemplate data={pageData} selectedMonth={selectedMonth} />;
+      case 'prod_by_process':
+        return <ProductionByProcessTemplate data={pageData} selectedMonth={selectedMonth} />;
+      case 'catwise_saleable':
+        return <CatWiseSaleableTemplate data={pageData} />;
+      case 'segment_wise':
+        return <SegmentWiseTemplate data={pageData} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>
@@ -131,7 +140,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}

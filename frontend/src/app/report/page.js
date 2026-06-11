@@ -19,6 +19,11 @@ const PAGE_LABELS = {
   11: 'Month-Wise Production Trend – Pig Iron & Finished Steel',
   12: 'Month-Wise Production Trend – Saleable Steel',
   13: 'Concast Production Performance',
+  14: 'Production by Process',
+  15: 'Category Wise – BSP',
+  16: 'Category Wise – DSP & RSP',
+  17: 'Category Wise – BSL & ISP',
+  18: 'Segment Wise Production',
 };
 
 const months = [
@@ -201,7 +206,7 @@ export default function ReportPage() {
               return p;
             });
             const formatted = getFormattedPagesData(normalized, selectedMonthName, selectedYear, 'November', '2025');
-            setPagesData(formatted.filter((p) => p.page <= 13));
+            setPagesData(formatted.filter((p) => p.page <= 18));
             setPagesDataMonth({ name: selectedMonthName, year: selectedYear });
           }
         }
@@ -375,7 +380,7 @@ export default function ReportPage() {
             <button
               className="btn btn-secondary"
               style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => Math.min(13, pagesData.length, prev + 1))}
+              onClick={() => setActivePageNum((prev) => Math.min(18, pagesData.length, prev + 1))}
               disabled={activePageNum === pagesData.length}
             >
               Next
