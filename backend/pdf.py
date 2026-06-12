@@ -794,6 +794,14 @@ HTML_TEMPLATE = """
 
         {% elif page.type == 'segment_wise' %}{# rendered in the block below #}
 
+        {% elif page.type == 'special_steel' %}{# rendered in the block below #}
+
+        {% elif page.type == 'opening_stock' %}{# rendered in the block below #}
+
+        {% elif page.type == 'ipt_status' %}{# rendered in the block below #}
+
+        {% elif page.type == 'techno_params' %}{# rendered in the block below #}
+
         {% elif page.type == 'performance_summary_table' %}
             <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2px;">
                 <h2 class="page5-6-heading">
@@ -1153,6 +1161,382 @@ HTML_TEMPLATE = """
         </table>
         {% endif %}{# end segment_wise #}
 
+        {% if page.type == 'special_steel' %}
+        <div style="padding:6px;font-family:Arial,sans-serif;font-size:7.5pt;">
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ page.title }}</div>
+          {% if page.variant == 'sail_summary' %}
+          <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:3px;">{{ page.month_label }}</div>
+          {% endif %}
+          <div style="text-align:right;font-size:6.8pt;margin-bottom:2px;">Unit: Tonnes</div>
+
+          {% if page.variant == 'sail_summary' %}
+          {# ── SAIL consolidated table — 12 cols ── #}
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.8pt;">
+            <colgroup>
+              <col style="width:13%"/><col style="width:8%"/>
+              <col style="width:7%"/><col style="width:7%"/><col style="width:5.5%"/>
+              <col style="width:6%"/><col style="width:5%"/>
+              <col style="width:7%"/><col style="width:7%"/><col style="width:5.5%"/>
+              <col style="width:6%"/><col style="width:5%"/>
+            </colgroup>
+            <thead>
+              <tr style="background:#1e3a5f;color:#fff;">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Plants</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">ABP<br/>26-27</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ page.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ page.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">%Gr<br/>{{ page.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">{{ page.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">{{ page.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">%Gr<br/>{{ page.cum_cply_label }}</th>
+              </tr>
+              <tr style="background:#2d4f7f;color:#fff;">
+                <th style="padding:2px 3px;border:1px solid #334155;">Orders</th>
+                <th style="padding:2px 3px;border:1px solid #334155;">Actual</th>
+                <th style="padding:2px 3px;border:1px solid #334155;">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">Orders</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">Actual</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">%Ful</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for row in page.rows %}
+            {% set bg = '#dcfce7' if row.type == 'sail-total' else '#f8fafc' %}
+            {% set fw = '700' if row.type == 'sail-total' else '400' %}
+            <tr style="background:{{ bg }};font-weight:{{ fw }};">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">{{ row.label }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.abp }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+            </tr>
+            {% endfor %}
+            <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
+            <tr style="background:#e0f2fe;font-weight:600;">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">Saleable Steel production</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.abp }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.pct_growth }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
+            </tr>
+            <tr style="background:#e0f2fe;font-weight:600;">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.special_pct.cum_current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.special_pct.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+            </tr>
+            </tbody>
+          </table>
+
+          {% else %}
+          {# ── Plant detail / ISP table — 11 cols ── #}
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.5pt;">
+            <colgroup>
+              <col style="width:20%"/>
+              <col style="width:8%"/><col style="width:8%"/><col style="width:6%"/>
+              <col style="width:6.5%"/><col style="width:5.5%"/>
+              <col style="width:8%"/><col style="width:8%"/><col style="width:6%"/>
+              <col style="width:6.5%"/><col style="width:5.5%"/>
+            </colgroup>
+            <thead>
+              <tr style="background:#1e3a5f;color:#fff;">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Quality / Grade</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ page.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ page.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">%Gr<br/>{{ page.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">{{ page.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">{{ page.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">%Gr<br/>{{ page.cum_cply_label }}</th>
+              </tr>
+              <tr style="background:#2d4f7f;color:#fff;">
+                <th style="padding:2px 3px;border:1px solid #334155;">Order</th>
+                <th style="padding:2px 3px;border:1px solid #334155;">Actual</th>
+                <th style="padding:2px 3px;border:1px solid #334155;">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">Order</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">Actual</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">%Ful</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for row in page.rows %}
+              {% if row.type == 'separator' %}
+              <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
+              {% elif row.type == 'product-hdr' %}
+              <tr style="background:#1e3a5f;color:#fff;font-weight:700;">
+                <td colspan="11" style="padding:2px 5px;border:1px solid #334155;text-align:left;">{{ row.label }}</td>
+              </tr>
+              {% elif row.type == 'grand-total' %}
+              <tr style="background:#dcfce7;font-weight:700;">
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">{{ row.label }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+              </tr>
+              {% elif row.type == 'subtotal' %}
+              <tr style="background:#fed7aa;font-weight:700;">
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">{{ row.label }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+              </tr>
+              {% elif row.type == 'product-total' %}
+              <tr style="background:#fef9c3;font-weight:700;">
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">{{ row.label }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+              </tr>
+              {% else %}
+              <tr style="background:#f8fafc;">
+                <td style="padding:1.5px 3px;padding-left:10px;border:1px solid #cbd5e1;text-align:left;">{{ row.label }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+              </tr>
+              {% endif %}
+            {% endfor %}
+            <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
+            <tr style="background:#e0f2fe;font-weight:600;">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">Saleable Steel Production</td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
+            </tr>
+            <tr style="background:#e0f2fe;font-weight:600;">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.special_pct.cum_current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ page.special_pct.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+            </tr>
+            </tbody>
+          </table>
+          {% endif %}
+        </div>
+        {% endif %}{# end special_steel #}
+
+        {% if page.type == 'opening_stock' %}
+        <div style="padding:6px;font-family:Arial,sans-serif;font-size:7pt;">
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ page.title }}</div>
+          <div style="text-align:right;font-size:6.5pt;margin-bottom:2px;">Unit: {{ page.unit }}</div>
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.3pt;">
+            <colgroup>
+              <col style="width:20px"/><col style="width:16px"/>
+              <col style="width:12%"/><col style="width:8%"/>
+              {% for c in page.col_labels %}<col/>{% endfor %}
+              <col style="width:9%"/>
+            </colgroup>
+            <thead>
+              <tr style="background:#1e3a5f;color:#fff;">
+                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;"></th>
+                <th style="padding:2px 3px;border:1px solid #334155;">PLANT</th>
+                {% for c in page.col_labels %}
+                <th style="padding:2px 3px;border:1px solid #334155;">{{ c }}</th>
+                {% endfor %}
+                <th style="padding:2px 3px;border:1px solid #334155;">{{ page.var_label }}</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for sec in page.sections %}
+              {% for row in sec.rows %}
+              {% if row.sail and row.bold %}{% set bg = '#dcfce7' %}
+              {% elif row.sail %}{% set bg = '#eff6ff' %}
+              {% elif row.bold %}{% set bg = '#fef9c3' %}
+              {% else %}{% set bg = '#f8fafc' %}{% endif %}
+              <tr style="background:{{ bg }};{% if row.bold %}font-weight:700;{% endif %}">
+                {% if loop.first %}
+                <td rowspan="{{ sec.rows | length }}" style="border:1px solid #94a3b8;background:#e2e8f0;text-align:center;vertical-align:middle;font-weight:700;font-size:5.6pt;padding:1px;">
+                  <div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;margin:auto;">{{ sec.label }}</div>
+                </td>
+                <td rowspan="{{ sec.rows | length }}" style="border:1px solid #94a3b8;background:#e2e8f0;text-align:center;vertical-align:middle;font-size:5.4pt;padding:1px;">
+                  <div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;margin:auto;">{{ sec.code }}</div>
+                </td>
+                {% endif %}
+                <td style="padding:1px 3px;border:1px solid #94a3b8;text-align:left;font-size:5.8pt;">{{ row.sub }}</td>
+                <td style="padding:1px 3px;border:1px solid #94a3b8;text-align:left;{% if row.plant == 'SAIL' %}font-weight:700;{% endif %}">{{ row.plant }}</td>
+                {% for v in row['values'] %}
+                <td style="padding:1px 3px;border:1px solid #94a3b8;text-align:right;">{{ v }}</td>
+                {% endfor %}
+                <td style="padding:1px 3px;border:1px solid #94a3b8;text-align:right;font-weight:600;">{{ row.var }}</td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+            </tbody>
+          </table>
+          <div style="display:flex;justify-content:space-between;font-size:5.8pt;color:#475569;margin-top:2px;">
+            <span>Figures are provisional</span><span>For internal use</span>
+          </div>
+        </div>
+        {% endif %}{# end opening_stock #}
+
+        {% if page.type == 'ipt_status' %}
+        <div style="padding:10px;font-family:Arial,sans-serif;font-size:7.5pt;">
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:6px;">{{ page.title }}</div>
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:7.5pt;">
+            <colgroup>
+              <col style="width:24%"/><col style="width:9%"/><col style="width:9%"/><col style="width:8%"/>
+              <col style="width:12.5%"/><col style="width:12.5%"/><col style="width:12.5%"/><col style="width:12.5%"/>
+            </colgroup>
+            <thead>
+              <tr style="background:#1e3a5f;color:#fff;">
+                <th rowspan="2" style="padding:3px 4px;border:1px solid #334155;text-align:left;">Item</th>
+                <th rowspan="2" style="padding:3px 4px;border:1px solid #334155;">From</th>
+                <th rowspan="2" style="padding:3px 4px;border:1px solid #334155;">To</th>
+                <th rowspan="2" style="padding:3px 4px;border:1px solid #334155;">Unit</th>
+                <th colspan="2" style="padding:3px 4px;border:1px solid #334155;">{{ page.month_label }}</th>
+                <th colspan="2" style="padding:3px 4px;border:1px solid #334155;">{{ page.cum_label }}</th>
+              </tr>
+              <tr style="background:#2d4f7f;color:#fff;">
+                <th style="padding:3px 4px;border:1px solid #334155;">Plan</th>
+                <th style="padding:3px 4px;border:1px solid #334155;">Actual</th>
+                <th style="padding:3px 4px;border:1px solid #334155;">Plan</th>
+                <th style="padding:3px 4px;border:1px solid #334155;">Actual</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for sec in page.sections %}
+              {% set sbg = '#f8fafc' if loop.index0 % 2 else '#ffffff' %}
+              {% for row in sec.rows %}
+              <tr style="background:{{ sbg }};">
+                {% if loop.first %}
+                <td rowspan="{{ sec.rows | length }}" style="padding:2px 5px;border:1px solid #94a3b8;text-align:left;font-weight:600;vertical-align:middle;">{{ sec.item }}</td>
+                {% endif %}
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:center;">{{ row.from }}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:center;">{{ row.to }}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:center;">{{ row.unit }}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:right;">{{ row.plan }}{% if row.plan_t %}<div style="font-size:5.6pt;color:#475569;">({{ row.plan_t }} T)</div>{% endif %}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:right;">{{ row.actual }}{% if row.actual_t %}<div style="font-size:5.6pt;color:#475569;">({{ row.actual_t }} T)</div>{% endif %}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:right;">{{ row.cum_plan }}{% if row.cum_plan_t %}<div style="font-size:5.6pt;color:#475569;">({{ row.cum_plan_t }} T)</div>{% endif %}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:right;">{{ row.cum_actual }}{% if row.cum_actual_t %}<div style="font-size:5.6pt;color:#475569;">({{ row.cum_actual_t }} T)</div>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}{# end ipt_status #}
+
+        {% if page.type == 'techno_params' %}
+        <div style="padding:6px;font-family:Arial,sans-serif;font-size:6.5pt;">
+          <div style="text-align:center;font-weight:700;font-size:9.5pt;">{{ page.title }}</div>
+          {% if page.subtitle %}
+          <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:3px;">{{ page.subtitle }}</div>
+          {% endif %}
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.2pt;margin-top:3px;">
+            <colgroup>
+              <col style="width:13%"/><col style="width:13%"/><col style="width:7%"/>
+              {% set ncols = 6 + (page.month_labels | length) %}
+              {% for i in range(ncols) %}<col/>{% endfor %}
+            </colgroup>
+            <thead>
+              <tr style="background:#1e3a5f;color:#fff;">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Parameters</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">Plant / Shop</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">Unit</th>
+                <th colspan="2" style="padding:2px 3px;border:1px solid #334155;background:#475569;">Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;background:#7c2d12;">{{ page.target_label }}</th>
+                <th colspan="{{ page.month_labels | length }}" style="padding:2px 3px;border:1px solid #334155;">Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ page.cply_label }}<br/>Actual</th>
+                <th colspan="2" style="padding:2px 3px;border:1px solid #334155;background:#2d5016;">Actual</th>
+              </tr>
+              <tr style="background:#2d4f7f;color:#fff;">
+                <th style="padding:2px 3px;border:1px solid #334155;background:#475569;">{{ page.fy2_label }}</th>
+                <th style="padding:2px 3px;border:1px solid #334155;background:#475569;">{{ page.fy1_label }}</th>
+                {% for m in page.month_labels %}
+                <th style="padding:2px 3px;border:1px solid #334155;">{{ m }}</th>
+                {% endfor %}
+                <th style="padding:2px 3px;border:1px solid #334155;background:#2d5016;">{{ page.cum_label }}</th>
+                <th style="padding:2px 3px;border:1px solid #334155;background:#2d5016;">{{ page.cum_cply_label }}</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for sec in page.sections %}
+              {% set sbg = '#f8fafc' if loop.index0 % 2 else '#ffffff' %}
+              {% for row in sec.rows %}
+              <tr style="background:{{ sbg }};">
+                {% if loop.first %}
+                <td rowspan="{{ sec.rows | length }}" style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:left;font-weight:700;vertical-align:top;background:#e2e8f0;">{{ sec.label }}</td>
+                {% endif %}
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:left;">{{ row.label }}</td>
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:center;font-size:5.6pt;">{{ row.unit }}</td>
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;">{{ row.fy2 }}</td>
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;">{{ row.fy1 }}</td>
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;background:#fef3ec;">{{ row.target }}</td>
+                {% for v in row.months %}
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;">{{ v }}</td>
+                {% endfor %}
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;">{{ row.cply }}</td>
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;background:#f3faf0;">{{ row.cum }}</td>
+                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;background:#f3faf0;">{{ row.cum_cply }}</td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+            </tbody>
+          </table>
+          <div style="display:flex;justify-content:space-between;font-size:5.8pt;color:#475569;margin-top:2px;">
+            <span>figures are provisional</span><span>for internal circulation only</span>
+          </div>
+        </div>
+        {% endif %}{# end techno_params #}
+
         {% endif %}{# end non-cover #}
     </div>
     {% endif %}{# end else (non-trend_section) #}
@@ -1295,8 +1679,6 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None) -
         flat_pages = []
         src = pages_override if pages_override is not None else [p_data.dict() for p_data in request.pages]
         for p in src:
-            if p.get("page", 0) > 18:
-                continue
             if p.get("type") == "page4_table":
                 p["rows"] = _group_page4_rows(p.get("rows", []))
             flat_pages.append(p)

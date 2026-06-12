@@ -6,7 +6,12 @@
       "Bash(python -c \"import json; d=json.load\\(open\\('h:/opr-mis1/backend/mis_data.json'\\)\\); pages=[p.get\\('page'\\) for p in d]; print\\('page count:', len\\(d\\)\\); print\\('page nums:', pages[-5:]\\); last=d[-1]; print\\('last page keys:', list\\(last.keys\\(\\)\\)[:10]\\); p13=[p for p in d if p.get\\('page'\\)==13]; print\\('page 13:', list\\(p13[0].keys\\(\\)\\) if p13 else 'not found'\\)\")",
       "Bash(python -c \"import json; d=json.load\\(open\\('h:/opr-mis1/backend/mis_data.json'\\)\\); p13=d[-1]; import json; print\\(json.dumps\\(p13, indent=2\\)\\)\")",
       "Bash(python -c \"import main; print\\('main.py OK'\\)\")",
-      "Read(//h/opr-mis/frontend/**)"
+      "Read(//h/opr-mis/frontend/**)",
+      "Bash(./venv/Scripts/python.exe -c ' *)",
+      "Bash(curl -s -o /dev/null -w \"backend direct: %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")",
+      "Bash(curl -s -o /dev/null -w \"again \\(warm\\): %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")",
+      "Bash(curl -s -o /dev/null -w \"after fix \\(cold\\): %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")",
+      "Bash(curl -s -o /dev/null -w \"after fix \\(warm\\): %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")"
     ]
   }
 }
