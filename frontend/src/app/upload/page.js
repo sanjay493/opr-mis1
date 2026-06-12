@@ -43,6 +43,48 @@ const getDefaultDate = () => {
   };
 };
 
+function PreviewTable({ title, headers, rows }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: '9pt', fontWeight: 700, color: '#a5b4fc', margin: '8px 0 6px' }}>{title}</div>
+      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 320, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0 }}>
+              {headers.map((h) => (
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
+                                     fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((cells, i) => {
+              const status = cells[cells.length - 1];
+              const ok = status === 'ok';
+              return (
+                <tr key={i} style={{
+                  backgroundColor: ok ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)',
+                  borderBottom: '1px solid #1e293b', opacity: ok ? 1 : 0.6,
+                }}>
+                  {cells.map((c, j) => (
+                    <td key={j} style={{
+                      padding: '4px 10px',
+                      color: j === 0 ? '#38bdf8' : (j === cells.length - 1 ? (ok ? '#34d399' : '#f87171') : '#cbd5e1'),
+                      fontWeight: j === 0 || j === cells.length - 1 ? 600 : 400,
+                      whiteSpace: 'nowrap',
+                      fontFamily: String(c).match(/^[A-Z]+\d+/) ? 'monospace' : 'inherit',
+                    }}>{c}</td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function UploadPage() {
   const defaultDate = getDefaultDate();
   const [uploadPlantName, setUploadPlantName] = useState('RSP');
@@ -53,6 +95,13 @@ export default function UploadPage() {
   const [uploadPlanPlantName, setUploadPlanPlantName] = useState('RSP');
   const [uploadPlanFY, setUploadPlanFY] = useState(defaultFY());
   const [uploadPlanFile, setUploadPlanFile] = useState(null);
+
+  const [technoPlant, setTechnoPlant] = useState('RSP');
+  const [technoMonthName, setTechnoMonthName] = useState(defaultDate.month);
+  const [technoYear, setTechnoYear] = useState(defaultDate.year);
+  const [technoFile, setTechnoFile] = useState(null);
+  const [technoPreview, setTechnoPreview] = useState(null);
+  const [isTechnoBusy, setIsTechnoBusy] = useState(false);
   
   const [isUploading, setIsUploading] = useState(false);
   const [logs, setLogs] = useState([
@@ -125,6 +174,97 @@ export default function UploadPage() {
       if (fileInput) fileInput.value = "";
     }
   };
+
+  const handleTechnoExtract = async (e) => {
+    e.preventDefault();
+    if (!technoFile) {
+      alert('Please select the RSP Excel file.');
+      return;
+    }
+    setIsTechnoBusy(true);
+    setTechnoPreview(null);
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    setLogs([]);
+    addLog('info', `Extracting ${technoPlant} report for preview (${targetPeriod})...`);
+
+    const formData = new FormData();
+    formData.append('file', technoFile);
+    formData.append('plant_name', technoPlant);
+    formData.append('month', targetPeriod);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || 'extraction failed');
+      const prodOk = (result.production_rows || []).filter((r) => r.status === 'ok').length;
+      const teOk = (result.techno_rows || []).filter((r) => r.status === 'ok').length;
+      const millOk = (result.techno_param_rows || []).filter((r) => r.status === 'ok').length;
+      addLog('success', `File type: ${result.source_type} (month ${result.month})`);
+      addLog('info', `Workbook sheets: ${(result.workbook_sheets || []).join(' | ')}`);
+      if (!result.production_rows?.length) {
+        addLog('info', 'No production data: this file was not recognized as a Final Monthly Report (sheets "page-9" + "page 1-8") or Morning Report. If it should contain production, check the sheet names above.');
+      }
+      if (result.shops_found?.length) {
+        addLog('success', `Mill techno: sheet "${result.mill_sheet}", cols ${result.month_col}/${result.cum_col}` +
+          (result.columns_detected ? ' (auto-detected)' : ' (defaults)') + ` — shops: ${result.shops_found.join(', ')}`);
+      }
+      addLog('success', `Extracted: ${prodOk} production, ${teOk} techno, ${millOk} mill techno values. Review below, then Insert.`);
+      setTechnoPreview(result);
+    } catch (err) {
+      addLog('error', `Extraction failed: ${err.message}`);
+      alert(`Extraction failed: ${err.message}`);
+    } finally {
+      setIsTechnoBusy(false);
+    }
+  };
+
+  const handleTechnoInsert = async () => {
+    if (!technoPreview) return;
+    const production_rows = (technoPreview.production_rows || []).filter((r) => r.status === 'ok');
+    const techno_rows = (technoPreview.techno_rows || []).filter((r) => r.status === 'ok');
+    const techno_param_rows = (technoPreview.techno_param_rows || []).filter((r) => r.status === 'ok');
+    if (!production_rows.length && !techno_rows.length && !techno_param_rows.length) {
+      alert('No extracted values to insert.');
+      return;
+    }
+    setIsTechnoBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/confirm-extraction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: technoPreview.month,
+          plant: technoPreview.plant,
+          source_type: technoPreview.source_type,
+          sheets: technoPreview.sheets,
+          file_name: technoPreview.file_name || '',
+          production_rows,
+          techno_rows,
+          techno_param_rows,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || 'insert failed');
+      addLog('success', result.message);
+      alert(result.message);
+      setTechnoPreview(null);
+      setTechnoFile(null);
+      const fi = document.getElementById('techno-file-input');
+      if (fi) fi.value = '';
+      fetchExtractionLog();
+    } catch (err) {
+      addLog('error', `Insert failed: ${err.message}`);
+      alert(`Insert failed: ${err.message}`);
+    } finally {
+      setIsTechnoBusy(false);
+    }
+  };
+
+  const technoOkCount = technoPreview
+    ? (technoPreview.production_rows || []).filter((r) => r.status === 'ok').length +
+      (technoPreview.techno_rows || []).filter((r) => r.status === 'ok').length +
+      (technoPreview.techno_param_rows || []).filter((r) => r.status === 'ok').length
+    : 0;
 
   const handlePlanUpload = async (e) => {
     e.preventDefault();
@@ -304,6 +444,49 @@ export default function UploadPage() {
           </form>
         </div>
 
+        {/* Techno Parameters extraction with preview */}
+        <div className="control-section" style={{ marginTop: '15px' }}>
+          <h2>RSP Extraction (Preview → Insert)</h2>
+          <form onSubmit={handleTechnoExtract}>
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <label>Plant Source</label>
+              <select className="form-control" value={technoPlant}
+                      onChange={(e) => setTechnoPlant(e.target.value)}>
+                <option value="RSP">RSP</option>
+              </select>
+            </div>
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <label>Report Month</label>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <select className="form-control" style={{ flex: 2 }} value={technoMonthName}
+                        onChange={(e) => setTechnoMonthName(e.target.value)}>
+                  {months.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select className="form-control" style={{ flex: 1 }} value={technoYear}
+                        onChange={(e) => setTechnoYear(e.target.value)}>
+                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="form-group" style={{ marginBottom: '15px' }}>
+              <label>RSP Excel File (.xlsx)</label>
+              <input id="techno-file-input" type="file" className="form-control" accept=".xlsx"
+                     style={{ padding: '4px', fontSize: '0.8rem' }}
+                     onChange={(e) => setTechnoFile(e.target.files[0])} />
+              <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
+                Accepts Final Monthly Report, Morning Report or Techno Parameters file —
+                auto-detected. Production AND techno data are both extracted, shown for
+                review, then inserted into their respective tables on confirmation.
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                             backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }}>
+              {isTechnoBusy ? 'Working...' : 'Extract & Preview'}
+            </button>
+          </form>
+        </div>
+
         {/* ABP Plan Target Ingestion Form */}
         <div className="control-section" style={{ marginTop: '15px' }}>
           <h2>ABP Plan Target Ingestion</h2>
@@ -422,6 +605,70 @@ export default function UploadPage() {
               </div>
             </div>
           </div>
+
+          {/* RSP extraction preview — verify production + techno before insertion */}
+          {technoPreview && (
+            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #8b5cf6', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                  Extracted Data — {technoPreview.plant} {technoPreview.month}
+                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400, marginLeft: 10 }}>
+                    {technoPreview.source_type}{technoPreview.sheets ? ` · ${technoPreview.sheets}` : ''}
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setTechnoPreview(null)} disabled={isTechnoBusy}
+                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
+                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                    Discard
+                  </button>
+                  <button onClick={handleTechnoInsert} disabled={isTechnoBusy}
+                          style={{ backgroundColor: '#10b981', border: '1px solid #10b981', borderRadius: 4,
+                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+                    {isTechnoBusy ? 'Inserting...' : `Insert ${technoOkCount} rows into DB`}
+                  </button>
+                </div>
+              </div>
+
+              {/* 1. Production rows → production_table */}
+              {technoPreview.production_rows?.length > 0 && (
+                <PreviewTable
+                  title={`Production (${technoPreview.production_rows.filter(r => r.status === 'ok').length} ok) → production_table`}
+                  headers={['Plant', 'Item', 'Value', 'Unit', 'Cell', 'Status']}
+                  rows={technoPreview.production_rows.map((r) => [
+                    technoPreview.plant, r.item_name, r.value ?? '', r.unit, r.cell, r.status,
+                  ])}
+                />
+              )}
+
+              {/* 2. Old-style techno params → techno_table */}
+              {technoPreview.techno_rows?.length > 0 && (
+                <PreviewTable
+                  title={`Techno-Economic Parameters (${technoPreview.techno_rows.filter(r => r.status === 'ok').length} ok) → techno_table`}
+                  headers={['Plant', 'Parameter', 'Unit', 'Month Actual', 'YTD Actual', 'Cell', 'Status']}
+                  rows={technoPreview.techno_rows.map((r) => [
+                    technoPreview.plant, r.parameter, r.unit, r.month_actual ?? '', r.ytd_actual ?? '', r.cell, r.status,
+                  ])}
+                />
+              )}
+
+              {/* 3. Mill techno params → techno_monthly */}
+              {technoPreview.techno_param_rows?.length > 0 && (
+                <PreviewTable
+                  title={`Mill Techno Parameters (${technoPreview.techno_param_rows.filter(r => r.status === 'ok').length} ok) → techno_monthly`}
+                  headers={['Plant', 'Shop', 'Parameter', 'Unit', 'Month', 'Actual', 'Cum', 'Cell', 'Found via', 'Status']}
+                  rows={technoPreview.techno_param_rows.map((r) => [
+                    r.plant, r.section, r.parameter, r.unit, r.month, r.actual ?? '', r.cum_actual ?? '', r.cell, r.found_via, r.status,
+                  ])}
+                />
+              )}
+
+              <div style={{ fontSize: '8pt', color: '#94a3b8', marginTop: 8 }}>
+                Only rows with status <strong style={{ color: '#34d399' }}>ok</strong> are inserted, each
+                into the table shown in its section heading. "not found" / "no value" rows are skipped.
+              </div>
+            </div>
+          )}
 
           {/* Terminal log window */}
           <div style={{

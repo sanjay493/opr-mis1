@@ -14,6 +14,10 @@ from page17_concast import generate_concast_data
 from page_prod_by_process import generate_prod_by_process
 from page_catwise_saleable import generate_catwise_saleable
 from page_segment_wise import generate_segment_wise
+from page_special_steel import generate_special_steel_plant, generate_special_steel_sail
+from page_opening_stock import generate_opening_stock
+from page_ipt import generate_ipt
+from page_techno import generate_techno, TECHNO_PAGES
 from pdf import build_pdf_response
 
 db.init_db()
@@ -60,7 +64,7 @@ def get_data(month: str = "2025-11"):
     try:
         pages_config = db.get_all_page_configs(month)
         if not pages_config:
-            with open(FRONTEND_DATA_PATH, "r", encoding="utf-8") as f:
+            with open(FRONTEND_DATA_PATH, "r", encoding="utf-8-sig") as f:
                 pages_config = json.load(f)
             pages_config = blank_out_page_data(pages_config)
 
@@ -122,10 +126,8 @@ def get_data(month: str = "2025-11"):
                 if pg in (15, 16, 17, 18):
                     import datetime as _dt
                     dt = _dt.datetime.strptime(month, "%Y-%m")
-                    ml = dt.strftime("%b'%y")
-                    cl = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
-                    page["month_label"] = ml
-                    page["cply_label"]  = cl
+                    page["month_label"] = dt.strftime("%b'%y")
+                    page["cply_label"]  = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
                 if pg == 15:
                     page["type"]     = "catwise_saleable"
                     page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
@@ -146,6 +148,36 @@ def get_data(month: str = "2025-11"):
                     page["title"] = "SEGMENT WISE PRODUCTION"
                     sw = generate_segment_wise(month)
                     page["rows"]  = sw["rows"]
+
+        # Always regenerate special steel pages (data from special_steel_orders,
+        # independent of production_table / production_plan_table)
+        import datetime as _dt
+        _dt_obj = _dt.datetime.strptime(month, "%Y-%m")
+        _ml = _dt_obj.strftime("%b'%y")
+        _cl = _dt.datetime(_dt_obj.year - 1, _dt_obj.month, 1).strftime("%b'%y")
+        _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
+        for page in pages_config:
+            pg = page.get("page")
+            if pg in _SPECIAL_PLANTS or pg == 24:
+                page["month_label"] = _ml
+                page["cply_label"]  = _cl
+            if pg in _SPECIAL_PLANTS:
+                ss = generate_special_steel_plant(month, _SPECIAL_PLANTS[pg])
+                page.update(ss)
+                page["type"] = "special_steel"
+            if pg == 24:
+                ss = generate_special_steel_sail(month)
+                page.update(ss)
+                page["type"] = "special_steel"
+            if pg == 25:
+                page.update(generate_opening_stock(month))
+                page["type"] = "opening_stock"
+            if pg == 26:
+                page.update(generate_ipt(month))
+                page["type"] = "ipt_status"
+            if pg in TECHNO_PAGES:
+                page.update(generate_techno(month, pg))
+                page["type"] = "techno_params"
 
         return pages_config
     except Exception as e:
@@ -212,7 +244,7 @@ async def generate_pdf(request: PDFRequest):
             p["monthly_prev"] = pbp["monthly_prev"]
             p["ytd"]          = pbp["ytd"]
             p["ytd_prev"]     = pbp["ytd_prev"]
-        if pg in (15, 16, 17, 18):
+        if pg in (15, 16, 17, 18, 19, 20, 21, 22, 23, 24):
             dt = _dt.datetime.strptime(request.month, "%Y-%m")
             p["month_label"] = dt.strftime("%b'%y")
             p["cply_label"]  = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
@@ -228,6 +260,22 @@ async def generate_pdf(request: PDFRequest):
         if pg == 18:
             p["type"] = "segment_wise"
             p["rows"]  = generate_segment_wise(request.month)["rows"]
+        _SP = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
+        if pg in _SP:
+            ss = generate_special_steel_plant(request.month, _SP[pg])
+            p.update(ss); p["type"] = "special_steel"
+        if pg == 24:
+            ss = generate_special_steel_sail(request.month)
+            p.update(ss); p["type"] = "special_steel"
+        if pg == 25:
+            p.update(generate_opening_stock(request.month))
+            p["type"] = "opening_stock"
+        if pg == 26:
+            p.update(generate_ipt(request.month))
+            p["type"] = "ipt_status"
+        if pg in TECHNO_PAGES:
+            p.update(generate_techno(request.month, pg))
+            p["type"] = "techno_params"
         enriched.append(p)
     return await build_pdf_response(request, pages_override=enriched)
 
@@ -367,6 +415,190 @@ async def upload_excel_plan(
                 os.unlink(tmp_path)
             except Exception as unlink_err:
                 print(f"Failed to delete temp file {tmp_path}: {unlink_err}")
+
+
+# ---------------------------------------------------------------------------
+# Unified RSP extraction (preview → confirm → insert into respective tables)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/extract-preview")
+async def extract_preview_endpoint(
+    file: UploadFile = File(...),
+    plant_name: str = Form(...),
+    month: str = Form(...),
+):
+    """Extract production + techno data from an RSP report for review.
+    Returns previews only — nothing is written to the DB."""
+    import shutil
+    import tempfile
+    import sys
+
+    if plant_name != "RSP":
+        raise HTTPException(status_code=400,
+                            detail=f"Preview extraction is currently only supported for RSP, not {plant_name}.")
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename)[1]
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+        import excel_extractor_rsp
+        result = excel_extractor_rsp.extract_preview(tmp_path, month)
+        result["file_name"] = file.filename
+        return result
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Preview extraction failed: {str(e)}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+@app.post("/api/confirm-extraction")
+async def confirm_extraction(payload: dict):
+    """Insert user-confirmed preview rows into their respective tables:
+    production_rows → production_table, techno_rows → techno_table,
+    techno_param_rows → techno_param_master / techno_monthly."""
+    month = payload.get("month")
+    plant = payload.get("plant", "RSP")
+    if not month:
+        raise HTTPException(status_code=400, detail="month is required")
+
+    saved_prod = saved_te = saved_mill = 0
+
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    try:
+        for r in payload.get("production_rows", []):
+            cur.execute("""
+                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(report_month, plant_name, item_name)
+                DO UPDATE SET month_actual = excluded.month_actual
+            """, (month, plant, r.get("item_name"), r.get("value")))
+            if r.get("value") is not None:
+                saved_prod += 1
+
+        for r in payload.get("techno_rows", []):
+            cur.execute("""
+                INSERT INTO techno_table (report_month, plant_name, parameter_name, unit, month_actual, ytd_actual)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(report_month, plant_name, parameter_name)
+                DO UPDATE SET unit=excluded.unit, month_actual=excluded.month_actual,
+                              ytd_actual=excluded.ytd_actual
+            """, (month, plant, r.get("parameter"), r.get("unit", ""),
+                  r.get("month_actual"), r.get("ytd_actual")))
+            if r.get("month_actual") is not None or r.get("ytd_actual") is not None:
+                saved_te += 1
+        conn.commit()
+    finally:
+        conn.close()
+
+    for r in payload.get("techno_param_rows", []):
+        if r.get("actual") is None and r.get("cum_actual") is None:
+            continue
+        pid = db.get_or_create_techno_param(
+            r.get("group_code", ""), r.get("section", ""), r.get("parameter", ""),
+            r.get("unit", ""), r.get("sort_order", 0))
+        db.save_techno_value(month, pid, r.get("actual"), r.get("cum_actual"))
+        saved_mill += 1
+
+    total = saved_prod + saved_te + saved_mill
+    if total:
+        db.log_extraction(plant, month, payload.get("file_name", ""),
+                          payload.get("sheets", ""),
+                          payload.get("source_type", "Preview Confirmed"), total)
+    return {
+        "status": "success",
+        "saved_production": saved_prod,
+        "saved_techno": saved_te,
+        "saved_mill_techno": saved_mill,
+        "message": (f"Inserted {saved_prod} production, {saved_te} techno and "
+                    f"{saved_mill} mill techno values for {plant} {month}."),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Techno parameter extraction (preview → confirm → insert)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/extract-techno")
+async def extract_techno_preview(
+    file: UploadFile = File(...),
+    plant_name: str = Form(...),
+    month: str = Form(...),
+):
+    """Extract techno parameters from an uploaded plant report.
+    Returns a preview only — nothing is written to the DB."""
+    import shutil
+    import tempfile
+    import sys
+
+    if plant_name != "RSP":
+        raise HTTPException(status_code=400,
+                            detail=f"Techno extraction is currently only supported for RSP, not {plant_name}.")
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename)[1]
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+        import excel_extractor_rsp_techno
+        result = excel_extractor_rsp_techno.extract_techno(tmp_path, month)
+        result["file_name"] = file.filename
+        return result
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Techno extraction failed: {str(e)}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+@app.post("/api/techno-entries")
+async def save_techno_entries(payload: dict):
+    """Insert previously previewed techno rows into the DB (user-confirmed)."""
+    month = payload.get("month")
+    rows = payload.get("rows", [])
+    if not month or not rows:
+        raise HTTPException(status_code=400, detail="month and rows are required")
+
+    saved = 0
+    for r in rows:
+        if r.get("actual") is None and r.get("cum_actual") is None:
+            continue
+        pid = db.get_or_create_techno_param(
+            r.get("group_code", ""), r.get("section", ""), r.get("parameter", ""),
+            r.get("unit", ""), r.get("sort_order", 0))
+        db.save_techno_value(month, pid, r.get("actual"), r.get("cum_actual"))
+        saved += 1
+
+    plant = payload.get("plant", "")
+    if saved:
+        db.log_extraction(plant, month, payload.get("file_name", ""), "techno",
+                          "techno_params", saved)
+    return {"status": "success", "saved": saved,
+            "message": f"Inserted {saved} techno parameter values for {plant} {month}."}
 
 
 # ---------------------------------------------------------------------------
