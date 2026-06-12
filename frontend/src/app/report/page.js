@@ -24,6 +24,23 @@ const PAGE_LABELS = {
   16: 'Category Wise – DSP & RSP',
   17: 'Category Wise – BSL & ISP',
   18: 'Segment Wise Production',
+  19: 'Special Steel – BSP',
+  20: 'Special Steel – DSP',
+  21: 'Special Steel – RSP',
+  22: 'Special Steel – BSL',
+  23: 'Special Steel – ISP',
+  24: 'Special Steel – SAIL (Consolidated)',
+  25: 'Opening Stock at Plants & Stockyards',
+  26: 'IPT Status',
+  27: 'Major Techno-Economic Parameters',
+  28: 'Techno – Coke & Coal Chemicals, Sinter',
+  29: 'Techno – Iron Making',
+  30: 'Techno – BOF Shop',
+  31: 'Mill Wise Techno – BSP',
+  32: 'Mill Wise Techno – DSP',
+  33: 'Mill Wise Techno – RSP',
+  34: 'Mill Wise Techno – BSL',
+  35: 'Mill Wise Techno – ISP',
 };
 
 const months = [
@@ -148,7 +165,7 @@ console.log('API_BASE_URL:', API_BASE_URL);
 
 // In browser environments, failing to fetch is often due to CORS/origin/host reachability.
 // Add a lightweight timeout so the user sees faster feedback in DevTools.
-const fetchWithTimeout = (url, options = {}, timeoutMs = 8000) => {
+const fetchWithTimeout = (url, options = {}, timeoutMs = 30000) => {
   return new Promise((resolve, reject) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => {
@@ -206,7 +223,7 @@ export default function ReportPage() {
               return p;
             });
             const formatted = getFormattedPagesData(normalized, selectedMonthName, selectedYear, 'November', '2025');
-            setPagesData(formatted.filter((p) => p.page <= 18));
+            setPagesData(formatted);
             setPagesDataMonth({ name: selectedMonthName, year: selectedYear });
           }
         }
@@ -380,7 +397,7 @@ export default function ReportPage() {
             <button
               className="btn btn-secondary"
               style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => Math.min(18, pagesData.length, prev + 1))}
+              onClick={() => setActivePageNum((prev) => Math.min(pagesData.length, prev + 1))}
               disabled={activePageNum === pagesData.length}
             >
               Next
