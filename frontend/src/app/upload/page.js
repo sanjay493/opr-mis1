@@ -446,13 +446,14 @@ export default function UploadPage() {
 
         {/* Techno Parameters extraction with preview */}
         <div className="control-section" style={{ marginTop: '15px' }}>
-          <h2>RSP Extraction (Preview → Insert)</h2>
+          <h2>Extraction with Preview → Insert</h2>
           <form onSubmit={handleTechnoExtract}>
             <div className="form-group" style={{ marginBottom: '12px' }}>
               <label>Plant Source</label>
               <select className="form-control" value={technoPlant}
                       onChange={(e) => setTechnoPlant(e.target.value)}>
-                <option value="RSP">RSP</option>
+                <option value="RSP">RSP (Excel)</option>
+                <option value="DSP">DSP (OMI PDF)</option>
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: '12px' }}>
@@ -469,14 +470,16 @@ export default function UploadPage() {
               </div>
             </div>
             <div className="form-group" style={{ marginBottom: '15px' }}>
-              <label>RSP Excel File (.xlsx)</label>
-              <input id="techno-file-input" type="file" className="form-control" accept=".xlsx"
+              <label>{technoPlant === 'DSP' ? 'DSP OMI PDF Report (.pdf)' : 'RSP Excel File (.xlsx)'}</label>
+              <input id="techno-file-input" type="file" className="form-control"
+                     accept={technoPlant === 'DSP' ? '.pdf' : '.xlsx'}
                      style={{ padding: '4px', fontSize: '0.8rem' }}
                      onChange={(e) => setTechnoFile(e.target.files[0])} />
               <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
-                Accepts Final Monthly Report, Morning Report or Techno Parameters file —
-                auto-detected. Production AND techno data are both extracted, shown for
-                review, then inserted into their respective tables on confirmation.
+                {technoPlant === 'DSP'
+                  ? 'DSP monthly MIS PDF: production read from the "PRODUCTION MONTHWISE" page (located by heading, not page number). Month column selected by Report Month above.'
+                  : 'Accepts Final Monthly Report, Morning Report or Techno Parameters file — auto-detected. Production AND techno data are both extracted.'}
+                {' '}Data is shown for review before insertion.
               </div>
             </div>
             <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
