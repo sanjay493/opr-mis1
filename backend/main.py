@@ -433,9 +433,9 @@ async def extract_preview_endpoint(
     import tempfile
     import sys
 
-    if plant_name != "RSP":
+    if plant_name not in ("RSP", "DSP"):
         raise HTTPException(status_code=400,
-                            detail=f"Preview extraction is currently only supported for RSP, not {plant_name}.")
+                            detail=f"Preview extraction is currently only supported for RSP and DSP, not {plant_name}.")
 
     temp_dir = os.path.join(os.path.dirname(__file__), "temp")
     os.makedirs(temp_dir, exist_ok=True)
@@ -447,8 +447,15 @@ async def extract_preview_endpoint(
             tmp_path = tmp.name
 
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
-        import excel_extractor_rsp
-        result = excel_extractor_rsp.extract_preview(tmp_path, month)
+        if plant_name == "DSP":
+            if suffix.lower() != ".pdf":
+                raise HTTPException(status_code=400,
+                                    detail="DSP preview extraction expects the OMI PDF report (.pdf).")
+            import pdf_extractor_dsp
+            result = pdf_extractor_dsp.extract_preview(tmp_path, month)
+        else:
+            import excel_extractor_rsp
+            result = excel_extractor_rsp.extract_preview(tmp_path, month)
         result["file_name"] = file.filename
         return result
     except ValueError as ve:
