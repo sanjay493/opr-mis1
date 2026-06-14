@@ -2,6 +2,17 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
 
+class FontConfig(BaseModel):
+    """Global typography settings injected into every PDF render.
+    All sizes are in points (pt). Users can override per-page via page_layouts."""
+    family: Optional[str] = "IBM Plex Sans"
+    mono_family: Optional[str] = "IBM Plex Mono"
+    td_size: Optional[float] = 9.5      # table data cells
+    th_size: Optional[float] = 9.0      # table header cells
+    title_size: Optional[float] = 13.0  # page h2 titles
+    heading_size: Optional[float] = 10.5  # section h3 headings
+
+
 class PageRow(BaseModel):
     label: str
     values: List[str]
@@ -47,6 +58,7 @@ class PDFRequest(BaseModel):
     month: str
     pages: List[PageData]
     page_layouts: Optional[Dict[str, Any]] = None
+    font_config: Optional[FontConfig] = None
 
 
 class ProductionEntry(BaseModel):

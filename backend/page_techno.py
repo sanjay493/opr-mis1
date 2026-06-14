@@ -165,7 +165,7 @@ def generate_techno(report_month: str, page_no: int) -> dict:
         for pid, section, row_label, unit in master:
             if group == "MILL_DSP" and section == "Section Mill":
                 continue
-            if group == "IRON_MAKING" and section in ("Productivity (Working vol.)", "Sinter %"):
+            if group == "IRON_MAKING" and section == "Sinter %":
                 continue
             if group == "IRON_MAKING" and section in _DSP_FURNACE_SECTIONS \
                     and not (row_label.startswith("DSP") or row_label.startswith("RSP")):

@@ -112,12 +112,6 @@ ROWS = [
     ("COKE_SINTER", "Sinter Productivity", "BSL",       "T/m2/hr", 36, 1.1),
     ("COKE_SINTER", "Sinter Productivity", "ISP",       "T/m2/hr", 37, 1.4),
     # IRON_MAKING
-    ("IRON_MAKING", "Productivity (Working vol.)", "BSP", "T/m3/day", 1, 1.99),
-    ("IRON_MAKING", "Productivity (Working vol.)", "DSP", "T/m3/day", 2, 1.76),
-    ("IRON_MAKING", "Productivity (Working vol.)", "RSP", "T/m3/day", 3, 2.45),
-    ("IRON_MAKING", "Productivity (Working vol.)", "BSL", "T/m3/day", 4, 1.92),
-    ("IRON_MAKING", "Productivity (Working vol.)", "ISP", "T/m3/day", 5, 2.40),
-    ("IRON_MAKING", "Productivity (Working vol.)", "SAIL 5 PLANT", "T/m3/day", 6, 2.08),
     ("IRON_MAKING", "CDI", "BSP Avg for CDI Fces", "Kg/Thm", 10, 120),
     ("IRON_MAKING", "CDI", "DSP Avg for CDI Fces", "Kg/Thm", 11,  55),  # plant avg (reference)
     ("IRON_MAKING", "CDI", "DSP BF#2",             "Kg/Thm", 12,  46),  # furnace-wise (extracted)

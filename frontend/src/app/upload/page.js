@@ -370,7 +370,7 @@ export default function UploadPage() {
   const handleTechnoExtract = async (e) => {
     e.preventDefault();
     if (!technoFile) {
-      alert('Please select the RSP Excel file.');
+      alert('Please select the Excel file to extract.');
       return;
     }
     setIsTechnoBusy(true);
@@ -723,6 +723,8 @@ export default function UploadPage() {
                 <option value="RSP">RSP (Excel)</option>
                 <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
                 <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
+                <option value="BSP">BSP (3-page Techno .xlsx)</option>
+                <option value="BSP-OISCO">BSP-OISCO (OISCO Techno .xlsx)</option>
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: '12px' }}>
@@ -742,6 +744,8 @@ export default function UploadPage() {
               <label>
                 {technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
                   : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
+                  : technoPlant === 'BSP' ? 'BSP Techno Excel File (.xlsx)'
+                  : technoPlant === 'BSP-OISCO' ? 'BSP OISCO Techno Excel File (.xlsx)'
                   : 'RSP Excel File (.xlsx)'}
               </label>
               <input id="techno-file-input" type="file" className="form-control"
@@ -753,6 +757,10 @@ export default function UploadPage() {
                   ? 'OMI PDF: production + special steel + techno from monthly MIS report. MCR-I .xls: 21 production items from tab-separated month-end report. Month auto-detected from file in both cases.'
                   : technoPlant === 'ISP'
                   ? 'Morning Report (DAILYREPORT1): month auto-detected from K5, ~19 production items. Final Monthly (Maj Production Summ): set month above, ~17 production items. Summarized Monthly Report (B-FCE sheet): set month above — extracts ~37 techno params from BF, Sinter, SMS, WRM, BM, USM.'
+                  : technoPlant === 'BSP'
+                  ? 'BSP-3-page-Tech.xlsx: extracts 62 techno parameters (Coke Yield, Sinter SP-2/3, BF, SMS-2/3, RSM, URM, MM, WRM, BRM, Plate Mill, Energy). Month column selected per chosen month; cumulative always from column P. Set month above to match the file.'
+                  : technoPlant === 'BSP-OISCO'
+                  ? 'OISCO_<Mon>\'YY.xlsx: extracts 35 techno parameters (BF CDI per furnace, Fuel Rate, Pellets, SMS-2/3 converter ops, Fe-Mn/Si/Mn, O2, LD Gas, DS Heats, Sp. Water). Month auto-detected from title; cumulative column is always the column immediately after the month column.'
                   : 'Accepts Final Monthly Report, Morning Report or Techno Parameters file — auto-detected. Production AND techno data are both extracted.'}
                 {' '}Data is shown for review before insertion.
               </div>

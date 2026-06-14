@@ -277,7 +277,7 @@ async def generate_pdf(request: PDFRequest):
             p.update(generate_techno(request.month, pg))
             p["type"] = "techno_params"
         enriched.append(p)
-    return await build_pdf_response(request, pages_override=enriched, page_layouts=request.page_layouts)
+    return await build_pdf_response(request, pages_override=enriched, page_layouts=request.page_layouts, font_config=request.font_config)
 
 
 # ---------------------------------------------------------------------------
@@ -433,9 +433,9 @@ async def extract_preview_endpoint(
     import tempfile
     import sys
 
-    if plant_name not in ("RSP", "DSP", "ISP"):
+    if plant_name not in ("RSP", "DSP", "ISP", "BSP", "BSP-OISCO"):
         raise HTTPException(status_code=400,
-                            detail=f"Preview extraction is currently only supported for RSP, DSP, and ISP, not {plant_name}.")
+                            detail=f"Preview extraction not supported for {plant_name}.")
 
     temp_dir = os.path.join(os.path.dirname(__file__), "temp")
     os.makedirs(temp_dir, exist_ok=True)
@@ -465,6 +465,20 @@ async def extract_preview_endpoint(
                 result = await loop.run_in_executor(
                     pool,
                     lambda: excel_extractor_isp.extract_preview(tmp_path, month)
+                )
+        elif plant_name == "BSP":
+            import excel_extractor_bsp_techno
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: excel_extractor_bsp_techno.extract_preview(tmp_path, month)
+                )
+        elif plant_name == "BSP-OISCO":
+            import excel_extractor_bsp_oisco
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: excel_extractor_bsp_oisco.extract_preview(tmp_path, month)
                 )
         else:
             import excel_extractor_rsp
