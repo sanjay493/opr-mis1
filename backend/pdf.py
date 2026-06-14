@@ -10,12 +10,21 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <title>SAIL MIS Report - {{ month }}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap');
+        {{ font_imports }}
 
         * { box-sizing: border-box; }
 
+        :root {
+            --font-primary: {{ font_family_css }};
+            --font-mono: {{ mono_family_css }};
+            --sz-title:   {{ title_size }}pt;
+            --sz-heading: {{ heading_size }}pt;
+            --sz-th:      {{ th_size }}pt;
+            --sz-td:      {{ td_size }}pt;
+        }
+
         body {
-            font-family: 'Roboto', Arial, Helvetica, sans-serif;
+            font-family: var(--font-primary);
             color: #0f172a;
             margin: 0;
             padding: 0;
@@ -64,7 +73,7 @@ HTML_TEMPLATE = """
         }
 
         .report-title-section h2 {
-            font-size: 13pt;
+            font-size: var(--sz-title);
             font-weight: 700;
             color: #0f172a;
             text-transform: uppercase;
@@ -81,7 +90,7 @@ HTML_TEMPLATE = """
         .report-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 12pt;
+            font-size: var(--sz-td);
             margin-top: 10px;
         }
 
@@ -90,7 +99,7 @@ HTML_TEMPLATE = """
             color: #0f172a;
             font-weight: 700;
             text-transform: uppercase;
-            font-size: 11pt;
+            font-size: var(--sz-th);
             padding: 5px 4px;
             border: 1px solid #94a3b8;
             text-align: center;
@@ -99,15 +108,15 @@ HTML_TEMPLATE = """
         .report-table td {
             padding: 4px 4px;
             border: 1px solid #cbd5e1;
-            font-family: 'Roboto', Arial, Helvetica, sans-serif;
-            font-size: 12pt;
+            font-family: inherit;
+            font-size: var(--sz-td);
             text-align: right;
         }
 
         .report-table td.label-cell {
             text-align: left;
-            font-family: 'Roboto', Arial, Helvetica, sans-serif;
-            font-size: 11pt;
+            font-family: inherit;
+            font-size: var(--sz-td);
             font-weight: 500;
         }
 
@@ -224,7 +233,7 @@ HTML_TEMPLATE = """
             border: 1px solid #000;
             font-size: 10.5pt;
             padding: 8px 10px;
-            font-family: 'Roboto', Arial, Helvetica, sans-serif;
+            font-family: inherit;
             text-align: left;
             vertical-align: top;
             color: #333;
@@ -482,9 +491,23 @@ HTML_TEMPLATE = """
     <style>
     {% for page in pages %}
     {% set _pl = page_layouts.get(page.page|string, {}) %}
-    {% if _pl and _pl.get('fontSize') %}
+    {% if _pl %}
+    {% if _pl.get('fontSize') %}
     .pg-{{ page.page }} th,
     .pg-{{ page.page }} td { font-size: {{ _pl.get('fontSize') }}pt !important; }
+    {% endif %}
+    {% if _pl.get('fontFamily') %}
+    .pg-{{ page.page }},
+    .pg-{{ page.page }} th,
+    .pg-{{ page.page }} td { font-family: '{{ _pl.get("fontFamily") }}', Arial, sans-serif !important; }
+    {% endif %}
+    {% if _pl.get('fitToPage') %}
+    .pg-{{ page.page }} th,
+    .pg-{{ page.page }} td { font-size: 7pt !important; padding: 1px 2px !important; line-height: 1.0 !important; }
+    .pg-{{ page.page }} .report-title-section { margin-bottom: 6px !important; }
+    .pg-{{ page.page }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; font-size: 7pt !important; }
+    .pg-{{ page.page }} .highlights-box li { margin-bottom: 1px !important; }
+    {% endif %}
     {% endif %}
     {% endfor %}
     </style>
@@ -781,14 +804,14 @@ HTML_TEMPLATE = """
                         <td class="label-cell" rowspan="{{ row.group_size }}"
                             style="font-weight: 700; font-size: 8pt; vertical-align: middle;
                                    background-color: #f8fafc; padding: 1px 2px 1px 4px;
-                                   overflow: hidden; font-family: 'Roboto', Arial, Helvetica, sans-serif;">
+                                   overflow: hidden; font-family: inherit;">
                             {{ row.item }}
                         </td>
                         {% endif %}
                         <td class="label-cell"
                             style="font-weight: 600; font-size: 8pt; text-align: center;
                                    background-color: #f8fafc; padding: 1px 2px;
-                                   font-family: 'Roboto', Arial, Helvetica, sans-serif;
+                                   font-family: inherit;
                                    white-space: nowrap; overflow: hidden;">
                             {{ row.plant }}
                         </td>
@@ -1557,6 +1580,30 @@ HTML_TEMPLATE = """
 </html>
 """
 
+FONT_CATALOG = {
+    "IBM Plex Sans": {
+        "import": "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;700&display=swap');",
+        "mono": "IBM Plex Mono",
+    },
+    "Source Sans 3": {
+        "import": "@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Source+Code+Pro:wght@400;500;700&display=swap');",
+        "mono": "Source Code Pro",
+    },
+    "Roboto": {
+        "import": "@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap');",
+        "mono": "Roboto Mono",
+    },
+    "Noto Sans": {
+        "import": "@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Noto+Sans+Mono:wght@400;500;700&display=swap');",
+        "mono": "Noto Sans Mono",
+    },
+    "Lato": {
+        "import": "@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Roboto+Mono:wght@400;500;700&display=swap');",
+        "mono": "Roboto Mono",
+    },
+}
+_DEFAULT_FONT = "IBM Plex Sans"
+
 _PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL', 'ASP', 'SSP', 'VISL', '5 Plants']
 
 _MONTHS_ORDER = [
@@ -1638,9 +1685,10 @@ def _group_page4_rows(rows: list) -> list:
     return grouped
 
 
-def _render_pdf_sync(html: str) -> bytes:
+def _render_pdf_sync(html: str, font_family: str = _DEFAULT_FONT) -> bytes:
     """Run Playwright synchronously (called from a thread to avoid event-loop conflicts)."""
     from playwright.sync_api import sync_playwright
+    hdr_font = f"'{font_family}',Arial,sans-serif"
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         page = browser.new_page()
@@ -1650,22 +1698,22 @@ def _render_pdf_sync(html: str) -> bytes:
             print_background=True,
             display_header_footer=True,
             header_template=(
-                '<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
-                'font-family:Arial,sans-serif;font-size:7.5pt;font-weight:500;'
-                'color:#64748b;text-align:center;border-bottom:0.5px solid #e2e8f0;'
-                'padding-bottom:3px;">'
-                'Steel Authority of India Limited - Operations Monthly Informatics'
-                '</div>'
+                f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
+                f'font-family:{hdr_font};font-size:7.5pt;font-weight:500;'
+                f'color:#64748b;text-align:center;border-bottom:0.5px solid #e2e8f0;'
+                f'padding-bottom:3px;">'
+                f'Steel Authority of India Limited – Operations Monthly Informatics'
+                f'</div>'
             ),
             footer_template=(
-                '<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
-                'font-family:Arial,sans-serif;font-size:7.5pt;color:#64748b;'
-                'display:flex;justify-content:space-between;'
-                'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
-                '<span>Prepared by: MIS Group</span>'
-                '<span>Page <span class="pageNumber"></span>'
-                ' of <span class="totalPages"></span></span>'
-                '</div>'
+                f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
+                f'font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
+                f'display:flex;justify-content:space-between;'
+                f'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
+                f'<span>Prepared by: MIS Group</span>'
+                f'<span>Page <span class="pageNumber"></span>'
+                f' of <span class="totalPages"></span></span>'
+                f'</div>'
             ),
             margin={
                 "top": "18mm",
@@ -1678,13 +1726,20 @@ def _render_pdf_sync(html: str) -> bytes:
     return pdf_bytes
 
 
-async def build_pdf_response(request: PDFRequest, pages_override: list = None, page_layouts: dict = None) -> StreamingResponse:
+async def build_pdf_response(request: PDFRequest, pages_override: list = None, page_layouts: dict = None, font_config=None) -> StreamingResponse:
     import asyncio
     import traceback as tb
     from jinja2 import Template
+    from models import FontConfig
 
     try:
         vars = _resolve_month_vars(request.month)
+
+        fc = font_config or request.font_config or FontConfig()
+        _catalog_entry = FONT_CATALOG.get(fc.family, FONT_CATALOG[_DEFAULT_FONT])
+        _font_imports   = _catalog_entry["import"]
+        _font_family_css = f"'{fc.family}', Arial, Helvetica, sans-serif"
+        _mono_family_css = f"'{_catalog_entry['mono']}', 'Courier New', monospace"
 
         total_report_pages = len(request.pages)
 
@@ -1728,12 +1783,20 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
             pages=pages_to_render,
             total_report_pages=total_report_pages,
             page_layouts=page_layouts or {},
+            # Typography variables
+            font_imports=_font_imports,
+            font_family_css=_font_family_css,
+            mono_family_css=_mono_family_css,
+            td_size=fc.td_size,
+            th_size=fc.th_size,
+            title_size=fc.title_size,
+            heading_size=fc.heading_size,
             **vars,
         )
 
         # Run sync Playwright in a thread so it doesn't fight the asyncio event loop
         loop = asyncio.get_event_loop()
-        pdf_bytes = await loop.run_in_executor(None, _render_pdf_sync, rendered_html)
+        pdf_bytes = await loop.run_in_executor(None, _render_pdf_sync, rendered_html, fc.family)
 
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
