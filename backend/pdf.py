@@ -478,12 +478,24 @@ HTML_TEMPLATE = """
         .segwise-table tr.sw-separator { height: 3px; }
         .segwise-table tr.sw-separator td { border: none; background: transparent; padding: 0; }
     </style>
+    {% if page_layouts %}
+    <style>
+    {% for page in pages %}
+    {% set _pl = page_layouts.get(page.page|string, {}) %}
+    {% if _pl and _pl.get('fontSize') %}
+    .pg-{{ page.page }} th,
+    .pg-{{ page.page }} td { font-size: {{ _pl.get('fontSize') }}pt !important; }
+    {% endif %}
+    {% endfor %}
+    </style>
+    {% endif %}
 </head>
 <body>
     {% set total_pages = total_report_pages %}
     {% for page in pages %}
+    {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}
-    <div class="page7-13-section-page">
+    <div class="page7-13-section-page pg-{{ page.page }}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         {% for item in page['items'] %}
         {% if not loop.first %}<hr class="page7-13-separator">{% endif %}
         <div class="page7-13-item-block">
@@ -543,7 +555,7 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
     {% else %}
-    <div class="page{% if page.type == 'page4_table' %} page4-page{% endif %}">
+    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
 
         {% if page.type == 'cover' %}
             <div class="page1-container">
@@ -1666,7 +1678,7 @@ def _render_pdf_sync(html: str) -> bytes:
     return pdf_bytes
 
 
-async def build_pdf_response(request: PDFRequest, pages_override: list = None) -> StreamingResponse:
+async def build_pdf_response(request: PDFRequest, pages_override: list = None, page_layouts: dict = None) -> StreamingResponse:
     import asyncio
     import traceback as tb
     from jinja2 import Template
@@ -1715,6 +1727,7 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None) -
             month=request.month,
             pages=pages_to_render,
             total_report_pages=total_report_pages,
+            page_layouts=page_layouts or {},
             **vars,
         )
 

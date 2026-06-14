@@ -199,10 +199,112 @@ def _extract_mcr_report(file_path: str, source_file_name: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Extractor 2 — DSP Final Monthly Report (to be implemented)
+# Preview — MCR-I (no DB writes, returns standard preview dict)
 # ---------------------------------------------------------------------------
 
-# def _extract_monthly_report(file_path: str, report_month: str, source_file_name: str) -> bool:
-#     """Extracts production data from DSP final monthly consolidated report."""
-#     pass
+def _mcr_preview(file_path: str, report_month: str) -> dict:
+    with open(file_path, encoding='utf-8', errors='replace') as f:
+        lines = [line.rstrip('\r\n').split('\t') for line in f.readlines()]
+
+    if not lines or 'DAILY MANAGEMENT CONTROL REPORT' not in lines[0][0].upper():
+        raise ValueError(
+            "File does not appear to be a DSP MCR-I report. "
+            "First line must start with 'DAILY MANAGEMENT CONTROL REPORT'."
+        )
+
+    def get_cell(row_1based: int, col_0based: int) -> Optional[str]:
+        idx = row_1based - 1
+        if idx >= len(lines):
+            return None
+        cols = lines[idx]
+        if col_0based >= len(cols):
+            return None
+        return cols[col_0based].strip() or None
+
+    date_str = get_cell(1, 2) or ""
+    date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', date_str)
+    if date_match:
+        _, m_num, year = date_match.groups()
+        db_month = f"{year}-{m_num}"
+    else:
+        db_month = report_month
+
+    COL_D = 3
+    COL_E = 4
+    NO_CONVERT = {"Oven Pushing(nos/d)"}
+
+    row_specs = [
+        (5,  COL_E, "Oven Pushing(nos/d)"),
+        (13, COL_E, "SP-1"),
+        (14, COL_E, "SP-2"),
+        (15, COL_E, "Total Sinter"),
+        (16, COL_E, "Hot Metal"),
+        (17, COL_E, "Pig Iron"),
+        (20, COL_E, "BILLET Caster"),
+        (21, COL_E, "Bloom Caster "),
+        (23, COL_D, "Round Production"),
+        (25, COL_E, "Total Caster"),
+        (26, COL_E, "BOTTOM_POURING_INGOT"),
+        (27, COL_E, "Total Crude Steel"),
+        (30, COL_E, "MSM"),
+        (32, COL_E, "MM"),
+        (37, COL_E, "WAP"),
+        (38, COL_E, "Saleable Semis"),
+        (39, COL_E, "Finished Steel"),
+        (40, COL_E, "Saleable Steel"),
+        (43, COL_E, "BILLET for Sale"),
+        (44, COL_E, "Blooms for Sale "),
+        (46, COL_E, "BRC"),
+    ]
+
+    rows = []
+    for row, col, item_name in row_specs:
+        raw = get_cell(row, col)
+        val = clean_val(raw)
+        if val is not None and item_name not in NO_CONVERT:
+            val = round(val / 1000.0, 3)
+        unit = "nos/d" if item_name in NO_CONVERT else "'000T"
+        rows.append({
+            "item_name": item_name,
+            "value": val,
+            "unit": unit,
+            "cell": f"R{row}C{col + 1}",
+            "pdf_label": item_name,
+            "status": "ok" if val is not None else "no value",
+        })
+
+    return {
+        "plant": "DSP",
+        "month": db_month,
+        "source_type": "DSP MCR-I Report",
+        "sheets": "MCR-I",
+        "workbook_sheets": ["MCR-I"],
+        "production_rows": rows,
+        "special_steel_rows": [],
+        "techno_rows": [],
+        "techno_param_rows": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Unified preview entry point — auto-detects PDF vs MCR-I text
+# ---------------------------------------------------------------------------
+
+def extract_preview(file_path: str, report_month: str, aliases: dict = None) -> dict:
+    """DSP preview: delegates to pdf_extractor_dsp for .pdf, else MCR-I text."""
+    import os as _os
+    suffix = _os.path.splitext(file_path)[1].lower()
+
+    if suffix == '.pdf':
+        import pdf_extractor_dsp
+        return pdf_extractor_dsp.extract_preview(file_path, report_month, aliases=aliases)
+
+    with open(file_path, 'rb') as f:
+        magic = f.read(4)
+    if magic == b'\xd0\xcf\x11\xe0':
+        raise ValueError(
+            "Binary XLS format is not supported for DSP. "
+            "Upload the MCR-I tab-separated .xls file or the OMI PDF report."
+        )
+    return _mcr_preview(file_path, report_month)
 

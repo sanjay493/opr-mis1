@@ -277,7 +277,7 @@ async def generate_pdf(request: PDFRequest):
             p.update(generate_techno(request.month, pg))
             p["type"] = "techno_params"
         enriched.append(p)
-    return await build_pdf_response(request, pages_override=enriched)
+    return await build_pdf_response(request, pages_override=enriched, page_layouts=request.page_layouts)
 
 
 # ---------------------------------------------------------------------------
@@ -433,9 +433,9 @@ async def extract_preview_endpoint(
     import tempfile
     import sys
 
-    if plant_name not in ("RSP", "DSP"):
+    if plant_name not in ("RSP", "DSP", "ISP"):
         raise HTTPException(status_code=400,
-                            detail=f"Preview extraction is currently only supported for RSP and DSP, not {plant_name}.")
+                            detail=f"Preview extraction is currently only supported for RSP, DSP, and ISP, not {plant_name}.")
 
     temp_dir = os.path.join(os.path.dirname(__file__), "temp")
     os.makedirs(temp_dir, exist_ok=True)
@@ -447,23 +447,42 @@ async def extract_preview_endpoint(
             tmp_path = tmp.name
 
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+
+        import asyncio, concurrent.futures
+        loop = asyncio.get_event_loop()
+
         if plant_name == "DSP":
-            if suffix.lower() != ".pdf":
-                raise HTTPException(status_code=400,
-                                    detail="DSP preview extraction expects the OMI PDF report (.pdf).")
-            import pdf_extractor_dsp
-            result = pdf_extractor_dsp.extract_preview(tmp_path, month)
+            import excel_extractor_dsp
+            aliases = db.get_pdf_item_aliases("DSP")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: excel_extractor_dsp.extract_preview(tmp_path, month, aliases=aliases)
+                )
+        elif plant_name == "ISP":
+            import excel_extractor_isp
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: excel_extractor_isp.extract_preview(tmp_path, month)
+                )
         else:
             import excel_extractor_rsp
-            result = excel_extractor_rsp.extract_preview(tmp_path, month)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: excel_extractor_rsp.extract_preview(tmp_path, month)
+                )
         result["file_name"] = file.filename
         return result
+    except HTTPException:
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
+    except BaseException as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Preview extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Preview extraction failed: {type(e).__name__}: {str(e)}")
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:
@@ -477,63 +496,96 @@ async def confirm_extraction(payload: dict):
     """Insert user-confirmed preview rows into their respective tables:
     production_rows → production_table, techno_rows → techno_table,
     techno_param_rows → techno_param_master / techno_monthly."""
-    month = payload.get("month")
-    plant = payload.get("plant", "RSP")
-    if not month:
-        raise HTTPException(status_code=400, detail="month is required")
-
-    saved_prod = saved_te = saved_mill = 0
-
-    conn = sqlite3.connect(db.DB_PATH)
-    cur = conn.cursor()
     try:
-        for r in payload.get("production_rows", []):
-            cur.execute("""
-                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(report_month, plant_name, item_name)
-                DO UPDATE SET month_actual = excluded.month_actual
-            """, (month, plant, r.get("item_name"), r.get("value")))
-            if r.get("value") is not None:
-                saved_prod += 1
+        month = payload.get("month")
+        plant = payload.get("plant", "RSP")
+        if not month:
+            raise HTTPException(status_code=400, detail="month is required")
 
-        for r in payload.get("techno_rows", []):
-            cur.execute("""
-                INSERT INTO techno_table (report_month, plant_name, parameter_name, unit, month_actual, ytd_actual)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(report_month, plant_name, parameter_name)
-                DO UPDATE SET unit=excluded.unit, month_actual=excluded.month_actual,
-                              ytd_actual=excluded.ytd_actual
-            """, (month, plant, r.get("parameter"), r.get("unit", ""),
-                  r.get("month_actual"), r.get("ytd_actual")))
-            if r.get("month_actual") is not None or r.get("ytd_actual") is not None:
-                saved_te += 1
-        conn.commit()
-    finally:
-        conn.close()
+        saved_prod = saved_te = saved_mill = 0
 
-    for r in payload.get("techno_param_rows", []):
-        if r.get("actual") is None and r.get("cum_actual") is None:
-            continue
-        pid = db.get_or_create_techno_param(
-            r.get("group_code", ""), r.get("section", ""), r.get("parameter", ""),
-            r.get("unit", ""), r.get("sort_order", 0))
-        db.save_techno_value(month, pid, r.get("actual"), r.get("cum_actual"))
-        saved_mill += 1
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+        try:
+            for r in payload.get("production_rows", []):
+                cur.execute("""
+                    INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(report_month, plant_name, item_name)
+                    DO UPDATE SET month_actual = excluded.month_actual
+                """, (month, plant, r.get("item_name"), r.get("value")))
+                if r.get("value") is not None:
+                    saved_prod += 1
 
-    total = saved_prod + saved_te + saved_mill
-    if total:
-        db.log_extraction(plant, month, payload.get("file_name", ""),
-                          payload.get("sheets", ""),
-                          payload.get("source_type", "Preview Confirmed"), total)
-    return {
-        "status": "success",
-        "saved_production": saved_prod,
-        "saved_techno": saved_te,
-        "saved_mill_techno": saved_mill,
-        "message": (f"Inserted {saved_prod} production, {saved_te} techno and "
-                    f"{saved_mill} mill techno values for {plant} {month}."),
-    }
+            for r in payload.get("techno_rows", []):
+                cur.execute("""
+                    INSERT INTO techno_table (report_month, plant_name, parameter_name, unit, month_actual, ytd_actual)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(report_month, plant_name, parameter_name)
+                    DO UPDATE SET unit=excluded.unit, month_actual=excluded.month_actual,
+                                  ytd_actual=excluded.ytd_actual
+                """, (month, plant, r.get("parameter"), r.get("unit", ""),
+                      r.get("month_actual"), r.get("ytd_actual")))
+                if r.get("month_actual") is not None or r.get("ytd_actual") is not None:
+                    saved_te += 1
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Persist inline item_name corrections made on the preview so future
+        # extractions for this plant map those PDF labels automatically.
+        saved_aliases = 0
+        for o in payload.get("item_overrides", []):
+            if o.get("pdf_label") and o.get("item_name"):
+                db.save_pdf_item_alias(plant, o["pdf_label"], o["item_name"],
+                                       1 if o.get("convert_t", 1) else 0)
+                saved_aliases += 1
+
+        for r in payload.get("techno_param_rows", []):
+            if r.get("actual") is None and r.get("cum_actual") is None:
+                continue
+            pid = db.get_or_create_techno_param(
+                r.get("group_code", ""), r.get("section", ""), r.get("parameter", ""),
+                r.get("unit", ""), r.get("sort_order", 0))
+            db.save_techno_value(month, pid, r.get("actual"), r.get("cum_actual"))
+            saved_mill += 1
+
+        saved_ss = 0
+        for r in payload.get("special_steel_rows", []):
+            if r.get("status") != "ok":
+                continue  # skip "total" rows (cross-check only) and anything not ok
+            db.save_special_steel_entry(
+                month, plant,
+                r.get("product", ""), r.get("quality_grade", ""),
+                r.get("sort_order", 0),
+                r.get("order_qty"), r.get("actual_despatch"),
+                section=r.get("section", ""),
+            )
+            saved_ss += 1
+
+        total = saved_prod + saved_te + saved_mill + saved_ss
+        if total:
+            db.log_extraction(plant, month, payload.get("file_name", ""),
+                              payload.get("sheets", ""),
+                              payload.get("source_type", "Preview Confirmed"), total)
+        msg = (f"Inserted {saved_prod} production, {saved_te} techno, "
+               f"{saved_mill} mill techno, {saved_ss} special steel values for {plant} {month}.")
+        if saved_aliases:
+            msg += f" Remembered {saved_aliases} item-name mapping(s) for future extractions."
+        return {
+            "status": "success",
+            "saved_production": saved_prod,
+            "saved_techno": saved_te,
+            "saved_mill_techno": saved_mill,
+            "saved_special_steel": saved_ss,
+            "saved_aliases": saved_aliases,
+            "message": msg,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500,
+                            detail=f"Insertion failed: {type(e).__name__}: {e}")
 
 
 # ---------------------------------------------------------------------------

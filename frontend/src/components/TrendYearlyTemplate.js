@@ -2,15 +2,15 @@
 import React from 'react';
 
 // Header cell styles
-const HDR  = { fontSize: '7pt',   padding: '3px 2px', background: '#1e3a5f', color: '#fff',    textAlign: 'center', border: '0.4px solid #334155', whiteSpace: 'nowrap', fontWeight: '700' };
+const HDR  = { fontSize: 'var(--report-font-size)', padding: '3px 2px', background: '#1e3a5f', color: '#fff',    textAlign: 'center', border: '0.4px solid #334155', whiteSpace: 'nowrap', fontWeight: '700' };
 const QHDR = { ...HDR, background: '#2d4f7f' };
 const THDR = { ...HDR, background: '#1a3050' };
 
 // Data cell styles
-const CELL  = { fontSize: '9pt',  padding: '2px 3px',  textAlign: 'right',  border: '0.3px solid #e2e8f0' };
+const CELL  = { fontSize: 'var(--report-font-size)', padding: '2px 3px',  textAlign: 'right',  border: '0.3px solid #e2e8f0' };
 const QCELL = { ...CELL, background: '#f0f5ff', fontWeight: '600' };
 const TCELL = { ...CELL, background: '#e8f0fb', fontWeight: '700' };
-const YCELL = { ...CELL, fontSize: '8pt', textAlign: 'left', paddingLeft: '3px', whiteSpace: 'nowrap', fontWeight: '400' };
+const YCELL = { ...CELL, fontSize: 'var(--report-font-size)', textAlign: 'left', paddingLeft: '3px', whiteSpace: 'nowrap', fontWeight: '400' };
 
 // Colours for aggregate / special rows
 const PLAN_BG = '#dbeafe';   // light blue  — plan row
@@ -78,7 +78,7 @@ function TrendTable({ rows, item_display, unit }) {
               verticalAlign: 'middle',
               fontWeight: '700',
               textAlign: 'center',
-              fontSize: isAggregate ? '8pt' : '9pt',
+              fontSize: 'var(--report-font-size)',
               background: isAggregate ? (row.plant === 'SAIL' ? '#bbf7d0' : '#fef08a') : '#e8edf3',
               color: '#1e3a5f',
               border: '0.5px solid #94a3b8',

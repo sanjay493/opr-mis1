@@ -1,14 +1,14 @@
 'use client';
 
 // ── style tokens ──────────────────────────────────────────────────────────────
-const CELL = { padding: '2px 5px', border: '1px solid #94a3b8', lineHeight: 1.25, fontSize: '0.72rem' };
+const CELL = { padding: '2px 5px', border: '1px solid #94a3b8', lineHeight: 1.25, fontSize: 'var(--report-font-size)' };
 const NUM  = { ...CELL, textAlign: 'right' };
 const CTR  = { ...CELL, textAlign: 'center' };
 const LBL  = { ...CELL, textAlign: 'left' };
 const TH   = {
   backgroundColor: '#1e3a5f', color: '#fff', padding: '3px 4px',
   textAlign: 'center', verticalAlign: 'middle',
-  border: '1px solid #334155', fontSize: '0.7rem', lineHeight: 1.2, fontWeight: 600,
+  border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
 
 function Qty({ value, tonnage }) {
@@ -35,7 +35,7 @@ export default function IptStatusTemplate({ data }) {
       </div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
-                      tableLayout: 'fixed', fontSize: '0.72rem' }}>
+                      tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
           <col style={{ width: '24%' }} />
           <col style={{ width: '9%' }} />

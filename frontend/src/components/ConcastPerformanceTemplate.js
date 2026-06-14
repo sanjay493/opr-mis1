@@ -10,10 +10,10 @@ function PlantRow({ row, valueKeys }) {
 
   return (
     <tr style={{ background: bg, fontWeight: isBold ? 700 : 400 }}>
-      <td style={{ padding: '2px 4px', border: '1px solid #cbd5e1', fontWeight: isBold ? 700 : 500, fontSize: '9.5pt' }}>
+      <td style={{ padding: '2px 4px', border: '1px solid #cbd5e1', fontWeight: isBold ? 700 : 500, fontSize: 'var(--report-font-size)' }}>
         {row.plant}
       </td>
-      <td style={{ padding: '2px 4px', border: '1px solid #cbd5e1', textAlign: 'right', fontSize: '9.5pt', background: '#dbeafe' }}>
+      <td style={{ padding: '2px 4px', border: '1px solid #cbd5e1', textAlign: 'right', fontSize: 'var(--report-font-size)', background: '#dbeafe' }}>
         {row.ann_plan}
       </td>
       {valueKeys.map((k, i) => (
@@ -23,7 +23,7 @@ function PlantRow({ row, valueKeys }) {
             padding: '2px 4px',
             border: '1px solid #cbd5e1',
             textAlign: 'right',
-            fontSize: '9.5pt',
+            fontSize: 'var(--report-font-size)',
             background: i === 1 ? '#d1fae5' : 'inherit',
           }}
         >
@@ -71,7 +71,7 @@ function ConcastTable({ rows, colHeaders, valueKeys, periodLabel, prevLabel, fy 
 
 const thStyle = {
   padding: '3px 4px',
-  fontSize: '9pt',
+  fontSize: 'var(--report-font-size)',
   border: '1px solid #94a3b8',
   verticalAlign: 'middle',
   textAlign: 'center',

@@ -11,7 +11,9 @@
       "Bash(curl -s -o /dev/null -w \"backend direct: %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")",
       "Bash(curl -s -o /dev/null -w \"again \\(warm\\): %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")",
       "Bash(curl -s -o /dev/null -w \"after fix \\(cold\\): %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")",
-      "Bash(curl -s -o /dev/null -w \"after fix \\(warm\\): %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")"
+      "Bash(curl -s -o /dev/null -w \"after fix \\(warm\\): %{http_code} in %{time_total}s\\\\n\" --max-time 60 \"http://localhost:8082/api/data?month=2026-04\")",
+      "PowerShell(C:\\\\Users\\\\sanja\\\\anaconda3\\\\python.exe _test_cob.py)",
+      "PowerShell(C:\\\\Users\\\\sanja\\\\anaconda3\\\\python.exe _test_cob2.py)"
     ]
   }
 }
