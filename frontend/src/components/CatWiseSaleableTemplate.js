@@ -5,7 +5,7 @@ const ROW_STYLES = {
   'section-data': { backgroundColor: '#eff6ff', fontWeight: 600 },
   'section-hdr':  { backgroundColor: '#e2e8f0', fontWeight: 700 },
   subtotal:     { backgroundColor: '#fef9c3', fontWeight: 700 },
-  pct:          { backgroundColor: '#f1f5f9', fontStyle: 'italic', fontSize: '0.72rem' },
+  pct:          { backgroundColor: '#f1f5f9', fontStyle: 'italic', fontSize: 'var(--report-font-size)' },
   total:        { backgroundColor: '#dcfce7', fontWeight: 700 },
 };
 
@@ -40,7 +40,7 @@ function PlantTable({ section, monthLabel, cplyLabel }) {
     <th rowSpan={rowSpan} colSpan={colSpan}
       style={{ backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
                textAlign: left ? 'left' : 'center', verticalAlign: 'middle',
-               border: '1px solid #334155', fontSize: '0.72rem', lineHeight: 1.2, fontWeight: 600 }}>
+               border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600 }}>
       {children}
     </th>
   );
@@ -50,7 +50,7 @@ function PlantTable({ section, monthLabel, cplyLabel }) {
         {section.label}
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
-                      tableLayout: 'fixed', fontSize: '0.76rem' }}>
+                      tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
           <col style={{ width: '33%' }} />
           {[...Array(6)].map((_, i) => <col key={i} style={{ width: '11.2%' }} />)}

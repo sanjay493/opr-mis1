@@ -192,6 +192,8 @@ const getDefaultDate = () => {
   };
 };
 
+const LAYOUT_DEFAULTS = { fontSize: 12, marginTop: 15, marginBottom: 15, marginLR: 15 };
+
 export default function ReportPage() {
   const defaultDate = getDefaultDate();
   const [pagesData, setPagesData] = useState([]);
@@ -201,6 +203,36 @@ export default function ReportPage() {
   const [selectedYear, setSelectedYear] = useState(defaultDate.year);
   const [pagesDataMonth, setPagesDataMonth] = useState({ name: defaultDate.month, year: defaultDate.year });
   const [isBackendGenerating, setIsBackendGenerating] = useState(false);
+  const [pageLayouts, setPageLayouts] = useState({});
+
+  // Load persisted layouts after mount — localStorage is not available during SSR
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('reportPageLayouts');
+      if (saved) setPageLayouts(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const curLayout = { ...LAYOUT_DEFAULTS, ...(pageLayouts[activePageNum] || {}) };
+
+  // Apply CSS variables for the currently viewed page
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--report-font-size', `${curLayout.fontSize}pt`);
+    root.style.setProperty('--page-margin-top', `${curLayout.marginTop}mm`);
+    root.style.setProperty('--page-margin-bottom', `${curLayout.marginBottom}mm`);
+    root.style.setProperty('--page-margin-lr', `${curLayout.marginLR}mm`);
+  }, [curLayout.fontSize, curLayout.marginTop, curLayout.marginBottom, curLayout.marginLR]);
+
+  // Persist per-page layouts to localStorage
+  useEffect(() => {
+    try { localStorage.setItem('reportPageLayouts', JSON.stringify(pageLayouts)); } catch {}
+  }, [pageLayouts]);
+
+  const updateCurLayout = (patch) => setPageLayouts((prev) => ({
+    ...prev,
+    [activePageNum]: { ...curLayout, ...patch },
+  }));
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
   const activePage = pagesData.find((p) => p.page === activePageNum) || pagesData[0];
@@ -277,6 +309,7 @@ export default function ReportPage() {
         body: JSON.stringify({
           month: selectedMonth,
           pages: pagesData,
+          page_layouts: pageLayouts,
         }),
       });
 
@@ -422,6 +455,84 @@ export default function ReportPage() {
               <option value="portrait">Portrait</option>
               <option value="landscape">Landscape</option>
             </select>
+          </div>
+        </div>
+
+        {/* Layout Settings */}
+        <div className="control-section">
+          <h2>Layout Settings <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 400 }}>(Page {activePageNum})</span></h2>
+
+          <div className="form-group">
+            <label>Table Font Size: <strong style={{ color: '#38bdf8' }}>{curLayout.fontSize} pt</strong></label>
+            <input
+              type="range" min="7" max="14" step="0.5"
+              value={curLayout.fontSize}
+              onChange={(e) => updateCurLayout({ fontSize: parseFloat(e.target.value) })}
+              style={{ width: '100%', accentColor: '#0284c7' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
+              <span>7 pt</span><span>14 pt</span>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Top Margin (mm): <strong style={{ color: '#38bdf8' }}>{curLayout.marginTop}</strong></label>
+            <input
+              type="range" min="5" max="30" step="1"
+              value={curLayout.marginTop}
+              onChange={(e) => updateCurLayout({ marginTop: parseInt(e.target.value) })}
+              style={{ width: '100%', accentColor: '#0284c7' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
+              <span>5 mm</span><span>30 mm</span>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Bottom Margin (mm): <strong style={{ color: '#38bdf8' }}>{curLayout.marginBottom}</strong></label>
+            <input
+              type="range" min="5" max="30" step="1"
+              value={curLayout.marginBottom}
+              onChange={(e) => updateCurLayout({ marginBottom: parseInt(e.target.value) })}
+              style={{ width: '100%', accentColor: '#0284c7' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
+              <span>5 mm</span><span>30 mm</span>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Left / Right Margin (mm): <strong style={{ color: '#38bdf8' }}>{curLayout.marginLR}</strong></label>
+            <input
+              type="range" min="5" max="30" step="1"
+              value={curLayout.marginLR}
+              onChange={(e) => updateCurLayout({ marginLR: parseInt(e.target.value) })}
+              style={{ width: '100%', accentColor: '#0284c7' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
+              <span>5 mm</span><span>30 mm</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary"
+              style={{ flex: 1, fontSize: '0.75rem', padding: '5px 8px' }}
+              onClick={() => setPageLayouts((prev) => { const next = { ...prev }; delete next[activePageNum]; return next; })}
+            >
+              Reset Page
+            </button>
+            <button
+              className="btn btn-secondary"
+              style={{ flex: 1, fontSize: '0.75rem', padding: '5px 8px' }}
+              onClick={() => {
+                const all = {};
+                pagesData.forEach((p) => { all[p.page] = { ...curLayout }; });
+                setPageLayouts(all);
+              }}
+            >
+              Apply to All Pages
+            </button>
           </div>
         </div>
 

@@ -63,19 +63,38 @@ def init_db():
         )
     """)
 
-    # 5. Special steel orders / actual despatch table
+    # 5. Special steel orders / actual despatch table.
+    # 'section' is optional (only some plants — e.g. DSP — report it); it is part
+    # of the PK because DSP rows can differ only by section (same product+grade).
+    # SQLite cannot ALTER a PK, so pre-section databases are rebuilt in place,
+    # old rows getting section = ''.
+    cursor.execute("PRAGMA table_info(special_steel_orders)")
+    _ss_cols = [r[1] for r in cursor.fetchall()]
+    if _ss_cols and "section" not in _ss_cols:
+        cursor.execute("ALTER TABLE special_steel_orders RENAME TO special_steel_orders_presection")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS special_steel_orders (
             report_month    TEXT,
             plant_name      TEXT,
             product         TEXT,
             quality_grade   TEXT,
+            section         TEXT NOT NULL DEFAULT '',
             sort_order      INTEGER DEFAULT 0,
             order_qty       REAL,
             actual_despatch REAL,
-            PRIMARY KEY (report_month, plant_name, product, quality_grade)
+            PRIMARY KEY (report_month, plant_name, product, quality_grade, section)
         )
     """)
+    if _ss_cols and "section" not in _ss_cols:
+        cursor.execute("""
+            INSERT INTO special_steel_orders
+                (report_month, plant_name, product, quality_grade, section,
+                 sort_order, order_qty, actual_despatch)
+            SELECT report_month, plant_name, product, quality_grade, '',
+                   sort_order, order_qty, actual_despatch
+            FROM special_steel_orders_presection
+        """)
+        cursor.execute("DROP TABLE special_steel_orders_presection")
 
     # 6. Opening stock table — stock as on 1st of stock_month (tonnes)
     cursor.execute("""
@@ -141,6 +160,17 @@ def init_db():
             param_id INTEGER REFERENCES techno_param_master(param_id),
             target   REAL,
             PRIMARY KEY (fy, param_id)
+        )
+    """)
+
+    # 11a. User-defined PDF label → item_name aliases (learned from preview edits)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pdf_item_alias (
+            plant_name TEXT NOT NULL,
+            pdf_label  TEXT NOT NULL,
+            item_name  TEXT NOT NULL,
+            convert_t  INTEGER DEFAULT 1,  -- 1: tonnes → '000T on extraction
+            PRIMARY KEY (plant_name, pdf_label)
         )
     """)
 
@@ -428,20 +458,24 @@ def save_techno_parameter(month: str, plant: str, parameter: str, unit: str, mon
 
 def save_special_steel_entry(month: str, plant: str, product: str, quality_grade: str,
                              sort_order: int = 0, order_qty: Optional[float] = None,
-                             actual_despatch: Optional[float] = None):
-    """Upsert one row into special_steel_orders."""
+                             actual_despatch: Optional[float] = None,
+                             section: str = ""):
+    """Upsert one row into special_steel_orders. section stays '' for plants
+    whose report has no section breakdown."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         INSERT INTO special_steel_orders
-            (report_month, plant_name, product, quality_grade, sort_order, order_qty, actual_despatch)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(report_month, plant_name, product, quality_grade)
+            (report_month, plant_name, product, quality_grade, section,
+             sort_order, order_qty, actual_despatch)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(report_month, plant_name, product, quality_grade, section)
         DO UPDATE SET
             sort_order      = excluded.sort_order,
             order_qty       = excluded.order_qty,
             actual_despatch = excluded.actual_despatch
-    """, (month, plant, product, quality_grade, sort_order, order_qty, actual_despatch))
+    """, (month, plant, product, quality_grade, section or "",
+          sort_order, order_qty, actual_despatch))
     conn.commit()
     conn.close()
 
@@ -500,7 +534,8 @@ def get_or_create_techno_param(group_code: str, section: str, row_label: str,
         INSERT INTO techno_param_master (group_code, section, row_label, unit, sort_order)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(group_code, section, row_label)
-        DO UPDATE SET unit = excluded.unit, sort_order = excluded.sort_order
+        DO UPDATE SET unit = excluded.unit,
+            sort_order = CASE WHEN excluded.sort_order > 0 THEN excluded.sort_order ELSE sort_order END
     """, (group_code, section, row_label, unit, sort_order))
     cur.execute("""
         SELECT param_id FROM techno_param_master
@@ -520,8 +555,9 @@ def save_techno_value(month: str, param_id: int, actual: Optional[float],
     conn.execute("""
         INSERT INTO techno_monthly (report_month, param_id, actual, cum_actual)
         VALUES (?, ?, ?, ?)
-        ON CONFLICT(report_month, param_id)
-        DO UPDATE SET actual = excluded.actual, cum_actual = excluded.cum_actual
+        ON CONFLICT(report_month, param_id) DO UPDATE SET
+            actual = excluded.actual,
+            cum_actual = COALESCE(excluded.cum_actual, cum_actual)
     """, (month, param_id, actual, cum_actual))
     conn.commit()
     conn.close()
@@ -550,6 +586,31 @@ def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: st
         INSERT INTO extraction_log (logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), plant, report_month, file_name, sheet_name, source_type, items_extracted))
+    conn.commit()
+    conn.close()
+
+
+def get_pdf_item_aliases(plant: str) -> Dict[str, Any]:
+    """User-saved PDF label corrections for a plant: {pdf_label: (item_name, convert_t)}."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT pdf_label, item_name, convert_t FROM pdf_item_alias WHERE plant_name = ?
+    """, (plant,)).fetchall()
+    conn.close()
+    return {r[0]: (r[1], r[2]) for r in rows}
+
+
+def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: int = 1):
+    """Upsert a PDF label → item_name correction so future extractions map it automatically."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        INSERT INTO pdf_item_alias (plant_name, pdf_label, item_name, convert_t)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(plant_name, pdf_label)
+        DO UPDATE SET item_name = excluded.item_name, convert_t = excluded.convert_t
+    """, (plant, pdf_label, item_name, convert_t))
     conn.commit()
     conn.close()
 

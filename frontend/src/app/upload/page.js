@@ -85,6 +85,196 @@ function PreviewTable({ title, headers, rows }) {
   );
 }
 
+function TechnoCheckTable({ rows }) {
+  const okCount      = rows.filter((r) => r.status === 'ok').length;
+  const mismatchCount = rows.filter((r) => r.mapping_ok === false).length;
+  const title = `Techno-Economic Parameters (${okCount} ok${mismatchCount > 0 ? `, ⚠ ${mismatchCount} mapping issues` : ''}) → techno_table`;
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: '9pt', fontWeight: 700, color: mismatchCount > 0 ? '#fbbf24' : '#a5b4fc', margin: '8px 0 6px' }}>
+        {title}
+      </div>
+      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 320, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0 }}>
+              {['Parameter', 'Unit', 'Month', 'YTD', 'Cell', 'File Label', 'Status'].map((h) => (
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
+                                     fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const ok     = r.status === 'ok';
+              const mapOk  = r.mapping_ok !== false;
+              const rowBg  = !mapOk
+                ? 'rgba(251,191,36,0.10)'
+                : ok ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)';
+              return (
+                <tr key={i} style={{ backgroundColor: rowBg, borderBottom: '1px solid #1e293b' }}>
+                  <td style={{ padding: '4px 10px', color: '#38bdf8', fontWeight: 600, whiteSpace: 'nowrap' }}>{r.parameter}</td>
+                  <td style={{ padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{r.unit}</td>
+                  <td style={{ padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{r.month_actual ?? ''}</td>
+                  <td style={{ padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{r.ytd_actual ?? ''}</td>
+                  <td style={{ padding: '4px 10px', color: '#94a3b8', whiteSpace: 'nowrap',
+                               fontFamily: 'monospace', fontSize: '8pt' }}>{r.cell}</td>
+                  <td style={{ padding: '4px 10px', color: mapOk ? '#94a3b8' : '#fbbf24',
+                               fontWeight: mapOk ? 400 : 700, whiteSpace: 'nowrap' }}>
+                    {r.row_label || '—'}{!mapOk && ' ⚠'}
+                  </td>
+                  <td style={{ padding: '4px 10px', color: ok ? '#34d399' : '#f87171',
+                               fontWeight: 600, whiteSpace: 'nowrap' }}>{r.status}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function EditableSpecialSteelTable({ plant, rows, onToggle, onEditGrade, onEditSection }) {
+  const selCount = rows.filter((r) => r.selected).length;
+  const cellStyle = { padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: '9pt', fontWeight: 700, color: '#fbbf24', margin: '8px 0 6px' }}>
+        Special Steel Performance ({selCount} selected) → special_steel_orders
+      </div>
+      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 360, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
+              {['Insert', 'Product', 'Quality/Grade (editable)', 'Section (editable)', 'Order Qty', 'Prodn', 'Desp', 'Unit', 'Cell', 'Status'].map((h) => (
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
+                                     fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const isTotal = r.status === 'total';
+              const canInsert = !isTotal;
+              return (
+                <tr key={i} style={{
+                  backgroundColor: isTotal
+                    ? 'rgba(251,191,36,0.06)'
+                    : r.selected ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)',
+                  borderBottom: '1px solid #1e293b',
+                  opacity: isTotal ? 0.7 : r.selected ? 1 : 0.65,
+                }}>
+                  <td style={{ ...cellStyle, textAlign: 'center' }}>
+                    <input type="checkbox" checked={!!r.selected} disabled={!canInsert}
+                           title={isTotal ? 'Total rows are for cross-check only' : 'Include in insert'}
+                           onChange={(e) => onToggle(i, e.target.checked)}
+                           style={{ accentColor: '#10b981', cursor: canInsert ? 'pointer' : 'not-allowed' }} />
+                  </td>
+                  <td style={{ ...cellStyle, color: '#38bdf8', fontWeight: 600 }}>{r.product || ''}</td>
+                  <td style={cellStyle}>
+                    {isTotal ? (
+                      <span style={{ color: '#fbbf24', fontStyle: 'italic' }}>{r.quality_grade}</span>
+                    ) : (
+                      <input type="text" value={r.grade_edit ?? r.quality_grade}
+                             onChange={(e) => onEditGrade(i, e.target.value)}
+                             style={{ width: 180, background: '#020617', color: '#e2e8f0',
+                                      border: '1px solid #334155', borderRadius: 4,
+                                      padding: '3px 6px', fontSize: '8.5pt' }} />
+                    )}
+                  </td>
+                  <td style={cellStyle}>
+                    {isTotal ? '' : (
+                      <input type="text" value={r.section_edit ?? r.section ?? ''}
+                             onChange={(e) => onEditSection(i, e.target.value)}
+                             style={{ width: 100, background: '#020617', color: '#e2e8f0',
+                                      border: '1px solid #334155', borderRadius: 4,
+                                      padding: '3px 6px', fontSize: '8.5pt' }} />
+                    )}
+                  </td>
+                  <td style={{ ...cellStyle, textAlign: 'right' }}>{r.order_qty ?? ''}</td>
+                  <td style={{ ...cellStyle, textAlign: 'right' }}>{r.prodn ?? ''}</td>
+                  <td style={{ ...cellStyle, textAlign: 'right' }}>{r.actual_despatch ?? ''}</td>
+                  <td style={cellStyle}>{r.unit}</td>
+                  <td style={{ ...cellStyle, color: '#64748b' }}>{r.cell}</td>
+                  <td style={{ ...cellStyle,
+                               color: isTotal ? '#fbbf24' : '#34d399', fontWeight: 600 }}>
+                    {isTotal ? 'total (skip)' : 'ok'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
+  const selCount = rows.filter((r) => r.selected).length;
+  const cellStyle = { padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: '9pt', fontWeight: 700, color: '#a5b4fc', margin: '8px 0 6px' }}>
+        Production ({selCount} selected) → production_table
+      </div>
+      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 360, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
+              {['Insert', 'Plant', 'Item (editable)', 'Value', 'Unit', 'Cell', 'PDF Label', 'Status'].map((h) => (
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
+                                     fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const wasOk = r.status === 'ok';
+              const named = (r.item_edit || '').trim() !== '';
+              const edited = named && wasOk && r.item_edit.trim() !== r.item_name;
+              const statusText = !named ? 'unmapped'
+                : edited ? 'ok (renamed)'
+                : wasOk ? 'ok'
+                : 'ok (mapped here)';
+              const statusOk = named;
+              return (
+                <tr key={i} style={{
+                  backgroundColor: r.selected ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)',
+                  borderBottom: '1px solid #1e293b', opacity: r.selected ? 1 : 0.65,
+                }}>
+                  <td style={{ ...cellStyle, textAlign: 'center' }}>
+                    <input type="checkbox" checked={r.selected} disabled={!named}
+                           title={named ? 'Include this row in the insert' : 'Type an item name first'}
+                           onChange={(e) => onToggle(i, e.target.checked)}
+                           style={{ accentColor: '#10b981', cursor: named ? 'pointer' : 'not-allowed' }} />
+                  </td>
+                  <td style={{ ...cellStyle, color: '#38bdf8', fontWeight: 600 }}>{plant}</td>
+                  <td style={cellStyle}>
+                    <input type="text" value={r.item_edit}
+                           placeholder={r.pdf_label || r.item_name}
+                           onChange={(e) => onEditName(i, e.target.value)}
+                           style={{ width: 180, background: '#020617', color: edited || !wasOk ? '#fbbf24' : '#e2e8f0',
+                                    border: '1px solid ' + (edited || (!wasOk && named) ? '#fbbf24' : '#334155'),
+                                    borderRadius: 4, padding: '3px 6px', fontSize: '8.5pt' }} />
+                  </td>
+                  <td style={cellStyle}>{r.value ?? ''}</td>
+                  <td style={cellStyle}>{r.unit}</td>
+                  <td style={{ ...cellStyle, color: '#64748b' }}>{r.cell}</td>
+                  <td style={{ ...cellStyle, color: '#94a3b8', fontStyle: 'italic' }}>{r.pdf_label || ''}</td>
+                  <td style={{ ...cellStyle, color: statusOk ? '#34d399' : '#f87171', fontWeight: 600 }}>{statusText}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function UploadPage() {
   const defaultDate = getDefaultDate();
   const [uploadPlantName, setUploadPlantName] = useState('RSP');
@@ -101,6 +291,8 @@ export default function UploadPage() {
   const [technoYear, setTechnoYear] = useState(defaultDate.year);
   const [technoFile, setTechnoFile] = useState(null);
   const [technoPreview, setTechnoPreview] = useState(null);
+  const [prodRows, setProdRows] = useState([]);   // editable copy of production_rows
+  const [ssRows, setSsRows] = useState([]);       // editable copy of special_steel_rows
   const [isTechnoBusy, setIsTechnoBusy] = useState(false);
   
   const [isUploading, setIsUploading] = useState(false);
@@ -194,7 +386,13 @@ export default function UploadPage() {
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
-      const result = await res.json();
+      const rawText = await res.text();
+      let result;
+      try {
+        result = JSON.parse(rawText);
+      } catch (_) {
+        throw new Error(rawText.substring(0, 300));
+      }
       if (!res.ok) throw new Error(result.detail || 'extraction failed');
       const prodOk = (result.production_rows || []).filter((r) => r.status === 'ok').length;
       const teOk = (result.techno_rows || []).filter((r) => r.status === 'ok').length;
@@ -210,6 +408,23 @@ export default function UploadPage() {
       }
       addLog('success', `Extracted: ${prodOk} production, ${teOk} techno, ${millOk} mill techno values. Review below, then Insert.`);
       setTechnoPreview(result);
+      setProdRows((result.production_rows || []).map((r) => ({
+        ...r,
+        selected: r.status === 'ok',
+        item_edit: r.status === 'ok' ? r.item_name : '',
+      })));
+      setSsRows((result.special_steel_rows || []).map((r) => ({
+        ...r,
+        selected: r.status === 'ok',
+        grade_edit: r.quality_grade ?? '',
+        section_edit: r.section ?? '',
+      })));
+      if (result.special_steel_note) {
+        addLog('info', `Special Steel: ${result.special_steel_note}`);
+      } else if ((result.special_steel_rows || []).length) {
+        const ssOk = (result.special_steel_rows || []).filter((r) => r.status === 'ok').length;
+        addLog('success', `Special Steel: ${ssOk} data rows + ${(result.special_steel_rows || []).length - ssOk} total rows extracted.`);
+      }
     } catch (err) {
       addLog('error', `Extraction failed: ${err.message}`);
       alert(`Extraction failed: ${err.message}`);
@@ -220,10 +435,36 @@ export default function UploadPage() {
 
   const handleTechnoInsert = async () => {
     if (!technoPreview) return;
-    const production_rows = (technoPreview.production_rows || []).filter((r) => r.status === 'ok');
+    // Only rows the user kept ticked (and named) are inserted. Raw-tonne values
+    // of newly mapped rows are converted to '000T to match DB conventions.
+    const chosen = prodRows.filter((r) => r.selected && (r.item_edit || '').trim());
+    const production_rows = chosen.map((r) => {
+      let value = r.value;
+      let unit = r.unit;
+      if (r.status !== 'ok' && unit === 'T' && typeof value === 'number') {
+        value = Math.round(value) / 1000;
+        unit = "'000T";
+      }
+      return { ...r, item_name: r.item_edit.trim(), value, unit };
+    });
+    // Renames + newly mapped labels are remembered server-side for future extractions.
+    const item_overrides = chosen
+      .filter((r) => r.pdf_label && (r.status !== 'ok' || r.item_edit.trim() !== r.item_name))
+      .map((r) => ({
+        pdf_label: r.pdf_label,
+        item_name: r.item_edit.trim(),
+        convert_t: r.unit === 'nos/d' ? 0 : 1,
+      }));
     const techno_rows = (technoPreview.techno_rows || []).filter((r) => r.status === 'ok');
     const techno_param_rows = (technoPreview.techno_param_rows || []).filter((r) => r.status === 'ok');
-    if (!production_rows.length && !techno_rows.length && !techno_param_rows.length) {
+    const special_steel_rows = ssRows
+      .filter((r) => r.selected && r.status === 'ok')
+      .map((r) => ({
+        ...r,
+        quality_grade: (r.grade_edit ?? r.quality_grade ?? '').trim(),
+        section: (r.section_edit ?? r.section ?? '').trim(),
+      }));
+    if (!production_rows.length && !techno_rows.length && !techno_param_rows.length && !special_steel_rows.length) {
       alert('No extracted values to insert.');
       return;
     }
@@ -239,15 +480,21 @@ export default function UploadPage() {
           sheets: technoPreview.sheets,
           file_name: technoPreview.file_name || '',
           production_rows,
+          item_overrides,
           techno_rows,
           techno_param_rows,
+          special_steel_rows,
         }),
       });
-      const result = await res.json();
+      const text = await res.text();
+      let result;
+      try { result = JSON.parse(text); } catch { throw new Error(text.slice(0, 300) || `Server error ${res.status}`); }
       if (!res.ok) throw new Error(result.detail || 'insert failed');
       addLog('success', result.message);
       alert(result.message);
       setTechnoPreview(null);
+      setProdRows([]);
+      setSsRows([]);
       setTechnoFile(null);
       const fi = document.getElementById('techno-file-input');
       if (fi) fi.value = '';
@@ -261,10 +508,31 @@ export default function UploadPage() {
   };
 
   const technoOkCount = technoPreview
-    ? (technoPreview.production_rows || []).filter((r) => r.status === 'ok').length +
+    ? prodRows.filter((r) => r.selected && (r.item_edit || '').trim()).length +
       (technoPreview.techno_rows || []).filter((r) => r.status === 'ok').length +
-      (technoPreview.techno_param_rows || []).filter((r) => r.status === 'ok').length
+      (technoPreview.techno_param_rows || []).filter((r) => r.status === 'ok').length +
+      ssRows.filter((r) => r.selected && r.status === 'ok').length
     : 0;
+
+  const toggleProdRow = (idx, checked) =>
+    setProdRows((prev) => prev.map((r, i) => (i === idx ? { ...r, selected: checked } : r)));
+
+  const editProdRowName = (idx, name) =>
+    setProdRows((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      // auto-tick a row the moment the user gives it a name; untick if cleared
+      const named = name.trim() !== '';
+      return { ...r, item_edit: name, selected: named ? (r.selected || r.status !== 'ok') : false };
+    }));
+
+  const toggleSsRow = (idx, checked) =>
+    setSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, selected: checked } : r)));
+
+  const editSsGrade = (idx, val) =>
+    setSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, grade_edit: val } : r)));
+
+  const editSsSection = (idx, val) =>
+    setSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, section_edit: val } : r)));
 
   const handlePlanUpload = async (e) => {
     e.preventDefault();
@@ -453,7 +721,8 @@ export default function UploadPage() {
               <select className="form-control" value={technoPlant}
                       onChange={(e) => setTechnoPlant(e.target.value)}>
                 <option value="RSP">RSP (Excel)</option>
-                <option value="DSP">DSP (OMI PDF)</option>
+                <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
+                <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: '12px' }}>
@@ -470,14 +739,20 @@ export default function UploadPage() {
               </div>
             </div>
             <div className="form-group" style={{ marginBottom: '15px' }}>
-              <label>{technoPlant === 'DSP' ? 'DSP OMI PDF Report (.pdf)' : 'RSP Excel File (.xlsx)'}</label>
+              <label>
+                {technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
+                  : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
+                  : 'RSP Excel File (.xlsx)'}
+              </label>
               <input id="techno-file-input" type="file" className="form-control"
-                     accept={technoPlant === 'DSP' ? '.pdf' : '.xlsx'}
+                     accept={technoPlant === 'DSP' ? '.pdf,.xls' : '.xlsx'}
                      style={{ padding: '4px', fontSize: '0.8rem' }}
                      onChange={(e) => setTechnoFile(e.target.files[0])} />
               <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
                 {technoPlant === 'DSP'
-                  ? 'DSP monthly MIS PDF: production read from the "PRODUCTION MONTHWISE" page (located by heading, not page number). Month column selected by Report Month above.'
+                  ? 'OMI PDF: production + special steel + techno from monthly MIS report. MCR-I .xls: 21 production items from tab-separated month-end report. Month auto-detected from file in both cases.'
+                  : technoPlant === 'ISP'
+                  ? 'Morning Report (DAILYREPORT1): month auto-detected from K5, ~19 production items. Final Monthly (Maj Production Summ): set month above, ~17 production items. Summarized Monthly Report (B-FCE sheet): set month above — extracts ~37 techno params from BF, Sinter, SMS, WRM, BM, USM.'
                   : 'Accepts Final Monthly Report, Morning Report or Techno Parameters file — auto-detected. Production AND techno data are both extracted.'}
                 {' '}Data is shown for review before insertion.
               </div>
@@ -620,7 +895,7 @@ export default function UploadPage() {
                   </span>
                 </h3>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setTechnoPreview(null)} disabled={isTechnoBusy}
+                  <button onClick={() => { setTechnoPreview(null); setProdRows([]); setSsRows([]); }} disabled={isTechnoBusy}
                           style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
                                    color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
                     Discard
@@ -633,29 +908,38 @@ export default function UploadPage() {
                 </div>
               </div>
 
-              {/* 1. Production rows → production_table */}
-              {technoPreview.production_rows?.length > 0 && (
-                <PreviewTable
-                  title={`Production (${technoPreview.production_rows.filter(r => r.status === 'ok').length} ok) → production_table`}
-                  headers={['Plant', 'Item', 'Value', 'Unit', 'Cell', 'Status']}
-                  rows={technoPreview.production_rows.map((r) => [
-                    technoPreview.plant, r.item_name, r.value ?? '', r.unit, r.cell, r.status,
-                  ])}
+              {/* 1. Production rows → production_table (selectable + item name editable) */}
+              {prodRows.length > 0 && (
+                <EditableProductionTable
+                  plant={technoPreview.plant}
+                  rows={prodRows}
+                  onToggle={toggleProdRow}
+                  onEditName={editProdRowName}
                 />
               )}
 
-              {/* 2. Old-style techno params → techno_table */}
+              {/* 2. Special Steel rows → special_steel_orders */}
+              {ssRows.length > 0 && (
+                <EditableSpecialSteelTable
+                  plant={technoPreview.plant}
+                  rows={ssRows}
+                  onToggle={toggleSsRow}
+                  onEditGrade={editSsGrade}
+                  onEditSection={editSsSection}
+                />
+              )}
+              {technoPreview.special_steel_note && (
+                <div style={{ fontSize: '8pt', color: '#fbbf24', margin: '4px 0' }}>
+                  ⚠ {technoPreview.special_steel_note}
+                </div>
+              )}
+
+              {/* 4. Old-style techno params → techno_table */}
               {technoPreview.techno_rows?.length > 0 && (
-                <PreviewTable
-                  title={`Techno-Economic Parameters (${technoPreview.techno_rows.filter(r => r.status === 'ok').length} ok) → techno_table`}
-                  headers={['Plant', 'Parameter', 'Unit', 'Month Actual', 'YTD Actual', 'Cell', 'Status']}
-                  rows={technoPreview.techno_rows.map((r) => [
-                    technoPreview.plant, r.parameter, r.unit, r.month_actual ?? '', r.ytd_actual ?? '', r.cell, r.status,
-                  ])}
-                />
+                <TechnoCheckTable rows={technoPreview.techno_rows} />
               )}
 
-              {/* 3. Mill techno params → techno_monthly */}
+              {/* 5. Mill techno params → techno_monthly */}
               {technoPreview.techno_param_rows?.length > 0 && (
                 <PreviewTable
                   title={`Mill Techno Parameters (${technoPreview.techno_param_rows.filter(r => r.status === 'ok').length} ok) → techno_monthly`}
@@ -667,8 +951,12 @@ export default function UploadPage() {
               )}
 
               <div style={{ fontSize: '8pt', color: '#94a3b8', marginTop: 8 }}>
-                Only rows with status <strong style={{ color: '#34d399' }}>ok</strong> are inserted, each
-                into the table shown in its section heading. "not found" / "no value" rows are skipped.
+                Production: only <strong style={{ color: '#34d399' }}>ticked</strong> rows are inserted — untick any
+                row to skip it, or type an item name on an <strong style={{ color: '#f87171' }}>unmapped</strong> row
+                to map &amp; include it (raw tonne values are stored as &apos;000T). Renamed / newly mapped labels are
+                remembered and applied automatically in future {technoPreview.plant} extractions.
+                Techno tables: rows with status <strong style={{ color: '#34d399' }}>ok</strong> are inserted;
+                "not found" / "no value" rows are skipped.
               </div>
             </div>
           )}

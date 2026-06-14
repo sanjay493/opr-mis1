@@ -8,9 +8,15 @@
   --text-dark: #1e293b;
   --text-light: #f8fafc;
   --border-color: #e2e8f0;
-  
+
   --font-sans: 'Roboto', Arial, Helvetica, sans-serif;
   --font-mono: 'Roboto Mono', 'Courier New', monospace;
+
+  /* User-adjustable layout settings */
+  --report-font-size: 12pt;
+  --page-margin-top: 15mm;
+  --page-margin-bottom: 15mm;
+  --page-margin-lr: 15mm;
 }
 
 * {
@@ -247,7 +253,7 @@ select.form-control {
   background-color: white;
   color: black;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
-  padding: 15mm;
+  padding: var(--page-margin-top) var(--page-margin-lr) var(--page-margin-bottom) var(--page-margin-lr);
   display: flex;
   flex-direction: column;
   overflow: visible;
@@ -258,7 +264,7 @@ select.form-control {
 .a4-page.landscape {
   width: 297mm;
   min-height: 210mm;
-  padding: 15mm 20mm 15mm 20mm;
+  padding: var(--page-margin-top) 20mm var(--page-margin-bottom) 20mm;
 }
 
 
@@ -325,7 +331,7 @@ select.form-control {
 .report-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12pt;
+  font-size: var(--report-font-size);
   line-height: 1.2;
 }
 
@@ -334,7 +340,7 @@ select.form-control {
   color: #0f172a;
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 12pt;
+  font-size: var(--report-font-size);
   padding: 6px 4px;
   border: 1px solid #94a3b8;
   text-align: center;
@@ -344,14 +350,14 @@ select.form-control {
   padding: 5px 4px;
   border: 1px solid #cbd5e1;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: var(--report-font-size);
   text-align: right;
 }
 
 .report-table td.label-cell {
   text-align: left;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: var(--report-font-size);
   font-weight: 500;
 }
 
@@ -471,7 +477,7 @@ select.form-control {
   border: 1px solid #000;
   color: #333;
   text-transform: none;
-  font-size: 10.5pt;
+  font-size: var(--report-font-size);
   padding: 8px 10px;
   font-weight: bold;
   text-align: center;
@@ -480,7 +486,7 @@ select.form-control {
 
 .page2-table td {
   border: 1px solid #000;
-  font-size: 10.5pt;
+  font-size: var(--report-font-size);
   padding: 8px 10px;
   font-family: var(--font-sans);
   text-align: left;
@@ -529,13 +535,13 @@ select.form-control {
 }
 
 .page4-table th {
-  font-size: 6pt;
+  font-size: var(--report-font-size);
   padding: 2px 2px;
   line-height: 1.15;
 }
 
 .page4-table td {
-  font-size: 6.5pt;
+  font-size: var(--report-font-size);
   padding: 1px 2px;
   line-height: 1.15;
 }
@@ -556,21 +562,21 @@ select.form-control {
 }
 
 .page5-6-table th {
-  font-size: 12pt;
+  font-size: var(--report-font-size);
   padding: 2px 3px;
   vertical-align: middle;
   line-height: 1.2;
 }
 
 .page5-6-table td {
-  font-size: 12pt;
+  font-size: var(--report-font-size);
   padding: 1px 3px;
   line-height: 1.2;
   overflow: hidden;
 }
 
 .page5-6-plant-cell {
-  font-size: 12pt;
+  font-size: var(--report-font-size);
   font-weight: 800;
   text-align: center;
   vertical-align: middle;
@@ -598,16 +604,16 @@ select.form-control {
 
 .page7-13-trend-table {
   width: 100%;
-  font-size: 6.5pt !important;
+  font-size: var(--report-font-size) !important;
 }
 
 .page7-13-trend-table th {
-  font-size: 5.5pt !important;
+  font-size: var(--report-font-size) !important;
   padding: 4px 2px;
 }
 
 .page7-13-trend-table td {
-  font-size: 6pt !important;
+  font-size: var(--report-font-size) !important;
   padding: 3px 2px;
 }
 

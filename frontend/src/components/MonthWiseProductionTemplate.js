@@ -20,8 +20,8 @@ const COL_W = {
   ytdGr:      '5.5%',
 };
 
-const TH_STYLE = { padding: '2.5px 2.5px', fontSize: '6.5pt',  verticalAlign: 'middle', lineHeight: '1.15' };
-const TD_STYLE = { padding: '2.5px 2.5px', fontSize: '7pt', lineHeight: '1.15' };
+const TH_STYLE = { padding: '2.5px 2.5px', fontSize: 'var(--report-font-size)', verticalAlign: 'middle', lineHeight: '1.15' };
+const TD_STYLE = { padding: '2.5px 2.5px', fontSize: 'var(--report-font-size)', lineHeight: '1.15' };
 const INPUT_STYLE = {
   width: '100%', minWidth: 0, padding: '0 1px',
   background: 'transparent', border: 'none',

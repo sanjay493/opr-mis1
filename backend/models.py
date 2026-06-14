@@ -46,6 +46,7 @@ class PageData(BaseModel):
 class PDFRequest(BaseModel):
     month: str
     pages: List[PageData]
+    page_layouts: Optional[Dict[str, Any]] = None
 
 
 class ProductionEntry(BaseModel):

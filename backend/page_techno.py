@@ -19,6 +19,13 @@ import db
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+# Sections in IRON_MAKING that show furnace-level DSP data only.
+# Other plants (RSP BF-1, RSP BF-5 etc.) must never appear here.
+_DSP_FURNACE_SECTIONS = frozenset({
+    "BF Coke Rate", "Nut Coke Rate", "BF Productivity",
+    "Si in HM", "S in HM", "Blast Temperature",
+})
+
 # page number → (group_code, title, subtitle, orientation)
 TECHNO_PAGES = {
     27: ("MAJOR",       "MAJOR TECHNO-ECONOMIC PARAMETERS", ""),
@@ -156,6 +163,13 @@ def generate_techno(report_month: str, page_no: int) -> dict:
 
         sections, by_sec = [], {}
         for pid, section, row_label, unit in master:
+            if group == "MILL_DSP" and section == "Section Mill":
+                continue
+            if group == "IRON_MAKING" and section in ("Productivity (Working vol.)", "Sinter %"):
+                continue
+            if group == "IRON_MAKING" and section in _DSP_FURNACE_SECTIONS \
+                    and not (row_label.startswith("DSP") or row_label.startswith("RSP")):
+                continue
             row = {
                 "label": row_label,
                 "unit":  unit or "",

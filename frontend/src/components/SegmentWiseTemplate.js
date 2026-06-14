@@ -8,7 +8,7 @@ const ROW_STYLES = {
   data:         { backgroundColor: '#f8fafc' },
   'seg-total':  { backgroundColor: '#fef9c3', fontWeight: 700 },
   'seg-pct':    { backgroundColor: '#f1f5f9', fontWeight: 700, fontStyle: 'italic' },
-  'grand-total':{ backgroundColor: '#dcfce7', fontWeight: 700, fontSize: '0.82rem' },
+  'grand-total':{ backgroundColor: '#dcfce7', fontWeight: 700 },
 };
 
 function SWRow({ row }) {
@@ -19,7 +19,7 @@ function SWRow({ row }) {
     return (
       <tr>
         <td colSpan={7} style={{ ...LBL, backgroundColor: '#1e3a5f', color: '#fff',
-                                  fontWeight: 700, fontSize: '0.82rem', padding: '3px 5px',
+                                  fontWeight: 700, padding: '3px 5px',
                                   border: '1px solid #334155' }}>
           {row.label}
         </td>
@@ -59,13 +59,13 @@ export default function SegmentWiseTemplate({ data }) {
     <th rowSpan={rowSpan} colSpan={colSpan}
       style={{ backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
                textAlign: left ? 'left' : 'center', verticalAlign: 'middle',
-               border: '1px solid #334155', fontSize: '0.72rem', lineHeight: 1.2, fontWeight: 600 }}>
+               border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600 }}>
       {children}
     </th>
   );
 
   return (
-    <div style={{ padding: '8px', fontFamily: 'Arial, sans-serif', fontSize: '0.76rem' }}>
+    <div style={{ padding: '8px', fontFamily: 'Arial, sans-serif', fontSize: 'var(--report-font-size)' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
                       tableLayout: 'fixed' }}>
         <colgroup>

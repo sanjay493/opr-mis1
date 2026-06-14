@@ -1,13 +1,13 @@
 'use client';
 
 // ── style tokens ──────────────────────────────────────────────────────────────
-const CELL = { padding: '1.5px 4px', border: '1px solid #94a3b8', lineHeight: 1.2, fontSize: '0.66rem' };
+const CELL = { padding: '1.5px 4px', border: '1px solid #94a3b8', lineHeight: 1.2, fontSize: 'var(--report-font-size)' };
 const NUM  = { ...CELL, textAlign: 'right' };
 const LBL  = { ...CELL, textAlign: 'left' };
 const TH   = {
   backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
   textAlign: 'center', verticalAlign: 'middle',
-  border: '1px solid #334155', fontSize: '0.62rem', lineHeight: 1.2, fontWeight: 600,
+  border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
 const TH_HIST = { ...TH, backgroundColor: '#475569' };   // past FY actuals
 const TH_TGT  = { ...TH, backgroundColor: '#7c2d12' };   // target
@@ -35,7 +35,7 @@ export default function TechnoParamsTemplate({ data }) {
       )}
 
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
-                      tableLayout: 'fixed', fontSize: '0.66rem', marginTop: 4 }}>
+                      tableLayout: 'fixed', fontSize: 'var(--report-font-size)', marginTop: 4 }}>
         <colgroup>
           <col style={{ width: '14%' }} />
           <col style={{ width: '14%' }} />
@@ -46,8 +46,8 @@ export default function TechnoParamsTemplate({ data }) {
         </colgroup>
         <thead>
           <tr>
-            <th rowSpan={2} style={{ ...TH, textAlign: 'left' }}>Parameters</th>
-            <th rowSpan={2} style={TH}>Plant / Shop</th>
+            <th rowSpan={2} style={{ ...TH, textAlign: 'left' }}>Shop</th>
+            <th rowSpan={2} style={TH}>Parameters</th>
             <th rowSpan={2} style={TH}>Unit</th>
             <th colSpan={2} style={TH_HIST}>Actual</th>
             <th rowSpan={2} style={TH_TGT}>{target_label}</th>
@@ -71,12 +71,12 @@ export default function TechnoParamsTemplate({ data }) {
                 {ri === 0 && (
                   <td rowSpan={sec.rows.length}
                       style={{ ...LBL, fontWeight: 700, verticalAlign: 'top',
-                               backgroundColor: '#e2e8f0', fontSize: '0.64rem' }}>
+                               backgroundColor: '#e2e8f0' }}>
                     {sec.label}
                   </td>
                 )}
                 <td style={LBL}>{row.label}</td>
-                <td style={{ ...CELL, textAlign: 'center', fontSize: '0.58rem' }}>{row.unit}</td>
+                <td style={{ ...CELL, textAlign: 'center' }}>{row.unit}</td>
                 <td style={NUM}>{row.fy2}</td>
                 <td style={NUM}>{row.fy1}</td>
                 <td style={{ ...NUM, backgroundColor: '#fef3ec' }}>{row.target}</td>

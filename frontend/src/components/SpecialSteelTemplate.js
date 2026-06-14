@@ -1,13 +1,13 @@
 'use client';
 
 // ── shared style tokens ───────────────────────────────────────────────────────
-const CELL = { padding: '1.5px 3px', border: '1px solid #cbd5e1', lineHeight: 1.2, fontSize: '0.68rem' };
+const CELL = { padding: '1.5px 3px', border: '1px solid #cbd5e1', lineHeight: 1.2, fontSize: 'var(--report-font-size)' };
 const NUM  = { ...CELL, textAlign: 'right' };
 const LBL  = { ...CELL, textAlign: 'left' };
 const TH_S = {
   backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
   textAlign: 'center', verticalAlign: 'middle',
-  border: '1px solid #334155', fontSize: '0.63rem', lineHeight: 1.2, fontWeight: 600,
+  border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
 const TH_C = { ...TH_S, backgroundColor: '#2d5016' }; // darker green for cumulative header
 
@@ -74,7 +74,7 @@ function DetailTable({ data }) {
       <div style={{ textAlign: 'right', fontSize: '0.65rem', marginBottom: 3 }}>Unit: {unit}</div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
-                      tableLayout: 'fixed', fontSize: '0.68rem' }}>
+                      tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
           <col style={{ width: '20%' }} />
           {/* Monthly */}
@@ -178,7 +178,7 @@ function SailTable({ data }) {
       <div style={{ textAlign: 'right', fontSize: '0.65rem', marginBottom: 3 }}>Unit: Tonnes</div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
-                      tableLayout: 'fixed', fontSize: '0.68rem' }}>
+                      tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
           <col style={{ width: '13%' }} />
           <col style={{ width: '8%' }} />
