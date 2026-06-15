@@ -21,7 +21,65 @@ from typing import Optional, Dict, Any, List
 import openpyxl
 from openpyxl.utils import get_column_letter
 
+try:
+    import xlrd
+    _XLRD_AVAILABLE = True
+except ImportError:
+    _XLRD_AVAILABLE = False
+
 logger = logging.getLogger("excel_extractor")
+
+
+# ---------------------------------------------------------------------------
+# Excel 97-2003 (.xls) compatibility layer
+# ---------------------------------------------------------------------------
+
+class _XlsCell:
+    __slots__ = ("value",)
+    def __init__(self, value):
+        self.value = None if value == "" else value
+
+
+class _XlsSheet:
+    """Makes an xlrd sheet look like an openpyxl worksheet (1-based cell access)."""
+    def __init__(self, sheet):
+        self._s = sheet
+        self.max_column = sheet.ncols
+
+    def cell(self, row: int, col: int) -> _XlsCell:
+        r, c = row - 1, col - 1
+        if r < 0 or r >= self._s.nrows or c < 0 or c >= self._s.ncols:
+            return _XlsCell(None)
+        return _XlsCell(self._s.cell_value(r, c))
+
+
+class _XlsWorkbook:
+    """Makes an xlrd workbook look like an openpyxl workbook."""
+    def __init__(self, wb):
+        self._wb = wb
+
+    @property
+    def sheetnames(self):
+        return self._wb.sheet_names()
+
+    def __getitem__(self, name: str) -> _XlsSheet:
+        return _XlsSheet(self._wb.sheet_by_name(name))
+
+    @property
+    def active(self) -> _XlsSheet:
+        return _XlsSheet(self._wb.sheets()[0])
+
+
+def _open_workbook(file_path: str):
+    """Open .xlsx (openpyxl) or .xls (xlrd) and return a unified workbook interface."""
+    if file_path.lower().endswith(".xls"):
+        if not _XLRD_AVAILABLE:
+            raise ImportError(
+                "xlrd is required for Excel 97-2003 (.xls) files. "
+                "Install it with: pip install xlrd"
+            )
+        return _XlsWorkbook(xlrd.open_workbook(file_path))
+    return openpyxl.load_workbook(file_path, data_only=True)
 
 # ---------------------------------------------------------------------------
 # Month constants
@@ -165,7 +223,7 @@ def extract_preview(file_path: str, report_month: str) -> Dict[str, Any]:
         Preview dict compatible with /api/confirm-extraction, with
         techno_param_rows containing all 35 mapped parameters.
     """
-    wb = openpyxl.load_workbook(file_path, data_only=True)
+    wb = _open_workbook(file_path)
     ws = wb["Sheet1"] if "Sheet1" in wb.sheetnames else wb.active
 
     # ── Determine report month ────────────────────────────────────────────

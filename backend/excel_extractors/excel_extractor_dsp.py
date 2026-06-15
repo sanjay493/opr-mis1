@@ -290,14 +290,16 @@ def _mcr_preview(file_path: str, report_month: str) -> dict:
 # Unified preview entry point — auto-detects PDF vs MCR-I text
 # ---------------------------------------------------------------------------
 
-def extract_preview(file_path: str, report_month: str, aliases: dict = None) -> dict:
+def extract_preview(file_path: str, report_month: str, aliases: dict = None,
+                    block: str = 'all') -> dict:
     """DSP preview: delegates to pdf_extractor_dsp for .pdf, else MCR-I text."""
     import os as _os
     suffix = _os.path.splitext(file_path)[1].lower()
 
     if suffix == '.pdf':
         import pdf_extractor_dsp
-        return pdf_extractor_dsp.extract_preview(file_path, report_month, aliases=aliases)
+        return pdf_extractor_dsp.extract_preview(
+            file_path, report_month, aliases=aliases, block=block)
 
     with open(file_path, 'rb') as f:
         magic = f.read(4)
