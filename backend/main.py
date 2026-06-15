@@ -426,6 +426,7 @@ async def extract_preview_endpoint(
     file: UploadFile = File(...),
     plant_name: str = Form(...),
     month: str = Form(...),
+    extract_block: str = Form("all"),
 ):
     """Extract production + techno data from an RSP report for review.
     Returns previews only — nothing is written to the DB."""
@@ -449,16 +450,28 @@ async def extract_preview_endpoint(
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
 
         import asyncio, concurrent.futures
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         if plant_name == "DSP":
             import excel_extractor_dsp
             aliases = db.get_pdf_item_aliases("DSP")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                result = await loop.run_in_executor(
-                    pool,
-                    lambda: excel_extractor_dsp.extract_preview(tmp_path, month, aliases=aliases)
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            try:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        pool,
+                        lambda: excel_extractor_dsp.extract_preview(
+                            tmp_path, month, aliases=aliases, block=extract_block)
+                    ),
+                    timeout=300.0,
                 )
+            except asyncio.TimeoutError:
+                raise HTTPException(status_code=504,
+                    detail="PDF extraction timed out after 5 minutes. "
+                           "The PDF may be too complex or very large. "
+                           "Check backend/extraction_errors.log for details.")
+            finally:
+                pool.shutdown(wait=False)
         elif plant_name == "ISP":
             import excel_extractor_isp
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
@@ -494,9 +507,25 @@ async def extract_preview_endpoint(
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except BaseException as e:
-        import traceback
+        import traceback, datetime
+        tb_text = traceback.format_exc()
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Preview extraction failed: {type(e).__name__}: {str(e)}")
+        # Write full traceback to a file so it's visible even without a terminal
+        try:
+            log_path = os.path.join(os.path.dirname(__file__), "extraction_errors.log")
+            with open(log_path, "a", encoding="utf-8") as _lf:
+                _lf.write(f"\n{'='*60}\n{datetime.datetime.now()}\n")
+                _lf.write(f"plant={plant_name}  month={month}\n")
+                _lf.write(tb_text)
+        except Exception:
+            pass
+        short_msg = str(e) or "(no message)"
+        if len(short_msg) > 400:
+            short_msg = short_msg[:400] + "..."
+        raise HTTPException(
+            status_code=500,
+            detail=f"Preview extraction failed: {type(e).__name__}: {short_msg}"
+        )
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:

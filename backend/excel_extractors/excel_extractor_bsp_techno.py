@@ -26,7 +26,65 @@ from typing import Optional, List, Dict, Any
 import openpyxl
 from openpyxl.utils import get_column_letter
 
+try:
+    import xlrd
+    _XLRD_AVAILABLE = True
+except ImportError:
+    _XLRD_AVAILABLE = False
+
 logger = logging.getLogger("excel_extractor")
+
+
+# ---------------------------------------------------------------------------
+# Excel 97-2003 (.xls) compatibility layer
+# ---------------------------------------------------------------------------
+
+class _XlsCell:
+    __slots__ = ("value",)
+    def __init__(self, value):
+        self.value = None if value == "" else value
+
+
+class _XlsSheet:
+    """Makes an xlrd sheet look like an openpyxl worksheet (1-based cell access)."""
+    def __init__(self, sheet):
+        self._s = sheet
+        self.max_column = sheet.ncols
+
+    def cell(self, row: int, col: int) -> _XlsCell:
+        r, c = row - 1, col - 1
+        if r < 0 or r >= self._s.nrows or c < 0 or c >= self._s.ncols:
+            return _XlsCell(None)
+        return _XlsCell(self._s.cell_value(r, c))
+
+
+class _XlsWorkbook:
+    """Makes an xlrd workbook look like an openpyxl workbook."""
+    def __init__(self, wb):
+        self._wb = wb
+
+    @property
+    def sheetnames(self):
+        return self._wb.sheet_names()
+
+    def __getitem__(self, name: str) -> _XlsSheet:
+        return _XlsSheet(self._wb.sheet_by_name(name))
+
+    @property
+    def active(self) -> _XlsSheet:
+        return _XlsSheet(self._wb.sheets()[0])
+
+
+def _open_workbook(file_path: str):
+    """Open .xlsx (openpyxl) or .xls (xlrd) and return a unified workbook interface."""
+    if file_path.lower().endswith(".xls"):
+        if not _XLRD_AVAILABLE:
+            raise ImportError(
+                "xlrd is required for Excel 97-2003 (.xls) files. "
+                "Install it with: pip install xlrd"
+            )
+        return _XlsWorkbook(xlrd.open_workbook(file_path))
+    return openpyxl.load_workbook(file_path, data_only=True)
 
 # ---------------------------------------------------------------------------
 # Month / column constants
@@ -59,7 +117,8 @@ _MONTH_FULL: Dict[str, str] = {
     "09": "September", "10": "October", "11": "November", "12": "December",
 }
 
-CUM_COL = 16   # column P: cumulative "till month" — always
+_CUM_COL_FALLBACK = 16   # column P: used when header scan finds nothing
+_CUM_HEADERS = {"ACTUAL", "CUM", "CUMULATIVE", "CUM.", "TILL DATE", "TILL MONTH", "APR-ACTUAL"}
 
 
 # ---------------------------------------------------------------------------
@@ -154,13 +213,30 @@ PARAM_MAP: List[tuple] = [
 def clean_val(v) -> Optional[float]:
     if v is None:
         return None
-    s = str(v).strip().lower()
-    if s in ("", "-", "nan", "###", "#div/0!", "#value!", "#n/a", "0"):
-        return None if s in ("", "-", "nan", "###", "#div/0!", "#value!", "#n/a") else (0.0 if s == "0" else None)
+    s = str(v).strip()
+    if s in ("", "-", "—", "nan", "###", "#DIV/0!", "#VALUE!", "#N/A"):
+        return None
     try:
-        return float(v)
+        return float(s.replace(",", ""))
     except (ValueError, TypeError):
         return None
+
+
+def _detect_cum_col(ws) -> int:
+    """Scan row 4 for a known cumulative header; return its 1-based column index."""
+    for c in range(1, 30):
+        cell_val = ws.cell(4, c).value
+        if cell_val is None:
+            continue
+        v = str(cell_val).strip().upper()
+        if v in _CUM_HEADERS:
+            logger.debug("BSP techno: CUM column detected at col %d (header %r)", c, v)
+            return c
+    logger.warning(
+        "BSP techno: CUM column header not found in row 4; falling back to col %d",
+        _CUM_COL_FALLBACK,
+    )
+    return _CUM_COL_FALLBACK
 
 
 def _detect_month_from_file(ws) -> Optional[str]:
@@ -175,9 +251,8 @@ def _detect_month_from_file(ws) -> Optional[str]:
 
 
 def _open_sheet(file_path: str):
-    """Open workbook and return the data sheet."""
-    wb = openpyxl.load_workbook(file_path, data_only=True)
-    # Accept 'Sheet1' or the only sheet
+    """Open workbook (.xlsx or .xls) and return the data sheet."""
+    wb = _open_workbook(file_path)
     ws = wb["Sheet1"] if "Sheet1" in wb.sheetnames else wb.active
     return wb, ws
 
@@ -239,15 +314,19 @@ def extract_preview(file_path: str, report_month: str) -> Dict[str, Any]:
             expected_hdr, get_column_letter(month_col), actual_hdr,
         )
 
+    # ── Locate cumulative column dynamically ─────────────────────────────
+    cum_col     = _detect_cum_col(ws)
+    cum_col_ltr = get_column_letter(cum_col)
+
     # ── Extract rows ──────────────────────────────────────────────────────
     mon_col_ltr = get_column_letter(month_col)
     rows_out: List[Dict[str, Any]] = []
 
     for sort_idx, (row_1b, group, section, param, unit) in enumerate(PARAM_MAP):
         actual_val  = clean_val(ws.cell(row_1b, month_col).value)
-        cum_val     = clean_val(ws.cell(row_1b, CUM_COL).value)
+        cum_val     = clean_val(ws.cell(row_1b, cum_col).value)
         file_label  = str(ws.cell(row_1b, 1).value or "").strip()
-        cell_ref    = f"{mon_col_ltr}{row_1b}/P{row_1b}"
+        cell_ref    = f"{mon_col_ltr}{row_1b}/{cum_col_ltr}{row_1b}"
 
         # Row 40 (Crude Benzol) often has "-" — still include with None values
         status = "ok" if (actual_val is not None or cum_val is not None) else "skip"
@@ -270,8 +349,8 @@ def extract_preview(file_path: str, report_month: str) -> Dict[str, Any]:
 
     ok_count = sum(1 for r in rows_out if r["status"] == "ok")
     logger.info(
-        "BSP techno preview: %d/%d rows ok for %s (col %s, cum P)",
-        ok_count, len(rows_out), db_month, mon_col_ltr,
+        "BSP techno preview: %d/%d rows ok for %s (col %s, cum col %s)",
+        ok_count, len(rows_out), db_month, mon_col_ltr, cum_col_ltr,
     )
 
     return {
@@ -280,6 +359,7 @@ def extract_preview(file_path: str, report_month: str) -> Dict[str, Any]:
         "plant":             "BSP",
         "workbook_sheets":   wb.sheetnames,
         "month_col_letter":  mon_col_ltr,
+        "cum_col_letter":    cum_col_ltr,
         "header_verified":   header_ok,
         "file_month":        month_label,
         "production_rows":   [],

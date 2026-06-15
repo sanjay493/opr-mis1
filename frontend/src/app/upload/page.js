@@ -294,6 +294,14 @@ export default function UploadPage() {
   const [prodRows, setProdRows] = useState([]);   // editable copy of production_rows
   const [ssRows, setSsRows] = useState([]);       // editable copy of special_steel_rows
   const [isTechnoBusy, setIsTechnoBusy] = useState(false);
+
+  // DSP PDF three-step state (independent from the generic technoPreview flow)
+  const [dspProdResult, setDspProdResult] = useState(null);
+  const [dspProdRows, setDspProdRows] = useState([]);
+  const [dspTechnoResult, setDspTechnoResult] = useState(null);
+  const [dspSsResult, setDspSsResult] = useState(null);
+  const [dspSsRows, setDspSsRows] = useState([]);
+  const [dspBusy, setDspBusy] = useState({ production: false, techno: false, special_steel: false });
   
   const [isUploading, setIsUploading] = useState(false);
   const [logs, setLogs] = useState([
@@ -534,6 +542,127 @@ export default function UploadPage() {
   const editSsSection = (idx, val) =>
     setSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, section_edit: val } : r)));
 
+  // ── DSP PDF three-step helpers ──────────────────────────────────────────
+  const isDspPdf = technoPlant === 'DSP' && technoFile?.name?.toLowerCase().endsWith('.pdf');
+
+  const handleDspExtract = async (block) => {
+    if (!technoFile) { alert('Please select the DSP PDF file first.'); return; }
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    setDspBusy((b) => ({ ...b, [block]: true }));
+    setLogs([]);
+    addLog('info', `DSP: extracting ${block} (${targetPeriod}) from ${technoFile.name}...`);
+    const formData = new FormData();
+    formData.append('file', technoFile);
+    formData.append('plant_name', 'DSP');
+    formData.append('month', targetPeriod);
+    formData.append('extract_block', block);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
+      const rawText = await res.text();
+      let result;
+      try { result = JSON.parse(rawText); } catch (_) { throw new Error(rawText.substring(0, 300)); }
+      if (!res.ok) throw new Error(result.detail || 'extraction failed');
+      if (block === 'production') {
+        setDspProdResult(result);
+        setDspProdRows((result.production_rows || []).map((r) => ({
+          ...r, selected: r.status === 'ok', item_edit: r.status === 'ok' ? r.item_name : '',
+        })));
+        const ok = (result.production_rows || []).filter((r) => r.status === 'ok').length;
+        addLog('success', `Production: ${ok} items extracted. Review below, then Insert Production.`);
+      } else if (block === 'techno') {
+        setDspTechnoResult(result);
+        const ok = (result.techno_param_rows || []).filter((r) => r.status === 'ok').length;
+        addLog('success', `Techno: ${ok} parameters extracted. Review below, then Insert Techno.`);
+      } else {
+        setDspSsResult(result);
+        setDspSsRows((result.special_steel_rows || []).map((r) => ({
+          ...r, selected: r.status === 'ok', grade_edit: r.quality_grade ?? '', section_edit: r.section ?? '',
+        })));
+        const ok = (result.special_steel_rows || []).filter((r) => r.status === 'ok').length;
+        const note = result.special_steel_note;
+        if (note) addLog('info', `Special Steel: ${note}`);
+        else addLog('success', `Special Steel: ${ok} rows extracted. Review below, then Insert Special Steel.`);
+      }
+    } catch (err) {
+      addLog('error', `DSP ${block} extraction failed: ${err.message}`);
+      alert(`Extraction failed: ${err.message}`);
+    } finally {
+      setDspBusy((b) => ({ ...b, [block]: false }));
+    }
+  };
+
+  const handleDspInsert = async (block) => {
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    const baseResult = dspProdResult || dspTechnoResult || dspSsResult;
+    const month = baseResult?.month || targetPeriod;
+    let payload = {
+      month, plant: 'DSP', source_type: 'DSP OMI PDF Report',
+      sheets: '', file_name: technoFile?.name || '',
+      production_rows: [], item_overrides: [], techno_rows: [],
+      techno_param_rows: [], special_steel_rows: [],
+    };
+    if (block === 'production' && dspProdResult) {
+      const chosen = dspProdRows.filter((r) => r.selected && (r.item_edit || '').trim());
+      if (!chosen.length) { alert('No production rows selected.'); return; }
+      payload.production_rows = chosen.map((r) => {
+        let value = r.value;
+        if (r.status !== 'ok' && r.unit === 'T' && typeof value === 'number') value = Math.round(value) / 1000;
+        return { ...r, item_name: r.item_edit.trim(), value };
+      });
+      payload.item_overrides = chosen
+        .filter((r) => r.pdf_label && (r.status !== 'ok' || r.item_edit.trim() !== r.item_name))
+        .map((r) => ({ pdf_label: r.pdf_label, item_name: r.item_edit.trim(), convert_t: r.unit === 'nos/d' ? 0 : 1 }));
+      payload.sheets = dspProdResult.sheets || '';
+    } else if (block === 'techno' && dspTechnoResult) {
+      payload.techno_param_rows = (dspTechnoResult.techno_param_rows || []).filter((r) => r.status === 'ok');
+      if (!payload.techno_param_rows.length) { alert('No techno rows to insert.'); return; }
+      payload.sheets = dspTechnoResult.sheets || '';
+    } else if (block === 'special_steel' && dspSsResult) {
+      payload.special_steel_rows = dspSsRows
+        .filter((r) => r.selected && r.status === 'ok')
+        .map((r) => ({ ...r, quality_grade: (r.grade_edit ?? r.quality_grade ?? '').trim(), section: (r.section_edit ?? r.section ?? '').trim() }));
+      if (!payload.special_steel_rows.length) { alert('No special steel rows selected.'); return; }
+      payload.sheets = dspSsResult.sheets || '';
+    } else { return; }
+
+    setDspBusy((b) => ({ ...b, [block]: true }));
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/confirm-extraction`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      let result;
+      try { result = JSON.parse(text); } catch { throw new Error(text.slice(0, 300) || `Server error ${res.status}`); }
+      if (!res.ok) throw new Error(result.detail || 'insert failed');
+      addLog('success', result.message);
+      alert(result.message);
+      if (block === 'production') { setDspProdResult(null); setDspProdRows([]); }
+      else if (block === 'techno') { setDspTechnoResult(null); }
+      else { setDspSsResult(null); setDspSsRows([]); }
+      fetchExtractionLog();
+    } catch (err) {
+      addLog('error', `DSP ${block} insert failed: ${err.message}`);
+      alert(`Insert failed: ${err.message}`);
+    } finally {
+      setDspBusy((b) => ({ ...b, [block]: false }));
+    }
+  };
+
+  const toggleDspProdRow = (idx, checked) =>
+    setDspProdRows((prev) => prev.map((r, i) => (i === idx ? { ...r, selected: checked } : r)));
+  const editDspProdName = (idx, name) =>
+    setDspProdRows((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const named = name.trim() !== '';
+      return { ...r, item_edit: name, selected: named ? (r.selected || r.status !== 'ok') : false };
+    }));
+  const toggleDspSsRow = (idx, checked) =>
+    setDspSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, selected: checked } : r)));
+  const editDspSsGrade = (idx, val) =>
+    setDspSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, grade_edit: val } : r)));
+  const editDspSsSection = (idx, val) =>
+    setDspSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, section_edit: val } : r)));
+
   const handlePlanUpload = async (e) => {
     e.preventDefault();
     if (!uploadPlanFile) {
@@ -765,11 +894,40 @@ export default function UploadPage() {
                 {' '}Data is shown for review before insertion.
               </div>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                             backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }}>
-              {isTechnoBusy ? 'Working...' : 'Extract & Preview'}
-            </button>
+            {isDspPdf ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: '8pt', color: '#94a3b8', marginBottom: 2 }}>
+                  DSP PDF mode — extract each block separately, review, then insert:
+                </div>
+                <button type="button" onClick={() => handleDspExtract('production')}
+                        disabled={dspBusy.production}
+                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                 backgroundColor: '#10b981', border: '1px solid #10b981', color: '#fff',
+                                 cursor: dspBusy.production ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                  {dspBusy.production ? 'Extracting...' : '1. Extract Production'}
+                </button>
+                <button type="button" onClick={() => handleDspExtract('techno')}
+                        disabled={dspBusy.techno}
+                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                 backgroundColor: '#8b5cf6', border: '1px solid #8b5cf6', color: '#fff',
+                                 cursor: dspBusy.techno ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                  {dspBusy.techno ? 'Extracting...' : '2. Extract Techno Parameters'}
+                </button>
+                <button type="button" onClick={() => handleDspExtract('special_steel')}
+                        disabled={dspBusy.special_steel}
+                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                 backgroundColor: '#f59e0b', border: '1px solid #f59e0b', color: '#fff',
+                                 cursor: dspBusy.special_steel ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                  {dspBusy.special_steel ? 'Extracting...' : '3. Extract Special Steel'}
+                </button>
+              </div>
+            ) : (
+              <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                               backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }}>
+                {isTechnoBusy ? 'Working...' : 'Extract & Preview'}
+              </button>
+            )}
           </form>
         </div>
 
@@ -966,6 +1124,105 @@ export default function UploadPage() {
                 Techno tables: rows with status <strong style={{ color: '#34d399' }}>ok</strong> are inserted;
                 "not found" / "no value" rows are skipped.
               </div>
+            </div>
+          )}
+
+          {/* DSP PDF — three independent block preview panels */}
+          {dspProdResult && (
+            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #10b981', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                  Step 1 — Production&nbsp;
+                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                    DSP {dspProdResult.month} · {dspProdResult.source_type}
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setDspProdResult(null); setDspProdRows([]); }}
+                          disabled={dspBusy.production}
+                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
+                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                    Discard
+                  </button>
+                  <button onClick={() => handleDspInsert('production')}
+                          disabled={dspBusy.production}
+                          style={{ backgroundColor: '#10b981', border: '1px solid #10b981', borderRadius: 4,
+                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+                    {dspBusy.production ? 'Inserting...' : `Insert Production (${dspProdRows.filter(r => r.selected && (r.item_edit||'').trim()).length} rows)`}
+                  </button>
+                </div>
+              </div>
+              <EditableProductionTable plant="DSP" rows={dspProdRows}
+                onToggle={toggleDspProdRow} onEditName={editDspProdName} />
+            </div>
+          )}
+
+          {dspTechnoResult && (
+            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #8b5cf6', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                  Step 2 — Techno Parameters&nbsp;
+                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                    DSP {dspTechnoResult.month}
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setDspTechnoResult(null)}
+                          disabled={dspBusy.techno}
+                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
+                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                    Discard
+                  </button>
+                  <button onClick={() => handleDspInsert('techno')}
+                          disabled={dspBusy.techno}
+                          style={{ backgroundColor: '#8b5cf6', border: '1px solid #8b5cf6', borderRadius: 4,
+                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+                    {dspBusy.techno ? 'Inserting...' : `Insert Techno (${(dspTechnoResult.techno_param_rows||[]).filter(r=>r.status==='ok').length} rows)`}
+                  </button>
+                </div>
+              </div>
+              <PreviewTable
+                title={`Techno Parameters — ${(dspTechnoResult.techno_param_rows||[]).filter(r=>r.status==='ok').length} ok → techno_monthly`}
+                headers={['Group', 'Section', 'Parameter', 'Unit', 'Actual', 'Cum', 'Cell', 'Status']}
+                rows={(dspTechnoResult.techno_param_rows||[]).map((r) => [
+                  r.group_code, r.section, r.parameter, r.unit,
+                  r.actual ?? '', r.cum_actual ?? '', r.cell, r.status,
+                ])}
+              />
+            </div>
+          )}
+
+          {dspSsResult && (
+            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #f59e0b', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                  Step 3 — Special Steel&nbsp;
+                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                    DSP {dspSsResult.month}
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setDspSsResult(null); setDspSsRows([]); }}
+                          disabled={dspBusy.special_steel}
+                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
+                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                    Discard
+                  </button>
+                  <button onClick={() => handleDspInsert('special_steel')}
+                          disabled={dspBusy.special_steel}
+                          style={{ backgroundColor: '#f59e0b', border: '1px solid #f59e0b', borderRadius: 4,
+                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+                    {dspBusy.special_steel ? 'Inserting...' : `Insert Special Steel (${dspSsRows.filter(r=>r.selected&&r.status==='ok').length} rows)`}
+                  </button>
+                </div>
+              </div>
+              {dspSsResult.special_steel_note && (
+                <div style={{ fontSize: '8pt', color: '#fbbf24', margin: '4px 0 8px' }}>
+                  {dspSsResult.special_steel_note}
+                </div>
+              )}
+              <EditableSpecialSteelTable plant="DSP" rows={dspSsRows}
+                onToggle={toggleDspSsRow} onEditGrade={editDspSsGrade} onEditSection={editDspSsSection} />
             </div>
           )}
 
