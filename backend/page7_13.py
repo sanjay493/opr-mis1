@@ -215,7 +215,8 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     """
     y, m_num = int(report_month[:4]), int(report_month[5:7])
     cur_fy = y if m_num >= 4 else y - 1
-    fy_lbl_cur = f"{cur_fy}-{(cur_fy + 1) % 100:02d}"
+    fy_lbl_cur      = f"{cur_fy}-{(cur_fy + 1) % 100:02d}"
+    fy_lbl_cur_plan = f"{cur_fy % 100:02d}-{(cur_fy + 1) % 100:02d}"
     hist_fys = list(range(cur_fy - 1, cur_fy - 11, -1))
 
     db_item  = config["db_item"]
@@ -291,7 +292,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         plan_values = _compute_row(plan_vals, is_nos)
         if show_all or not _is_blank(plan_values):
             group_rows.append({
-                "plant": label, "year_label": f"Plan {fy_lbl_cur}",
+                "plant": label, "year_label": f"Plan {fy_lbl_cur_plan}",
                 "is_plan": True, "values": plan_values,
             })
 

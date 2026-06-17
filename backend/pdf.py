@@ -52,6 +52,36 @@ HTML_TEMPLATE = """
             padding-bottom: 0;
         }
 
+        /* Pages 5–6: same tight side margins as page 4 to match trend-page content width */
+        @page page5-6-layout {
+            size: A4 portrait;
+            margin-top: 12mm;
+            margin-right: 10mm;
+            margin-bottom: 12mm;
+            margin-left: 10mm;
+        }
+
+        .page5-6-page {
+            page: page5-6-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        /* Pages 27–35: techno-economic parameter pages — landscape for wide column tables */
+        @page techno-layout {
+            size: A4 landscape;
+            margin-top: 10mm;
+            margin-right: 10mm;
+            margin-bottom: 10mm;
+            margin-left: 10mm;
+        }
+
+        .techno-page {
+            page: techno-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
         .page {
             page-break-after: always;
             break-after: page;
@@ -275,8 +305,8 @@ HTML_TEMPLATE = """
         }
 
         .page4-table { table-layout: fixed; width: 100%; border: 2.5px solid #1e293b; }
-        .page4-table th { font-size: 8pt; padding: 1.5px 2px; line-height: 1.0; }
-        .page4-table td { font-size: 8pt; padding: 1.5px 2px; line-height: 1.0; }
+        .page4-table th { font-size: 8.5pt; padding: 1.5px 2px; line-height: 1.0; }
+        .page4-table td { font-size: 8.5pt; padding: 1.5px 2px; line-height: 1.0; }
         .page4-table col.c-items    { width: 13%; }
         .page4-table col.c-plant    { width:  5%; }
         .page4-table col.c-ann      { width:  7%; }
@@ -328,11 +358,11 @@ HTML_TEMPLATE = """
         }
 
         .page5-6-table { table-layout: fixed; width: 100%; border: 2.5px solid #1e293b; }
-        .page5-6-table th { font-size: 11pt; padding: 4px 4px; line-height: 1; vertical-align: middle; }
-        .page5-6-table td { font-size: 11pt; padding: 4px 4px; line-height: 1; }
+        .page5-6-table th { font-size: 8.5pt; padding: 4px 4px; line-height: 1; vertical-align: middle; }
+        .page5-6-table td { font-size: 8.5pt; padding: 4px 4px; line-height: 1; }
 
         .page5-6-plant-cell {
-            font-size: 11pt;
+            font-size: 8.5pt;
             font-weight: 700;
             text-align: center;
             vertical-align: middle;
@@ -422,8 +452,8 @@ HTML_TEMPLATE = """
             text-transform: uppercase; text-align: left;
         }
         .page7-13-yearly-table thead tr.item-heading-row th.heading-unit {
-            font-size: 10pt; font-weight: 500; color: #475569;
-            text-transform: none; text-align: right;
+            font-size: 10pt; font-weight: 700; color: #1e293b;
+            text-transform: none; text-align: right; white-space: nowrap;
         }
 
         .page7-13-section-page {
@@ -486,6 +516,11 @@ HTML_TEMPLATE = """
         .segwise-table tr.sw-grand-total td { background-color: #dcfce7; font-weight: 700; font-size: 8pt; }
         .segwise-table tr.sw-separator { height: 3px; }
         .segwise-table tr.sw-separator td { border: none; background: transparent; padding: 0; }
+
+        /* ── Page-specific font overrides ───────────────────────────────── */
+        .pg-7, .pg-7 th, .pg-7 td {
+            font-family: 'Arial Narrow', Arial, sans-serif !important;
+        }
     </style>
     {% if page_layouts %}
     <style>
@@ -538,8 +573,8 @@ HTML_TEMPLATE = """
                 </colgroup>
                 <thead>
                     <tr class="item-heading-row">
-                        <th colspan="18" class="heading-title">MONTH-WISE PRODUCTION TREND : {{ item.item_display }}</th>
-                        <th class="heading-unit">Unit: {{ item.unit }}</th>
+                        <th colspan="15" class="heading-title">MONTH-WISE PRODUCTION TREND : {{ item.item_display }}</th>
+                        <th colspan="4" class="heading-unit">Unit: {{ item.unit }}</th>
                     </tr>
                     <tr>
                         <th>Plant</th><th>Year</th>
@@ -578,7 +613,7 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
     {% else %}
-    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %} techno-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
 
         {% if page.type == 'cover' %}
             <div class="page1-container">
@@ -720,8 +755,8 @@ HTML_TEMPLATE = """
                 </colgroup>
                 <thead>
                     <tr class="item-heading-row">
-                        <th colspan="18" class="heading-title">MONTH-WISE PRODUCTION TREND : {{ page.item_display }}</th>
-                        <th class="heading-unit">Unit: {{ page.unit }}</th>
+                        <th colspan="15" class="heading-title">MONTH-WISE PRODUCTION TREND : {{ page.item_display }}</th>
+                        <th colspan="4" class="heading-unit">Unit: {{ page.unit }}</th>
                     </tr>
                     <tr>
                         <th>Plant</th><th>Year</th>
@@ -1523,8 +1558,8 @@ HTML_TEMPLATE = """
             </colgroup>
             <thead>
               <tr style="background:#1e3a5f;color:#fff;">
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Parameters</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">Plant / Shop</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Shop / Plant</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">Parameters</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">Unit</th>
                 <th colspan="2" style="padding:2px 3px;border:1px solid #334155;background:#475569;">Actual</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;background:#7c2d12;">{{ page.target_label }}</th>

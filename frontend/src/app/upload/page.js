@@ -148,7 +148,7 @@ function EditableSpecialSteelTable({ plant, rows, onToggle, onEditGrade, onEditS
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
           <thead>
             <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
-              {['Insert', 'Product', 'Quality/Grade (editable)', 'Section (editable)', 'Order Qty', 'Prodn', 'Desp', 'Unit', 'Cell', 'Status'].map((h) => (
+              {['Insert', 'Product', 'Quality/Grade (editable)', 'Section (editable)', 'Order Qty', 'ABP Month', 'Desp', 'Unit', 'Cell', 'Status'].map((h) => (
                 <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
                                      fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
@@ -194,7 +194,7 @@ function EditableSpecialSteelTable({ plant, rows, onToggle, onEditGrade, onEditS
                     )}
                   </td>
                   <td style={{ ...cellStyle, textAlign: 'right' }}>{r.order_qty ?? ''}</td>
-                  <td style={{ ...cellStyle, textAlign: 'right' }}>{r.prodn ?? ''}</td>
+                  <td style={{ ...cellStyle, textAlign: 'right', color: '#64748b' }}>{r.abp_month ?? r.prodn ?? ''}</td>
                   <td style={{ ...cellStyle, textAlign: 'right' }}>{r.actual_despatch ?? ''}</td>
                   <td style={cellStyle}>{r.unit}</td>
                   <td style={{ ...cellStyle, color: '#64748b' }}>{r.cell}</td>
@@ -277,11 +277,12 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
 
 export default function UploadPage() {
   const defaultDate = getDefaultDate();
+  const [uploadMode, setUploadMode] = useState('actuals'); // 'actuals' | 'preview' | 'plan'
   const [uploadPlantName, setUploadPlantName] = useState('RSP');
   const [uploadMonthName, setUploadMonthName] = useState(defaultDate.month);
   const [uploadYear, setUploadYear] = useState(defaultDate.year);
   const [uploadFile, setUploadFile] = useState(null);
-  
+
   const [uploadPlanPlantName, setUploadPlanPlantName] = useState('RSP');
   const [uploadPlanFY, setUploadPlanFY] = useState(defaultFY());
   const [uploadPlanFile, setUploadPlanFile] = useState(null);
@@ -745,257 +746,204 @@ export default function UploadPage() {
           </Link>
         </div>
 
-        {/* Excel Import Config form */}
+        {/* Unified Data Upload — single section with mode toggle */}
         <div className="control-section">
-          <h2>Extraction Settings</h2>
-          <form onSubmit={handleExcelUpload}>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <label>Plant Source</label>
-              <select
-                className="form-control"
-                value={uploadPlantName}
-                onChange={(e) => setUploadPlantName(e.target.value)}
-              >
-                <option value="RSP">RSP</option>
-                <option value="BSP">BSP</option>
-                <option value="ISP">ISP</option>
-                <option value="BSL">BSL</option>
-                <option value="DSP">DSP</option>
-                <option value="ASP">ASP (not yet supported)</option>
-                <option value="SSP">SSP (not yet supported)</option>
-                <option value="VISL">VISL (not yet supported)</option>
-              </select>
-            </div>
+          <h2>Data Upload</h2>
 
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <label>Target Period</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <select
-                  className="form-control"
-                  style={{ flex: 2 }}
-                  value={uploadMonthName}
-                  onChange={(e) => setUploadMonthName(e.target.value)}
-                >
-                  {months.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-                <select
-                  className="form-control"
-                  style={{ flex: 1 }}
-                  value={uploadYear}
-                  onChange={(e) => setUploadYear(e.target.value)}
-                >
-                  {years.map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-group" style={{ marginBottom: '15px' }}>
-              <label>
-                Excel File&nbsp;
-                {(uploadPlantName === 'BSP' || uploadPlantName === 'DSP') ? '(.xls — tab-separated)' : '(.xlsx)'}
-              </label>
-              <input
-                id="excel-file-input"
-                type="file"
-                className="form-control"
-                accept={(uploadPlantName === 'BSP' || uploadPlantName === 'DSP') ? '.xls' : '.xlsx'}
-                style={{ padding: '4px', fontSize: '0.8rem' }}
-                onChange={(e) => setUploadFile(e.target.files[0])}
-              />
-              {(uploadPlantName === 'BSP' || uploadPlantName === 'BSL' || uploadPlantName === 'DSP' || uploadPlantName === 'ISP') && (
-                <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
-                  {uploadPlantName === 'BSP'
-                    ? 'Month auto-detected from cell N1 (sheet S1). Month selector ignored.'
-                    : uploadPlantName === 'BSL'
-                    ? 'Month auto-detected from cell O1 (sheet DPR). Month selector ignored.'
-                    : uploadPlantName === 'DSP'
-                    ? 'Month auto-detected from date in MCR-I header row. Month selector ignored.'
-                    : 'Morning Report (DAILYREPORT1): month auto-detected from K5. Final Monthly (Maj Production Summ): set month above.'}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary"
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#10b981', borderColor: '#10b981' }}
-              disabled={isUploading}
-            >
-              {isUploading ? (
-                "Extracting Data..."
-              ) : (
-                <>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                  Extract Data
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* Techno Parameters extraction with preview */}
-        <div className="control-section" style={{ marginTop: '15px' }}>
-          <h2>Extraction with Preview → Insert</h2>
-          <form onSubmit={handleTechnoExtract}>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <label>Plant Source</label>
-              <select className="form-control" value={technoPlant}
-                      onChange={(e) => setTechnoPlant(e.target.value)}>
-                <option value="RSP">RSP (Excel)</option>
-                <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
-                <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
-                <option value="BSP">BSP (3-page Techno .xlsx)</option>
-                <option value="BSP-OISCO">BSP-OISCO (OISCO Techno .xlsx)</option>
-              </select>
-            </div>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <label>Report Month</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <select className="form-control" style={{ flex: 2 }} value={technoMonthName}
-                        onChange={(e) => setTechnoMonthName(e.target.value)}>
-                  {months.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <select className="form-control" style={{ flex: 1 }} value={technoYear}
-                        onChange={(e) => setTechnoYear(e.target.value)}>
-                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="form-group" style={{ marginBottom: '15px' }}>
-              <label>
-                {technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
-                  : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
-                  : technoPlant === 'BSP' ? 'BSP Techno Excel File (.xlsx)'
-                  : technoPlant === 'BSP-OISCO' ? 'BSP OISCO Techno Excel File (.xlsx)'
-                  : 'RSP Excel File (.xlsx)'}
-              </label>
-              <input id="techno-file-input" type="file" className="form-control"
-                     accept={technoPlant === 'DSP' ? '.pdf,.xls' : '.xlsx'}
-                     style={{ padding: '4px', fontSize: '0.8rem' }}
-                     onChange={(e) => setTechnoFile(e.target.files[0])} />
-              <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
-                {technoPlant === 'DSP'
-                  ? 'OMI PDF: production + special steel + techno from monthly MIS report. MCR-I .xls: 21 production items from tab-separated month-end report. Month auto-detected from file in both cases.'
-                  : technoPlant === 'ISP'
-                  ? 'Morning Report (DAILYREPORT1): month auto-detected from K5, ~19 production items. Final Monthly (Maj Production Summ): set month above, ~17 production items. Summarized Monthly Report (B-FCE sheet): set month above — extracts ~37 techno params from BF, Sinter, SMS, WRM, BM, USM.'
-                  : technoPlant === 'BSP'
-                  ? 'BSP-3-page-Tech.xlsx: extracts 62 techno parameters (Coke Yield, Sinter SP-2/3, BF, SMS-2/3, RSM, URM, MM, WRM, BRM, Plate Mill, Energy). Month column selected per chosen month; cumulative always from column P. Set month above to match the file.'
-                  : technoPlant === 'BSP-OISCO'
-                  ? 'OISCO_<Mon>\'YY.xlsx: extracts 35 techno parameters (BF CDI per furnace, Fuel Rate, Pellets, SMS-2/3 converter ops, Fe-Mn/Si/Mn, O2, LD Gas, DS Heats, Sp. Water). Month auto-detected from title; cumulative column is always the column immediately after the month column.'
-                  : 'Accepts Final Monthly Report, Morning Report or Techno Parameters file — auto-detected. Production AND techno data are both extracted.'}
-                {' '}Data is shown for review before insertion.
-              </div>
-            </div>
-            {isDspPdf ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ fontSize: '8pt', color: '#94a3b8', marginBottom: 2 }}>
-                  DSP PDF mode — extract each block separately, review, then insert:
-                </div>
-                <button type="button" onClick={() => handleDspExtract('production')}
-                        disabled={dspBusy.production}
-                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
-                                 backgroundColor: '#10b981', border: '1px solid #10b981', color: '#fff',
-                                 cursor: dspBusy.production ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
-                  {dspBusy.production ? 'Extracting...' : '1. Extract Production'}
-                </button>
-                <button type="button" onClick={() => handleDspExtract('techno')}
-                        disabled={dspBusy.techno}
-                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
-                                 backgroundColor: '#8b5cf6', border: '1px solid #8b5cf6', color: '#fff',
-                                 cursor: dspBusy.techno ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
-                  {dspBusy.techno ? 'Extracting...' : '2. Extract Techno Parameters'}
-                </button>
-                <button type="button" onClick={() => handleDspExtract('special_steel')}
-                        disabled={dspBusy.special_steel}
-                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
-                                 backgroundColor: '#f59e0b', border: '1px solid #f59e0b', color: '#fff',
-                                 cursor: dspBusy.special_steel ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
-                  {dspBusy.special_steel ? 'Extracting...' : '3. Extract Special Steel'}
-                </button>
-              </div>
-            ) : (
-              <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                               backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }}>
-                {isTechnoBusy ? 'Working...' : 'Extract & Preview'}
+          {/* Mode selector */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid #334155' }}>
+            {[['actuals', 'Actuals'], ['preview', 'Preview & Insert'], ['plan', 'ABP Plan']].map(([mode, label]) => (
+              <button key={mode} type="button" onClick={() => setUploadMode(mode)}
+                style={{ flex: 1, padding: '5px 2px', fontSize: '7pt', fontWeight: uploadMode === mode ? 700 : 500,
+                         border: `1px solid ${uploadMode === mode ? '#38bdf8' : '#334155'}`,
+                         borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap',
+                         backgroundColor: uploadMode === mode ? 'rgba(56,189,248,0.12)' : 'transparent',
+                         color: uploadMode === mode ? '#38bdf8' : '#94a3b8' }}>
+                {label}
               </button>
-            )}
-          </form>
-        </div>
+            ))}
+          </div>
 
-        {/* ABP Plan Target Ingestion Form */}
-        <div className="control-section" style={{ marginTop: '15px' }}>
-          <h2>ABP Plan Target Ingestion</h2>
-          <form onSubmit={handlePlanUpload}>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <label>Plant Source</label>
-              <select
-                className="form-control"
-                value={uploadPlanPlantName}
-                onChange={(e) => setUploadPlanPlantName(e.target.value)}
-              >
-                <option value="RSP">RSP (Steel Plant)</option>
-                <option value="ISP">ISP (Steel Plant)</option>
-                <option value="BSP">BSP (Steel Plant)</option>
-                <option value="DSP">DSP (Steel Plant)</option>
-                <option value="BSL">BSL (Steel Plant)</option>
-                <option value="ASP_SSP_VISL">ASP / SSP / VISL (combined file)</option>
-              </select>
-            </div>
+          {/* ── ACTUALS MODE ──────────────────────────────────────── */}
+          {uploadMode === 'actuals' && (
+            <form onSubmit={handleExcelUpload}>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label>Plant Source</label>
+                <select className="form-control" value={uploadPlantName}
+                        onChange={(e) => setUploadPlantName(e.target.value)}>
+                  <option value="RSP">RSP</option>
+                  <option value="BSP">BSP</option>
+                  <option value="ISP">ISP</option>
+                  <option value="BSL">BSL</option>
+                  <option value="DSP">DSP</option>
+                  <option value="ASP">ASP (not yet supported)</option>
+                  <option value="SSP">SSP (not yet supported)</option>
+                  <option value="VISL">VISL (not yet supported)</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label>Target Period</label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <select className="form-control" style={{ flex: 2 }} value={uploadMonthName}
+                          onChange={(e) => setUploadMonthName(e.target.value)}>
+                    {months.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <select className="form-control" style={{ flex: 1 }} value={uploadYear}
+                          onChange={(e) => setUploadYear(e.target.value)}>
+                    {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label>Excel File {(uploadPlantName === 'BSP' || uploadPlantName === 'DSP') ? '(.xls)' : '(.xlsx)'}</label>
+                <input id="excel-file-input" type="file" className="form-control"
+                       accept={(uploadPlantName === 'BSP' || uploadPlantName === 'DSP') ? '.xls' : '.xlsx'}
+                       style={{ padding: '4px', fontSize: '0.8rem' }}
+                       onChange={(e) => setUploadFile(e.target.files[0])} />
+                {(uploadPlantName === 'BSP' || uploadPlantName === 'BSL' || uploadPlantName === 'DSP' || uploadPlantName === 'ISP') && (
+                  <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
+                    {uploadPlantName === 'BSP' ? 'Month auto-detected from N1 (sheet S1). Month selector ignored.'
+                      : uploadPlantName === 'BSL' ? 'Month auto-detected from O1 (sheet DPR). Month selector ignored.'
+                      : uploadPlantName === 'DSP' ? 'Month auto-detected from MCR-I header. Month selector ignored.'
+                      : 'Morning Report: month from K5. Final Monthly: set month above.'}
+                  </div>
+                )}
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={isUploading}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                               backgroundColor: '#10b981', borderColor: '#10b981' }}>
+                {isUploading ? 'Extracting...' : (
+                  <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>Extract Data</>
+                )}
+              </button>
+            </form>
+          )}
 
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <label>Financial Year</label>
-              <select
-                className="form-control"
-                value={uploadPlanFY}
-                onChange={(e) => setUploadPlanFY(e.target.value)}
-              >
-                {financialYears.map((fy) => (
-                  <option key={fy} value={fy}>{fy}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group" style={{ marginBottom: '15px' }}>
-              <label>ABP Excel File (.xlsx)</label>
-              <input
-                id="plan-file-input"
-                type="file"
-                className="form-control"
-                accept=".xlsx"
-                style={{ padding: '4px', fontSize: '0.8rem' }}
-                onChange={(e) => setUploadPlanFile(e.target.files[0])}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary"
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}
-              disabled={isUploading}
-            >
-              {isUploading ? (
-                "Extracting Plan..."
+          {/* ── PREVIEW & INSERT MODE ─────────────────────────────── */}
+          {uploadMode === 'preview' && (
+            <form onSubmit={handleTechnoExtract}>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label>Plant Source</label>
+                <select className="form-control" value={technoPlant}
+                        onChange={(e) => setTechnoPlant(e.target.value)}>
+                  <option value="RSP">RSP (Excel)</option>
+                  <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
+                  <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
+                  <option value="BSP">BSP (Techno / Special Steel .xlsx)</option>
+                  <option value="BSP-OISCO">BSP-OISCO (OISCO Techno .xlsx)</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label>Report Month</label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <select className="form-control" style={{ flex: 2 }} value={technoMonthName}
+                          onChange={(e) => setTechnoMonthName(e.target.value)}>
+                    {months.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <select className="form-control" style={{ flex: 1 }} value={technoYear}
+                          onChange={(e) => setTechnoYear(e.target.value)}>
+                    {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label>
+                  {technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
+                    : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
+                    : technoPlant === 'BSP' ? 'BSP Excel File (.xlsx) — auto-detected'
+                    : technoPlant === 'BSP-OISCO' ? 'BSP OISCO Techno Excel (.xlsx)'
+                    : 'RSP Excel File (.xlsx)'}
+                </label>
+                <input id="techno-file-input" type="file" className="form-control"
+                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : '.xlsx'}
+                       style={{ padding: '4px', fontSize: '0.8rem' }}
+                       onChange={(e) => setTechnoFile(e.target.files[0])} />
+                <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
+                  {technoPlant === 'DSP'
+                    ? 'OMI PDF: production + special steel + techno. MCR-I .xls: 21 production items. Month auto-detected.'
+                    : technoPlant === 'ISP'
+                    ? 'Morning Report (DAILYREPORT1): ~19 items, month from K5. Final Monthly: ~17 items, set month above. Summarized Monthly (B-FCE): ~37 techno params.'
+                    : technoPlant === 'BSP'
+                    ? 'BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → 62 techno params. OISCO_*.xlsx → 35 OISCO params.'
+                    : technoPlant === 'BSP-OISCO'
+                    ? "OISCO_<Mon>'YY.xlsx — 35 techno params. Month auto-detected from title."
+                    : 'Final Monthly, Morning Report or Techno file — auto-detected. Production + techno both extracted.'}
+                  {' '}Shown for review before insertion.
+                </div>
+              </div>
+              {isDspPdf ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: '8pt', color: '#94a3b8', marginBottom: 2 }}>
+                    DSP PDF — extract each block separately, then insert:
+                  </div>
+                  {[
+                    ['production', '1. Extract Production', '#10b981'],
+                    ['techno', '2. Extract Techno', '#8b5cf6'],
+                    ['special_steel', '3. Extract Special Steel', '#f59e0b'],
+                  ].map(([block, label, color]) => (
+                    <button key={block} type="button" onClick={() => handleDspExtract(block)}
+                            disabled={dspBusy[block]}
+                            style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                     backgroundColor: color, border: `1px solid ${color}`, color: '#fff',
+                                     cursor: dspBusy[block] ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                      {dspBusy[block] ? 'Extracting...' : label}
+                    </button>
+                  ))}
+                </div>
               ) : (
-                <>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                  Extract Plan Targets
-                </>
+                <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                 backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }}>
+                  {isTechnoBusy ? 'Working...' : 'Extract & Preview'}
+                </button>
               )}
-            </button>
-          </form>
+            </form>
+          )}
+
+          {/* ── ABP PLAN MODE ─────────────────────────────────────── */}
+          {uploadMode === 'plan' && (
+            <form onSubmit={handlePlanUpload}>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label>Plant Source</label>
+                <select className="form-control" value={uploadPlanPlantName}
+                        onChange={(e) => setUploadPlanPlantName(e.target.value)}>
+                  <option value="RSP">RSP</option>
+                  <option value="ISP">ISP</option>
+                  <option value="BSP">BSP</option>
+                  <option value="DSP">DSP</option>
+                  <option value="BSL">BSL</option>
+                  <option value="ASP_SSP_VISL">ASP / SSP / VISL (combined)</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label>Financial Year</label>
+                <select className="form-control" value={uploadPlanFY}
+                        onChange={(e) => setUploadPlanFY(e.target.value)}>
+                  {financialYears.map((fy) => <option key={fy} value={fy}>{fy}</option>)}
+                </select>
+              </div>
+              <div style={{ fontSize: '7.5pt', color: '#94a3b8', marginBottom: 8 }}>
+                RSP: sheet1 · ISP: SUMM PROD · BSP: Table 1 · DSP: Monthwise · BSL: PLAN SUMMARY · ASP/SSP/VISL: APP 26-27
+              </div>
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label>ABP Excel File (.xlsx)</label>
+                <input id="plan-file-input" type="file" className="form-control" accept=".xlsx"
+                       style={{ padding: '4px', fontSize: '0.8rem' }}
+                       onChange={(e) => setUploadPlanFile(e.target.files[0])} />
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={isUploading}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                               backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}>
+                {isUploading ? 'Extracting Plan...' : (
+                  <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>Extract Plan Targets</>
+                )}
+              </button>
+            </form>
+          )}
         </div>
 
         <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#64748b', textAlign: 'center', paddingTop: '15px' }}>
@@ -1024,7 +972,7 @@ export default function UploadPage() {
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
               <div>
-                <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#10b981', margin: '0 0 6px 0' }}>RSP, ISP, BSP, BSL & DSP Actuals Ingestion</h4>
+                <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#10b981', margin: '0 0 6px 0' }}>RSP, ISP, BSP, BSL & DSP Actuals + Special Steel Ingestion</h4>
                 <ul style={{ fontSize: '8.5pt', color: '#cbd5e1', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
                   <li><strong>RSP — Final Monthly (.xlsx):</strong> Sheets <strong>page-9</strong> + <strong>page 1-8</strong>. Set month manually.</li>
                   <li><strong>RSP — Morning Report (.xlsx):</strong> Sheet starts with <strong>"RSP Morning Report Data for-"</strong>. Month from <strong>A2</strong>. Auto-detected.</li>
@@ -1034,6 +982,7 @@ export default function UploadPage() {
                   <li><strong>BSL — DPR Mail (.xlsx):</strong> Sheet <strong>DPR</strong>. Month from <strong>O1</strong>. Auto-detected.</li>
                   <li><strong>DSP — MCR-I (.xls):</strong> Tab-separated text file (<em>mcr1_*.xls</em>). Month from header row. Auto-detected. 21 items extracted.</li>
                   <li>All tonnage values converted Tonnes → '000 T automatically. Every upload is logged below.</li>
+                  <li><strong>BSP — Special Steel (.xlsx):</strong> Use <strong>Extraction with Preview → Insert</strong> (plant: BSP). File auto-detected by sheet name <strong>CORP</strong>. Extracts grade-wise Orders (Effective) & Loading from BSP_Spstl-*.xlsx. Data saved to <strong>special_steel_orders</strong> and displayed on report page 19.</li>
                 </ul>
               </div>
               <div>

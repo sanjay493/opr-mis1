@@ -202,6 +202,9 @@ def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set
     ]
 
 
+_EXTRA_PLANTS = {"ASP", "SSP", "VISL"}
+
+
 def generate_page4_rows(month: str) -> list:
     """Build all page-4 rows for `month`."""
     conn = sqlite3.connect(db.DB_PATH)
@@ -215,13 +218,30 @@ def generate_page4_rows(month: str) -> list:
             five_p   = cfg.get("five_plants", [])
             sail_set = cfg.get("sail_set", [])
 
+            # First pass: build group rows, apply per-plant hide rules
+            group = []          # list of (plant, row_dict)
+            visible_extra = False
+
             for plant in cfg["plants"]:
                 values = _p4_row_values(cur, month, plant, db_item, is_nos, five_p, sail_set)
-                rows.append({
+                # Hide VISL in HOT METAL when all key actuals are nil
+                if display == "HOT METAL" and plant == "VISL":
+                    if all(values[i] == "" for i in [2, 5, 8, 11]):
+                        continue
+                if plant in _EXTRA_PLANTS:
+                    visible_extra = True
+                group.append((plant, {
                     "label":        f"{display} {plant}",
                     "display_name": display,
                     "values":       values,
-                })
+                }))
+
+            # Second pass: hide "5 Plants" when none of ASP/SSP/VISL are visible
+            for plant, row in group:
+                if plant == "5 Plants" and not visible_extra:
+                    continue
+                rows.append(row)
+
     finally:
         conn.close()
     return rows

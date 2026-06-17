@@ -217,12 +217,19 @@ def _ytd_nos(cur, plant, db_spec, months):
     return tw / td if td > 0 else None
 
 
-def _fmt(v):
+_ONE_DP_LABELS = {"Pig Iron", "Ingot", "Ingot steel"}
+
+
+def _is_one_dp(label: str) -> bool:
+    return label in _ONE_DP_LABELS
+
+
+def _fmt(v, one_dp: bool = False):
     if v is None:
         return ""
     try:
         f = float(v)
-        if f < 1000:
+        if one_dp:
             one_dec = int(_math.floor(f * 10 + 0.5)) / 10
             return f"{one_dec:.1f}"
         return str(int(_math.floor(f + 0.5)))
@@ -252,7 +259,7 @@ def _growth(curr, prev):
 # Row computation
 # ---------------------------------------------------------------------------
 
-def _compute_row(cur, plant, db_item, is_nos_day, report_month):
+def _compute_row(cur, plant, db_item, is_nos_day, report_month, one_dp: bool = False):
     """
     Returns 11 values:
     [annual_plan, m_plan, m_actual, m_pct_ful,
@@ -291,16 +298,16 @@ def _compute_row(cur, plant, db_item, is_nos_day, report_month):
         ytd_cply   = _ytd_sum(cur, "act",  plant, db_item, prev_ytd_months)
 
     return [
-        _fmt(ann_plan),
-        _fmt(m_plan),
-        _fmt(m_actual),
+        _fmt(ann_plan, one_dp),
+        _fmt(m_plan, one_dp),
+        _fmt(m_actual, one_dp),
         _pct(m_actual, m_plan),
-        _fmt(cply),
+        _fmt(cply, one_dp),
         _growth(m_actual, cply),
-        _fmt(ytd_plan),
-        _fmt(ytd_actual),
+        _fmt(ytd_plan, one_dp),
+        _fmt(ytd_actual, one_dp),
         _pct(ytd_actual, ytd_plan),
-        _fmt(ytd_cply),
+        _fmt(ytd_cply, one_dp),
         _growth(ytd_actual, ytd_cply),
     ]
 
@@ -316,7 +323,7 @@ def _build_rows(plant_defs, report_month):
     try:
         for plant, items in plant_defs:
             for label, db_item, is_bold, is_nos_day in items:
-                values = _compute_row(cur, plant, db_item, is_nos_day, report_month)
+                values = _compute_row(cur, plant, db_item, is_nos_day, report_month, _is_one_dp(label))
                 rows.append({
                     "plant": plant,
                     "label": label,
