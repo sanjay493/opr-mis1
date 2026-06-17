@@ -296,6 +296,11 @@ export default function UploadPage() {
   const [ssRows, setSsRows] = useState([]);       // editable copy of special_steel_rows
   const [isTechnoBusy, setIsTechnoBusy] = useState(false);
 
+  // ASP PDF state (single-step auto-detect: REP or FL file)
+  const [aspResult, setAspResult] = useState(null);
+  const [aspProdRows, setAspProdRows] = useState([]);
+  const [aspBusy, setAspBusy] = useState(false);
+
   // DSP PDF three-step state (independent from the generic technoPreview flow)
   const [dspProdResult, setDspProdResult] = useState(null);
   const [dspProdRows, setDspProdRows] = useState([]);
@@ -542,6 +547,103 @@ export default function UploadPage() {
 
   const editSsSection = (idx, val) =>
     setSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, section_edit: val } : r)));
+
+  // ── ASP PDF handlers ────────────────────────────────────────────────────
+  const isAspPdf = technoPlant === 'ASP';
+
+  const handleAspExtract = async (e) => {
+    e.preventDefault();
+    if (!technoFile) { alert('Please select the ASP PDF file first.'); return; }
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    setAspBusy(true);
+    setAspResult(null);
+    setAspProdRows([]);
+    setLogs([]);
+    const isRep = technoFile.name.toUpperCase().startsWith('REP');
+    const isFl  = technoFile.name.toUpperCase().startsWith('FL');
+    const hint  = isRep ? 'REP (crude steel)' : isFl ? 'FL (finished steel)' : 'auto-detect';
+    addLog('info', `ASP: extracting ${hint} PDF for ${targetPeriod} — ${technoFile.name}...`);
+    const formData = new FormData();
+    formData.append('file', technoFile);
+    formData.append('plant_name', 'ASP');
+    formData.append('month', targetPeriod);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
+      const rawText = await res.text();
+      let result;
+      try { result = JSON.parse(rawText); } catch (_) { throw new Error(rawText.substring(0, 300)); }
+      if (!res.ok) throw new Error(result.detail || 'extraction failed');
+      setAspResult(result);
+      setAspProdRows((result.production_rows || []).map((r) => ({
+        ...r, selected: r.status === 'ok', item_edit: r.status === 'ok' ? r.item_name : '',
+      })));
+      const ok = (result.production_rows || []).filter((r) => r.status === 'ok').length;
+      addLog('success', `ASP ${result.report_type}: ${ok} items extracted (${result.source_type}). Review below, then Insert.`);
+    } catch (err) {
+      addLog('error', `ASP extraction failed: ${err.message}`);
+      alert(`Extraction failed: ${err.message}`);
+    } finally {
+      setAspBusy(false);
+    }
+  };
+
+  const handleAspInsert = async () => {
+    if (!aspResult) return;
+    const chosen = aspProdRows.filter((r) => r.selected && (r.item_edit || '').trim());
+    if (!chosen.length) { alert('No rows selected.'); return; }
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    const production_rows = chosen.map((r) => {
+      let value = r.value;
+      if (r.status !== 'ok' && r.unit === 'T' && typeof value === 'number') value = Math.round(value) / 1000;
+      return { ...r, item_name: r.item_edit.trim(), value };
+    });
+    const item_overrides = chosen
+      .filter((r) => r.pdf_label && (r.status !== 'ok' || r.item_edit.trim() !== r.item_name))
+      .map((r) => ({ pdf_label: r.pdf_label, item_name: r.item_edit.trim(), convert_t: 1 }));
+    setAspBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/confirm-extraction`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: aspResult.month || targetPeriod,
+          plant: 'ASP',
+          source_type: aspResult.source_type,
+          sheets: aspResult.sheets,
+          file_name: technoFile?.name || '',
+          production_rows,
+          item_overrides,
+          techno_rows: [],
+          techno_param_rows: [],
+          special_steel_rows: [],
+        }),
+      });
+      const text = await res.text();
+      let result;
+      try { result = JSON.parse(text); } catch { throw new Error(text.slice(0, 300) || `Server error ${res.status}`); }
+      if (!res.ok) throw new Error(result.detail || 'insert failed');
+      addLog('success', result.message);
+      alert(result.message);
+      setAspResult(null);
+      setAspProdRows([]);
+      const fi = document.getElementById('techno-file-input');
+      if (fi) fi.value = '';
+      fetchExtractionLog();
+    } catch (err) {
+      addLog('error', `ASP insert failed: ${err.message}`);
+      alert(`Insert failed: ${err.message}`);
+    } finally {
+      setAspBusy(false);
+    }
+  };
+
+  const toggleAspRow = (idx, checked) =>
+    setAspProdRows((prev) => prev.map((r, i) => (i === idx ? { ...r, selected: checked } : r)));
+  const editAspRowName = (idx, name) =>
+    setAspProdRows((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const named = name.trim() !== '';
+      return { ...r, item_edit: name, selected: named ? (r.selected || r.status !== 'ok') : false };
+    }));
 
   // ── DSP PDF three-step helpers ──────────────────────────────────────────
   const isDspPdf = technoPlant === 'DSP' && technoFile?.name?.toLowerCase().endsWith('.pdf');
@@ -833,6 +935,7 @@ export default function UploadPage() {
                   <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
                   <option value="BSP">BSP (Techno / Special Steel .xlsx)</option>
                   <option value="BSP-OISCO">BSP-OISCO (OISCO Techno .xlsx)</option>
+                  <option value="ASP">ASP (xlsx or PDF — REP / FL)</option>
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '12px' }}>
@@ -854,10 +957,11 @@ export default function UploadPage() {
                     : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
                     : technoPlant === 'BSP' ? 'BSP Excel File (.xlsx) — auto-detected'
                     : technoPlant === 'BSP-OISCO' ? 'BSP OISCO Techno Excel (.xlsx)'
+                    : technoPlant === 'ASP' ? 'ASP file — asp.xlsx  or  REP*.pdf / FL*.pdf'
                     : 'RSP Excel File (.xlsx)'}
                 </label>
                 <input id="techno-file-input" type="file" className="form-control"
-                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : '.xlsx'}
+                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'ASP' ? '.xlsx,.pdf' : '.xlsx'}
                        style={{ padding: '4px', fontSize: '0.8rem' }}
                        onChange={(e) => setTechnoFile(e.target.files[0])} />
                 <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
@@ -869,6 +973,8 @@ export default function UploadPage() {
                     ? 'BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → 62 techno params. OISCO_*.xlsx → 35 OISCO params.'
                     : technoPlant === 'BSP-OISCO'
                     ? "OISCO_<Mon>'YY.xlsx — 35 techno params. Month auto-detected from title."
+                    : technoPlant === 'ASP'
+                    ? "asp.xlsx → reads cells F10/F11/F13/F21/L26 (Crude Steel, Concast, Ingot, Saleable, Stock). Month auto-detected from E3. REP*.pdf → same items via keyword search. FL*.pdf → BARS+FS PRD+PL MILL → Finished Steel (col3=Actual)."
                     : 'Final Monthly, Morning Report or Techno file — auto-detected. Production + techno both extracted.'}
                   {' '}Shown for review before insertion.
                 </div>
@@ -892,6 +998,13 @@ export default function UploadPage() {
                     </button>
                   ))}
                 </div>
+              ) : isAspPdf ? (
+                <button type="button" onClick={handleAspExtract} disabled={aspBusy}
+                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                 backgroundColor: '#0ea5e9', border: '1px solid #0ea5e9', color: '#fff',
+                                 cursor: aspBusy ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                  {aspBusy ? 'Extracting ASP PDF...' : 'Extract ASP PDF (REP / FL)'}
+                </button>
               ) : (
                 <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
                         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -972,17 +1085,20 @@ export default function UploadPage() {
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
               <div>
-                <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#10b981', margin: '0 0 6px 0' }}>RSP, ISP, BSP, BSL & DSP Actuals + Special Steel Ingestion</h4>
+                <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#10b981', margin: '0 0 6px 0' }}>RSP, ISP, BSP, BSL, DSP & ASP Actuals + Special Steel Ingestion</h4>
                 <ul style={{ fontSize: '8.5pt', color: '#cbd5e1', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
                   <li><strong>RSP — Final Monthly (.xlsx):</strong> Sheets <strong>page-9</strong> + <strong>page 1-8</strong>. Set month manually.</li>
-                  <li><strong>RSP — Morning Report (.xlsx):</strong> Sheet starts with <strong>"RSP Morning Report Data for-"</strong>. Month from <strong>A2</strong>. Auto-detected.</li>
+                  <li><strong>RSP — Morning Report (.xlsx):</strong> Sheet starts with <strong>&quot;RSP Morning Report Data for-&quot;</strong>. Month from <strong>A2</strong>. Auto-detected.</li>
                   <li><strong>ISP — Final Monthly (.xlsx):</strong> Sheet <strong>Maj Production Summ</strong>. Set month manually.</li>
                   <li><strong>ISP — Morning Report (.xlsx):</strong> Sheet <strong>DAILYREPORT1</strong>. Month from <strong>K5</strong>. Auto-detected. 19 items extracted.</li>
                   <li><strong>BSP — PPC MIS (.xls):</strong> Sheet <strong>S1</strong>. Month from <strong>N1</strong>. Auto-detected.</li>
                   <li><strong>BSL — DPR Mail (.xlsx):</strong> Sheet <strong>DPR</strong>. Month from <strong>O1</strong>. Auto-detected.</li>
                   <li><strong>DSP — MCR-I (.xls):</strong> Tab-separated text file (<em>mcr1_*.xls</em>). Month from header row. Auto-detected. 21 items extracted.</li>
-                  <li>All tonnage values converted Tonnes → '000 T automatically. Every upload is logged below.</li>
-                  <li><strong>BSP — Special Steel (.xlsx):</strong> Use <strong>Extraction with Preview → Insert</strong> (plant: BSP). File auto-detected by sheet name <strong>CORP</strong>. Extracts grade-wise Orders (Effective) & Loading from BSP_Spstl-*.xlsx. Data saved to <strong>special_steel_orders</strong> and displayed on report page 19.</li>
+                  <li><strong>ASP — asp.xlsx</strong> (Preview &amp; Insert, plant: ASP): Reads cells <strong>F10</strong> (Crude Steel), <strong>F11</strong> (Concast), <strong>F12</strong> (Ingot), <strong>F20</strong> (Saleable Steel), <strong>L25</strong> (Stock). Month <strong>auto-detected from E3</strong> (e.g. 30/04/2026 → Apr&apos;26). Sheet: <em>md cell</em>.</li>
+                  <li><strong>ASP — REP*.pdf</strong> (Preview &amp; Insert, plant: ASP): Same items as xlsx via keyword search. Set month manually.</li>
+                  <li><strong>ASP — FL*.pdf</strong> (Preview &amp; Insert, plant: ASP): Extracts <strong>BARS Mill, FS PRD, Plate Mill</strong> (Plan col2, Actual col3) + computes <strong>Finished Steel</strong> total. Set month manually.</li>
+                  <li>All tonnage values converted Tonnes → &apos;000 T automatically. Every upload is logged below.</li>
+                  <li><strong>BSP — Special Steel (.xlsx):</strong> Use <strong>Extraction with Preview → Insert</strong> (plant: BSP). File auto-detected by sheet name <strong>CORP</strong>. Extracts grade-wise Orders (Effective) &amp; Loading from BSP_Spstl-*.xlsx. Data saved to <strong>special_steel_orders</strong> and displayed on report page 19.</li>
                 </ul>
               </div>
               <div>
@@ -1172,6 +1288,67 @@ export default function UploadPage() {
               )}
               <EditableSpecialSteelTable plant="DSP" rows={dspSsRows}
                 onToggle={toggleDspSsRow} onEditGrade={editDspSsGrade} onEditSection={editDspSsSection} />
+            </div>
+          )}
+
+          {/* ASP PDF — single-step extract & preview panel */}
+          {aspResult && (
+            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #0ea5e9', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                  ASP —&nbsp;
+                  {aspResult.report_type === 'EXCEL' ? 'Crude Steel (Excel)'
+                    : aspResult.report_type === 'REP' ? 'Crude Steel (REP PDF)'
+                    : 'Finished Steel (FL PDF)'}
+                  &nbsp;<span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                    ASP {aspResult.month} · {aspResult.source_type}
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setAspResult(null); setAspProdRows([]); }}
+                          disabled={aspBusy}
+                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
+                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                    Discard
+                  </button>
+                  <button onClick={handleAspInsert}
+                          disabled={aspBusy}
+                          style={{ backgroundColor: '#0ea5e9', border: '1px solid #0ea5e9', borderRadius: 4,
+                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+                    {aspBusy ? 'Inserting...' : `Insert ${aspProdRows.filter(r => r.selected && (r.item_edit||'').trim()).length} rows into DB`}
+                  </button>
+                </div>
+              </div>
+
+              {/* Report type badge */}
+              <div style={{ marginBottom: 10 }}>
+                {(() => {
+                  const rt = aspResult.report_type;
+                  const color = rt === 'EXCEL' ? '#38bdf8' : rt === 'REP' ? '#34d399' : '#fbbf24';
+                  const bg    = rt === 'EXCEL' ? 'rgba(56,189,248,0.12)' : rt === 'REP' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)';
+                  const label = rt === 'EXCEL'
+                    ? `Excel (${aspResult.sheets}) — cells F10/F11/F12/F20/L25 → Crude Steel, Concast, Ingot, Saleable, Stock`
+                    : rt === 'REP'
+                    ? 'REP PDF — OMI Production (Crude Steel, Ingot, Concast, Saleable, Stock)'
+                    : 'FL PDF — Finished Steel by Mill (BARS + FS PRD + PL MILL)';
+                  return (
+                    <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 4,
+                                   fontSize: '8pt', fontWeight: 700, backgroundColor: bg,
+                                   color, border: `1px solid ${color}` }}>
+                      {label}
+                    </span>
+                  );
+                })()}
+              </div>
+
+              <EditableProductionTable plant="ASP" rows={aspProdRows}
+                onToggle={toggleAspRow} onEditName={editAspRowName} />
+
+              <div style={{ fontSize: '8pt', color: '#94a3b8', marginTop: 8 }}>
+                All values converted from Tonnes → &apos;000T automatically. Tick/untick rows to include or skip.
+                Edit item names to override the DB mapping. For multi-month PDFs, verify the &quot;Value&quot; column
+                matches the expected month-end figure (extractor picks the largest number on each keyword line).
+              </div>
             </div>
           )}
 
