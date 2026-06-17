@@ -3,25 +3,25 @@ import React from 'react';
 
 // Column widths as % — 15 cols, must sum to 100
 const COL_W = {
-  items:      '13%',
-  plant:       '5%',
+  items:      '10%',
+  plant:       '6%',
   annualApp:   '8%',
   mApp:        '5%',
-  mActual:     '6%',
+  mActual:     '7%',
   mVar:       '5.5%',
   mPct:       '5.5%',
   cplyAct:     '6%',
   pctGr:      '5.5%',
   ytdApp:      '6%',
-  ytdActual:   '6%',
+  ytdActual:   '7%',
   ytdVar:     '5.5%',
   ytdPct:     '5.5%',
   ytdCply:     '6%',
   ytdGr:      '5.5%',
 };
 
-const TH_STYLE = { padding: '2.5px 2.5px', fontSize: 'var(--report-font-size)', verticalAlign: 'middle', lineHeight: '1.15' };
-const TD_STYLE = { padding: '2.5px 2.5px', fontSize: 'var(--report-font-size)', lineHeight: '1.15' };
+const TH_STYLE = { padding: '2.5px 2.5px', fontSize: '9.5pt', verticalAlign: 'middle', lineHeight: '1' };
+const TD_STYLE = { padding: '2.5px 2.5px', fontSize: '9.5pt', lineHeight: '1' };
 const INPUT_STYLE = {
   width: '100%', minWidth: 0, padding: '0 1px',
   background: 'transparent', border: 'none',
@@ -166,14 +166,14 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
             <th rowSpan="2" style={TH_STYLE}>Plant</th>
             <th rowSpan="2" style={TH_STYLE}>APP<br />{fyStr}</th>
             <th colSpan="4" style={TH_STYLE}>{shortM}'{shortY}</th>
-            <th rowSpan="2" style={TH_STYLE}>{shortM}'{prevY}<br />Actual</th>
+            <th rowSpan="2" style={TH_STYLE}>{shortM}'{prevY}<br />Act</th>
             <th rowSpan="2" style={TH_STYLE}>%Gr.<br />{shortM}'{prevY}</th>
             <th colSpan="4" style={TH_STYLE}>Apr-{shortM}'{shortY}</th>
-            <th rowSpan="2" style={TH_STYLE}>Apr-{shortM}'{prevY}<br />Actual</th>
+            <th rowSpan="2" style={TH_STYLE}>Apr-{shortM}'{prevY}<br />Act</th>
             <th rowSpan="2" style={TH_STYLE}>%Gr.<br />Apr-{shortM}'{prevY}</th>
           </tr>
           <tr>
-            {['APP','Actual','Var','%Ful.','APP','Actual','Var','%Ful.'].map((h, i) => (
+            {['APP','Act','Var','%Ful.','APP','Act','Var','%Ful.'].map((h, i) => (
               <th key={i} style={TH_STYLE}>{h}</th>
             ))}
           </tr>

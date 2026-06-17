@@ -617,6 +617,11 @@ select.form-control {
   padding: 3px 2px;
 }
 
+/* ─── Page-specific font overrides ───────────────────────── */
+.pg-7, .pg-7 th, .pg-7 td {
+  font-family: 'Arial Narrow', Arial, sans-serif !important;
+}
+
 /* ─── Page 14 – Plant-Wise Production (Detailed) ─────────── */
 /* inherits .report-table — no extra overrides needed */
 

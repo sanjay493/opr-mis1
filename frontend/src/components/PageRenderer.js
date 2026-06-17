@@ -142,7 +142,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
   const isLandscape = pageData.orientation === 'landscape';
 
   return (
-    <div className={`a4-page ${isLandscape ? 'landscape' : ''}`}>
+    <div className={`a4-page${isLandscape ? ' landscape' : ''}${pageData.page ? ` pg-${pageData.page}` : ''}`}>
       {/* Header (hidden on Cover page for cleaner design) */}
       {pageData.type !== 'cover' && (
         <div className="report-header">

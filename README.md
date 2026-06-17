@@ -1,209 +1,215 @@
 # SAIL MIS Report Generator & Ingestion Portal
 
-This repository contains the Operation Monthly Informatics (OMI) Management Information System (MIS) portal for Steel Authority of India Limited (SAIL). It consists of a **Python FastAPI backend** for database storage and WeasyPrint-based PDF generation, and a **Next.js frontend** for report editing and excel data ingestion.
+Operation Monthly Informatics (OMI) Management Information System for Steel Authority of India Limited (SAIL). A **Python FastAPI backend** handles database storage and WeasyPrint PDF generation; a **Next.js frontend** provides report preview, inline editing, and Excel/PDF data ingestion.
 
 ---
 
 ## Architecture Overview
 
-1. **Frontend (Next.js)**: A React-based web interface built with Next.js for interactive report visualization, inline editing, and Excel sheet ingestion.
-2. **Backend (FastAPI)**: A Python API server that interfaces with a local SQLite database and uses **WeasyPrint** to compile HTML templates into clean, print-ready A4 PDF reports.
-3. **Database (SQLite)**: Store report configurations, techno-economic parameters, and actual/plan monthly production data.
+| Layer | Technology | Role |
+|---|---|---|
+| Frontend | Next.js 14 (`/frontend`) | Report preview, inline editing, data upload UI |
+| Backend | FastAPI + Python 3.11 (`/backend`) | REST API, SQLite queries, WeasyPrint PDF generation |
+| Database | SQLite (`mis_reports.db`) | Production actuals/plan, techno-economic params, page configs |
+
+---
+
+## Report Coverage (Pages 1–35+)
+
+| Pages | Content |
+|---|---|
+| 1 | Cover Page |
+| 2 | Index |
+| 3 | Production Summary (SAIL-level) |
+| 4 | Month-Wise Production (all plants, items, plan vs actual) |
+| 5–6 | Plant-Wise Production Performance |
+| 7–12 | Month-Wise Production Trends (item-wise) |
+| 13 | Concast Production Performance |
+| 14 | Production by Process |
+| 15–17 | Category-Wise Saleable Steel (BSP / DSP+RSP / BSL+ISP) |
+| 18 | Segment-Wise Production |
+| 19–23 | Special Steel Performance — BSP, DSP, RSP, BSL, ISP |
+| 24 | Special Steel — SAIL Consolidated |
+| 25 | Opening Stock |
+| 26 | IPT Status |
+| 27 | Major Techno-Economic Parameters |
+| 28 | Coke & Coal Chemicals, Sinter Plant (Techno) |
+| 29 | Iron Making (Techno) |
+| 30 | BOF Shop (Techno) |
+| 31–35 | Mill-Wise Techno — BSP / DSP / RSP / BSL / ISP |
+
+---
+
+## Supported Plants & Data Sources
+
+### Production Actuals (`/api/upload-excel`)
+
+| Plant | File Type | Sheet / Detection |
+|---|---|---|
+| RSP | `.xlsx` Final Monthly | Sheets `page-9` + `page 1-8` — set month manually |
+| RSP | `.xlsx` Morning Report | Sheet starts with `RSP Morning Report Data for-` — month from A2 |
+| ISP | `.xlsx` Final Monthly | Sheet `Maj Production Summ` — set month manually |
+| ISP | `.xlsx` Morning Report | Sheet `DAILYREPORT1` — month from K5 |
+| BSP | `.xls` PPC MIS | Sheet `S1` — month from N1, auto-detected |
+| BSL | `.xlsx` DPR Mail | Sheet `DPR` — month from O1, auto-detected |
+| DSP | `.xls` MCR-I | Tab-separated text — month from header, auto-detected |
+
+### Extract with Preview → Insert (`/api/extract-preview` + `/api/confirm-extraction`)
+
+Extracts production, techno-economic parameters, and special steel data with a preview step before DB insertion.
+
+| Plant | File Type | What is extracted |
+|---|---|---|
+| RSP | `.xlsx` (Final Monthly / Morning Report / Techno) | Production + techno params (auto-detected) |
+| ISP | `.xlsx` (Final Monthly / Morning Report / Summarized Monthly) | Production (~17–19 items) + techno params (B-FCE sheet, ~37 params) |
+| BSP | `.xlsx` `BSP_Spstl-*.xlsx` | Special Steel orders & loading → `special_steel_orders` |
+| BSP | `.xlsx` `BSP-3-page-Tech.xlsx` | 62 techno params (Coke, Sinter, BF, SMS, Mills, Energy) |
+| BSP-OISCO | `.xlsx` `OISCO_*.xlsx` | 35 OISCO techno params (BF CDI, Fuel Rate, O2, LD Gas, etc.) |
+| DSP | `.pdf` OMI Report | Production + special steel + techno (3-step extraction) |
+| DSP | `.xls` MCR-I | 21 production items |
+
+### ABP Plan Targets (`/api/upload-excel-plan`)
+
+Populates `production_plan_table` for all 12 months in a single upload.
+
+| Plant | Sheet Name |
+|---|---|
+| RSP | `sheet1` |
+| ISP | `SUMM PROD` |
+| BSP | `Table 1` |
+| DSP | `Monthwise` |
+| BSL | `PLAN SUMMARY` |
+| ASP / SSP / VISL | `APP 26-27` (combined file, all three plants in one upload) |
+
+---
+
+## Database Tables
+
+| Table | Purpose |
+|---|---|
+| `production_table` | Monthly actual production (all plants, all items) |
+| `production_plan_table` | ABP monthly plan targets |
+| `techno_table` | Legacy techno-economic params (plant-level, from old RSP extraction) |
+| `techno_param_master` | Master list of techno params (group, section, label, unit, sort_order) |
+| `techno_monthly` | Monthly techno actuals + cumulative (linked to param_master via param_id) |
+| `techno_target` | Annual techno targets by FY and param_id |
+| `special_steel_orders` | Grade-wise special steel orders & actual despatch |
+| `opening_stock` | Raw material stocks as on 1st of each month |
+| `ipt_status` | Inter-plant transfer status |
+| `page_configs` | Saved page configuration JSON per report month |
+| `extraction_log` | Audit trail of every upload (plant, month, file, items extracted) |
 
 ---
 
 ## System Requirements
 
-- **Node.js**: v18.x or v20.x (LTS recommended)
-- **Python**: 3.9.x to 3.12.x
-- **pip**: Python package installer
+- **Node.js**: v18.x or v20.x (LTS)
+- **Python**: 3.11.x (3.9–3.12 supported)
+- **pip**: Python package manager
 
 ---
 
-## 1. System-Specific Dependencies (Required for WeasyPrint PDF Generation)
+## 1. System-Specific Dependencies (WeasyPrint)
 
-WeasyPrint relies on external system libraries for graphics rendering (Cairo, Pango, GObject). Install them based on your OS:
+WeasyPrint requires Cairo, Pango, and GObject system libraries.
+
+### Windows
+1. Download and install the GTK3 runtime from [GTK-for-Windows-installer](https://github.com/tschoonj/GTK-for-Windows-installer/releases).
+2. Add the GTK `bin` folder (e.g. `C:\Program Files\GTK3-Runtime\bin`) to `Path`.
 
 ### Linux (Ubuntu / Debian)
 ```bash
-sudo apt-get update
-sudo apt-get install -y build-essential python3-dev python3-pip python3-setuptools \
-                       python3-wheel python3-cffi libcairo2 libpango-1.0-0 \
-                       libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
-```
-
-### Linux (Fedora / CentOS / RHEL)
-```bash
-sudo dnf install -y redhat-rpm-config python3-devel cairo-devel pango-devel \
-                    gdk-pixbuf2-devel libffi-devel
+sudo apt-get install -y libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
 ```
 
 ### macOS
-Ensure you have [Homebrew](https://brew.sh/) installed:
 ```bash
 brew install pango cairo gdk-pixbuf libffi
 ```
 
-### Windows
-WeasyPrint requires GTK libraries on Windows:
-1. Download the latest GTK3 installer for Windows from [GTK-for-Windows](https://github.com/tschoonj/GTK-for-Windows-installer/releases).
-2. Add the GTK installation `bin` folder (e.g. `C:\Program Files\GTK3-Runtime\bin`) to your system environment variables `Path`.
-3. Alternatively, you can install WeasyPrint and its dependencies using [MSYS2](https://www.msys2.org/) or [Conda](https://docs.conda.io/en/latest/).
-
 ---
 
-## 2. Backend Setup & Run Instructions
+## 2. Backend Setup
 
-Navigate to the `backend` directory:
 ```bash
 cd backend
-```
 
-### Dependency Installation
-We recommend setting up a Python virtual environment:
-
-**On Linux/macOS:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-**On Windows (Command Prompt):**
-```cmd
+# Create and activate virtual environment
 python -m venv venv
-venv\Scripts\activate
+# Linux/macOS:  source venv/bin/activate
+# Windows CMD:  venv\Scripts\activate
+# Windows PS:   .\venv\Scripts\Activate.ps1
+
 pip install -r requirements.txt
 ```
 
-**On Windows (PowerShell):**
+> `mis_reports.db` is created automatically on first run.
+
+### Start the Backend
+
+```bash
+# Development (auto-reload)
+uvicorn main:app --host 127.0.0.1 --port 8082 --reload
+
+# Windows PowerShell
+$env:PORT="8082"; uvicorn main:app --host 127.0.0.1 --port 8082 --reload
+```
+
+Set `FRONTEND_PORT` or `FRONTEND_ORIGIN` env vars to configure CORS for non-default frontend ports:
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+$env:PORT="8082"; $env:FRONTEND_PORT="3001"; uvicorn main:app --host 127.0.0.1 --port 8082 --reload
 ```
-
-*Note: Running the backend server will automatically initialize/migrate the SQLite database (`mis_reports.db`) if it doesn't already exist.*
-
-### Running the Backend
-
-#### A. Development Model (With auto-reload)
-```bash
-# On Linux/macOS
-PORT=8082 uvicorn main:app --host 127.0.0.1 --port 8082 --reload
-
-# On Windows (CMD)
-set PORT=8082
-uvicorn main:app --host 127.0.0.1 --port 8082 --reload
-
-# On Windows (PowerShell)
-$env:PORT="8082"
-uvicorn main:app --host 127.0.0.1 --port 8082 --reload
-```
-
-#### B. Production Model
-```bash
-# On Linux/macOS
-PORT=8082 uvicorn main:app --host 127.0.0.1 --port 8082
-
-# On Windows (CMD)
-set PORT=8082
-uvicorn main:app --host 127.0.0.1 --port 8082
-
-# On Windows (PowerShell)
-$env:PORT="8082"
-uvicorn main:app --host 127.0.0.1 --port 8082
-```
-
-### Dynamic Port Configuration (Backend)
-- Pass a custom port in the environment variable `PORT` to change backend API port.
-- Pass `FRONTEND_PORT` or `FRONTEND_ORIGIN` to configure CORS allowance for custom frontend addresses.
-  - E.g., `PORT=9000 FRONTEND_PORT=4000 python main.py` or `PORT=9000 FRONTEND_ORIGIN=http://127.0.0.1:4000 python main.py`.
 
 ---
 
-## 3. Frontend Setup & Run Instructions
+## 3. Frontend Setup
 
-Navigate to the `frontend` directory:
 ```bash
 cd frontend
-```
-
-### Dependency Installation
-```bash
 npm install
 ```
 
-### Configure Backend Connection Port
-
-Create a `.env.local` file inside the `frontend` directory to point the UI to your backend API server:
+Create `frontend/.env.local` pointing to the backend:
 ```env
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8082
 ```
-Change `8082` to whatever custom port your backend is listening on.
 
-### Running the Frontend
-
-#### A. Development Model (Fast Refresh)
 ```bash
-# Start on default port 3000
-npm run dev
-
-# Start on a user-defined port (e.g., 4000)
-# Linux/macOS
-PORT=4000 npm run dev
-# Windows (CMD)
-set PORT=4000 && npm run dev
-# Windows (PowerShell)
-$env:PORT="4000"; npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) (or the custom port) in your browser.
-
-#### B. Production Model (Optimized build & served)
-First build the production bundle:
-```bash
-npm run build
-```
-
-Then start the production server:
-```bash
-# Start on default port 3000
-npm run start
-
-# Start on a user-defined port (e.g., 4000)
-# Linux/macOS
-PORT=4000 npm run start
-# Windows (CMD)
-set PORT=4000 && npm run start
-# Windows (PowerShell)
-$env:PORT="4000"; npm run start
+npm run dev        # development server on port 3000
+npm run build      # production build
+npm run start      # serve production build
 ```
 
 ---
 
-## 4. Full Example: Running Frontend & Backend on Custom Ports
+## 4. Application URLs
 
-Let's say you want to run the **Backend on port 8090** and the **Frontend on port 3005**.
+| URL | Description |
+|---|---|
+| `http://localhost:3000` | Dashboard — month selector, report preview navigation |
+| `http://localhost:3000/upload` | Data ingestion — upload actuals, techno files, or ABP plan |
+| `http://localhost:3000/report` | Full report viewer — multi-page A4 preview + PDF download |
+| `http://localhost:8082/docs` | FastAPI Swagger UI for API exploration |
 
-### Step 1: Start Backend on Port 8090 and allow Frontend on 3005
-```bash
-cd backend
-# Activate virtual environment
-source venv/bin/activate
+---
 
-# Start backend
-PORT=8090 FRONTEND_PORT=3005 python main.py
-```
+## 5. Upload Page — Data Upload Modes
 
-### Step 2: Configure and Start Frontend on Port 3005
-In a new terminal window:
-```bash
-cd frontend
+The `/upload` page has a single **Data Upload** section with three modes selectable via tab:
 
-# Set the backend URL configuration
-echo "NEXT_PUBLIC_API_URL=http://127.0.0.1:8090" > .env.local
+| Mode | Purpose | Endpoint |
+|---|---|---|
+| **Actuals** | Quick extract from production Excel — no preview, direct DB insert | `POST /api/upload-excel` |
+| **Preview & Insert** | Extract production + techno + special steel, review before inserting | `POST /api/extract-preview` → `POST /api/confirm-extraction` |
+| **ABP Plan** | Extract annual plan targets for all 12 months | `POST /api/upload-excel-plan` |
 
-# Run the frontend on port 3005
-PORT=3005 npm run dev
-```
-Now access the web portal at [http://localhost:3005](http://localhost:3005).
+---
+
+## 6. Report PDF Notes
+
+- Pages 1–6: A4 Portrait with tight margins (10mm sides) for maximum table width.
+- Pages 7–26: A4 Portrait, standard margins.
+- Pages 27–35 (Techno): **A4 Landscape** — wide multi-column tables with month-wise actuals.
+- Font: Arial Narrow on page 7 (trend), standard Arial elsewhere.
+- All tonnage values stored and displayed as `'000 T` unless otherwise noted.
+- Financial year convention: April–March. Format `YYYY-YY` (e.g. `2025-26`). Plan rows show short `YY-YY` format.

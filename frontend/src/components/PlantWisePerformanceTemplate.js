@@ -17,8 +17,8 @@ const COL_W = {
   ytdGr:   '6%',
 };
 
-const TH = { padding: '2px 3px', fontSize: '12pt', verticalAlign: 'middle', lineHeight: '1.2' };
-const TD = { padding: '1px 3px', fontSize: '12pt', lineHeight: '1.2', overflow: 'hidden' };
+const TH = { padding: '2px 3px', fontSize: '9.5pt', verticalAlign: 'middle', lineHeight: '1.2' };
+const TD = { padding: '1px 3px', fontSize: '9.5pt', lineHeight: '1.2', overflow: 'hidden' };
 const INPUT = {
   width: '100%', minWidth: 0, padding: '0 1px',
   background: 'transparent', border: 'none',
