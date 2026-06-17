@@ -108,10 +108,11 @@ PAGE6_PLANTS = [
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
     ("ASP", [
-        ("Ingot steel",         None,                    False, False),
-        ("Concast (total)",     None,                    False, False),
+        ("Ingot steel",         "Ingot Steel",           False, False),
+        ("Concast (total)",     "Total Caster",          False, False),
         ("Crude Steel(Tot)",    "Total Crude Steel",     True,  False),
         ("Saleable Steel",      "Saleable Steel",        True,  False),
+        ("Finished Steel",      "Finished Steel",        False, False),
     ]),
     ("SSP", [
         ("Crude Steel",         "Total Crude Steel",     True,  False),
@@ -217,11 +218,12 @@ def _ytd_nos(cur, plant, db_spec, months):
     return tw / td if td > 0 else None
 
 
-_ONE_DP_LABELS = {"Pig Iron", "Ingot", "Ingot steel"}
+_ONE_DP_LABELS  = {"Pig Iron", "Ingot", "Ingot steel"}
+_ONE_DP_PLANTS  = frozenset({"ASP", "SSP", "VISL"})
 
 
-def _is_one_dp(label: str) -> bool:
-    return label in _ONE_DP_LABELS
+def _is_one_dp(label: str, plant: str = "") -> bool:
+    return label in _ONE_DP_LABELS or plant in _ONE_DP_PLANTS
 
 
 def _fmt(v, one_dp: bool = False):
@@ -323,7 +325,7 @@ def _build_rows(plant_defs, report_month):
     try:
         for plant, items in plant_defs:
             for label, db_item, is_bold, is_nos_day in items:
-                values = _compute_row(cur, plant, db_item, is_nos_day, report_month, _is_one_dp(label))
+                values = _compute_row(cur, plant, db_item, is_nos_day, report_month, _is_one_dp(label, plant))
                 rows.append({
                     "plant": plant,
                     "label": label,
