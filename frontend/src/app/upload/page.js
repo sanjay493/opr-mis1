@@ -880,7 +880,7 @@ export default function UploadPage() {
                   <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
                   <option value="BSP">BSP (Techno / Special Steel .xlsx)</option>
                   <option value="BSP-OISCO">BSP-OISCO (OISCO Techno .xlsx)</option>
-                  <option value="BSL">BSL (TECHNO &lt;MON&gt;&lt;YYYY&gt;.xls — Techno params)</option>
+                  <option value="BSL">BSL (Techno .xls  or  Corporate SS .xlsx)</option>
                   <option value="ASP">ASP (xlsx or PDF — REP / FL)</option>
                 </select>
               </div>
@@ -903,13 +903,14 @@ export default function UploadPage() {
                     : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
                     : technoPlant === 'BSP' ? 'BSP Excel File (.xlsx) — auto-detected'
                     : technoPlant === 'BSP-OISCO' ? 'BSP OISCO Techno Excel (.xlsx)'
-                    : technoPlant === 'BSL' ? 'BSL Techno File (.xls) — TECHNO <MON><YYYY>.XLS'
+                    : technoPlant === 'BSL' ? 'BSL — Techno (.xls) or Corporate Office Special Steel (.xlsx)'
                     : technoPlant === 'ASP' ? 'ASP file — asp.xlsx  or  REP*.pdf / FL*.pdf'
                     : 'RSP Excel File (.xlsx)'}
                 </label>
                 <input id="techno-file-input" type="file" className="form-control"
                        accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSL' ? '.xls,.xlsx' : technoPlant === 'ASP' ? '.xlsx,.pdf' : '.xlsx'}
                        style={{ padding: '4px', fontSize: '0.8rem' }}
+                       suppressHydrationWarning
                        onChange={(e) => setTechnoFile(e.target.files[0])} />
                 <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
                   {technoPlant === 'DSP'
@@ -921,7 +922,7 @@ export default function UploadPage() {
                     : technoPlant === 'BSP-OISCO'
                     ? "OISCO_<Mon>'YY.xlsx — 35 techno params. Month auto-detected from title."
                     : technoPlant === 'BSL'
-                    ? 'TECHNO <MON><YYYY>.XLS — 14 techno params from Sheet1 (Sp. Heat Cons., Energy, Sinter, BF, CDI, Fuel Rate, Coal to HM, CRM Yield, Refractories, Water) and Sheet2 (Coke Oven: Dry Coal Charge, Avg Coking Time). Set month above — used as report month.'
+                    ? 'Techno: TECHNO <MON><YYYY>.XLS — 14+ techno params. Set month above. | Corporate SS: "Corporate office Report <MON><YEAR>.xlsx" — month auto-detected from cell I2. Extracts grade-wise Order Qty (col G = ORDER AVAILABLE TOTAL) & Actual (col I = Despatch Till Date, monthly) for HR COIL / HR PLATE / HR SHEET / CR COIL/SHEET/GP GC / SLAB. Saves to special_steel_orders; shown on report page 22.'
                     : technoPlant === 'ASP'
                     ? "asp.xlsx → reads cells F10/F11/F13/F21/L26 (Crude Steel, Concast, Ingot, Saleable, Stock). Month auto-detected from E3. REP*.pdf → same items via keyword search. FL*.pdf → BARS+FS PRD+PL MILL → Finished Steel (col3=Actual)."
                     : 'Final Monthly, Morning Report or Techno file — auto-detected. Production + techno both extracted.'}
@@ -1108,6 +1109,7 @@ export default function UploadPage() {
                   <li><strong>ISP — Morning Report (.xlsx):</strong> Sheet <strong>DAILYREPORT1</strong>. Month from <strong>K5</strong>. Auto-detected. 19 items extracted.</li>
                   <li><strong>BSP — PPC MIS (.xls):</strong> Sheet <strong>S1</strong>. Month from <strong>N1</strong>. Auto-detected.</li>
                   <li><strong>BSL — DPR Mail (.xlsx):</strong> Sheet <strong>DPR</strong>. Month from <strong>O1</strong>. Auto-detected.</li>
+                  <li><strong>BSL — Corporate Office Special Steel (.xlsx):</strong> Use <strong>Extraction with Preview → Insert</strong> (plant: BSL). Auto-detected by Sheet1 + "SPECIAL STEEL" title. Month from cell <strong>I2</strong>. Products: HR COIL / HR PLATE / HR SHEET / CR COIL/SHEET/GP GC / SLAB. Order Qty = col G (ORDER AVAILABLE TOTAL); Actual = col I (Despatch Till Date, monthly). Saves to <strong>special_steel_orders</strong>; shown on report page 22.</li>
                   <li><strong>DSP — MCR-I (.xls):</strong> Tab-separated text file (<em>mcr1_*.xls</em>). Month from header row. Auto-detected. 21 items extracted.</li>
                   <li><strong>ASP — asp.xlsx</strong> (Preview &amp; Insert, plant: ASP): Reads cells <strong>F10</strong> (Crude Steel), <strong>F11</strong> (Concast), <strong>F12</strong> (Ingot), <strong>F20</strong> (Saleable Steel), <strong>L25</strong> (Stock). Month <strong>auto-detected from E3</strong> (e.g. 30/04/2026 → Apr&apos;26). Sheet: <em>md cell</em>.</li>
                   <li><strong>ASP — REP*.pdf</strong> (Preview &amp; Insert, plant: ASP): Same items as xlsx via keyword search. Set month manually.</li>
