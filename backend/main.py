@@ -434,7 +434,7 @@ async def extract_preview_endpoint(
     import tempfile
     import sys
 
-    if plant_name not in ("RSP", "DSP", "ISP", "BSP", "BSP-OISCO", "BSP-Spstl", "ASP"):
+    if plant_name not in ("RSP", "DSP", "ISP", "BSP", "BSP-OISCO", "BSP-Spstl", "ASP", "BSL"):
         raise HTTPException(status_code=400,
                             detail=f"Preview extraction not supported for {plant_name}.")
 
@@ -497,6 +497,13 @@ async def extract_preview_endpoint(
                 result = await loop.run_in_executor(
                     pool,
                     lambda: _asp_mod.extract_preview(tmp_path, month)
+                )
+        elif plant_name == "BSL":
+            import excel_extractor_bsl as _bsl_mod
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: _bsl_mod.extract_preview(tmp_path, month)
                 )
         else:
             import excel_extractor_rsp
