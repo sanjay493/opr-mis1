@@ -46,7 +46,9 @@ def extract_and_save_excel(file_path: str, report_month: str = "", source_file_n
 
         raise ValueError(
             "Uploaded BSL file does not match any known format. "
-            "Expected sheet 'DPR' (DPR Mail month-end report)."
+            "Expected sheet 'DPR' (DPR Mail month-end report) or "
+            "Sheet1 with 'SPECIAL STEEL' title (Corporate Office Special Steel report — "
+            "use Extract & Preview workflow for that file)."
         )
     except ValueError as ve:
         logger.error(f"BSL validation error: {ve}")
@@ -398,19 +400,180 @@ def _detect_month_from_filename(file_path: str) -> Optional[str]:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Extractor 3 — BSL Corporate Office Special Steel Report
+# ---------------------------------------------------------------------------
+# Sheet: Sheet1
+#   Row 1:    Title "SPECIAL STEEL REPORT FOR <MONTH> <YEAR>"
+#   Row 2:    Date in cell I2 (col 9) — last day of report month
+#   Rows 4-6: Two-row column headers
+#   Rows 7+:  Data (product group in col A, grade in col B)
+#
+# Col  A (1)  Product group  (HR COIL / HR PLATE / HR SHEET / CR COIL/ / SLAB)
+# Col  B (2)  Quality / Grade
+# Col  D (4)  Actual Up To Last Month  (= last month's monthly actual; for growth ref)
+# Col  F (6)  APP FOR THE MONTH  (monthly plan, not stored)
+# Col  G (7)  ORDER AVAILABLE TOTAL  (current outstanding orders → order_qty)
+# Col  I (9)  Despatch Till Date  (= this month's monthly despatch → actual_despatch)
+#
+# Note: Col I is the MONTHLY figure for the report month, NOT a running cumulative.
+# "Actual Up To Last Month" (D) = last month's monthly actual (for growth comparison).
+# ---------------------------------------------------------------------------
+
+_CORP_SS_PRODUCT_MAP = {
+    "HR COIL":  "HR COIL",
+    "HR PLATE": "HR PLATE",
+    "HR SHEET": "HR SHEET",
+    "CR COIL/": "CR COIL/SHEET/GP GC",  # spans two col-A cells; "SHEET" continues
+    "SLAB":     "SLAB",
+}
+_CORP_SS_STOP_A  = {"GRND/TOT"}      # grand-total sentinel — stop scan
+_CORP_SS_SKIP_A  = {"TOTAL"}          # section-total row — skip, keep product
+_CORP_SS_SKIP_B  = {"TOTAL", "GRAND TOTAL"}
+_CORP_SS_CONT    = "SHEET"            # continuation of "CR COIL/SHEET/GP GC"
+
+
+def _is_corp_ss_file(wb) -> bool:
+    """True if the workbook is a BSL Corporate Office Special Steel report."""
+    if "Sheet1" not in wb.sheetnames:
+        return False
+    try:
+        r1 = str(wb["Sheet1"].cell(1, 1).value or "").upper()
+        return "SPECIAL STEEL" in r1
+    except Exception:
+        return False
+
+
+def _corp_ss_month(ws) -> Optional[str]:
+    """Extract 'YYYY-MM' from cell I2 (row 2, col 9)."""
+    raw = ws.cell(2, 9).value
+    if raw is None:
+        return None
+    if hasattr(raw, "year") and hasattr(raw, "month"):
+        return f"{raw.year}-{str(raw.month).zfill(2)}"
+    s = str(raw).strip()
+    m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
+    if m:
+        return f"{m.group(3)}-{m.group(2).zfill(2)}"
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}"
+    return None
+
+
+def _extract_corp_ss_preview(wb, report_month: str) -> dict:
+    """Parse BSL Corporate Office Special Steel Report (Sheet1).
+
+    Col G (ORDER AVAILABLE TOTAL)  = outstanding order quantity → order_qty.
+    Col I (Despatch Till Date)     = monthly actual for the report month → actual_despatch.
+    Col D (Actual Up To Last Month) = previous month's actual (stored as cply_actual for reference).
+    """
+    ws = wb["Sheet1"]
+    detected = _corp_ss_month(ws)
+    db_month = detected or report_month
+
+    rows = []
+    current_product = ""
+    sort_order = 0
+
+    for row_num in range(7, ws.max_row + 1):
+        a_raw = ws.cell(row_num, 1).value
+        b_raw = ws.cell(row_num, 2).value
+        d_raw = ws.cell(row_num, 4).value   # last month's actual (growth reference)
+        g_raw = ws.cell(row_num, 7).value   # order available total → order_qty
+        i_raw = ws.cell(row_num, 9).value   # this month's despatch → actual_despatch
+
+        a_str = str(a_raw).strip() if a_raw is not None else ""
+        b_str = str(b_raw).strip() if b_raw is not None else ""
+
+        if a_str in _CORP_SS_STOP_A:
+            break
+
+        if a_str:
+            if a_str in _CORP_SS_SKIP_A:
+                continue  # section TOTAL row — skip, keep current product
+            elif a_str in _CORP_SS_PRODUCT_MAP:
+                current_product = _CORP_SS_PRODUCT_MAP[a_str]
+            elif a_str == _CORP_SS_CONT:
+                pass  # "SHEET" continues "CR COIL/SHEET/GP GC"; process col B
+            else:
+                logger.debug("BSL CorpSS row %d: unknown col-A %r — skipped", row_num, a_str)
+                continue
+
+        if not b_str or b_str in _CORP_SS_SKIP_B:
+            continue
+        if not current_product:
+            continue
+
+        d_val = clean_val(d_raw)   # last month's actual (display reference)
+        g_val = clean_val(g_raw)   # order available total
+        i_val = clean_val(i_raw)   # this month's actual despatch
+
+        sort_order += 1
+        has_data = bool(
+            (g_val is not None and g_val != 0) or
+            (i_val is not None and i_val != 0)
+        )
+
+        rows.append({
+            "product":         current_product,
+            "quality_grade":   b_str,
+            "section":         "",
+            "sort_order":      sort_order,
+            "order_qty":       g_val,    # order available total (col G)
+            "actual_despatch": i_val,    # monthly actual despatch (col I)
+            "cply_actual":     d_val,    # last month's actual (col D, display only)
+            "unit":            "T",
+            "cell":            f"R{row_num}:G(order) / I(actual)",
+            "status":          "ok" if has_data else "zero",
+        })
+
+    ok = sum(1 for r in rows if r["status"] == "ok")
+    logger.info("BSL CorpSS: %d ok / %d total rows for %s", ok, len(rows), db_month)
+
+    if ok == 0 and not rows:
+        raise ValueError(
+            "No data rows found in Sheet1. "
+            "Verify this is a BSL 'Corporate office Report <MON><YEAR>.xlsx' file."
+        )
+
+    note = (f"{ok} grade rows extracted for {db_month}. "
+            "Order Qty = ORDER AVAILABLE TOTAL (col G); "
+            "Actual = Despatch Till Date (col I, monthly).")
+
+    return {
+        "plant":              "BSL",
+        "month":              db_month,
+        "source_type":        "BSL Corporate Office Special Steel Report",
+        "sheets":             "Sheet1",
+        "workbook_sheets":    list(wb.sheetnames),
+        "report_type":        "CORP_SS",
+        "detected_month":     detected,
+        "production_rows":    [],
+        "special_steel_rows": rows,
+        "special_steel_note": note,
+        "techno_rows":        [],
+        "techno_param_rows":  [],
+    }
+
+
 def extract_preview(file_path: str, report_month: str) -> dict:
     """
-    Extract BSL Techno-Economic Parameters from TECHNO <MON><YYYY>.XLS.
+    Extract BSL data — auto-detects file type:
 
-    Supported sheets:
-      Sheet1 — COKE AND COAL CHEMICALS, SINTER PLANT + Iron Making + Mills
-      Sheet2 — Coke Oven parameters
+    • Corporate Office Special Steel Report (.xlsx, Sheet1 with "SPECIAL STEEL" title)
+      → special_steel_rows populated; monthly actual = Despatch Till Date − Actual Up To Last Month.
+
+    • Techno-Economic Parameters (TECHNO <MON><YYYY>.XLS / .XLSX)
+      → techno_param_rows populated from Sheet1/Sheet2/SMS-I/SMS-II.
 
     Returns a preview dict compatible with /api/confirm-extraction.
-    Month is taken from `report_month` ('YYYY-MM'); if empty, falls back to
-    the filename.
     """
     wb = _open_wb(file_path)
+
+    # ── Route 1: Corporate Office Special Steel Report ────────────────────
+    if _is_corp_ss_file(wb):
+        return _extract_corp_ss_preview(wb, report_month)
 
     # ── Determine report month ────────────────────────────────────────────
     db_month = report_month
