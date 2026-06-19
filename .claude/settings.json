@@ -37,7 +37,11 @@
       "PowerShell(\\(Get-Command python3 -ErrorAction SilentlyContinue\\).Source; \\(Get-Command py -ErrorAction SilentlyContinue\\).Source; Get-ChildItem \"C:\\\\Users\\\\sanja\\\\AppData\\\\Local\\\\Programs\\\\Python\" -ErrorAction SilentlyContinue | Select-Object Name)",
       "PowerShell($py = \"C:\\\\Users\\\\sanja\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\"; & $py -c \"import uvicorn, fastapi; print\\('OK'\\)\" 2>&1)",
       "Read(//c/Temp/**)",
-      "Bash(backend/venv/Scripts/python.exe -c ' *)"
+      "Bash(backend/venv/Scripts/python.exe -c ' *)",
+      "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__bf_calc.py\" 2>&1)",
+      "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__bf_src.py\" 2>&1)",
+      "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__update_bfp.py\" 2>&1)",
+      "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__update_tgt.py\" 2>&1)"
     ]
   }
 }
