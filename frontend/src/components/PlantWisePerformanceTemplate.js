@@ -28,7 +28,7 @@ const INPUT = {
 const PLANT_BG = {
   SAIL: '#dbeafe', BSP: '#fef9c3', DSP: '#dcfce7',
   RSP: '#fce7f3', BSL: '#ede9fe', ISP: '#ffedd5',
-  ASP: '#f1f5f9', SSP: '#f1f5f9', VISP: '#f1f5f9',
+  ASP: '#f1f5f9', SSP: '#f1f5f9', VISL: '#f1f5f9',
 };
 
 const BOLD_PLANTS = new Set(['SAIL', 'BSP', 'DSP', 'RSP', 'BSL', 'ISP']);

@@ -119,7 +119,9 @@ PAGE6_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
     ]),
     ("VISL", [
-        ("Saleable Steel",      "Saleable Steel",        True,  False),
+        ("Saleable Steel",           "Saleable Steel",           True,  False),
+        ("Finished Steel",           "Finished Steel",           False, False),
+        ("Saleable Steel Despatch",  "Saleable Steel Despatch",  False, False),
     ]),
 ]
 
@@ -159,15 +161,27 @@ def _days(month_str):
         return 30
 
 
+_FS_ALIAS = frozenset({"SSP", "VISL"})
+
+
 def _get_single(cur, table, plant, item, month):
-    """Single plant, single item."""
+    """Single plant, single item. SSP/VISL fall back to Saleable Steel for Finished Steel."""
     tbl = "production_table" if table == "act" else "production_plan_table"
     cur.execute(
         f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name=? AND report_month=?",
         (plant, item, month),
     )
     r = cur.fetchone()
-    return r[0] if r and r[0] is not None else None
+    if r and r[0] is not None:
+        return r[0]
+    if item == "Finished Steel" and plant in _FS_ALIAS:
+        cur.execute(
+            f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name='Saleable Steel' AND report_month=?",
+            (plant, month),
+        )
+        r = cur.fetchone()
+        return r[0] if r and r[0] is not None else None
+    return None
 
 
 def _get_agg(cur, table, item, plants, month):

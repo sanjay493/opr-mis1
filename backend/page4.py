@@ -80,21 +80,42 @@ def _fy_months(month: str) -> list:
     return result
 
 
+_FS_ALIAS = frozenset({"SSP", "VISL"})
+
+
 def _p4_query_one(cur, table, month, plant, db_item):
-    """Single plant, single month."""
+    """Single plant, single month. SSP/VISL fall back to Saleable Steel for Finished Steel."""
     tbl = "production_table" if table == "act" else "production_plan_table"
     cur.execute(
         f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name=?",
         (month, plant, db_item),
     )
     row = cur.fetchone()
-    return row[0] if row else None
+    if row and row[0] is not None:
+        return row[0]
+    if db_item == "Finished Steel" and plant in _FS_ALIAS:
+        cur.execute(
+            f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name='Saleable Steel'",
+            (month, plant),
+        )
+        row = cur.fetchone()
+        return row[0] if row and row[0] is not None else None
+    return None
 
 
 def _p4_query_sum(cur, table, month, plants, db_item):
     """Sum across a list of plants for one month."""
     if not plants:
         return None
+    if db_item == "Finished Steel":
+        # Per-plant loop so SSP/VISL can apply their Saleable Steel fallback.
+        total, found = 0.0, False
+        for p in plants:
+            v = _p4_query_one(cur, table, month, p, db_item)
+            if v is not None:
+                total += v
+                found = True
+        return total if found else None
     tbl = "production_table" if table == "act" else "production_plan_table"
     phs = ",".join("?" for _ in plants)
     cur.execute(

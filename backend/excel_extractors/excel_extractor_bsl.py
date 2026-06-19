@@ -557,9 +557,277 @@ def _extract_corp_ss_preview(wb, report_month: str) -> dict:
     }
 
 
+def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
+    """
+    Extract BF-wise performance data from BSL BF Performance & Analysis Report PDF.
+
+    Parses three tables:
+      Table 1 — Production Performance: Productivity (W.V./24h), Hot Blast Temp
+      Table 2 — Fuel/Quality Parameters: Coke Rate, Nut Coke Rate, CDI Rate, Fuel Rate
+      Table 3 — Raw Material Consumption: O2 Enrichment%, Slag Rate
+
+    All values use OnDate/Monthly format (X/Y); monthly (second) value is stored.
+    Cumulative (till-month) is set to None — not available in this PDF.
+    BF-3 (UNDER CAPITAL REPAIR) is skipped automatically.
+    """
+    import pdfplumber, re as _re
+
+    fname = os.path.basename(file_path)
+    logger.info("BSL BF PDF: opening %s for month %s", fname, report_month)
+
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            full_text = "\n".join(pg.extract_text() or "" for pg in pdf.pages)
+    except Exception as exc:
+        raise ValueError(f"Cannot open PDF '{fname}': {exc}") from exc
+
+    lines = full_text.splitlines()
+
+    def _monthly(cell: str):
+        """Parse 'X / Y' → float Y (monthly value). Returns None if no slash."""
+        m = _re.search(r'[\d.*]+\s*/\s*([\d.]+)', cell.strip())
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                return None
+        return None
+
+    def _is_repair(line: str) -> bool:
+        lu = line.upper()
+        return 'UNDER' in lu or 'CAPITAL REPAIR' in lu
+
+    def _parse_row(line: str):
+        """Split pipe-delimited line, strip cells, return list."""
+        return [c.strip() for c in line.split('|')]
+
+    def _is_fce_row(line: str) -> bool:
+        if _is_repair(line):
+            return False
+        return bool(_re.match(r'\|?\s*(\d+\.?|Shop|SH|SHOP)\s*\|', line, _re.IGNORECASE))
+
+    def _fce_id(cols):
+        if len(cols) < 2:
+            return None
+        s = cols[1].strip()
+        if s.upper() in ('SHOP', 'SH'):
+            return 'BF Shop'
+        m = _re.match(r'^(\d+)\.?$', s)
+        if m:
+            return f'BF-{int(m.group(1))}'
+        return None
+
+    # ── Identify table sections ───────────────────────────────────────────────
+    TABLE_NONE = 0
+    TABLE_PROD = 1   # Production Performance
+    TABLE_FUEL = 2   # Fuel/Quality Parameters
+    TABLE_RAW  = 3   # Raw Material Consumption
+
+    prod_rows = {}   # fce_id → cols list
+    fuel_rows = {}
+    raw_rows  = {}
+    current_table = TABLE_NONE
+
+    for line in lines:
+        lu = line.upper()
+        # Section transitions detected from header keywords
+        if 'PRODUCTIVT' in lu or ('W.V.' in lu and '24H' in lu):
+            current_table = TABLE_PROD
+            continue
+        if 'COKE RATE' in lu and ('CDI RATE' in lu or 'N/C RT' in lu):
+            current_table = TABLE_FUEL
+            continue
+        if ('O2 EN' in lu and 'SLG RATE' in lu) or ('NUTCOKE' in lu and 'CDI' in lu and 'PELLET' in lu):
+            current_table = TABLE_RAW
+            continue
+
+        if not _is_fce_row(line):
+            continue
+
+        cols = _parse_row(line)
+        fce = _fce_id(cols)
+        if fce is None:
+            continue
+
+        if current_table == TABLE_PROD and fce not in prod_rows:
+            prod_rows[fce] = cols
+        elif current_table == TABLE_FUEL and fce not in fuel_rows:
+            fuel_rows[fce] = cols
+        elif current_table == TABLE_RAW and fce not in raw_rows:
+            raw_rows[fce] = cols
+
+    # ── Column indices (0-based after split by |) ────────────────────────────
+    # Production table: [0]='' [1]=Fce [2]=Prod [3]=Theo [4]=DailyRate [5]=MonthlyRate
+    #   [6]=Chrg [7]=Tuyr [8]=FlueDust [9]=TotOff [10]=OffBlast [11]=LowBlast [12]=LowBlast2
+    #   [13]=HOT BLAST [14]=RecDaily [15]=RecMonthly [16]=Productivity W.V./24h
+    # Fuel table: [0]='' [1]=FCE [2]=Si [3]=S [4]=SlagAl2O3 [5]=MgO [6]=Basicity
+    #   [7]=HOT MET T [8]=COKE RATE [9]=N/C RT [10]=CDI RATE [11]=FUEL RATE ...
+    # Raw material table: [0]='' [1]=Fce [2]=Coke [3]=IronOre [4]=Sinter [5]=Scrap
+    #   [6]=NutCoke [7]=CDI [8]=Pellet [9]=CokeEcy [10]=O2 En(%) [11]=SLG RATE ...
+    PARAMS = [
+        # (table_key, col_idx, param_name,      unit,       group)
+        ('prod', 16, 'BF Productivity', 'T/m³/day', 'IRON_MAKING'),
+        ('prod', 13, 'Hot Blast Temp',  '°C',       'IRON_MAKING'),
+        ('fuel',  7, 'Hot Metal Temp',  '°C',       'IRON_MAKING'),
+        ('fuel',  8, 'Coke Rate',       'Kg/THM',   'IRON_MAKING'),
+        ('fuel',  9, 'Nut Coke Rate',   'Kg/THM',   'IRON_MAKING'),
+        ('fuel', 10, 'CDI Rate',        'Kg/THM',   'IRON_MAKING'),
+        ('fuel', 11, 'Fuel Rate',       'Kg/THM',   'IRON_MAKING'),
+        ('raw',   3, 'Iron Ore',        'T',        'IRON_MAKING'),
+        ('raw',   4, 'Sinter',          'T',        'IRON_MAKING'),
+        ('raw',   5, 'Scrap',           'T',        'IRON_MAKING'),
+        ('raw',   8, 'Pellet',          'T',        'IRON_MAKING'),
+        ('raw',  10, 'O2 Enrichment',   '%',        'IRON_MAKING'),
+        ('raw',  11, 'Slag Rate',       'Kg/THM',   'IRON_MAKING'),
+        ('raw',  12, 'Sinter%',         '%',        'IRON_MAKING'),
+    ]
+    TABLE_DATA = {'prod': prod_rows, 'fuel': fuel_rows, 'raw': raw_rows}
+    FURNACES = ['BF-1', 'BF-2', 'BF-4', 'BF-5', 'BF Shop']
+
+    # ── Build techno_param_rows ───────────────────────────────────────────────
+    rows_out = []
+    sort_idx = 0
+    for fce in FURNACES:
+        for tbl, col_idx, param, unit, group in PARAMS:
+            cols = TABLE_DATA[tbl].get(fce, [])
+            val = _monthly(cols[col_idx]) if col_idx < len(cols) else None
+            rows_out.append({
+                'group_code':  group,
+                'section':     fce,
+                'parameter':   param,
+                'unit':        unit,
+                'actual':      val,
+                'cum_actual':  None,
+                'sort_order':  sort_idx * 10,
+                'cell':        f'PDF {tbl}-table col-{col_idx}',
+                'file_label':  param,
+                'plant':       'BSL',
+                'month':       report_month,
+                'found_via':   f'BSL BF PDF ({tbl} table, col {col_idx})',
+                'status':      'ok' if val is not None else 'skip',
+            })
+            sort_idx += 1
+
+    ok = sum(1 for r in rows_out if r['status'] == 'ok')
+    logger.info("BSL BF PDF: %d/%d rows ok for %s", ok, len(rows_out), report_month)
+
+    if ok == 0:
+        raise ValueError(
+            "No BF performance values extracted. "
+            "Verify this is a BSL BF Performance & Analysis Report PDF with "
+            "'Productivty'/'W.V./24h', 'COKE RATE'/'CDI RATE', and 'O2 En(%)'/'SLG RATE' tables."
+        )
+
+    return {
+        'source_type':        'BSL BF Performance & Analysis Report (PDF)',
+        'month':              report_month,
+        'plant':              'BSL',
+        'workbook_sheets':    ['PDF'],
+        'production_rows':    [],
+        'techno_rows':        [],
+        'techno_param_rows':  rows_out,
+        'special_steel_rows': [],
+    }
+
+
+def _extract_dpr_preview(wb, report_month: str) -> dict:
+    """Preview BSL DPR Mail report (sheet 'DPR') — no DB writes."""
+    ws = wb["DPR"]
+
+    # Auto-detect month from O1 (Excel datetime or DD.MM.YYYY string)
+    o1_raw = ws["O1"].value
+    db_month = None
+    if isinstance(o1_raw, datetime):
+        db_month = f"{o1_raw.year}-{str(o1_raw.month).zfill(2)}"
+    elif o1_raw:
+        m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", str(o1_raw))
+        if m:
+            db_month = f"{m.group(3)}-{m.group(2)}"
+    db_month = db_month or report_month
+    if not db_month:
+        raise ValueError("Cannot determine report month: cell O1 is empty and no month supplied.")
+
+    logger.info("BSL DPR preview: month from O1 → %s", db_month)
+
+    NO_CONVERT = {"Oven Pushing(nos/d)"}
+    CELL_MAP = {
+        "Oven Pushing(nos/d)": "P6",
+        "Total Sinter":        "P7",
+        "Hot Metal":           "P8",
+        "Pig Iron":            "E30",
+        "SMS-1 CCM-1":         "P10",
+        "SMS-2 CCM-1&2":       "P11",
+        "Total Crude Steel":   "P12",
+        "HSM Total HR Coil":   "P14",
+        "HSM HR Coil (Sale)":  "E7",
+        "HSM HR Plate":        "E8",
+        "HR Sheet":            "E9",
+        "CRC&S(1&2)":          "E10",
+        "CRC(3)":              "E11",
+        "GP/GC":               "E12",
+        "GPC3":                "E13",
+        "CRSALE":              "E29",
+        "Saleable Steel":      "P31",
+        "Saleable Semis":      "E32",
+    }
+
+    rows = []
+    for item_name, addr in CELL_MAP.items():
+        raw = clean_val(ws[addr].value)
+        if raw is not None:
+            if item_name in NO_CONVERT:
+                stored, unit = raw, "nos/d"
+            else:
+                stored, unit = round(raw / 1000.0, 3), "'000T"
+            rows.append({"item_name": item_name, "value": stored, "unit": unit,
+                         "cell": f"DPR!{addr}", "pdf_label": addr, "status": "ok"})
+        else:
+            unit = "nos/d" if item_name in NO_CONVERT else "'000T"
+            rows.append({"item_name": item_name, "value": None, "unit": unit,
+                         "cell": f"DPR!{addr}", "pdf_label": addr, "status": "skip"})
+
+    # Derived: Finished Steel = Saleable Steel (P31) − Saleable Semis (E32)
+    sal = clean_val(ws["P31"].value)
+    sem = clean_val(ws["E32"].value)
+    if sal is not None and sem is not None:
+        rows.append({"item_name": "Finished Steel",
+                     "value": round((sal - sem) / 1000.0, 3), "unit": "'000T",
+                     "cell": "DPR!P31-E32 (computed)", "pdf_label": "P31-E32", "status": "ok"})
+    elif sal is not None:
+        rows.append({"item_name": "Finished Steel",
+                     "value": round(sal / 1000.0, 3), "unit": "'000T",
+                     "cell": "DPR!P31 (semis missing)", "pdf_label": "P31", "status": "ok"})
+
+    ok = sum(1 for r in rows if r["status"] == "ok")
+    logger.info("BSL DPR preview: %d/%d ok for %s", ok, len(rows), db_month)
+
+    if ok == 0:
+        raise ValueError(
+            "No values found at expected cell locations in DPR sheet. "
+            "Verify this is a BSL DPR Mail file (sheet 'DPR', date in O1)."
+        )
+
+    return {
+        "source_type":        "BSL DPR Mail (Month-End)",
+        "month":              db_month,
+        "plant":              "BSL",
+        "workbook_sheets":    list(wb.sheetnames),
+        "production_rows":    rows,
+        "techno_rows":        [],
+        "techno_param_rows":  [],
+        "special_steel_rows": [],
+    }
+
+
 def extract_preview(file_path: str, report_month: str) -> dict:
     """
     Extract BSL data — auto-detects file type:
+
+    • BF Performance & Analysis Report (.pdf)
+      → techno_param_rows populated with BF-wise Productivity, Coke Rate, etc.
+
+    • DPR Mail Month-End Report (.xlsx, sheet 'DPR')
+      → production_rows populated with ~19 production items.
 
     • Corporate Office Special Steel Report (.xlsx, Sheet1 with "SPECIAL STEEL" title)
       → special_steel_rows populated; monthly actual = Despatch Till Date − Actual Up To Last Month.
@@ -569,9 +837,16 @@ def extract_preview(file_path: str, report_month: str) -> dict:
 
     Returns a preview dict compatible with /api/confirm-extraction.
     """
+    if file_path.lower().endswith('.pdf'):
+        return extract_preview_bf_pdf(file_path, report_month)
+
     wb = _open_wb(file_path)
 
-    # ── Route 1: Corporate Office Special Steel Report ────────────────────
+    # ── Route 1: DPR Mail Month-End Report ───────────────────────────────
+    if "DPR" in wb.sheetnames:
+        return _extract_dpr_preview(wb, report_month)
+
+    # ── Route 2: Corporate Office Special Steel Report ────────────────────
     if _is_corp_ss_file(wb):
         return _extract_corp_ss_preview(wb, report_month)
 

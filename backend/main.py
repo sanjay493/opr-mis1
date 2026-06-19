@@ -418,6 +418,177 @@ async def upload_excel_plan(
 
 
 # ---------------------------------------------------------------------------
+# ABP Plan: preview (no DB write) + confirm (insert into production_plan_table)
+# ---------------------------------------------------------------------------
+
+_PLAN_PREVIEW_PLANTS = ("RSP", "ISP", "BSP", "DSP", "BSL", "ASP_SSP_VISL", "ASP")
+_PLAN_EXCEL_PLANTS   = ("RSP", "ISP", "BSP", "DSP", "BSL", "ASP_SSP_VISL")
+_PLAN_UNIT_OVERRIDE  = {"Oven Pushing(nos/d)": "nos/d"}   # all other items → '000T
+
+_PLAN_TABLE_DDL = """
+CREATE TABLE IF NOT EXISTS production_plan_table (
+    report_month TEXT NOT NULL,
+    plant_name   TEXT NOT NULL,
+    item_name    TEXT NOT NULL,
+    month_actual REAL,
+    PRIMARY KEY (report_month, plant_name, item_name)
+)"""
+
+
+@app.post("/api/preview-plan")
+async def preview_plan(
+    file: UploadFile = File(...),
+    plant_name: str = Form(...),
+    financial_year: str = Form(...),
+):
+    """Extract ABP plan rows without writing to the real DB.
+    Returns plan_rows ready for display; caller confirms via /api/confirm-plan."""
+    import shutil, tempfile, sys, asyncio, concurrent.futures, sqlite3 as _sql
+
+    if plant_name not in _PLAN_PREVIEW_PLANTS:
+        raise HTTPException(status_code=400,
+                            detail=f"Plan preview not supported for plant '{plant_name}'.")
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename or "")[1] or (".pdf" if plant_name == "ASP" else ".xlsx")
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+        loop = asyncio.get_running_loop()
+
+        if plant_name == "ASP":
+            # ASP ABP Plan is a PDF — use existing PDF preview extractor
+            import excel_extractor_asp_ssp_visl_plan as _asp_mod
+            fy_start = int(financial_year.split("-")[0])
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool, lambda: _asp_mod.extract_preview_pdf(tmp_path, f"{fy_start}-04"))
+            return result
+
+        # Excel plants — redirect writes to a temp SQLite, then read back rows
+        tmp_db_fd, tmp_db_path = tempfile.mkstemp(suffix=".db", dir=temp_dir)
+        os.close(tmp_db_fd)
+        try:
+            # Set up minimal schema in the temp DB
+            _c = _sql.connect(tmp_db_path)
+            _c.execute(_PLAN_TABLE_DDL)
+            _c.commit()
+            _c.close()
+
+            # Load module and patch its DB_PATH to the temp file
+            if plant_name == "RSP":
+                import excel_extractor_rsp_plan as _mod
+            elif plant_name == "ISP":
+                import excel_extractor_isp_plan as _mod
+            elif plant_name == "BSP":
+                import excel_extractor_bsp_plan as _mod
+            elif plant_name == "BSL":
+                import excel_extractor_bsl_plan as _mod
+            elif plant_name == "ASP_SSP_VISL":
+                import excel_extractor_asp_ssp_visl_plan as _mod
+            else:
+                import excel_extractor_dsp_plan as _mod
+
+            orig_db = _mod.DB_PATH
+            _mod.DB_PATH = tmp_db_path
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    ok = await loop.run_in_executor(
+                        pool, lambda: _mod.extract_and_save_excel_plan(tmp_path, financial_year))
+                if not ok:
+                    raise Exception(f"{plant_name} plan extractor returned failure.")
+            finally:
+                _mod.DB_PATH = orig_db
+
+            # Read written rows from the temp DB
+            _c = _sql.connect(tmp_db_path)
+            rows = _c.execute(
+                "SELECT plant_name, item_name, report_month, month_actual "
+                "FROM production_plan_table "
+                "ORDER BY plant_name, item_name, report_month"
+            ).fetchall()
+            _c.close()
+
+            plan_rows = [
+                {
+                    "item_name": r[1],
+                    "month":     r[2],
+                    "value":     r[3],
+                    "unit":      _PLAN_UNIT_OVERRIDE.get(r[1], "'000T"),
+                    "plant":     r[0],
+                    "status":    "ok" if r[3] is not None else "skip",
+                }
+                for r in rows
+            ]
+            ok_count = sum(1 for r in plan_rows if r["status"] == "ok")
+            if ok_count == 0:
+                raise ValueError(f"No data extracted from {plant_name} plan file.")
+
+            return {
+                "plant":          plant_name,
+                "financial_year": financial_year,
+                "plan_rows":      plan_rows,
+                "source_type":    f"{plant_name} ABP Plan Excel",
+                "sheets":         "",
+                "workbook_sheets": [],
+            }
+        finally:
+            try:
+                os.unlink(tmp_db_path)
+            except Exception:
+                pass
+
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+@app.post("/api/confirm-plan")
+async def confirm_plan(payload: dict):
+    """Insert confirmed ABP plan rows into production_plan_table."""
+    plan_rows = payload.get("plan_rows", [])
+    if not plan_rows:
+        raise HTTPException(status_code=400, detail="No plan rows provided.")
+    try:
+        DB_PATH = db.DB_PATH
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        saved = 0
+        for r in plan_rows:
+            if r.get("status") != "ok" or r.get("value") is None:
+                continue
+            cur.execute("""
+                INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(report_month, plant_name, item_name)
+                DO UPDATE SET month_actual = excluded.month_actual
+            """, (r["month"], r.get("plant", ""), r["item_name"], r["value"]))
+            saved += 1
+        conn.commit()
+        conn.close()
+        return {
+            "status":  "success",
+            "saved":   saved,
+            "message": f"Inserted {saved} plan rows into production_plan_table.",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
 # Unified RSP extraction (preview → confirm → insert into respective tables)
 # ---------------------------------------------------------------------------
 
@@ -434,7 +605,7 @@ async def extract_preview_endpoint(
     import tempfile
     import sys
 
-    if plant_name not in ("RSP", "DSP", "ISP", "BSP", "BSP-OISCO", "BSP-Spstl", "ASP", "BSL"):
+    if plant_name not in ("RSP", "DSP", "ISP", "BSP", "ASP", "SSP", "VISL", "BSL", "ASP-Plan"):
         raise HTTPException(status_code=400,
                             detail=f"Preview extraction not supported for {plant_name}.")
 
@@ -479,8 +650,8 @@ async def extract_preview_endpoint(
                     pool,
                     lambda: excel_extractor_isp.extract_preview(tmp_path, month)
                 )
-        elif plant_name in ("BSP", "BSP-OISCO", "BSP-Spstl"):
-            # Unified BSP extractor — auto-detects: 3-page-Tech / OISCO / Special Steel
+        elif plant_name == "BSP":
+            # Unified BSP extractor — auto-detects: Special Steel / OISCO / 3-page-Tech
             import excel_extractor_bsp as _bsp_mod
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 result = await loop.run_in_executor(
@@ -497,6 +668,27 @@ async def extract_preview_endpoint(
                 result = await loop.run_in_executor(
                     pool,
                     lambda: _asp_mod.extract_preview(tmp_path, month)
+                )
+        elif plant_name == "SSP":
+            import pdf_extractor_ssp as _ssp_mod
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: _ssp_mod.extract_preview(tmp_path, month)
+                )
+        elif plant_name == "VISL":
+            import pdf_extractor_visl as _visl_mod
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: _visl_mod.extract_preview(tmp_path, month)
+                )
+        elif plant_name == "ASP-Plan":
+            import excel_extractor_asp_ssp_visl_plan as _asp_plan_mod
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    lambda: _asp_plan_mod.extract_preview_pdf(tmp_path, month)
                 )
         elif plant_name == "BSL":
             import excel_extractor_bsl as _bsl_mod
@@ -549,15 +741,15 @@ async def extract_preview_endpoint(
 @app.post("/api/confirm-extraction")
 async def confirm_extraction(payload: dict):
     """Insert user-confirmed preview rows into their respective tables:
-    production_rows → production_table, techno_rows → techno_table,
-    techno_param_rows → techno_param_master / techno_monthly."""
+    production_rows → production_table, plan_rows → production_plan_table,
+    techno_rows → techno_table, techno_param_rows → techno_param_master / techno_monthly."""
     try:
         month = payload.get("month")
         plant = payload.get("plant", "RSP")
         if not month:
             raise HTTPException(status_code=400, detail="month is required")
 
-        saved_prod = saved_te = saved_mill = 0
+        saved_prod = saved_plan = saved_te = saved_mill = 0
 
         conn = sqlite3.connect(db.DB_PATH)
         cur = conn.cursor()
@@ -571,6 +763,17 @@ async def confirm_extraction(payload: dict):
                 """, (month, plant, r.get("item_name"), r.get("value")))
                 if r.get("value") is not None:
                     saved_prod += 1
+
+            for r in payload.get("plan_rows", []):
+                if r.get("status") != "ok" or r.get("value") is None:
+                    continue
+                cur.execute("""
+                    INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(report_month, plant_name, item_name)
+                    DO UPDATE SET month_actual = excluded.month_actual
+                """, (r["month"], r.get("plant", plant), r["item_name"], r["value"]))
+                saved_plan += 1
 
             for r in payload.get("techno_rows", []):
                 cur.execute("""
@@ -618,18 +821,19 @@ async def confirm_extraction(payload: dict):
             )
             saved_ss += 1
 
-        total = saved_prod + saved_te + saved_mill + saved_ss
+        total = saved_prod + saved_plan + saved_te + saved_mill + saved_ss
         if total:
             db.log_extraction(plant, month, payload.get("file_name", ""),
                               payload.get("sheets", ""),
                               payload.get("source_type", "Preview Confirmed"), total)
-        msg = (f"Inserted {saved_prod} production, {saved_te} techno, "
+        msg = (f"Inserted {saved_prod} production, {saved_plan} plan, {saved_te} techno, "
                f"{saved_mill} mill techno, {saved_ss} special steel values for {plant} {month}.")
         if saved_aliases:
             msg += f" Remembered {saved_aliases} item-name mapping(s) for future extractions."
         return {
             "status": "success",
             "saved_production": saved_prod,
+            "saved_plan": saved_plan,
             "saved_techno": saved_te,
             "saved_mill_techno": saved_mill,
             "saved_special_steel": saved_ss,

@@ -603,8 +603,13 @@ def _detect_3page_month_from_file(ws) -> Optional[str]:
 
 
 def _extract_techno_3page_preview(wb, file_path: str, report_month: str) -> dict:
-    """Extract BSP techno params from 3-page-Tech.xlsx."""
-    ws = wb["Sheet1"] if "Sheet1" in wb.sheetnames else wb.active
+    """Extract BSP techno params from 3-page-Tech.xlsx or S2 sheet of PPC MIS."""
+    if "Sheet1" in wb.sheetnames:
+        ws = wb["Sheet1"]
+    elif "S2" in wb.sheetnames:
+        ws = wb["S2"]
+    else:
+        ws = wb.active
 
     m_num: Optional[str] = None
     y_str: Optional[str] = None
@@ -787,6 +792,84 @@ def _extract_oisco_preview(wb, report_month: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Section 1b — BSP PPC MIS preview (S1 production + S2 techno)
+# ---------------------------------------------------------------------------
+
+def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
+    """Preview BSP PPC MIS .xls: production from sheet S1 only."""
+
+    wb_raw = xlrd.open_workbook(file_path)
+    ws_s1 = wb_raw.sheet_by_name("S1")
+
+    n1_raw = ws_s1.cell_value(0, 13)
+    if n1_raw and isinstance(n1_raw, float) and n1_raw > 0:
+        y, m, *_ = xlrd.xldate_as_tuple(n1_raw, wb_raw.datemode)
+        db_month = f"{y}-{m:02d}"
+        logger.info("BSP PPC MIS preview: month from S1!N1 → %s", db_month)
+    elif report_month:
+        db_month = report_month
+    else:
+        db_month = "unknown"
+
+    COL_F, COL_J, COL_N = 5, 9, 13
+    _PROD_CELLS = [
+        ("COB#1-8",             3,  COL_F, False, "F4"),
+        ("Oven Pushing(nos/d)", 5,  COL_F, False, "F6"),
+        ("SP-2",                7,  COL_F, True,  "F8"),
+        ("SP-3",                8,  COL_F, True,  "F9"),
+        ("Total Sinter",        9,  COL_F, True,  "F10"),
+        ("BF#1-7",              10, COL_F, True,  "F11"),
+        ("BF#8",                11, COL_F, True,  "F12"),
+        ("Hot Metal",           12, COL_F, True,  "F13"),
+        ("SMS-2",               13, COL_F, True,  "F14"),
+        ("SMS-3",               15, COL_F, True,  "F16"),
+        ("Total Crude Steel",   16, COL_F, True,  "F17"),
+        ("RSM_RAIL",            17, COL_F, True,  "F18"),
+        ("URM_RAIL",            21, COL_F, True,  "F22"),
+        ("MM",                  23, COL_F, True,  "F24"),
+        ("WIRERODS",            24, COL_F, True,  "F25"),
+        ("BARS&RODMILL",        25, COL_F, True,  "F26"),
+        ("PLATEMILL",           26, COL_F, True,  "F27"),
+        ("Finished Steel",      27, COL_F, True,  "F28"),
+        ("Saleable Semis",      34, COL_F, True,  "F35"),
+        ("Saleable Steel",      35, COL_F, True,  "F36"),
+        ("RSMPRIME",            38, COL_F, True,  "F39"),
+        ("URMPRIME",            38, COL_J, True,  "J39"),
+        ("Pig Iron",            62, COL_N, True,  "N63"),
+    ]
+
+    production_rows = []
+    for item_name, row_0, col_0, do_convert, cell_ref in _PROD_CELLS:
+        raw = ws_s1.cell_value(row_0, col_0)
+        val = _clean(raw)
+        if val is not None and do_convert:
+            val = round(val / 1000.0, 3)
+        unit = "nos/d" if not do_convert else "'000T"
+        production_rows.append({
+            "item_name": item_name,
+            "value": val,
+            "unit": unit,
+            "cell": f"S1!{cell_ref}",
+            "pdf_label": cell_ref,
+            "status": "ok" if val is not None else "skip",
+        })
+
+    ok_prod = sum(1 for r in production_rows if r["status"] == "ok")
+    logger.info("BSP PPC MIS preview: %d/%d production rows ok for %s", ok_prod, len(production_rows), db_month)
+
+    return {
+        "source_type":        "BSP PPC MIS Monthly Report",
+        "month":              db_month,
+        "plant":              "BSP",
+        "workbook_sheets":    wb_raw.sheet_names(),
+        "production_rows":    production_rows,
+        "techno_rows":        [],
+        "techno_param_rows":  [],
+        "special_steel_rows": [],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Unified preview entry point (auto-detects file type)
 # ---------------------------------------------------------------------------
 
@@ -794,11 +877,16 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     """Unified BSP preview — auto-detects file type. No DB writes.
 
     Detection priority:
-      1. BSP Special Steel → sheet 'CORP' with 'BHILAI STEEL PLANT' in R3C1
-      2. OISCO Techno      → R3C3 contains 'TECHNO ECONOMIC PARAMETERS'
-      3. BSP 3-page-Tech   → default (Sheet1 with month name in R3C1)
+      1. BSP PPC MIS       → sheet 'S1' present (.xls monthly report)
+      2. BSP Special Steel → sheet 'CORP' with 'BHILAI STEEL PLANT' in R3C1
+      3. OISCO Techno      → R3C3 contains 'TECHNO ECONOMIC PARAMETERS'
+      4. BSP 3-page-Tech   → default (Sheet1 with month name in R3C1)
     """
     wb = _open_workbook(file_path)
+
+    if "S1" in wb.sheetnames:
+        logger.info("BSP: detected PPC MIS file (sheet S1) — production only")
+        return _extract_ppc_mis_preview(file_path, report_month)
 
     if _is_bsp_ss_file(wb):
         logger.info("BSP: detected Special Steel file (sheet CORP)")
