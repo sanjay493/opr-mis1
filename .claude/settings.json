@@ -36,7 +36,8 @@
       "Bash(python -c \"import fastapi, uvicorn; print\\('ok'\\)\")",
       "PowerShell(\\(Get-Command python3 -ErrorAction SilentlyContinue\\).Source; \\(Get-Command py -ErrorAction SilentlyContinue\\).Source; Get-ChildItem \"C:\\\\Users\\\\sanja\\\\AppData\\\\Local\\\\Programs\\\\Python\" -ErrorAction SilentlyContinue | Select-Object Name)",
       "PowerShell($py = \"C:\\\\Users\\\\sanja\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\"; & $py -c \"import uvicorn, fastapi; print\\('OK'\\)\" 2>&1)",
-      "Read(//c/Temp/**)"
+      "Read(//c/Temp/**)",
+      "Bash(backend/venv/Scripts/python.exe -c ' *)"
     ]
   }
 }

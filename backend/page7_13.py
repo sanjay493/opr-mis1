@@ -246,6 +246,22 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         if plant in act_data:
             act_data[plant][rm] = val
 
+    # For Finished Steel: patch SSP/VISL from Saleable Steel where FS is absent.
+    _FS_ALIAS = frozenset({"SSP", "VISL"})
+    if db_item == "Finished Steel":
+        alias_in_query = [p for p in all_plants if p in _FS_ALIAS]
+        if alias_in_query:
+            aphs = ",".join("?" for _ in alias_in_query)
+            cur.execute(
+                f"SELECT plant_name, report_month, month_actual FROM production_table "
+                f"WHERE item_name='Saleable Steel' AND plant_name IN ({aphs}) "
+                f"AND report_month>=? AND report_month<=?",
+                alias_in_query + [min_act, max_act],
+            )
+            for plant, rm, val in cur.fetchall():
+                if plant in act_data and rm not in act_data[plant]:
+                    act_data[plant][rm] = val
+
     cur.execute(
         f"SELECT plant_name, report_month, month_actual FROM production_plan_table "
         f"WHERE item_name=? AND plant_name IN ({phs}) "
@@ -256,6 +272,20 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     for plant, rm, val in cur.fetchall():
         if plant in plan_data:
             plan_data[plant][rm] = val
+
+    if db_item == "Finished Steel":
+        alias_in_query = [p for p in all_plants if p in _FS_ALIAS]
+        if alias_in_query:
+            aphs = ",".join("?" for _ in alias_in_query)
+            cur.execute(
+                f"SELECT plant_name, report_month, month_actual FROM production_plan_table "
+                f"WHERE item_name='Saleable Steel' AND plant_name IN ({aphs}) "
+                f"AND report_month>=? AND report_month<=?",
+                alias_in_query + [plan_min, plan_max],
+            )
+            for plant, rm, val in cur.fetchall():
+                if plant in plan_data and rm not in plan_data[plant]:
+                    plan_data[plant][rm] = val
 
     sail_act_direct  = {}
     sail_plan_direct = {}

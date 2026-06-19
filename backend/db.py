@@ -236,17 +236,82 @@ def get_cply_month(report_month: str) -> str:
     except (ValueError, IndexError):
         return report_month
 
+# For SSP and VISL, Finished Steel = Saleable Steel (same data, no separate BF/SMS).
+# Whenever "Finished Steel" is queried for these plants and no dedicated row exists,
+# the query falls back to "Saleable Steel".
+_FS_ALIAS_PLANTS = ('SSP', 'VISL')
+
+
+def _fs_alias_sum(cursor, tbl: str, month: str, plants: list) -> Optional[float]:
+    """
+    Sum 'Finished Steel' across plants with SSP/VISL fallback to 'Saleable Steel'.
+    Regular plants use a single bulk query; SSP/VISL try FS first then SS.
+    """
+    regular = [p for p in plants if p not in _FS_ALIAS_PLANTS]
+    alias   = [p for p in plants if p in _FS_ALIAS_PLANTS]
+
+    total, found = 0.0, False
+
+    if regular:
+        phs = ",".join("?" for _ in regular)
+        cursor.execute(
+            f"SELECT SUM(month_actual) FROM {tbl} "
+            f"WHERE report_month=? AND plant_name IN ({phs}) AND item_name='Finished Steel'",
+            [month] + regular,
+        )
+        r = cursor.fetchone()
+        if r and r[0] is not None:
+            total += r[0]
+            found = True
+
+    for p in alias:
+        cursor.execute(
+            f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name='Finished Steel'",
+            (month, p),
+        )
+        r = cursor.fetchone()
+        if r and r[0] is not None:
+            total += r[0]
+            found = True
+        else:
+            cursor.execute(
+                f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name='Saleable Steel'",
+                (month, p),
+            )
+            r = cursor.fetchone()
+            if r and r[0] is not None:
+                total += r[0]
+                found = True
+
+    return total if found else None
+
+
 def get_sail_production_actual(month: str, item: str) -> Optional[float]:
     """Calculates the sum of actuals across active plants. Falls back to explicit 'SAIL' record if none found."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    if item == "Finished Steel":
+        result = _fs_alias_sum(cursor, "production_table", month, PLANTS)
+        if result is not None:
+            conn.close()
+            return result
+        # Fallback to direct SAIL record
+        cursor.execute(
+            "SELECT month_actual FROM production_table WHERE report_month=? AND plant_name='SAIL' AND item_name='Finished Steel'",
+            (month,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else None
+
     placeholders = ",".join("?" for _ in PLANTS)
     query = f"""
-        SELECT SUM(month_actual) 
-        FROM production_table 
-        WHERE report_month = ? 
-          AND plant_name IN ({placeholders}) 
+        SELECT SUM(month_actual)
+        FROM production_table
+        WHERE report_month = ?
+          AND plant_name IN ({placeholders})
           AND item_name = ?
     """
     cursor.execute(query, [month] + PLANTS + [item])
@@ -254,11 +319,11 @@ def get_sail_production_actual(month: str, item: str) -> Optional[float]:
     if row and row[0] is not None:
         conn.close()
         return row[0]
-        
+
     # Fallback to explicit 'SAIL' record
     cursor.execute("""
-        SELECT month_actual 
-        FROM production_table 
+        SELECT month_actual
+        FROM production_table
         WHERE report_month = ? AND plant_name = 'SAIL' AND item_name = ?
     """, (month, item))
     row = cursor.fetchone()
@@ -270,12 +335,26 @@ def get_sail_production_plan(month: str, item: str) -> Optional[float]:
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    if item == "Finished Steel":
+        result = _fs_alias_sum(cursor, "production_plan_table", month, PLANTS)
+        if result is not None:
+            conn.close()
+            return result
+        cursor.execute(
+            "SELECT month_actual FROM production_plan_table WHERE report_month=? AND plant_name='SAIL' AND item_name='Finished Steel'",
+            (month,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else None
+
     placeholders = ",".join("?" for _ in PLANTS)
     query = f"""
-        SELECT SUM(month_actual) 
-        FROM production_plan_table 
-        WHERE report_month = ? 
-          AND plant_name IN ({placeholders}) 
+        SELECT SUM(month_actual)
+        FROM production_plan_table
+        WHERE report_month = ?
+          AND plant_name IN ({placeholders})
           AND item_name = ?
     """
     cursor.execute(query, [month] + PLANTS + [item])
@@ -283,11 +362,11 @@ def get_sail_production_plan(month: str, item: str) -> Optional[float]:
     if row and row[0] is not None:
         conn.close()
         return row[0]
-        
+
     # Fallback to explicit 'SAIL' record
     cursor.execute("""
-        SELECT month_actual 
-        FROM production_plan_table 
+        SELECT month_actual
+        FROM production_plan_table
         WHERE report_month = ? AND plant_name = 'SAIL' AND item_name = ?
     """, (month, item))
     row = cursor.fetchone()
@@ -301,13 +380,24 @@ def get_sail_production_ytd_actual(months: List[str], item: str) -> Optional[flo
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    if item == "Finished Steel":
+        total, found = 0.0, False
+        for m in months:
+            v = _fs_alias_sum(cursor, "production_table", m, PLANTS)
+            if v is not None:
+                total += v
+                found = True
+        conn.close()
+        return total if found else None
+
     plant_placeholders = ",".join("?" for _ in PLANTS)
     month_placeholders = ",".join("?" for _ in months)
     query = f"""
-        SELECT SUM(month_actual) 
-        FROM production_table 
-        WHERE report_month IN ({month_placeholders}) 
-          AND plant_name IN ({plant_placeholders}) 
+        SELECT SUM(month_actual)
+        FROM production_table
+        WHERE report_month IN ({month_placeholders})
+          AND plant_name IN ({plant_placeholders})
           AND item_name = ?
     """
     cursor.execute(query, months + PLANTS + [item])
@@ -315,13 +405,13 @@ def get_sail_production_ytd_actual(months: List[str], item: str) -> Optional[flo
     if row and row[0] is not None:
         conn.close()
         return row[0]
-        
+
     # Fallback: Sum explicit 'SAIL' records across months
     query = f"""
-        SELECT SUM(month_actual) 
-        FROM production_table 
-        WHERE report_month IN ({month_placeholders}) 
-          AND plant_name = 'SAIL' 
+        SELECT SUM(month_actual)
+        FROM production_table
+        WHERE report_month IN ({month_placeholders})
+          AND plant_name = 'SAIL'
           AND item_name = ?
     """
     cursor.execute(query, months + [item])
@@ -336,13 +426,24 @@ def get_sail_production_ytd_plan(months: List[str], item: str) -> Optional[float
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    if item == "Finished Steel":
+        total, found = 0.0, False
+        for m in months:
+            v = _fs_alias_sum(cursor, "production_plan_table", m, PLANTS)
+            if v is not None:
+                total += v
+                found = True
+        conn.close()
+        return total if found else None
+
     plant_placeholders = ",".join("?" for _ in PLANTS)
     month_placeholders = ",".join("?" for _ in months)
     query = f"""
-        SELECT SUM(month_actual) 
-        FROM production_plan_table 
-        WHERE report_month IN ({month_placeholders}) 
-          AND plant_name IN ({plant_placeholders}) 
+        SELECT SUM(month_actual)
+        FROM production_plan_table
+        WHERE report_month IN ({month_placeholders})
+          AND plant_name IN ({plant_placeholders})
           AND item_name = ?
     """
     cursor.execute(query, months + PLANTS + [item])
@@ -350,13 +451,13 @@ def get_sail_production_ytd_plan(months: List[str], item: str) -> Optional[float
     if row and row[0] is not None:
         conn.close()
         return row[0]
-        
+
     # Fallback: Sum explicit 'SAIL' records across months
     query = f"""
-        SELECT SUM(month_actual) 
-        FROM production_plan_table 
-        WHERE report_month IN ({month_placeholders}) 
-          AND plant_name = 'SAIL' 
+        SELECT SUM(month_actual)
+        FROM production_plan_table
+        WHERE report_month IN ({month_placeholders})
+          AND plant_name = 'SAIL'
           AND item_name = ?
     """
     cursor.execute(query, months + [item])

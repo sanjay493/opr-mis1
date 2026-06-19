@@ -14,3 +14,9 @@ git rm --cached mis_reports.db
 git rm --cached backend/mis_reports.db
 git add .gitignore
 git commit -m "Remove database files from tracking"
+
+
+sqlite3 D:\opr-mis1\backend\mis_reports.db "SELECT * FROM production_table WHERE report_month in ('2025-04','2025-05','2026-04','2026-05') AND plant_name='SSP';"
+
+
+ sqlite3 D:\opr-mis1\backend\mis_reports.db "SELECT * FROM production_plan_table WHERE report_month='2026-04' AND plant_name='SSP';"

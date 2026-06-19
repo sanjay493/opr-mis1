@@ -25,7 +25,7 @@ _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
 # ── REP report: keyword → (item_name in production_table, search_alternatives)
 _REP_ITEMS = [
     # keyword (lowercase)    item_name                 alternatives
-    ("crude steel",          "Total Crude Steel",      ["total crude"]),
+    ("crude steel",          "Total Crude Steel",      ["total crude","CRUDE"]),
     ("concast",              "Total Caster",           ["cc steel", "continuous cast"]),
     ("ingot",                "Ingot Steel",            ["ingot steel"]),
     ("saleable steel",       "Saleable Steel",         ["saleable"]),

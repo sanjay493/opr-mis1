@@ -294,6 +294,8 @@ export default function UploadPage() {
   const [technoFile, setTechnoFile] = useState(null);
   const [technoPreview, setTechnoPreview] = useState(null);
   const [prodRows, setProdRows] = useState([]);   // editable copy of production_rows
+  const [planPreview, setPlanPreview] = useState(null);   // ABP Plan tab preview
+  const [isPlanBusy, setIsPlanBusy] = useState(false);
   const [ssRows, setSsRows] = useState([]);       // editable copy of special_steel_rows
   const [isTechnoBusy, setIsTechnoBusy] = useState(false);
 
@@ -422,6 +424,40 @@ export default function UploadPage() {
           (result.columns_detected ? ' (auto-detected)' : ' (defaults)') + ` — shops: ${result.shops_found.join(', ')}`);
       }
       addLog('success', `Extracted: ${prodOk} production, ${teOk} techno, ${millOk} mill techno values. Review below, then Insert.`);
+
+      // Compute Pellet% in Burden for BF-wise data (BSL BF PDF)
+      if ((result.techno_param_rows || []).some(r => r.parameter === 'Pellet')) {
+        const orig = result.techno_param_rows || [];
+        // Pre-build section → param → value map for computation
+        const secVals = {};
+        orig.forEach(r => {
+          if (!secVals[r.section]) secVals[r.section] = {};
+          secVals[r.section][r.parameter] = r.actual ?? 0;
+        });
+        // Insert a Pellet% row immediately after each Pellet row
+        const augmented = [];
+        orig.forEach(r => {
+          augmented.push(r);
+          if (r.parameter === 'Pellet') {
+            const v = secVals[r.section] || {};
+            const total = (v['Iron Ore'] ?? 0) + (v['Sinter'] ?? 0) + (v['Scrap'] ?? 0) + (v['Pellet'] ?? 0);
+            const pct = total > 0 ? Math.round((v['Pellet'] ?? 0) / total * 1000) / 10 : null;
+            augmented.push({
+              group_code: r.group_code, section: r.section,
+              parameter: 'Pellet% in Burden', unit: '%',
+              actual: pct, cum_actual: null,
+              sort_order: (r.sort_order || 0) + 5,
+              cell: 'computed: Pellet÷(IronOre+Sinter+Scrap+Pellet)×100',
+              file_label: 'Pellet% in Burden',
+              plant: r.plant, month: r.month,
+              found_via: 'frontend computed',
+              status: pct !== null ? 'ok' : 'skip',
+            });
+          }
+        });
+        result = { ...result, techno_param_rows: augmented };
+      }
+
       setTechnoPreview(result);
       setProdRows((result.production_rows || []).map((r) => ({
         ...r,
@@ -767,51 +803,62 @@ export default function UploadPage() {
   const editDspSsSection = (idx, val) =>
     setDspSsRows((prev) => prev.map((r, i) => (i === idx ? { ...r, section_edit: val } : r)));
 
-  const handlePlanUpload = async (e) => {
+  const handlePlanExtract = async (e) => {
     e.preventDefault();
     if (!uploadPlanFile) {
-      alert("Please select a Plan Excel file to upload.");
+      alert('Please select a Plan file to upload.');
       return;
     }
-
-    setIsUploading(true);
-    
-    setLogs([]);
-    addLog('info', `Starting ABP Plan extraction job for ${uploadPlanPlantName} (${uploadPlanFY})...`);
-    addLog('info', `Validating plan spreadsheet: ${uploadPlanFile.name} (${(uploadPlanFile.size / 1024).toFixed(1)} KB)`);
-
-    const formData = new FormData();
-    formData.append("file", uploadPlanFile);
-    formData.append("plant_name", uploadPlanPlantName);
-    formData.append("financial_year", uploadPlanFY);
-
+    setIsPlanBusy(true);
+    addLog('info', `Extracting ABP Plan for ${uploadPlanPlantName} (${uploadPlanFY})…`);
+    const fd = new FormData();
+    fd.append('file', uploadPlanFile);
+    fd.append('plant_name', uploadPlanPlantName);
+    fd.append('financial_year', uploadPlanFY);
     try {
-      addLog('info', 'Uploading plan spreadsheet file to FastAPI backend...');
-      const response = await fetch(`${API_BASE_URL}/api/upload-excel-plan`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const result = await response.json();
-      if (response.ok) {
-        addLog('success', `Plan Excel file uploaded and parsed successfully!`);
-        addLog('success', `Extractor Status: ${result.message}`);
-        addLog('success', `Database table production_plan_table successfully updated for all 12 months.`);
-        alert(result.message || "Excel ABP targets parsed and extracted successfully!");
-      } else {
-        const errMsg = result.detail || "Database write failure.";
-        addLog('error', `Plan Data Extraction Failed: ${errMsg}`);
-        alert(`Plan extraction failed: ${errMsg}`);
-      }
+      const res = await fetch(`${API_BASE_URL}/api/preview-plan`, { method: 'POST', body: fd });
+      const text = await res.text();
+      let result;
+      try { result = JSON.parse(text); } catch { throw new Error(text.slice(0, 300) || `Server error ${res.status}`); }
+      if (!res.ok) throw new Error(result.detail || 'extraction failed');
+      const okCount = (result.plan_rows || []).filter(r => r.status === 'ok').length;
+      addLog('success', `Preview ready: ${okCount} plan rows for ${uploadPlanPlantName} FY ${uploadPlanFY}. Review then insert.`);
+      setPlanPreview(result);
     } catch (err) {
-      console.error(err);
-      addLog('error', `Connection Error: Backend server is not running at ${API_BASE_URL}.`);
-      alert("An error occurred during plan upload. Ensure the backend server is running.");
+      addLog('error', `Plan extraction failed: ${err.message}`);
+      alert(`Extraction failed: ${err.message}`);
     } finally {
-      setIsUploading(false);
+      setIsPlanBusy(false);
+    }
+  };
+
+  const handlePlanInsert = async () => {
+    if (!planPreview) return;
+    const plan_rows = (planPreview.plan_rows || []).filter(r => r.status === 'ok');
+    if (!plan_rows.length) { alert('No rows to insert.'); return; }
+    setIsPlanBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/confirm-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_rows, plant: planPreview.plant, financial_year: planPreview.financial_year }),
+      });
+      const text = await res.text();
+      let result;
+      try { result = JSON.parse(text); } catch { throw new Error(text.slice(0, 300)); }
+      if (!res.ok) throw new Error(result.detail || 'insert failed');
+      addLog('success', result.message);
+      alert(result.message);
+      setPlanPreview(null);
       setUploadPlanFile(null);
-      const fileInput = document.getElementById("plan-file-input");
-      if (fileInput) fileInput.value = "";
+      const fi = document.getElementById('plan-file-input');
+      if (fi) fi.value = '';
+      fetchExtractionLog();
+    } catch (err) {
+      addLog('error', `Plan insert failed: ${err.message}`);
+      alert(`Insert failed: ${err.message}`);
+    } finally {
+      setIsPlanBusy(false);
     }
   };
 
@@ -878,10 +925,11 @@ export default function UploadPage() {
                   <option value="RSP">RSP (Excel)</option>
                   <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
                   <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
-                  <option value="BSP">BSP (Techno / Special Steel .xlsx)</option>
-                  <option value="BSP-OISCO">BSP-OISCO (OISCO Techno .xlsx)</option>
-                  <option value="BSL">BSL (Techno .xls  or  Corporate SS .xlsx)</option>
-                  <option value="ASP">ASP (xlsx or PDF — REP / FL)</option>
+                  <option value="BSP">BSP (3-page Techno / OISCO Techno / Special Steel .xlsx)</option>
+                  <option value="BSL">BSL (Techno .xls / Corporate SS .xlsx / BF PDF)</option>
+                  <option value="ASP">ASP (xlsx or PDF — REP / FL actuals)</option>
+                  <option value="SSP">SSP (PDF — Monthly DPR)</option>
+                  <option value="VISL">VISL (PDF — Monthly Report)</option>
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '12px' }}>
@@ -901,14 +949,15 @@ export default function UploadPage() {
                 <label>
                   {technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
                     : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
-                    : technoPlant === 'BSP' ? 'BSP Excel File (.xlsx) — auto-detected'
-                    : technoPlant === 'BSP-OISCO' ? 'BSP OISCO Techno Excel (.xlsx)'
-                    : technoPlant === 'BSL' ? 'BSL — Techno (.xls) or Corporate Office Special Steel (.xlsx)'
+                    : technoPlant === 'BSP' ? 'BSP Excel File (.xlsx) — file type auto-detected'
+                    : technoPlant === 'BSL' ? 'BSL — DPR Mail (.xlsx) or Techno (.xls) or Corporate SS (.xlsx) or BF Performance PDF (.pdf)'
                     : technoPlant === 'ASP' ? 'ASP file — asp.xlsx  or  REP*.pdf / FL*.pdf'
+                    : technoPlant === 'SSP' ? 'SSP DPR PDF (e.g. SSP-DPR-DD.MM.YY.pdf)'
+                    : technoPlant === 'VISL' ? 'VISL Monthly Report PDF (e.g. VISLreportsMONYY.pdf)'
                     : 'RSP Excel File (.xlsx)'}
                 </label>
                 <input id="techno-file-input" type="file" className="form-control"
-                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSL' ? '.xls,.xlsx' : technoPlant === 'ASP' ? '.xlsx,.pdf' : '.xlsx'}
+                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : '.xlsx'}
                        style={{ padding: '4px', fontSize: '0.8rem' }}
                        suppressHydrationWarning
                        onChange={(e) => setTechnoFile(e.target.files[0])} />
@@ -918,13 +967,15 @@ export default function UploadPage() {
                     : technoPlant === 'ISP'
                     ? 'Morning Report (DAILYREPORT1): ~19 items, month from K5. Final Monthly: ~17 items, set month above. Summarized Monthly (B-FCE): ~37 techno params.'
                     : technoPlant === 'BSP'
-                    ? 'BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → 62 techno params. OISCO_*.xlsx → 35 OISCO params.'
-                    : technoPlant === 'BSP-OISCO'
-                    ? "OISCO_<Mon>'YY.xlsx — 35 techno params. Month auto-detected from title."
+                    ? "File type auto-detected from content: BSP_Spstl-*.xlsx → Special Steel (sheet CORP, ~80 rows). BSP-3-page-Tech.xlsx → 62 techno params (Sheet1, month from A3). OISCO_<Mon>'YY.xlsx → 35 OISCO techno params (month from C3)."
                     : technoPlant === 'BSL'
-                    ? 'Techno: TECHNO <MON><YYYY>.XLS — 14+ techno params. Set month above. | Corporate SS: "Corporate office Report <MON><YEAR>.xlsx" — month auto-detected from cell I2. Extracts grade-wise Order Qty (col G = ORDER AVAILABLE TOTAL) & Actual (col I = Despatch Till Date, monthly) for HR COIL / HR PLATE / HR SHEET / CR COIL/SHEET/GP GC / SLAB. Saves to special_steel_orders; shown on report page 22.'
+                    ? 'DPR XLSX: BSL_DPR_DDMMYYYY.xlsx (sheet DPR) — 19 production items, month auto-detected from O1. | Techno XLS: TECHNO <MON><YYYY>.XLS — 14+ techno params, set month above. | Corp SS XLSX: grade-wise Order Qty & Despatch, month auto-detected. | BF PDF: BSL_BlastFurnace_DDMMYYYY.pdf — BF-wise 14 params per furnace.'
                     : technoPlant === 'ASP'
                     ? "asp.xlsx → reads cells F10/F11/F13/F21/L26 (Crude Steel, Concast, Ingot, Saleable, Stock). Month auto-detected from E3. REP*.pdf → same items via keyword search. FL*.pdf → BARS+FS PRD+PL MILL → Finished Steel (col3=Actual)."
+                    : technoPlant === 'SSP'
+                    ? "SSP DPR PDF → SMS(SLAB) row: 1st number = Crude Steel (Cum Actual). Saleable Production TOTAL row: 2nd number = Finished & Saleable Steel (Cum Actual). Values in Tonnes → stored as '000T."
+                    : technoPlant === 'VISL'
+                    ? "VISL Monthly PDF → 'Total Saleable Steel' row: 2nd number (To Date) = Finished Steel & Saleable Steel. 'Sales (AS+MS)' row: 2nd number (To Date) = Saleable Steel Despatch. Values in Tonnes → stored as '000T."
                     : 'Final Monthly, Morning Report or Techno file — auto-detected. Production + techno both extracted.'}
                   {' '}Shown for review before insertion.
                 </div>
@@ -1032,18 +1083,19 @@ export default function UploadPage() {
           )}
 
           {/* ── ABP PLAN MODE ─────────────────────────────────────── */}
-          {uploadMode === 'plan' && (
-            <form onSubmit={handlePlanUpload}>
+          {uploadMode === 'plan' && !planPreview && (
+            <form onSubmit={handlePlanExtract}>
               <div className="form-group" style={{ marginBottom: '12px' }}>
                 <label>Plant Source</label>
                 <select className="form-control" value={uploadPlanPlantName}
                         onChange={(e) => setUploadPlanPlantName(e.target.value)}>
-                  <option value="RSP">RSP</option>
-                  <option value="ISP">ISP</option>
-                  <option value="BSP">BSP</option>
-                  <option value="DSP">DSP</option>
-                  <option value="BSL">BSL</option>
-                  <option value="ASP_SSP_VISL">ASP / SSP / VISL (combined)</option>
+                  <option value="RSP">RSP (.xlsx)</option>
+                  <option value="ISP">ISP (.xlsx)</option>
+                  <option value="BSP">BSP (.xlsx)</option>
+                  <option value="DSP">DSP (.xlsx)</option>
+                  <option value="BSL">BSL (.xlsx)</option>
+                  <option value="ASP_SSP_VISL">ASP / SSP / VISL combined (.xlsx)</option>
+                  <option value="ASP">ASP — BARS / FORGINGS / PLATES (.pdf)</option>
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '12px' }}>
@@ -1054,24 +1106,49 @@ export default function UploadPage() {
                 </select>
               </div>
               <div style={{ fontSize: '7.5pt', color: '#94a3b8', marginBottom: 8 }}>
-                RSP: sheet1 · ISP: SUMM PROD · BSP: Table 1 · DSP: Monthwise · BSL: PLAN SUMMARY · ASP/SSP/VISL: APP 26-27
+                {uploadPlanPlantName === 'ASP'
+                  ? 'ASP ABP Plan PDF → extracts BARS, FORGINGS, PLATES for all 12 months; computes Finished Steel per month.'
+                  : 'RSP: sheet1 · ISP: SUMM PROD · BSP: Table 1 · DSP: Monthwise · BSL: PLAN SUMMARY · ASP/SSP/VISL: APP 26-27'}
               </div>
               <div className="form-group" style={{ marginBottom: '15px' }}>
-                <label>ABP Excel File (.xlsx)</label>
-                <input id="plan-file-input" type="file" className="form-control" accept=".xlsx"
+                <label>{uploadPlanPlantName === 'ASP' ? 'ASP ABP Plan PDF' : 'ABP Excel File (.xlsx)'}</label>
+                <input id="plan-file-input" type="file" className="form-control"
+                       accept={uploadPlanPlantName === 'ASP' ? '.pdf' : '.xlsx'}
                        style={{ padding: '4px', fontSize: '0.8rem' }}
                        onChange={(e) => setUploadPlanFile(e.target.files[0])} />
               </div>
-              <button type="submit" className="btn btn-primary" disabled={isUploading}
+              <button type="submit" className="btn btn-primary" disabled={isPlanBusy}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}>
-                {isUploading ? 'Extracting Plan...' : (
+                {isPlanBusy ? 'Extracting...' : (
                   <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                  </svg>Extract Plan Targets</>
+                  </svg>Extract & Preview Plan</>
                 )}
               </button>
             </form>
+          )}
+          {uploadMode === 'plan' && planPreview && (
+            <div>
+              <div style={{ fontSize: '9pt', color: '#94a3b8', marginBottom: 10 }}>
+                <strong style={{ color: '#f1f5f9' }}>{planPreview.plant}</strong> · FY {planPreview.financial_year}
+                <span style={{ marginLeft: 8, color: '#64748b' }}>({planPreview.plan_rows?.filter(r=>r.status==='ok').length} rows ready)</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                <button onClick={handlePlanInsert} disabled={isPlanBusy}
+                        style={{ flex: 1, padding: '7px 0', fontSize: '8.5pt', fontWeight: 700,
+                                 backgroundColor: '#10b981', border: 'none', color: '#fff',
+                                 borderRadius: 4, cursor: 'pointer' }}>
+                  {isPlanBusy ? 'Inserting...' : `Insert ${planPreview.plan_rows?.filter(r=>r.status==='ok').length} rows into DB`}
+                </button>
+                <button onClick={() => { setPlanPreview(null); setUploadPlanFile(null); const fi = document.getElementById('plan-file-input'); if (fi) fi.value = ''; }}
+                        disabled={isPlanBusy}
+                        style={{ padding: '7px 14px', fontSize: '8.5pt', background: 'none',
+                                 border: '1px solid #64748b', color: '#94a3b8', borderRadius: 4, cursor: 'pointer' }}>
+                  Discard
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
@@ -1131,6 +1208,96 @@ export default function UploadPage() {
               </div>
             </div>
           </div>
+
+          {/* ABP Plan preview — pivot table shown before DB insert */}
+          {planPreview && (() => {
+            const rows = planPreview.plan_rows || [];
+            const plants = [...new Set(rows.map(r => r.plant))].sort();
+            const months = [...new Set(rows.map(r => r.month))].sort();
+            const fmtM = m => {
+              const mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              return `${mn[parseInt(m.slice(5))-1]}'${m.slice(2,4)}`;
+            };
+            const TH = { padding:'2px 5px', fontSize:'7.5pt', borderBottom:'1px solid #475569', whiteSpace:'nowrap', color:'#94a3b8', textAlign:'right' };
+            const TD = { padding:'2px 5px', fontSize:'8pt', textAlign:'right', borderBottom:'1px solid #1e293b' };
+            const okCount = rows.filter(r => r.status === 'ok').length;
+            return (
+              <div style={{ padding:'16px', backgroundColor:'#1e293b', border:'1px solid #3b82f6', borderRadius:'8px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                  <h3 style={{ fontSize:'11pt', fontWeight:700, color:'#f1f5f9', margin:0 }}>
+                    ABP Plan Preview — {planPreview.plant} FY {planPreview.financial_year}
+                    <span style={{ fontSize:'8pt', color:'#94a3b8', fontWeight:400, marginLeft:8 }}>{okCount} rows</span>
+                  </h3>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={handlePlanInsert} disabled={isPlanBusy}
+                            style={{ padding:'5px 14px', fontSize:'8.5pt', fontWeight:700, backgroundColor:'#10b981',
+                                     border:'none', color:'#fff', borderRadius:4, cursor:'pointer' }}>
+                      {isPlanBusy ? 'Inserting…' : `Insert ${okCount} rows`}
+                    </button>
+                    <button onClick={() => { setPlanPreview(null); setUploadPlanFile(null); const fi = document.getElementById('plan-file-input'); if (fi) fi.value = ''; }}
+                            disabled={isPlanBusy}
+                            style={{ padding:'5px 12px', fontSize:'8.5pt', background:'none',
+                                     border:'1px solid #64748b', color:'#94a3b8', borderRadius:4, cursor:'pointer' }}>
+                      Discard
+                    </button>
+                  </div>
+                </div>
+                {plants.map(plant => {
+                  const pRows = rows.filter(r => r.plant === plant);
+                  const items = [...new Set(pRows.map(r => r.item_name))];
+                  const lookup = {};
+                  pRows.forEach(r => {
+                    if (!lookup[r.item_name]) lookup[r.item_name] = {};
+                    lookup[r.item_name][r.month] = r;
+                  });
+                  return (
+                    <div key={plant} style={{ marginBottom:12 }}>
+                      {plants.length > 1 && (
+                        <div style={{ fontSize:'8pt', fontWeight:700, color:'#60a5fa', marginBottom:4 }}>{plant}</div>
+                      )}
+                      <div style={{ overflowX:'auto' }}>
+                        <table style={{ borderCollapse:'collapse', fontSize:'8pt', color:'#e2e8f0', width:'100%' }}>
+                          <thead>
+                            <tr>
+                              <th style={{...TH, textAlign:'left', paddingLeft:6}}>Item</th>
+                              {months.map(m => <th key={m} style={TH}>{fmtM(m)}</th>)}
+                              <th style={TH}>Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.map(item => {
+                              const unit = lookup[item]?.[months[0]]?.unit || "'000T";
+                              const isFin = item === 'Finished Steel';
+                              const vals = months.map(m => lookup[item]?.[m]?.value ?? null);
+                              const total = vals.reduce((a,b) => a + (b ?? 0), 0);
+                              const fmt = v => v === null ? '—' : unit === 'nos/d' ? v.toFixed(0) : (v * 1000).toFixed(0);
+                              return (
+                                <tr key={item}>
+                                  <td style={{...TD, textAlign:'left', paddingLeft:6,
+                                              fontWeight:isFin?700:400, color:isFin?'#34d399':'#e2e8f0'}}>
+                                    {item}
+                                  </td>
+                                  {vals.map((v,i) => (
+                                    <td key={i} style={{...TD, fontWeight:isFin?700:400, color:isFin?'#34d399':v===null?'#475569':'#e2e8f0'}}>
+                                      {fmt(v)}
+                                    </td>
+                                  ))}
+                                  <td style={{...TD, fontWeight:700, color:'#fbbf24'}}>{fmt(total)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{fontSize:'7pt',color:'#64748b',marginTop:3}}>
+                        Values in {(lookup[items[0]]?.[months[0]]?.unit||"'000T") === 'nos/d' ? 'nos/d' : "T (display) — stored as '000T"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* RSP extraction preview — verify production + techno before insertion */}
           {technoPreview && (
