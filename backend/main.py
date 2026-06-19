@@ -17,7 +17,7 @@ from page_segment_wise import generate_segment_wise
 from page_special_steel import generate_special_steel_plant, generate_special_steel_sail
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
-from page_techno import generate_techno, TECHNO_PAGES
+from page_techno import generate_techno, TECHNO_PAGES, generate_summary_te_table
 from pdf import build_pdf_response
 
 db.init_db()
@@ -81,6 +81,7 @@ def get_data(month: str = "2025-11"):
                 if page.get("page") == 3 or page.get("type") == "summary":
                     for row in page.get("production_table", []):
                         row["values"] = compute_item_row(month, row.get("item"))
+                    page["te_table"] = generate_summary_te_table(month)
                 if page.get("page") == 4 or page.get("type") == "page4_table":
                     page["rows"] = generate_page4_rows(month)
                 if page.get("page") == 5:
@@ -234,6 +235,8 @@ async def generate_pdf(request: PDFRequest):
     for page in request.pages:
         p = page.dict()
         pg = p.get("page", 0)
+        if pg == 3 or p.get("type") == "summary":
+            p["te_table"] = generate_summary_te_table(request.month)
         if pg == 13:
             concast = generate_concast_data(request.month)
             p["monthly"] = concast["monthly"]
