@@ -718,22 +718,37 @@ def get_or_create_techno_param(group_code: str, section: str, row_label: str,
     return pid
 
 
+def _techno_flat_key(group_code: str, section: str, row_label: str):
+    """Derive (plant_name, parameter_name) for techno_table from param_master fields."""
+    if group_code in ('MAJOR', 'COKE_SINTER', 'IRON_MAKING', 'SMS'):
+        return (row_label, section)
+    if group_code == 'BSL':
+        return (f'BSL {section}', row_label)
+    if group_code.startswith('MILL_'):
+        return (f'{group_code[5:]} {section}', row_label)
+    return (row_label, section)
+
+
 def save_techno_value(month: str, param_id: int, actual: Optional[float],
                       cum_actual: Optional[float] = None,
                       source_priority: int = 5):
-    """Upsert one monthly techno actual with its Apr-to-month cumulative.
+    """Upsert one monthly techno actual.
 
-    source_priority controls overwrite behaviour:
-      - On INSERT: always stored.
-      - On CONFLICT: only updates actual/cum_actual when incoming priority >=
-        the stored priority, preventing low-priority secondary sources from
-        overwriting high-priority primary extractions.
+    Dual-writes to:
+      techno_monthly  — legacy normalized store, used by manual-entry UI.
+                        source_priority controls which write wins on conflict.
+      techno_table    — canonical flat store, used by page_techno.py for display.
+                        Always overwrites (source_priority enforced via techno_monthly).
+
+    source_priority:
       5 = direct extractor write (default)
       4 = computed shop aggregate (techno_aggregates.py)
       3 = secondary/fallback source
     """
     init_db()
     conn = sqlite3.connect(DB_PATH)
+
+    # ── techno_monthly (priority-aware) ──────────────────────────────────────
     conn.execute("""
         INSERT INTO techno_monthly (report_month, param_id, actual, cum_actual, source_priority)
         VALUES (?, ?, ?, ?, ?)
@@ -746,6 +761,27 @@ def save_techno_value(month: str, param_id: int, actual: Optional[float],
             source_priority = CASE WHEN excluded.source_priority >= source_priority
                                    THEN excluded.source_priority ELSE source_priority END
     """, (month, param_id, actual, cum_actual, source_priority))
+
+    # ── techno_table (flat display store) ────────────────────────────────────
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT group_code, section, row_label, unit FROM techno_param_master WHERE param_id=?",
+        (param_id,),
+    )
+    master = cur.fetchone()
+    if master:
+        group_code, section, row_label, unit = master
+        plant_name, parameter_name = _techno_flat_key(group_code, section, row_label)
+        conn.execute("""
+            INSERT INTO techno_table
+                (report_month, plant_name, parameter_name, unit, month_actual, ytd_actual)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, plant_name, parameter_name) DO UPDATE SET
+                unit         = excluded.unit,
+                month_actual = excluded.month_actual,
+                ytd_actual   = excluded.ytd_actual
+        """, (month, plant_name, parameter_name, unit or "", actual, cum_actual))
+
     conn.commit()
     conn.close()
 

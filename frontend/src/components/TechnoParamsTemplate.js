@@ -1,22 +1,31 @@
 'use client';
 
 // ── style tokens ──────────────────────────────────────────────────────────────
-const CELL = { padding: '1.5px 4px', borderTop: '1px solid #94a3b8', borderRight: '1px solid #94a3b8', borderBottom: '1px solid #94a3b8', borderLeft: '1px solid #94a3b8', lineHeight: 1.2, fontSize: 'var(--report-font-size)' };
-const NUM  = { ...CELL, textAlign: 'right' };
-const LBL  = { ...CELL, textAlign: 'left' };
-const TH   = {
-  backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
-  textAlign: 'center', verticalAlign: 'middle',
-  border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
-};
-const TH_HIST = { ...TH, backgroundColor: '#475569' };   // past FY actuals
-const TH_TGT  = { ...TH, backgroundColor: '#7c2d12' };   // target
-const TH_CUM  = { ...TH, backgroundColor: '#2d5016' };   // cumulative
+const BLACK  = '1px solid #000';
+const NONE   = 0;
 
-// SAIL row overrides — bold + thick outer border
-const SAIL_TB   = { fontWeight: 700, borderTop: '2px solid #1e293b', borderBottom: '2px solid #1e293b' };
-const SAIL_FIRST = { ...SAIL_TB, borderLeft:  '2px solid #1e293b' };
-const SAIL_LAST  = { ...SAIL_TB, borderRight: '2px solid #1e293b' };
+// Base cell — vertical dividers only, no horizontal lines inside a parameter block
+const CELL = {
+  padding: '1.5px 4px', lineHeight: 1.2,
+  fontSize: 'var(--report-font-size)',
+  borderLeft: BLACK, borderRight: BLACK,
+  borderTop: NONE, borderBottom: NONE,
+};
+const NUM = { ...CELL, textAlign: 'right' };
+const LBL = { ...CELL, textAlign: 'left' };
+
+// Header — plain black/white, no colour bands
+const TH = {
+  backgroundColor: '#000', color: '#fff', padding: '2px 3px',
+  textAlign: 'center', verticalAlign: 'middle',
+  border: BLACK, fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
+};
+const TH_HIST = { ...TH };
+const TH_TGT  = { ...TH };
+const TH_CUM  = { ...TH };
+
+// SAIL row — bold text only, no background, no thick border
+const SAIL = { fontWeight: 700 };
 
 export default function TechnoParamsTemplate({ data }) {
   if (!data) return null;
@@ -39,7 +48,7 @@ export default function TechnoParamsTemplate({ data }) {
         </div>
       )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
+      <table style={{ width: '100%', borderCollapse: 'collapse', border: BLACK,
                       tableLayout: 'fixed', fontSize: 'var(--report-font-size)', marginTop: 4 }}>
         <colgroup>
           <col style={{ width: '14%' }} />
@@ -69,25 +78,34 @@ export default function TechnoParamsTemplate({ data }) {
         <tbody>
           {sections.map((sec, si) =>
             sec.rows.map((row, ri) => {
-              const sail = row.label === 'SAIL';
+              const sail     = row.label === 'SAIL';
+              const isFirst  = ri === 0;
+              const isLast   = ri === sec.rows.length - 1;
+              // outer black border per parameter block — top on first row, bottom on last
+              const topBorder    = isFirst ? { borderTop: BLACK }    : {};
+              const bottomBorder = isLast  ? { borderBottom: BLACK } : {};
+              const blockBorder  = { ...topBorder, ...bottomBorder };
+              const sailStyle    = sail ? SAIL : {};
+
               return (
-                <tr key={`${si}-${ri}`}
-                    style={{ backgroundColor: si % 2 ? '#f8fafc' : '#fff' }}>
-                  {ri === 0 && (
+                <tr key={`${si}-${ri}`}>
+                  {isFirst && (
                     <td rowSpan={sec.rows.length}
                         style={{ ...LBL, fontWeight: 700, verticalAlign: 'top',
-                                 backgroundColor: '#e2e8f0' }}>
+                                 borderTop: BLACK, borderBottom: BLACK }}>
                       {sec.label}{sec.rows[0]?.unit ? ` (${sec.rows[0].unit})` : ''}
                     </td>
                   )}
-                  <td style={{ ...LBL,  ...(sail ? SAIL_FIRST : {}) }}>{row.label}</td>
-                  <td style={{ ...NUM,  ...(sail ? SAIL_TB    : {}) }}>{row.fy2}</td>
-                  <td style={{ ...NUM,                              ...(sail ? SAIL_TB    : {}) }}>{row.fy1}</td>
-                  <td style={{ ...NUM, backgroundColor: '#fef3ec', ...(sail ? SAIL_TB    : {}) }}>{row.target}</td>
-                  {row.months.map((v, mi) => <td key={mi} style={{ ...NUM, ...(sail ? SAIL_TB : {}) }}>{v}</td>)}
-                  <td style={{ ...NUM,                              ...(sail ? SAIL_TB    : {}) }}>{row.cply}</td>
-                  <td style={{ ...NUM, backgroundColor: '#f3faf0', ...(sail ? SAIL_TB    : {}) }}>{row.cum}</td>
-                  <td style={{ ...NUM, backgroundColor: '#f3faf0', ...(sail ? SAIL_LAST  : {}) }}>{row.cum_cply}</td>
+                  <td style={{ ...LBL, ...blockBorder, ...sailStyle }}>{row.label}</td>
+                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.fy2}</td>
+                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.fy1}</td>
+                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.target}</td>
+                  {row.months.map((v, mi) => (
+                    <td key={mi} style={{ ...NUM, ...blockBorder, ...sailStyle }}>{v}</td>
+                  ))}
+                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.cply}</td>
+                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.cum}</td>
+                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.cum_cply}</td>
                 </tr>
               );
             })
