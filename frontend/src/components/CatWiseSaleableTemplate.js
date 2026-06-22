@@ -1,32 +1,57 @@
 'use client';
 
 const ROW_STYLES = {
-  data:         { backgroundColor: '#f8fafc' },
+  data:           { backgroundColor: '#f8fafc' },
   'section-data': { backgroundColor: '#eff6ff', fontWeight: 600 },
   'section-hdr':  { backgroundColor: '#e2e8f0', fontWeight: 700 },
-  subtotal:     { backgroundColor: '#fef9c3', fontWeight: 700 },
-  pct:          { backgroundColor: '#f1f5f9', fontStyle: 'italic', fontSize: 'var(--report-font-size)' },
-  total:        { backgroundColor: '#dcfce7', fontWeight: 700 },
+  subtotal:       { backgroundColor: '#fef9c3', fontWeight: 700 },
+  pct:            { backgroundColor: '#f1f5f9', fontStyle: 'italic', fontSize: 'var(--report-font-size)' },
+  total:          { backgroundColor: '#dcfce7', fontWeight: 700 },
+};
+
+const CAT_BG = {
+  FLAT:  '#bfdbfe',
+  PET:   '#bbf7d0',
+  LONG:  '#fde68a',
+  SEMIS: '#e2e8f0',
 };
 
 const CELL = { padding: '1.5px 4px', border: '1px solid #cbd5e1', lineHeight: 1.2 };
-const NUM = { ...CELL, textAlign: 'right' };
-const LBL = { ...CELL, textAlign: 'left' };
+const NUM  = { ...CELL, textAlign: 'right' };
+const LBL  = { ...CELL, textAlign: 'left' };
 
 function Row({ row }) {
   if (row.type === 'separator') {
-    return <tr style={{ height: 3 }}><td colSpan={7} style={{ border: 'none', padding: 0 }} /></tr>;
+    return <tr style={{ height: 3 }}><td colSpan={8} style={{ border: 'none', padding: 0 }} /></tr>;
   }
   if (row.type === 'section-hdr') {
     return (
       <tr style={ROW_STYLES['section-hdr']}>
-        <td colSpan={7} style={{ ...LBL, backgroundColor: '#e2e8f0', fontWeight: 700 }}>{row.label}</td>
+        <td colSpan={8} style={{ ...LBL, backgroundColor: '#e2e8f0', fontWeight: 700 }}>{row.label}</td>
       </tr>
     );
   }
+
   const style = ROW_STYLES[row.type] || {};
+
+  let catCell = null;
+  if (row.cat_first) {
+    catCell = (
+      <td rowSpan={row.cat_rowspan}
+          style={{ ...CELL, backgroundColor: CAT_BG[row.category] || '#e2e8f0',
+                   fontWeight: 700, textAlign: 'center', verticalAlign: 'middle',
+                   fontSize: 'var(--report-font-size)' }}>
+        {row.category}
+      </td>
+    );
+  } else if (!row.category) {
+    catCell = <td style={{ ...CELL, backgroundColor: '#f8fafc' }} />;
+  }
+  // rows mid-group (cat set, cat_first false): covered by rowspan — no td
+
   return (
     <tr style={style}>
+      {catCell}
       <td style={{ ...LBL, ...style }}>{row.label}</td>
       {[row.ann_plan, row.m_plan, row.m_act, row.m_pct, row.cply_act, row.m_growth].map((v, i) => (
         <td key={i} style={{ ...NUM, ...style }}>{v}</td>
@@ -52,11 +77,13 @@ function PlantTable({ section, monthLabel, cplyLabel }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
                       tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
-          <col style={{ width: '33%' }} />
+          <col style={{ width: '5%' }} />
+          <col style={{ width: '28%' }} />
           {[...Array(6)].map((_, i) => <col key={i} style={{ width: '11.2%' }} />)}
         </colgroup>
         <thead>
           <tr>
+            <TH rowSpan={2}>Cat.</TH>
             <TH rowSpan={2} left>CATEGORY</TH>
             <TH rowSpan={2}>2026-27<br/>Plan</TH>
             <TH colSpan={3}>{monthLabel}</TH>
@@ -76,12 +103,25 @@ function PlantTable({ section, monthLabel, cplyLabel }) {
 }
 
 export default function CatWiseSaleableTemplate({ data }) {
+  const title      = data?.title       || '';
+  const subtitle   = data?.subtitle    || '';
   const monthLabel = data?.month_label || '';
   const cplyLabel  = data?.cply_label  || '';
   const sections   = data?.sections    || [];
 
   return (
     <div style={{ padding: '8px 8px 0', fontFamily: 'Arial, sans-serif' }}>
+      {title && (
+        <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.9rem',
+                      textDecoration: 'underline', marginBottom: 2 }}>
+          {title}
+        </div>
+      )}
+      {subtitle && (
+        <div style={{ textAlign: 'center', fontWeight: 600, fontSize: '0.85rem', marginBottom: 5 }}>
+          {subtitle}
+        </div>
+      )}
       {sections.map((section, i) => (
         <PlantTable key={i} section={section} monthLabel={monthLabel} cplyLabel={cplyLabel} />
       ))}

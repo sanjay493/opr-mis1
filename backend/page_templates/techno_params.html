@@ -1,0 +1,88 @@
+        {% set _is_major = page.group == 'MAJOR' %}
+        {% set _tsz = '12pt'  %}
+        <div style="padding:4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:{{ _tsz }};">
+          <div style="text-align:center;font-weight:700;font-size:10pt;">{{ page.title }}</div>
+          {% if page.subtitle %}
+          <div style="text-align:center;font-weight:600;font-size:10pt;margin-bottom:3px;">{{ page.subtitle }}</div>
+          {% endif %}
+          {% set _tbsz = '12pt' %}
+          <table style="width:100%;border-collapse:collapse;border:1px solid #000;table-layout:fixed;font-size:{{ _tbsz }};margin-top:2px;">
+            <colgroup>
+              {% if _is_major %}
+              <col style="width:20%"/><col style="width:10%"/>
+              {% else %}
+              <col style="width:13%"/><col style="width:13%"/><col style="width:7%"/>
+              {% endif %}
+              {% set ncols = 7 + (page.month_labels | length) %}
+              {% for i in range(ncols) %}<col/>{% endfor %}
+            </colgroup>
+            <thead>
+              <tr>
+                {% if _is_major %}
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;text-align:left;">Parameters</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Plants</th>
+                {% else %}
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;text-align:left;">Parameters</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Shop / Plant</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Unit</th>
+                {% endif %}
+                <th colspan="3" style="padding:2px 3px;border:1px solid #000;">Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;background:#fef9c3;">{{ page.target_label }}</th>
+                <th colspan="{{ page.month_labels | length }}" style="padding:2px 3px;border:1px solid #000;">Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">{{ page.cply_label }}<br/>Actual</th>
+                <th colspan="2" style="padding:2px 3px;border:1px solid #000;">Actual</th>
+              </tr>
+              <tr>
+                <th style="padding:2px 3px;border:1px solid #000;">{{ page.fy3_label }}</th>
+                <th style="padding:2px 3px;border:1px solid #000;">{{ page.fy2_label }}</th>
+                <th style="padding:2px 3px;border:1px solid #000;">{{ page.fy1_label }}</th>
+                {% for m in page.month_labels %}
+                <th style="padding:2px 3px;border:1px solid #000;">{{ m }}</th>
+                {% endfor %}
+                <th style="padding:2px 3px;border:1px solid #000;">{{ page.cum_label }}</th>
+                <th style="padding:2px 3px;border:1px solid #000;">{{ page.cum_cply_label }}</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for sec in page.sections %}
+              {% for row in sec.rows %}
+              {% set _sail = row.label == 'SAIL' %}
+              {% set _v = 'border-left:1px solid #000;border-right:1px solid #000;' %}
+              {% set _bt = 'border-top:1px solid #000;'    if loop.first else '' %}
+              {% set _bb = 'border-bottom:1px solid #000;' if loop.last  else '' %}
+              {% set _box = 'border-top:1.5px solid #000;border-bottom:1.5px solid #000;font-weight:900;' if _sail else (_bt ~ _bb) %}
+              {% set _td = _v ~ _box %}
+              {% set _row_bg = 'background:#dcfce7;' if _sail else '' %}
+              <tr style="{{ _row_bg }}">
+                {% if loop.first %}
+                {% if _is_major %}
+                {% set _sec_unit = sec.rows[0].unit if sec.rows else '' %}
+                {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:900;vertical-align:top;">{{ _sec_label }}</td>
+                {% else %}
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:900;vertical-align:top;">{{ sec.label }}</td>
+                {% endif %}
+                {% endif %}
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;">{{ row.label }}</td>
+                {% if not _is_major %}
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;font-size:10pt;">{{ row.unit }}</td>
+                {% endif %}
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy3 }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy2 }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy1 }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;background:#fef9c3;">{{ row.target }}</td>
+                {% for v in row.months %}
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ v }}</td>
+                {% endfor %}
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.cply }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.cum }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.cum_cply }}</td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+            </tbody>
+          </table>
+          <div style="display:flex;justify-content:space-between;font-size:5.8pt;color:#475569;margin-top:2px;">
+            <span>figures are provisional</span><span>for internal circulation only</span>
+          </div>
+        </div>

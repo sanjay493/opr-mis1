@@ -1,0 +1,74 @@
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.5px solid #0f172a;padding-bottom:3px;margin-bottom:6px;">
+                <h2 style="font-size:12pt;font-weight:700;color:#060177;margin:0;text-transform:uppercase;">
+                    PRODUCTION BY PROCESS
+                </h2>
+                <span style="font-size:8pt;color:#475569;font-weight:500;">Unit: Tonnes</span>
+            </div>
+
+            {# ── Monthly Table ── #}
+            <table class="page14-table" style="margin-bottom:22pt;">
+                <colgroup>
+                    <col style="width:9%"/>
+                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                </colgroup>
+                <thead>
+                    <tr style="background:#dbeafe;color:#1e293b;">
+                        <th rowspan="2">PLANT</th>
+                        <th colspan="6">{{ short_m }}'{{ short_y }}</th>
+                        <th colspan="6" style="border-left:2.5px solid #5a7fa0;">{{ short_m }}'{{ short_prev_y }}</th>
+                    </tr>
+                    <tr style="background:#bfdbfe;color:#1e293b;">
+                        <th>BOF</th><th>EAF</th><th class="cc-col">CC</th><th class="cs-col">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                        <th style="border-left:2.5px solid #5a7fa0;">BOF</th><th>EAF</th><th class="cc-col">CC</th><th class="cs-col">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page.monthly %}
+                    {% set pr = page.monthly_prev[loop.index0] %}
+                    <tr class="{% if row.plant == 'SAIL' %}sail-row{% elif row.bold %}agg-row{% endif %}">
+                        <td class="plant-col">{{ row.plant }}</td>
+                        <td>{{ row.bof }}</td><td>{{ row.eaf }}</td>
+                        <td class="cc-col">{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
+                        <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td>
+                        <td class="prev-sep">{{ pr.bof }}</td><td>{{ pr.eaf }}</td>
+                        <td class="cc-col">{{ pr.cc }}</td><td class="cs-col">{{ pr.cs }}</td>
+                        <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {# ── YTD Table ── #}
+            <table class="page14-table">
+                <colgroup>
+                    <col style="width:9%"/>
+                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                </colgroup>
+                <thead>
+                    <tr style="background:#dbeafe;color:#1e293b;">
+                        <th rowspan="2">PLANT</th>
+                        <th colspan="6">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th colspan="6" style="border-left:2.5px solid #5a7fa0;">Apr-{{ short_m }}'{{ short_prev_y }}</th>
+                    </tr>
+                    <tr style="background:#bfdbfe;color:#1e293b;">
+                        <th>BOF</th><th>EAF</th><th class="cc-col">CC</th><th class="cs-col">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                        <th style="border-left:2.5px solid #5a7fa0;">BOF</th><th>EAF</th><th class="cc-col">CC</th><th class="cs-col">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page.ytd %}
+                    {% set pr = page.ytd_prev[loop.index0] %}
+                    <tr class="{% if row.plant == 'SAIL' %}sail-row{% elif row.bold %}agg-row{% endif %}">
+                        <td class="plant-col">{{ row.plant }}</td>
+                        <td>{{ row.bof }}</td><td>{{ row.eaf }}</td>
+                        <td class="cc-col">{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
+                        <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td>
+                        <td class="prev-sep">{{ pr.bof }}</td><td>{{ pr.eaf }}</td>
+                        <td class="cc-col">{{ pr.cc }}</td><td class="cs-col">{{ pr.cs }}</td>
+                        <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>

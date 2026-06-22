@@ -1,0 +1,19 @@
+            <h2 class="page2-heading">{{ page.title }}</h2>
+            <table class="report-table page2-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th style="width: 8%; text-align: center;">S.No.</th>
+                        <th style="width: 77%; text-align: left;">Contents</th>
+                        <th style="width: 15%; text-align: center;">Page</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page.rows %}
+                    <tr>
+                        <td class="sno" style="font-family: inherit;">{{ row.sno }}</td>
+                        <td style="font-family: inherit;">{{ row.title }}</td>
+                        <td class="center" style="font-family: inherit;">{{ row.page_range }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>

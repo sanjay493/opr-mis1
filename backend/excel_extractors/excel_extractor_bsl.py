@@ -299,7 +299,7 @@ _TECHNO_PARAM_MAP = [
     ("Sheet1", 37,  6,    1.0, "IRON_MAKING", "CDI",                   "BSL Plant Shop",                    "Kg/THM"),
     ("Sheet1", 37,  6,    1.0, "MAJOR",       "CDI Rate",              "BSL",                               "kg/Thm"),
     ("Sheet1", 39,  6,    1.0, "IRON_MAKING", "Fuel Rate",             "BSL Plant Shop",                    "Kg/THM"),
-    ("Sheet1", 41,  6,    1.0, "MAJOR",       "Coal to Hot Metal",     "BSL",                               "Kg/THM"),
+    ("Sheet1", 41,  6,    1.0, "MAJOR",       "Coal to Hot Metal",     "BSL",                               "Ratio"),
     ("Sheet1", 49,  6,    1.0, "MILL_BSL",    "CRM 1&2",               "Yield of HR Coil",                  "%"),
     ("Sheet1", 51,  6,    1.0, "MILL_BSL",    "CRM 3",                 "Yield of HR Coil",                  "%"),
     ("Sheet1", 55,  6,    1.0, "SMS",         "Refractory",            "BSL",                               "Kg/TCS"),

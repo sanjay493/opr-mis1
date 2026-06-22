@@ -1,15 +1,17 @@
 """
 Techno-Economic Parameter pages — pages 27-35.
 
-Single data source: techno_table (report_month, plant_name, parameter_name, month_actual, ytd_actual)
-Display ordering:   techno_param_master (group_code, section, row_label, unit, sort_order)
-Annual targets:     techno_target (fy, param_id) → joined with techno_param_master
+Data source: techno_actuals JOIN techno_param (replaces techno_table + techno_param_master)
+Display ordering: techno_param_group (group_code, sort_order)
+Annual targets:   techno_target JOIN techno_param JOIN techno_param_group
 
 Column layout:
   <FY-2> Actual | <FY-1> Actual | Target <FY> |
   Apr'YY … <report month> | <CPLY month> | Apr-<Mon>'YY | Apr-<Mon>'YY-1
 
-Annual FY value = March ytd_actual (Apr-to-Mar); falls back to AVG(month_actual).
+Annual FY value: stored March till_month_actual first; else AVG(month_actual) for all 12 months
+                 (NULL if fewer than 12 months available).
+YTD value:       stored till_month_actual first; else AVG(month_actual) Apr→month.
 
 SAIL row computation (MAJOR page + Summary page te_table):
   BF params (Coal/HM, Coke, Nut Coke, CDI Rate, Fuel, Sinter%, Pellet%):
@@ -49,7 +51,7 @@ _BOF_VISIBLE = frozenset({
 })
 
 _IRON_MAKING_VISIBLE = frozenset({
-    "CDI", "Si in HM", "S in HM", "HBT", "Coke Screen Loss",
+    "CDI Rate", "Si in HM", "S in HM", "HBT", "Coke Screen Loss",
 })
 
 TECHNO_PAGES = {
@@ -92,10 +94,10 @@ _PLANT_SHOP_CNT = {"BSP": 2, "DSP": 1, "RSP": 2, "BSL": 2, "ISP": 1}
 
 _SMS_PARAMS = ["Hot Metal Consumption", "Scrap Consumption", "TMI"]
 
-# BSL BF per-furnace aggregation methods
+# BSL BF per-furnace aggregation methods (canonical param names)
 _BSL_BF_AGG = {
-    "CDI":             "wtavg",
-    "BF Coke Rate":    "wtavg",
+    "CDI Rate":        "wtavg",
+    "Coke Rate":       "wtavg",
     "Nut Coke Rate":   "wtavg",
     "Fuel Rate":       "wtavg",
     "Sinter in Burden":"wtavg",
@@ -114,21 +116,6 @@ _BSL_BF_AGG = {
 }
 _BSL_FURNACES    = ["BSL BF-1", "BSL BF-2", "BSL BF-4", "BSL BF-5"]
 _BSL_BF_ALL      = _BSL_FURNACES + ["BSL Plant Shop"]
-
-# ---------------------------------------------------------------------------
-# Key helpers
-# ---------------------------------------------------------------------------
-
-def _pk(group_code, section, row_label):
-    """Return (plant_name, parameter_name) key for techno_table lookup."""
-    if group_code in ('MAJOR', 'COKE_SINTER', 'IRON_MAKING', 'SMS'):
-        return (row_label, section)
-    if group_code == 'BSL':
-        return (f'BSL {section}', row_label)
-    if group_code.startswith('MILL_'):
-        plant = group_code[5:]           # 'MILL_BSP' → 'BSP'
-        return (f'{plant} {section}', row_label)
-    return (row_label, section)
 
 # ---------------------------------------------------------------------------
 # Formatting helpers
@@ -171,77 +158,95 @@ def _fmt(v):
     return s.rstrip("0").rstrip(".") if "." in s else s
 
 # ---------------------------------------------------------------------------
-# Data access — all from techno_table
+# Data access — techno_actuals JOIN techno_param
 # ---------------------------------------------------------------------------
 
 def _avg_map(cur, months):
-    """(plant, param) → AVG(month_actual) over given months."""
+    """(row_label, param_name) → AVG(actual) over given months."""
     if not months:
         return {}
     ph = ",".join("?" * len(months))
     cur.execute(f"""
-        SELECT plant_name, parameter_name, AVG(month_actual)
-        FROM techno_table
-        WHERE report_month IN ({ph}) AND month_actual IS NOT NULL
-        GROUP BY plant_name, parameter_name
+        SELECT p.row_label, p.param_name, AVG(a.actual)
+        FROM techno_actuals a
+        JOIN techno_param p ON a.param_id = p.param_id
+        WHERE a.report_month IN ({ph}) AND a.actual IS NOT NULL
+        GROUP BY p.row_label, p.param_name
     """, months)
     return {(r[0], r[1]): r[2] for r in cur.fetchall()}
 
 
 def _ytd_of_month(cur, month):
-    """(plant, param) → ytd_actual for a single month."""
+    """(row_label, param_name) → YTD value.
+    Uses stored till_month_actual if present; otherwise AVG(actual) Apr→month."""
+    # 1. Stored till_month_actual for this month
     cur.execute("""
-        SELECT plant_name, parameter_name, ytd_actual
-        FROM techno_table
-        WHERE report_month=? AND ytd_actual IS NOT NULL
+        SELECT p.row_label, p.param_name, a.till_month_actual
+        FROM techno_actuals a
+        JOIN techno_param p ON a.param_id = p.param_id
+        WHERE a.report_month = ? AND a.till_month_actual IS NOT NULL
     """, (month,))
-    return {(r[0], r[1]): r[2] for r in cur.fetchall()}
+    out = {(r[0], r[1]): r[2] for r in cur.fetchall()}
+    # 2. Compute from monthly actuals for those without stored value
+    fy = _fy_start(month)
+    ytd_months = [m for m in _fy_months(fy) if m <= month]
+    for key, val in _avg_map(cur, ytd_months).items():
+        out.setdefault(key, val)
+    return out
 
 
 def _annual_map(cur, fy):
-    """(plant, param) → annual value for a past FY.
-    Uses latest stored ytd_actual within the FY (March = full year);
-    falls back to AVG(month_actual) when no ytd stored.
-    Returns (map, ytd_keys) where ytd_keys = params that had real ytd_actual."""
+    """(row_label, param_name) → annual value for a past FY.
+    Priority: stored March till_month_actual → AVG(12 months); NULL if <12 months.
+    Returns (map, stored_keys) where stored_keys came from plant-reported till_month_actual."""
+    march = f"{fy + 1}-03"
+    # 1. Stored March till_month_actual (plant-reported annual cumulative)
+    cur.execute("""
+        SELECT p.row_label, p.param_name, a.till_month_actual
+        FROM techno_actuals a
+        JOIN techno_param p ON a.param_id = p.param_id
+        WHERE a.report_month = ? AND a.till_month_actual IS NOT NULL
+    """, (march,))
+    out = {(r[0], r[1]): r[2] for r in cur.fetchall()}
+    stored_keys = set(out.keys())
+    # 2. AVG of all 12 months — only when full year data available
     months = _fy_months(fy)
-    ph = ",".join("?" * len(months))
+    ph = ",".join("?" * 12)
     cur.execute(f"""
-        SELECT plant_name, parameter_name, report_month, ytd_actual
-        FROM techno_table
-        WHERE report_month IN ({ph}) AND ytd_actual IS NOT NULL
-        ORDER BY report_month
+        SELECT p.row_label, p.param_name, COUNT(a.actual), AVG(a.actual)
+        FROM techno_actuals a
+        JOIN techno_param p ON a.param_id = p.param_id
+        WHERE a.report_month IN ({ph}) AND a.actual IS NOT NULL
+        GROUP BY p.row_label, p.param_name
     """, months)
-    out = {}
-    ytd_keys = set()
-    for plant, param, _, ytd in cur.fetchall():
-        key = (plant, param)
-        out[key] = ytd           # later month overwrites — March wins
-        ytd_keys.add(key)
-    for key, avg in _avg_map(cur, months).items():
-        out.setdefault(key, avg)
-    return out, ytd_keys
+    for rl, pn, cnt, avg in cur.fetchall():
+        key = (rl, pn)
+        if key not in out:
+            out[key] = avg if cnt == 12 else None
+    return out, stored_keys
 
 
 def _fetch_techno_data(cur, plant_params, months):
-    """Return {(plant, param): {month: month_actual}} for the given pairs and months."""
+    """Return {(row_label, param_name): {month: actual}} for the given pairs and months."""
     if not plant_params or not months:
         return {}
     pp_set  = set(plant_params)
-    plants  = list({p  for p, _ in pp_set})
-    params  = list({pm for _, pm in pp_set})
+    entities = list({p  for p, _ in pp_set})
+    params   = list({pm for _, pm in pp_set})
     ph_m  = ",".join("?" * len(months))
-    ph_p  = ",".join("?" * len(plants))
+    ph_p  = ",".join("?" * len(entities))
     ph_pm = ",".join("?" * len(params))
     cur.execute(
-        f"SELECT plant_name, parameter_name, report_month, month_actual "
-        f"FROM techno_table "
-        f"WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND parameter_name IN ({ph_pm})",
-        list(months) + plants + params,
+        f"SELECT p.row_label, p.param_name, a.report_month, a.actual "
+        f"FROM techno_actuals a "
+        f"JOIN techno_param p ON a.param_id = p.param_id "
+        f"WHERE a.report_month IN ({ph_m}) AND p.row_label IN ({ph_p}) AND p.param_name IN ({ph_pm})",
+        list(months) + entities + params,
     )
     result = {}
-    for plant, param, month, val in cur.fetchall():
-        if val is not None and (plant, param) in pp_set:
-            result.setdefault((plant, param), {})[month] = val
+    for rl, pn, month, val in cur.fetchall():
+        if val is not None and (rl, pn) in pp_set:
+            result.setdefault((rl, pn), {})[month] = val
     return result
 
 
@@ -412,11 +417,12 @@ def _inject_plant_weighted_annual(cur, fy_map, ytd_keys, months):
 
 
 def _inject_sail_techno(cur, mon_map, cum_map, ccum_map, cply_map,
-                        fy2_map, fy1_map,
-                        ytd, cply_ytd, cply_month, fy2_months, fy1_months):
-    """Compute SAIL weighted-average techno values and inject them into the
-    existing maps in-place, overriding stored SAIL values."""
-    all_months  = sorted(set(ytd) | set(cply_ytd) | {cply_month} | set(fy2_months) | set(fy1_months))
+                        fy2_map, fy1_map, fy3_map,
+                        ytd, cply_ytd, cply_month, fy2_months, fy1_months, fy3_months,
+                        fy2_stored=None, fy1_stored=None):
+    """Compute SAIL weighted-average techno values and fill gaps in maps.
+    Stored values always win — computed values only fill keys not already set."""
+    all_months   = sorted(set(ytd) | set(cply_ytd) | {cply_month} | set(fy2_months) | set(fy1_months) | set(fy3_months))
     plant_params = _all_sail_plant_params()
     techno_data  = _fetch_techno_data(cur, plant_params, all_months)
     prod_raw     = _fetch_prod_multi(cur, _BF_PLANTS, ["Hot Metal", "Total Crude Steel"], all_months)
@@ -425,29 +431,32 @@ def _inject_sail_techno(cur, mon_map, cum_map, ccum_map, cply_map,
 
     for m in ytd:
         for key, val in _compute_sail(techno_data, hm, cs, [m]).items():
-            mon_map.setdefault(key, {})[m] = val
+            mon_map.setdefault(key, {}).setdefault(m, val)
 
     for key, val in _compute_sail(techno_data, hm, cs, [cply_month]).items():
-        cply_map[key] = val
+        cply_map.setdefault(key, val)
 
     for key, val in _compute_sail(techno_data, hm, cs, ytd).items():
-        cum_map[key] = val
+        cum_map.setdefault(key, val)
 
     for key, val in _compute_sail(techno_data, hm, cs, cply_ytd).items():
-        ccum_map[key] = val
+        ccum_map.setdefault(key, val)
+
+    for key, val in _compute_sail(techno_data, hm, cs, fy3_months).items():
+        fy3_map.setdefault(key, val)
 
     for key, val in _compute_sail(techno_data, hm, cs, fy2_months).items():
-        fy2_map[key] = val
+        fy2_map.setdefault(key, val)
 
     for key, val in _compute_sail(techno_data, hm, cs, fy1_months).items():
-        fy1_map[key] = val
+        fy1_map.setdefault(key, val)
 
 
-def _inject_bsl_bf_wtavg(cur, cum_map, ccum_map, fy2_map, fy1_map,
-                          ytd, cply_ytd, fy2_months, fy1_months):
+def _inject_bsl_bf_wtavg(cur, cum_map, ccum_map, fy2_map, fy1_map, fy3_map,
+                          ytd, cply_ytd, fy2_months, fy1_months, fy3_months):
     """Compute YTD cumulative values for BSL BF per-furnace and Plant Shop params
     from monthly actuals so that uploading any middle month auto-corrects all cums."""
-    all_months = sorted(set(ytd) | set(cply_ytd) | set(fy2_months) | set(fy1_months))
+    all_months = sorted(set(ytd) | set(cply_ytd) | set(fy2_months) | set(fy1_months) | set(fy3_months))
     if not all_months:
         return
 
@@ -509,6 +518,7 @@ def _inject_bsl_bf_wtavg(cur, cum_map, ccum_map, fy2_map, fy1_map,
             key = (plant_name, section)
             cum_map[key]  = _agg(plant_name, section, ytd)
             ccum_map[key] = _agg(plant_name, section, cply_ytd)
+            fy3_map[key]  = _agg(plant_name, section, fy3_months)
             fy2_map[key]  = _agg(plant_name, section, fy2_months)
             fy1_map[key]  = _agg(plant_name, section, fy1_months)
 
@@ -529,60 +539,67 @@ def generate_techno(report_month: str, page_no: int) -> dict:
     cur  = conn.cursor()
     try:
         cur.execute("""
-            SELECT group_code, section, row_label, unit
-            FROM techno_param_master
-            WHERE group_code=? ORDER BY sort_order, param_id
+            SELECT p.param_name, p.row_label, p.unit
+            FROM techno_param p
+            JOIN techno_param_group g ON p.param_id = g.param_id
+            WHERE g.group_code = ?
+            ORDER BY g.sort_order, p.param_id
         """, (group,))
-        master = cur.fetchall()
+        master = cur.fetchall()   # [(param_name, row_label, unit), ...]
 
-        fy2_map, fy2_ytd_keys = _annual_map(cur, fy - 2)
-        fy1_map, fy1_ytd_keys = _annual_map(cur, fy - 1)
+        fy3_map, fy3_stored = _annual_map(cur, fy - 3)
+        fy2_map, fy2_stored = _annual_map(cur, fy - 2)
+        fy1_map, fy1_stored = _annual_map(cur, fy - 1)
         cum_map  = _ytd_of_month(cur, report_month)
         ccum_map = _ytd_of_month(cur, cply_month)
 
         # Per-month actuals for YTD columns
         ph = ",".join("?" * len(ytd))
         cur.execute(f"""
-            SELECT plant_name, parameter_name, report_month, month_actual
-            FROM techno_table WHERE report_month IN ({ph})
+            SELECT p.row_label, p.param_name, a.report_month, a.actual
+            FROM techno_actuals a
+            JOIN techno_param p ON a.param_id = p.param_id
+            WHERE a.report_month IN ({ph})
         """, ytd)
         mon_map = {}
-        for plant, param, m, v in cur.fetchall():
-            mon_map.setdefault((plant, param), {})[m] = v
+        for rl, pn, m, v in cur.fetchall():
+            mon_map.setdefault((rl, pn), {})[m] = v
 
         # CPLY monthly actuals
         cur.execute("""
-            SELECT plant_name, parameter_name, month_actual
-            FROM techno_table WHERE report_month=?
+            SELECT p.row_label, p.param_name, a.actual
+            FROM techno_actuals a
+            JOIN techno_param p ON a.param_id = p.param_id
+            WHERE a.report_month = ?
         """, (cply_month,))
         cply_map = {(r[0], r[1]): r[2] for r in cur.fetchall()}
 
-        # Annual targets (joined via param_master to get plant/param keys)
+        # Annual targets
         cur.execute("""
-            SELECT pm.group_code, pm.section, pm.row_label, tt.target
+            SELECT p.row_label, p.param_name, tt.target
             FROM techno_target tt
-            JOIN techno_param_master pm ON tt.param_id = pm.param_id
-            WHERE tt.fy=? AND pm.group_code=?
+            JOIN techno_param p ON tt.param_id = p.param_id
+            JOIN techno_param_group g ON p.param_id = g.param_id
+            WHERE tt.fy = ? AND g.group_code = ?
         """, (_fy_label(fy), group))
-        tgt_map = {}
-        for gc, sec, rl, tgt in cur.fetchall():
-            tgt_map[_pk(gc, sec, rl)] = tgt
+        tgt_map = {(r[0], r[1]): r[2] for r in cur.fetchall()}
 
         if group == "MAJOR":
-            _inject_plant_weighted_annual(cur, fy2_map, fy2_ytd_keys, _fy_months(fy - 2))
-            _inject_plant_weighted_annual(cur, fy1_map, fy1_ytd_keys, _fy_months(fy - 1))
+            _inject_plant_weighted_annual(cur, fy3_map, fy3_stored, _fy_months(fy - 3))
+            _inject_plant_weighted_annual(cur, fy2_map, fy2_stored, _fy_months(fy - 2))
+            _inject_plant_weighted_annual(cur, fy1_map, fy1_stored, _fy_months(fy - 1))
             _inject_sail_techno(
-                cur, mon_map, cum_map, ccum_map, cply_map, fy2_map, fy1_map,
+                cur, mon_map, cum_map, ccum_map, cply_map, fy2_map, fy1_map, fy3_map,
                 ytd, cply_ytd, cply_month,
-                _fy_months(fy - 2), _fy_months(fy - 1),
+                _fy_months(fy - 2), _fy_months(fy - 1), _fy_months(fy - 3),
             )
 
         if group == "IRON_MAKING":
-            # Plant Shop CDI rows mirror the MAJOR CDI Rate for each plant
+            # Plant Shop CDI Rate rows mirror the MAJOR CDI Rate for each plant
             for p in _BF_PLANTS:
                 src = (p, "CDI Rate")
-                dst = (f"{p} Plant Shop", "CDI")
-                for mp in (fy2_map, fy1_map, cum_map, ccum_map, cply_map, tgt_map):
+                dst = (f"{p} Plant Shop", "CDI Rate")
+                for mp in (fy3_map, fy2_map, fy1_map, cum_map, ccum_map, cply_map, tgt_map):
                     if src in mp:
                         mp.setdefault(dst, mp[src])
                 if src in mon_map:
@@ -590,29 +607,30 @@ def generate_techno(report_month: str, page_no: int) -> dict:
 
             _inject_bsl_bf_wtavg(
                 cur, cum_map, ccum_map,
-                fy2_map, fy1_map,
-                ytd, cply_ytd, _fy_months(fy - 2), _fy_months(fy - 1),
+                fy2_map, fy1_map, fy3_map,
+                ytd, cply_ytd, _fy_months(fy - 2), _fy_months(fy - 1), _fy_months(fy - 3),
             )
 
         # Build output sections
         sections, by_sec = [], {}
-        for group_code, section, row_label, unit in master:
-            if group == "MILL_DSP" and section == "Section Mill":
+        for param_name, row_label, unit in master:
+            if group == "MILL_DSP" and param_name == "Section Mill":
                 continue
-            if group == "COKE_SINTER" and section not in _COKE_SINTER_VISIBLE:
+            if group == "COKE_SINTER" and param_name not in _COKE_SINTER_VISIBLE:
                 continue
-            if group == "IRON_MAKING" and section not in _IRON_MAKING_VISIBLE:
+            if group == "IRON_MAKING" and param_name not in _IRON_MAKING_VISIBLE:
                 continue
-            if group == "SMS" and section not in _BOF_VISIBLE:
+            if group == "SMS" and param_name not in _BOF_VISIBLE:
                 continue
-            if group == "IRON_MAKING" and section in _DSP_FURNACE_SECTIONS \
+            if group == "IRON_MAKING" and param_name in _DSP_FURNACE_SECTIONS \
                     and not (row_label.startswith("DSP") or row_label.startswith("RSP")):
                 continue
 
-            pk = _pk(group_code, section, row_label)
+            pk = (row_label, param_name)
             row = {
                 "label":  row_label,
                 "unit":   unit or "",
+                "fy3":    _fmt(fy3_map.get(pk)),
                 "fy2":    _fmt(fy2_map.get(pk)),
                 "fy1":    _fmt(fy1_map.get(pk)),
                 "target": _fmt(tgt_map.get(pk)),
@@ -621,23 +639,25 @@ def generate_techno(report_month: str, page_no: int) -> dict:
                 "cum":      _fmt(cum_map.get(pk)),
                 "cum_cply": _fmt(ccum_map.get(pk)),
             }
-            if section not in by_sec:
-                by_sec[section] = {"label": section, "rows": []}
-                sections.append(by_sec[section])
-            by_sec[section]["rows"].append(row)
+            if param_name not in by_sec:
+                by_sec[param_name] = {"label": param_name, "rows": []}
+                sections.append(by_sec[param_name])
+            by_sec[param_name]["rows"].append(row)
 
         return {
-            "title":         title,
-            "subtitle":      subtitle,
-            "variant":       "techno_params",
-            "fy2_label":     _fy_label(fy - 2),
-            "fy1_label":     _fy_label(fy - 1),
-            "target_label":  f"Target {_fy_label(fy)}",
-            "month_labels":  [_mlabel(m) for m in ytd],
-            "cply_label":    _mlabel(cply_month),
-            "cum_label":     _cum_label(ytd),
+            "title":          title,
+            "subtitle":       subtitle,
+            "variant":        "techno_params",
+            "group":          group,
+            "fy3_label":      _fy_label(fy - 3),
+            "fy2_label":      _fy_label(fy - 2),
+            "fy1_label":      _fy_label(fy - 1),
+            "target_label":   f"Target {_fy_label(fy)}",
+            "month_labels":   [_mlabel(m) for m in ytd],
+            "cply_label":     _mlabel(cply_month),
+            "cum_label":      _cum_label(ytd),
             "cum_cply_label": _cum_label(cply_ytd),
-            "sections":      sections,
+            "sections":       sections,
         }
     finally:
         conn.close()
@@ -664,12 +684,13 @@ def generate_summary_te_table(report_month: str) -> list:
         hm = prod_raw["Hot Metal"]
         cs = prod_raw["Total Crude Steel"]
 
-        # Targets for SAIL via param_master join
+        # Targets for SAIL row in MAJOR group
         cur.execute("""
-            SELECT pm.section, tt.target
+            SELECT p.param_name, tt.target
             FROM techno_target tt
-            JOIN techno_param_master pm ON tt.param_id = pm.param_id
-            WHERE tt.fy=? AND pm.group_code='MAJOR' AND pm.row_label='SAIL'
+            JOIN techno_param p ON tt.param_id = p.param_id
+            JOIN techno_param_group g ON p.param_id = g.param_id
+            WHERE tt.fy = ? AND g.group_code = 'MAJOR' AND p.row_label = 'SAIL'
         """, (_fy_label(fy),))
         tgt_by_param = dict(cur.fetchall())
 
@@ -707,10 +728,11 @@ def generate_summary_chart_data(report_month: str) -> dict:
     try:
         # Targets for current FY SAIL row
         cur.execute("""
-            SELECT pm.section, tt.target
+            SELECT p.param_name, tt.target
             FROM techno_target tt
-            JOIN techno_param_master pm ON tt.param_id = pm.param_id
-            WHERE tt.fy=? AND pm.group_code='MAJOR' AND pm.row_label='SAIL'
+            JOIN techno_param p ON tt.param_id = p.param_id
+            JOIN techno_param_group g ON p.param_id = g.param_id
+            WHERE tt.fy = ? AND g.group_code = 'MAJOR' AND p.row_label = 'SAIL'
         """, (_fy_label(fy),))
         tgt_by_param = dict(cur.fetchall())
 
@@ -805,17 +827,18 @@ def compute_sail_targets(fy: str) -> dict:
         if val and val > 0:
             (hm_wt if item == "Hot Metal" else cs_wt)[plant] = val
 
-    # Plant-level targets from techno_target joined with param_master
+    # Plant-level targets from techno_target joined with techno_param
     cur.execute("""
-        SELECT pm.group_code, pm.section, pm.row_label, tt.target
+        SELECT p.row_label, p.param_name, tt.target
         FROM techno_target tt
-        JOIN techno_param_master pm ON tt.param_id = pm.param_id
-        WHERE tt.fy=? AND pm.group_code IN ('MAJOR','SMS')
-          AND pm.row_label != 'SAIL'
+        JOIN techno_param p ON tt.param_id = p.param_id
+        JOIN techno_param_group g ON p.param_id = g.param_id
+        WHERE tt.fy = ? AND g.group_code IN ('MAJOR','SMS')
+          AND p.row_label != 'SAIL'
     """, (fy,))
-    tgt = {}   # {(plant, param): target}
-    for gc, sec, rl, t in cur.fetchall():
-        tgt[_pk(gc, sec, rl)] = t
+    tgt = {}   # {(row_label, param_name): target}
+    for rl, pn, t in cur.fetchall():
+        tgt[(rl, pn)] = t
     conn.close()
 
     out = {}
@@ -871,7 +894,22 @@ def compute_sail_targets(fy: str) -> dict:
             den += cs
     out[("SAIL", "Specific Energy Consumption")] = round(num / den, 3) if den > 0 else None
 
-    return out
+    # Convert (row_label, param_name) keys → param_id for save_techno_target
+    conn2 = sqlite3.connect(db.DB_PATH)
+    cur2  = conn2.cursor()
+    result = {}
+    for (rl, pn), val in out.items():
+        if val is None:
+            continue
+        cur2.execute(
+            "SELECT param_id FROM techno_param WHERE row_label=? AND param_name=?",
+            (rl, pn),
+        )
+        row = cur2.fetchone()
+        if row:
+            result[row[0]] = val
+    conn2.close()
+    return result
 
 
 # ---------------------------------------------------------------------------

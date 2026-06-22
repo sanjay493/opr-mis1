@@ -1,0 +1,77 @@
+        <div class="catwise-wrap">
+        {% for section in page.sections %}
+            <div class="catwise-plant-title">{{ section.label }}</div>
+            <table class="catwise-table">
+                <colgroup>
+                    <col class="col-cat">
+                    <col class="col-lbl">
+                    <col class="col-num">
+                    <col class="col-num"><col class="col-num"><col class="col-num">
+                    <col class="col-num"><col class="col-num">
+                    <col class="col-num"><col class="col-num"><col class="col-num">
+                    <col class="col-num"><col class="col-num">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="cat-th">Cat.</th>
+                        <th rowspan="2" class="lbl-th">ITEM</th>
+                        <th rowspan="2">2026-27<br/>Plan</th>
+                        <th colspan="3">{{ page.month_label }}</th>
+                        <th rowspan="2">{{ page.cply_label }}<br/>Actual</th>
+                        <th rowspan="2">% Gr.<br/>over<br/>{{ page.cply_label }}</th>
+                        <th colspan="3">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th rowspan="2">Apr-{{ short_m }}'{{ short_prev_y }}<br/>Actual</th>
+                        <th rowspan="2">% Gr.<br/>over<br/>A-{{ short_m }}'{{ short_prev_y }}</th>
+                    </tr>
+                    <tr>
+                        <th>Plan</th><th>Actual</th><th>% Ful</th>
+                        <th>Plan</th><th>Actual</th><th>% Ful</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in section.rows %}
+                    {% if row.type == 'separator' %}
+                    <tr class="cw-separator"><td colspan="13"></td></tr>
+                    {% elif row.type == 'section-hdr' %}
+                    <tr class="cw-section-hdr">
+                        <td colspan="13" class="lbl-td">{{ row.label }}</td>
+                    </tr>
+                    {% elif row.category %}
+                    <tr class="cw-{{ row.type }}">
+                        {% if row.cat_first %}
+                        <td rowspan="{{ row.cat_rowspan }}" class="cat-td">{{ row.category }}</td>
+                        {% endif %}
+                        <td class="lbl-td">{{ row.label }}</td>
+                        <td class="num-td">{{ row.ann_plan }}</td>
+                        <td class="num-td">{{ row.m_plan }}</td>
+                        <td class="num-td">{{ row.m_act }}</td>
+                        <td class="num-td">{{ row.m_pct }}</td>
+                        <td class="num-td">{{ row.cply_act }}</td>
+                        <td class="num-td">{{ row.m_growth }}</td>
+                        <td class="num-td cum-td">{{ row.cum_plan }}</td>
+                        <td class="num-td cum-td">{{ row.cum_act }}</td>
+                        <td class="num-td cum-td">{{ row.cum_pct }}</td>
+                        <td class="num-td cum-td">{{ row.cum_cply }}</td>
+                        <td class="num-td cum-td">{{ row.cum_growth }}</td>
+                    </tr>
+                    {% else %}
+                    <tr class="cw-{{ row.type }}">
+                        <td colspan="2" class="lbl-td">{{ row.label }}</td>
+                        <td class="num-td">{{ row.ann_plan }}</td>
+                        <td class="num-td">{{ row.m_plan }}</td>
+                        <td class="num-td">{{ row.m_act }}</td>
+                        <td class="num-td">{{ row.m_pct }}</td>
+                        <td class="num-td">{{ row.cply_act }}</td>
+                        <td class="num-td">{{ row.m_growth }}</td>
+                        <td class="num-td cum-td">{{ row.cum_plan }}</td>
+                        <td class="num-td cum-td">{{ row.cum_act }}</td>
+                        <td class="num-td cum-td">{{ row.cum_pct }}</td>
+                        <td class="num-td cum-td">{{ row.cum_cply }}</td>
+                        <td class="num-td cum-td">{{ row.cum_growth }}</td>
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endfor %}
+        </div>
