@@ -3,6 +3,7 @@ import json
 import os
 from typing import List, Dict, Any, Optional
 from constants import ALL_PLANTS as PLANTS
+from techno_registry import canonical_unit as _canon_unit
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "mis_reports.db")
 
@@ -126,9 +127,10 @@ def init_db():
     """)
 
     # 8. Techno-economic parameter master (one row per group/section/row-label)
-    #    group_code: MAJOR / COKE_SINTER / IRON_MAKING / BOF / MILL_BSP ... MILL_ISP
-    #    section   : row-group header (parameter name, or shop for mill pages)
-    #    row_label : plant / shop / parameter shown on the row
+    #    group_code : MAJOR / COKE_SINTER / IRON_MAKING / BOF / MILL_* / BSL / BSP ...
+    #    section    : parameter name (cross-plant) or unit name (plant-specific legacy)
+    #    row_label  : 'PLANT UNIT' (cross-plant) or parameter name (legacy)
+    #    unit_type  : BF / SMS / MILL / COKE / SINTER / GENERAL (from plant_registry.py)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS techno_param_master (
             param_id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,21 +139,63 @@ def init_db():
             row_label  TEXT NOT NULL,
             unit       TEXT DEFAULT '',
             sort_order INTEGER DEFAULT 0,
+            unit_type  TEXT DEFAULT NULL,
             UNIQUE (group_code, section, row_label)
+        )
+    """)
+    try:
+        cursor.execute("ALTER TABLE techno_param_master ADD COLUMN unit_type TEXT DEFAULT NULL")
+    except Exception:
+        pass  # column already exists
+
+    # A. Plant unit registry — all physical units (furnaces, converters, mills) at each plant
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS plant_units (
+            unit_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            plant_code    TEXT NOT NULL,      -- 'BSP', 'DSP', 'RSP', 'BSL', 'ISP'
+            unit_type     TEXT NOT NULL,      -- 'BF', 'SMS', 'MILL', 'COKE', 'SINTER', 'GENERAL'
+            unit_name     TEXT NOT NULL,      -- 'BF-4', 'SMS-2', 'HSM', 'Shop'
+            display_label TEXT NOT NULL,      -- 'BSP BF-4' used as cross-plant row_label
+            is_shop       INTEGER DEFAULT 0,  -- 1 = plant-level average, not a physical unit
+            is_active     INTEGER DEFAULT 1,  -- 0 = decommissioned
+            sort_order    INTEGER DEFAULT 0,
+            UNIQUE(plant_code, unit_type, unit_name)
+        )
+    """)
+
+    # B. Standard techno-economic parameters per unit type with aggregation rules
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS techno_param_types (
+            type_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_type    TEXT NOT NULL,      -- 'BF', 'SMS', 'MILL', 'COKE', 'SINTER', 'GENERAL'
+            param_name   TEXT NOT NULL,      -- canonical parameter name
+            unit_of_meas TEXT DEFAULT '',    -- 'Kg/THM', 'T/m³/day', '%'
+            agg_method   TEXT DEFAULT 'weighted_avg',  -- how to compute shop average
+            sort_order   INTEGER DEFAULT 0,
+            UNIQUE(unit_type, param_name)
         )
     """)
 
     # 9. Techno monthly actuals (FK techno_param_master)
     #    cum_actual = plant-reported cumulative Apr → this month
+    #    source_priority: higher number = more authoritative (default 5 = extractor)
+    #      4 = computed aggregate (techno_aggregates.py)
+    #      3 = secondary/fallback source
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS techno_monthly (
-            report_month TEXT,
-            param_id     INTEGER REFERENCES techno_param_master(param_id),
-            actual       REAL,
-            cum_actual   REAL,
+            report_month    TEXT,
+            param_id        INTEGER REFERENCES techno_param_master(param_id),
+            actual          REAL,
+            cum_actual      REAL,
+            source_priority INTEGER DEFAULT 5,
             PRIMARY KEY (report_month, param_id)
         )
     """)
+    # Add source_priority column to existing databases that predate this schema
+    try:
+        cursor.execute("ALTER TABLE techno_monthly ADD COLUMN source_priority INTEGER DEFAULT 5")
+    except Exception:
+        pass  # column already exists
 
     # 10. Techno annual targets per FY ('2026-27')
     cursor.execute("""
@@ -189,6 +233,14 @@ def init_db():
     """)
 
     conn.commit()
+
+    # Seed plant_units and techno_param_types from plant_registry.py (idempotent)
+    try:
+        from plant_registry import seed_plant_registry
+        seed_plant_registry(conn)
+    except Exception:
+        pass  # non-critical — only affects registry metadata, not core data tables
+
     conn.close()
 
 def get_ytd_months(report_month: str) -> List[str]:
@@ -467,19 +519,20 @@ def get_sail_production_ytd_plan(months: List[str], item: str) -> Optional[float
 
 def save_production_actual(month: str, plant: str, item: str, value: Optional[float]):
     """Saves or updates an actual production record."""
+    item = item.strip()
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if value is None:
         cursor.execute("""
-            DELETE FROM production_table 
+            DELETE FROM production_table
             WHERE report_month = ? AND plant_name = ? AND item_name = ?
         """, (month, plant, item))
     else:
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
             VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name) 
+            ON CONFLICT(report_month, plant_name, item_name)
             DO UPDATE SET month_actual = excluded.month_actual
         """, (month, plant, item, value))
     conn.commit()
@@ -487,6 +540,7 @@ def save_production_actual(month: str, plant: str, item: str, value: Optional[fl
 
 def save_production_plan(month: str, plant: str, item: str, value: Optional[float]):
     """Saves or updates a planned production record."""
+    item = item.strip()
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -557,6 +611,21 @@ def save_techno_parameter(month: str, plant: str, parameter: str, unit: str, mon
     conn.close()
 
 
+def clear_special_steel_orders(month: str, plant: str) -> int:
+    """Delete all special_steel_orders rows for a given month + plant.
+    Called once before a batch insert so stale grades/products don't linger."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.execute(
+        "DELETE FROM special_steel_orders WHERE report_month=? AND plant_name=?",
+        (month, plant),
+    )
+    deleted = cur.rowcount
+    conn.commit()
+    conn.close()
+    return deleted
+
+
 def save_special_steel_entry(month: str, plant: str, product: str, quality_grade: str,
                              sort_order: int = 0, order_qty: Optional[float] = None,
                              actual_despatch: Optional[float] = None,
@@ -583,7 +652,7 @@ def save_special_steel_entry(month: str, plant: str, product: str, quality_grade
 
 def save_stock_entry(stock_month: str, plant: str, item_type: str,
                      stock_type: str = "", stock: Optional[float] = None):
-    """Upsert one opening-stock record (tonnes, as on 1st of stock_month)."""
+    """Upsert one opening-stock record ('000T, as on 1st of stock_month)."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
@@ -628,6 +697,7 @@ def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
 def get_or_create_techno_param(group_code: str, section: str, row_label: str,
                                unit: str = "", sort_order: int = 0) -> int:
     """Return param_id for the master row, creating/updating it as needed."""
+    unit = _canon_unit(unit, group_code, section)
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -649,19 +719,42 @@ def get_or_create_techno_param(group_code: str, section: str, row_label: str,
 
 
 def save_techno_value(month: str, param_id: int, actual: Optional[float],
-                      cum_actual: Optional[float] = None):
-    """Upsert one monthly techno actual with its Apr-to-month cumulative."""
+                      cum_actual: Optional[float] = None,
+                      source_priority: int = 5):
+    """Upsert one monthly techno actual with its Apr-to-month cumulative.
+
+    source_priority controls overwrite behaviour:
+      - On INSERT: always stored.
+      - On CONFLICT: only updates actual/cum_actual when incoming priority >=
+        the stored priority, preventing low-priority secondary sources from
+        overwriting high-priority primary extractions.
+      5 = direct extractor write (default)
+      4 = computed shop aggregate (techno_aggregates.py)
+      3 = secondary/fallback source
+    """
     init_db()
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
-        INSERT INTO techno_monthly (report_month, param_id, actual, cum_actual)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO techno_monthly (report_month, param_id, actual, cum_actual, source_priority)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(report_month, param_id) DO UPDATE SET
-            actual = excluded.actual,
-            cum_actual = COALESCE(excluded.cum_actual, cum_actual)
-    """, (month, param_id, actual, cum_actual))
+            actual          = CASE WHEN excluded.source_priority >= source_priority
+                                   THEN excluded.actual ELSE actual END,
+            cum_actual      = CASE WHEN excluded.source_priority >= source_priority
+                                   THEN COALESCE(excluded.cum_actual, cum_actual)
+                                   ELSE cum_actual END,
+            source_priority = CASE WHEN excluded.source_priority >= source_priority
+                                   THEN excluded.source_priority ELSE source_priority END
+    """, (month, param_id, actual, cum_actual, source_priority))
     conn.commit()
     conn.close()
+
+
+def save_techno_monthly(param_id: int, report_month: str, actual: Optional[float],
+                        cum_actual: Optional[float] = None,
+                        source_priority: int = 5):
+    """Alias for save_techno_value with param_id/month argument order used by techno_aggregates."""
+    save_techno_value(report_month, param_id, actual, cum_actual, source_priority)
 
 
 def save_techno_target(fy: str, param_id: int, target: Optional[float]):

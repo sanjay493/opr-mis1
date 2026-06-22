@@ -214,22 +214,22 @@ P18_TECHNO_ITEMS = [
 
 TECHNO_UNIT_MAP = {
     "Coal to Hot metal ratio": "--",
-    "Coke Rate": "kg/thm",
-    "Coke Rate BF-1": "kg/thm", "Coke Rate BF-4": "kg/thm", "Coke Rate BF-5": "kg/thm",
-    "Nut Coke Rate": "kg/thm",
-    "Nut Coke BF-1": "kg/thm", "Nut Coke BF-4": "kg/thm",
-    "CDI": "kg/thm",
-    "CDI BF-1": "kg/thm", "CDI BF-4": "kg/thm", "CDI BF-5": "kg/thm",
-    "Fuel Rate": "kg/thm",
-    "BF Productivity": "t/m3/day",
-    "BF Productivity BF-1": "t/m3/day", "BF Productivity BF-4": "t/m3/day", "BF Productivity BF-5": "t/m3/day",
+    "Coke Rate": "Kg/THM",
+    "Coke Rate BF-1": "Kg/THM", "Coke Rate BF-4": "Kg/THM", "Coke Rate BF-5": "Kg/THM",
+    "Nut Coke Rate": "Kg/THM",
+    "Nut Coke BF-1": "Kg/THM", "Nut Coke BF-4": "Kg/THM",
+    "CDI": "Kg/THM",
+    "CDI BF-1": "Kg/THM", "CDI BF-4": "Kg/THM", "CDI BF-5": "Kg/THM",
+    "Fuel Rate": "Kg/THM",
+    "BF Productivity": "T/m³/day",
+    "BF Productivity BF-1": "T/m³/day", "BF Productivity BF-4": "T/m³/day", "BF Productivity BF-5": "T/m³/day",
     "Sinter% in Burden": "%", "Pellet% in Burden": "%",
     "Si% in HM": "%", "Si% in HM BF-1": "%", "Si% in HM BF-4": "%", "Si% in HM BF-5": "%",
     "O2 Enrichment": "%", "O2 Enrichment BF-1": "%", "O2 Enrichment BF-4": "%", "O2 Enrichment BF-5": "%",
-    "Hot Blast Temp": "Deg C",
-    "Hot Blast Temp BF-1": "Deg C", "Hot Blast Temp BF-4": "Deg C", "Hot Blast Temp BF-5": "Deg C",
-    "Hot Blast Volume": "Nm3/min",
-    "Hot Blast Volume BF-1": "Nm3/min", "Hot Blast Volume BF-4": "Nm3/min", "Hot Blast Volume BF-5": "Nm3/min",
+    "Hot Blast Temp": "°C",
+    "Hot Blast Temp BF-1": "°C", "Hot Blast Temp BF-4": "°C", "Hot Blast Temp BF-5": "°C",
+    "Hot Blast Volume": "Nm³/min",
+    "Hot Blast Volume BF-1": "Nm³/min", "Hot Blast Volume BF-4": "Nm³/min", "Hot Blast Volume BF-5": "Nm³/min",
     "Energy consumption": "Gcal/tcs",
     "SMS-1 HM consumption per ton of crude steel": "kg/tcs",
     "SMS-1 Scrap consumption per ton of crude steel": "kg/tcs",
@@ -237,7 +237,7 @@ TECHNO_UNIT_MAP = {
     "SMS-2 HM consumption per ton of crude steel": "kg/tcs",
     "SMS-2 Scrap consumption per ton of crude steel": "kg/tcs",
     "SMS-2 TMI consumption per ton of crude steel": "kg/tcs",
-    "SMS-1 Oxygen Consumption": "Nm3/T", "SMS-2 Oxygen Consumption": "Nm3/T",
+    "SMS-1 Oxygen Consumption": "Nm³/T", "SMS-2 Oxygen Consumption": "Nm³/T",
     "SMS-1 Converter Yield": "%",        "SMS-2 Converter Yield": "%",
     "SMS-1 Caster Yield": "%",           "SMS-2 Caster Yield": "%",
     "SMS-1 Avg heat wt": "T/Blow",        "SMS-2 Avg heat wt": "T/Blow",
@@ -254,25 +254,38 @@ _BLOWS_DAILY_AVG = {"SMS-1 Avg Blows per day", "SMS-2 Avg Blows per day"}
 # P18 techno param name → (group_code, section, row_label, unit, sort_order)
 # These are also written to techno_monthly so page 29 (IRON MAKING) can display them.
 _IRON_MAKING_PARAM_MAP = {
-    "CDI":                  ("IRON_MAKING", "CDI",               "RSP Avg for CDI Fces", "Kg/Thm", 15),
-    "CDI BF-1":             ("IRON_MAKING", "CDI",               "RSP BF-1",             "Kg/Thm", 18),
-    "CDI BF-4":             ("IRON_MAKING", "CDI",               "RSP BF-4",             "Kg/Thm", 19),
-    "CDI BF-5":             ("IRON_MAKING", "CDI",               "RSP BF-5",             "Kg/Thm", 20),
-    "Coke Rate BF-1":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-1",             "Kg/T",    53),
-    "Coke Rate BF-4":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-4",             "Kg/T",    54),
-    "Coke Rate BF-5":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-5",             "Kg/T",    55),
-    "Nut Coke BF-1":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-1",             "Kg/T",    63),
-    "Nut Coke BF-4":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-4",             "Kg/T",    64),
-    "Nut Coke BF-5":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-5",             "Kg/T",    65),
-    "BF Productivity BF-1": ("IRON_MAKING", "BF Productivity",   "RSP BF-1",             "T/m3/Day",73),
-    "BF Productivity BF-4": ("IRON_MAKING", "BF Productivity",   "RSP BF-4",             "T/m3/Day",74),
-    "BF Productivity BF-5": ("IRON_MAKING", "BF Productivity",   "RSP BF-5",             "T/m3/Day",75),
-    "Si% in HM BF-1":       ("IRON_MAKING", "Si in HM",         "RSP BF-1",             "%",       83),
-    "Si% in HM BF-4":       ("IRON_MAKING", "Si in HM",         "RSP BF-4",             "%",       84),
-    "Si% in HM BF-5":       ("IRON_MAKING", "Si in HM",         "RSP BF-5",             "%",       85),
-    "Hot Blast Temp BF-1":  ("IRON_MAKING", "Blast Temperature", "RSP BF-1",             "°C",     103),
-    "Hot Blast Temp BF-4":  ("IRON_MAKING", "Blast Temperature", "RSP BF-4",             "°C",     104),
-    "Hot Blast Temp BF-5":  ("IRON_MAKING", "Blast Temperature", "RSP BF-5",             "°C",     105),
+    "CDI":                  ("IRON_MAKING", "CDI",               "RSP Plant Shop",       "Kg/THM", 15),
+    "CDI BF-1":             ("IRON_MAKING", "CDI",               "RSP BF-1",             "Kg/THM", 18),
+    "CDI BF-4":             ("IRON_MAKING", "CDI",               "RSP BF-4",             "Kg/THM", 19),
+    "CDI BF-5":             ("IRON_MAKING", "CDI",               "RSP BF-5",             "Kg/THM", 20),
+    "Coke Rate BF-1":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-1",             "Kg/THM",  53),
+    "Coke Rate BF-4":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-4",             "Kg/THM",  54),
+    "Coke Rate BF-5":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-5",             "Kg/THM",  55),
+    "Nut Coke BF-1":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-1",             "Kg/THM",  63),
+    "Nut Coke BF-4":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-4",             "Kg/THM",  64),
+    "Nut Coke BF-5":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-5",             "Kg/THM",  65),
+    "BF Productivity BF-1": ("IRON_MAKING", "BF Productivity",   "RSP BF-1",             "T/m³/day",73),
+    "BF Productivity BF-4": ("IRON_MAKING", "BF Productivity",   "RSP BF-4",             "T/m³/day",74),
+    "BF Productivity BF-5": ("IRON_MAKING", "BF Productivity",   "RSP BF-5",             "T/m³/day",75),
+    "Si% in HM BF-1":       ("IRON_MAKING", "Si in HM",          "RSP BF-1",             "%",       83),
+    "Si% in HM BF-4":       ("IRON_MAKING", "Si in HM",          "RSP BF-4",             "%",       84),
+    "Si% in HM BF-5":       ("IRON_MAKING", "Si in HM",          "RSP BF-5",             "%",       85),
+    "Hot Blast Temp BF-1":  ("IRON_MAKING", "HBT",               "RSP BF-1",             "°C",     103),
+    "Hot Blast Temp BF-4":  ("IRON_MAKING", "HBT",               "RSP BF-4",             "°C",     104),
+    "Hot Blast Temp BF-5":  ("IRON_MAKING", "HBT",               "RSP BF-5",             "°C",     105),
+    # Shop-level rows — RSP source file provides shop averages directly
+    "Coke Rate":            ("IRON_MAKING", "BF Coke Rate",      "RSP Plant Shop",       "Kg/THM",  48),
+    "Nut Coke Rate":        ("IRON_MAKING", "Nut Coke Rate",     "RSP Plant Shop",       "Kg/THM",  58),
+    "BF Productivity":      ("IRON_MAKING", "BF Productivity",   "RSP Plant Shop",       "T/m³/day",68),
+    "Si% in HM":            ("IRON_MAKING", "Si in HM",          "RSP Plant Shop",       "%",       79),
+    "Hot Blast Temp":       ("IRON_MAKING", "HBT",               "RSP Plant Shop",       "°C",      99),
+    "Fuel Rate":            ("IRON_MAKING", "Fuel Rate",         "RSP Plant Shop",       "Kg/THM", 109),
+    "Sinter% in Burden":    ("IRON_MAKING", "Sinter in Burden",  "RSP Plant Shop",       "%",      119),
+    "Pellet% in Burden":    ("IRON_MAKING", "Pellet in Burden",  "RSP Plant Shop",       "%",      129),
+    "O2 Enrichment":        ("IRON_MAKING", "O2 Enrichment",     "RSP Plant Shop",       "%",      149),
+    "O2 Enrichment BF-1":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-1",             "%",      146),
+    "O2 Enrichment BF-4":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-4",             "%",      147),
+    "O2 Enrichment BF-5":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-5",             "%",      148),
 }
 
 # ---------------------------------------------------------------------------
@@ -950,8 +963,13 @@ def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
         is_total = label.upper().startswith("TOTAL")
         sort += 1
 
+        # CRNO grade belongs to "Pipes, CRNO" regardless of where it sits in the Excel layout
+        row_product = cur_product
+        if not is_total and label.upper() == "CRNO":
+            row_product = "Pipes, CRNO"
+
         rows.append({
-            "product":         "" if is_total else cur_product,
+            "product":         "" if is_total else row_product,
             "quality_grade":   label,
             "section":         "",
             "sort_order":      sort,
@@ -985,11 +1003,11 @@ def _save_rsp_special_steel(wb, report_month: str, source_file_name: str) -> boo
     result  = _extract_rsp_ss_preview(wb, report_month)
     db_month = result["month"]
     saved = 0
-    for r in result["special_steel_rows"]:
-        if r["status"] != "ok":
-            continue
-        if r.get("order_qty") is None and r.get("actual_despatch") is None:
-            continue
+    _ss_rows = [r for r in result["special_steel_rows"]
+                if r["status"] == "ok" and (r.get("order_qty") is not None or r.get("actual_despatch") is not None)]
+    if _ss_rows:
+        _db.clear_special_steel_orders(db_month, "RSP")
+    for r in _ss_rows:
         _db.save_special_steel_entry(
             db_month, "RSP",
             r["product"], r["quality_grade"],
@@ -1008,6 +1026,44 @@ def _save_rsp_special_steel(wb, report_month: str, source_file_name: str) -> boo
     return saved > 0
 
 
+def _extract_morning_stock(ws, db_report_month: str) -> list:
+    """Extract opening stock from RSP Daily Morning Report worksheet.
+
+    Two months of data per run:
+      this_month = stock as on 1st of db_report_month  (C301, J268)
+      next_month = stock as on 1st of next month        (D301, K268, L296)
+
+    Cell mapping (raw Tonnes → stored as '000T, 3 d.p.):
+      C301 → SLABS INPROCESS, this_month
+      D301 → SLABS INPROCESS, next_month
+      J268 → FINISHED STEEL,  this_month
+      K268 → FINISHED STEEL,  next_month
+      L296 → PIG IRON,        next_month only
+    """
+    y, m = int(db_report_month[:4]), int(db_report_month[5:7])
+    this_month = db_report_month
+    next_month = f"{y+1 if m == 12 else y}-{1 if m == 12 else m+1:02d}"
+
+    def _t(v):
+        f = clean_val(v)
+        return round(f / 1000, 3) if f is not None else None
+
+    def _row(item_type, stock_type, stock_month, value, formula):
+        return {
+            "plant": "RSP", "item_type": item_type, "stock_type": stock_type,
+            "stock_month": stock_month, "value": value, "formula": formula,
+            "status": "ok" if value is not None else "skip",
+        }
+
+    return [
+        _row("SLABS",         "INPROCESS", this_month, _t(ws["C301"].value), "C301 (opening this month)"),
+        _row("SLABS",         "INPROCESS", next_month, _t(ws["D301"].value), "D301 (opening next month)"),
+        _row("FINISHED STEEL", "",         this_month, _t(ws["J268"].value), "J268 (opening this month)"),
+        _row("FINISHED STEEL", "",         next_month, _t(ws["K268"].value), "K268 (opening next month)"),
+        _row("PIG IRON",      "",          next_month, _t(ws["L296"].value), "L296 (opening next month)"),
+    ]
+
+
 def extract_preview(file_path: str, report_month: str) -> dict:
     """Unified RSP preview: production + techno_table + mill/sinter techno params.
     Auto-detects file type. No database writes."""
@@ -1019,7 +1075,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
 
     sheet_names = wb.sheetnames
 
-    production_rows, techno_rows = [], []
+    production_rows, techno_rows, stock_rows = [], [], []
     source_type, sheets_used = "Techno Parameters File", ""
     db_report_month, month_num = _parse_report_month(report_month)
 
@@ -1053,23 +1109,25 @@ def extract_preview(file_path: str, report_month: str) -> dict:
                 _d, m_num2, year = dm.groups()
                 db_report_month = f"{year}-{m_num2}"
             production_rows = _preview_production_from_cells(ws, MORNING_CELLS)
+            stock_rows = _extract_morning_stock(ws, db_report_month)
 
     techno_param_rows, mill_meta = [], {}
-    try:
-        t = extract_techno_params(wb, db_report_month)
-        if t.get("shops_found") or t.get("sinter_found"):
-            techno_param_rows = t["rows"]
-            mill_meta = {
-                "mill_sheet":        t["sheet"],
-                "month_col":         t["month_col"],
-                "cum_col":           t["cum_col"],
-                "shops_found":       t["shops_found"],
-                "sinter_found":      t.get("sinter_found", []),
-            }
-    except Exception as e:
-        logger.warning(f"RSP mill/sinter techno scan skipped: {e}")
+    if source_type != "Daily Morning Report":
+        try:
+            t = extract_techno_params(wb, db_report_month)
+            if t.get("shops_found") or t.get("sinter_found"):
+                techno_param_rows = t["rows"]
+                mill_meta = {
+                    "mill_sheet":        t["sheet"],
+                    "month_col":         t["month_col"],
+                    "cum_col":           t["cum_col"],
+                    "shops_found":       t["shops_found"],
+                    "sinter_found":      t.get("sinter_found", []),
+                }
+        except Exception as e:
+            logger.warning(f"RSP mill/sinter techno scan skipped: {e}")
 
-    if not production_rows and not techno_rows and not techno_param_rows:
+    if not production_rows and not techno_rows and not techno_param_rows and not stock_rows:
         raise ValueError(
             "No extractable data found. Expected an RSP Final Monthly Report, "
             "Daily Morning Report, or a techno-parameters workbook with mill sections.")
@@ -1083,6 +1141,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
         "production_rows":    production_rows,
         "techno_rows":        techno_rows,
         "techno_param_rows":  techno_param_rows,
+        "stock_rows":         stock_rows,
         **mill_meta,
     }
 

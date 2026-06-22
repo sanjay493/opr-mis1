@@ -233,7 +233,8 @@
           "6.33"
         ]
       }
-    ]
+    ],
+    "production_narrative": ""
   },
   {
     "page": 4,
@@ -12289,6 +12290,7 @@
   {
     "page": 18,
     "type": "segment_wise",
+    "orientation": "portrait",
     "title": "SEGMENT WISE PRODUCTION",
     "month_label": "",
     "cply_label": "",
@@ -12321,13 +12323,7 @@
   {
     "page": 23,
     "type": "special_steel",
-    "title": "SPECIAL STEEL PERFORMANCE FOR ISP",
-    "orientation": "portrait"
-  },
-  {
-    "page": 24,
-    "type": "special_steel",
-    "title": "SPECIAL STEEL PERFORMANCE OF SAIL",
+    "title": "SPECIAL STEEL PERFORMANCE — ISP & SAIL",
     "orientation": "portrait"
   },
   {
@@ -12346,54 +12342,54 @@
     "page": 27,
     "type": "techno_params",
     "title": "MAJOR TECHNO-ECONOMIC PARAMETERS",
-    "orientation": "landscape"
+    "orientation": "portrait"
   },
   {
     "page": 28,
     "type": "techno_params",
     "title": "MONTH-WISE TECHNO-ECONOMIC PARAMETERS - COKE & SINTER",
-    "orientation": "landscape"
+    "orientation": "portrait"
   },
   {
     "page": 29,
     "type": "techno_params",
     "title": "MONTH-WISE TECHNO-ECONOMIC PARAMETERS - IRON MAKING",
-    "orientation": "landscape"
+    "orientation": "portrait"
   },
   {
     "page": 30,
     "type": "techno_params",
     "title": "MONTH-WISE TECHNO-ECONOMIC PARAMETERS - BOF SHOP",
-    "orientation": "landscape"
+    "orientation": "portrait"
   },
   {
     "page": 31,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - BSP",
-    "orientation": "landscape"
+    "orientation": "portrait"
   },
   {
     "page": 32,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - DSP",
-    "orientation": "landscape"
+    "orientation": "portrait"
   },
   {
     "page": 33,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - RSP",
-    "orientation": "landscape"
+    "orientation": "portrait"
   },
   {
     "page": 34,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - BSL",
-    "orientation": "landscape"
+    "orientation": "portrait"
   },
   {
     "page": 35,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - ISP",
-    "orientation": "landscape"
+    "orientation": "portrait"
   }
 ]

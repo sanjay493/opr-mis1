@@ -1,9 +1,8 @@
 """
-Special Steel Report — pages 19-24.
+Special Steel Report — pages 19-23.
 
 Pages 19-22: Plant detail (BSP/DSP/RSP/BSL) — Quality/Grade-wise orders & actual.
-Page 23:     ISP — Mill-wise summary (US Mill / Semis / WRM / Bar Mill).
-Page 24:     SAIL consolidated — Plant-wise totals with ABP column.
+Page 23:     ISP mill-wise + SAIL consolidated combined on one page.
 
 Data source: special_steel_orders table
   (report_month, plant_name, product, quality_grade, sort_order, order_qty, actual_despatch)
@@ -13,6 +12,7 @@ Each page carries two period sets side-by-side:
   • Cumulative: Apr→current month vs CPLY same range (Apr last-year → CPLY month)
 """
 import math
+import datetime as _dt
 import sqlite3
 import db
 
@@ -601,3 +601,24 @@ def generate_special_steel_sail(report_month: str) -> dict:
         }
     finally:
         conn.close()
+
+
+def generate_special_steel_isp_sail(report_month: str) -> dict:
+    """Page 23 combined: ISP mill-wise + SAIL summary on one page."""
+    dt = _dt.datetime.strptime(report_month, "%Y-%m")
+    ml = dt.strftime("%b'%y")
+    cl = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
+
+    isp  = generate_special_steel_plant(report_month, "ISP")
+    sail = generate_special_steel_sail(report_month)
+    isp["month_label"]  = ml;  isp["cply_label"]  = cl
+    sail["month_label"] = ml;  sail["cply_label"] = cl
+
+    return {
+        "variant":     "isp_sail_combined",
+        "title":       "SPECIAL STEEL PERFORMANCE — ISP & SAIL",
+        "month_label": ml,
+        "cply_label":  cl,
+        "isp":         isp,
+        "sail":        sail,
+    }

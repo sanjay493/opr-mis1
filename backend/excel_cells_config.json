@@ -1,0 +1,129 @@
+{
+  "_doc": "Cell-address config for Excel/PDF extractors. Edit here when a file format changes — no Python code changes needed. All changes take effect on the next upload (no restart). Keys: 'cells' for A1-style addresses, 'cells_rc' for [row_0based, col_0based, divide_by_1000] tuples.",
+
+  "bsl_dpr": {
+    "_doc": "BSL DPR Mail month-end report. Sheet: DPR. Date auto-detected from date_cell (Excel datetime).",
+    "sheet": "DPR",
+    "date_cell": "O1",
+    "plant": "BSL",
+    "no_convert": ["Oven Pushing(nos/d)"],
+    "cells": {
+      "Oven Pushing(nos/d)": "P6",
+      "Total Sinter":        "P7",
+      "Hot Metal":           "P8",
+      "Pig Iron":            "E30",
+      "SMS-1 CCM-1":         "P10",
+      "SMS-2 CCM-1&2":       "P11",
+      "Total Crude Steel":   "P12",
+      "HSM Total HR Coil":   "P14",
+      "HSM HR Coil (Sale)":  "E7",
+      "HSM HR Plate":        "E8",
+      "HR Sheet":            "E9",
+      "CRC&S(1&2)":          "E10",
+      "CRC(3)":              "E11",
+      "GP/GC":               "E12",
+      "GPC3":                "E13",
+      "CRSALE":              "E29",
+      "Saleable Steel":      "P31",
+      "Saleable Semis":      "E32"
+    },
+    "derived": [
+      { "item": "Finished Steel", "op": "subtract", "a": "P31", "b": "E32" }
+    ]
+  },
+
+  "isp_morning": {
+    "_doc": "ISP Morning Report (month-end daily). Sheet: DAILYREPORT1. Date auto-detected from date_cell.",
+    "sheet": "DAILYREPORT1",
+    "date_cell": "K5",
+    "plant": "ISP",
+    "no_convert": ["COB#10", "COB#11", "Oven Pushing(nos/d)"],
+    "cells": {
+      "COB#10":               "E9",
+      "COB#11":               "E10",
+      "Oven Pushing(nos/d)":  "E11",
+      "SP-1":                 "E12",
+      "SP-2":                 "E13",
+      "Total Sinter":         "E14",
+      "Hot Metal":            "E16",
+      "CCM-1&2":              "E30",
+      "CCM-3":                "E31",
+      "Total Crude Steel":    "E32",
+      "WRMILL":               "E33",
+      "BARMILL":              "E34",
+      "USMILL":               "E35",
+      "Finished Steel":       "E36",
+      "Saleable 150 Billets": "E37",
+      "200 Blooms":           "E38",
+      "Saleable Steel":       "E39"
+    },
+    "derived": [
+      { "item": "Pig Iron",       "op": "add", "cells": ["E18", "E20"] },
+      { "item": "Saleable Semis", "op": "add", "cells": ["E37", "E38"] }
+    ]
+  },
+
+  "bsp_ppc_mis": {
+    "_doc": "BSP PPC MIS daily report (.xls, sheet S1). date_rc = [row_0based, col_0based]. cells_rc values: [row_0based, col_0based, divide_by_1000].",
+    "sheet": "S1",
+    "date_rc": [0, 13],
+    "plant": "BSP",
+    "no_convert": ["COB#1-8", "Oven Pushing(nos/d)"],
+    "cells_rc": {
+      "COB#1-8":             [3,  5,  false],
+      "Oven Pushing(nos/d)": [5,  5,  false],
+      "SP-2":                [7,  5,  true],
+      "SP-3":                [8,  5,  true],
+      "Total Sinter":        [9,  5,  true],
+      "BF#1-7":              [10, 5,  true],
+      "BF#8":                [11, 5,  true],
+      "Hot Metal":           [12, 5,  true],
+      "SMS-2":               [13, 5,  true],
+      "SMS-3":               [15, 5,  true],
+      "Total Crude Steel":   [16, 5,  true],
+      "RSM_RAIL":            [17, 5,  true],
+      "URM_RAIL":            [21, 5,  true],
+      "MM":                  [23, 5,  true],
+      "WIRERODS":            [24, 5,  true],
+      "BARS&RODMILL":        [25, 5,  true],
+      "PLATEMILL":           [26, 5,  true],
+      "Finished Steel":      [27, 5,  true],
+      "Saleable Semis":      [34, 5,  true],
+      "Saleable Steel":      [35, 5,  true],
+      "RSMPRIME":            [38, 5,  true],
+      "URMPRIME":            [38, 9,  true],
+      "Pig Iron":            [62, 13, true]
+    }
+  },
+
+  "dsp_pdf": {
+    "_doc": "DSP PDF extractor — label text → (item_name_in_DB, convert_to_000T). Edit when PDF headings change. Labels are matched case-insensitively after stripping serial prefixes.",
+    "item_map": [
+      ["nos per day",      "Oven Pushing(nos/d)",  false],
+      ["sinter",           "Total Sinter",         true],
+      ["sp 1",             "SP-1",                 true],
+      ["sp 2",             "SP-2",                 true],
+      ["hot metal",        "Hot Metal",            true],
+      ["bf 2",             "BF#2",                 true],
+      ["bf 3",             "BF#3",                 true],
+      ["bf 4",             "BF#4",                 true],
+      ["hm to asp",        "Hot Metal to ASP",     true],
+      ["pig iron",         "Pig Iron",             true],
+      ["crude steel",      "Total Crude Steel",    true],
+      ["bottom pouring",   "BOTTOM_POURING_INGOT", true],
+      ["concast steel",    "Total Caster",         true],
+      ["cc billet",        "BILLET Caster",        true],
+      ["cc bloom",         "Bloom Caster ",        true],
+      ["brc bloom",        "BRC",                  true],
+      ["brc round",        "Round Production",     true],
+      ["merchant mill",    "MM",                   true],
+      ["msm",              "MSM",                  true],
+      ["wheel axle plant", "WAP",                  true]
+    ],
+    "saleable_map": [
+      ["finished", "Finished Steel",  true],
+      ["semis",    "Saleable Semis",  true],
+      ["total",    "Saleable Steel",  true]
+    ]
+  }
+}

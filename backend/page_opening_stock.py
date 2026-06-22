@@ -5,15 +5,18 @@ Data source: stock_table
   (stock_month 'YYYY-MM' = stock as on 1st of that month,
    plant_name, item_type, stock_type, stock in tonnes)
 
-Stored item_types : STEEL INGOTS, SLABS, BLOOM/BILLETS, FINISHED STEEL, PIG IRON
+Stored item_types : SLABS, BLOOM/BILLETS, FINISHED STEEL, PIG IRON
 Stored stock_types: INPROCESS / FOR SALE  (SLABS, BLOOM/BILLETS only), '' otherwise.
 
-Derived sections (computed, never stored):
-  4 SEMIS (For Sale)  = SLABS b + BLOOM/BILLETS b
-  5 SEMIS (In process)= SLABS a + BLOOM/BILLETS a
-  6 SEMIS (Total)     = 4 + 5
-  8 SALEABLE STEEL    = 4 + 7 (FINISHED STEEL)
-  9 TOTAL STEEL INV.  = 1 + 5 + 8
+Section numbering (Steel Ingots removed):
+  1 SLABS
+  2 BLOOM/BILLETS
+  3 SEMIS (For Sale)   = 1b + 2b
+  4 SEMIS (In process) = 1a + 2a
+  5 SEMIS (Total)      = 3 + 4
+  6 FINISHED STEEL
+  7 SALEABLE STEEL     = 3 + 6
+  8 TOTAL STEEL INV.   = 4 + 7
 
 Column selection for a report month:
   • 1st Jan of last two FYs                                (e.g. 1.1.25, 1.1.26)
@@ -50,8 +53,8 @@ def _nsum(*vals):
     return sum(vs) if vs else None
 
 def _fmt(v):
-    """Tonnes → '000T display."""
-    return "" if v is None else str(int(round(v / 1000)))
+    """'000T value → integer display string."""
+    return "" if v is None else str(int(round(v)))
 
 
 # ── data access ───────────────────────────────────────────────────────────────
@@ -86,10 +89,10 @@ def _derived(data, m, p):
     semis_inp  = _nsum(sl_a, bb_a)
     semis_tot  = _nsum(semis_sale, semis_inp)
     saleable   = _nsum(semis_sale, fin)
-    tot_inv    = _nsum(ing, semis_inp, saleable)
+    tot_inv    = _nsum(semis_inp, saleable)   # Steel Ingots excluded
 
     return {
-        "ing": ing, "sl_a": sl_a, "sl_b": sl_b, "bb_a": bb_a, "bb_b": bb_b,
+        "sl_a": sl_a, "sl_b": sl_b, "bb_a": bb_a, "bb_b": bb_b,
         "fin": fin, "pig": pig,
         "semis_sale": semis_sale, "semis_inp": semis_inp, "semis_tot": semis_tot,
         "saleable": saleable, "tot_inv": tot_inv,
@@ -188,10 +191,11 @@ def generate_opening_stock(report_month: str) -> dict:
             rows = [_row("", p, vals(p, key), apr_i, nxt_i) for p in PLANTS]
             rows.append(_row("", "SAIL", vals("SAIL", key), apr_i, nxt_i,
                              bold=True, sail=True))
+            for r in rows:
+                r["plant_rowspan"] = 1
             return {"label": label, "code": code, "rows": rows}
 
         def split_section(label, code, key_a, key_b, item):
-            # only plants that actually have records for this item
             sp = [p for p in PLANTS
                   if any(_g(data, m, p, item, st) is not None
                          for m in months for st in ("INPROCESS", "FOR SALE"))]
@@ -200,21 +204,24 @@ def generate_opening_stock(report_month: str) -> dict:
                 is_sail = p == "SAIL"
                 va, vb = vals(p, key_a), vals(p, key_b)
                 vt = [_nsum(a_, b_) for a_, b_ in zip(va, vb)]
-                rows.append(_row("a INPROCESS", p, va, apr_i, nxt_i, sail=is_sail))
-                rows.append(_row("b FOR SALE", "", vb, apr_i, nxt_i, sail=is_sail))
-                rows.append(_row("TOTAL", "", vt, apr_i, nxt_i, bold=True, sail=is_sail))
+                r_a = _row("[a] INPROCESS", p, va, apr_i, nxt_i, sail=is_sail)
+                r_b = _row("[b] FOR SALE",  p, vb, apr_i, nxt_i, sail=is_sail)
+                r_t = _row("TOTAL",         p, vt, apr_i, nxt_i, bold=True, sail=is_sail)
+                r_a["plant_rowspan"] = 3   # plant td spans all 3 rows
+                r_b["plant_rowspan"] = 0   # no plant td — merged into above
+                r_t["plant_rowspan"] = 0   # no plant td — merged into above
+                rows.extend([r_a, r_b, r_t])
             return {"label": label, "code": code, "rows": rows}
 
         sections = [
-            simple_section("STEEL INGOTS", "1", "ing"),
-            split_section("SLABS", "2", "sl_a", "sl_b", "SLABS"),
-            split_section("BLOOM/BILLETS", "3", "bb_a", "bb_b", "BLOOM/BILLETS"),
-            simple_section("SEMIS (For Sale)", "4 (2b+3b)", "semis_sale"),
-            simple_section("SEMIS (In process)", "5 (2a+3a)", "semis_inp"),
-            simple_section("SEMIS (Total)", "6 (4+5)", "semis_tot"),
-            simple_section("FINISHED STEEL", "7", "fin"),
-            simple_section("SALEABLE STEEL (Plant)", "8 (4+7)", "saleable"),
-            simple_section("TOTAL STEEL INVENTORY (PLANT)", "9 (1+5+8)", "tot_inv"),
+            split_section("SLABS", "1", "sl_a", "sl_b", "SLABS"),
+            split_section("BLOOM/BILLETS", "2", "bb_a", "bb_b", "BLOOM/BILLETS"),
+            simple_section("SEMIS (For Sale)", "3 (1b+2b)", "semis_sale"),
+            simple_section("SEMIS (In process)", "4 (1a+2a)", "semis_inp"),
+            simple_section("SEMIS (Total)", "5 (3+4)", "semis_tot"),
+            simple_section("FINISHED STEEL", "6", "fin"),
+            simple_section("SALEABLE STEEL (Plant)", "7 (3+6)", "saleable"),
+            simple_section("TOTAL STEEL INVENTORY (PLANT)", "8 (4+7)", "tot_inv"),
             simple_section("PIG IRON (PLANT)", "", "pig"),
         ]
 

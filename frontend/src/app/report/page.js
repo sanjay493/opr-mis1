@@ -35,7 +35,7 @@ const PAGE_LABELS = {
   27: 'Major Techno-Economic Parameters',
   28: 'Techno – Coke & Coal Chemicals, Sinter',
   29: 'Techno – Iron Making',
-  30: 'Techno – BOF Shop',
+  30: 'Techno – SMS Shop',
   31: 'Mill Wise Techno – BSP',
   32: 'Mill Wise Techno – DSP',
   33: 'Mill Wise Techno – RSP',
@@ -222,16 +222,37 @@ export default function ReportPage() {
   const [pageLayouts, setPageLayouts] = useState({});
   const [fontConfig, setFontConfig] = useState(FONT_CONFIG_DEFAULTS);
 
-  // Load persisted layouts and font config after mount — localStorage not available during SSR
+  // Load layout config from server, then overlay localStorage overrides.
+  // Priority: localStorage (user's UI tweaks) > layout_config.json > hardcoded defaults.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('reportPageLayouts');
-      if (saved) setPageLayouts(JSON.parse(saved));
-    } catch {}
-    try {
-      const savedFont = localStorage.getItem('reportFontConfig');
-      if (savedFont) setFontConfig((prev) => ({ ...prev, ...JSON.parse(savedFont) }));
-    } catch {}
+    const savedLayouts = (() => { try { return JSON.parse(localStorage.getItem('reportPageLayouts') || 'null'); } catch { return null; } })();
+    const savedFont    = (() => { try { return JSON.parse(localStorage.getItem('reportFontConfig')   || 'null'); } catch { return null; } })();
+
+    fetchWithTimeout(`${API_BASE_URL}/api/layout-config`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((cfg) => {
+        const cfgPages  = cfg?.pages  || {};
+        const cfgGlobal = cfg?.global || {};
+
+        // Per-page layouts: config file as base, localStorage on top
+        setPageLayouts({ ...cfgPages, ...(savedLayouts || {}) });
+
+        // Global font config: config file fills in anything not in localStorage
+        setFontConfig((prev) => ({
+          ...prev,
+          ...(cfgGlobal.font_family  != null ? { family:       cfgGlobal.font_family  } : {}),
+          ...(cfgGlobal.td_size      != null ? { td_size:      cfgGlobal.td_size      } : {}),
+          ...(cfgGlobal.th_size      != null ? { th_size:      cfgGlobal.th_size      } : {}),
+          ...(cfgGlobal.title_size   != null ? { title_size:   cfgGlobal.title_size   } : {}),
+          ...(cfgGlobal.heading_size != null ? { heading_size: cfgGlobal.heading_size } : {}),
+          ...(savedFont || {}),
+        }));
+      })
+      .catch(() => {
+        // Server unreachable — fall back to localStorage only
+        if (savedLayouts) setPageLayouts(savedLayouts);
+        if (savedFont)    setFontConfig((prev) => ({ ...prev, ...savedFont }));
+      });
   }, []);
 
   const curLayout = { ...LAYOUT_DEFAULTS, ...(pageLayouts[activePageNum] || {}) };

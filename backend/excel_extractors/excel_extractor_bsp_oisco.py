@@ -10,8 +10,8 @@ Sheet layout (single sheet "Sheet1"):
 
 Coverage (35 parameters):
   BF Operations  → IRON_MAKING / BF Operations (BSP)
-  SMS-II Ops     → BOF / SMS-II Operations (BSP)
-  SMS-III Ops    → BOF / SMS-III Operations (BSP)
+  SMS-II Ops     → SMS / SMS-II Operations (BSP)
+  SMS-III Ops    → SMS / SMS-III Operations (BSP)
   Utilities      → IRON_MAKING / Utilities (BSP)
 """
 
@@ -111,44 +111,46 @@ UNIT_COL   = 4   # col D: unit
 # ---------------------------------------------------------------------------
 PARAM_MAP: List[tuple] = [
     # ── Blast Furnace Operations (rows 9-20) ─────────────────────────────
-    ( 9, "IRON_MAKING", "BF Operations (BSP)", "CDI Rate (Shop 1-8)",     "Kg/THM"),
-    (11, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-4",                "Kg/THM"),
-    (12, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-5",                "Kg/THM"),
-    (13, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-6",                "Kg/THM"),
-    (14, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-7",                "Kg/THM"),
-    (15, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-8",                "Kg/THM"),
-    (16, "IRON_MAKING", "BF Operations (BSP)", "Fuel Rate (Shop 1-8)",    "Kg/THM"),
-    (17, "IRON_MAKING", "BF Operations (BSP)", "Pellet % in Burden",      "%"),
-    (18, "IRON_MAKING", "BF Operations (BSP)", "LD Slag Usage (Shop 1-8)","Kg/THM"),
-    (19, "IRON_MAKING", "BF Operations (BSP)", "Not Dry Cast (Shop 1-8)", "%"),
-    (20, "IRON_MAKING", "BF Operations (BSP)", "Coal to HM Ratio",        "Ratio"),
+    # source_priority=4: secondary to BSP Monthly Tech Excel for shop-level params
+    # source_priority=5: only source for per-furnace CDI
+    ( 9, "IRON_MAKING", "CDI",               "BSP Plant Shop",       "Kg/THM", 4),
+    (11, "IRON_MAKING", "CDI",               "BSP BF-4",             "Kg/THM", 5),
+    (12, "IRON_MAKING", "CDI",               "BSP BF-5",             "Kg/THM", 5),
+    (13, "IRON_MAKING", "CDI",               "BSP BF-6",             "Kg/THM", 5),
+    (14, "IRON_MAKING", "CDI",               "BSP BF-7",             "Kg/THM", 5),
+    (15, "IRON_MAKING", "CDI",               "BSP BF-8",             "Kg/THM", 5),
+    (16, "IRON_MAKING", "Fuel Rate",          "BSP Plant Shop",       "Kg/THM", 4),
+    (17, "IRON_MAKING", "Pellet in Burden",   "BSP Plant Shop",       "%",      4),
+    (18, "IRON_MAKING", "LD Slag Usage",      "BSP Plant Shop",       "Kg/THM", 4),
+    (19, "IRON_MAKING", "Not Dry Cast",       "BSP Plant Shop",       "%",      4),
+    (20, "MAJOR",       "Coal to Hot Metal",  "BSP",                  "Kg/THM", 4),
     # ── SMS-II Operations (rows 22-36) ──────────────────────────────────
-    (22, "BOF", "SMS-II Operations (BSP)", "Converter Availability",      "% ICH"),
-    (23, "BOF", "SMS-II Operations (BSP)", "Converter Utilisation",       "% Avail hr"),
-    (24, "BOF", "SMS-II Operations (BSP)", "Tap to Tap Time",             "Minutes"),
-    (25, "BOF", "SMS-II Operations (BSP)", "Average Blows/Day",           "Heats/Day"),
-    (26, "BOF", "SMS-II Operations (BSP)", "Average Heat Weight",         "Tonnes"),
-    (27, "BOF", "SMS-II Operations (BSP)", "Avg. Lining Life",            "Heats"),
-    (28, "BOF", "SMS-II Operations (BSP)", "Fe-Mn Consumption",           "Kg/TCS"),
-    (29, "BOF", "SMS-II Operations (BSP)", "Fe-Si Consumption",           "Kg/TCS"),
-    (30, "BOF", "SMS-II Operations (BSP)", "Si-Mn Consumption",           "Kg/TCS"),
-    (31, "BOF", "SMS-II Operations (BSP)", "Oxygen Consumption",          "NM3/TCS"),
-    (32, "BOF", "SMS-II Operations (BSP)", "Alumina Consumption",         "Kg/TCS"),
-    (35, "BOF", "SMS-II Operations (BSP)", "LD Gas Recovery",             "CuM/T"),
-    (36, "BOF", "SMS-II Operations (BSP)", "DS Heats",                    "Nos"),
+    (22, "SMS", "SMS-II Operations (BSP)", "Converter Availability",      "% ICH"),
+    (23, "SMS", "SMS-II Operations (BSP)", "Converter Utilisation",       "% Avail hr"),
+    (24, "SMS", "SMS-II Operations (BSP)", "Tap to Tap Time",             "Minutes"),
+    (25, "SMS", "SMS-II Operations (BSP)", "Average Blows/Day",           "Heats/Day"),
+    (26, "SMS", "SMS-II Operations (BSP)", "Average Heat Weight",         "Tonnes"),
+    (27, "SMS", "SMS-II Operations (BSP)", "Avg. Lining Life",            "Heats"),
+    (28, "SMS", "SMS-II Operations (BSP)", "Fe-Mn Consumption",           "Kg/TCS"),
+    (29, "SMS", "SMS-II Operations (BSP)", "Fe-Si Consumption",           "Kg/TCS"),
+    (30, "SMS", "SMS-II Operations (BSP)", "Si-Mn Consumption",           "Kg/TCS"),
+    (31, "SMS", "SMS-II Operations (BSP)", "Oxygen Consumption",          "NM3/TCS"),
+    (32, "SMS", "SMS-II Operations (BSP)", "Alumina Consumption",         "Kg/TCS"),
+    (35, "SMS", "SMS-II Operations (BSP)", "LD Gas Recovery",             "CuM/T"),
+    (36, "SMS", "SMS-II Operations (BSP)", "DS Heats",                    "Nos"),
     # ── SMS-III Operations (rows 38-51) ─────────────────────────────────
-    (38, "BOF", "SMS-III Operations (BSP)", "Converter Availability",     "% ICH"),
-    (39, "BOF", "SMS-III Operations (BSP)", "Converter Utilisation",      "% Avail hr"),
-    (40, "BOF", "SMS-III Operations (BSP)", "Tap to Tap Time",            "Minutes"),
-    (41, "BOF", "SMS-III Operations (BSP)", "Average Blows/Day",          "Heats/Day"),
-    (42, "BOF", "SMS-III Operations (BSP)", "Average Heat Weight",        "Tonnes"),
-    (43, "BOF", "SMS-III Operations (BSP)", "Fe-Mn Consumption",          "Kg/TCS"),
-    (44, "BOF", "SMS-III Operations (BSP)", "Fe-Si Consumption",          "Kg/TCS"),
-    (45, "BOF", "SMS-III Operations (BSP)", "Si-Mn Consumption",          "Kg/TCS"),
-    (46, "BOF", "SMS-III Operations (BSP)", "Oxygen Consumption",         "NM3/TCS"),
-    (47, "BOF", "SMS-III Operations (BSP)", "Alumina Consumption",        "Kg/TCS"),
-    (50, "BOF", "SMS-III Operations (BSP)", "LD Gas Recovery",            "CuM/T"),
-    (51, "BOF", "SMS-III Operations (BSP)", "DS Heats",                   "Nos"),
+    (38, "SMS", "SMS-III Operations (BSP)", "Converter Availability",     "% ICH"),
+    (39, "SMS", "SMS-III Operations (BSP)", "Converter Utilisation",      "% Avail hr"),
+    (40, "SMS", "SMS-III Operations (BSP)", "Tap to Tap Time",            "Minutes"),
+    (41, "SMS", "SMS-III Operations (BSP)", "Average Blows/Day",          "Heats/Day"),
+    (42, "SMS", "SMS-III Operations (BSP)", "Average Heat Weight",        "Tonnes"),
+    (43, "SMS", "SMS-III Operations (BSP)", "Fe-Mn Consumption",          "Kg/TCS"),
+    (44, "SMS", "SMS-III Operations (BSP)", "Fe-Si Consumption",          "Kg/TCS"),
+    (45, "SMS", "SMS-III Operations (BSP)", "Si-Mn Consumption",          "Kg/TCS"),
+    (46, "SMS", "SMS-III Operations (BSP)", "Oxygen Consumption",         "NM3/TCS"),
+    (47, "SMS", "SMS-III Operations (BSP)", "Alumina Consumption",        "Kg/TCS"),
+    (50, "SMS", "SMS-III Operations (BSP)", "LD Gas Recovery",            "CuM/T"),
+    (51, "SMS", "SMS-III Operations (BSP)", "DS Heats",                   "Nos"),
     # ── Utilities (row 54) ───────────────────────────────────────────────
     (54, "IRON_MAKING", "Utilities (BSP)", "Sp. Water Consumption",       "CuM/TCS"),
 ]
@@ -264,7 +266,9 @@ def extract_preview(file_path: str, report_month: str) -> Dict[str, Any]:
     # ── Extract rows ──────────────────────────────────────────────────────
     rows_out: List[Dict[str, Any]] = []
 
-    for sort_idx, (row_1b, group, section, param, unit) in enumerate(PARAM_MAP):
+    for sort_idx, entry in enumerate(PARAM_MAP):
+        row_1b, group, section, param, unit = entry[:5]
+        priority = entry[5] if len(entry) > 5 else 5
         actual_val = _clean(ws.cell(row_1b, data_col).value)
         cum_val    = _clean(ws.cell(row_1b, cum_col).value)
         file_label = str(ws.cell(row_1b, LABEL_COL).value or "").strip().replace("\n", " ")
@@ -272,19 +276,20 @@ def extract_preview(file_path: str, report_month: str) -> Dict[str, Any]:
         status     = "ok" if (actual_val is not None or cum_val is not None) else "skip"
 
         rows_out.append({
-            "group_code": group,
-            "section":    section,
-            "parameter":  param,
-            "unit":       unit,
-            "actual":     actual_val,
-            "cum_actual": cum_val,
-            "sort_order": sort_idx * 10,
-            "cell":       cell_ref,
-            "file_label": file_label,
-            "plant":      "BSP",
-            "month":      db_month,
-            "found_via":  f"hardcoded R{row_1b}",
-            "status":     status,
+            "group_code":      group,
+            "section":         section,
+            "parameter":       param,
+            "unit":            unit,
+            "actual":          actual_val,
+            "cum_actual":      cum_val,
+            "sort_order":      sort_idx * 10,
+            "cell":            cell_ref,
+            "file_label":      file_label,
+            "plant":           "BSP",
+            "month":           db_month,
+            "found_via":       f"hardcoded R{row_1b}",
+            "status":          status,
+            "source_priority": priority,
         })
 
     ok_count = sum(1 for r in rows_out if r["status"] == "ok")

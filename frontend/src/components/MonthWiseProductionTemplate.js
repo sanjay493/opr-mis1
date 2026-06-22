@@ -20,8 +20,8 @@ const COL_W = {
   ytdGr:      '5.5%',
 };
 
-const TH_STYLE = { padding: '2.5px 2.5px', fontSize: '9.5pt', verticalAlign: 'middle', lineHeight: '1' };
-const TD_STYLE = { padding: '2.5px 2.5px', fontSize: '9.5pt', lineHeight: '1' };
+const TH_STYLE = { padding: '2.5px 2.5px', fontSize: '9pt', verticalAlign: 'middle', lineHeight: '1' };
+const TD_STYLE = { padding: '2.5px 2.5px', fontSize: '9pt', lineHeight: '1' };
 const INPUT_STYLE = {
   width: '100%', minWidth: 0, padding: '0 1px',
   background: 'transparent', border: 'none',
@@ -99,7 +99,10 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
     onCellChange({ ...data, rows: updatedRows });
   };
 
-  // Group consecutive rows with the same item prefix
+  const isNilVal = v => v === null || v === undefined || v === '' || v === '-' || v === '–' || v === 0 || v === '0' || v === '0.00';
+  const isNilRow = row => row.values.every(isNilVal);
+
+  // Group consecutive rows with the same item prefix, skipping all-nil rows
   const groupedRows = [];
   let i = 0;
   while (i < rows.length) {
@@ -110,16 +113,20 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
       if (nextItem === item && item !== '') groupSize++;
       else break;
     }
+    const visible = [];
     for (let g = 0; g < groupSize; g++) {
-      groupedRows.push({
-        row: rows[i + g],
-        rIdx: i + g,
-        isFirstInGroup: g === 0,
-        groupSize,
-        item,
-        plant: splitLabel(rows[i + g].label).plant,
-      });
+      const r = rows[i + g];
+      if (!isNilRow(r) || r.is_conversion || r.is_sail_incl_conv) visible.push({ row: r, rIdx: i + g });
     }
+    visible.forEach(({ row, rIdx }, g) => {
+      groupedRows.push({
+        row, rIdx,
+        isFirstInGroup: g === 0,
+        groupSize: visible.length,
+        item,
+        plant: splitLabel(row.label).plant,
+      });
+    });
     i += groupSize;
   }
 
@@ -181,50 +188,71 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
 
         <tbody>
           {groupedRows.map(({ row, rIdx, isFirstInGroup, groupSize, item, plant }) => (
-            <tr key={rIdx}>
-              {isFirstInGroup && (
+            <tr key={rIdx} style={
+              row.is_sail_incl_conv ? { backgroundColor: '#dcfce7', fontWeight: 700 } :
+              row.is_conversion     ? { backgroundColor: '#fef9c3' } :
+              {}
+            }>
+              {(row.is_conversion || row.is_sail_incl_conv) ? (
                 <td
-                  className="label-cell"
-                  rowSpan={groupSize}
+                  colSpan={2}
                   style={{
                     ...TD_STYLE,
-                    fontWeight: 'bold',
-                    verticalAlign: 'middle',
-                    backgroundColor: '#f8fafc',
-                    borderRight: '1px solid #cbd5e1',
-                    overflow: 'hidden',
+                    fontWeight: '700',
                     textAlign: 'left',
-                    paddingLeft: '3px',
+                    paddingLeft: '4px',
+                    verticalAlign: 'middle',
                   }}
                 >
-                  <input
-                    type="text"
-                    className="editor-input"
-                    style={{ ...LABEL_INPUT_STYLE, fontWeight: 'bold', fontSize: '6pt' }}
-                    value={item}
-                    onChange={(e) => handleItemChange(rIdx, e.target.value)}
-                  />
+                  {row.is_sail_incl_conv ? 'SAIL incl. conversion' : 'Conversion'}
                 </td>
+              ) : (
+                <>
+                  {isFirstInGroup && (
+                    <td
+                      className="label-cell"
+                      rowSpan={groupSize}
+                      style={{
+                        ...TD_STYLE,
+                        fontWeight: 'bold',
+                        verticalAlign: 'middle',
+                        backgroundColor: '#f8fafc',
+                        borderRight: '1px solid #cbd5e1',
+                        overflow: 'hidden',
+                        textAlign: 'left',
+                        paddingLeft: '3px',
+                      }}
+                    >
+                      <input
+                        type="text"
+                        className="editor-input"
+                        style={{ ...LABEL_INPUT_STYLE, fontWeight: 'bold', fontSize: '6pt' }}
+                        value={item}
+                        onChange={(e) => handleItemChange(rIdx, e.target.value)}
+                      />
+                    </td>
+                  )}
+                  <td
+                    className="label-cell"
+                    style={{
+                      ...TD_STYLE,
+                      fontWeight: '600',
+                      textAlign: 'center',
+                      backgroundColor: '#f8fafc',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <input
+                      type="text"
+                      className="editor-input"
+                      style={{ ...LABEL_INPUT_STYLE, textAlign: 'center', fontWeight: '600', fontSize: '6pt' }}
+                      value={plant}
+                      onChange={(e) => handlePlantChange(rIdx, e.target.value)}
+                    />
+                  </td>
+                </>
               )}
-              <td
-                className="label-cell"
-                style={{
-                  ...TD_STYLE,
-                  fontWeight: '600',
-                  textAlign: 'center',
-                  backgroundColor: '#f8fafc',
-                  overflow: 'hidden',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <input
-                  type="text"
-                  className="editor-input"
-                  style={{ ...LABEL_INPUT_STYLE, textAlign: 'center', fontWeight: '600', fontSize: '6pt' }}
-                  value={plant}
-                  onChange={(e) => handlePlantChange(rIdx, e.target.value)}
-                />
-              </td>
               {row.values.map((val, vIdx) => (
                 <td key={vIdx} style={{ ...TD_STYLE, overflow: 'hidden' }}>
                   <input

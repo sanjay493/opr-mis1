@@ -58,36 +58,89 @@ def _ann_sum(cur, plant, items, fy):
             tot += v; ok = True
     return tot if ok else None
 
-def _r(label, rtype, ann, plan, act, cply, indent=0):
-    """Build a row dict."""
-    if rtype == "pct":
-        return {"label": label, "type": rtype, "indent": indent,
-                "ann_plan": ann or "", "m_plan": plan or "",
-                "m_act": act or "", "m_pct": "", "cply_act": cply or "", "m_growth": ""}
-    return {"label": label, "type": rtype, "indent": indent,
-            "ann_plan": _fmt(ann), "m_plan": _fmt(plan),
-            "m_act": _fmt(act), "m_pct": _ipct(act, plan),
-            "cply_act": _fmt(cply), "m_growth": _igr(act, cply)}
+def _ytd_one(cur, table, plant, item, months):
+    """Sum one item across multiple months (YTD)."""
+    tot, ok = 0.0, False
+    for m in months:
+        v = _one(cur, table, plant, item, m)
+        if v is not None:
+            tot += v; ok = True
+    return tot if ok else None
 
-def _zero(label, ann=None, plan=None, rtype="data", indent=0):
-    return {"label": label, "type": rtype, "indent": indent,
-            "ann_plan": _fmt(ann) if ann is not None else "0",
-            "m_plan": _fmt(plan) if plan is not None else "0",
-            "m_act": "0", "m_pct": "", "cply_act": "0", "m_growth": ""}
+def _ytd_sum_items(cur, table, plant, items, months):
+    """Sum multiple items across multiple months (YTD)."""
+    tot, ok = 0.0, False
+    for it in items:
+        for m in months:
+            v = _one(cur, table, plant, it, m)
+            if v is not None:
+                tot += v; ok = True
+    return tot if ok else None
 
 def _sep():
-    return {"label": "", "type": "separator"}
+    return {"label": "", "type": "separator",
+            "group": None, "plant": None,
+            "show_group": False, "group_span": 1,
+            "show_plant": False, "plant_span": 1}
 
-def _hdr(label):
-    return {"label": label, "type": "seg-hdr"}
+def _r(label, rtype, group, plant, ann, plan, act, cply,
+        cum_plan=None, cum_act=None, cum_cply=None):
+    return {"label": label, "type": rtype, "group": group, "plant": plant,
+            "ann_plan": _fmt(ann), "m_plan": _fmt(plan),
+            "m_act": _fmt(act), "m_pct": _ipct(act, plan),
+            "cply_act": _fmt(cply), "m_growth": _igr(act, cply),
+            "cum_plan": _fmt(cum_plan), "cum_act": _fmt(cum_act),
+            "cum_pct": _ipct(cum_act, cum_plan),
+            "cum_cply": _fmt(cum_cply), "cum_growth": _igr(cum_act, cum_cply),
+            "show_group": False, "group_span": 1,
+            "show_plant": False, "plant_span": 1}
 
-def _plant_lbl(plant):
-    return {"label": plant, "type": "plant-lbl"}
+def _zero(label, group=None, plant=None):
+    return {"label": label, "type": "data", "group": group, "plant": plant,
+            "ann_plan": "0", "m_plan": "0", "m_act": "0", "m_pct": "",
+            "cply_act": "0", "m_growth": "",
+            "cum_plan": "0", "cum_act": "0", "cum_pct": "",
+            "cum_cply": "0", "cum_growth": "",
+            "show_group": False, "group_span": 1,
+            "show_plant": False, "plant_span": 1}
+
+def _add_rowspans(rows):
+    """Pre-compute group_span / plant_span for rowspan-based HTML rendering."""
+    data_idx = [i for i, r in enumerate(rows) if r.get("type") == "data"]
+
+    di = 0
+    while di < len(data_idx):
+        i      = data_idx[di]
+        group  = rows[i].get("group")
+        dj     = di
+        while dj + 1 < len(data_idx) and rows[data_idx[dj + 1]].get("group") == group:
+            dj += 1
+
+        rows[i]["show_group"]  = True
+        rows[i]["group_span"]  = dj - di + 1
+
+        dp = di
+        while dp <= dj:
+            pi    = data_idx[dp]
+            plant = rows[pi].get("plant")
+            dq    = dp
+            while dq + 1 <= dj and rows[data_idx[dq + 1]].get("plant") == plant:
+                dq += 1
+
+            rows[pi]["show_plant"]  = True
+            rows[pi]["plant_span"]  = dq - dp + 1
+            dp = dq + 1
+
+        di = dj + 1
+
+    return rows
 
 
 def generate_segment_wise(report_month: str) -> dict:
     prev_month = db.get_cply_month(report_month)
     fy         = db.get_fy_months(report_month)
+    ytd        = db.get_ytd_months(report_month)
+    cply_ytd   = [f"{int(m[:4])-1}{m[4:]}" for m in ytd]
 
     conn = sqlite3.connect(db.DB_PATH)
     cur  = conn.cursor()
@@ -96,282 +149,378 @@ def generate_segment_wise(report_month: str) -> dict:
 
     try:
         # ── FLAT ─────────────────────────────────────────────────────────────
-        rows.append(_hdr("FLAT"))
-
         # BSP — plates only
-        rows.append(_plant_lbl("BSP"))
-        rows.append(_r("  Plates", "data",
+        rows.append(_r("Plates", "data", "FLAT", "BSP",
                        _ann(cur,"BSP","PLATEMILL",fy),
                        _one(cur,"plan","BSP","PLATEMILL",report_month),
                        _one(cur,"act","BSP","PLATEMILL",report_month),
-                       _one(cur,"act","BSP","PLATEMILL",prev_month)))
+                       _one(cur,"act","BSP","PLATEMILL",prev_month),
+                       _ytd_one(cur,"plan","BSP","PLATEMILL",ytd),
+                       _ytd_one(cur,"act","BSP","PLATEMILL",ytd),
+                       _ytd_one(cur,"act","BSP","PLATEMILL",cply_ytd)))
 
         # RSP — flat rolled items (excluding PET)
-        rows.append(_plant_lbl("RSP"))
         rsp_flat_items = ["OPM Plate", "NPM Plate", "HSM-2 HR Plate", "HSM-2 HR Coil (Sale)"]
-        rows.append(_zero("  Semis", ann=0, plan=0))
+        rows.append(_zero("Semis", "FLAT", "RSP"))
         for label, item in [
-            ("  PM Plates",      "OPM Plate"),
-            ("  New PM Plates",  "NPM Plate"),
-            ("  HR Plates",      "HSM-2 HR Plate"),
-            ("  HR Coils",       "HSM-2 HR Coil (Sale)"),
+            ("PM Plates",     "OPM Plate"),
+            ("New PM Plates", "NPM Plate"),
+            ("HR Plates",     "HSM-2 HR Plate"),
+            ("HR Coils",      "HSM-2 HR Coil (Sale)"),
         ]:
-            rows.append(_r(label, "data",
+            rows.append(_r(label, "data", "FLAT", "RSP",
                            _ann(cur,"RSP",item,fy),
                            _one(cur,"plan","RSP",item,report_month),
                            _one(cur,"act","RSP",item,report_month),
-                           _one(cur,"act","RSP",item,prev_month)))
-        rows.append(_zero("  CR Coils/Sheets"))
-        rows.append(_zero("  GP/GC Sheets"))
+                           _one(cur,"act","RSP",item,prev_month),
+                           _ytd_one(cur,"plan","RSP",item,ytd),
+                           _ytd_one(cur,"act","RSP",item,ytd),
+                           _ytd_one(cur,"act","RSP",item,cply_ytd)))
+        rows.append(_zero("CR Coils/Sheets", "FLAT", "RSP"))
+        rows.append(_zero("GP/GC Sheets", "FLAT", "RSP"))
 
         # BSL — all products (incl. semis as flat plant)
-        rows.append(_plant_lbl("BSL"))
-        bsl_flat_items = ["HSM HR Coil (Sale)", "HSM HR Plate", "HR Sheet",
-                          "CRC&S(1&2)", "CRC(3)", "GP/GC", "GPC3"]
-        rows.append(_r("  Semis", "data",
+        rows.append(_r("Semis", "data", "FLAT", "BSL",
                        _ann(cur,"BSL","Saleable Semis",fy),
                        _one(cur,"plan","BSL","Saleable Semis",report_month),
                        _one(cur,"act","BSL","Saleable Semis",report_month),
-                       _one(cur,"act","BSL","Saleable Semis",prev_month)))
+                       _one(cur,"act","BSL","Saleable Semis",prev_month),
+                       _ytd_one(cur,"plan","BSL","Saleable Semis",ytd),
+                       _ytd_one(cur,"act","BSL","Saleable Semis",ytd),
+                       _ytd_one(cur,"act","BSL","Saleable Semis",cply_ytd)))
         for label, item in [
-            ("  HR Coils",              "HSM HR Coil (Sale)"),
-            ("  HR Plates",             "HSM HR Plate"),
-            ("  HR Sheets",             "HR Sheet"),
-            ("  CR Coils",              "CRC&S(1&2)"),
-            ("  New CR Coils",          "CRC(3)"),
+            ("HR Coils",     "HSM HR Coil (Sale)"),
+            ("HR Plates",    "HSM HR Plate"),
+            ("HR Sheets",    "HR Sheet"),
+            ("CR Coils",     "CRC&S(1&2)"),
+            ("New CR Coils", "CRC(3)"),
         ]:
-            rows.append(_r(label, "data",
+            rows.append(_r(label, "data", "FLAT", "BSL",
                            _ann(cur,"BSL",item,fy),
                            _one(cur,"plan","BSL",item,report_month),
                            _one(cur,"act","BSL",item,report_month),
-                           _one(cur,"act","BSL",item,prev_month)))
-        rows.append(_zero("  CR Sheets"))
-        rows.append(_r("  Thick Plates", "data",
+                           _one(cur,"act","BSL",item,prev_month),
+                           _ytd_one(cur,"plan","BSL",item,ytd),
+                           _ytd_one(cur,"act","BSL",item,ytd),
+                           _ytd_one(cur,"act","BSL",item,cply_ytd)))
+        rows.append(_zero("CR Sheets", "FLAT", "BSL"))
+        rows.append(_r("Thick Plates", "data", "FLAT", "BSL",
                        _ann(cur,"BSL","CRSALE",fy),
                        _one(cur,"plan","BSL","CRSALE",report_month),
                        _one(cur,"act","BSL","CRSALE",report_month),
-                       _one(cur,"act","BSL","CRSALE",prev_month)))
+                       _one(cur,"act","BSL","CRSALE",prev_month),
+                       _ytd_one(cur,"plan","BSL","CRSALE",ytd),
+                       _ytd_one(cur,"act","BSL","CRSALE",ytd),
+                       _ytd_one(cur,"act","BSL","CRSALE",cply_ytd)))
 
         # GP/GC total for BSL = GP/GC + GPC3
-        gp_ann  = (_ann(cur,"BSL","GP/GC",fy) or 0) + (_ann(cur,"BSL","GPC3",fy) or 0)
-        gp_plan = ((_one(cur,"plan","BSL","GP/GC",report_month) or 0) +
-                   (_one(cur,"plan","BSL","GPC3",report_month)  or 0))
-        gp_act  = ((_one(cur,"act","BSL","GP/GC",report_month) or 0) +
-                   (_one(cur,"act","BSL","GPC3",report_month)   or 0))
-        gp_cply = ((_one(cur,"act","BSL","GP/GC",prev_month) or 0) +
-                   (_one(cur,"act","BSL","GPC3",prev_month)   or 0))
-        rows.append(_r("  GP/GC Sheets", "data",
-                       gp_ann or None, gp_plan or None, gp_act or None, gp_cply or None))
-        rows.append(_zero("  TMBP"))
+        gp_ann   = (_ann(cur,"BSL","GP/GC",fy) or 0) + (_ann(cur,"BSL","GPC3",fy) or 0)
+        gp_plan  = ((_one(cur,"plan","BSL","GP/GC",report_month) or 0) +
+                    (_one(cur,"plan","BSL","GPC3",report_month) or 0))
+        gp_act   = ((_one(cur,"act","BSL","GP/GC",report_month) or 0) +
+                    (_one(cur,"act","BSL","GPC3",report_month) or 0))
+        gp_cply  = ((_one(cur,"act","BSL","GP/GC",prev_month) or 0) +
+                    (_one(cur,"act","BSL","GPC3",prev_month) or 0))
+        gp_cplan = ((_ytd_one(cur,"plan","BSL","GP/GC",ytd) or 0) +
+                    (_ytd_one(cur,"plan","BSL","GPC3",ytd) or 0))
+        gp_cact  = ((_ytd_one(cur,"act","BSL","GP/GC",ytd) or 0) +
+                    (_ytd_one(cur,"act","BSL","GPC3",ytd) or 0))
+        gp_ccply = ((_ytd_one(cur,"act","BSL","GP/GC",cply_ytd) or 0) +
+                    (_ytd_one(cur,"act","BSL","GPC3",cply_ytd) or 0))
+        rows.append(_r("GP/GC Sheets", "data", "FLAT", "BSL",
+                       gp_ann or None, gp_plan or None, gp_act or None, gp_cply or None,
+                       gp_cplan or None, gp_cact or None, gp_ccply or None))
+        rows.append(_zero("TMBP", "FLAT", "BSL"))
 
-        # FLAT total — BSL is a flat-products plant; use its Saleable Steel directly
-        # to avoid double-counting from overlapping DB items (CRSALE vs CRC items).
-        flat_act_bsp  = _one(cur,"act","BSP","PLATEMILL",report_month) or 0
-        flat_act_rsp  = _sum_items(cur,"act","RSP",rsp_flat_items,report_month) or 0
-        flat_act_bsl  = _one(cur,"act","BSL","Saleable Steel",report_month) or 0
+        # FLAT totals
+        flat_act_bsp   = _one(cur,"act","BSP","PLATEMILL",report_month) or 0
+        flat_act_rsp   = _sum_items(cur,"act","RSP",rsp_flat_items,report_month) or 0
+        flat_act_bsl   = _one(cur,"act","BSL","Saleable Steel",report_month) or 0
         flat_act_total = flat_act_bsp + flat_act_rsp + flat_act_bsl
 
-        flat_plan_bsp  = _one(cur,"plan","BSP","PLATEMILL",report_month) or 0
-        flat_plan_rsp  = _sum_items(cur,"plan","RSP",rsp_flat_items,report_month) or 0
-        flat_plan_bsl  = _one(cur,"plan","BSL","Saleable Steel",report_month) or 0
+        flat_plan_bsp   = _one(cur,"plan","BSP","PLATEMILL",report_month) or 0
+        flat_plan_rsp   = _sum_items(cur,"plan","RSP",rsp_flat_items,report_month) or 0
+        flat_plan_bsl   = _one(cur,"plan","BSL","Saleable Steel",report_month) or 0
         flat_plan_total = flat_plan_bsp + flat_plan_rsp + flat_plan_bsl
 
-        flat_ann_bsp  = _ann(cur,"BSP","PLATEMILL",fy) or 0
-        flat_ann_rsp  = _ann_sum(cur,"RSP",rsp_flat_items,fy) or 0
-        flat_ann_bsl  = _ann(cur,"BSL","Saleable Steel",fy) or 0
+        flat_ann_bsp   = _ann(cur,"BSP","PLATEMILL",fy) or 0
+        flat_ann_rsp   = _ann_sum(cur,"RSP",rsp_flat_items,fy) or 0
+        flat_ann_bsl   = _ann(cur,"BSL","Saleable Steel",fy) or 0
         flat_ann_total = flat_ann_bsp + flat_ann_rsp + flat_ann_bsl
 
-        flat_cply_bsp  = _one(cur,"act","BSP","PLATEMILL",prev_month) or 0
-        flat_cply_rsp  = _sum_items(cur,"act","RSP",rsp_flat_items,prev_month) or 0
-        flat_cply_bsl  = _one(cur,"act","BSL","Saleable Steel",prev_month) or 0
+        flat_cply_bsp   = _one(cur,"act","BSP","PLATEMILL",prev_month) or 0
+        flat_cply_rsp   = _sum_items(cur,"act","RSP",rsp_flat_items,prev_month) or 0
+        flat_cply_bsl   = _one(cur,"act","BSL","Saleable Steel",prev_month) or 0
         flat_cply_total = flat_cply_bsp + flat_cply_rsp + flat_cply_bsl
 
+        flat_cum_plan = ((_ytd_one(cur,"plan","BSP","PLATEMILL",ytd) or 0) +
+                         (_ytd_sum_items(cur,"plan","RSP",rsp_flat_items,ytd) or 0) +
+                         (_ytd_one(cur,"plan","BSL","Saleable Steel",ytd) or 0))
+        flat_cum_act  = ((_ytd_one(cur,"act","BSP","PLATEMILL",ytd) or 0) +
+                         (_ytd_sum_items(cur,"act","RSP",rsp_flat_items,ytd) or 0) +
+                         (_ytd_one(cur,"act","BSL","Saleable Steel",ytd) or 0))
+        flat_cum_cply = ((_ytd_one(cur,"act","BSP","PLATEMILL",cply_ytd) or 0) +
+                         (_ytd_sum_items(cur,"act","RSP",rsp_flat_items,cply_ytd) or 0) +
+                         (_ytd_one(cur,"act","BSL","Saleable Steel",cply_ytd) or 0))
+
         rows.append(_sep())
-        rows.append(_r("Total   Flat", "seg-total",
+        rows.append(_r("Total   Flat", "seg-total", None, None,
                        flat_ann_total or None, flat_plan_total or None,
-                       flat_act_total or None, flat_cply_total or None))
+                       flat_act_total or None, flat_cply_total or None,
+                       flat_cum_plan or None, flat_cum_act or None, flat_cum_cply or None))
 
-        ss5_ann  = sum(filter(None,(_ann(cur,p,"Saleable Steel",fy) for p in["BSP","DSP","RSP","BSL","ISP"]))) or None
-        ss5_plan = sum(filter(None,(_one(cur,"plan",p,"Saleable Steel",report_month) for p in["BSP","DSP","RSP","BSL","ISP"]))) or None
-        ss5_cply = sum(filter(None,(_one(cur,"act",p,"Saleable Steel",prev_month) for p in["BSP","DSP","RSP","BSL","ISP"]))) or None
+        ss5_ann      = sum(filter(None, (_ann(cur,p,"Saleable Steel",fy) for p in ["BSP","DSP","RSP","BSL","ISP"]))) or None
+        ss5_plan     = sum(filter(None, (_one(cur,"plan",p,"Saleable Steel",report_month) for p in ["BSP","DSP","RSP","BSL","ISP"]))) or None
+        ss5_cply     = sum(filter(None, (_one(cur,"act",p,"Saleable Steel",prev_month) for p in ["BSP","DSP","RSP","BSL","ISP"]))) or None
+        ss5_cum_plan = sum(filter(None, (_ytd_one(cur,"plan",p,"Saleable Steel",ytd) for p in ["BSP","DSP","RSP","BSL","ISP"]))) or None
+        ss5_cum_cply = sum(filter(None, (_ytd_one(cur,"act",p,"Saleable Steel",cply_ytd) for p in ["BSP","DSP","RSP","BSL","ISP"]))) or None
+        ss5_act      = sum(filter(None, (_one(cur,"act",p,"Saleable Steel",report_month) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        ss5_cum_act  = sum(filter(None, (_ytd_one(cur,"act",p,"Saleable Steel",ytd) for p in ["BSP","DSP","RSP","BSL","ISP"])))
 
-        rows.append({"label": "  Flat %", "type": "seg-pct", "indent": 0,
+        rows.append({"label": "Flat %", "type": "seg-pct", "group": None, "plant": None,
                      "ann_plan": _ipct(flat_ann_total or None, ss5_ann),
                      "m_plan":   _ipct(flat_plan_total or None, ss5_plan),
-                     "m_act":    _ipct(flat_act_total or None,
-                                       sum(filter(None,(_one(cur,"act",p,"Saleable Steel",report_month) for p in["BSP","DSP","RSP","BSL","ISP"])))),
-                     "m_pct": "",
-                     "cply_act": _ipct(flat_cply_total or None, ss5_cply),
-                     "m_growth": ""})
+                     "m_act":    _ipct(flat_act_total or None, ss5_act or None),
+                     "m_pct": "", "cply_act": _ipct(flat_cply_total or None, ss5_cply),
+                     "m_growth": "",
+                     "cum_plan":   _ipct(flat_cum_plan or None, ss5_cum_plan),
+                     "cum_act":    _ipct(flat_cum_act or None, ss5_cum_act or None),
+                     "cum_pct": "", "cum_cply": _ipct(flat_cum_cply or None, ss5_cum_cply),
+                     "cum_growth": "",
+                     "show_group": False, "group_span": 1, "show_plant": False, "plant_span": 1})
 
         # ── PET ──────────────────────────────────────────────────────────────
         rows.append(_sep())
-        rows.append(_hdr("PET"))
-        rows.append(_plant_lbl("RSP"))
 
         pet_items = ["ERW Pipes", "SW Pipes", "CRNO Coils"]
         for label, item in [
-            ("  ERW Pipes",   "ERW Pipes"),
-            ("  SW Pipes",    "SW Pipes"),
+            ("ERW Pipes", "ERW Pipes"),
+            ("SW Pipes",  "SW Pipes"),
         ]:
-            rows.append(_r(label, "data",
+            rows.append(_r(label, "data", "PET", "RSP",
                            _ann(cur,"RSP",item,fy),
                            _one(cur,"plan","RSP",item,report_month),
                            _one(cur,"act","RSP",item,report_month),
-                           _one(cur,"act","RSP",item,prev_month)))
-        rows.append(_zero("  Tin plates"))
-        rows.append(_r("  CRNO", "data",
+                           _one(cur,"act","RSP",item,prev_month),
+                           _ytd_one(cur,"plan","RSP",item,ytd),
+                           _ytd_one(cur,"act","RSP",item,ytd),
+                           _ytd_one(cur,"act","RSP",item,cply_ytd)))
+        rows.append(_zero("Tin plates", "PET", "RSP"))
+        rows.append(_r("CRNO", "data", "PET", "RSP",
                        _ann(cur,"RSP","CRNO Coils",fy),
                        _one(cur,"plan","RSP","CRNO Coils",report_month),
                        _one(cur,"act","RSP","CRNO Coils",report_month),
-                       _one(cur,"act","RSP","CRNO Coils",prev_month)))
+                       _one(cur,"act","RSP","CRNO Coils",prev_month),
+                       _ytd_one(cur,"plan","RSP","CRNO Coils",ytd),
+                       _ytd_one(cur,"act","RSP","CRNO Coils",ytd),
+                       _ytd_one(cur,"act","RSP","CRNO Coils",cply_ytd)))
 
-        pet_act   = _sum_items(cur,"act","RSP",pet_items,report_month)
-        pet_plan  = _sum_items(cur,"plan","RSP",pet_items,report_month)
-        pet_ann   = _ann_sum(cur,"RSP",pet_items,fy)
-        pet_cply  = _sum_items(cur,"act","RSP",pet_items,prev_month)
+        pet_act      = _sum_items(cur,"act","RSP",pet_items,report_month)
+        pet_plan     = _sum_items(cur,"plan","RSP",pet_items,report_month)
+        pet_ann      = _ann_sum(cur,"RSP",pet_items,fy)
+        pet_cply     = _sum_items(cur,"act","RSP",pet_items,prev_month)
+        pet_cum_plan = _ytd_sum_items(cur,"plan","RSP",pet_items,ytd)
+        pet_cum_act  = _ytd_sum_items(cur,"act","RSP",pet_items,ytd)
+        pet_cum_cply = _ytd_sum_items(cur,"act","RSP",pet_items,cply_ytd)
 
         rows.append(_sep())
-        rows.append(_r("Total   PET", "seg-total", pet_ann, pet_plan, pet_act, pet_cply))
+        rows.append(_r("Total   PET", "seg-total", None, None,
+                       pet_ann, pet_plan, pet_act, pet_cply,
+                       pet_cum_plan, pet_cum_act, pet_cum_cply))
 
-        ss5_act = sum(filter(None,(_one(cur,"act",p,"Saleable Steel",report_month) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        rows.append({"label": "  PET %", "type": "seg-pct", "indent": 0,
+        rows.append({"label": "PET %", "type": "seg-pct", "group": None, "plant": None,
                      "ann_plan": _ipct(pet_ann, ss5_ann),
                      "m_plan":   _ipct(pet_plan, ss5_plan),
-                     "m_act":    _ipct(pet_act, ss5_act if ss5_act else None),
-                     "m_pct": "",
-                     "cply_act": _ipct(pet_cply, ss5_cply),
-                     "m_growth": ""})
+                     "m_act":    _ipct(pet_act, ss5_act or None),
+                     "m_pct": "", "cply_act": _ipct(pet_cply, ss5_cply),
+                     "m_growth": "",
+                     "cum_plan":   _ipct(pet_cum_plan, ss5_cum_plan),
+                     "cum_act":    _ipct(pet_cum_act, ss5_cum_act or None),
+                     "cum_pct": "", "cum_cply": _ipct(pet_cum_cply, ss5_cum_cply),
+                     "cum_growth": "",
+                     "show_group": False, "group_span": 1, "show_plant": False, "plant_span": 1})
 
         # ── LONG ─────────────────────────────────────────────────────────────
         rows.append(_sep())
-        rows.append(_hdr("LONG"))
 
         # BSP long products
-        rows.append(_plant_lbl("BSP"))
-        rows.append(_r("  Semis", "data",
+        rows.append(_r("Semis", "data", "LONG", "BSP",
                        _ann(cur,"BSP","Saleable Semis",fy),
                        _one(cur,"plan","BSP","Saleable Semis",report_month),
                        _one(cur,"act","BSP","Saleable Semis",report_month),
-                       _one(cur,"act","BSP","Saleable Semis",prev_month)))
-        rows.append(_r("  Wire Rods", "data",
+                       _one(cur,"act","BSP","Saleable Semis",prev_month),
+                       _ytd_one(cur,"plan","BSP","Saleable Semis",ytd),
+                       _ytd_one(cur,"act","BSP","Saleable Semis",ytd),
+                       _ytd_one(cur,"act","BSP","Saleable Semis",cply_ytd)))
+        rows.append(_r("Wire Rods", "data", "LONG", "BSP",
                        _ann(cur,"BSP","WIRERODS",fy),
                        _one(cur,"plan","BSP","WIRERODS",report_month),
                        _one(cur,"act","BSP","WIRERODS",report_month),
-                       _one(cur,"act","BSP","WIRERODS",prev_month)))
-        # Rounds = MM + BARS&RODMILL combined
-        rnd_ann  = (_ann(cur,"BSP","MM",fy) or 0)  + (_ann(cur,"BSP","BARS&RODMILL",fy) or 0)
-        rnd_plan = ((_one(cur,"plan","BSP","MM",report_month) or 0) +
-                    (_one(cur,"plan","BSP","BARS&RODMILL",report_month) or 0))
-        rnd_act  = ((_one(cur,"act","BSP","MM",report_month) or 0) +
-                    (_one(cur,"act","BSP","BARS&RODMILL",report_month) or 0))
-        rnd_cply = ((_one(cur,"act","BSP","MM",prev_month) or 0) +
-                    (_one(cur,"act","BSP","BARS&RODMILL",prev_month) or 0))
-        rows.append(_r("  Rounds", "data",
-                       rnd_ann or None, rnd_plan or None, rnd_act or None, rnd_cply or None))
-        rows.append(_zero("  Light Structurals"))
-        rows.append(_zero("  Heavy Structural"))
-        # Saleable Rails = RSM_RAIL + URM_RAIL
-        rail_items = ["RSM_RAIL","URM_RAIL"]
-        rows.append(_r("  Saleable Rails", "data",
+                       _one(cur,"act","BSP","WIRERODS",prev_month),
+                       _ytd_one(cur,"plan","BSP","WIRERODS",ytd),
+                       _ytd_one(cur,"act","BSP","WIRERODS",ytd),
+                       _ytd_one(cur,"act","BSP","WIRERODS",cply_ytd)))
+
+        rnd_ann   = (_ann(cur,"BSP","MM",fy) or 0) + (_ann(cur,"BSP","BARS&RODMILL",fy) or 0)
+        rnd_plan  = ((_one(cur,"plan","BSP","MM",report_month) or 0) +
+                     (_one(cur,"plan","BSP","BARS&RODMILL",report_month) or 0))
+        rnd_act   = ((_one(cur,"act","BSP","MM",report_month) or 0) +
+                     (_one(cur,"act","BSP","BARS&RODMILL",report_month) or 0))
+        rnd_cply  = ((_one(cur,"act","BSP","MM",prev_month) or 0) +
+                     (_one(cur,"act","BSP","BARS&RODMILL",prev_month) or 0))
+        rnd_cplan = ((_ytd_one(cur,"plan","BSP","MM",ytd) or 0) +
+                     (_ytd_one(cur,"plan","BSP","BARS&RODMILL",ytd) or 0))
+        rnd_cact  = ((_ytd_one(cur,"act","BSP","MM",ytd) or 0) +
+                     (_ytd_one(cur,"act","BSP","BARS&RODMILL",ytd) or 0))
+        rnd_ccply = ((_ytd_one(cur,"act","BSP","MM",cply_ytd) or 0) +
+                     (_ytd_one(cur,"act","BSP","BARS&RODMILL",cply_ytd) or 0))
+        rows.append(_r("Rounds", "data", "LONG", "BSP",
+                       rnd_ann or None, rnd_plan or None, rnd_act or None, rnd_cply or None,
+                       rnd_cplan or None, rnd_cact or None, rnd_ccply or None))
+        rows.append(_zero("Light Structurals", "LONG", "BSP"))
+        rows.append(_zero("Heavy Structural", "LONG", "BSP"))
+
+        rail_items = ["RSM_RAIL", "URM_RAIL"]
+        rows.append(_r("Saleable Rails", "data", "LONG", "BSP",
                        _ann_sum(cur,"BSP",rail_items,fy),
                        _sum_items(cur,"plan","BSP",rail_items,report_month),
                        _sum_items(cur,"act","BSP",rail_items,report_month),
-                       _sum_items(cur,"act","BSP",rail_items,prev_month)))
+                       _sum_items(cur,"act","BSP",rail_items,prev_month),
+                       _ytd_sum_items(cur,"plan","BSP",rail_items,ytd),
+                       _ytd_sum_items(cur,"act","BSP",rail_items,ytd),
+                       _ytd_sum_items(cur,"act","BSP",rail_items,cply_ytd)))
 
         # DSP long products
-        rows.append(_plant_lbl("DSP"))
-        rows.append(_r("  Semis", "data",
+        rows.append(_r("Semis", "data", "LONG", "DSP",
                        _ann(cur,"DSP","Saleable Semis",fy),
                        _one(cur,"plan","DSP","Saleable Semis",report_month),
                        _one(cur,"act","DSP","Saleable Semis",report_month),
-                       _one(cur,"act","DSP","Saleable Semis",prev_month)))
-        rows.append(_r("  Rounds", "data",
+                       _one(cur,"act","DSP","Saleable Semis",prev_month),
+                       _ytd_one(cur,"plan","DSP","Saleable Semis",ytd),
+                       _ytd_one(cur,"act","DSP","Saleable Semis",ytd),
+                       _ytd_one(cur,"act","DSP","Saleable Semis",cply_ytd)))
+        rows.append(_r("Rounds", "data", "LONG", "DSP",
                        _ann(cur,"DSP","MM",fy),
                        _one(cur,"plan","DSP","MM",report_month),
                        _one(cur,"act","DSP","MM",report_month),
-                       _one(cur,"act","DSP","MM",prev_month)))
-        rows.append(_r("  Med.Structurals", "data",
+                       _one(cur,"act","DSP","MM",prev_month),
+                       _ytd_one(cur,"plan","DSP","MM",ytd),
+                       _ytd_one(cur,"act","DSP","MM",ytd),
+                       _ytd_one(cur,"act","DSP","MM",cply_ytd)))
+        rows.append(_r("Med.Structurals", "data", "LONG", "DSP",
                        _ann(cur,"DSP","MSM",fy),
                        _one(cur,"plan","DSP","MSM",report_month),
                        _one(cur,"act","DSP","MSM",report_month),
-                       _one(cur,"act","DSP","MSM",prev_month)))
-        rows.append(_r("  Wheel & Axles", "data",
+                       _one(cur,"act","DSP","MSM",prev_month),
+                       _ytd_one(cur,"plan","DSP","MSM",ytd),
+                       _ytd_one(cur,"act","DSP","MSM",ytd),
+                       _ytd_one(cur,"act","DSP","MSM",cply_ytd)))
+        rows.append(_r("Wheel & Axles", "data", "LONG", "DSP",
                        _ann(cur,"DSP","WAP",fy),
                        _one(cur,"plan","DSP","WAP",report_month),
                        _one(cur,"act","DSP","WAP",report_month),
-                       _one(cur,"act","DSP","WAP",prev_month)))
+                       _one(cur,"act","DSP","WAP",prev_month),
+                       _ytd_one(cur,"plan","DSP","WAP",ytd),
+                       _ytd_one(cur,"act","DSP","WAP",ytd),
+                       _ytd_one(cur,"act","DSP","WAP",cply_ytd)))
 
         # ISP long products
-        rows.append(_plant_lbl("ISP"))
-        rows.append(_r("  Semis", "data",
+        rows.append(_r("Semis", "data", "LONG", "ISP",
                        _ann(cur,"ISP","Saleable Semis",fy),
                        _one(cur,"plan","ISP","Saleable Semis",report_month),
                        _one(cur,"act","ISP","Saleable Semis",report_month),
-                       _one(cur,"act","ISP","Saleable Semis",prev_month)))
-        rows.append(_r("  Bars & Rods", "data",
+                       _one(cur,"act","ISP","Saleable Semis",prev_month),
+                       _ytd_one(cur,"plan","ISP","Saleable Semis",ytd),
+                       _ytd_one(cur,"act","ISP","Saleable Semis",ytd),
+                       _ytd_one(cur,"act","ISP","Saleable Semis",cply_ytd)))
+        rows.append(_r("Bars & Rods", "data", "LONG", "ISP",
                        _ann(cur,"ISP","BARMILL",fy),
                        _one(cur,"plan","ISP","BARMILL",report_month),
                        _one(cur,"act","ISP","BARMILL",report_month),
-                       _one(cur,"act","ISP","BARMILL",prev_month)))
-        rows.append(_zero("  Light Structurals"))
-        rows.append(_zero("  Med.Structurals"))
-        rows.append(_r("  Wire rods", "data",
+                       _one(cur,"act","ISP","BARMILL",prev_month),
+                       _ytd_one(cur,"plan","ISP","BARMILL",ytd),
+                       _ytd_one(cur,"act","ISP","BARMILL",ytd),
+                       _ytd_one(cur,"act","ISP","BARMILL",cply_ytd)))
+        rows.append(_zero("Light Structurals", "LONG", "ISP"))
+        rows.append(_zero("Med.Structurals", "LONG", "ISP"))
+        rows.append(_r("Wire rods", "data", "LONG", "ISP",
                        _ann(cur,"ISP","WRMILL",fy),
                        _one(cur,"plan","ISP","WRMILL",report_month),
                        _one(cur,"act","ISP","WRMILL",report_month),
-                       _one(cur,"act","ISP","WRMILL",prev_month)))
-        rows.append(_r("  Heavy Structurals", "data",
+                       _one(cur,"act","ISP","WRMILL",prev_month),
+                       _ytd_one(cur,"plan","ISP","WRMILL",ytd),
+                       _ytd_one(cur,"act","ISP","WRMILL",ytd),
+                       _ytd_one(cur,"act","ISP","WRMILL",cply_ytd)))
+        rows.append(_r("Heavy Structurals", "data", "LONG", "ISP",
                        _ann(cur,"ISP","USMILL",fy),
                        _one(cur,"plan","ISP","USMILL",report_month),
                        _one(cur,"act","ISP","USMILL",report_month),
-                       _one(cur,"act","ISP","USMILL",prev_month)))
-        rows.append(_zero("  Light rails"))
+                       _one(cur,"act","ISP","USMILL",prev_month),
+                       _ytd_one(cur,"plan","ISP","USMILL",ytd),
+                       _ytd_one(cur,"act","ISP","USMILL",ytd),
+                       _ytd_one(cur,"act","ISP","USMILL",cply_ytd)))
+        rows.append(_zero("Light rails", "LONG", "ISP"))
 
         # LONG total = 5 ISPs SS - FLAT - PET
-        ss5_act_full = sum((_one(cur,"act",p,"Saleable Steel",report_month) or 0 for p in["BSP","DSP","RSP","BSL","ISP"]))
-        long_act  = ss5_act_full - (flat_act_total or 0) - (pet_act or 0)
-        long_plan = (ss5_plan or 0) - (flat_plan_total or 0) - (pet_plan or 0)
-        long_ann  = (ss5_ann or 0) - (flat_ann_total or 0) - (pet_ann or 0)
-        long_cply = (ss5_cply or 0) - (flat_cply_total or 0) - (pet_cply or 0)
+        ss5_act_full     = sum((_one(cur,"act",p,"Saleable Steel",report_month) or 0 for p in ["BSP","DSP","RSP","BSL","ISP"]))
+        ss5_cum_act_full = sum((_ytd_one(cur,"act",p,"Saleable Steel",ytd) or 0 for p in ["BSP","DSP","RSP","BSL","ISP"]))
+
+        long_act      = ss5_act_full - (flat_act_total or 0) - (pet_act or 0)
+        long_plan     = (ss5_plan or 0) - (flat_plan_total or 0) - (pet_plan or 0)
+        long_ann      = (ss5_ann or 0) - (flat_ann_total or 0) - (pet_ann or 0)
+        long_cply     = (ss5_cply or 0) - (flat_cply_total or 0) - (pet_cply or 0)
+        long_cum_plan = (ss5_cum_plan or 0) - (flat_cum_plan or 0) - (pet_cum_plan or 0)
+        long_cum_act  = ss5_cum_act_full - (flat_cum_act or 0) - (pet_cum_act or 0)
+        long_cum_cply = (ss5_cum_cply or 0) - (flat_cum_cply or 0) - (pet_cum_cply or 0)
 
         rows.append(_sep())
-        rows.append(_r("Total   Long", "seg-total",
+        rows.append(_r("Total   Long", "seg-total", None, None,
                        long_ann or None, long_plan or None,
-                       long_act or None, long_cply or None))
-        rows.append({"label": "  Long %", "type": "seg-pct", "indent": 0,
+                       long_act or None, long_cply or None,
+                       long_cum_plan or None, long_cum_act or None, long_cum_cply or None))
+        rows.append({"label": "Long %", "type": "seg-pct", "group": None, "plant": None,
                      "ann_plan": _ipct(long_ann or None, ss5_ann),
                      "m_plan":   _ipct(long_plan or None, ss5_plan),
                      "m_act":    _ipct(long_act or None, ss5_act_full or None),
-                     "m_pct": "",
-                     "cply_act": _ipct(long_cply or None, ss5_cply),
-                     "m_growth": ""})
+                     "m_pct": "", "cply_act": _ipct(long_cply or None, ss5_cply),
+                     "m_growth": "",
+                     "cum_plan":   _ipct(long_cum_plan or None, ss5_cum_plan),
+                     "cum_act":    _ipct(long_cum_act or None, ss5_cum_act_full or None),
+                     "cum_pct": "", "cum_cply": _ipct(long_cum_cply or None, ss5_cum_cply),
+                     "cum_growth": "",
+                     "show_group": False, "group_span": 1, "show_plant": False, "plant_span": 1})
 
         # ── Grand totals ──────────────────────────────────────────────────────
         rows.append(_sep())
 
-        # SEMI FINISHED STEEL = sum of Saleable Semis for all 5 plants
-        sem_ann  = sum(filter(None,(_ann(cur,p,"Saleable Semis",fy) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        sem_plan = sum(filter(None,(_one(cur,"plan",p,"Saleable Semis",report_month) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        sem_act  = sum(filter(None,(_one(cur,"act",p,"Saleable Semis",report_month) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        sem_cply = sum(filter(None,(_one(cur,"act",p,"Saleable Semis",prev_month) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        rows.append(_r("SEMI FINISHED STEEL", "grand-total",
-                       sem_ann or None, sem_plan or None, sem_act or None, sem_cply or None))
+        sem_ann      = sum(filter(None, (_ann(cur,p,"Saleable Semis",fy) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        sem_plan     = sum(filter(None, (_one(cur,"plan",p,"Saleable Semis",report_month) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        sem_act      = sum(filter(None, (_one(cur,"act",p,"Saleable Semis",report_month) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        sem_cply     = sum(filter(None, (_one(cur,"act",p,"Saleable Semis",prev_month) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        sem_cum_plan = sum(filter(None, (_ytd_one(cur,"plan",p,"Saleable Semis",ytd) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        sem_cum_act  = sum(filter(None, (_ytd_one(cur,"act",p,"Saleable Semis",ytd) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        sem_cum_cply = sum(filter(None, (_ytd_one(cur,"act",p,"Saleable Semis",cply_ytd) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        rows.append(_r("SEMI FINISHED STEEL", "grand-total", None, None,
+                       sem_ann or None, sem_plan or None, sem_act or None, sem_cply or None,
+                       sem_cum_plan or None, sem_cum_act or None, sem_cum_cply or None))
 
-        # FINISHED STEEL = sum of Finished Steel for all 5 plants
-        fs_ann  = sum(filter(None,(_ann(cur,p,"Finished Steel",fy) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        fs_plan = sum(filter(None,(_one(cur,"plan",p,"Finished Steel",report_month) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        fs_act  = sum(filter(None,(_one(cur,"act",p,"Finished Steel",report_month) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        fs_cply = sum(filter(None,(_one(cur,"act",p,"Finished Steel",prev_month) for p in["BSP","DSP","RSP","BSL","ISP"])))
-        rows.append(_r("FINISHED STEEL", "grand-total",
-                       fs_ann or None, fs_plan or None, fs_act or None, fs_cply or None))
+        fs_ann      = sum(filter(None, (_ann(cur,p,"Finished Steel",fy) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        fs_plan     = sum(filter(None, (_one(cur,"plan",p,"Finished Steel",report_month) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        fs_act      = sum(filter(None, (_one(cur,"act",p,"Finished Steel",report_month) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        fs_cply     = sum(filter(None, (_one(cur,"act",p,"Finished Steel",prev_month) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        fs_cum_plan = sum(filter(None, (_ytd_one(cur,"plan",p,"Finished Steel",ytd) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        fs_cum_act  = sum(filter(None, (_ytd_one(cur,"act",p,"Finished Steel",ytd) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        fs_cum_cply = sum(filter(None, (_ytd_one(cur,"act",p,"Finished Steel",cply_ytd) for p in ["BSP","DSP","RSP","BSL","ISP"])))
+        rows.append(_r("FINISHED STEEL", "grand-total", None, None,
+                       fs_ann or None, fs_plan or None, fs_act or None, fs_cply or None,
+                       fs_cum_plan or None, fs_cum_act or None, fs_cum_cply or None))
 
-        # 5 ISPs SALEABLE STEEL
-        rows.append(_r("5 ISPs  SALEABLE STEEL", "grand-total",
-                       ss5_ann, ss5_plan,
-                       ss5_act_full or None, ss5_cply))
+        rows.append(_r("5 ISPs  SALEABLE STEEL", "grand-total", None, None,
+                       ss5_ann, ss5_plan, ss5_act_full or None, ss5_cply,
+                       ss5_cum_plan, ss5_cum_act_full or None, ss5_cum_cply))
 
     finally:
         conn.close()
 
+    _add_rowspans(rows)
     return {"rows": rows}

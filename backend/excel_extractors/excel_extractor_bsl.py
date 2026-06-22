@@ -117,10 +117,13 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
 
     logger.info(f"BSL DPR: month auto-detected from O1 → {db_report_month}")
 
-    NO_CONVERT = {"Oven Pushing(nos/d)"}
+    from cells_loader import get_extractor_config
+    _cfg = get_extractor_config("bsl_dpr")
 
-    # Simple cells: item_name → cell address
-    production_cells = {
+    NO_CONVERT = set(_cfg.get("no_convert", ["Oven Pushing(nos/d)"]))
+
+    # Cell map: item_name → A1-style address. Falls back to hardcoded defaults.
+    production_cells = _cfg.get("cells", {
         "Oven Pushing(nos/d)": "P6",
         "Total Sinter":        "P7",
         "Hot Metal":           "P8",
@@ -139,7 +142,10 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
         "CRSALE":              "E29",
         "Saleable Steel":      "P31",
         "Saleable Semis":      "E32",
-    }
+    })
+
+    _default_derived = [{"item": "Finished Steel", "op": "subtract", "a": "P31", "b": "E32"}]
+    derived_rules = _cfg.get("derived", _default_derived)
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -158,24 +164,24 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
             DO UPDATE SET month_actual = excluded.month_actual
         """, (db_report_month, "BSL", item_name, val))
 
-    # Extract all mapped cells
     for item_name, cell in production_cells.items():
         _save(item_name, clean_val(ws[cell].value))
 
-    # Derived: Finished Steel = Saleable Steel (P31) − Saleable Semis (E32)
-    sal_steel = clean_val(ws["P31"].value)
-    sal_semis  = clean_val(ws["E32"].value)
-    if sal_steel is not None and sal_semis is not None:
-        finished = round((sal_steel - sal_semis) / 1000.0, 3)
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
-        """, (db_report_month, "BSL", "Finished Steel", finished))
-        vals_extracted += 1
-    elif sal_steel is not None:
-        _save("Finished Steel", sal_steel)   # best-effort if semis missing
+    # Derived values driven by config
+    for d in derived_rules:
+        item = d["item"]
+        if d["op"] == "subtract":
+            a_val = clean_val(ws[d["a"]].value)
+            b_val = clean_val(ws[d["b"]].value)
+            if a_val is not None and b_val is not None:
+                _save(item, a_val - b_val)
+            elif a_val is not None:
+                _save(item, a_val)
+        elif d["op"] == "add":
+            parts = [clean_val(ws[c].value) for c in d.get("cells", [])]
+            parts = [v for v in parts if v is not None]
+            if parts:
+                _save(item, sum(parts))
 
     if vals_extracted == 0:
         raise ValueError(
@@ -288,14 +294,15 @@ _TECHNO_PARAM_MAP = [
     ("Sheet1", 10,  6, 1000.0, "COKE_SINTER", "Energy",                "Sp. Heat Cons.",                    "Kcal/TCO"),
     ("Sheet1", 26,  6,    1.0, "COKE_SINTER", "Energy",                "Specific Energy Consumption",       "KWH/TCHS"),
     ("Sheet1", 31,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Machine Productivity",              "T/m²/hr"),
-    ("Sheet1", 33,  6,    1.0, "IRON_MAKING", "BF Productivity (BSL)", "BF Productivity",                   "T/m³/day"),
-    ("Sheet1", 35,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Coke Rate",                         "Kg/THM"),
-    ("Sheet1", 37,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "CDI Rate",                          "Kg/THM"),
-    ("Sheet1", 39,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Fuel Rate",                         "Kg/THM"),
-    ("Sheet1", 41,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Coal to Hot Metal",                 "Kg/THM"),
+    ("Sheet1", 33,  6,    1.0, "IRON_MAKING", "BF Productivity",       "BSL Plant Shop",                    "T/m³/day"),
+    ("Sheet1", 35,  6,    1.0, "IRON_MAKING", "BF Coke Rate",          "BSL Plant Shop",                    "Kg/THM"),
+    ("Sheet1", 37,  6,    1.0, "IRON_MAKING", "CDI",                   "BSL Plant Shop",                    "Kg/THM"),
+    ("Sheet1", 37,  6,    1.0, "MAJOR",       "CDI Rate",              "BSL",                               "kg/Thm"),
+    ("Sheet1", 39,  6,    1.0, "IRON_MAKING", "Fuel Rate",             "BSL Plant Shop",                    "Kg/THM"),
+    ("Sheet1", 41,  6,    1.0, "MAJOR",       "Coal to Hot Metal",     "BSL",                               "Kg/THM"),
     ("Sheet1", 49,  6,    1.0, "MILL_BSL",    "CRM 1&2",               "Yield of HR Coil",                  "%"),
     ("Sheet1", 51,  6,    1.0, "MILL_BSL",    "CRM 3",                 "Yield of HR Coil",                  "%"),
-    ("Sheet1", 55,  6,    1.0, "BOF",         "Refractory",            "Refractory Consumption",            "Kg/TCS"),
+    ("Sheet1", 55,  6,    1.0, "SMS",         "Refractory",            "BSL",                               "Kg/TCS"),
     ("Sheet1", 57,  6,    1.0, "COKE_SINTER", "Water",                 "Water Consumption",                 "m³/T"),
     # ── Sheet2 ─────────────────────────────────────────────────────────────
     ("Sheet2", 11,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Dry Coal Charge per Oven",          "T/oven"),
@@ -325,52 +332,52 @@ _TECHNO_PARAM_MAP = [
     ("Sheet3", 43,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter M/c Availability",           "%"),
     ("Sheet3", 46,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter M/c Utilization",            "%"),
     # ── Sheet4 ─────────────────────────────────────────────────────────────
-    ("Sheet4", 31,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Sinter in Burden",                  "%"),
-    ("Sheet4", 33,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Oxygen Enrichment",                  "%"),
-    ("Sheet4", 35,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "BF Coke Screen Loss (-25mm)",        "%"),
+    ("Sheet4", 31,  6,    1.0, "IRON_MAKING", "Sinter in Burden",      "BSL Plant Shop",                    "%"),
+    ("Sheet4", 33,  6,    1.0, "IRON_MAKING", "O2 Enrichment",         "BSL Plant Shop",                    "%"),
+    ("Sheet4", 35,  6,    1.0, "IRON_MAKING", "Coke Screen Loss",      "BSL Plant Shop",                    "%"),
     ("Sheet4", 37,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Slag Rate",                          "Kg/THM"),
     ("Sheet4", 38,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "BF Gas Yield",                       "Nm³/THM"),
     ("Sheet4", 39,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "CV of BF Gas",                       "Kcal/Nm³"),
     ("Sheet4", 40,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Furnace Availability",               "%"),
     ("Sheet4", 41,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Furnace Utilization",                "%"),
     # ── SMS-I ──────────────────────────────────────────────────────────────
-    ("SMS-I",   12,  6,    1.0, "BOF",         "SMS-I",                 "Tap to Tap Time (Avail. Hrs)",      "Min"),
-    ("SMS-I",   14,  6,    1.0, "BOF",         "SMS-I",                 "Tap to Tap Time (Working Hrs)",     "Min"),
-    ("SMS-I",  16,  6,    1.0, "BOF",         "SMS-I",                 "Average Lining Life",               "Heats"),
-    ("SMS-I",  18,  6,    1.0, "BOF",         "SMS-I",                 "Converter Availability (Cal. Hr)",  "%"),
-    ("SMS-I",  20,  6,    1.0, "BOF",         "SMS-I",                 "Converter Availability (Avail. Hr)","%"),
-    ("SMS-I",  23,  6,    1.0, "BOF",         "SMS-I",                 "Sp. Hot Metal Cons.",               "Kg/T CS"),
-    ("SMS-I",  25,  6,    1.0, "BOF",         "SMS-I",                 "Sp. Scrap Cons.",                   "Kg/T CS"),
-    ("SMS-I",  27,  6,    1.0, "BOF",         "SMS-I",                 "Sp. Iron Ore Cons.",                "Kg/T CS"),
-    ("SMS-I",  26,  6,    1.0, "BOF",         "SMS-I",                 "Sp. Pellet Cons.",                  "Kg/T CS"),
-    ("SMS-I",  28,  6,    1.0, "BOF",         "SMS-I",                 "Fe-Si Cons.",                       "Kg/T CS"),
-    ("SMS-I",  29,  6,    1.0, "BOF",         "SMS-I",                 "Fe-Mn Cons.",                       "Kg/T CS"),
-    ("SMS-I",  30,  6,    1.0, "BOF",         "SMS-I",                 "Si-Mn Cons.",                       "Kg/T CS"),
-    ("SMS-I",  34,  6,    1.0, "BOF",         "SMS-I",                 "Oxygen Blow per T Crude",           "Nm³/T CS"),
-    ("SMS-I",  33,  6,    1.0, "BOF",         "SMS-I",                 "Refractory Cons.",                  "Kg/T CS"),
-    ("SMS-I",  40,  6,    1.0, "BOF",         "SMS-I",                 "Heat Consumed",                     "Kcal/T CS"),
-    ("SMS-I",  42,  6,    1.0, "BOF",         "SMS-I",                 "Power Consumed",                    "KWH/T CS"),
-    ("SMS-I",  48,  6,    1.0, "BOF",         "SMS-I",                 "Reblown Heat",                      "%"),
-    ("SMS-I",  50,  6,    1.0, "BOF",         "SMS-I",                 "FeO in Slag",                       "%"),
+    ("SMS-I",   12,  6,    1.0, "SMS",         "SMS-I",                 "Tap to Tap Time (Avail. Hrs)",      "Min"),
+    ("SMS-I",   14,  6,    1.0, "SMS",         "SMS-I",                 "Tap to Tap Time (Working Hrs)",     "Min"),
+    ("SMS-I",  16,  6,    1.0, "SMS",         "SMS-I",                 "Average Lining Life",               "Heats"),
+    ("SMS-I",  18,  6,    1.0, "SMS",         "SMS-I",                 "Converter Availability (Cal. Hr)",  "%"),
+    ("SMS-I",  20,  6,    1.0, "SMS",         "SMS-I",                 "Converter Availability (Avail. Hr)","%"),
+    ("SMS-I",  23,  6,    1.0, "SMS",         "SMS-I",                 "Sp. Hot Metal Cons.",               "Kg/TCS"),
+    ("SMS-I",  25,  6,    1.0, "SMS",         "SMS-I",                 "Sp. Scrap Cons.",                   "Kg/TCS"),
+    ("SMS-I",  27,  6,    1.0, "SMS",         "SMS-I",                 "Sp. Iron Ore Cons.",                "Kg/TCS"),
+    ("SMS-I",  26,  6,    1.0, "SMS",         "SMS-I",                 "Sp. Pellet Cons.",                  "Kg/TCS"),
+    ("SMS-I",  28,  6,    1.0, "SMS",         "SMS-I",                 "Fe-Si Cons.",                       "Kg/TCS"),
+    ("SMS-I",  29,  6,    1.0, "SMS",         "SMS-I",                 "Fe-Mn Cons.",                       "Kg/TCS"),
+    ("SMS-I",  30,  6,    1.0, "SMS",         "SMS-I",                 "Si-Mn Cons.",                       "Kg/TCS"),
+    ("SMS-I",  34,  6,    1.0, "SMS",         "SMS-I",                 "Oxygen Blow per T Crude",           "Nm³/T CS"),
+    ("SMS-I",  33,  6,    1.0, "SMS",         "SMS-I",                 "Refractory Cons.",                  "Kg/TCS"),
+    ("SMS-I",  40,  6,    1.0, "SMS",         "SMS-I",                 "Heat Consumed",                     "Kcal/T CS"),
+    ("SMS-I",  42,  6,    1.0, "SMS",         "SMS-I",                 "Power Consumed",                    "KWH/T CS"),
+    ("SMS-I",  48,  6,    1.0, "SMS",         "SMS-I",                 "Reblown Heat",                      "%"),
+    ("SMS-I",  50,  6,    1.0, "SMS",         "SMS-I",                 "FeO in Slag",                       "%"),
     # ── SMS-II ─────────────────────────────────────────────────────────────
-    ("SMS-II",  12,  6,    1.0, "BOF",         "SMS-II",                "Tap to Tap Time (Avail. Hrs)",      "Min"),
-    ("SMS-II",  14,  6,    1.0, "BOF",         "SMS-II",                "Tap to Tap Time (Working Hrs)",     "Min"),
-    ("SMS-II", 16,  6,    1.0, "BOF",         "SMS-II",                "Average Lining Life",               "Heats"),
-    ("SMS-II", 18,  6,    1.0, "BOF",         "SMS-II",                "Converter Availability (Cal. Hr)",  "%"),
-    ("SMS-II", 20,  6,    1.0, "BOF",         "SMS-II",                "Converter Availability (Avail. Hr)","%"),
-    ("SMS-II", 23,  6,    1.0, "BOF",         "SMS-II",                "Sp. Hot Metal Cons.",               "Kg/T CS"),
-    ("SMS-II", 25,  6,    1.0, "BOF",         "SMS-II",                "Sp. Scrap Cons.",                   "Kg/T CS"),
-    ("SMS-II", 27,  6,    1.0, "BOF",         "SMS-II",                "Sp. Iron Ore Cons.",                "Kg/T CS"),
-    ("SMS-II", 26,  6,    1.0, "BOF",         "SMS-II",                "Sp. Pellet Cons.",                  "Kg/T CS"),
-    ("SMS-II", 28,  6,    1.0, "BOF",         "SMS-II",                "Fe-Si Cons.",                       "Kg/T CS"),
-    ("SMS-II", 29,  6,    1.0, "BOF",         "SMS-II",                "Fe-Mn Cons.",                       "Kg/T CS"),
-    ("SMS-II", 30,  6,    1.0, "BOF",         "SMS-II",                "Si-Mn Cons.",                       "Kg/T CS"),
-    ("SMS-II", 36,  6,    1.0, "BOF",         "SMS-II",                "Oxygen Blow per T Crude",           "Nm³/T CS"),
-    ("SMS-II", 35,  6,    1.0, "BOF",         "SMS-II",                "Refractory Cons.",                  "Kg/T CS"),
-    ("SMS-II", 42,  6,    1.0, "BOF",         "SMS-II",                "Heat Consumed",                     "Kcal/T CS"),
-    ("SMS-II", 44,  6,    1.0, "BOF",         "SMS-II",                "Power Consumed",                    "KWH/T CS"),
-    ("SMS-II", 50,  6,    1.0, "BOF",         "SMS-II",                "Reblown Heat",                      "%"),
-    ("SMS-II", 52,  6,    1.0, "BOF",         "SMS-II",                "FeO in Slag",                       "%"),
+    ("SMS-II",  12,  6,    1.0, "SMS",         "SMS-II",                "Tap to Tap Time (Avail. Hrs)",      "Min"),
+    ("SMS-II",  14,  6,    1.0, "SMS",         "SMS-II",                "Tap to Tap Time (Working Hrs)",     "Min"),
+    ("SMS-II", 16,  6,    1.0, "SMS",         "SMS-II",                "Average Lining Life",               "Heats"),
+    ("SMS-II", 18,  6,    1.0, "SMS",         "SMS-II",                "Converter Availability (Cal. Hr)",  "%"),
+    ("SMS-II", 20,  6,    1.0, "SMS",         "SMS-II",                "Converter Availability (Avail. Hr)","%"),
+    ("SMS-II", 23,  6,    1.0, "SMS",         "SMS-II",                "Sp. Hot Metal Cons.",               "Kg/TCS"),
+    ("SMS-II", 25,  6,    1.0, "SMS",         "SMS-II",                "Sp. Scrap Cons.",                   "Kg/TCS"),
+    ("SMS-II", 27,  6,    1.0, "SMS",         "SMS-II",                "Sp. Iron Ore Cons.",                "Kg/TCS"),
+    ("SMS-II", 26,  6,    1.0, "SMS",         "SMS-II",                "Sp. Pellet Cons.",                  "Kg/TCS"),
+    ("SMS-II", 28,  6,    1.0, "SMS",         "SMS-II",                "Fe-Si Cons.",                       "Kg/TCS"),
+    ("SMS-II", 29,  6,    1.0, "SMS",         "SMS-II",                "Fe-Mn Cons.",                       "Kg/TCS"),
+    ("SMS-II", 30,  6,    1.0, "SMS",         "SMS-II",                "Si-Mn Cons.",                       "Kg/TCS"),
+    ("SMS-II", 36,  6,    1.0, "SMS",         "SMS-II",                "Oxygen Blow per T Crude",           "Nm³/T CS"),
+    ("SMS-II", 35,  6,    1.0, "SMS",         "SMS-II",                "Refractory Cons.",                  "Kg/TCS"),
+    ("SMS-II", 42,  6,    1.0, "SMS",         "SMS-II",                "Heat Consumed",                     "Kcal/T CS"),
+    ("SMS-II", 44,  6,    1.0, "SMS",         "SMS-II",                "Power Consumed",                    "KWH/T CS"),
+    ("SMS-II", 50,  6,    1.0, "SMS",         "SMS-II",                "Reblown Heat",                      "%"),
+    ("SMS-II", 52,  6,    1.0, "SMS",         "SMS-II",                "FeO in Slag",                       "%"),
 ]
 
 _MONTH_FROM_NAME = {
@@ -398,6 +405,76 @@ def _detect_month_from_filename(file_path: str) -> Optional[str]:
         if mon_num:
             return f"{yr}-{mon_num}"
     return None
+
+
+_MONTH_NAME_RE = re.compile(
+    r'\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)'
+    r'[\s\-–]*(\d{4})\b'
+)
+# BSL BF PDF header: "BF PERFORMANCE & ANALYSIS REPORT For DD/MM/YYYY"
+_DATE_DDMMYYYY_RE = re.compile(r'\b\d{2}/(\d{2})/(\d{4})\b')
+
+
+def _detect_month_from_pdf_text(text: str) -> Optional[str]:
+    """Detect YYYY-MM from BSL BF PDF text.
+
+    Primary: DD/MM/YYYY date in the report header line (e.g. 'For 30/04/2026').
+    Fallback: month-name + year pattern for any future format variation.
+    Searches the first 500 chars first (header), then the full text.
+    """
+    for chunk in (text[:500], text):
+        m = _DATE_DDMMYYYY_RE.search(chunk)
+        if m:
+            mon, yr = m.group(1), m.group(2)
+            if "01" <= mon <= "12":
+                return f"{yr}-{mon}"
+    for chunk in (text[:500], text):
+        m = _MONTH_NAME_RE.search(chunk.upper())
+        if m:
+            mon_num = _MONTH_FROM_NAME.get(m.group(1))
+            if mon_num:
+                return f"{m.group(2)}-{mon_num}"
+    return None
+
+
+def _detect_month_from_sheet1(wb) -> Optional[str]:
+    """Scan the first 5 rows of Sheet1 for a month-name + year pattern (Techno Excel header)."""
+    try:
+        ws = wb["Sheet1"]
+    except (KeyError, Exception):
+        return None
+    for row in range(1, 6):
+        for col in range(1, 10):
+            try:
+                val = str(ws.cell(row, col).value or "").upper()
+            except Exception:
+                continue
+            m = _MONTH_NAME_RE.search(val)
+            if m:
+                mon_num = _MONTH_FROM_NAME.get(m.group(1))
+                if mon_num:
+                    return f"{m.group(2)}-{mon_num}"
+    return None
+
+
+def _fmt_month(ym: str) -> str:
+    """Format 'YYYY-MM' as 'Month YYYY' for human-readable error messages."""
+    try:
+        y, mo = ym[:4], ym[5:7]
+        return f"{MONTH_NAMES[mo]} {y}"
+    except Exception:
+        return ym
+
+
+def _assert_month_match(detected: Optional[str], user_month: str, source: str) -> None:
+    """Raise ValueError if detected month does not match user-selected month."""
+    if detected and detected != user_month:
+        raise ValueError(
+            f"Month mismatch: the {source} contains data for "
+            f"{_fmt_month(detected)}, but you selected {_fmt_month(user_month)}. "
+            f"Please select '{_fmt_month(detected)}' in the month picker, "
+            f"or upload the file for {_fmt_month(user_month)}."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -581,6 +658,9 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     except Exception as exc:
         raise ValueError(f"Cannot open PDF '{fname}': {exc}") from exc
 
+    detected = _detect_month_from_pdf_text(full_text)
+    _assert_month_match(detected, report_month, "BSL BF Performance PDF")
+
     lines = full_text.splitlines()
 
     def _monthly(cell: str):
@@ -664,49 +744,96 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     #   [7]=HOT MET T [8]=COKE RATE [9]=N/C RT [10]=CDI RATE [11]=FUEL RATE ...
     # Raw material table: [0]='' [1]=Fce [2]=Coke [3]=IronOre [4]=Sinter [5]=Scrap
     #   [6]=NutCoke [7]=CDI [8]=Pellet [9]=CokeEcy [10]=O2 En(%) [11]=SLG RATE ...
-    PARAMS = [
-        # (table_key, col_idx, param_name,      unit,       group)
-        ('prod', 16, 'BF Productivity', 'T/m³/day', 'IRON_MAKING'),
-        ('prod', 13, 'Hot Blast Temp',  '°C',       'IRON_MAKING'),
-        ('fuel',  7, 'Hot Metal Temp',  '°C',       'IRON_MAKING'),
-        ('fuel',  8, 'Coke Rate',       'Kg/THM',   'IRON_MAKING'),
-        ('fuel',  9, 'Nut Coke Rate',   'Kg/THM',   'IRON_MAKING'),
-        ('fuel', 10, 'CDI Rate',        'Kg/THM',   'IRON_MAKING'),
-        ('fuel', 11, 'Fuel Rate',       'Kg/THM',   'IRON_MAKING'),
-        ('raw',   3, 'Iron Ore',        'T',        'IRON_MAKING'),
-        ('raw',   4, 'Sinter',          'T',        'IRON_MAKING'),
-        ('raw',   5, 'Scrap',           'T',        'IRON_MAKING'),
-        ('raw',   8, 'Pellet',          'T',        'IRON_MAKING'),
-        ('raw',  10, 'O2 Enrichment',   '%',        'IRON_MAKING'),
-        ('raw',  11, 'Slag Rate',       'Kg/THM',   'IRON_MAKING'),
-        ('raw',  12, 'Sinter%',         '%',        'IRON_MAKING'),
-    ]
     TABLE_DATA = {'prod': prod_rows, 'fuel': fuel_rows, 'raw': raw_rows}
-    FURNACES = ['BF-1', 'BF-2', 'BF-4', 'BF-5', 'BF Shop']
 
     # ── Build techno_param_rows ───────────────────────────────────────────────
     rows_out = []
     sort_idx = 0
-    for fce in FURNACES:
-        for tbl, col_idx, param, unit, group in PARAMS:
-            cols = TABLE_DATA[tbl].get(fce, [])
-            val = _monthly(cols[col_idx]) if col_idx < len(cols) else None
+
+    # Add per-furnace CDI + monthly HM weight (for YTD weighted avg on page 29)
+    for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'),
+                        ('BF-4', 'BSL BF-4'), ('BF-5', 'BSL BF-5')]:
+        fuel_cols = TABLE_DATA['fuel'].get(fce, [])
+        cdi_val = _monthly(fuel_cols[10]) if len(fuel_cols) > 10 else None
+        rows_out.append({
+            'group_code': 'IRON_MAKING', 'section': 'CDI',
+            'parameter': label, 'unit': 'Kg/THM',
+            'actual': cdi_val, 'cum_actual': None,
+            'sort_order': sort_idx * 10, 'cell': f'PDF fuel-table col-10 {fce}',
+            'file_label': f'CDI Rate ({fce})', 'plant': 'BSL', 'month': report_month,
+            'found_via': f'BSL {fce} CDI Rate', 'status': 'ok' if cdi_val is not None else 'skip',
+        })
+        prod_cols = TABLE_DATA['prod'].get(fce, [])
+        hm_val = _monthly(prod_cols[2]) if len(prod_cols) > 2 else None
+        rows_out.append({
+            'group_code': 'IRON_MAKING', 'section': 'HM Production',
+            'parameter': label, 'unit': 'T',
+            'actual': hm_val, 'cum_actual': None,
+            'sort_order': sort_idx * 10, 'cell': f'PDF prod-table col-2 {fce}',
+            'file_label': f'HM Production ({fce})', 'plant': 'BSL', 'month': report_month,
+            'found_via': f'BSL {fce} Monthly HM', 'status': 'ok' if hm_val is not None else 'skip',
+        })
+        sort_idx += 1
+    shop_cdi_cols = TABLE_DATA['fuel'].get('BF Shop', [])
+    shop_cdi_val = _monthly(shop_cdi_cols[10]) if len(shop_cdi_cols) > 10 else None
+    rows_out.append({
+        'group_code': 'IRON_MAKING', 'section': 'CDI',
+        'parameter': 'BSL Plant Shop', 'unit': 'Kg/THM',
+        'actual': shop_cdi_val, 'cum_actual': None,
+        'source_priority': 4,   # Monthly Tech Excel (priority 5) can override this shop avg
+        'sort_order': sort_idx * 10, 'cell': 'PDF fuel-table col-10 BF Shop',
+        'file_label': 'CDI Rate (BF Shop)', 'plant': 'BSL', 'month': report_month,
+        'found_via': 'BSL BF Shop CDI Rate', 'status': 'ok' if shop_cdi_val is not None else 'skip',
+    })
+    sort_idx += 1
+
+    # ── Cross-plant section writes (section-as-section, furnace-as-row_label)
+    # prod: [13]=Hot Blast Temp  [16]=BF Productivity
+    # fuel: [2]=Si%  [3]=S%  [7]=Hot Metal Temp  [8]=Coke Rate  [9]=Nut Coke Rate  [11]=Fuel Rate
+    # raw:  [3]=Iron Ore(T)  [4]=Sinter(T)  [5]=Scrap(T)  [8]=Pellet(T)
+    #       [10]=O2 En(%)  [11]=Slag Rate  [12]=Sinter% in Burden  [13]=Pellet% in Burden
+    _CROSS = [
+        # (table, col, section, unit, sort_base)
+        ('prod', 16, 'BF Productivity',    'T/m³/day', 76),
+        ('prod', 13, 'HBT',                '°C',      106),
+        ('fuel',  7, 'Hot Metal Temp',     '°C',       95),
+        ('fuel',  8, 'BF Coke Rate',       'Kg/THM',   56),
+        ('fuel',  9, 'Nut Coke Rate',      'Kg/THM',   66),
+        ('fuel', 11, 'Fuel Rate',          'Kg/THM',  110),
+        ('fuel',  2, 'Si in HM',           '%',        86),
+        ('fuel',  3, 'S in HM',            '%',        93),
+        ('raw',   3, 'Iron Ore',           'T',        25),
+        ('raw',   4, 'Sinter Consumption', 'T',        35),
+        ('raw',   5, 'BF Scrap',           'T',        45),
+        ('raw',   8, 'Pellet Consumption', 'T',        55),
+        ('raw',  10, 'O2 Enrichment',      '%',       140),
+        ('raw',  11, 'Slag Rate',          'Kg/THM',  138),
+        ('raw',  12, 'Sinter in Burden',   '%',       120),
+        ('raw',  13, 'Pellet in Burden',   '%',       130),
+    ]
+    # All rows (per-furnace and BF Shop) stored at priority 5 — PDF is the authoritative source.
+    # compute_bf_shop_averages() at priority 4 will not overwrite these.
+    for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'),
+                        ('BF-4', 'BSL BF-4'), ('BF-5', 'BSL BF-5'),
+                        ('BF Shop', 'BSL Plant Shop')]:
+        cols_f = TABLE_DATA['fuel'].get(fce, [])
+        cols_p = TABLE_DATA['prod'].get(fce, [])
+        cols_r = TABLE_DATA['raw'].get(fce, [])
+        for tbl, ci, section, unit, so_base in _CROSS:
+            cols = cols_f if tbl == 'fuel' else (cols_p if tbl == 'prod' else cols_r)
+            val = _monthly(cols[ci]) if ci < len(cols) else None
             rows_out.append({
-                'group_code':  group,
-                'section':     fce,
-                'parameter':   param,
-                'unit':        unit,
-                'actual':      val,
-                'cum_actual':  None,
-                'sort_order':  sort_idx * 10,
-                'cell':        f'PDF {tbl}-table col-{col_idx}',
-                'file_label':  param,
-                'plant':       'BSL',
-                'month':       report_month,
-                'found_via':   f'BSL BF PDF ({tbl} table, col {col_idx})',
-                'status':      'ok' if val is not None else 'skip',
+                'group_code': 'IRON_MAKING', 'section': section,
+                'parameter': label, 'unit': unit,
+                'actual': val, 'cum_actual': None,
+                'sort_order': so_base + sort_idx,
+                'source_priority': 5,
+                'cell': f'PDF {tbl}-table col-{ci} {fce}',
+                'file_label': f'{section} ({fce})', 'plant': 'BSL', 'month': report_month,
+                'found_via': f'BSL {fce} {section}',
+                'status': 'ok' if val is not None else 'skip',
             })
-            sort_idx += 1
+        sort_idx += 1
 
     ok = sum(1 for r in rows_out if r['status'] == 'ok')
     logger.info("BSL BF PDF: %d/%d rows ok for %s", ok, len(rows_out), report_month)
@@ -721,6 +848,7 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     return {
         'source_type':        'BSL BF Performance & Analysis Report (PDF)',
         'month':              report_month,
+        'detected_month':     detected,
         'plant':              'BSL',
         'workbook_sheets':    ['PDF'],
         'production_rows':    [],
@@ -728,6 +856,41 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
         'techno_param_rows':  rows_out,
         'special_steel_rows': [],
     }
+
+
+def _extract_delhi_report_stock(wb, db_month: str) -> list:
+    """Extract next-month opening stock from 'Delhi Report' sheet.
+
+    Column M = closing stock as on last day of db_month = opening of next month.
+    Cell mapping (Tonnes → stored as '000T, 3 d.p.):
+      M67 → SLABS INPROCESS
+      M66 → FINISHED STEEL
+      M69 → PIG IRON
+    """
+    dr_name = next((s for s in wb.sheetnames if s.strip().lower() == "delhi report"), None)
+    if dr_name is None:
+        return []
+
+    ws = wb[dr_name]
+    y, m = int(db_month[:4]), int(db_month[5:7])
+    next_month = f"{y+1 if m == 12 else y}-{1 if m == 12 else m+1:02d}"
+
+    def _t(addr):
+        v = clean_val(ws[addr].value)
+        return round(v / 1000, 3) if v is not None else None
+
+    def _row(item_type, stock_type, value, formula):
+        return {
+            "plant": "BSL", "item_type": item_type, "stock_type": stock_type,
+            "stock_month": next_month, "value": value, "formula": formula,
+            "status": "ok" if value is not None else "skip",
+        }
+
+    return [
+        _row("SLABS",         "INPROCESS", _t("M67"), "Delhi Report!M67"),
+        _row("FINISHED STEEL", "",          _t("M66"), "Delhi Report!M66"),
+        _row("PIG IRON",      "",          _t("M69"), "Delhi Report!M69"),
+    ]
 
 
 def _extract_dpr_preview(wb, report_month: str) -> dict:
@@ -746,6 +909,14 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
     db_month = db_month or report_month
     if not db_month:
         raise ValueError("Cannot determine report month: cell O1 is empty and no month supplied.")
+
+    if db_month != report_month and report_month and len(report_month) >= 7:
+        raise ValueError(
+            f"Month mismatch: the DPR file's date cell (O1) shows "
+            f"{_fmt_month(db_month)}, but you selected {_fmt_month(report_month)}. "
+            f"Please select '{_fmt_month(db_month)}' in the month picker, "
+            f"or upload the DPR file for {_fmt_month(report_month)}."
+        )
 
     logger.info("BSL DPR preview: month from O1 → %s", db_month)
 
@@ -807,6 +978,11 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
             "Verify this is a BSL DPR Mail file (sheet 'DPR', date in O1)."
         )
 
+    stock_rows = _extract_delhi_report_stock(wb, db_month)
+    stock_ok = sum(1 for r in stock_rows if r["status"] == "ok")
+    logger.info("BSL DPR stock (Delhi Report): %d/%d ok for next_month of %s",
+                stock_ok, len(stock_rows), db_month)
+
     return {
         "source_type":        "BSL DPR Mail (Month-End)",
         "month":              db_month,
@@ -816,6 +992,7 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
         "techno_rows":        [],
         "techno_param_rows":  [],
         "special_steel_rows": [],
+        "stock_rows":         stock_rows,
     }
 
 
@@ -851,14 +1028,16 @@ def extract_preview(file_path: str, report_month: str) -> dict:
         return _extract_corp_ss_preview(wb, report_month)
 
     # ── Determine report month ────────────────────────────────────────────
+    detected_month = _detect_month_from_sheet1(wb) or _detect_month_from_filename(file_path)
     db_month = report_month
     if not db_month or len(db_month) < 7:
-        db_month = _detect_month_from_filename(file_path) or ""
+        db_month = detected_month or ""
     if not db_month:
         raise ValueError(
             "Cannot determine report month. Set the month in the selector or "
             "name the file as TECHNO <MONTH><YYYY>.XLS (e.g. TECHNO APRIL2026.XLS)."
         )
+    _assert_month_match(detected_month, db_month, "BSL Techno Excel")
 
     # ── Check which sheets are present ───────────────────────────────────
     sheets_present = list(wb.sheetnames)
@@ -922,6 +1101,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     return {
         "source_type":       "BSL Techno-Economic Parameters",
         "month":             db_month,
+        "detected_month":    detected_month,
         "plant":             "BSL",
         "workbook_sheets":   sheets_present,
         "production_rows":   [],
@@ -929,4 +1109,5 @@ def extract_preview(file_path: str, report_month: str) -> dict:
         "techno_param_rows": rows_out,
         "special_steel_rows": [],
     }
+
 

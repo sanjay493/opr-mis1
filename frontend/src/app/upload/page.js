@@ -294,6 +294,7 @@ export default function UploadPage() {
   const [technoFile, setTechnoFile] = useState(null);
   const [technoPreview, setTechnoPreview] = useState(null);
   const [prodRows, setProdRows] = useState([]);   // editable copy of production_rows
+  const [stockRows, setStockRows] = useState([]);
   const [planPreview, setPlanPreview] = useState(null);   // ABP Plan tab preview
   const [isPlanBusy, setIsPlanBusy] = useState(false);
   const [ssRows, setSsRows] = useState([]);       // editable copy of special_steel_rows
@@ -310,7 +311,8 @@ export default function UploadPage() {
   const [dspTechnoResult, setDspTechnoResult] = useState(null);
   const [dspSsResult, setDspSsResult] = useState(null);
   const [dspSsRows, setDspSsRows] = useState([]);
-  const [dspBusy, setDspBusy] = useState({ production: false, techno: false, special_steel: false });
+  const [dspStockResult, setDspStockResult] = useState(null);
+  const [dspBusy, setDspBusy] = useState({ production: false, techno: false, special_steel: false, stock: false });
   
   const [isUploading, setIsUploading] = useState(false);
   const [logs, setLogs] = useState([
@@ -415,6 +417,9 @@ export default function UploadPage() {
       const teOk = (result.techno_rows || []).filter((r) => r.status === 'ok').length;
       const millOk = (result.techno_param_rows || []).filter((r) => r.status === 'ok').length;
       addLog('success', `File type: ${result.source_type} (month ${result.month})`);
+      if (result.month_mismatch) {
+        addLog('error', `Month mismatch: file contains data for ${result.month} but you selected ${result.selected_month}. File month (${result.month}) will be used — please re-select the correct month if needed.`);
+      }
       addLog('info', `Workbook sheets: ${(result.workbook_sheets || []).join(' | ')}`);
       if (!result.production_rows?.length) {
         addLog('info', 'No production data: this file was not recognized as a Final Monthly Report (sheets "page-9" + "page 1-8") or Morning Report. If it should contain production, check the sheet names above.');
@@ -470,6 +475,12 @@ export default function UploadPage() {
         grade_edit: r.quality_grade ?? '',
         section_edit: r.section ?? '',
       })));
+      setStockRows(result.stock_rows || []);
+      const stockOk = (result.stock_rows || []).filter(r => r.status === 'ok').length;
+      if (stockOk > 0) {
+        const sm = (result.stock_rows || []).find(r => r.stock_month)?.stock_month || '';
+        addLog('success', `Opening Stock: ${stockOk} items extracted for stock_month ${sm} → stock_table`);
+      }
       if (result.special_steel_note) {
         addLog('info', `Special Steel: ${result.special_steel_note}`);
       } else if ((result.special_steel_rows || []).length) {
@@ -515,7 +526,8 @@ export default function UploadPage() {
         quality_grade: (r.grade_edit ?? r.quality_grade ?? '').trim(),
         section: (r.section_edit ?? r.section ?? '').trim(),
       }));
-    if (!production_rows.length && !techno_rows.length && !techno_param_rows.length && !special_steel_rows.length) {
+    const stock_rows = stockRows.filter(r => r.status === 'ok');
+    if (!production_rows.length && !techno_rows.length && !techno_param_rows.length && !special_steel_rows.length && !stock_rows.length) {
       alert('No extracted values to insert.');
       return;
     }
@@ -535,6 +547,7 @@ export default function UploadPage() {
           techno_rows,
           techno_param_rows,
           special_steel_rows,
+          stock_rows,
         }),
       });
       const text = await res.text();
@@ -546,6 +559,7 @@ export default function UploadPage() {
       setTechnoPreview(null);
       setProdRows([]);
       setSsRows([]);
+      setStockRows([]);
       setTechnoFile(null);
       const fi = document.getElementById('techno-file-input');
       if (fi) fi.value = '';
@@ -562,7 +576,8 @@ export default function UploadPage() {
     ? prodRows.filter((r) => r.selected && (r.item_edit || '').trim()).length +
       (technoPreview.techno_rows || []).filter((r) => r.status === 'ok').length +
       (technoPreview.techno_param_rows || []).filter((r) => r.status === 'ok').length +
-      ssRows.filter((r) => r.selected && r.status === 'ok').length
+      ssRows.filter((r) => r.selected && r.status === 'ok').length +
+      stockRows.filter((r) => r.status === 'ok').length
     : 0;
 
   const toggleProdRow = (idx, checked) =>
@@ -713,7 +728,7 @@ export default function UploadPage() {
         setDspTechnoResult(result);
         const ok = (result.techno_param_rows || []).filter((r) => r.status === 'ok').length;
         addLog('success', `Techno: ${ok} parameters extracted. Review below, then Insert Techno.`);
-      } else {
+      } else if (block === 'special_steel') {
         setDspSsResult(result);
         setDspSsRows((result.special_steel_rows || []).map((r) => ({
           ...r, selected: r.status === 'ok', grade_edit: r.quality_grade ?? '', section_edit: r.section ?? '',
@@ -722,6 +737,12 @@ export default function UploadPage() {
         const note = result.special_steel_note;
         if (note) addLog('info', `Special Steel: ${note}`);
         else addLog('success', `Special Steel: ${ok} rows extracted. Review below, then Insert Special Steel.`);
+      } else if (block === 'stock') {
+        setDspStockResult(result);
+        const ok = (result.stock_rows || []).filter((r) => r.status === 'ok').length;
+        if (result.month_mismatch)
+          addLog('error', `Flash stock: detected date ${result.detected_date} (month ${result.detected_month}) ≠ selected month ${result.selected_month} — verify before inserting.`);
+        addLog('success', `Flash stock: ${ok}/4 rows extracted. Review below, then Insert Stock.`);
       }
     } catch (err) {
       addLog('error', `DSP ${block} extraction failed: ${err.message}`);
@@ -733,8 +754,42 @@ export default function UploadPage() {
 
   const handleDspInsert = async (block) => {
     const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
-    const baseResult = dspProdResult || dspTechnoResult || dspSsResult;
+    const baseResult = dspProdResult || dspTechnoResult || dspSsResult || dspStockResult;
     const month = baseResult?.month || targetPeriod;
+
+    // ── Stock (Flash.pdf) insert ──────────────────────────────────────────
+    if (block === 'stock' && dspStockResult) {
+      const okRows = (dspStockResult.stock_rows || []).filter((r) => r.status === 'ok' && r.value != null);
+      if (!okRows.length) { alert('No stock rows to insert.'); return; }
+      const payload = {
+        month, plant: 'DSP', source_type: 'DSP Flash Report (Closing Stock)',
+        sheets: 'Flash.pdf page 1', file_name: technoFile?.name || '',
+        production_rows: [], item_overrides: [], techno_rows: [],
+        techno_param_rows: [], special_steel_rows: [],
+        stock_rows: okRows,
+      };
+      setDspBusy((b) => ({ ...b, stock: true }));
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/confirm-extraction`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        const text = await res.text();
+        let result;
+        try { result = JSON.parse(text); } catch { throw new Error(text.slice(0, 300) || `Server error ${res.status}`); }
+        if (!res.ok) throw new Error(result.detail || 'insert failed');
+        addLog('success', result.message);
+        alert(result.message);
+        setDspStockResult(null);
+        fetchExtractionLog();
+      } catch (err) {
+        addLog('error', `DSP stock insert failed: ${err.message}`);
+        alert(`Insert failed: ${err.message}`);
+      } finally {
+        setDspBusy((b) => ({ ...b, stock: false }));
+      }
+      return;
+    }
+
     let payload = {
       month, plant: 'DSP', source_type: 'DSP OMI PDF Report',
       sheets: '', file_name: technoFile?.name || '',
@@ -925,7 +980,7 @@ export default function UploadPage() {
                   <option value="RSP">RSP (Excel)</option>
                   <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
                   <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
-                  <option value="BSP">BSP (3-page Techno / OISCO Techno / Special Steel .xlsx)</option>
+                  <option value="BSP">BSP (PPC MIS Month-End .xls / Techno / OISCO / Special Steel .xlsx)</option>
                   <option value="BSL">BSL (Techno .xls / Corporate SS .xlsx / BF PDF)</option>
                   <option value="ASP">ASP (xlsx or PDF — REP / FL actuals)</option>
                   <option value="SSP">SSP (PDF — Monthly DPR)</option>
@@ -949,7 +1004,7 @@ export default function UploadPage() {
                 <label>
                   {technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
                     : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
-                    : technoPlant === 'BSP' ? 'BSP Excel File (.xlsx) — file type auto-detected'
+                    : technoPlant === 'BSP' ? 'BSP File (.xls Month-End PPC MIS or .xlsx Techno/OISCO/SS)'
                     : technoPlant === 'BSL' ? 'BSL — DPR Mail (.xlsx) or Techno (.xls) or Corporate SS (.xlsx) or BF Performance PDF (.pdf)'
                     : technoPlant === 'ASP' ? 'ASP file — asp.xlsx  or  REP*.pdf / FL*.pdf'
                     : technoPlant === 'SSP' ? 'SSP DPR PDF (e.g. SSP-DPR-DD.MM.YY.pdf)'
@@ -957,7 +1012,7 @@ export default function UploadPage() {
                     : 'RSP Excel File (.xlsx)'}
                 </label>
                 <input id="techno-file-input" type="file" className="form-control"
-                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : '.xlsx'}
+                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : '.xlsx'}
                        style={{ padding: '4px', fontSize: '0.8rem' }}
                        suppressHydrationWarning
                        onChange={(e) => setTechnoFile(e.target.files[0])} />
@@ -967,7 +1022,7 @@ export default function UploadPage() {
                     : technoPlant === 'ISP'
                     ? 'Morning Report (DAILYREPORT1): ~19 items, month from K5. Final Monthly: ~17 items, set month above. Summarized Monthly (B-FCE): ~37 techno params.'
                     : technoPlant === 'BSP'
-                    ? "File type auto-detected from content: BSP_Spstl-*.xlsx → Special Steel (sheet CORP, ~80 rows). BSP-3-page-Tech.xlsx → 62 techno params (Sheet1, month from A3). OISCO_<Mon>'YY.xlsx → 35 OISCO techno params (month from C3)."
+                    ? "File type auto-detected from content: BSPMIS*.xls → PPC MIS Month-End (sheet S1) — production + opening stock (closing stock saved as next month). BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → techno params (Sheet1, month from A3). OISCO_<Mon>'YY.xlsx → OISCO techno params (month from C3)."
                     : technoPlant === 'BSL'
                     ? 'DPR XLSX: BSL_DPR_DDMMYYYY.xlsx (sheet DPR) — 19 production items, month auto-detected from O1. | Techno XLS: TECHNO <MON><YYYY>.XLS — 14+ techno params, set month above. | Corp SS XLSX: grade-wise Order Qty & Despatch, month auto-detected. | BF PDF: BSL_BlastFurnace_DDMMYYYY.pdf — BF-wise 14 params per furnace.'
                     : technoPlant === 'ASP'
@@ -989,6 +1044,7 @@ export default function UploadPage() {
                     ['production', '1. Extract Production', '#10b981'],
                     ['techno', '2. Extract Techno', '#8b5cf6'],
                     ['special_steel', '3. Extract Special Steel', '#f59e0b'],
+                    ['stock', '4. Extract Stock (Flash.pdf)', '#ef4444'],
                   ].map(([block, label, color]) => (
                     <button key={block} type="button" onClick={() => handleDspExtract(block)}
                             disabled={dspBusy[block]}
@@ -1310,7 +1366,7 @@ export default function UploadPage() {
                   </span>
                 </h3>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => { setTechnoPreview(null); setProdRows([]); setSsRows([]); }} disabled={isTechnoBusy}
+                  <button onClick={() => { setTechnoPreview(null); setProdRows([]); setSsRows([]); setStockRows([]); }} disabled={isTechnoBusy}
                           style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
                                    color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
                     Discard
@@ -1348,6 +1404,28 @@ export default function UploadPage() {
                   ⚠ {technoPreview.special_steel_note}
                 </div>
               )}
+
+              {/* 3. Opening Stock rows → stock_table */}
+              {stockRows.length > 0 && (() => {
+                const months = [...new Set(stockRows.map(r => r.stock_month).filter(Boolean))];
+                const smLabel = months.join(', ');
+                const okCount = stockRows.filter(r => r.status === 'ok').length;
+                const plant = technoPreview?.plant || technoPlant || '';
+                return (
+                  <PreviewTable
+                    title={`Opening Stock — ${plant} (${okCount} ok, stock_month: ${smLabel}) → stock_table`}
+                    headers={['Item Type', 'Stock Type', 'Stock Month', "Value ('000T)", 'Formula', 'Status']}
+                    rows={stockRows.map(r => [
+                      r.item_type,
+                      r.stock_type || '—',
+                      r.stock_month || '—',
+                      r.value != null ? r.value.toFixed(3) : '—',
+                      r.formula,
+                      r.status,
+                    ])}
+                  />
+                );
+              })()}
 
               {/* 4. Old-style techno params → techno_table */}
               {technoPreview.techno_rows?.length > 0 && (
@@ -1472,6 +1550,66 @@ export default function UploadPage() {
               )}
               <EditableSpecialSteelTable plant="DSP" rows={dspSsRows}
                 onToggle={toggleDspSsRow} onEditGrade={editDspSsGrade} onEditSection={editDspSsSection} />
+            </div>
+          )}
+
+          {/* DSP Flash Stock preview panel */}
+          {dspStockResult && (
+            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #ef4444', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                  Step 4 — Closing Stock (Flash.pdf)&nbsp;
+                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                    DSP {dspStockResult.month}
+                    {dspStockResult.detected_date ? ` · file date ${dspStockResult.detected_date}` : ''}
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setDspStockResult(null)}
+                          disabled={dspBusy.stock}
+                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
+                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                    Discard
+                  </button>
+                  <button onClick={() => handleDspInsert('stock')}
+                          disabled={dspBusy.stock}
+                          style={{ backgroundColor: '#ef4444', border: '1px solid #ef4444', borderRadius: 4,
+                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+                    {dspBusy.stock ? 'Inserting...' : `Insert Stock (${(dspStockResult.stock_rows || []).filter(r => r.status === 'ok').length} rows)`}
+                  </button>
+                </div>
+              </div>
+              {dspStockResult.month_mismatch && (
+                <div style={{ fontSize: '8pt', color: '#fbbf24', marginBottom: 8 }}>
+                  Warning: file date {dspStockResult.detected_date} (month {dspStockResult.detected_month}) does not match selected month {dspStockResult.selected_month}.
+                </div>
+              )}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+                <thead>
+                  <tr>
+                    {['Item Type', 'Stock Type', "Value ('000T)", 'Formula', 'Status'].map((h) => (
+                      <th key={h} style={{ padding: '4px 8px', backgroundColor: '#334155', color: '#f1f5f9',
+                                           textAlign: 'left', border: '1px solid #475569' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(dspStockResult.stock_rows || []).map((r, i) => (
+                    <tr key={i} style={{ backgroundColor: i % 2 ? '#1e293b' : '#263548' }}>
+                      <td style={{ padding: '3px 8px', border: '1px solid #334155', color: '#f1f5f9' }}>{r.item_type}</td>
+                      <td style={{ padding: '3px 8px', border: '1px solid #334155', color: '#f1f5f9' }}>{r.stock_type || '—'}</td>
+                      <td style={{ padding: '3px 8px', border: '1px solid #334155', color: r.status === 'ok' ? '#86efac' : '#f87171',
+                                   textAlign: 'right' }}>{r.value != null ? r.value.toFixed(3) : '—'}</td>
+                      <td style={{ padding: '3px 8px', border: '1px solid #334155', color: '#94a3b8' }}>{r.formula}</td>
+                      <td style={{ padding: '3px 8px', border: '1px solid #334155',
+                                   color: r.status === 'ok' ? '#86efac' : '#f87171' }}>{r.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ fontSize: '7.5pt', color: '#64748b', marginTop: 6 }}>
+                Stock month (opening of next month): {(dspStockResult.stock_rows || [])[0]?.stock_month || '—'}
+              </div>
             </div>
           )}
 

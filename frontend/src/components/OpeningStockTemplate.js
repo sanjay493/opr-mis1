@@ -32,10 +32,10 @@ export default function OpeningStockTemplate({ data }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
                       tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
-          <col style={{ width: '26px' }} />
-          <col style={{ width: '20px' }} />
-          <col style={{ width: '13%' }} />
-          <col style={{ width: '9%' }} />
+          <col style={{ width: '22px' }} />
+          <col style={{ width: '18px' }} />
+          <col style={{ width: '8%' }} />
+          <col style={{ width: '8%' }} />
           {col_labels.map((_, i) => <col key={i} style={{ width: `${58 / nCols}%` }} />)}
           <col style={{ width: '9%' }} />
         </colgroup>
@@ -65,8 +65,13 @@ export default function OpeningStockTemplate({ data }) {
                       {sec.code}
                     </td>
                   )}
-                  <td style={{ ...LBL }}>{row.sub}</td>
-                  <td style={{ ...LBL, fontWeight: row.plant === 'SAIL' ? 700 : fw }}>{row.plant}</td>
+                  <td style={{ ...LBL, whiteSpace: 'normal', wordBreak: 'break-word' }}>{row.sub}</td>
+                  {(row.plant_rowspan ?? 1) > 0 && (
+                    <td rowSpan={row.plant_rowspan ?? 1}
+                        style={{ ...LBL, fontWeight: row.plant === 'SAIL' ? 700 : fw, verticalAlign: 'middle' }}>
+                      {row.plant}
+                    </td>
+                  )}
                   {row.values.map((v, vi) => <td key={vi} style={NUM}>{v}</td>)}
                   <td style={{ ...NUM, fontWeight: 600 }}>{row.var}</td>
                 </tr>

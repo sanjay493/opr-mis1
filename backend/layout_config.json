@@ -1,0 +1,27 @@
+{
+  "_doc": "Edit this file to customize fonts, sizes and margins. Changes apply on the next PDF generation (no restart needed). Per-page keys: fontSize (pt), fontFamily (name), marginTop/marginBottom/marginLR (mm).",
+
+  "global": {
+    "font_family":   "Arial Narrow",
+    "td_size":        9.5,
+    "th_size":        9.0,
+    "title_size":    13.0,
+    "heading_size":  10.5
+  },
+
+  "pages": {
+    "3":  { "fontSize": 11, "marginTop": 10, "marginBottom": 5, "marginLR": 7 },
+    "4":  { "fontSize": 8.5, "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "5":  { "fontSize": 8.5, "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "6":  { "fontSize": 8.5, "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "7":  { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "8":  { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "9":  { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "10": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "11": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "12": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "13": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "27": { "fontFamily": "Arial Narrow", "fontSize": 6.5, "marginTop": 4, "marginBottom": 3, "marginLR": 5 },
+    "28": { "marginTop": 5, "marginBottom": 5, "marginLR": 5 }
+  }
+}

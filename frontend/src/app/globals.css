@@ -14,8 +14,8 @@
 
   /* User-adjustable layout settings */
   --report-font-size: 12pt;
-  --page-margin-top: 15mm;
-  --page-margin-bottom: 15mm;
+  --page-margin-top: 7mm;
+  --page-margin-bottom: 5mm;
   --page-margin-lr: 15mm;
 }
 
@@ -622,6 +622,20 @@ select.form-control {
   font-family: 'Arial Narrow', Arial, sans-serif !important;
 }
 
+/* ─── Page 27 – MAJOR TECHNO: compact portrait to fit all rows on one page ─── */
+.a4-page.pg-27 {
+  --page-margin-top: 4mm;
+  --page-margin-bottom: 3mm;
+  --page-margin-lr: 8mm;
+  --report-font-size: 6.5pt;
+  font-family: 'Arial Narrow', Arial, sans-serif !important;
+}
+.pg-27 table td,
+.pg-27 table th {
+  padding: 0.5px 2px !important;
+  font-family: 'Arial Narrow', Arial, sans-serif !important;
+}
+
 /* ─── Page 14 – Plant-Wise Production (Detailed) ─────────── */
 /* inherits .report-table — no extra overrides needed */
 
@@ -668,5 +682,15 @@ select.form-control {
     page: landscape_layout;
     width: auto;
     height: auto;
+  }
+
+  /* Page 27 – portrait with tighter margins so all rows fit on one page */
+  @page pg27_layout {
+    size: A4 portrait;
+    margin: 7mm 8mm 5mm 8mm;
+  }
+  .a4-page.pg-27 {
+    page: pg27_layout;
+    --report-font-size: 6.5pt;
   }
 }
