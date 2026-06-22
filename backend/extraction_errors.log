@@ -1,0 +1,72 @@
+
+============================================================
+2026-06-21 23:05:28.059520
+plant=RSP  month=2026-03
+Traceback (most recent call last):
+  File "D:\opr-mis1\backend\main.py", line 710, in extract_preview_endpoint
+    result = await loop.run_in_executor(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\sanja\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\main.py", line 712, in <lambda>
+    lambda: excel_extractor_rsp.extract_preview(tmp_path, month)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\excel_extractors\excel_extractor_rsp.py", line 1032, in extract_preview
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\venv\Lib\site-packages\openpyxl\reader\excel.py", line 346, in load_workbook
+    reader = ExcelReader(filename, read_only, keep_vba,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\venv\Lib\site-packages\openpyxl\reader\excel.py", line 123, in __init__
+    self.archive = _validate_archive(fn)
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\venv\Lib\site-packages\openpyxl\reader\excel.py", line 93, in _validate_archive
+    raise InvalidFileException(msg)
+openpyxl.utils.exceptions.InvalidFileException: openpyxl does not support the old .xls file format, please use xlrd to read this file, or convert it to the more recent .xlsx file format.
+
+============================================================
+2026-06-21 23:08:52.998826
+plant=BSP  month=2026-03
+Traceback (most recent call last):
+  File "D:\opr-mis1\backend\main.py", line 664, in extract_preview_endpoint
+    result = await loop.run_in_executor(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\sanja\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\main.py", line 666, in <lambda>
+    lambda: _bsp_mod.extract_preview(tmp_path, month)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\excel_extractors\excel_extractor_bsp.py", line 937, in extract_preview
+    return _extract_ppc_mis_preview(file_path, report_month)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\excel_extractors\excel_extractor_bsp.py", line 815, in _extract_ppc_mis_preview
+    wb_raw = xlrd.open_workbook(file_path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\venv\Lib\site-packages\xlrd\__init__.py", line 170, in open_workbook
+    raise XLRDError(FILE_FORMAT_DESCRIPTIONS[file_format]+'; not supported')
+xlrd.biffh.XLRDError: Excel xlsx file; not supported
+
+============================================================
+2026-06-21 23:09:24.697600
+plant=BSP  month=2026-04
+Traceback (most recent call last):
+  File "D:\opr-mis1\backend\main.py", line 664, in extract_preview_endpoint
+    result = await loop.run_in_executor(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\sanja\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\main.py", line 666, in <lambda>
+    lambda: _bsp_mod.extract_preview(tmp_path, month)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\excel_extractors\excel_extractor_bsp.py", line 937, in extract_preview
+    return _extract_ppc_mis_preview(file_path, report_month)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\excel_extractors\excel_extractor_bsp.py", line 815, in _extract_ppc_mis_preview
+    wb_raw = xlrd.open_workbook(file_path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\opr-mis1\backend\venv\Lib\site-packages\xlrd\__init__.py", line 170, in open_workbook
+    raise XLRDError(FILE_FORMAT_DESCRIPTIONS[file_format]+'; not supported')
+xlrd.biffh.XLRDError: Excel xlsx file; not supported

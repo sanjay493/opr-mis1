@@ -52,6 +52,8 @@ class PageData(BaseModel):
     items: Optional[List[Dict[str, Any]]] = []
     monthly: Optional[List[Dict[str, Any]]] = []
     ytd: Optional[List[Dict[str, Any]]] = []
+    chart_data: Optional[Dict[str, Any]] = None
+    production_narrative: Optional[str] = ""
 
 
 class PDFRequest(BaseModel):

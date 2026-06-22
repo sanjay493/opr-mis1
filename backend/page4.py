@@ -226,6 +226,71 @@ def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set
 _EXTRA_PLANTS = {"ASP", "SSP", "VISL"}
 
 
+def _p4_conv_actuals(cur, month: str):
+    """Fetch Conversion (SAIL) actuals: current month, CPLY month, YTD, YTD CPLY."""
+    prev = db.get_cply_month(month)
+    ytd_m = db.get_ytd_months(month)
+    ytd_prev = db.get_ytd_months(prev)
+
+    def fetch(m):
+        cur.execute(
+            "SELECT month_actual FROM production_table "
+            "WHERE report_month=? AND plant_name='SAIL' AND item_name='Conversion'",
+            (m,)
+        )
+        r = cur.fetchone()
+        return r[0] if r and r[0] is not None else None
+
+    def ytd_sum(months):
+        vals = [v for m in months if (v := fetch(m)) is not None]
+        return sum(vals) if vals else None
+
+    return fetch(month), fetch(prev), ytd_sum(ytd_m), ytd_sum(ytd_prev)
+
+
+def _fmt3(v):
+    if v is None:
+        return ""
+    r = round(v, 3)
+    return str(int(r)) if r == int(r) else str(r)
+
+
+def _gr_vals(c, p):
+    return "" if (c is None or p is None or p == 0) else str(round((c - p) / p * 100))
+
+
+def _safe_add(s, v):
+    if v is None:
+        return s
+    try:
+        return _fmt3(float(s) + v) if s != "" else _fmt3(v)
+    except (ValueError, TypeError):
+        return s
+
+
+def _safe_var(a_s, p_s):
+    try:
+        return str(round(float(a_s) - float(p_s)))
+    except (ValueError, TypeError):
+        return ""
+
+
+def _safe_pct(a_s, p_s):
+    try:
+        a, p = float(a_s), float(p_s)
+        return str(round(a / p * 100)) if p != 0 else ""
+    except (ValueError, TypeError):
+        return ""
+
+
+def _safe_gr(c_s, p_s):
+    try:
+        c, p = float(c_s), float(p_s)
+        return str(round((c - p) / p * 100)) if p != 0 else ""
+    except (ValueError, TypeError):
+        return ""
+
+
 def generate_page4_rows(month: str) -> list:
     """Build all page-4 rows for `month`."""
     conn = sqlite3.connect(db.DB_PATH)
@@ -262,6 +327,50 @@ def generate_page4_rows(month: str) -> list:
                 if plant == "5 Plants" and not visible_extra:
                     continue
                 rows.append(row)
+
+        # ── Conversion & SAIL incl. Conversion (appended after Finished Steel) ─
+        fs_sail_set = _5P + ["ASP", "SSP", "VISL"]
+        conv_m, conv_cply, conv_ytd, conv_ytd_cply = _p4_conv_actuals(cur, month)
+
+        rows.append({
+            "label": "CONVERSION SAIL",
+            "display_name": "CONVERSION",
+            "is_conversion": True,
+            "values": [
+                "", "",                                      # 0 Annual APP, 1 Monthly APP
+                _fmt3(conv_m),                               # 2 Monthly Actual
+                "", "",                                      # 3 Var, 4 %Ful
+                _fmt3(conv_cply),                            # 5 CPLY Actual
+                _gr_vals(conv_m, conv_cply),                 # 6 %Growth
+                "",                                          # 7 YTD APP
+                _fmt3(conv_ytd),                             # 8 YTD Actual
+                "", "",                                      # 9 YTD Var, 10 YTD %Ful
+                _fmt3(conv_ytd_cply),                        # 11 YTD CPLY
+                _gr_vals(conv_ytd, conv_ytd_cply),           # 12 YTD %Growth
+            ],
+        })
+
+        sail_fs_vals = _p4_row_values(cur, month, "SAIL", "Finished Steel", False, _5P, fs_sail_set)
+        iv = list(sail_fs_vals)
+        iv[2]  = _safe_add(iv[2],  conv_m)
+        iv[5]  = _safe_add(iv[5],  conv_cply)
+        iv[8]  = _safe_add(iv[8],  conv_ytd)
+        iv[11] = _safe_add(iv[11], conv_ytd_cply)
+        iv[3]  = _safe_var(iv[2],  iv[1])
+        iv[4]  = _safe_pct(iv[2],  iv[1])
+        iv[6]  = _safe_gr(iv[2],   iv[5])
+        iv[9]  = _safe_var(iv[8],  iv[7])
+        iv[10] = _safe_pct(iv[8],  iv[7])
+        iv[12] = _safe_gr(iv[8],   iv[11])
+        # Round all numeric values to zero decimal places
+        iv = [str(round(float(v))) if v not in ("", None) else v for v in iv]
+
+        rows.append({
+            "label": "SAIL INCL. CONV. SAIL",
+            "display_name": "SAIL INCL. CONV.",
+            "is_sail_incl_conv": True,
+            "values": iv,
+        })
 
     finally:
         conn.close()

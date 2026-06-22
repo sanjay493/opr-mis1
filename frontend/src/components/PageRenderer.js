@@ -152,7 +152,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && pageData.type !== 'special_steel' && pageData.type !== 'opening_stock' && pageData.type !== 'ipt_status' && pageData.type !== 'techno_params' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'summary' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && pageData.type !== 'special_steel' && pageData.type !== 'opening_stock' && pageData.type !== 'ipt_status' && pageData.type !== 'techno_params' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}

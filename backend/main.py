@@ -1,7 +1,8 @@
 import os
 import json
 import sqlite3
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
+from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 
 import db
@@ -14,11 +15,12 @@ from page17_concast import generate_concast_data
 from page_prod_by_process import generate_prod_by_process
 from page_catwise_saleable import generate_catwise_saleable
 from page_segment_wise import generate_segment_wise
-from page_special_steel import generate_special_steel_plant, generate_special_steel_sail
+from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, generate_special_steel_isp_sail
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
-from page_techno import generate_techno, TECHNO_PAGES, generate_summary_te_table
+from page_techno import generate_techno, TECHNO_PAGES, generate_summary_te_table, generate_summary_chart_data, compute_sail_targets
 from pdf import build_pdf_response
+from layout_loader import load_layout_config
 
 db.init_db()
 
@@ -54,6 +56,15 @@ FRONTEND_DATA_PATH = os.path.join(os.path.dirname(__file__), "mis_data.json")
 
 
 # ---------------------------------------------------------------------------
+# Layout config
+# ---------------------------------------------------------------------------
+
+@app.get("/api/layout-config")
+def get_layout_config():
+    return load_layout_config()
+
+
+# ---------------------------------------------------------------------------
 # Report data
 # ---------------------------------------------------------------------------
 
@@ -82,6 +93,7 @@ def get_data(month: str = "2025-11"):
                     for row in page.get("production_table", []):
                         row["values"] = compute_item_row(month, row.get("item"))
                     page["te_table"] = generate_summary_te_table(month)
+                    page["chart_data"] = generate_summary_chart_data(month)
                 if page.get("page") == 4 or page.get("type") == "page4_table":
                     page["rows"] = generate_page4_rows(month)
                 if page.get("page") == 5:
@@ -145,10 +157,10 @@ def get_data(month: str = "2025-11"):
                     page["subtitle"] = ""
                     page["sections"] = generate_catwise_saleable(month, ["BSL", "ISP"])
                 if pg == 18:
-                    page["type"]  = "segment_wise"
-                    page["title"] = "SEGMENT WISE PRODUCTION"
+                    page["type"]        = "segment_wise"
+                    page["title"]       = "SEGMENT WISE PRODUCTION"
                     sw = generate_segment_wise(month)
-                    page["rows"]  = sw["rows"]
+                    page["rows"]        = sw["rows"]
 
         # Always regenerate special steel pages (data from special_steel_orders,
         # independent of production_table / production_plan_table)
@@ -156,19 +168,19 @@ def get_data(month: str = "2025-11"):
         _dt_obj = _dt.datetime.strptime(month, "%Y-%m")
         _ml = _dt_obj.strftime("%b'%y")
         _cl = _dt.datetime(_dt_obj.year - 1, _dt_obj.month, 1).strftime("%b'%y")
-        _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
+        _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL"}
+        # Page 24 is merged into page 23 (ISP + SAIL combined on one page)
+        pages_config = [p for p in pages_config if p.get("page") != 24]
         for page in pages_config:
             pg = page.get("page")
-            if pg in _SPECIAL_PLANTS or pg == 24:
+            if pg in _SPECIAL_PLANTS:
                 page["month_label"] = _ml
                 page["cply_label"]  = _cl
-            if pg in _SPECIAL_PLANTS:
                 ss = generate_special_steel_plant(month, _SPECIAL_PLANTS[pg])
                 page.update(ss)
                 page["type"] = "special_steel"
-            if pg == 24:
-                ss = generate_special_steel_sail(month)
-                page.update(ss)
+            if pg == 23:
+                page.update(generate_special_steel_isp_sail(month))
                 page["type"] = "special_steel"
             if pg == 25:
                 page.update(generate_opening_stock(month))
@@ -261,15 +273,17 @@ async def generate_pdf(request: PDFRequest):
             p["type"]     = "catwise_saleable"
             p["sections"] = generate_catwise_saleable(request.month, ["BSL", "ISP"])
         if pg == 18:
-            p["type"] = "segment_wise"
-            p["rows"]  = generate_segment_wise(request.month)["rows"]
-        _SP = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
+            p["type"]        = "segment_wise"
+            p["rows"]        = generate_segment_wise(request.month)["rows"]
+        _SP = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL"}
         if pg in _SP:
             ss = generate_special_steel_plant(request.month, _SP[pg])
             p.update(ss); p["type"] = "special_steel"
+        if pg == 23:
+            p.update(generate_special_steel_isp_sail(request.month))
+            p["type"] = "special_steel"
         if pg == 24:
-            ss = generate_special_steel_sail(request.month)
-            p.update(ss); p["type"] = "special_steel"
+            continue  # merged into page 23
         if pg == 25:
             p.update(generate_opening_stock(request.month))
             p["type"] = "opening_stock"
@@ -808,13 +822,21 @@ async def confirm_extraction(payload: dict):
             pid = db.get_or_create_techno_param(
                 r.get("group_code", ""), r.get("section", ""), r.get("parameter", ""),
                 r.get("unit", ""), r.get("sort_order", 0))
-            db.save_techno_value(month, pid, r.get("actual"), r.get("cum_actual"))
+            src_pri = r.get("source_priority", 5)
+            db.save_techno_value(month, pid, r.get("actual"), r.get("cum_actual"),
+                                 source_priority=src_pri)
+            # Mirror to canonical MAJOR param at priority 4 (won't overwrite manual priority-5 entries)
+            major_pid = _IM_AVG_TO_MAJOR.get(pid)
+            if major_pid:
+                db.save_techno_value(month, major_pid, r.get("actual"), r.get("cum_actual"),
+                                     source_priority=4)
             saved_mill += 1
 
         saved_ss = 0
-        for r in payload.get("special_steel_rows", []):
-            if r.get("status") != "ok":
-                continue  # skip "total" rows (cross-check only) and anything not ok
+        _ss_rows_to_save = [r for r in payload.get("special_steel_rows", []) if r.get("status") == "ok"]
+        if _ss_rows_to_save:
+            db.clear_special_steel_orders(month, plant)
+        for r in _ss_rows_to_save:
             db.save_special_steel_entry(
                 month, plant,
                 r.get("product", ""), r.get("quality_grade", ""),
@@ -824,13 +846,39 @@ async def confirm_extraction(payload: dict):
             )
             saved_ss += 1
 
-        total = saved_prod + saved_plan + saved_te + saved_mill + saved_ss
+        saved_stock = 0
+        for r in payload.get("stock_rows", []):
+            if r.get("value") is None:
+                continue
+            db.save_stock_entry(
+                r["stock_month"], r.get("plant", plant),
+                r["item_type"], r.get("stock_type", ""),
+                r.get("value"),
+            )
+            saved_stock += 1
+
+        total = saved_prod + saved_plan + saved_te + saved_mill + saved_ss + saved_stock
         if total:
             db.log_extraction(plant, month, payload.get("file_name", ""),
                               payload.get("sheets", ""),
                               payload.get("source_type", "Preview Confirmed"), total)
+        # Recompute BF shop averages for plants that have per-furnace cross-plant data.
+        # Runs at priority 4 so direct-extracted shop rows (priority 5) are never overwritten.
+        agg_written = 0
+        if plant in ("BSL", "DSP", "RSP", "BSP"):
+            try:
+                import sqlite3 as _sqlite3
+                from techno_aggregates import compute_bf_shop_averages as _bf_agg
+                _conn = _sqlite3.connect(db.DB_PATH)
+                agg_written = _bf_agg(_conn, month, plants=[plant])
+                _conn.close()
+            except Exception:
+                pass  # aggregation failure must not block the main save
+
         msg = (f"Inserted {saved_prod} production, {saved_plan} plan, {saved_te} techno, "
-               f"{saved_mill} mill techno, {saved_ss} special steel values for {plant} {month}.")
+               f"{saved_mill} mill techno, {saved_ss} special steel, {saved_stock} opening stock values for {plant} {month}.")
+        if agg_written:
+            msg += f" Computed {agg_written} BF shop aggregate row(s)."
         if saved_aliases:
             msg += f" Remembered {saved_aliases} item-name mapping(s) for future extractions."
         return {
@@ -840,6 +888,7 @@ async def confirm_extraction(payload: dict):
             "saved_techno": saved_te,
             "saved_mill_techno": saved_mill,
             "saved_special_steel": saved_ss,
+            "saved_stock": saved_stock,
             "saved_aliases": saved_aliases,
             "message": msg,
         }
@@ -918,8 +967,19 @@ async def save_techno_entries(payload: dict):
     if saved:
         db.log_extraction(plant, month, payload.get("file_name", ""), "techno",
                           "techno_params", saved)
+    agg_written = 0
+    if plant in ("BSL", "DSP", "RSP", "BSP"):
+        try:
+            import sqlite3 as _sqlite3
+            from techno_aggregates import compute_bf_shop_averages as _bf_agg
+            _conn = _sqlite3.connect(db.DB_PATH)
+            agg_written = _bf_agg(_conn, month, plants=[plant])
+            _conn.close()
+        except Exception:
+            pass
     return {"status": "success", "saved": saved,
-            "message": f"Inserted {saved} techno parameter values for {plant} {month}."}
+            "message": (f"Inserted {saved} techno parameter values for {plant} {month}."
+                        + (f" Computed {agg_written} BF shop aggregate row(s)." if agg_written else ""))}
 
 
 # ---------------------------------------------------------------------------
@@ -973,6 +1033,336 @@ async def save_production_entry(request: ProductionEntryRequest):
             db.save_production_plan(request.month, request.plant, entry.item_name, entry.plan_value)
             saved.append(f"plan:{entry.item_name}")
     return {"status": "success", "saved": saved, "count": len(saved)}
+
+
+@app.get("/api/conversion-data")
+async def get_conversion_data(fy_start: str = Query(...)):
+    """Return Conversion (SAIL) actuals for all 12 months of a financial year."""
+    try:
+        y = int(fy_start)
+    except ValueError:
+        return {"data": {}}
+    months = [
+        f"{y}-04", f"{y}-05", f"{y}-06", f"{y}-07", f"{y}-08", f"{y}-09",
+        f"{y}-10", f"{y}-11", f"{y}-12",
+        f"{y+1}-01", f"{y+1}-02", f"{y+1}-03",
+    ]
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    phs = ",".join("?" for _ in months)
+    cur.execute(
+        f"SELECT report_month, month_actual FROM production_table "
+        f"WHERE plant_name='SAIL' AND item_name='Conversion' AND report_month IN ({phs})",
+        months,
+    )
+    data = {r[0]: r[1] for r in cur.fetchall()}
+    conn.close()
+    return {"data": {m: data.get(m) for m in months}}
+
+
+@app.post("/api/conversion-entry")
+async def save_conversion_entry(payload: dict):
+    """Save Conversion (SAIL) monthly actuals."""
+    entries = payload.get("entries", [])
+    saved = 0
+    for e in entries:
+        month = str(e.get("month", "")).strip()
+        value = e.get("value")
+        if not month or value is None:
+            continue
+        db.save_production_actual(month, "SAIL", "Conversion", float(value))
+        saved += 1
+    return {"status": "success", "saved": saved}
+
+
+@app.get("/api/stock-data")
+async def get_stock_data(plant: str = Query(...), stock_month: str = Query(...)):
+    """Return all stock entries for a plant + stock_month."""
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT item_type, stock_type, stock FROM stock_table "
+        "WHERE plant_name=? AND stock_month=? ORDER BY item_type, stock_type",
+        (plant, stock_month),
+    )
+    rows = [{"item_type": r[0], "stock_type": r[1] or "", "stock": r[2]} for r in cur.fetchall()]
+    conn.close()
+    return {"plant": plant, "stock_month": stock_month, "data": rows}
+
+
+@app.post("/api/stock-entry")
+async def save_stock_entry_manual(payload: dict):
+    """Upsert one or more stock entries manually. Values must be in '000T."""
+    entries = payload.get("entries", [])
+    saved = 0
+    for e in entries:
+        plant      = str(e.get("plant", "")).strip()
+        stock_month = str(e.get("stock_month", "")).strip()
+        item_type  = str(e.get("item_type", "")).strip()
+        stock_type = str(e.get("stock_type", "")).strip()
+        stock      = e.get("stock")
+        if not plant or not stock_month or not item_type:
+            continue
+        db.save_stock_entry(stock_month, plant, item_type, stock_type,
+                            float(stock) if stock is not None else None)
+        saved += 1
+    return {"status": "success", "saved": saved,
+            "message": f"Saved {saved} opening stock entry/entries."}
+
+
+@app.get("/api/techno-targets")
+async def get_techno_targets(fy: str = Query("2026-27")):
+    """
+    Return all MAJOR-group techno params with their targets for the given FY.
+    Response: { fy, sections: [{section, unit, rows: [{row_label, param_id, target}]}] }
+    """
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT m.section, m.row_label, m.unit, m.param_id,
+               COALESCE(t.target, NULL) as target
+        FROM techno_param_master m
+        LEFT JOIN techno_target t ON t.param_id = m.param_id AND t.fy = ?
+        WHERE m.group_code = 'MAJOR'
+        ORDER BY m.sort_order, m.section, m.row_label
+    """, (fy,))
+    rows = cur.fetchall()
+    conn.close()
+
+    # Pivot into sections
+    sections_map = {}
+    section_order = []
+    for section, row_label, unit, param_id, target in rows:
+        if section not in sections_map:
+            sections_map[section] = {"section": section, "unit": unit, "rows": []}
+            section_order.append(section)
+        sections_map[section]["rows"].append({
+            "row_label": row_label,
+            "param_id": param_id,
+            "target": target,
+        })
+
+    return {"fy": fy, "sections": [sections_map[s] for s in section_order]}
+
+
+@app.post("/api/techno-targets")
+async def save_techno_targets(payload: dict):
+    """
+    Save techno targets. Payload: { fy: str, rows: [{param_id, target}] }
+    """
+    fy = payload.get("fy", "")
+    rows = payload.get("rows", [])
+    if not fy:
+        raise HTTPException(status_code=400, detail="fy is required")
+    saved = 0
+    for r in rows:
+        param_id = r.get("param_id")
+        target = r.get("target")
+        if param_id is None:
+            continue
+        try:
+            target_val = float(target) if target not in (None, "", "–") else None
+        except (ValueError, TypeError):
+            target_val = None
+        db.save_techno_target(fy, param_id, target_val)
+        saved += 1
+
+    # Auto-compute SAIL unless caller explicitly wants to save SAIL as-is
+    sail_computed = 0
+    if not payload.get("skip_sail_compute", False):
+        computed = compute_sail_targets(fy)
+        for sail_pid, sail_val in computed.items():
+            db.save_techno_target(fy, sail_pid, sail_val)
+        sail_computed = len(computed)
+
+    return {"status": "success", "fy": fy, "saved": saved, "sail_computed": sail_computed}
+
+
+# ---------------------------------------------------------------------------
+# Plant registry and unit-type catalogue
+# ---------------------------------------------------------------------------
+
+@app.get("/api/plant-units")
+async def api_plant_units(plant_code: str = Query(None), unit_type: str = Query(None)):
+    """
+    Return plant_units rows.  Filter by plant_code and/or unit_type.
+    Response: { units: [{unit_id, plant_code, unit_type, unit_name, display_label, is_shop}] }
+    """
+    from plant_registry import get_plant_units
+    conn = sqlite3.connect(db.DB_PATH)
+    units = get_plant_units(conn, plant_code=plant_code, unit_type=unit_type)
+    conn.close()
+    return {"units": units}
+
+
+@app.get("/api/param-types")
+async def api_param_types(unit_type: str = Query(None)):
+    """
+    Return techno_param_types rows (standard parameter catalogue per unit type).
+    Response: { param_types: [{type_id, unit_type, param_name, unit_of_meas, agg_method, sort_order}] }
+    """
+    from plant_registry import get_param_types
+    conn = sqlite3.connect(db.DB_PATH)
+    pts = get_param_types(conn, unit_type=unit_type)
+    conn.close()
+    return {"param_types": pts}
+
+
+# ---------------------------------------------------------------------------
+# Techno manual data entry
+# ---------------------------------------------------------------------------
+
+@app.get("/api/techno-groups")
+async def get_techno_groups():
+    """Return distinct group_codes available in techno_param_master."""
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT group_code, COUNT(*) as cnt
+        FROM techno_param_master
+        GROUP BY group_code
+        ORDER BY group_code
+    """)
+    rows = [{"group_code": r[0], "param_count": r[1]} for r in cur.fetchall()]
+    conn.close()
+    return {"groups": rows}
+
+
+# Single-source redirect: IRON_MAKING "Avg" param_id → canonical MAJOR param_id.
+# Writes to IRON_MAKING Avg rows are stored here instead.
+# Reads for IRON_MAKING Avg rows display values from here.
+_IM_AVG_TO_MAJOR = {
+    # BF Coke Rate Avg → MAJOR Coke Rate
+    2803: 7,  2811: 8,  2816: 9,  2798: 10, 2825: 11,
+    # CDI Avg for CDI Fces → MAJOR CDI Rate
+    63: 614,  64: 615,  65: 616,  66: 617,  67: 618,
+    # BF Productivity Avg → MAJOR BF Productivity (Working Volume)
+    2810: 25, 2815: 26, 2818: 27, 2467: 28, 2827: 29,
+    # Fuel Rate Avg → MAJOR Fuel Rate
+    2805: 19, 2813: 20, 2822: 21, 2787: 22, 2828: 23,
+    # Nut Coke Rate Avg → MAJOR Nut Coke Consumption
+    2804: 13, 2812: 14, 2817: 15, 2799: 16, 2826: 17,
+    # Sinter in Burden Avg → MAJOR Sinter in Burden
+    2806: 626, 2814: 627, 2823: 628, 2792: 629, 2829: 630,
+    # Pellet in Burden Avg → MAJOR Pellet in Burden
+    2807: 632, 2824: 634, 2797: 635, 2830: 636,
+}
+
+
+@app.get("/api/techno-monthly-data")
+async def get_techno_monthly_data(group_code: str = Query(...), month: str = Query(...)):
+    """
+    Return all params for a group with their current monthly values.
+    For IRON_MAKING Avg rows, values are read from the canonical MAJOR params
+    (single-source via _IM_AVG_TO_MAJOR).
+    """
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT p.section, p.row_label, p.unit, p.param_id, p.sort_order,
+               m.actual, m.cum_actual, m.source_priority
+        FROM techno_param_master p
+        LEFT JOIN techno_monthly m ON m.param_id = p.param_id AND m.report_month = ?
+        WHERE p.group_code = ?
+        ORDER BY p.sort_order, p.section, p.row_label
+    """, (month, group_code))
+    rows = cur.fetchall()
+
+    # For IRON_MAKING group: overlay MAJOR values on Avg rows
+    major_overlay = {}
+    if group_code == "IRON_MAKING":
+        maj_pids = list(_IM_AVG_TO_MAJOR.values())
+        ph = ",".join("?" * len(maj_pids))
+        cur.execute(
+            f"SELECT param_id, actual, cum_actual, source_priority FROM techno_monthly "
+            f"WHERE param_id IN ({ph}) AND report_month = ?",
+            maj_pids + [month],
+        )
+        major_overlay = {r[0]: r[1:] for r in cur.fetchall()}
+
+    conn.close()
+
+    sections_map = {}
+    section_order = []
+    for section, row_label, unit, param_id, sort_order, actual, cum_actual, src_pri in rows:
+        if section not in sections_map:
+            sections_map[section] = {"section": section, "unit": unit, "rows": []}
+            section_order.append(section)
+        # Overlay MAJOR value for Avg rows in IRON_MAKING group
+        maj_pid = _IM_AVG_TO_MAJOR.get(param_id)
+        if maj_pid and maj_pid in major_overlay:
+            actual, cum_actual, src_pri = major_overlay[maj_pid]
+        sections_map[section]["rows"].append({
+            "param_id": param_id,
+            "row_label": row_label,
+            "unit": unit,
+            "actual": actual,
+            "cum_actual": cum_actual,
+            "source_priority": src_pri,
+        })
+
+    return {
+        "group_code": group_code,
+        "month": month,
+        "sections": [sections_map[s] for s in section_order],
+    }
+
+
+@app.post("/api/techno-manual-save")
+async def save_techno_manual(payload: dict):
+    """
+    Save manually entered techno values.
+    Payload: { group_code, month, rows: [{param_id, actual, cum_actual}] }
+    Writes at source_priority=5 (same as extractors — manual entry is primary).
+    """
+    month = payload.get("month", "")
+    rows = payload.get("rows", [])
+    if not month or not rows:
+        raise HTTPException(status_code=400, detail="month and rows are required")
+
+    saved = 0
+    cleared = 0
+    for r in rows:
+        param_id = r.get("param_id")
+        if param_id is None:
+            continue
+        raw_actual = r.get("actual")
+        raw_cum = r.get("cum_actual")
+        clear = r.get("clear", False)
+
+        if clear:
+            clear_pid = _IM_AVG_TO_MAJOR.get(param_id, param_id)
+            conn = sqlite3.connect(db.DB_PATH)
+            conn.execute("DELETE FROM techno_monthly WHERE param_id=? AND report_month=?",
+                         (clear_pid, month))
+            conn.commit()
+            conn.close()
+            cleared += 1
+            continue
+
+        try:
+            actual = float(raw_actual) if raw_actual not in (None, "", "–", "-") else None
+        except (ValueError, TypeError):
+            actual = None
+        try:
+            cum_actual = float(raw_cum) if raw_cum not in (None, "", "–", "-") else None
+        except (ValueError, TypeError):
+            cum_actual = None
+
+        if actual is None and cum_actual is None:
+            continue
+
+        # Redirect IRON_MAKING Avg params to their canonical MAJOR param
+        store_pid = _IM_AVG_TO_MAJOR.get(param_id, param_id)
+        db.save_techno_monthly(store_pid, month, actual, cum_actual, source_priority=5)
+        saved += 1
+
+    return {
+        "status": "success",
+        "saved": saved,
+        "cleared": cleared,
+        "message": f"Saved {saved} value(s), cleared {cleared} value(s) for {month}.",
+    }
 
 
 if __name__ == "__main__":

@@ -41,7 +41,30 @@
       "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__bf_calc.py\" 2>&1)",
       "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__bf_src.py\" 2>&1)",
       "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__update_bfp.py\" 2>&1)",
-      "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__update_tgt.py\" 2>&1)"
+      "PowerShell(& \"h:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" \"h:\\\\opr-mis1\\\\backend\\\\__update_tgt.py\" 2>&1)",
+      "Bash(python -c \"import main; print\\('main OK'\\)\")",
+      "Bash(./venv/Scripts/python -c ' *)",
+      "Bash(./venv/Scripts/python.exe test_coke2.py)",
+      "Bash(python -c \"import sys; sys.stdout.buffer.write\\(sys.stdin.buffer.read\\(\\)\\)\")",
+      "Bash(cd /d d:/opr-mis1/backend)",
+      "Bash(python -c \"import db; print\\(db.DB_PATH\\)\")",
+      "Bash(cat)",
+      "Bash(python /tmp/audit_queries.py)",
+      "Bash(sqlite3 mis.db \"SELECT group_code, section, row_label, param_id FROM techno_param_master WHERE group_code IN \\('IRON_MAKING','MAJOR'\\) ORDER BY group_code, section, row_label;\")",
+      "PowerShell(cd d:\\\\opr-mis1\\\\backend; \\(Get-Command python\\).Source; python --version)",
+      "PowerShell(cd d:\\\\opr-mis1\\\\backend; $files = @\\(\"excel_extractors/pdf_extractor_dsp.py\", \"excel_extractors/excel_extractor_bsp_techno.py\", \"excel_extractors/excel_extractor_bsp_oisco.py\", \"excel_extractors/excel_extractor_isp.py\"\\); foreach \\($f in $files\\) { $result = d:\\\\opr-mis1\\\\backend\\\\venv\\\\Scripts\\\\python.exe -c \"import ast; ast.parse\\(open\\('$f'\\).read\\(\\)\\); print\\('OK: $f'\\)\" 2>&1; Write-Host $result })",
+      "PowerShell($f = 'd:/opr-mis1/backend/excel_extractors/excel_extractor_bsl.py'; \\(Get-Content $f -Raw -Encoding utf8\\).Replace\\('\"BOF\"', '\"SMS\"'\\) | Set-Content $f -Encoding utf8; Write-Host \"done\")",
+      "Bash(sqlite3 mis_reports.db \"SELECT group_code, COUNT\\(*\\) as cnt FROM techno_param_master GROUP BY group_code ORDER BY group_code;\")",
+      "Bash(sqlite3 mis_reports.db \"SELECT group_code, section, COUNT\\(*\\) FROM techno_param_master WHERE group_code IN \\('BSL','BSP','ISP'\\) GROUP BY group_code, section ORDER BY group_code, section;\")",
+      "Bash(sqlite3 mis_reports.db \"SELECT section, row_label FROM techno_param_master WHERE group_code='IRON_MAKING' AND row_label LIKE 'ISP%' ORDER BY section, row_label;\")",
+      "Bash(sqlite3 mis_reports.db \"SELECT section, row_label FROM techno_param_master WHERE group_code='IRON_MAKING' AND row_label LIKE 'BSP%' ORDER BY section, row_label;\")",
+      "Bash(py migrate_plant_groups.py)",
+      "PowerShell(cd d:\\\\opr-mis1\\\\backend; $env:PYTHONIOENCODING='utf-8'; py migrate_plant_groups.py)",
+      "Bash(py -c \"import page_techno; print\\('OK'\\)\")",
+      "Bash(python -c \"import pdfplumber; print\\('ok'\\)\")",
+      "Bash(pip show *)",
+      "Bash(where python *)",
+      "Bash(pip list *)"
     ]
   }
 }

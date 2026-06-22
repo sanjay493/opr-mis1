@@ -1,6 +1,7 @@
 'use client';
 
 // ── shared style tokens ───────────────────────────────────────────────────────
+const FONT = "'Arial Narrow', Arial, sans-serif";
 const CELL = { padding: '1.5px 3px', border: '1px solid #cbd5e1', lineHeight: 1.2, fontSize: 'var(--report-font-size)' };
 const NUM  = { ...CELL, textAlign: 'right' };
 const LBL  = { ...CELL, textAlign: 'left' };
@@ -9,7 +10,7 @@ const TH_S = {
   textAlign: 'center', verticalAlign: 'middle',
   border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
-const TH_C = { ...TH_S, backgroundColor: '#2d5016' }; // darker green for cumulative header
+const TH_C = { ...TH_S, backgroundColor: '#2d5016' };
 
 const ROW_STYLES = {
   grade:           { backgroundColor: '#f8fafc' },
@@ -22,7 +23,6 @@ const ROW_STYLES = {
 
 
 // ── plant_detail / isp_summary table (pages 19-23) ───────────────────────────
-// 11 columns: Quality/Grade | Order | Actual | %Ful | CPLY | %Gr | CumOrd | CumAct | %Ful | CumCPLY | %Gr
 
 function DetailRow({ row }) {
   if (row.type === 'separator') {
@@ -67,7 +67,7 @@ function DetailTable({ data }) {
   } = data;
 
   return (
-    <div style={{ padding: '6px', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ padding: '6px', fontFamily: FONT }}>
       <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
         {title}
       </div>
@@ -76,13 +76,11 @@ function DetailTable({ data }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
                       tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
-          <col style={{ width: '20%' }} />
-          {/* Monthly */}
-          <col style={{ width: '8%' }} /><col style={{ width: '8%' }} /><col style={{ width: '6%' }} />
-          <col style={{ width: '6.5%' }} /><col style={{ width: '5.5%' }} />
-          {/* Cumulative */}
-          <col style={{ width: '8%' }} /><col style={{ width: '8%' }} /><col style={{ width: '6%' }} />
-          <col style={{ width: '6.5%' }} /><col style={{ width: '5.5%' }} />
+          <col style={{ width: '24%' }} />
+          <col style={{ width: '7.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '5.5%' }} />
+          <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
+          <col style={{ width: '7.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '5.5%' }} />
+          <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
         </colgroup>
         <thead>
           <tr>
@@ -136,8 +134,7 @@ function DetailTable({ data }) {
 }
 
 
-// ── sail_summary table (page 24) ──────────────────────────────────────────────
-// 12 cols: Plants | ABP | Orders | Actual | %Ful | CPLY | %Gr | CumOrd | CumAct | %Ful | CumCPLY | %Gr
+// ── sail_summary table ────────────────────────────────────────────────────────
 
 function SailRow({ row }) {
   const s = ROW_STYLES[row.type] || {};
@@ -168,7 +165,7 @@ function SailTable({ data }) {
   } = data;
 
   return (
-    <div style={{ padding: '6px', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ padding: '6px', fontFamily: FONT }}>
       <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
         {title}
       </div>
@@ -182,10 +179,8 @@ function SailTable({ data }) {
         <colgroup>
           <col style={{ width: '13%' }} />
           <col style={{ width: '8%' }} />
-          {/* Monthly */}
           <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '5.5%' }} />
           <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
-          {/* Cumulative */}
           <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '5.5%' }} />
           <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
         </colgroup>
@@ -252,6 +247,14 @@ function SailTable({ data }) {
 
 export default function SpecialSteelTemplate({ data }) {
   if (!data) return null;
+  if (data.variant === 'isp_sail_combined') {
+    return (
+      <>
+        <DetailTable data={data.isp || {}} />
+        <SailTable data={data.sail || {}} />
+      </>
+    );
+  }
   if (data.variant === 'sail_summary') return <SailTable data={data} />;
   return <DetailTable data={data} />;
 }

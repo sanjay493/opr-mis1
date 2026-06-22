@@ -31,9 +31,8 @@ PLANT = "DSP"
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
            "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
-# (normalized pdf label → (item_name in production_table, convert_to_000T))
-# Labels are matched after stripping serial prefixes ('3 ', 'i) ', 'iii) ').
-_ITEM_MAP = [
+# Default label maps — overridden at runtime from excel_cells_config.json ["dsp_pdf"]
+_ITEM_MAP_DEFAULT = [
     ("nos per day",        "Oven Pushing(nos/d)",  False),
     ("sinter",             "Total Sinter",         True),
     ("sp 1",               "SP-1",                 True),
@@ -55,12 +54,27 @@ _ITEM_MAP = [
     ("msm",                "MSM",                  True),
     ("wheel axle plant",   "WAP",                  True),
 ]
-# inside the 'SALEABLE STEEL' block only:
-_SALEABLE_MAP = [
+_SALEABLE_MAP_DEFAULT = [
     ("finished", "Finished Steel",  True),
     ("semis",    "Saleable Semis",  True),
     ("total",    "Saleable Steel",  True),
 ]
+
+
+def _load_maps():
+    """Load item maps from config; fall back to defaults if config absent."""
+    try:
+        from cells_loader import get_extractor_config
+        cfg = get_extractor_config("dsp_pdf")
+        raw_item = cfg.get("item_map")
+        raw_sale = cfg.get("saleable_map")
+        item_map = [tuple(r) for r in raw_item] if raw_item else _ITEM_MAP_DEFAULT
+        sale_map = [tuple(r) for r in raw_sale] if raw_sale else _SALEABLE_MAP_DEFAULT
+        return item_map, sale_map
+    except Exception:
+        return _ITEM_MAP_DEFAULT, _SALEABLE_MAP_DEFAULT
+
+
 
 
 def _norm(s):
@@ -280,16 +294,16 @@ _WA_PARAMS = {
 }
 
 _MAJOR_PAGE_DEFS = [
-    ("coke rate",                "MAJOR",       "Coke Rate",                        "DSP",     "kg/Thm",    21),
-    ("cdi rate",                 "MAJOR",       "CDI Rate",                         "DSP",     "kg/Thm",    41),
-    ("nut coke rate",            "MAJOR",       "Nut Coke Consumption",             "DSP",     "kg/Thm",    31),
-    ("fuel rate",                "MAJOR",       "Fuel Rate",                        "DSP",     "kg/Thm",    51),
+    ("coke rate",                "MAJOR",       "Coke Rate",                        "DSP",     "Kg/THM",    21),
+    ("cdi rate",                 "MAJOR",       "CDI Rate",                         "DSP",     "Kg/THM",    41),
+    ("nut coke rate",            "MAJOR",       "Nut Coke Consumption",             "DSP",     "Kg/THM",    31),
+    ("fuel rate",                "MAJOR",       "Fuel Rate",                        "DSP",     "Kg/THM",    51),
     ("sinter in burden",         "MAJOR",       "Sinter in Burden",                 "DSP",     "%",         61),
-    ("bf productivity",          "MAJOR",       "BF Productivity (Working Volume)", "DSP",     "T/m3/Day",  81),
+    ("bf productivity",          "MAJOR",       "BF Productivity (Working Volume)", "DSP",     "T/m³/day",  81),
     ("total metallic input",     "MAJOR",       "TMI",                              "DSP SMS", "Kg/TCS",   112),
-    ("gross energy consumption", "MAJOR",       "Specific Energy Consumption",      "DSP",     "G.Cal/Tcs",121),
-    ("bof slag utilisation",     "IRON_MAKING", "BOF Slag Utilisation",             "DSP",     "%",         41),
-    ("loss at skip",             "IRON_MAKING", "Screen Loss",                      "DSP",     "%",         31),
+    ("gross energy consumption", "MAJOR",       "Specific Energy Consumption",      "DSP",     "G.Cal/TCS",121),
+    ("bof slag utilisation",     "COKE_SINTER", "BOF Slag Utilisation",             "DSP",     "%",         41),
+    ("loss at skip",             "IRON_MAKING", "Coke Screen Loss",                 "DSP Plant Shop", "%",  31),
 ]
 
 _SMS_PAGE_DEFS = [
@@ -431,6 +445,7 @@ def _block_production(file_path: str, prod_page_idx: int,
                       alias_lookup: dict):
     """Open PDF, read only the production page, close, parse and return rows."""
     import pdfplumber
+    _ITEM_MAP, _SALEABLE_MAP = _load_maps()
 
     with pdfplumber.open(file_path) as pdf:
         text = pdf.pages[prod_page_idx].extract_text() or ""
@@ -598,7 +613,7 @@ def _block_techno(file_path: str, page_index: dict,
                             "group_code": "COKE_SINTER",
                             "section":    "Sinter Productivity",
                             "parameter":  label,
-                            "unit":       "T/m2/hr",
+                            "unit":       "T/m²/hr",
                             "sort_order": 31 if label == "DSP SP-1" else 32,
                             "actual":     actual,
                             "cum_actual": cum,
@@ -614,10 +629,11 @@ def _block_techno(file_path: str, page_index: dict,
         bf_text = page_texts[bf_idx]
         bf_pno  = bf_idx + 1
         cdi_lines = _slice_text(bf_text, "CDI RATE", ["FUEL RATE", "SINTER IN BURDEN"])
+        _fce_markers = ("furnace-ii", "furnace-iii", "furnace-iv")
         for furnace_marker, row_label, sort in [
-            ("furnace-ii",  "DSP BF#2", 12),
-            ("furnace-iii", "DSP BF#3", 13),
-            ("furnace-iv",  "DSP BF#4", 14),
+            ("furnace-ii",  "DSP BF-2", 12),
+            ("furnace-iii", "DSP BF-3", 13),
+            ("furnace-iv",  "DSP BF-4", 14),
         ]:
             for ln in cdi_lines:
                 if furnace_marker in ln.lower():
@@ -628,7 +644,7 @@ def _block_techno(file_path: str, page_index: dict,
                             "group_code": "IRON_MAKING",
                             "section":    "CDI",
                             "parameter":  row_label,
-                            "unit":       "Kg/Thm",
+                            "unit":       "Kg/THM",
                             "sort_order": sort,
                             "actual":     actual,
                             "cum_actual": cum,
@@ -636,6 +652,25 @@ def _block_techno(file_path: str, page_index: dict,
                             "found_via":  f"DSP BF CDI {row_label}",
                             "status":     "ok",
                         })
+                    break
+        # Shop-level CDI average: first numeric line not belonging to a specific furnace
+        for ln in cdi_lines:
+            if not any(m in ln.lower() for m in _fce_markers):
+                nums = _parse_te_nums(ln)
+                actual, cum = _te_values(nums, month_diff, offset=4)
+                if actual is not None:
+                    rows.append({
+                        "group_code": "IRON_MAKING",
+                        "section":    "CDI",
+                        "parameter":  "DSP Plant Shop",
+                        "unit":       "Kg/THM",
+                        "sort_order": 11,
+                        "actual":     actual,
+                        "cum_actual": cum,
+                        "cell":       f"PDF p{bf_pno} · {want_mon}'{yy}",
+                        "found_via":  "DSP BF CDI shop avg",
+                        "status":     "ok",
+                    })
                     break
 
     return rows
@@ -689,24 +724,198 @@ def _block_special_steel(file_path: str, ss_page_idx,
 
 
 # ---------------------------------------------------------------------------
+# DSP Flash.pdf — closing stock extraction
+# ---------------------------------------------------------------------------
+
+def _is_flash_pdf(file_path: str) -> bool:
+    """Return True if the file is a DSP Flash daily/monthly report."""
+    try:
+        import pdfplumber as _plumb
+        with _plumb.open(file_path) as _pdf:
+            text = _pdf.pages[0].extract_text() or ""
+            return "In-process Stock" in text and "Sal.Steel Stock" in text
+    except Exception:
+        return False
+
+
+def _extract_flash_stock(file_path: str, report_month: str) -> dict:
+    """Parse Flash.pdf and return raw stock values (Tonnes).
+
+    Layout (single 27-row × 14-col table):
+      row with "CC Billet" in col[7]  → In-process col[9], Sal.Steel col[12]
+      row with "Saleable Semis" in col[7] → Total col[13]
+    """
+    import pdfplumber as _plumb
+
+    with _plumb.open(file_path) as pdf:
+        page   = pdf.pages[0]
+        text   = page.extract_text() or ""
+        tables = page.extract_tables()
+
+    # Date from top of page e.g. "20.06.2026"
+    date_m = re.search(r'\b(\d{1,2})\.(\d{2})\.(\d{4})\b', text)
+    detected_date  = None
+    detected_month = None
+    if date_m:
+        dd, mo, yr = date_m.group(1), date_m.group(2), date_m.group(3)
+        detected_date  = f"{dd}.{mo}.{yr}"
+        detected_month = f"{yr}-{mo}"
+
+    inprocess_total = None
+    sal_semis_total = None
+    finished_total  = None
+    pig_iron        = None
+
+    def _num(s):
+        s = str(s or "").strip().replace(',', '')
+        try:
+            return float(s) if re.fullmatch(r'\d+(\.\d+)?', s) else None
+        except (ValueError, TypeError):
+            return None
+
+    for table in tables:
+        for row in table:
+            if not row or len(row) < 8:
+                continue
+
+            col7 = str(row[7] or "")
+
+            # ── In-process / Sal.Steel Stock block ──────────────────────────
+            # Items in col[7], In-process values in col[9], Sal.Steel in col[12]
+            if "CC Billet" in col7:
+                inp_str = str(row[9] if len(row) > 9 else "") or ""
+                vals_inp = [_num(v) for v in inp_str.split('\n')]
+                vals_inp = [v for v in vals_inp if v is not None]
+                if vals_inp:
+                    inprocess_total = sum(vals_inp)
+
+                # Pig Iron* aligned by position in col[7] items vs col[12] values
+                sal_str  = str(row[12] if len(row) > 12 else "") or ""
+                sal_vals = [v.strip() for v in sal_str.split('\n') if v.strip()]
+                items    = [v.strip() for v in col7.split('\n') if v.strip()]
+                for j, item in enumerate(items):
+                    if 'Pig Iron' in item and j < len(sal_vals):
+                        n = _num(sal_vals[j])
+                        if n is not None:
+                            pig_iron = n
+                        break
+
+            # ── Movable / Non-Movable / Total block ─────────────────────────
+            # Items in col[7], Total values in col[13]
+            if "Saleable Semis" in col7:
+                total_str  = str(row[13] if len(row) > 13 else "") or ""
+                total_vals = [v.strip() for v in total_str.split('\n') if v.strip()]
+                items      = [v.strip() for v in col7.split('\n') if v.strip()]
+                for j, item in enumerate(items):
+                    if j >= len(total_vals):
+                        break
+                    if 'Saleable Semis' in item:
+                        n = _num(total_vals[j])
+                        if n is not None:
+                            sal_semis_total = n
+                    elif item == 'Finished':
+                        n = _num(total_vals[j])
+                        if n is not None:
+                            finished_total = n
+
+    month_mismatch = bool(
+        detected_month and report_month and detected_month != report_month
+    )
+    return {
+        "inprocess":      inprocess_total,
+        "for_sale":       sal_semis_total,
+        "finished":       finished_total,
+        "pig_iron":       pig_iron,
+        "detected_date":  detected_date,
+        "detected_month": detected_month,
+        "month_mismatch": month_mismatch,
+    }
+
+
+def extract_preview_flash(file_path: str, report_month: str) -> dict:
+    """Preview DSP Flash.pdf closing stock for stock_table.
+
+    Values stored in '000T (raw Tonnes ÷ 1000, 3 d.p.).
+    stock_month = next month of report_month (closing = opening of next month).
+    """
+    raw = _extract_flash_stock(file_path, report_month)
+
+    def _t(v):
+        return round(v / 1000, 3) if v is not None else None
+
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    stock_month = f"{y+1 if m == 12 else y}-{1 if m == 12 else m+1:02d}"
+
+    stock_rows = [
+        {
+            "plant": "DSP", "item_type": "BLOOM/BILLETS", "stock_type": "INPROCESS",
+            "stock_month": stock_month, "value": _t(raw["inprocess"]),
+            "formula": "Sum of In-process Stock column (CC Billet + CC Bloom + BRC Bloom + ...)",
+            "status": "ok" if raw["inprocess"] is not None else "skip",
+        },
+        {
+            "plant": "DSP", "item_type": "BLOOM/BILLETS", "stock_type": "FOR SALE",
+            "stock_month": stock_month, "value": _t(raw["for_sale"]),
+            "formula": "Saleable Semis → Total column",
+            "status": "ok" if raw["for_sale"] is not None else "skip",
+        },
+        {
+            "plant": "DSP", "item_type": "FINISHED STEEL", "stock_type": "",
+            "stock_month": stock_month, "value": _t(raw["finished"]),
+            "formula": "Finished → Total column",
+            "status": "ok" if raw["finished"] is not None else "skip",
+        },
+        {
+            "plant": "DSP", "item_type": "PIG IRON", "stock_type": "",
+            "stock_month": stock_month, "value": _t(raw["pig_iron"]),
+            "formula": "Pig Iron* → Sal.Steel Stock column",
+            "status": "ok" if raw["pig_iron"] is not None else "skip",
+        },
+    ]
+
+    ok_n = sum(1 for r in stock_rows if r["status"] == "ok")
+    import sys
+    print(f"[DSP Flash] stock extraction: {ok_n}/4 ok  stock_month={stock_month}  "
+          f"detected_date={raw['detected_date']}", flush=True, file=sys.stderr)
+
+    return {
+        "source_type":        "DSP Flash Report (Closing Stock)",
+        "month":              report_month,
+        "plant":              "DSP",
+        "workbook_sheets":    ["Flash.pdf page 1"],
+        "month_mismatch":     raw["month_mismatch"],
+        "selected_month":     report_month,
+        "detected_date":      raw.get("detected_date", ""),
+        "detected_month":     raw.get("detected_month", ""),
+        "production_rows":    [],
+        "techno_rows":        [],
+        "techno_param_rows":  [],
+        "special_steel_rows": [],
+        "stock_rows":         stock_rows,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 def extract_preview(file_path: str, report_month: str, aliases: dict = None,
                     block: str = 'all') -> dict:
-    """Extract DSP data from the OMI PDF.
+    """Extract DSP data from the OMI PDF or Flash.pdf.
 
     block controls which sections are processed:
       'all'           — production + techno + special_steel (default)
       'production'    — Block 1 only
       'techno'        — Block 2 only
       'special_steel' — Block 3 only
+      'stock'         — Flash.pdf closing-stock extraction
 
-    Processes in three independent memory-bounded blocks (each opens and
-    closes the PDF independently).
     aliases: user-saved mapping {pdf_label: (item_name, convert_to_000T)}
     No database writes — preview only.
     """
+    if block == 'stock':
+        return extract_preview_flash(file_path, report_month)
+
     import sys
     alias_lookup = {}
     for raw_label, (a_item, a_conv) in (aliases or {}).items():

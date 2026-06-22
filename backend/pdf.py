@@ -34,15 +34,15 @@ HTML_TEMPLATE = """
 
         @page {
             size: A4 portrait;
-            margin: 18mm 15mm 18mm 15mm;
+            margin: 5mm 15mm 5mm 15mm;
         }
 
         /* Page 4: tighter margins to maximise usable area while keeping footer clear */
         @page page4-layout {
             size: A4 portrait;
-            margin-top: 12mm;
+            margin-top: 7mm;
             margin-right: 10mm;
-            margin-bottom: 12mm;
+            margin-bottom: 5mm;
             margin-left: 10mm;
         }
 
@@ -55,9 +55,9 @@ HTML_TEMPLATE = """
         /* Pages 5–6: same tight side margins as page 4 to match trend-page content width */
         @page page5-6-layout {
             size: A4 portrait;
-            margin-top: 12mm;
+            margin-top: 7mm;
             margin-right: 10mm;
-            margin-bottom: 12mm;
+            margin-bottom: 5mm;
             margin-left: 10mm;
         }
 
@@ -67,17 +67,32 @@ HTML_TEMPLATE = """
             padding-bottom: 0;
         }
 
-        /* Pages 27–35: techno-economic parameter pages — landscape for wide column tables */
+        /* Pages 27–35: techno-economic parameter pages — portrait */
         @page techno-layout {
-            size: A4 landscape;
-            margin-top: 10mm;
-            margin-right: 10mm;
-            margin-bottom: 10mm;
-            margin-left: 10mm;
+            size: A4 portrait;
+            margin-top: 5mm;
+            margin-right: 5mm;
+            margin-bottom: 5mm;
+            margin-left: 5mm;
         }
 
         .techno-page {
             page: techno-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        /* Page 28: same portrait layout */
+        @page techno-tight-layout {
+            size: A4 portrait;
+            margin-top: 5mm;
+            margin-right: 5mm;
+            margin-bottom: 5mm;
+            margin-left: 5mm;
+        }
+
+        .techno-tight-page {
+            page: techno-tight-layout;
             padding-top: 0;
             padding-bottom: 0;
         }
@@ -281,12 +296,25 @@ HTML_TEMPLATE = """
 
         /* ─── Page 3 – SAIL Performance Summary ─────────────── */
         .page3-section-heading {
-            font-size: 13pt;
+            font-size: 10pt;
             font-weight: 700;
-            margin: 10px 0 4px 0;
-            text-transform: uppercase;
+            margin: 5px 0 3px 0;
             color: #0f172a;
         }
+        .page3-narrative {
+            font-size: var(--sz-td);
+            line-height: 1.4;
+            margin: 2px 0 4px 0;
+        }
+        .page3-footnote {
+            font-size: 7.5pt;
+            font-style: italic;
+            color: #475569;
+            margin-top: 2px;
+        }
+        .page3-chart-grid { margin-top: 6px; }
+        .page3-chart-row  { display: flex; gap: 4px; margin-bottom: 3px; }
+        .page3-chart-cell { flex: 1; border: 0.5px solid #e2e8f0; border-radius: 3px; padding: 2px; }
 
         /* ─── Page 4 – Production Performance vs APP ─────────── */
         .page4-heading {
@@ -307,9 +335,9 @@ HTML_TEMPLATE = """
         .page4-table { table-layout: fixed; width: 100%; border: 2.5px solid #1e293b; }
         .page4-table th { font-size: 8.5pt; padding: 1.5px 2px; line-height: 1.0; }
         .page4-table td { font-size: 8.5pt; padding: 1.5px 2px; line-height: 1.0; }
-        .page4-table col.c-items    { width: 13%; }
-        .page4-table col.c-plant    { width:  5%; }
-        .page4-table col.c-ann      { width:  7%; }
+        .page4-table col.c-items    { width: 10%; }
+        .page4-table col.c-plant    { width:  6%; }
+        .page4-table col.c-ann      { width:  8%; }
         .page4-table col.c-num      { width:  6%; }
         .page4-table col.c-num-sm   { width:5.5%; }
 
@@ -500,22 +528,18 @@ HTML_TEMPLATE = """
         .catwise-table tr.cw-separator td { border: none; background: transparent; padding: 0; }
 
         /* ── page 18: Segment Wise Production ───────────────────────────── */
-        .segwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; font-size: 7.5pt; }
-        .segwise-table col.col-lbl { width: 27%; }
-        .segwise-table col.col-num { width: 12.2%; }
-        .segwise-table th { background-color: #1e3a5f; color: #fff; padding: 2px 3px; text-align: center; vertical-align: middle; border: 1px solid #334155; font-size: 7pt; line-height: 1.2; font-weight: 600; }
+        .segwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; font-size: 7pt; }
+        .segwise-table th { background-color: #1e3a5f; color: #fff; padding: 2px 3px; text-align: center; vertical-align: middle; border: 1px solid #334155; font-size: 6.5pt; line-height: 1.2; font-weight: 600; }
         .segwise-table th.lbl-th { text-align: left; }
-        .segwise-table td { padding: 1.5px 4px; border: 1px solid #cbd5e1; line-height: 1.2; }
+        .segwise-table td { padding: 1px 3px; border: 1px solid #cbd5e1; line-height: 1.2; }
         .segwise-table td.lbl-td { text-align: left; }
         .segwise-table td.num-td { text-align: right; }
+        .segwise-table td.sw-group-cell { background-color: #1e3a5f; color: #fff; font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid #334155; }
+        .segwise-table td.sw-plant-cell { background-color: #dbeafe; font-weight: 700; text-align: center; vertical-align: middle; }
         .segwise-table tr.sw-data td { background-color: #f8fafc; }
-        .segwise-table tr.sw-seg-hdr td { background-color: #1e3a5f; color: #fff; font-weight: 700; font-size: 8pt; padding: 3px 5px; border: 1px solid #334155; }
-        .segwise-table tr.sw-plant-lbl td { background-color: #dbeafe; font-weight: 700; font-size: 7.5pt; }
         .segwise-table tr.sw-seg-total td { background-color: #fef9c3; font-weight: 700; }
         .segwise-table tr.sw-seg-pct td { background-color: #f1f5f9; font-weight: 700; font-style: italic; }
-        .segwise-table tr.sw-grand-total td { background-color: #dcfce7; font-weight: 700; font-size: 8pt; }
-        .segwise-table tr.sw-separator { height: 3px; }
-        .segwise-table tr.sw-separator td { border: none; background: transparent; padding: 0; }
+        .segwise-table tr.sw-grand-total td { background-color: #dcfce7; font-weight: 700; }
 
         /* ── Page-specific font overrides ───────────────────────────────── */
         .pg-7, .pg-7 th, .pg-7 td {
@@ -613,7 +637,7 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
     {% else %}
-    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %} techno-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %}{% if page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
 
         {% if page.type == 'cover' %}
             <div class="page1-container">
@@ -657,67 +681,80 @@ HTML_TEMPLATE = """
 
         {% elif page.type == 'summary' %}
             <div class="report-title-section">
-                <h2>{{ page.title }}</h2>
-                <h3>{{ month }}</h3>
+                <h2>{{ page.title }}: {{ short_m }}'{{ short_y }}</h2>
             </div>
-            <h4 class="page3-section-heading">
-                Production Performance Summary (Unit: '000 T)
-            </h4>
-            <table class="report-table">
+
+            {# ── Production narrative ── #}
+            <p class="page3-section-heading" style="margin-bottom:1px;">Production:</p>
+            <p class="page3-section-heading" style="margin-top:0;margin-bottom:2px;">{{ short_m }}'{{ short_y }}:</p>
+            {% if page.production_narrative %}
+            <p class="page3-narrative">{{ page.production_narrative }}</p>
+            {% endif %}
+
+            {# ── Compact production table (5 data cols: APP, Actual, %Ful, CPLY Act, %Gr) ── #}
+            <div style="text-align:right;font-size:7.5pt;font-style:italic;margin-bottom:2px;">Unit: '000 T</div>
+            <table class="report-table" style="table-layout:fixed;width:100%;">
                 <thead>
                     <tr>
-                        <th rowspan="2">Item</th>
-                        <th colspan="3">{{ m_name }} {{ y_str }}</th>
-                        <th colspan="2">{{ short_m }}'{{ short_prev_y }}</th>
-                        <th colspan="3">April - {{ m_name }} {{ y_str }}</th>
-                        <th colspan="2">April-{{ short_m }}'{{ short_prev_y }}</th>
+                        <th rowspan="2" style="width:22%;text-align:left;">Item</th>
+                        <th colspan="3" style="text-align:center;">{{ m_name }} {{ y_str }}</th>
+                        <th rowspan="2" style="text-align:center;white-space:normal;line-height:1.2;">{{ short_m }}'{{ short_prev_y }}<br/>Act.</th>
+                        <th rowspan="2" style="text-align:center;white-space:normal;line-height:1.2;">% Gr.<br/>w.r.t.<br/>{{ short_m }}'{{ short_prev_y }}</th>
                     </tr>
                     <tr>
                         <th>APP</th><th>Actual</th><th>% Ful.</th>
-                        <th>Act.</th><th>% Gr.</th>
-                        <th>APP</th><th>Actual</th><th>% Ful.</th>
-                        <th>Act.</th><th>% Gr.</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in page.production_table %}
+                    {% set vals = row.get('values') or [] %}
                     <tr>
                         <td class="label-cell">{{ row.item }}</td>
-                        {% for val in row['values'] %}<td>{{ val }}</td>{% endfor %}
+                        {% for i in range(5) %}<td style="font-weight:{{ '700' if i == 1 else '400' }}">{{ vals[i] if vals|length > i else '' }}</td>{% endfor %}
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            <p class="page3-footnote">*includes conversion</p>
+
+            {# ── Highlights ── #}
             {% if page.highlights %}
-            <div class="highlights-box">
-                <h4>Key Production Highlights</h4>
-                <ul>{% for h in page.highlights %}<li>{{ h }}</li>{% endfor %}</ul>
-            </div>
+            <p class="page3-section-heading">Highlights:</p>
+            <div style="font-size:var(--sz-td);line-height:1.4;white-space:pre-wrap;">{% for h in page.highlights %}{{ h }}
+{% endfor %}</div>
             {% endif %}
-            <h4 class="page3-section-heading">
-                Major Techno-Economic Parameters
-            </h4>
-            <table class="report-table">
+
+            {# ── TE table: Target | Month | CPLY | Apr-Mon | CPLY Apr-Mon ── #}
+            <p class="page3-section-heading" style="margin-top:5px;">TE parameters performance:</p>
+            <table class="report-table" style="table-layout:fixed;width:100%;">
                 <thead>
                     <tr>
-                        <th>Parameter</th><th>Unit</th>
-                        <th>{{ target_header }}</th>
-                        <th>{{ short_m }}'{{ short_y }}</th>
-                        <th>{{ short_m }}'{{ short_prev_y }}</th>
-                        <th>Apr-{{ short_m }}'{{ short_y }}</th>
-                        <th>Apr-{{ short_m }}'{{ short_prev_y }}</th>
+                        <th style="width:24%;text-align:left;">Parameter</th>
+                        <th style="width:10%;">Unit</th>
+                        <th style="width:13%;">{{ target_header }}</th>
+                        <th style="width:13%;font-weight:700;">{{ short_m }}'{{ short_y }}</th>
+                        <th style="width:13%;">{{ short_m }}'{{ short_prev_y }}</th>
+                        <th style="width:14%;">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th style="width:13%;">Apr-{{ short_m }}'{{ short_prev_y }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in page.te_table %}
                     <tr>
-                        <td class="label-cell">{{ row.parameter }}</td>
-                        <td class="label-cell" style="font-style: italic; color: #475569;">{{ row.unit }}</td>
-                        {% for val in row['values'] %}<td>{{ val }}</td>{% endfor %}
+                        <td class="label-cell" style="font-weight:600;">{{ row.parameter }}</td>
+                        <td class="label-cell" style="font-style:italic;color:#475569;">{{ row.unit }}</td>
+                        <td style="text-align:right;">{{ row['values'][0] if row['values']|length > 0 else '' }}</td>
+                        <td style="font-weight:700;text-align:right;">{{ row['values'][1] if row['values']|length > 1 else '' }}</td>
+                        <td style="text-align:right;">{{ row['values'][2] if row['values']|length > 2 else '' }}</td>
+                        <td style="text-align:right;">{{ row['values'][3] if row['values']|length > 3 else '' }}</td>
+                        <td style="text-align:right;">{{ row['values'][4] if row['values']|length > 4 else '' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+
+            {# ── Bar charts ── #}
+            {% if page._chart_html %}{{ page._chart_html | safe }}{% endif %}
 
         {% elif page.type == 'trend' %}
             <div class="report-title-section">
@@ -835,6 +872,19 @@ HTML_TEMPLATE = """
                 <tbody>
                     {% for row in page.rows %}
                     <tr class="{% if row.is_first_in_group %}group-first {% endif %}{% if row.plant == 'SAIL' %}sail-row{% endif %}">
+                        {% if row.is_conversion %}
+                        <td colspan="2" class="label-cell"
+                            style="font-weight: 700; font-size: 8pt; vertical-align: middle;
+                                   padding: 1px 2px 1px 4px; font-family: inherit;">
+                            Conversion
+                        </td>
+                        {% elif row.is_sail_incl_conv %}
+                        <td colspan="2" class="label-cell"
+                            style="font-weight: 700; font-size: 8pt; vertical-align: middle;
+                                   padding: 1px 2px 1px 4px; font-family: inherit;">
+                            SAIL incl. conversion
+                        </td>
+                        {% else %}
                         {% if row.is_first_in_group %}
                         <td class="label-cell" rowspan="{{ row.group_size }}"
                             style="font-weight: 700; font-size: 8pt; vertical-align: middle;
@@ -850,6 +900,7 @@ HTML_TEMPLATE = """
                                    white-space: nowrap; overflow: hidden;">
                             {{ row.plant }}
                         </td>
+                        {% endif %}
                         {% for val in row['values'] %}<td{% if col_cls[loop.index0] %} class="{{ col_cls[loop.index0] }}"{% endif %}>{{ val }}</td>{% endfor %}
                     </tr>
                     {% endfor %}
@@ -1175,48 +1226,58 @@ HTML_TEMPLATE = """
         {% endif %}{# end catwise_saleable #}
 
         {% if page.type == 'segment_wise' %}
+        {% set cum_lbl = 'Apr-' ~ page.month_label %}
+        {% set cum_cply_lbl = 'Apr-' ~ page.cply_label %}
         <table class="segwise-table">
             <colgroup>
-                <col class="col-lbl">
-                <col class="col-num"><col class="col-num"><col class="col-num">
-                <col class="col-num"><col class="col-num"><col class="col-num">
+                <col style="width:5%"><col style="width:5%"><col style="width:13%">
+                <col style="width:7%">
+                <col style="width:6%"><col style="width:6%"><col style="width:5%">
+                <col style="width:6%"><col style="width:5%">
+                <col style="width:6%"><col style="width:6%"><col style="width:5%">
+                <col style="width:6%"><col style="width:5%">
             </colgroup>
             <thead>
                 <tr>
-                    <th rowspan="2" class="lbl-th">CATEGORY</th>
-                    <th rowspan="2">2026-27<br/>Plan</th>
+                    <th rowspan="2">Group</th>
+                    <th rowspan="2">Plant</th>
+                    <th rowspan="2" class="lbl-th">Item</th>
+                    <th rowspan="2">Plan<br/>26-27</th>
                     <th colspan="3">{{ page.month_label }}</th>
                     <th rowspan="2">{{ page.cply_label }}<br/>Actual</th>
                     <th rowspan="2">% Gr.<br/>over<br/>{{ page.cply_label }}</th>
+                    <th colspan="3">{{ cum_lbl }}</th>
+                    <th rowspan="2">{{ cum_cply_lbl }}<br/>Actual</th>
+                    <th rowspan="2">% Gr<br/>Over<br/>{{ cum_cply_lbl }}</th>
                 </tr>
                 <tr>
-                    <th>Plan</th><th>Actual</th><th>% Ful</th>
+                    <th>Plan</th><th>Actual</th><th>%Ful</th>
+                    <th>Plan</th><th>Actual</th><th>%Ful</th>
                 </tr>
             </thead>
             <tbody>
             {% for row in page.rows %}
                 {% if row.type == 'separator' %}
-                <tr class="sw-separator"><td colspan="7"></td></tr>
-                {% elif row.type == 'seg-hdr' %}
-                <tr class="sw-seg-hdr">
-                    <td colspan="7" class="lbl-td">{{ row.label }}</td>
-                </tr>
-                {% elif row.type == 'plant-lbl' %}
-                <tr class="sw-plant-lbl">
-                    <td colspan="7" class="lbl-td">{{ row.label }}</td>
-                </tr>
-                {% elif row.type == 'seg-pct' %}
-                <tr class="sw-seg-pct">
-                    <td class="lbl-td">{{ row.label }}</td>
+                {# skip separators — visual sections now provided by group/plant cells #}
+                {% elif row.type in ('seg-total', 'seg-pct', 'grand-total') %}
+                <tr class="sw-{{ row.type }}">
+                    <td colspan="3" class="lbl-td">{{ row.label }}</td>
                     <td class="num-td">{{ row.ann_plan }}</td>
                     <td class="num-td">{{ row.m_plan }}</td>
                     <td class="num-td">{{ row.m_act }}</td>
-                    <td class="num-td"></td>
+                    <td class="num-td">{{ row.m_pct }}</td>
                     <td class="num-td">{{ row.cply_act }}</td>
-                    <td class="num-td"></td>
+                    <td class="num-td">{{ row.m_growth }}</td>
+                    <td class="num-td">{{ row.cum_plan }}</td>
+                    <td class="num-td">{{ row.cum_act }}</td>
+                    <td class="num-td">{{ row.cum_pct }}</td>
+                    <td class="num-td">{{ row.cum_cply }}</td>
+                    <td class="num-td">{{ row.cum_growth }}</td>
                 </tr>
                 {% else %}
                 <tr class="sw-{{ row.type }}">
+                    {% if row.show_group %}<td rowspan="{{ row.group_span }}" class="sw-group-cell">{{ row.group }}</td>{% endif %}
+                    {% if row.show_plant %}<td rowspan="{{ row.plant_span }}" class="sw-plant-cell">{{ row.plant }}</td>{% endif %}
                     <td class="lbl-td">{{ row.label }}</td>
                     <td class="num-td">{{ row.ann_plan }}</td>
                     <td class="num-td">{{ row.m_plan }}</td>
@@ -1224,6 +1285,11 @@ HTML_TEMPLATE = """
                     <td class="num-td">{{ row.m_pct }}</td>
                     <td class="num-td">{{ row.cply_act }}</td>
                     <td class="num-td">{{ row.m_growth }}</td>
+                    <td class="num-td">{{ row.cum_plan }}</td>
+                    <td class="num-td">{{ row.cum_act }}</td>
+                    <td class="num-td">{{ row.cum_pct }}</td>
+                    <td class="num-td">{{ row.cum_cply }}</td>
+                    <td class="num-td">{{ row.cum_growth }}</td>
                 </tr>
                 {% endif %}
             {% endfor %}
@@ -1232,6 +1298,188 @@ HTML_TEMPLATE = """
         {% endif %}{# end segment_wise #}
 
         {% if page.type == 'special_steel' %}
+
+        {% if page.variant == 'isp_sail_combined' %}
+        {# ── Page 23: ISP mill-wise + SAIL summary combined on one portrait page ── #}
+        <div style="padding:6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
+
+          {% set d = page.isp %}
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ d.title }}</div>
+          <div style="text-align:right;font-size:6.8pt;margin-bottom:2px;">Unit: Tonnes</div>
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.5pt;">
+            <colgroup>
+              <col style="width:20%"/>
+              <col style="width:8%"/><col style="width:8%"/><col style="width:6%"/>
+              <col style="width:6.5%"/><col style="width:5.5%"/>
+              <col style="width:8%"/><col style="width:8%"/><col style="width:6%"/>
+              <col style="width:6.5%"/><col style="width:5.5%"/>
+            </colgroup>
+            <thead>
+              <tr style="background:#1e3a5f;color:#fff;">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Quality / Grade</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ d.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ d.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">%Gr<br/>{{ d.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">{{ d.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">{{ d.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">%Gr<br/>{{ d.cum_cply_label }}</th>
+              </tr>
+              <tr style="background:#2d4f7f;color:#fff;">
+                <th style="padding:2px 3px;border:1px solid #334155;">Order</th>
+                <th style="padding:2px 3px;border:1px solid #334155;">Actual</th>
+                <th style="padding:2px 3px;border:1px solid #334155;">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">Order</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">Actual</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">%Ful</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for row in d.rows %}
+              {% if row.type == 'separator' %}
+              <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
+              {% elif row.type == 'grand-total' %}
+              <tr style="background:#dcfce7;font-weight:700;">
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">{{ row.label }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+              </tr>
+              {% else %}
+              <tr style="background:#f8fafc;">
+                <td style="padding:1.5px 3px;padding-left:10px;border:1px solid #cbd5e1;text-align:left;">{{ row.label }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+              </tr>
+              {% endif %}
+            {% endfor %}
+            <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
+            <tr style="background:#e0f2fe;font-weight:600;">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">Saleable Steel Production</td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_pct_growth }}</td>
+            </tr>
+            <tr style="background:#e0f2fe;font-weight:600;">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.special_pct.current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.special_pct.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.special_pct.cum_current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.special_pct.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+            </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top:6px;"></div>
+
+          {% set d = page.sail %}
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ d.title }}</div>
+          <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:3px;">{{ d.month_label }}</div>
+          <div style="text-align:right;font-size:6.8pt;margin-bottom:2px;">Unit: Tonnes</div>
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.8pt;">
+            <colgroup>
+              <col style="width:13%"/><col style="width:8%"/>
+              <col style="width:7%"/><col style="width:7%"/><col style="width:5.5%"/>
+              <col style="width:6%"/><col style="width:5%"/>
+              <col style="width:7%"/><col style="width:7%"/><col style="width:5.5%"/>
+              <col style="width:6%"/><col style="width:5%"/>
+            </colgroup>
+            <thead>
+              <tr style="background:#1e3a5f;color:#fff;">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Plants</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">ABP<br/>26-27</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ d.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ d.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">%Gr<br/>{{ d.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">{{ d.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">{{ d.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">%Gr<br/>{{ d.cum_cply_label }}</th>
+              </tr>
+              <tr style="background:#2d4f7f;color:#fff;">
+                <th style="padding:2px 3px;border:1px solid #334155;">Orders</th>
+                <th style="padding:2px 3px;border:1px solid #334155;">Actual</th>
+                <th style="padding:2px 3px;border:1px solid #334155;">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">Orders</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">Actual</th>
+                <th style="padding:2px 3px;border:1px solid #2d5016;background:#2d5016;">%Ful</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for row in d.rows %}
+            {% set bg = '#dcfce7' if row.type == 'sail-total' else '#f8fafc' %}
+            {% set fw = '700' if row.type == 'sail-total' else '400' %}
+            <tr style="background:{{ bg }};font-weight:{{ fw }};">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">{{ row.label }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.abp }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+            </tr>
+            {% endfor %}
+            <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
+            <tr style="background:#e0f2fe;font-weight:600;">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">Saleable Steel production</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.abp }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.pct_growth }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_pct_growth }}</td>
+            </tr>
+            <tr style="background:#e0f2fe;font-weight:600;">
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:left;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.special_pct.current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;text-align:right;">{{ d.special_pct.cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #cbd5e1;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.special_pct.cum_current }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;text-align:right;">{{ d.special_pct.cum_cply }}</td>
+              <td style="padding:1.5px 3px;border:1px solid #b7d4a0;"></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {% else %}
+        {# ── existing sail_summary / plant_detail rendering ── #}
         <div style="padding:6px;font-family:Arial,sans-serif;font-size:7.5pt;">
           <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ page.title }}</div>
           {% if page.variant == 'sail_summary' %}
@@ -1441,6 +1689,7 @@ HTML_TEMPLATE = """
           </table>
           {% endif %}
         </div>
+        {% endif %}{# end isp_sail_combined else #}
         {% endif %}{# end special_steel #}
 
         {% if page.type == 'opening_stock' %}
@@ -1449,8 +1698,8 @@ HTML_TEMPLATE = """
           <div style="text-align:right;font-size:6.5pt;margin-bottom:2px;">Unit: {{ page.unit }}</div>
           <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.3pt;">
             <colgroup>
-              <col style="width:20px"/><col style="width:16px"/>
-              <col style="width:12%"/><col style="width:8%"/>
+              <col style="width:18px"/><col style="width:14px"/>
+              <col style="width:8%"/><col style="width:7%"/>
               {% for c in page.col_labels %}<col/>{% endfor %}
               <col style="width:9%"/>
             </colgroup>
@@ -1480,8 +1729,10 @@ HTML_TEMPLATE = """
                   <div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;margin:auto;">{{ sec.code }}</div>
                 </td>
                 {% endif %}
-                <td style="padding:1px 3px;border:1px solid #94a3b8;text-align:left;font-size:5.8pt;">{{ row.sub }}</td>
-                <td style="padding:1px 3px;border:1px solid #94a3b8;text-align:left;{% if row.plant == 'SAIL' %}font-weight:700;{% endif %}">{{ row.plant }}</td>
+                <td style="padding:1px 3px;border:1px solid #94a3b8;text-align:left;font-size:5.8pt;white-space:normal;word-break:break-word;">{{ row.sub }}</td>
+                {% if (row.plant_rowspan | default(1)) > 0 %}
+                <td rowspan="{{ row.plant_rowspan | default(1) }}" style="padding:1px 3px;border:1px solid #94a3b8;text-align:left;vertical-align:middle;{% if row.plant == 'SAIL' %}font-weight:700;{% endif %}">{{ row.plant }}</td>
+                {% endif %}
                 {% for v in row['values'] %}
                 <td style="padding:1px 3px;border:1px solid #94a3b8;text-align:right;">{{ v }}</td>
                 {% endfor %}
@@ -1545,22 +1796,34 @@ HTML_TEMPLATE = """
         {% endif %}{# end ipt_status #}
 
         {% if page.type == 'techno_params' %}
-        <div style="padding:6px;font-family:Arial,sans-serif;font-size:6.5pt;">
-          <div style="text-align:center;font-weight:700;font-size:9.5pt;">{{ page.title }}</div>
+        {% set _is_major = page.page == 27 %}
+        {% set _tsz = '5pt' if page.page == 28 else ('6pt' if _is_major else '5pt') %}
+        <div style="padding:4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:{{ _tsz }};">
+          <div style="text-align:center;font-weight:700;font-size:9pt;">{{ page.title }}</div>
           {% if page.subtitle %}
-          <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:3px;">{{ page.subtitle }}</div>
+          <div style="text-align:center;font-weight:600;font-size:7.5pt;margin-bottom:3px;">{{ page.subtitle }}</div>
           {% endif %}
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.2pt;margin-top:3px;">
+          {% set _tbsz = '4.8pt' if page.page == 28 else ('5.8pt' if _is_major else '4.8pt') %}
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ _tbsz }};margin-top:2px;">
             <colgroup>
+              {% if _is_major %}
+              <col style="width:20%"/><col style="width:10%"/>
+              {% else %}
               <col style="width:13%"/><col style="width:13%"/><col style="width:7%"/>
+              {% endif %}
               {% set ncols = 6 + (page.month_labels | length) %}
               {% for i in range(ncols) %}<col/>{% endfor %}
             </colgroup>
             <thead>
               <tr style="background:#1e3a5f;color:#fff;">
+                {% if _is_major %}
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Parameters</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">Plants</th>
+                {% else %}
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Shop / Plant</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">Parameters</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">Unit</th>
+                {% endif %}
                 <th colspan="2" style="padding:2px 3px;border:1px solid #334155;background:#475569;">Actual</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;background:#7c2d12;">{{ page.target_label }}</th>
                 <th colspan="{{ page.month_labels | length }}" style="padding:2px 3px;border:1px solid #334155;">Actual</th>
@@ -1583,19 +1846,27 @@ HTML_TEMPLATE = """
               {% for row in sec.rows %}
               <tr style="background:{{ sbg }};">
                 {% if loop.first %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:left;font-weight:700;vertical-align:top;background:#e2e8f0;">{{ sec.label }}</td>
+                {% if _is_major %}
+                {% set _sec_unit = sec.rows[0].unit if sec.rows else '' %}
+                {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:left;font-weight:700;vertical-align:top;background:#e2e8f0;">{{ _sec_label }}</td>
+                {% else %}
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:left;font-weight:700;vertical-align:top;background:#e2e8f0;">{{ sec.label }}</td>
                 {% endif %}
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:left;">{{ row.label }}</td>
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:center;font-size:5.6pt;">{{ row.unit }}</td>
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;">{{ row.fy2 }}</td>
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;">{{ row.fy1 }}</td>
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;background:#fef3ec;">{{ row.target }}</td>
+                {% endif %}
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:left;">{{ row.label }}</td>
+                {% if not _is_major %}
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:center;font-size:5.6pt;">{{ row.unit }}</td>
+                {% endif %}
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:right;">{{ row.fy2 }}</td>
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:right;">{{ row.fy1 }}</td>
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:right;background:#fef3ec;">{{ row.target }}</td>
                 {% for v in row.months %}
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;">{{ v }}</td>
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:right;">{{ v }}</td>
                 {% endfor %}
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;">{{ row.cply }}</td>
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;background:#f3faf0;">{{ row.cum }}</td>
-                <td style="padding:1.5px 4px;border:1px solid #94a3b8;text-align:right;background:#f3faf0;">{{ row.cum_cply }}</td>
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:right;">{{ row.cply }}</td>
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:right;background:#f3faf0;">{{ row.cum }}</td>
+                <td style="padding:0.5px 2px;border:1px solid #94a3b8;text-align:right;background:#f3faf0;">{{ row.cum_cply }}</td>
               </tr>
               {% endfor %}
             {% endfor %}
@@ -1768,9 +2039,20 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
     from models import FontConfig
 
     try:
+        from layout_loader import load_layout_config
+        _layout_cfg = load_layout_config()
+        _g = _layout_cfg["global"]
+
         vars = _resolve_month_vars(request.month)
 
-        fc = font_config or request.font_config or FontConfig()
+        _cfg_fc = FontConfig(
+            family=       _g.get("font_family",  "IBM Plex Sans"),
+            td_size=      _g.get("td_size",       9.5),
+            th_size=      _g.get("th_size",       9.0),
+            title_size=   _g.get("title_size",   13.0),
+            heading_size= _g.get("heading_size", 10.5),
+        )
+        fc = font_config or request.font_config or _cfg_fc
         _catalog_entry = FONT_CATALOG.get(fc.family, FONT_CATALOG[_DEFAULT_FONT])
         _font_imports   = _catalog_entry["import"]
         _font_family_css = f"'{fc.family}', Arial, Helvetica, sans-serif"
@@ -1783,6 +2065,9 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
         for p in src:
             if p.get("type") == "page4_table":
                 p["rows"] = _group_page4_rows(p.get("rows", []))
+            if p.get("type") == "summary" and p.get("chart_data"):
+                from page_techno import generate_summary_chart_html
+                p["_chart_html"] = generate_summary_chart_html(p["chart_data"])
             flat_pages.append(p)
 
         # Collect all consecutive trend pages into ONE section so items flow
@@ -1813,11 +2098,17 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
                 pages_to_render.append(p)
                 i += 1
 
+        _merged_page_layouts = {
+            **_layout_cfg["pages"],
+            **(page_layouts or {}),
+            **(request.page_layouts or {}),
+        }
+
         rendered_html = Template(HTML_TEMPLATE).render(
             month=request.month,
             pages=pages_to_render,
             total_report_pages=total_report_pages,
-            page_layouts=page_layouts or {},
+            page_layouts=_merged_page_layouts,
             # Typography variables
             font_imports=_font_imports,
             font_family_css=_font_family_css,

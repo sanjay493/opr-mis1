@@ -180,34 +180,40 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
                 "no report_month was provided."
             )
 
-        COL_F, COL_J, COL_N = 5, 9, 13
+        from cells_loader import get_extractor_config
+        _cfg = get_extractor_config("bsp_ppc_mis")
 
-        # (row_0based, col_0based, divide_by_1000)
-        production_cells = {
-            "COB#1-8":              (3,  COL_F, False),
-            "Oven Pushing(nos/d)":  (5,  COL_F, False),
-            "SP-2":                 (7,  COL_F, True),
-            "SP-3":                 (8,  COL_F, True),
-            "Total Sinter":         (9,  COL_F, True),
-            "BF#1-7":               (10, COL_F, True),
-            "BF#8":                 (11, COL_F, True),
-            "Hot Metal":            (12, COL_F, True),
-            "SMS-2":                (13, COL_F, True),
-            "SMS-3":                (15, COL_F, True),
-            "Total Crude Steel":    (16, COL_F, True),
-            "RSM_RAIL":             (17, COL_F, True),
-            "URM_RAIL":             (21, COL_F, True),
-            "MM":                   (23, COL_F, True),
-            "WIRERODS":             (24, COL_F, True),
-            "BARS&RODMILL":         (25, COL_F, True),
-            "PLATEMILL":            (26, COL_F, True),
-            "Finished Steel":       (27, COL_F, True),
-            "Saleable Semis":       (34, COL_F, True),
-            "Saleable Steel":       (35, COL_F, True),
-            "RSMPRIME":             (38, COL_F, True),
-            "URMPRIME":             (38, COL_J, True),
-            "Pig Iron":             (62, COL_N, True),
+        _default_rc = {
+            "COB#1-8":             (3,  5,  False),
+            "Oven Pushing(nos/d)": (5,  5,  False),
+            "SP-2":                (7,  5,  True),
+            "SP-3":                (8,  5,  True),
+            "Total Sinter":        (9,  5,  True),
+            "BF#1-7":              (10, 5,  True),
+            "BF#8":                (11, 5,  True),
+            "Hot Metal":           (12, 5,  True),
+            "SMS-2":               (13, 5,  True),
+            "SMS-3":               (15, 5,  True),
+            "Total Crude Steel":   (16, 5,  True),
+            "RSM_RAIL":            (17, 5,  True),
+            "URM_RAIL":            (21, 5,  True),
+            "MM":                  (23, 5,  True),
+            "WIRERODS":            (24, 5,  True),
+            "BARS&RODMILL":        (25, 5,  True),
+            "PLATEMILL":           (26, 5,  True),
+            "Finished Steel":      (27, 5,  True),
+            "Saleable Semis":      (34, 5,  True),
+            "Saleable Steel":      (35, 5,  True),
+            "RSMPRIME":            (38, 5,  True),
+            "URMPRIME":            (38, 9,  True),
+            "Pig Iron":            (62, 13, True),
         }
+        # Config stores [row, col, divide] lists; convert to tuples matching code expectation
+        _cfg_rc = _cfg.get("cells_rc", {})
+        production_cells = {
+            k: tuple(v) if isinstance(v, list) else v
+            for k, v in _cfg_rc.items()
+        } if _cfg_rc else _default_rc
 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -283,68 +289,68 @@ PARAM_MAP_3PAGE: List[tuple] = [
     # ── Sinter Plant 2 (rows 45-49) ─────────────────────────────────────────
     (45, "COKE_SINTER", "Sinter Plant SP-2",    "Machine Availability",      "%"),
     (46, "COKE_SINTER", "Sinter Plant SP-2",    "Machine Utilisation",       "%"),
-    (48, "COKE_SINTER", "Sinter Plant SP-2",    "Productivity",              "T/m2/hr"),
+    (48, "COKE_SINTER", "Sinter Plant SP-2",    "Productivity",              "T/m²/hr"),
     (49, "COKE_SINTER", "Sinter Plant SP-2",    "Basicity",                  ""),
     # ── Sinter Plant 3 (rows 51-55) ─────────────────────────────────────────
     (51, "COKE_SINTER", "Sinter Plant SP-3",    "Machine Availability",      "%"),
     (52, "COKE_SINTER", "Sinter Plant SP-3",    "Machine Utilisation",       "%"),
-    (54, "COKE_SINTER", "Sinter Plant SP-3",    "Productivity",              "T/m2/hr"),
+    (54, "COKE_SINTER", "Sinter Plant SP-3",    "Productivity",              "T/m²/hr"),
     (55, "COKE_SINTER", "Sinter Plant SP-3",    "Basicity",                  ""),
     # ── Blast Furnaces (rows 58-70) ─────────────────────────────────────────
-    (58, "IRON_MAKING", "Blast Furnaces",        "Sinter in Burden (BF 1-8)","%" ),
-    (59, "IRON_MAKING", "Blast Furnaces",        "Coke Rate (BF 1-8)",       "Kg./THM"),
-    (60, "IRON_MAKING", "Blast Furnaces",        "Coke Screening (BF 1-8)",  "25mm%"),
-    (68, "IRON_MAKING", "Blast Furnaces",        "CDI Rate",                 "Kg./THM"),
-    (69, "IRON_MAKING", "Blast Furnaces",        "Slag Rate (1-8)",          "Kg./THM"),
-    (70, "IRON_MAKING", "Blast Furnaces",        "Sp. Nut Coke Consumption", "Kg./THM"),
+    (58, "IRON_MAKING", "Sinter in Burden",       "BSP Plant Shop",           "%"),
+    (59, "IRON_MAKING", "BF Coke Rate",           "BSP Plant Shop",           "Kg/THM"),
+    (60, "IRON_MAKING", "Coke Screen Loss",        "BSP Plant Shop",           "25mm%"),
+    (68, "IRON_MAKING", "CDI",                    "BSP Plant Shop",           "Kg/THM"),
+    (69, "IRON_MAKING", "Slag Rate",              "BSP Plant Shop",           "Kg/THM"),
+    (70, "IRON_MAKING", "Nut Coke Rate",           "BSP Plant Shop",           "Kg/THM"),
     # ── BF Productivity (rows 65-67) ────────────────────────────────────────
-    (65, "IRON_MAKING", "BF Productivity (BSP)", "BF-7 (2104 Cu.M)",         "T/m3/day"),
-    (66, "IRON_MAKING", "BF Productivity (BSP)", "BF-8 (3445 Cu.M)",         "T/m3/day"),
-    (67, "IRON_MAKING", "BF Productivity (BSP)", "Overall (BF 1-8)",         "T/m3/day"),
+    (65, "IRON_MAKING", "BF Productivity",        "BSP BF-7",                 "T/m³/day"),
+    (66, "IRON_MAKING", "BF Productivity",        "BSP BF-8",                 "T/m³/day"),
+    (67, "IRON_MAKING", "BF Productivity",        "BSP Plant Shop",           "T/m³/day"),
     # ── SMS-II Consumption (rows 76-78) ─────────────────────────────────────
-    (76, "BOF", "SMS-II Consumption",            "Hot Metal",                "Kg/T CS"),
-    (77, "BOF", "SMS-II Consumption",            "Scrap",                    "Kg/T CS"),
-    (78, "BOF", "SMS-II Consumption",            "Total Metallic Charge",    "Kg/T CS"),
+    (76, "SMS", "SMS-II Consumption",            "Hot Metal",                "Kg/TCS"),
+    (77, "SMS", "SMS-II Consumption",            "Scrap",                    "Kg/TCS"),
+    (78, "SMS", "SMS-II Consumption",            "Total Metallic Charge",    "Kg/TCS"),
     # ── SMS-III Consumption (rows 90-92) ────────────────────────────────────
-    (90, "BOF", "SMS-III Consumption",           "Hot Metal",                "Kg/T CS"),
-    (91, "BOF", "SMS-III Consumption",           "Scrap",                    "Kg/T CS"),
-    (92, "BOF", "SMS-III Consumption",           "Total Metallic Charge",    "Kg/T CS"),
+    (90, "SMS", "SMS-III Consumption",           "Hot Metal",                "Kg/TCS"),
+    (91, "SMS", "SMS-III Consumption",           "Scrap",                    "Kg/TCS"),
+    (92, "SMS", "SMS-III Consumption",           "Total Metallic Charge",    "Kg/TCS"),
     # ── Rail & Structural Mill — RSM ─────────────────────────────────────────
     ( 97, "MILL_BSP", "Rail & Structural Mill",  "Yield",                    "%"),
-    ( 98, "MILL_BSP", "Rail & Structural Mill",  "Rolling Rate",             "T/Hr."),
+    ( 98, "MILL_BSP", "Rail & Structural Mill",  "Rolling Rate",             "T/Hr"),
     ( 99, "MILL_BSP", "Rail & Structural Mill",  "Mill Availability",        "%"),
     (100, "MILL_BSP", "Rail & Structural Mill",  "Mill Utilisation",         "%"),
     (137, "MILL_BSP", "Rail & Structural Mill",  "Heat Consumption",         "103Kcal/T"),
     (153, "MILL_BSP", "Rail & Structural Mill",  "Power Consumption",        "Kwh/T"),
     # ── Universal Rail Mill — URM ─────────────────────────────────────────────
     (103, "MILL_BSP", "Universal Rail Mill",     "Yield",                    "%"),
-    (104, "MILL_BSP", "Universal Rail Mill",     "Rolling Rate",             "T/Hr."),
+    (104, "MILL_BSP", "Universal Rail Mill",     "Rolling Rate",             "T/Hr"),
     (105, "MILL_BSP", "Universal Rail Mill",     "Mill Availability",        "%"),
     (106, "MILL_BSP", "Universal Rail Mill",     "Mill Utilisation",         "%"),
     (138, "MILL_BSP", "Universal Rail Mill",     "Heat Consumption",         "103Kcal/T"),
     (154, "MILL_BSP", "Universal Rail Mill",     "Power Consumption",        "Kwh/T"),
     # ── Merchant Mill — MM ───────────────────────────────────────────────────
     (109, "MILL_BSP", "Merchant Mill",           "Yield",                    "%"),
-    (110, "MILL_BSP", "Merchant Mill",           "Rolling Rate",             "T/Hr."),
+    (110, "MILL_BSP", "Merchant Mill",           "Rolling Rate",             "T/Hr"),
     (111, "MILL_BSP", "Merchant Mill",           "Mill Availability",        "%"),
     (112, "MILL_BSP", "Merchant Mill",           "Mill Utilisation",         "%"),
     (139, "MILL_BSP", "Merchant Mill",           "Heat Consumption",         "103Kcal/T"),
     (155, "MILL_BSP", "Merchant Mill",           "Power Consumption",        "Kwh/T"),
     # ── Wire Rod Mill — WRM ──────────────────────────────────────────────────
     (115, "MILL_BSP", "Wire Rod Mill",           "Yield",                    "%"),
-    (116, "MILL_BSP", "Wire Rod Mill",           "Rolling Rate",             "T/Hr."),
+    (116, "MILL_BSP", "Wire Rod Mill",           "Rolling Rate",             "T/Hr"),
     (117, "MILL_BSP", "Wire Rod Mill",           "Mill Availability",        "%"),
     (118, "MILL_BSP", "Wire Rod Mill",           "Mill Utilisation",         "%"),
     (140, "MILL_BSP", "Wire Rod Mill",           "Heat Consumption",         "103Kcal/T"),
     (156, "MILL_BSP", "Wire Rod Mill",           "Power Consumption",        "Kwh/T"),
     # ── Bar & Rod Mill — BRM ─────────────────────────────────────────────────
     (121, "MILL_BSP", "Bar & Rod Mill",          "Yield",                    "%"),
-    (122, "MILL_BSP", "Bar & Rod Mill",          "Rolling Rate",             "T/Hr."),
+    (122, "MILL_BSP", "Bar & Rod Mill",          "Rolling Rate",             "T/Hr"),
     (123, "MILL_BSP", "Bar & Rod Mill",          "Mill Availability",        "%"),
     (124, "MILL_BSP", "Bar & Rod Mill",          "Mill Utilisation",         "%"),
     # ── Plate Mill ───────────────────────────────────────────────────────────
     (127, "MILL_BSP", "Plate Mill",              "Yield",                    "%"),
-    (128, "MILL_BSP", "Plate Mill",              "Rolling Rate",             "T/Hr."),
+    (128, "MILL_BSP", "Plate Mill",              "Rolling Rate",             "T/Hr"),
     (130, "MILL_BSP", "Plate Mill",              "Mill Availability",        "%"),
     (131, "MILL_BSP", "Plate Mill",              "Mill Utilisation",         "%"),
     (141, "MILL_BSP", "Plate Mill",              "Heat Consumption",         "103Kcal/T"),
@@ -373,46 +379,46 @@ _OISCO_UNIT_COL   = 4
 PARAM_MAP_OISCO: List[tuple] = [
     # (row_1based, group_code, section, label, unit)
     # ── Blast Furnace Operations (rows 9-20) ─────────────────────────────────
-    ( 9, "IRON_MAKING", "BF Operations (BSP)", "CDI Rate (Shop 1-8)",     "Kg/THM"),
-    (11, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-4",                "Kg/THM"),
-    (12, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-5",                "Kg/THM"),
-    (13, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-6",                "Kg/THM"),
-    (14, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-7",                "Kg/THM"),
-    (15, "IRON_MAKING", "BF Operations (BSP)", "CDI BF-8",                "Kg/THM"),
-    (16, "IRON_MAKING", "BF Operations (BSP)", "Fuel Rate (Shop 1-8)",    "Kg/THM"),
-    (17, "IRON_MAKING", "BF Operations (BSP)", "Pellet % in Burden",      "%"),
-    (18, "IRON_MAKING", "BF Operations (BSP)", "LD Slag Usage (Shop 1-8)","Kg/THM"),
-    (19, "IRON_MAKING", "BF Operations (BSP)", "Not Dry Cast (Shop 1-8)", "%"),
-    (20, "IRON_MAKING", "BF Operations (BSP)", "Coal to HM Ratio",        "Ratio"),
+    ( 9, "IRON_MAKING", "CDI",                 "BSP Plant Shop",          "Kg/THM"),
+    (11, "IRON_MAKING", "CDI",                 "BSP BF-4",                "Kg/THM"),
+    (12, "IRON_MAKING", "CDI",                 "BSP BF-5",                "Kg/THM"),
+    (13, "IRON_MAKING", "CDI",                 "BSP BF-6",                "Kg/THM"),
+    (14, "IRON_MAKING", "CDI",                 "BSP BF-7",                "Kg/THM"),
+    (15, "IRON_MAKING", "CDI",                 "BSP BF-8",                "Kg/THM"),
+    (16, "IRON_MAKING", "Fuel Rate",           "BSP Plant Shop",          "Kg/THM"),
+    (17, "IRON_MAKING", "Pellet in Burden",    "BSP Plant Shop",          "%"),
+    (18, "IRON_MAKING", "LD Slag Usage",       "BSP Plant Shop",          "Kg/THM"),
+    (19, "IRON_MAKING", "Not Dry Cast",        "BSP Plant Shop",          "%"),
+    (20, "MAJOR",       "Coal to Hot Metal",   "BSP",                     "Ratio"),
     # ── SMS-II Operations (rows 22-36) ───────────────────────────────────────
-    (22, "BOF", "SMS-II Operations (BSP)", "Converter Availability",      "% ICH"),
-    (23, "BOF", "SMS-II Operations (BSP)", "Converter Utilisation",       "% Avail hr"),
-    (24, "BOF", "SMS-II Operations (BSP)", "Tap to Tap Time",             "Minutes"),
-    (25, "BOF", "SMS-II Operations (BSP)", "Average Blows/Day",           "Heats/Day"),
-    (26, "BOF", "SMS-II Operations (BSP)", "Average Heat Weight",         "Tonnes"),
-    (27, "BOF", "SMS-II Operations (BSP)", "Avg. Lining Life",            "Heats"),
-    (28, "BOF", "SMS-II Operations (BSP)", "Fe-Mn Consumption",           "Kg/TCS"),
-    (29, "BOF", "SMS-II Operations (BSP)", "Fe-Si Consumption",           "Kg/TCS"),
-    (30, "BOF", "SMS-II Operations (BSP)", "Si-Mn Consumption",           "Kg/TCS"),
-    (31, "BOF", "SMS-II Operations (BSP)", "Oxygen Consumption",          "NM3/TCS"),
-    (32, "BOF", "SMS-II Operations (BSP)", "Alumina Consumption",         "Kg/TCS"),
-    (35, "BOF", "SMS-II Operations (BSP)", "LD Gas Recovery",             "CuM/T"),
-    (36, "BOF", "SMS-II Operations (BSP)", "DS Heats",                    "Nos"),
+    (22, "SMS", "SMS-II Operations (BSP)", "Converter Availability",      "% ICH"),
+    (23, "SMS", "SMS-II Operations (BSP)", "Converter Utilisation",       "% Avail hr"),
+    (24, "SMS", "SMS-II Operations (BSP)", "Tap to Tap Time",             "Min"),
+    (25, "SMS", "SMS-II Operations (BSP)", "Average Blows/Day",           "Heats/Day"),
+    (26, "SMS", "SMS-II Operations (BSP)", "Average Heat Weight",         "T"),
+    (27, "SMS", "SMS-II Operations (BSP)", "Avg. Lining Life",            "Heats"),
+    (28, "SMS", "SMS-II Operations (BSP)", "Fe-Mn Consumption",           "Kg/TCS"),
+    (29, "SMS", "SMS-II Operations (BSP)", "Fe-Si Consumption",           "Kg/TCS"),
+    (30, "SMS", "SMS-II Operations (BSP)", "Si-Mn Consumption",           "Kg/TCS"),
+    (31, "SMS", "SMS-II Operations (BSP)", "Oxygen Consumption",          "Nm³/TCS"),
+    (32, "SMS", "SMS-II Operations (BSP)", "Alumina Consumption",         "Kg/TCS"),
+    (35, "SMS", "SMS-II Operations (BSP)", "LD Gas Recovery",             "m³/T"),
+    (36, "SMS", "SMS-II Operations (BSP)", "DS Heats",                    "Nos."),
     # ── SMS-III Operations (rows 38-51) ──────────────────────────────────────
-    (38, "BOF", "SMS-III Operations (BSP)", "Converter Availability",     "% ICH"),
-    (39, "BOF", "SMS-III Operations (BSP)", "Converter Utilisation",      "% Avail hr"),
-    (40, "BOF", "SMS-III Operations (BSP)", "Tap to Tap Time",            "Minutes"),
-    (41, "BOF", "SMS-III Operations (BSP)", "Average Blows/Day",          "Heats/Day"),
-    (42, "BOF", "SMS-III Operations (BSP)", "Average Heat Weight",        "Tonnes"),
-    (43, "BOF", "SMS-III Operations (BSP)", "Fe-Mn Consumption",          "Kg/TCS"),
-    (44, "BOF", "SMS-III Operations (BSP)", "Fe-Si Consumption",          "Kg/TCS"),
-    (45, "BOF", "SMS-III Operations (BSP)", "Si-Mn Consumption",          "Kg/TCS"),
-    (46, "BOF", "SMS-III Operations (BSP)", "Oxygen Consumption",         "NM3/TCS"),
-    (47, "BOF", "SMS-III Operations (BSP)", "Alumina Consumption",        "Kg/TCS"),
-    (50, "BOF", "SMS-III Operations (BSP)", "LD Gas Recovery",            "CuM/T"),
-    (51, "BOF", "SMS-III Operations (BSP)", "DS Heats",                   "Nos"),
+    (38, "SMS", "SMS-III Operations (BSP)", "Converter Availability",     "% ICH"),
+    (39, "SMS", "SMS-III Operations (BSP)", "Converter Utilisation",      "% Avail hr"),
+    (40, "SMS", "SMS-III Operations (BSP)", "Tap to Tap Time",            "Min"),
+    (41, "SMS", "SMS-III Operations (BSP)", "Average Blows/Day",          "Heats/Day"),
+    (42, "SMS", "SMS-III Operations (BSP)", "Average Heat Weight",        "T"),
+    (43, "SMS", "SMS-III Operations (BSP)", "Fe-Mn Consumption",          "Kg/TCS"),
+    (44, "SMS", "SMS-III Operations (BSP)", "Fe-Si Consumption",          "Kg/TCS"),
+    (45, "SMS", "SMS-III Operations (BSP)", "Si-Mn Consumption",          "Kg/TCS"),
+    (46, "SMS", "SMS-III Operations (BSP)", "Oxygen Consumption",         "Nm³/TCS"),
+    (47, "SMS", "SMS-III Operations (BSP)", "Alumina Consumption",        "Kg/TCS"),
+    (50, "SMS", "SMS-III Operations (BSP)", "LD Gas Recovery",            "m³/T"),
+    (51, "SMS", "SMS-III Operations (BSP)", "DS Heats",                   "Nos."),
     # ── Utilities (row 54) ───────────────────────────────────────────────────
-    (54, "IRON_MAKING", "Utilities (BSP)", "Sp. Water Consumption",       "CuM/TCS"),
+    (54, "BSP",          "Utilities (BSP)", "Sp. Water Consumption",       "m³/TCS"),
 ]
 
 
@@ -700,21 +706,35 @@ def _detect_oisco_month_from_title(ws) -> Optional[str]:
 
 
 def _detect_oisco_columns(ws, m_num: str):
-    """Scan row 6 for month abbreviation; return (data_col, cum_col) 1-based."""
+    """Scan row 6 for month abbreviation and CUM header; return (data_col, cum_col) 1-based.
+
+    The OISCO layout is: ... | APR | MAY | ... | CUM. |
+    For earlier months (e.g. April), unused month columns exist between the
+    data column and the CUM. column, so cum_col = data_col + 1 would land on an
+    empty month column, not on CUM.  We therefore scan explicitly for CUM.
+    """
     expected = _MONTH_NUM_TO_HDR.get(m_num, "")
+    data_col = None
+    cum_col  = None
     for c in range(1, ws.max_column + 2):
         v = str(ws.cell(_OISCO_HEADER_ROW, c).value or "").strip().upper()
         if v == expected:
-            return c, c + 1
-    found = [
-        str(ws.cell(_OISCO_HEADER_ROW, c).value or "").strip()
-        for c in range(1, ws.max_column + 1)
-        if ws.cell(_OISCO_HEADER_ROW, c).value
-    ]
-    raise ValueError(
-        f"Month header '{expected}' not found in row {_OISCO_HEADER_ROW}. "
-        f"Found: {found}. Ensure the file is for the selected month."
-    )
+            data_col = c
+        if v.startswith("CUM"):          # "CUM." / "CUMULATIVE"
+            cum_col = c
+    if data_col is None:
+        found = [
+            str(ws.cell(_OISCO_HEADER_ROW, c).value or "").strip()
+            for c in range(1, ws.max_column + 1)
+            if ws.cell(_OISCO_HEADER_ROW, c).value
+        ]
+        raise ValueError(
+            f"Month header '{expected}' not found in row {_OISCO_HEADER_ROW}. "
+            f"Found: {found}. Ensure the file is for the selected month."
+        )
+    if cum_col is None:
+        cum_col = data_col + 1           # fallback: adjacent column
+    return data_col, cum_col
 
 
 def _extract_oisco_preview(wb, report_month: str) -> dict:
@@ -796,20 +816,58 @@ def _extract_oisco_preview(wb, report_month: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
-    """Preview BSP PPC MIS .xls: production from sheet S1 only."""
+    """Preview BSP PPC MIS monthly report (S1 sheet): production + opening stock.
 
-    wb_raw = xlrd.open_workbook(file_path)
-    ws_s1 = wb_raw.sheet_by_name("S1")
+    Supports both .xls (xlrd) and .xlsx (openpyxl) formats.
+    """
+    import datetime as _dt
 
-    n1_raw = ws_s1.cell_value(0, 13)
-    if n1_raw and isinstance(n1_raw, float) and n1_raw > 0:
-        y, m, *_ = xlrd.xldate_as_tuple(n1_raw, wb_raw.datemode)
-        db_month = f"{y}-{m:02d}"
-        logger.info("BSP PPC MIS preview: month from S1!N1 → %s", db_month)
-    elif report_month:
-        db_month = report_month
+    is_xls = file_path.lower().endswith(".xls")
+
+    if is_xls:
+        wb_raw = xlrd.open_workbook(file_path)
+        ws_s1  = wb_raw.sheet_by_name("S1")
+        wb_sheets = wb_raw.sheet_names()
+
+        n1_raw = ws_s1.cell_value(0, 13)
+        if n1_raw and isinstance(n1_raw, float) and n1_raw > 0:
+            y, m, *_ = xlrd.xldate_as_tuple(n1_raw, wb_raw.datemode)
+            db_month = f"{y}-{m:02d}"
+        elif report_month:
+            db_month = report_month
+        else:
+            db_month = "unknown"
+
+        def _cv(r0, c0):        # 0-based
+            return ws_s1.cell_value(r0, c0)
+
     else:
-        db_month = "unknown"
+        wb_raw = openpyxl.load_workbook(file_path, data_only=True)
+        ws_s1  = wb_raw["S1"]
+        wb_sheets = wb_raw.sheetnames
+
+        n1_raw = ws_s1.cell(row=1, column=14).value
+        if isinstance(n1_raw, (_dt.datetime, _dt.date)):
+            db_month = f"{n1_raw.year}-{n1_raw.month:02d}"
+        elif report_month:
+            db_month = report_month
+        else:
+            db_month = "unknown"
+
+        def _cv(r0, c0):        # 0-based → openpyxl 1-based
+            v = ws_s1.cell(row=r0 + 1, column=c0 + 1).value
+            return None if v == "" else v
+
+    month_mismatch = bool(
+        report_month and db_month not in ("unknown", report_month)
+    )
+    if month_mismatch:
+        logger.warning(
+            "BSP PPC MIS: file month %s ≠ selected month %s — file month will be used",
+            db_month, report_month,
+        )
+    else:
+        logger.info("BSP PPC MIS preview: month → %s", db_month)
 
     COL_F, COL_J, COL_N = 5, 9, 13
     _PROD_CELLS = [
@@ -840,7 +898,7 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
 
     production_rows = []
     for item_name, row_0, col_0, do_convert, cell_ref in _PROD_CELLS:
-        raw = ws_s1.cell_value(row_0, col_0)
+        raw = _cv(row_0, col_0)
         val = _clean(raw)
         if val is not None and do_convert:
             val = round(val / 1000.0, 3)
@@ -857,15 +915,51 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
     ok_prod = sum(1 for r in production_rows if r["status"] == "ok")
     logger.info("BSP PPC MIS preview: %d/%d production rows ok for %s", ok_prod, len(production_rows), db_month)
 
+    # ── Opening stock extraction (sheet S1, closing stock = next month) ───────
+    def _next_month_str(m):
+        y, mo = int(m[:4]), int(m[5:7])
+        return f"{y+1 if mo == 12 else y}-{1 if mo == 12 else mo+1:02d}"
+
+    stock_month = _next_month_str(db_month) if db_month != "unknown" else "unknown"
+
+    N47 = _clean(_cv(46, 13))   # Slabs saleable stock (FOR SALE)
+    K47 = _clean(_cv(46, 10))   # Slabs gross stock (INPROCESS + FOR SALE)
+    N50 = _clean(_cv(49, 13))   # Total semis FOR SALE (Slabs + BB)
+    K50 = _clean(_cv(49, 10))   # Total semis gross
+    N58 = _clean(_cv(57, 13))   # Finished Steel stock
+    O63 = _clean(_cv(62, 14))   # Pig Iron stock
+
+    def _t(v):
+        return round(v / 1000, 3) if v is not None else None
+
+    sl_b = _t(N47)
+    sl_a = _t(K47 - N47)              if K47 is not None and N47 is not None else None
+    bb_b = _t(N50 - N47)              if N50 is not None and N47 is not None else None
+    bb_a = _t(K50 - N50 - K47 + N47) if all(x is not None for x in [K50, N50, K47, N47]) else None
+
+    stock_rows = [
+        {"plant": "BSP", "item_type": "SLABS",          "stock_type": "FOR SALE",  "stock_month": stock_month, "value": sl_b, "formula": "N47",            "status": "ok" if sl_b is not None else "skip"},
+        {"plant": "BSP", "item_type": "SLABS",          "stock_type": "INPROCESS", "stock_month": stock_month, "value": sl_a, "formula": "K47-N47",        "status": "ok" if sl_a is not None else "skip"},
+        {"plant": "BSP", "item_type": "BLOOM/BILLETS",  "stock_type": "FOR SALE",  "stock_month": stock_month, "value": bb_b, "formula": "N50-N47",        "status": "ok" if bb_b is not None else "skip"},
+        {"plant": "BSP", "item_type": "BLOOM/BILLETS",  "stock_type": "INPROCESS", "stock_month": stock_month, "value": bb_a, "formula": "K50-N50-K47+N47","status": "ok" if bb_a is not None else "skip"},
+        {"plant": "BSP", "item_type": "FINISHED STEEL", "stock_type": "",          "stock_month": stock_month, "value": _t(N58), "formula": "N58",         "status": "ok" if N58  is not None else "skip"},
+        {"plant": "BSP", "item_type": "PIG IRON",       "stock_type": "",          "stock_month": stock_month, "value": _t(O63), "formula": "O63",         "status": "ok" if O63  is not None else "skip"},
+    ]
+    ok_stock = sum(1 for r in stock_rows if r["status"] == "ok")
+    logger.info("BSP PPC MIS preview: %d stock rows ok for stock_month %s", ok_stock, stock_month)
+
     return {
         "source_type":        "BSP PPC MIS Monthly Report",
         "month":              db_month,
         "plant":              "BSP",
-        "workbook_sheets":    wb_raw.sheet_names(),
+        "workbook_sheets":    wb_sheets,
+        "month_mismatch":     month_mismatch,
+        "selected_month":     report_month or "",
         "production_rows":    production_rows,
         "techno_rows":        [],
         "techno_param_rows":  [],
         "special_steel_rows": [],
+        "stock_rows":         stock_rows,
     }
 
 
@@ -885,7 +979,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     wb = _open_workbook(file_path)
 
     if "S1" in wb.sheetnames:
-        logger.info("BSP: detected PPC MIS file (sheet S1) — production only")
+        logger.info("BSP: detected PPC MIS file (sheet S1) — production + stock")
         return _extract_ppc_mis_preview(file_path, report_month)
 
     if _is_bsp_ss_file(wb):
