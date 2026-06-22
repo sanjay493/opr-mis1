@@ -64,7 +64,15 @@
       "Bash(python -c \"import pdfplumber; print\\('ok'\\)\")",
       "Bash(pip show *)",
       "Bash(where python *)",
-      "Bash(pip list *)"
+      "Bash(pip list *)",
+      "Read(//h/opr-mis1/**)",
+      "PowerShell(Get-ChildItem -Path \"h:\\\\opr-mis\\\\backend\" -Name | Where-Object {$_ -match '\\\\.\\(env|conf|json|yml|yaml\\)$'})",
+      "Bash(python3 -c \"import sqlite3; conn=sqlite3.connect\\('h:/opr-mis1/mis_reports.db'\\); cur=conn.cursor\\(\\); cur.execute\\(\\\\\"SELECT name FROM sqlite_master WHERE type='table'\\\\\"\\); print\\(cur.fetchall\\(\\)\\)\")",
+      "Bash(python3 -c \"import sqlite3; conn=sqlite3.connect\\('h:/opr-mis1/backend/mis_reports.db'\\); cur=conn.cursor\\(\\); cur.execute\\(\\\\\"SELECT name FROM sqlite_master WHERE type='table'\\\\\"\\); print\\(cur.fetchall\\(\\)\\)\")",
+      "Bash(python import_techno_excel.py --dry-run)",
+      "Bash(python merge_techno_tables.py --dry-run)",
+      "Bash(python import_techno_excel.py)",
+      "Bash(python merge_techno_tables.py)"
     ]
   }
 }
