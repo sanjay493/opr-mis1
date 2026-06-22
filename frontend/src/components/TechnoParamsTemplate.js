@@ -14,9 +14,9 @@ const CELL = {
 const NUM = { ...CELL, textAlign: 'right' };
 const LBL = { ...CELL, textAlign: 'left' };
 
-// Header — plain black/white, no colour bands
+// Header — no background, black border
 const TH = {
-  backgroundColor: '#000', color: '#fff', padding: '2px 3px',
+  color: '#000', padding: '2px 3px',
   textAlign: 'center', verticalAlign: 'middle',
   border: BLACK, fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
@@ -24,8 +24,8 @@ const TH_HIST = { ...TH };
 const TH_TGT  = { ...TH };
 const TH_CUM  = { ...TH };
 
-// SAIL row — bold text only, no background, no thick border
-const SAIL = { fontWeight: 700 };
+// SAIL row — bold + top border to form a box (bottom comes from isLast blockBorder)
+const SAIL = { fontWeight: 700, borderTop: BLACK };
 
 export default function TechnoParamsTemplate({ data }) {
   if (!data) return null;

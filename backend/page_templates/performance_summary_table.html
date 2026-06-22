@@ -1,0 +1,64 @@
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2px;">
+                <h2 class="page5-6-heading">
+                    PLANT-WISE PRODUCTION PERFORMANCE :{{ short_m }}'{{ short_y }} and Apr-{{ short_m }}'{{ short_y }}
+                </h2>
+                <span class="page5-6-unit">Unit:000 T</span>
+            </div>
+            <table class="report-table page5-6-table" style="table-layout:fixed;width:100%;">
+                <colgroup>
+                    <col style="width:4%"/>
+                    <col style="width:20%"/>
+                    <col style="width:8%"/>
+                    <col style="width:5.5%"/>
+                    <col style="width:5.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:6%"/>
+                    <col style="width:6%"/>
+                    <col style="width:6%"/>
+                    <col style="width:6%"/>
+                    <col style="width:5%"/>
+                    <col style="width:6%"/>
+                    <col style="width:6%"/>
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="padding:3px 3px;"></th>
+                        <th rowspan="2" style="padding:3px 3px;text-align:left;"></th>
+                        <th rowspan="2" class="col-ann" style="padding:3px 3px;">{{ fy_str }}<br/>Plan</th>
+                        <th colspan="3" style="padding:3px 3px;">{{ short_m }}'{{ short_y }}</th>
+                        <th rowspan="2" style="padding:3px 3px;">{{ short_m }}'{{ prev_y }}<br/>Act</th>
+                        <th rowspan="2" style="padding:3px 3px;">%Gr.<br/>{{ short_m }}'{{ prev_y }}</th>
+                        <th colspan="3" style="padding:3px 3px;">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th rowspan="2" style="padding:3px 3px;">Apr-{{ short_m }}'{{ prev_y }}<br/>Act</th>
+                        <th rowspan="2" style="padding:3px 3px;">%Gr.<br/>Apr-{{ short_m }}'{{ prev_y }}</th>
+                    </tr>
+                    <tr>
+                        <th style="padding:3px 3px;">Plan</th>
+                        <th class="col-m-act" style="padding:3px 3px;">Actual</th>
+                        <th style="padding:3px 3px;">%Ful</th>
+                        <th class="col-ytd-plan" style="padding:3px 3px;">Plan</th>
+                        <th class="col-ytd-act" style="padding:3px 3px;">Actual</th>
+                        <th style="padding:3px 3px;">%Ful</th>
+                    </tr>
+                </thead>
+                {% set col_cls = ['col-ann','','col-m-act','','','','col-ytd-plan','col-ytd-act','','',''] %}
+                <tbody>
+                    {% set ns = namespace(cur_plant='', plant_rows={}) %}
+                    {% for row in page.rows %}
+                        {% if row.plant != ns.cur_plant %}
+                            {% set ns.cur_plant = row.plant %}
+                            {% set plant_size = page.rows | selectattr('plant','equalto',row.plant) | list | length %}
+                            <tr class="plant-first{% if row.plant == 'SAIL' %} sail-row{% endif %}" style="{{ 'font-weight:700;' if row.bold else '' }}">
+                                <td rowspan="{{ plant_size }}" class="page5-6-plant-cell" style="padding:2px 3px;">{{ row.plant }}</td>
+                                <td style="text-align:left;padding:2px 3px;font-weight:{{ '700' if row.bold else '400' }};">{{ row.label }}</td>
+                                {% for val in row['values'] %}<td{% if col_cls[loop.index0] %} class="{{ col_cls[loop.index0] }}"{% endif %} style="text-align:right;padding:2px 3px;">{{ val }}</td>{% endfor %}
+                            </tr>
+                        {% else %}
+                            <tr class="{% if row.plant == 'SAIL' %}sail-row{% endif %}" style="{{ 'font-weight:700;' if row.bold else '' }}">
+                                <td style="text-align:left;padding:2px 3px;font-weight:{{ '700' if row.bold else '400' }};">{{ row.label }}</td>
+                                {% for val in row['values'] %}<td{% if col_cls[loop.index0] %} class="{{ col_cls[loop.index0] }}"{% endif %} style="text-align:right;padding:2px 3px;">{{ val }}</td>{% endfor %}
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>

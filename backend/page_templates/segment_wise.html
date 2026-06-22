@@ -1,0 +1,69 @@
+        {% set cum_lbl = 'Apr-' ~ page.month_label %}
+        {% set cum_cply_lbl = 'Apr-' ~ page.cply_label %}
+        <table class="segwise-table">
+            <colgroup>
+                <col style="width:5%"><col style="width:5%"><col style="width:13%">
+                <col style="width:7%">
+                <col style="width:6%"><col style="width:6%"><col style="width:5%">
+                <col style="width:6%"><col style="width:5%">
+                <col style="width:6%"><col style="width:6%"><col style="width:5%">
+                <col style="width:6%"><col style="width:5%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th rowspan="2">Group</th>
+                    <th rowspan="2">Plant</th>
+                    <th rowspan="2" class="lbl-th">Item</th>
+                    <th rowspan="2">Plan<br/>26-27</th>
+                    <th colspan="3">{{ page.month_label }}</th>
+                    <th rowspan="2">{{ page.cply_label }}<br/>Actual</th>
+                    <th rowspan="2">% Gr.<br/>over<br/>{{ page.cply_label }}</th>
+                    <th colspan="3">{{ cum_lbl }}</th>
+                    <th rowspan="2">{{ cum_cply_lbl }}<br/>Actual</th>
+                    <th rowspan="2">% Gr<br/>Over<br/>{{ cum_cply_lbl }}</th>
+                </tr>
+                <tr>
+                    <th>Plan</th><th>Actual</th><th>%Ful</th>
+                    <th>Plan</th><th>Actual</th><th>%Ful</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in page.rows %}
+                {% if row.type == 'separator' %}
+                {# skip separators — visual sections now provided by group/plant cells #}
+                {% elif row.type in ('seg-total', 'seg-pct', 'grand-total') %}
+                <tr class="sw-{{ row.type }}">
+                    <td colspan="3" >{{ row.label }}</td>
+                    <td class="num-td">{{ row.ann_plan }}</td>
+                    <td class="num-td">{{ row.m_plan }}</td>
+                    <td class="num-td">{{ row.m_act }}</td>
+                    <td class="num-td">{{ row.m_pct }}</td>
+                    <td class="num-td">{{ row.cply_act }}</td>
+                    <td class="num-td">{{ row.m_growth }}</td>
+                    <td class="num-td">{{ row.cum_plan }}</td>
+                    <td class="num-td">{{ row.cum_act }}</td>
+                    <td class="num-td">{{ row.cum_pct }}</td>
+                    <td class="num-td">{{ row.cum_cply }}</td>
+                    <td class="num-td">{{ row.cum_growth }}</td>
+                </tr>
+                {% else %}
+                <tr class="sw-{{ row.type }}">
+                    {% if row.show_group %}<td rowspan="{{ row.group_span }}" class="sw-group-cell">{{ row.group }}</td>{% endif %}
+                    {% if row.show_plant %}<td rowspan="{{ row.plant_span }}" class="sw-plant-cell">{{ row.plant }}</td>{% endif %}
+                    <td class="lbl-td">{{ row.label }}</td>
+                    <td class="num-td">{{ row.ann_plan }}</td>
+                    <td class="num-td">{{ row.m_plan }}</td>
+                    <td class="num-td">{{ row.m_act }}</td>
+                    <td class="num-td">{{ row.m_pct }}</td>
+                    <td class="num-td">{{ row.cply_act }}</td>
+                    <td class="num-td">{{ row.m_growth }}</td>
+                    <td class="num-td">{{ row.cum_plan }}</td>
+                    <td class="num-td">{{ row.cum_act }}</td>
+                    <td class="num-td">{{ row.cum_pct }}</td>
+                    <td class="num-td">{{ row.cum_cply }}</td>
+                    <td class="num-td">{{ row.cum_growth }}</td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>

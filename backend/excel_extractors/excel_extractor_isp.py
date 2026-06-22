@@ -708,7 +708,7 @@ def _preview_maj_techno_summ(wb, db_report_month: str, month_num: str,
         ("CDI rate",                "CDI Rate",                         "Kg/THM",    41),
         ("Total Fuel",              "Fuel Rate",                        "Kg/THM",    51),
         ("BF Productivity",         "BF Productivity (Working Volume)", "T/m³/day",  81),
-        ("Gross Coal to Hot Metal", "Coal to Hot Metal",                "Kg/THM",    91),
+        ("Gross Coal to Hot Metal", "Coal to Hot Metal",                "Ratio",     91),
         ("Sp Energy Consumption",   "Specific Energy Consumption",      "G.Cal/TCS", 121),
     ]
 

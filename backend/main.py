@@ -793,15 +793,19 @@ async def confirm_extraction(payload: dict):
                 saved_plan += 1
 
             for r in payload.get("techno_rows", []):
-                cur.execute("""
-                    INSERT INTO techno_table (report_month, plant_name, parameter_name, unit, month_actual, ytd_actual)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(report_month, plant_name, parameter_name)
-                    DO UPDATE SET unit=excluded.unit, month_actual=excluded.month_actual,
-                                  ytd_actual=excluded.ytd_actual
-                """, (month, plant, r.get("parameter"), r.get("unit", ""),
-                      r.get("month_actual"), r.get("ytd_actual")))
-                if r.get("month_actual") is not None or r.get("ytd_actual") is not None:
+                # Legacy preview format: (plant_name, parameter_name) → look up param_id
+                cur.execute(
+                    "SELECT param_id FROM techno_param WHERE row_label=? AND param_name=?",
+                    (plant, r.get("parameter", "")),
+                )
+                row = cur.fetchone()
+                if row and r.get("month_actual") is not None:
+                    cur.execute("""
+                        INSERT INTO techno_actuals (report_month, param_id, actual, source)
+                        VALUES (?, ?, ?, 'excel')
+                        ON CONFLICT(report_month, param_id) DO UPDATE SET
+                            actual = excluded.actual, source = excluded.source
+                    """, (month, row[0], r["month_actual"]))
                     saved_te += 1
             conn.commit()
         finally:
@@ -823,7 +827,8 @@ async def confirm_extraction(payload: dict):
                 r.get("group_code", ""), r.get("section", ""), r.get("parameter", ""),
                 r.get("unit", ""), r.get("sort_order", 0))
             src_pri = r.get("source_priority", 5)
-            db.save_techno_value(month, pid, r.get("actual"), r.get("cum_actual"),
+            db.save_techno_value(month, pid, r.get("actual"),
+                                 till_month_actual=r.get("cum_actual"),
                                  source_priority=src_pri)
             # Mirror to canonical MAJOR param at priority 4 (won't overwrite manual priority-5 entries)
             major_pid = _IM_AVG_TO_MAJOR.get(pid)
@@ -1119,24 +1124,25 @@ async def get_techno_targets(fy: str = Query("2026-27")):
     conn = sqlite3.connect(db.DB_PATH)
     cur = conn.cursor()
     cur.execute("""
-        SELECT m.section, m.row_label, m.unit, m.param_id,
-               COALESCE(t.target, NULL) as target
-        FROM techno_param_master m
-        LEFT JOIN techno_target t ON t.param_id = m.param_id AND t.fy = ?
-        WHERE m.group_code = 'MAJOR'
-        ORDER BY m.sort_order, m.section, m.row_label
+        SELECT p.param_name, p.row_label, p.unit, p.param_id,
+               t.target
+        FROM techno_param p
+        JOIN techno_param_group g ON p.param_id = g.param_id
+        LEFT JOIN techno_target t ON t.param_id = p.param_id AND t.fy = ?
+        WHERE g.group_code = 'MAJOR'
+        ORDER BY g.sort_order, p.param_id
     """, (fy,))
     rows = cur.fetchall()
     conn.close()
 
-    # Pivot into sections
+    # Pivot by param_name (the "section" in the old schema)
     sections_map = {}
     section_order = []
-    for section, row_label, unit, param_id, target in rows:
-        if section not in sections_map:
-            sections_map[section] = {"section": section, "unit": unit, "rows": []}
-            section_order.append(section)
-        sections_map[section]["rows"].append({
+    for param_name, row_label, unit, param_id, target in rows:
+        if param_name not in sections_map:
+            sections_map[param_name] = {"section": param_name, "unit": unit, "rows": []}
+            section_order.append(param_name)
+        sections_map[param_name]["rows"].append({
             "row_label": row_label,
             "param_id": param_id,
             "target": target,
@@ -1214,12 +1220,12 @@ async def api_param_types(unit_type: str = Query(None)):
 
 @app.get("/api/techno-groups")
 async def get_techno_groups():
-    """Return distinct group_codes available in techno_param_master."""
+    """Return distinct group_codes available in techno_param_group."""
     conn = sqlite3.connect(db.DB_PATH)
     cur = conn.cursor()
     cur.execute("""
         SELECT group_code, COUNT(*) as cnt
-        FROM techno_param_master
+        FROM techno_param_group
         GROUP BY group_code
         ORDER BY group_code
     """)
@@ -1228,77 +1234,36 @@ async def get_techno_groups():
     return {"groups": rows}
 
 
-# Single-source redirect: IRON_MAKING "Avg" param_id → canonical MAJOR param_id.
-# Writes to IRON_MAKING Avg rows are stored here instead.
-# Reads for IRON_MAKING Avg rows display values from here.
-_IM_AVG_TO_MAJOR = {
-    # BF Coke Rate Avg → MAJOR Coke Rate
-    2803: 7,  2811: 8,  2816: 9,  2798: 10, 2825: 11,
-    # CDI Avg for CDI Fces → MAJOR CDI Rate
-    63: 614,  64: 615,  65: 616,  66: 617,  67: 618,
-    # BF Productivity Avg → MAJOR BF Productivity (Working Volume)
-    2810: 25, 2815: 26, 2818: 27, 2467: 28, 2827: 29,
-    # Fuel Rate Avg → MAJOR Fuel Rate
-    2805: 19, 2813: 20, 2822: 21, 2787: 22, 2828: 23,
-    # Nut Coke Rate Avg → MAJOR Nut Coke Consumption
-    2804: 13, 2812: 14, 2817: 15, 2799: 16, 2826: 17,
-    # Sinter in Burden Avg → MAJOR Sinter in Burden
-    2806: 626, 2814: 627, 2823: 628, 2792: 629, 2829: 630,
-    # Pellet in Burden Avg → MAJOR Pellet in Burden
-    2807: 632, 2824: 634, 2797: 635, 2830: 636,
-}
-
-
 @app.get("/api/techno-monthly-data")
 async def get_techno_monthly_data(group_code: str = Query(...), month: str = Query(...)):
-    """
-    Return all params for a group with their current monthly values.
-    For IRON_MAKING Avg rows, values are read from the canonical MAJOR params
-    (single-source via _IM_AVG_TO_MAJOR).
-    """
+    """Return all params for a group with their current monthly actual and till_month_actual."""
     conn = sqlite3.connect(db.DB_PATH)
     cur = conn.cursor()
     cur.execute("""
-        SELECT p.section, p.row_label, p.unit, p.param_id, p.sort_order,
-               m.actual, m.cum_actual, m.source_priority
-        FROM techno_param_master p
-        LEFT JOIN techno_monthly m ON m.param_id = p.param_id AND m.report_month = ?
-        WHERE p.group_code = ?
-        ORDER BY p.sort_order, p.section, p.row_label
+        SELECT p.param_name, p.row_label, p.unit, p.param_id, g.sort_order,
+               a.actual, a.till_month_actual, a.source
+        FROM techno_param p
+        JOIN techno_param_group g ON p.param_id = g.param_id
+        LEFT JOIN techno_actuals a ON a.param_id = p.param_id AND a.report_month = ?
+        WHERE g.group_code = ?
+        ORDER BY g.sort_order, p.param_id
     """, (month, group_code))
     rows = cur.fetchall()
-
-    # For IRON_MAKING group: overlay MAJOR values on Avg rows
-    major_overlay = {}
-    if group_code == "IRON_MAKING":
-        maj_pids = list(_IM_AVG_TO_MAJOR.values())
-        ph = ",".join("?" * len(maj_pids))
-        cur.execute(
-            f"SELECT param_id, actual, cum_actual, source_priority FROM techno_monthly "
-            f"WHERE param_id IN ({ph}) AND report_month = ?",
-            maj_pids + [month],
-        )
-        major_overlay = {r[0]: r[1:] for r in cur.fetchall()}
-
     conn.close()
 
     sections_map = {}
     section_order = []
-    for section, row_label, unit, param_id, sort_order, actual, cum_actual, src_pri in rows:
-        if section not in sections_map:
-            sections_map[section] = {"section": section, "unit": unit, "rows": []}
-            section_order.append(section)
-        # Overlay MAJOR value for Avg rows in IRON_MAKING group
-        maj_pid = _IM_AVG_TO_MAJOR.get(param_id)
-        if maj_pid and maj_pid in major_overlay:
-            actual, cum_actual, src_pri = major_overlay[maj_pid]
-        sections_map[section]["rows"].append({
+    for param_name, row_label, unit, param_id, _, actual, till_month_actual, source in rows:
+        if param_name not in sections_map:
+            sections_map[param_name] = {"section": param_name, "unit": unit, "rows": []}
+            section_order.append(param_name)
+        sections_map[param_name]["rows"].append({
             "param_id": param_id,
             "row_label": row_label,
             "unit": unit,
             "actual": actual,
-            "cum_actual": cum_actual,
-            "source_priority": src_pri,
+            "till_month_actual": till_month_actual,
+            "source": source,
         })
 
     return {
@@ -1312,8 +1277,7 @@ async def get_techno_monthly_data(group_code: str = Query(...), month: str = Que
 async def save_techno_manual(payload: dict):
     """
     Save manually entered techno values.
-    Payload: { group_code, month, rows: [{param_id, actual, cum_actual}] }
-    Writes at source_priority=5 (same as extractors — manual entry is primary).
+    Payload: { group_code, month, rows: [{param_id, actual, till_month_actual}] }
     """
     month = payload.get("month", "")
     rows = payload.get("rows", [])
@@ -1326,35 +1290,30 @@ async def save_techno_manual(payload: dict):
         param_id = r.get("param_id")
         if param_id is None:
             continue
-        raw_actual = r.get("actual")
-        raw_cum = r.get("cum_actual")
         clear = r.get("clear", False)
 
         if clear:
-            clear_pid = _IM_AVG_TO_MAJOR.get(param_id, param_id)
             conn = sqlite3.connect(db.DB_PATH)
-            conn.execute("DELETE FROM techno_monthly WHERE param_id=? AND report_month=?",
-                         (clear_pid, month))
+            conn.execute("DELETE FROM techno_actuals WHERE param_id=? AND report_month=?",
+                         (param_id, month))
             conn.commit()
             conn.close()
             cleared += 1
             continue
 
-        try:
-            actual = float(raw_actual) if raw_actual not in (None, "", "–", "-") else None
-        except (ValueError, TypeError):
-            actual = None
-        try:
-            cum_actual = float(raw_cum) if raw_cum not in (None, "", "–", "-") else None
-        except (ValueError, TypeError):
-            cum_actual = None
+        def _flt(x):
+            try:
+                return float(x) if x not in (None, "", "–", "-") else None
+            except (ValueError, TypeError):
+                return None
 
-        if actual is None and cum_actual is None:
+        actual           = _flt(r.get("actual"))
+        till_month_actual = _flt(r.get("till_month_actual"))
+
+        if actual is None and till_month_actual is None:
             continue
 
-        # Redirect IRON_MAKING Avg params to their canonical MAJOR param
-        store_pid = _IM_AVG_TO_MAJOR.get(param_id, param_id)
-        db.save_techno_monthly(store_pid, month, actual, cum_actual, source_priority=5)
+        db.save_techno_monthly(param_id, month, actual, till_month_actual, source_priority=5)
         saved += 1
 
     return {
@@ -1363,6 +1322,81 @@ async def save_techno_manual(payload: dict):
         "cleared": cleared,
         "message": f"Saved {saved} value(s), cleared {cleared} value(s) for {month}.",
     }
+
+
+# ---------------------------------------------------------------------------
+# IPT (Inter-Plant Transfer) data entry
+# ---------------------------------------------------------------------------
+
+@app.get("/api/ipt-entries")
+def get_ipt_entries(month: str = Query(..., description="YYYY-MM")):
+    conn = sqlite3.connect(db.DB_PATH)
+    cur  = conn.cursor()
+    cur.execute("""
+        SELECT item, from_plant, to_plant, unit, sort_order,
+               plan, actual, plan_tonnage, actual_tonnage
+        FROM ipt_table WHERE report_month = ?
+        ORDER BY sort_order, item, from_plant, to_plant
+    """, (month,))
+    rows = [
+        {"item": r[0], "from_plant": r[1], "to_plant": r[2],
+         "unit": r[3], "sort_order": r[4] if r[4] is not None else 0,
+         "plan": r[5], "actual": r[6],
+         "plan_tonnage": r[7], "actual_tonnage": r[8]}
+        for r in cur.fetchall()
+    ]
+    conn.close()
+    return {"month": month, "rows": rows}
+
+
+@app.post("/api/ipt-entry")
+async def save_ipt_entry_api(payload: dict):
+    month = payload.get("month", "")
+    if not month:
+        raise HTTPException(status_code=400, detail="month is required")
+
+    def _flt(v):
+        try:
+            return float(v) if v not in (None, "", "-", "--") else None
+        except (ValueError, TypeError):
+            return None
+
+    try:
+        db.save_ipt_entry(
+            month=month,
+            item=payload["item"],
+            from_plant=payload["from_plant"],
+            to_plant=payload["to_plant"],
+            unit=payload.get("unit", "T"),
+            sort_order=int(payload.get("sort_order") or 0),
+            plan=_flt(payload.get("plan")),
+            actual=_flt(payload.get("actual")),
+            plan_tonnage=_flt(payload.get("plan_tonnage")),
+            actual_tonnage=_flt(payload.get("actual_tonnage")),
+        )
+        return {"status": "ok", "message": "Saved."}
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Missing field: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ipt-delete")
+async def delete_ipt_entry_api(payload: dict):
+    month      = payload.get("month", "")
+    item       = payload.get("item", "")
+    from_plant = payload.get("from_plant", "")
+    to_plant   = payload.get("to_plant", "")
+    if not all([month, item, from_plant, to_plant]):
+        raise HTTPException(status_code=400, detail="month, item, from_plant, to_plant required")
+    conn = sqlite3.connect(db.DB_PATH)
+    conn.execute(
+        "DELETE FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
+        (month, item, from_plant, to_plant),
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "message": "Deleted."}
 
 
 if __name__ == "__main__":

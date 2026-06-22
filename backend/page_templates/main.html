@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SAIL MIS Report - {{ month }}</title>
+    <style>
+        {{ font_imports }}
+
+        * { box-sizing: border-box; }
+
+        :root {
+            --font-primary: {{ font_family_css }};
+            --font-mono: {{ mono_family_css }};
+            --sz-title:   {{ title_size }}pt;
+            --sz-heading: {{ heading_size }}pt;
+            --sz-th:      {{ th_size }}pt;
+            --sz-td:      {{ td_size }}pt;
+        }
+
+        body {
+            font-family: var(--font-primary);
+            color: #0f172a;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        @page {
+            size: A4 portrait;
+            margin: 12mm 15mm 12mm 15mm;
+        }
+
+        /* Page 4: tighter margins to maximise usable area while keeping footer clear */
+        @page page4-layout {
+            size: A4 portrait;
+            margin-top: 7mm;
+            margin-right: 10mm;
+            margin-bottom: 5mm;
+            margin-left: 10mm;
+        }
+
+        .page4-page {
+            page: page4-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        /* Pages 5–26: shared side margins; top/bottom match Playwright header/footer zones */
+        @page content-layout {
+            size: A4 portrait;
+            margin-top: 12mm;
+            margin-right: 10mm;
+            margin-bottom: 12mm;
+            margin-left: 10mm;
+        }
+
+        .page5-6-page {
+            page: content-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        .content-page {
+            page: content-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        /* Pages 27–35: techno-economic parameter pages — portrait */
+        @page techno-layout {
+            size: A4 portrait;
+            margin-top: 5mm;
+            margin-right: 5mm;
+            margin-bottom: 5mm;
+            margin-left: 5mm;
+        }
+
+        .techno-page {
+            page: techno-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        /* Page 28: same portrait layout */
+        @page techno-tight-layout {
+            size: A4 portrait;
+            margin-top: 5mm;
+            margin-right: 5mm;
+            margin-bottom: 5mm;
+            margin-left: 5mm;
+        }
+
+        .techno-tight-page {
+            page: techno-tight-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        .page {
+            page-break-after: always;
+            break-after: page;
+            page-break-inside: avoid;
+            padding: 3mm 0;
+        }
+
+        .page:last-child {
+            page-break-after: auto;
+        }
+
+        /* ══════════════════════════════════════════════════════
+           COMMON STYLES
+           ══════════════════════════════════════════════════════ */
+
+        .report-title-section {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .report-title-section h2 {
+            font-size: var(--sz-title);
+            font-weight: 700;
+            color: #0f172a;
+            text-transform: uppercase;
+            margin: 0;
+        }
+
+        .report-title-section h3 {
+            font-size: 12pt;
+            font-weight: 600;
+            color: #475569;
+            margin: 4px 0 0 0;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--sz-td);
+            margin-top: 10px;
+        }
+
+        .report-table th {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: var(--sz-th);
+            padding: 5px 4px;
+            border: 1px solid #94a3b8;
+            text-align: center;
+        }
+
+        .report-table td {
+            padding: 4px 4px;
+            border: 1px solid #cbd5e1;
+            font-family: inherit;
+            font-size: var(--sz-td);
+            text-align: right;
+        }
+
+        .report-table td.label-cell {
+            text-align: left;
+            font-family: inherit;
+            font-size: var(--sz-td);
+            font-weight: 500;
+        }
+
+        .highlights-box {
+            background-color: #f8fafc;
+            border-left: 3px solid #0284c7;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 12pt;
+        }
+
+        .highlights-box h4 {
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #0f172a;
+            margin: 0 0 5px 0;
+            font-size: 13pt;
+        }
+
+        .highlights-box ul {
+            margin: 0;
+            padding: 0 0 0 15px;
+            list-style-type: disc;
+        }
+
+        .highlights-box li {
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+
+        /* ══════════════════════════════════════════════════════
+           PAGE-SPECIFIC STYLES  (pages 1 – 14)
+           Naming: .pageN-{element}  |  common stays in .report-table
+           ══════════════════════════════════════════════════════ */
+
+        /* ─── Page 1 – Cover ────────────────────────────────── */
+        .page1-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 250mm;
+            text-align: center;
+            padding: 40mm 20mm;
+        }
+
+        .page1-accent {
+            width: 80px;
+            height: 6px;
+            background-color: #0284c7;
+            margin-bottom: 30px;
+            border-radius: 3px;
+        }
+
+        .page1-title {
+            font-size: 30pt;
+            font-weight: 900;
+            color: #0f172a;
+            line-height: 1.1;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .page1-subtitle {
+            font-size: 14pt;
+            font-weight: 500;
+            color: #475569;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 60px;
+        }
+
+        .page1-meta {
+            margin-top: auto;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 30px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            color: #64748b;
+        }
+
+        /* ─── Page 2 – Index ────────────────────────────────── */
+        .page2-heading {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #333;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #000;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        .page2-table {
+            line-height: 1.4;
+            background-color: white;
+        }
+
+        .page2-table th {
+            background-color: #f0f0f0;
+            border: 1px solid #000;
+            color: #333;
+            text-transform: none;
+            font-size: 10.5pt;
+            padding: 8px 10px;
+            font-weight: bold;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .page2-table td {
+            border: 1px solid #000;
+            font-size: 10.5pt;
+            padding: 8px 10px;
+            font-family: inherit;
+            text-align: left;
+            vertical-align: top;
+            color: #333;
+            font-weight: normal;
+        }
+
+        .page2-table td.center {
+            text-align: center;
+        }
+
+        .page2-table td.sno {
+            font-weight: bold;
+            text-align: center;
+        }
+
+        /* ─── Page 3 – SAIL Performance Summary ─────────────── */
+        .page3-section-heading {
+            font-size: 10pt;
+            font-weight: 700;
+            margin: 5px 0 3px 0;
+            color: #0f172a;
+        }
+        .page3-narrative {
+            font-size: var(--sz-td);
+            line-height: 1.4;
+            margin: 2px 0 4px 0;
+        }
+        .page3-footnote {
+            font-size: 7.5pt;
+            font-style: italic;
+            color: #475569;
+            margin-top: 2px;
+        }
+        .page3-chart-grid { margin-top: 6px; }
+        .page3-chart-row  { display: flex; gap: 4px; margin-bottom: 3px; }
+        .page3-chart-cell { flex: 1; border: 0.5px solid #e2e8f0; border-radius: 3px; padding: 2px; }
+
+        /* ─── Page 4 – Production Performance vs APP ─────────── */
+        .page4-heading {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #060177;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .page4-meta {
+            font-size: 8.5pt;
+            font-weight: 500;
+            color: #475569;
+            margin-bottom: 2px;
+        }
+
+        .page4-table { table-layout: fixed; width: 100%; border: 2.5px solid #1e293b; }
+        .page4-table th { font-size: 8.5pt; padding: 1.5px 2px; line-height: 1.0; }
+        .page4-table td { font-size: 8.5pt; padding: 1.5px 2px; line-height: 1.0; }
+        .page4-table col.c-items    { width: 10%; }
+        .page4-table col.c-plant    { width:  6%; }
+        .page4-table col.c-ann      { width:  8%; }
+        .page4-table col.c-num      { width:  6%; }
+        .page4-table col.c-num-sm   { width:5.5%; }
+
+        /* item-group block separator */
+        .page4-table tr.group-first td { border-top: 2px solid #374151; }
+
+        /* Annual APP column */
+        .page4-table td.col-ann,
+        .page4-table thead th.col-ann {
+            background-color: #dbeafe !important;
+            border-left:  2px solid #1d4ed8;
+            border-right: 2px solid #1d4ed8;
+        }
+
+        /* Month Actual column */
+        .page4-table td.col-m-act,
+        .page4-table thead th.col-m-act { background-color: #d1fae5 !important; }
+
+        /* Cumulative section left wall */
+        .page4-table td.col-ytd-app,
+        .page4-table thead th.col-ytd-app { border-left: 2.5px solid #1e293b; }
+
+        /* Cumulative Actual column */
+        .page4-table td.col-ytd-act,
+        .page4-table thead th.col-ytd-act { background-color: #d1fae5 !important; }
+
+        /* SAIL aggregate rows */
+        .page4-table tr.sail-row td {
+            font-weight: 700;
+            background-color: #eff6ff !important;
+        }
+
+        /* ─── Pages 5–6 – Plant-Wise Performance ─────────────── */
+        .page5-6-heading {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #060177;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .page5-6-unit {
+            font-size: 10pt;
+            font-weight: 500;
+            color: #475569;
+        }
+
+        .page5-6-table { table-layout: fixed; width: 100%; border: 2.5px solid #1e293b; }
+        .page5-6-table th { font-size: 8.5pt; padding: 4px 4px; line-height: 1; vertical-align: middle; }
+        .page5-6-table td { font-size: 8.5pt; padding: 4px 4px; line-height: 1; }
+
+        .page5-6-plant-cell {
+            font-size: 8.5pt;
+            font-weight: 700;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        /* plant group separator */
+        .page5-6-table tr.plant-first td { border-top: 2px solid #374151; }
+
+        /* Annual Plan column */
+        .page5-6-table td.col-ann,
+        .page5-6-table thead th.col-ann {
+            background-color: #dbeafe !important;
+            border-left:  2px solid #1d4ed8;
+            border-right: 2px solid #1d4ed8;
+        }
+
+        /* Month Actual column */
+        .page5-6-table td.col-m-act,
+        .page5-6-table thead th.col-m-act { background-color: #d1fae5 !important; }
+
+        /* Cumulative section left wall */
+        .page5-6-table td.col-ytd-plan,
+        .page5-6-table thead th.col-ytd-plan { border-left: 2.5px solid #1e293b; }
+
+        /* Cumulative Actual column */
+        .page5-6-table td.col-ytd-act,
+        .page5-6-table thead th.col-ytd-act { background-color: #d1fae5 !important; }
+
+        /* SAIL plant rows */
+        .page5-6-table tr.sail-row td {
+            font-weight: 700;
+            background-color: #eff6ff !important;
+        }
+
+        /* ─── Pages 7–13 – Month-wise Production Trend ──────── */
+        .page7-13-heading {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #060177;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .page7-13-unit {
+            font-size: 9pt;
+            font-weight: 500;
+            color: #475569;
+            text-transform: vertical-rl;
+        }
+
+        .page7-13-trend-table { font-size: 6pt !important; }
+        .page7-13-trend-table th { font-size: 5pt !important; padding: 3px 1.5px; }
+        .page7-13-trend-table td { font-size: 5.5pt !important; padding: 2.5px 1.5px; }
+
+        .page7-13-yearly-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+        .page7-13-yearly-table th {
+            font-size: 10pt; padding: 3.5px 3px; line-height: 1;
+            background: #1e3a5f; color: #fff; text-align: center; white-space: nowrap; font-weight: 700;
+        }
+        .page7-13-yearly-table th.qtr-hdr { background: #2d4f7f; }
+        .page7-13-yearly-table th.tot-hdr { background: #1a3050; }
+        .page7-13-yearly-table td {
+            font-size: 10pt; padding: 3.5px 3px; line-height: 1;
+            text-align: right; border: 0.3pt solid #cbd5e1;
+        }
+        .page7-13-yearly-table td.plant-cell {
+            font-size: 10pt; font-weight: 700; text-align: center;
+            vertical-align: middle; background: #e8edf3; color: #1e3a5f;
+        }
+        .page7-13-yearly-table td.plant-cell.agg-sail  { background: #bbf7d0; }
+        .page7-13-yearly-table td.plant-cell.agg-5p    { background: #fef08a; }
+        .page7-13-yearly-table td.year-cell {
+            font-size: 10pt; text-align: left; padding-left: 4px; white-space: nowrap;
+        }
+        .page7-13-yearly-table tr.plan-row   { background: #dbeafe; font-weight: 700; }
+        .page7-13-yearly-table tr.sail-row   { background: #dcfce7; font-weight: 700; }
+        .page7-13-yearly-table tr.fp-row     { background: #fef9c3; font-weight: 700; }
+        .page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid #64748b; }
+        .page7-13-yearly-table td.qtr-cell   { background: #f0f5ff; font-weight: 600; }
+        .page7-13-yearly-table td.total-cell { background: #e8f0fb; font-weight: 700; }
+        .page7-13-yearly-table thead tr.item-heading-row th {
+            background: white; border-bottom: 2px solid #0f172a; border-top: none;
+            padding: 0 0 4px 0; vertical-align: bottom;
+        }
+        .page7-13-yearly-table thead tr.item-heading-row th.heading-title {
+            font-size: 12pt; font-weight: 700; color: #060177;
+            text-transform: uppercase; text-align: left;
+        }
+        .page7-13-yearly-table thead tr.item-heading-row th.heading-unit {
+            font-size: 10pt; font-weight: 700; color: #1e293b;
+            text-transform: none; text-align: right; white-space: nowrap;
+        }
+
+        .page7-13-section-page {
+            page: content-layout;
+            page-break-before: always;
+            break-before: page;
+            padding: 0;
+        }
+        .page7-13-item-block {
+            padding-top: 2mm;
+            margin-bottom: 0;
+        }
+        .page7-13-separator {
+            border: none;
+            border-top: 1.5pt solid #0f172a;
+            margin: 16pt 0 10pt 0;
+        }
+
+        /* ─── Page 14 – Production by Process ───────────────── */
+        .page14-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; margin-bottom: 10pt; }
+        .page14-table th { font-size: 8pt; padding: 2px 3px; line-height: 1.1; text-align: center; vertical-align: middle; border: 1px solid #94a3b8; }
+        .page14-table td { font-size: 8.5pt; padding: 2px 3px; line-height: 1.1; text-align: right; border: 1px solid #cbd5e1; }
+        .page14-table td.plant-col { text-align: left; font-weight: 600; background-color: #f8fafc; }
+        .page14-table tr.agg-row td { font-weight: 700; background-color: #fef9c3 !important; }
+        .page14-table tr.sail-row td { font-weight: 700; background-color: #dcfce7 !important; }
+        .page14-table td.cs-col { background-color: #dbeafe !important; }
+        .page14-table td.cc-col { background-color: #d1fae5 !important; }
+        .page14-table td.prev-sep { border-left: 2.5px solid #1e293b; }
+
+        /* ── pages 15-17: Category Wise Saleable Steel ──────────────────── */
+        .catwise-wrap { margin-bottom: 6pt; }
+        .catwise-plant-title { font-weight: 700; font-size: 10pt; text-decoration: underline; margin: 4pt 0 3pt 0; }
+        .catwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; margin-bottom: 16pt; font-size: 12pt; }
+        .catwise-table col.col-cat { width: 5%; }
+        .catwise-table col.col-lbl { width: 16%; }
+        .catwise-table col.col-num { width: 7.2%; }
+        .catwise-table th { background-color: transparent; color: #1e293b; padding: 2px 3px; text-align: center; vertical-align: middle; border: 1px solid #94a3b8; font-size: 8.5pt; line-height: 1.4; font-weight: 700; }
+        .catwise-table th.cat-th { text-align: center; }
+        .catwise-table th.lbl-th { text-align: left; }
+        .catwise-table td { padding: 2px 4px; border: 1px solid #cbd5e1; line-height: 1.5; }
+        .catwise-table td.cat-td { text-align: center; font-weight: 700; vertical-align: middle; background-color: #e8f0fb; color: #1e3a5f; font-size: 6.8pt; border-right: 2px solid #94a3b8; }
+        .catwise-table td.lbl-td { text-align: left; }
+        .catwise-table td.num-td { text-align: right; }
+        .catwise-table td.cum-td { background-color: #f0f7ff; }
+        .catwise-table tr.cw-data td { background-color: #f8fafc; }
+        .catwise-table tr.cw-data td.cat-td { background-color: #e8f0fb; }
+        .catwise-table tr.cw-data td.cum-td { background-color: #e8f3ff; }
+        .catwise-table tr.cw-section-data td { background-color: #eff6ff; font-weight: 600; }
+        .catwise-table tr.cw-section-hdr td { background-color: #e2e8f0; font-weight: 700; font-size: 7.5pt; }
+        .catwise-table tr.cw-subtotal td { background-color: #fef9c3; font-weight: 700; }
+        .catwise-table tr.cw-pct td { background-color: #f1f5f9; font-style: italic; font-size: 6.8pt; }
+        .catwise-table tr.cw-total td { background-color: #dcfce7; font-weight: 700; }
+        .catwise-table tr.cw-separator { height: 3px; }
+        .catwise-table tr.cw-separator td { border: none; background: transparent; padding: 0; }
+
+        /* ── page 18: Segment Wise Production ───────────────────────────── */
+        .segwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; font-size: 7pt; }
+        .segwise-table th { background-color: #1e3a5f; color: #fff; padding: 2px 3px; text-align: center; vertical-align: middle; border: 1px solid #334155; font-size: 6.5pt; line-height: 1.2; font-weight: 600; }
+        .segwise-table th.lbl-th { text-align: left; }
+        .segwise-table td { padding: 1px 3px; border: 1px solid #cbd5e1; line-height: 1.2; }
+        .segwise-table td.lbl-td { text-align: left; }
+        .segwise-table td.num-td { text-align: right; }
+        .segwise-table td.sw-group-cell { background-color: #1e3a5f; color: #fff; font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid #334155; }
+        .segwise-table td.sw-plant-cell { background-color: #dbeafe; font-weight: 700; text-align: center; vertical-align: middle; }
+        .segwise-table tr.sw-data td { background-color: #f8fafc; }
+        .segwise-table tr.sw-seg-total td { background-color: #fef9c3; font-weight: 700; }
+        .segwise-table tr.sw-seg-pct td { background-color: #f1f5f9; font-weight: 700; font-style: italic; }
+        .segwise-table tr.sw-grand-total td { background-color: #dcfce7; font-weight: 700; }
+
+        /* ── Page-specific font overrides ───────────────────────────────── */
+        .pg-7, .pg-7 th, .pg-7 td {
+            font-family: 'Arial Narrow', Arial, sans-serif !important;
+        }
+    </style>
+    {% if page_layouts %}
+    <style>
+    {% for page in pages %}
+    {% set _pl = page_layouts.get(page.page|string, {}) %}
+    {% if _pl %}
+    {% if _pl.get('fontSize') %}
+    .pg-{{ page.page }} th,
+    .pg-{{ page.page }} td { font-size: {{ _pl.get('fontSize') }}pt !important; }
+    {% endif %}
+    {% if _pl.get('fontFamily') %}
+    .pg-{{ page.page }},
+    .pg-{{ page.page }} th,
+    .pg-{{ page.page }} td { font-family: '{{ _pl.get("fontFamily") }}', Arial, sans-serif !important; }
+    {% endif %}
+    {% if _pl.get('fitToPage') %}
+    .pg-{{ page.page }} th,
+    .pg-{{ page.page }} td { font-size: 7pt !important; padding: 1px 2px !important; line-height: 1.0 !important; }
+    .pg-{{ page.page }} .report-title-section { margin-bottom: 6px !important; }
+    .pg-{{ page.page }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; font-size: 7pt !important; }
+    .pg-{{ page.page }} .highlights-box li { margin-bottom: 1px !important; }
+    {% endif %}
+    {% endif %}
+    {% endfor %}
+    </style>
+    {% endif %}
+</head>
+<body>
+    {% set total_pages = total_report_pages %}
+    {% for page in pages %}
+    {% set _pl = page_layouts.get(page.page|string, {}) %}
+    {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
+    {% else %}
+    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %}{% if page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'special_steel', 'opening_stock', 'ipt_status') %} content-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+
+        {% if page.type == 'cover' %}{% include 'cover.html' %}
+        {% else %}
+        {% if page.type == 'index' %}{% include 'index.html' %}
+        {% elif page.type == 'summary' %}{% include 'summary.html' %}
+        {% elif page.type == 'trend' %}{% include 'trend.html' %}
+        {% elif page.type == 'trend_yearly' %}{% include 'trend_yearly.html' %}
+        {% elif page.type == 'page4_table' %}{% include 'page4_table.html' %}
+        {% elif page.type == 'performance_summary_table' %}{% include 'performance_summary_table.html' %}
+        {% elif page.type == 'concast_performance' %}{% include 'concast_performance.html' %}
+        {% elif page.type == 'prod_by_process' %}{% include 'prod_by_process.html' %}
+        {% elif page.type == 'catwise_saleable' %}{% include 'catwise_saleable.html' %}
+        {% elif page.type == 'segment_wise' %}{% include 'segment_wise.html' %}
+        {% elif page.type == 'special_steel' %}{% include 'special_steel.html' %}
+        {% elif page.type == 'opening_stock' %}{% include 'opening_stock.html' %}
+        {% elif page.type == 'ipt_status' %}{% include 'ipt_status.html' %}
+        {% elif page.type == 'techno_params' %}{% include 'techno_params.html' %}
+        {% else %}
+            <div class="report-title-section">
+                <h2>{{ page.title }}</h2>
+                {% if page.subtitle %}<h3>{{ page.subtitle }}</h3>{% endif %}
+            </div>
+            <table class="report-table">
+                <thead>
+                    <tr>{% for h in page.headers %}<th>{{ h }}</th>{% endfor %}</tr>
+                </thead>
+                <tbody>
+                    {% for row in page.rows %}
+                    <tr>
+                        <td class="label-cell">{{ row.label }}</td>
+                        {% for val in row['values'] %}<td>{{ val }}</td>{% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        {% endif %}{# end non-cover #}
+    </div>
+    {% endif %}{# end else (non-trend_section) #}
+    {% endfor %}
+</body>
+</html>

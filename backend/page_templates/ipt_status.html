@@ -1,0 +1,44 @@
+        <div style="padding:10px;font-family:Arial,sans-serif;font-size:7.5pt;">
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:6px;">{{ page.title }}</div>
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:7.5pt;">
+            <colgroup>
+              <col style="width:24%"/><col style="width:9%"/><col style="width:9%"/><col style="width:8%"/>
+              <col style="width:12.5%"/><col style="width:12.5%"/><col style="width:12.5%"/><col style="width:12.5%"/>
+            </colgroup>
+            <thead>
+              <tr style="background:#1e3a5f;color:#fff;">
+                <th rowspan="2" style="padding:3px 4px;border:1px solid #334155;text-align:left;">Item</th>
+                <th rowspan="2" style="padding:3px 4px;border:1px solid #334155;">From</th>
+                <th rowspan="2" style="padding:3px 4px;border:1px solid #334155;">To</th>
+                <th rowspan="2" style="padding:3px 4px;border:1px solid #334155;">Unit</th>
+                <th colspan="2" style="padding:3px 4px;border:1px solid #334155;">{{ page.month_label }}</th>
+                <th colspan="2" style="padding:3px 4px;border:1px solid #334155;">{{ page.cum_label }}</th>
+              </tr>
+              <tr style="background:#2d4f7f;color:#fff;">
+                <th style="padding:3px 4px;border:1px solid #334155;">Plan</th>
+                <th style="padding:3px 4px;border:1px solid #334155;">Actual</th>
+                <th style="padding:3px 4px;border:1px solid #334155;">Plan</th>
+                <th style="padding:3px 4px;border:1px solid #334155;">Actual</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for sec in page.sections %}
+              {% set sbg = '#f8fafc' if loop.index0 % 2 else '#ffffff' %}
+              {% for row in sec.rows %}
+              <tr style="background:{{ sbg }};">
+                {% if loop.first %}
+                <td rowspan="{{ sec.rows | length }}" style="padding:2px 5px;border:1px solid #94a3b8;text-align:left;font-weight:600;vertical-align:middle;">{{ sec.item }}</td>
+                {% endif %}
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:center;">{{ row.from }}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:center;">{{ row.to }}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:center;">{{ row.unit }}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:right;">{{ row.plan }}{% if row.plan_t %}<div style="font-size:5.6pt;color:#475569;">({{ row.plan_t }} T)</div>{% endif %}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:right;">{{ row.actual }}{% if row.actual_t %}<div style="font-size:5.6pt;color:#475569;">({{ row.actual_t }} T)</div>{% endif %}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:right;">{{ row.cum_plan }}{% if row.cum_plan_t %}<div style="font-size:5.6pt;color:#475569;">({{ row.cum_plan_t }} T)</div>{% endif %}</td>
+                <td style="padding:2px 5px;border:1px solid #94a3b8;text-align:right;">{{ row.cum_actual }}{% if row.cum_actual_t %}<div style="font-size:5.6pt;color:#475569;">({{ row.cum_actual_t }} T)</div>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>

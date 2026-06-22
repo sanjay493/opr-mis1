@@ -8,7 +8,7 @@ Data source: stock_table
 Stored item_types : SLABS, BLOOM/BILLETS, FINISHED STEEL, PIG IRON
 Stored stock_types: INPROCESS / FOR SALE  (SLABS, BLOOM/BILLETS only), '' otherwise.
 
-Section numbering (Steel Ingots removed):
+Section numbering:
   1 SLABS
   2 BLOOM/BILLETS
   3 SEMIS (For Sale)   = 1b + 2b
@@ -19,11 +19,10 @@ Section numbering (Steel Ingots removed):
   8 TOTAL STEEL INV.   = 4 + 7
 
 Column selection for a report month:
-  • 1st Jan of last two FYs                                (e.g. 1.1.25, 1.1.26)
-  • 1st Apr of current FY                                  (mandatory)
-  • 1st of report month and 1st of next month              (mandatory)
-  • highest / lowest SAIL total-inventory months in between (kept, others omitted)
-  • padded with months just before Apr when slots remain
+  • 1st Jan of last two FYs
+  • 1st Apr of current FY  (mandatory)
+  • 1st of report month and 1st of next month (mandatory)
+  • highest / lowest SAIL total-inventory months in between
   • Var. column = (1st of next month) − (1st Apr of same FY)
 """
 import sqlite3
@@ -41,26 +40,22 @@ def _add_months(ym: str, delta: int) -> str:
     return f"{t // 12}-{t % 12 + 1:02d}"
 
 def _col_label(ym: str) -> str:
-    """'2026-04' → '1.4.26'."""
     return f"1.{int(ym[5:7])}.{ym[2:4]}"
 
 
 # ── value helpers ─────────────────────────────────────────────────────────────
 
 def _nsum(*vals):
-    """None-aware sum: None if every input is None."""
     vs = [v for v in vals if v is not None]
     return sum(vs) if vs else None
 
 def _fmt(v):
-    """'000T value → integer display string."""
     return "" if v is None else str(int(round(v)))
 
 
 # ── data access ───────────────────────────────────────────────────────────────
 
 def _load_stock(cur, months):
-    """data[month][plant][item][stype] = tonnes"""
     ph = ",".join("?" * len(months))
     cur.execute(f"""
         SELECT stock_month, plant_name, item_type, stock_type, stock
@@ -76,10 +71,8 @@ def _g(data, m, p, item, st=""):
 
 
 def _derived(data, m, p):
-    """All computed quantities (tonnes or None) for plant p at month m."""
-    ing  = _g(data, m, p, "STEEL INGOTS")
-    sl_a = _g(data, m, p, "SLABS", "INPROCESS")
-    sl_b = _g(data, m, p, "SLABS", "FOR SALE")
+    sl_a = _g(data, m, p, "SLABS",         "INPROCESS")
+    sl_b = _g(data, m, p, "SLABS",         "FOR SALE")
     bb_a = _g(data, m, p, "BLOOM/BILLETS", "INPROCESS")
     bb_b = _g(data, m, p, "BLOOM/BILLETS", "FOR SALE")
     fin  = _g(data, m, p, "FINISHED STEEL")
@@ -89,7 +82,7 @@ def _derived(data, m, p):
     semis_inp  = _nsum(sl_a, bb_a)
     semis_tot  = _nsum(semis_sale, semis_inp)
     saleable   = _nsum(semis_sale, fin)
-    tot_inv    = _nsum(semis_inp, saleable)   # Steel Ingots excluded
+    tot_inv    = _nsum(semis_inp, saleable)
 
     return {
         "sl_a": sl_a, "sl_b": sl_b, "bb_a": bb_a, "bb_b": bb_b,
@@ -105,14 +98,13 @@ def _select_months(cur, report_month):
     y, m = int(report_month[:4]), int(report_month[5:7])
     fy_start = y if m >= 4 else y - 1
 
-    jan1 = f"{fy_start - 1}-01"          # 1st Jan, two FYs back
-    jan2 = f"{fy_start}-01"              # 1st Jan, previous FY
-    apr  = f"{fy_start}-04"              # FY opening
+    jan1 = f"{fy_start - 1}-01"
+    jan2 = f"{fy_start}-01"
+    apr  = f"{fy_start}-04"
     rep  = report_month
-    nxt  = _add_months(report_month, 1)  # closing of report month
+    nxt  = _add_months(report_month, 1)
 
     fy_cols = [apr]
-    # candidate mid-months between Apr and report month (exclusive)
     mid = []
     cm = _add_months(apr, 1)
     while cm < rep:
@@ -123,13 +115,12 @@ def _select_months(cur, report_month):
         fy_cols.append(rep)
     fy_cols.append(nxt)
 
-    free = TARGET_MONTH_COLS - 2 - len(fy_cols)   # minus the two Jan columns
+    free = TARGET_MONTH_COLS - 2 - len(fy_cols)
 
     if mid and free > 0:
         if len(mid) <= free:
             keep = mid
         else:
-            # keep highest & lowest SAIL total-inventory months, then most recent
             data = _load_stock(cur, mid)
             inv = {}
             for mm in mid:
@@ -138,7 +129,7 @@ def _select_months(cur, report_month):
             hi = max(mid, key=lambda x: inv[x])
             lo = min(mid, key=lambda x: inv[x])
             keep = {hi, lo}
-            for mm in reversed(mid):              # newest first
+            for mm in reversed(mid):
                 if len(keep) >= free:
                     break
                 keep.add(mm)
@@ -146,7 +137,6 @@ def _select_months(cur, report_month):
         fy_cols = sorted(set(fy_cols) | set(keep))
         free = TARGET_MONTH_COLS - 2 - len(fy_cols)
 
-    # pad with months just before Apr (tail of previous FY)
     pad = []
     pm = _add_months(apr, -1)
     while free > 0 and pm > jan2:
@@ -207,31 +197,31 @@ def generate_opening_stock(report_month: str) -> dict:
                 r_a = _row("[a] INPROCESS", p, va, apr_i, nxt_i, sail=is_sail)
                 r_b = _row("[b] FOR SALE",  p, vb, apr_i, nxt_i, sail=is_sail)
                 r_t = _row("TOTAL",         p, vt, apr_i, nxt_i, bold=True, sail=is_sail)
-                r_a["plant_rowspan"] = 3   # plant td spans all 3 rows
-                r_b["plant_rowspan"] = 0   # no plant td — merged into above
-                r_t["plant_rowspan"] = 0   # no plant td — merged into above
+                r_a["plant_rowspan"] = 3
+                r_b["plant_rowspan"] = 0
+                r_t["plant_rowspan"] = 0
                 rows.extend([r_a, r_b, r_t])
             return {"label": label, "code": code, "rows": rows}
 
         sections = [
-            split_section("SLABS", "1", "sl_a", "sl_b", "SLABS"),
-            split_section("BLOOM/BILLETS", "2", "bb_a", "bb_b", "BLOOM/BILLETS"),
-            simple_section("SEMIS (For Sale)", "3 (1b+2b)", "semis_sale"),
-            simple_section("SEMIS (In process)", "4 (1a+2a)", "semis_inp"),
-            simple_section("SEMIS (Total)", "5 (3+4)", "semis_tot"),
-            simple_section("FINISHED STEEL", "6", "fin"),
-            simple_section("SALEABLE STEEL (Plant)", "7 (3+6)", "saleable"),
-            simple_section("TOTAL STEEL INVENTORY (PLANT)", "8 (4+7)", "tot_inv"),
-            simple_section("PIG IRON (PLANT)", "", "pig"),
+            split_section("SLABS",                         "1",         "sl_a", "sl_b", "SLABS"),
+            split_section("BLOOM/BILLETS",                 "2",         "bb_a", "bb_b", "BLOOM/BILLETS"),
+            simple_section("SEMIS (For Sale)",             "3 (1b+2b)", "semis_sale"),
+            simple_section("SEMIS (In process)",           "4 (1a+2a)", "semis_inp"),
+            simple_section("SEMIS (Total)",                "5 (3+4)",   "semis_tot"),
+            simple_section("FINISHED STEEL",               "6",         "fin"),
+            simple_section("SALEABLE STEEL (Plant)",       "7 (3+6)",   "saleable"),
+            simple_section("TOTAL STEEL INVENTORY (PLANT)","8 (4+7)",   "tot_inv"),
+            simple_section("PIG IRON (PLANT)",             "",          "pig"),
         ]
 
         return {
-            "title": "OPENING STOCK AT SAIL PLANTS AND STOCKYARDS",
-            "unit": "'000T",
-            "variant": "opening_stock",
+            "title":      "OPENING STOCK AT SAIL PLANTS AND STOCKYARDS",
+            "unit":       "'000T",
+            "variant":    "opening_stock",
             "col_labels": [_col_label(m) for m in months],
-            "var_label": f"Var. w.r.t. {_col_label(apr)}",
-            "sections": sections,
+            "var_label":  f"Var. w.r.t. {_col_label(apr)}",
+            "sections":   sections,
         }
     finally:
         conn.close()

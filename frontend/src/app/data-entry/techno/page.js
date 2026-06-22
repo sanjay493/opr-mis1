@@ -111,9 +111,9 @@ function SectionTable({ section, rows, edits, onEdit, onClear }) {
               const key = row.param_id;
               const edit = edits[key] || {};
               const aChanged = edit.actual !== undefined && edit.actual !== String(row.actual ?? '');
-              const cChanged = edit.cum_actual !== undefined && edit.cum_actual !== String(row.cum_actual ?? '');
+              const cChanged = edit.till_month_actual !== undefined && edit.till_month_actual !== String(row.till_month_actual ?? '');
               const anyChanged = aChanged || cChanged;
-              const hasData = row.actual !== null || row.cum_actual !== null;
+              const hasData = row.actual !== null || row.till_month_actual !== null;
               return (
                 <tr key={key} style={{
                   background: anyChanged ? '#fffbeb' : idx % 2 === 0 ? '#fff' : '#f8fafc',
@@ -135,8 +135,8 @@ function SectionTable({ section, rows, edits, onEdit, onClear }) {
                   </td>
                   <td style={{ padding: '4px 6px' }}>
                     <NumInput
-                      value={edit.cum_actual !== undefined ? edit.cum_actual : String(row.cum_actual ?? '')}
-                      onChange={v => onEdit(key, 'cum_actual', v)}
+                      value={edit.till_month_actual !== undefined ? edit.till_month_actual : String(row.till_month_actual ?? '')}
+                      onChange={v => onEdit(key, 'till_month_actual', v)}
                       highlight={cChanged}
                     />
                   </td>
@@ -327,7 +327,7 @@ export default function TechnoManualEntry() {
       prev.map(sec => ({
         ...sec,
         rows: sec.rows.map(r =>
-          r.param_id === paramId ? { ...r, actual: null, cum_actual: null, source_priority: null } : r
+          r.param_id === paramId ? { ...r, actual: null, till_month_actual: null, source_priority: null } : r
         ),
       }))
     );
@@ -340,7 +340,7 @@ export default function TechnoManualEntry() {
         const row = sec.rows.find(r => r.param_id === parseInt(paramId));
         if (!row) continue;
         if (edit.actual !== undefined && edit.actual !== String(row.actual ?? '')) return true;
-        if (edit.cum_actual !== undefined && edit.cum_actual !== String(row.cum_actual ?? '')) return true;
+        if (edit.till_month_actual !== undefined && edit.till_month_actual !== String(row.till_month_actual ?? '')) return true;
       }
     }
     return false;
@@ -356,16 +356,16 @@ export default function TechnoManualEntry() {
         let origActual = null, origCum = null;
         for (const sec of sections) {
           const row = sec.rows.find(r => r.param_id === paramId);
-          if (row) { origActual = row.actual; origCum = row.cum_actual; break; }
+          if (row) { origActual = row.actual; origCum = row.till_month_actual; break; }
         }
         const newActual = edit.actual !== undefined ? edit.actual : String(origActual ?? '');
-        const newCum = edit.cum_actual !== undefined ? edit.cum_actual : String(origCum ?? '');
+        const newCum = edit.till_month_actual !== undefined ? edit.till_month_actual : String(origCum ?? '');
         if (newActual !== String(origActual ?? '') || newCum !== String(origCum ?? '')) {
-          rows.push({ param_id: paramId, actual: newActual || null, cum_actual: newCum || null });
+          rows.push({ param_id: paramId, actual: newActual || null, till_month_actual: newCum || null });
         }
       }
       for (const paramId of pendingClears) {
-        rows.push({ param_id: paramId, actual: null, cum_actual: null, clear: true });
+        rows.push({ param_id: paramId, actual: null, till_month_actual: null, clear: true });
       }
       if (!rows.length) { setStatus({ type: 'info', text: 'No changes to save.' }); return; }
 
@@ -396,7 +396,7 @@ export default function TechnoManualEntry() {
   }, [sections, filter]);
 
   const totalRows = sections.reduce((s, sec) => s + sec.rows.length, 0);
-  const filledRows = sections.reduce((s, sec) => s + sec.rows.filter(r => r.actual !== null || r.cum_actual !== null).length, 0);
+  const filledRows = sections.reduce((s, sec) => s + sec.rows.filter(r => r.actual !== null || r.till_month_actual !== null).length, 0);
 
   return (
     <main className="app-container">

@@ -67,11 +67,11 @@ function DetailTable({ data }) {
   } = data;
 
   return (
-    <div style={{ padding: '6px', fontFamily: FONT }}>
-      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
+    <div style={{ padding: '4px 6px', fontFamily: FONT }}>
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>
         {title}
       </div>
-      <div style={{ textAlign: 'right', fontSize: '0.65rem', marginBottom: 3 }}>Unit: {unit}</div>
+      <div style={{ textAlign: 'right', fontSize: '0.65rem', marginBottom: 2 }}>Unit: {unit}</div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
                       tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>

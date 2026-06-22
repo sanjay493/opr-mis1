@@ -1,0 +1,17 @@
+            <div class="report-title-section">
+                <h2>{{ page.title }}</h2>
+                {% if page.subtitle %}<h3>{{ page.subtitle }}</h3>{% endif %}
+            </div>
+            <table class="report-table page7-13-trend-table">
+                <thead>
+                    <tr>{% for h in page.headers %}<th>{{ h }}</th>{% endfor %}</tr>
+                </thead>
+                <tbody>
+                    {% for row in page.rows %}
+                    <tr>
+                        <td class="label-cell" style="font-weight: 600;">{{ row.label }}</td>
+                        {% for val in row['values'] %}<td>{{ val }}</td>{% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>

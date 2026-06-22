@@ -123,7 +123,7 @@ PARAM_MAP: List[tuple] = [
     (17, "IRON_MAKING", "Pellet in Burden",   "BSP Plant Shop",       "%",      4),
     (18, "IRON_MAKING", "LD Slag Usage",      "BSP Plant Shop",       "Kg/THM", 4),
     (19, "IRON_MAKING", "Not Dry Cast",       "BSP Plant Shop",       "%",      4),
-    (20, "MAJOR",       "Coal to Hot Metal",  "BSP",                  "Kg/THM", 4),
+    (20, "MAJOR",       "Coal to Hot Metal",  "BSP",                  "Ratio",  4),
     # ── SMS-II Operations (rows 22-36) ──────────────────────────────────
     (22, "SMS", "SMS-II Operations (BSP)", "Converter Availability",      "% ICH"),
     (23, "SMS", "SMS-II Operations (BSP)", "Converter Utilisation",       "% Avail hr"),

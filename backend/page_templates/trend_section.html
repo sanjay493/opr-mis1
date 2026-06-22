@@ -1,0 +1,58 @@
+    <div class="page7-13-section-page pg-{{ page.page }}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+        {% for item in page['items'] %}
+        <div class="page7-13-item-block">
+            <table class="page7-13-yearly-table">
+                <colgroup>
+                    <col style="width:4.5%"/>
+                    <col style="width:10%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
+                    <col style="width:5%"/>
+                    <col style="width:5.5%"/>
+                </colgroup>
+                <thead>
+                    <tr class="item-heading-row">
+                        <th colspan="15" class="heading-title">MONTH-WISE PRODUCTION TREND : {{ item.item_display }}</th>
+                        <th colspan="4" class="heading-unit">Unit: {{ item.unit }}</th>
+                    </tr>
+                    <tr>
+                        <th>Plant</th><th>Year</th>
+                        <th>Apr</th><th>May</th><th>Jun</th><th class="qtr-hdr">Q1</th>
+                        <th>Jul</th><th>Aug</th><th>Sep</th><th class="qtr-hdr">Q2</th>
+                        <th>Oct</th><th>Nov</th><th>Dec</th><th class="qtr-hdr">Q3</th>
+                        <th>Jan</th><th>Feb</th><th>Mar</th><th class="qtr-hdr">Q4</th>
+                        <th class="tot-hdr">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in item.rows %}
+                    {% set v = row['values'] %}
+                    {% set plant = row['plant'] %}
+                    {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
+                    <tr class="{{ row_cls }}">
+                        {% if row['is_first_in_plant'] %}
+                        {% set pcls %}plant-cell{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{% endset %}
+                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{{ plant }}</td>
+                        {% endif %}
+                        <td class="year-cell" style="{{ 'font-weight:700;' if row['is_plan'] else '' }}">{{ row['year_label'] }}</td>
+                        <td>{{ v[0] }}</td><td>{{ v[1] }}</td><td>{{ v[2] }}</td>
+                        <td class="qtr-cell">{{ v[3] }}</td>
+                        <td>{{ v[4] }}</td><td>{{ v[5] }}</td><td>{{ v[6] }}</td>
+                        <td class="qtr-cell">{{ v[7] }}</td>
+                        <td>{{ v[8] }}</td><td>{{ v[9] }}</td><td>{{ v[10] }}</td>
+                        <td class="qtr-cell">{{ v[11] }}</td>
+                        <td>{{ v[12] }}</td><td>{{ v[13] }}</td><td>{{ v[14] }}</td>
+                        <td class="qtr-cell">{{ v[15] }}</td>
+                        <td class="total-cell">{{ v[16] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>

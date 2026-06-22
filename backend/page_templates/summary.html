@@ -1,0 +1,75 @@
+            <div class="report-title-section">
+                <h2>{{ page.title }}: {{ short_m }}'{{ short_y }}</h2>
+            </div>
+
+            {# ── Production narrative ── #}
+            <p class="page3-section-heading" style="margin-bottom:1px;">Production:</p>
+            <p class="page3-section-heading" style="margin-top:0;margin-bottom:2px;">{{ short_m }}'{{ short_y }}:</p>
+            {% if page.production_narrative %}
+            <p class="page3-narrative">{{ page.production_narrative }}</p>
+            {% endif %}
+
+            {# ── Compact production table (5 data cols: APP, Actual, %Ful, CPLY Act, %Gr) ── #}
+            <div style="text-align:right;font-size:7.5pt;font-style:italic;margin-bottom:2px;">Unit: '000 T</div>
+            <table class="report-table" style="table-layout:fixed;width:100%;">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="width:22%;text-align:left;">Item</th>
+                        <th colspan="3" style="text-align:center;">{{ m_name }} {{ y_str }}</th>
+                        <th rowspan="2" style="text-align:center;white-space:normal;line-height:1.2;">{{ short_m }}'{{ short_prev_y }}<br/>Act.</th>
+                        <th rowspan="2" style="text-align:center;white-space:normal;line-height:1.2;">% Gr.<br/>w.r.t.<br/>{{ short_m }}'{{ short_prev_y }}</th>
+                    </tr>
+                    <tr>
+                        <th>APP</th><th>Actual</th><th>% Ful.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page.production_table %}
+                    {% set vals = row.get('values') or [] %}
+                    <tr>
+                        <td class="label-cell">{{ row.item }}</td>
+                        {% for i in range(5) %}<td style="font-weight:{{ '700' if i == 1 else '400' }}">{{ vals[i] if vals|length > i else '' }}</td>{% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p class="page3-footnote">*includes conversion</p>
+
+            {# ── Highlights ── #}
+            {% if page.highlights %}
+            <p class="page3-section-heading">Highlights:</p>
+            <div style="font-size:var(--sz-td);line-height:1.4;white-space:pre-wrap;">{% for h in page.highlights %}{{ h }}
+{% endfor %}</div>
+            {% endif %}
+
+            {# ── TE table: Target | Month | CPLY | Apr-Mon | CPLY Apr-Mon ── #}
+            <p class="page3-section-heading" style="margin-top:5px;">TE parameters performance:</p>
+            <table class="report-table" style="table-layout:fixed;width:100%;">
+                <thead>
+                    <tr>
+                        <th style="width:24%;text-align:left;">Parameter</th>
+                        <th style="width:10%;">Unit</th>
+                        <th style="width:13%;">{{ target_header }}</th>
+                        <th style="width:13%;font-weight:700;">{{ short_m }}'{{ short_y }}</th>
+                        <th style="width:13%;">{{ short_m }}'{{ short_prev_y }}</th>
+                        <th style="width:14%;">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th style="width:13%;">Apr-{{ short_m }}'{{ short_prev_y }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page.te_table %}
+                    <tr>
+                        <td class="label-cell" style="font-weight:600;">{{ row.parameter }}</td>
+                        <td class="label-cell" style="font-style:italic;color:#475569;">{{ row.unit }}</td>
+                        <td style="text-align:right;">{{ row['values'][0] if row['values']|length > 0 else '' }}</td>
+                        <td style="font-weight:700;text-align:right;">{{ row['values'][1] if row['values']|length > 1 else '' }}</td>
+                        <td style="text-align:right;">{{ row['values'][2] if row['values']|length > 2 else '' }}</td>
+                        <td style="text-align:right;">{{ row['values'][3] if row['values']|length > 3 else '' }}</td>
+                        <td style="text-align:right;">{{ row['values'][4] if row['values']|length > 4 else '' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {# ── Bar charts ── #}
+            {% if page._chart_html %}{{ page._chart_html | safe }}{% endif %}

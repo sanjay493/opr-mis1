@@ -65,7 +65,7 @@ class _Units:
     # Weight
     T         = "T"
     # Dimensionless
-    RATIO     = "ratio"
+    RATIO     = "Ratio"
 
 UNIT = _Units()
 
@@ -142,14 +142,22 @@ _NORMALIZE: dict[str, str] = {
     "tonnes":          "T",
     "tons":            "T",
     # Misc
-    "ratio":           "ratio",
+    "ratio":           "Ratio",
+    "--":              "Ratio",
     "kg/tco":          "Kg/TCO",
     "kcal/tco":        "Kcal/TCO",
     "kg/tdc":          "Kg/TDC",
 }
 
 # BF-rate params where Kg/T is a unit error (should be Kg/THM)
-_BF_RATE_SECTIONS = frozenset({"BF Coke Rate", "Nut Coke Rate", "CDI", "Blast Furnaces"})
+_BF_RATE_SECTIONS = frozenset({
+    "BF Coke Rate", "Coke Rate", "Nut Coke Rate", "CDI", "CDI Rate", "Blast Furnaces",
+})
+# Params stored as dimensionless ratio — Kg/THM label is wrong
+_RATIO_SECTIONS = frozenset({
+    "Coal to Hot Metal", "Coal to Hot Metal Ratio",
+    "Gross Coal to Hot Metal", "Coal to Hot metal ratio",
+})
 
 
 def canonical_unit(raw: str, group_code: str = "", section: str = "") -> str:
@@ -162,10 +170,32 @@ def canonical_unit(raw: str, group_code: str = "", section: str = "") -> str:
         return raw or ""
     key = raw.strip().lower()
     result = _NORMALIZE.get(key, raw.strip())
+    # Coal to Hot Metal is dimensionless ratio — any Kg/T* label is wrong
+    if section in _RATIO_SECTIONS and result in ("Kg/THM", "Kg/T", "Kg/TCS"):
+        result = "Ratio"
     # Context correction: Kg/T in BF-rate sections means Kg/THM
-    if result == "Kg/T" and section in _BF_RATE_SECTIONS:
+    elif result == "Kg/T" and section in _BF_RATE_SECTIONS:
         result = "Kg/THM"
     return result
+
+
+# ── Canonical parameter name normalisation ───────────────────────────────────
+
+_NAME_NORMALIZE: dict[str, str] = {
+    "bf coke rate":                     "Coke Rate",
+    "bf productivity (working volume)": "BF Productivity",
+    "gross coal to hot metal":          "Coal to Hot Metal",
+    "coal to hot metal ratio":          "Coal to Hot Metal",
+    "nut coke consumption":             "Nut Coke Rate",
+    "cdi":                              "CDI Rate",
+}
+
+
+def canonical_name(raw: str) -> str:
+    """Return the canonical parameter name for *raw* (case-insensitive lookup)."""
+    if not raw:
+        return raw or ""
+    return _NAME_NORMALIZE.get(raw.strip().lower(), raw.strip())
 
 
 # ── One-time DB migration ─────────────────────────────────────────────────────
