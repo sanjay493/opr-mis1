@@ -773,9 +773,9 @@ def _extract_oisco_preview(wb, report_month: str) -> dict:
     if file_m_num and m_num and file_m_num != m_num:
         file_m_int = int(file_m_num)
         ext_m_int = int(m_num)
-        # In fiscal year (Apr-Mar), need special handling
-        # For simplicity: if extraction month > file month, it's likely a prior FY month
-        extracting_prior_month = ext_m_int > file_m_int  # e.g., extracting 02 from 03 file
+        # If extraction month < file month, it's a prior month (same FY)
+        # Cumulative in the file (column Q) is till report month, not extraction month
+        extracting_prior_month = ext_m_int < file_m_int  # e.g., extracting 02 from 03 file
 
         if extracting_prior_month:
             logger.warning(
