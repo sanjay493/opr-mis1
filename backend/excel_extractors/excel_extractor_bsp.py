@@ -767,16 +767,36 @@ def _extract_oisco_preview(wb, report_month: str) -> dict:
 
     file_m_num = _detect_oisco_month_from_title(ws)
     header_ok  = (file_m_num == m_num)
-    if not header_ok:
-        logger.warning(
-            "OISCO: file title month %r does not match user-selected %r. Proceeding.",
-            file_m_num, m_num,
-        )
+
+    # Check if extracting for a month prior to the file's report month
+    extracting_prior_month = False
+    if file_m_num and m_num and file_m_num != m_num:
+        file_m_int = int(file_m_num)
+        ext_m_int = int(m_num)
+        # In fiscal year (Apr-Mar), need special handling
+        # For simplicity: if extraction month > file month, it's likely a prior FY month
+        extracting_prior_month = ext_m_int > file_m_int  # e.g., extracting 02 from 03 file
+
+        if extracting_prior_month:
+            logger.warning(
+                "OISCO: Extracting data for month %r from file with report month %r. "
+                "Cumulative data will be skipped (cumulative in file is till report month %r, not %r).",
+                _MONTH_FULL.get(m_num, m_num),
+                _MONTH_FULL.get(file_m_num, file_m_num),
+                _MONTH_FULL.get(file_m_num, file_m_num),
+                _MONTH_FULL.get(m_num, m_num),
+            )
+        else:
+            logger.warning(
+                "OISCO: file title month %r does not match user-selected %r. Proceeding.",
+                file_m_num, m_num,
+            )
 
     rows_out: List[Dict[str, Any]] = []
     for sort_idx, (row_1b, group, section, param, unit) in enumerate(PARAM_MAP_OISCO):
         actual_val = _clean(ws.cell(row_1b, data_col).value)
-        cum_val    = _clean(ws.cell(row_1b, cum_col).value)
+        # Skip cumulative when extracting for a prior month (cumulative in file is till report month)
+        cum_val    = None if extracting_prior_month else _clean(ws.cell(row_1b, cum_col).value)
         file_label = str(ws.cell(row_1b, _OISCO_LABEL_COL).value or "").strip().replace("\n", " ")
         cell_ref   = f"{data_ltr}{row_1b}/{cum_ltr}{row_1b}"
         status     = "ok" if (actual_val is not None or cum_val is not None) else "skip"
