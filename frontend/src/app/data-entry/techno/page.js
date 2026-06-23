@@ -19,7 +19,6 @@ const YEARS = Array.from({ length: 8 }, (_, i) => (2022 + i).toString());
 // Fallback group metadata if API fails
 const FALLBACK_GROUPS = {
   IRON_MAKING: { label: 'Iron Making — Blast Furnace', type: 'entry' },
-  BSL:         { label: 'Iron Making — BSL Furnaces', type: 'entry' },
   COKE_SINTER: { label: 'Coke & Sinter', type: 'entry' },
   SMS:         { label: 'Steel Making — SMS', type: 'entry' },
   MILL_BSP:    { label: 'Mills — BSP', type: 'entry' },

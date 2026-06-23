@@ -21,15 +21,16 @@ Successfully restructured the techno parameter grouping architecture from a data
 ### Before & After
 
 **Group Counts:**
-| Group | Before | After | Change |
-|-------|--------|-------|--------|
-| IRON_MAKING | 197 | 211 | +48 plant-level BF params |
-| MAJOR | 81 | 81 | — (unchanged) |
-| SMS | 185 | 185 | — (unchanged) |
-| COKE_SINTER | 85 | 85 | — (unchanged) |
-| GENERAL | — | 6 | **NEW** |
-| MILLS | — | 103 | **NEW** |
-| **Total groups** | 10 | 12 | — |
+| Group | Before | After (Restructuring) | After (BSL Merge) | Change |
+|-------|--------|-------|--------|-------|
+| IRON_MAKING | 197 | 211 | 250 | +53 params (48 MAJOR BF + 39 from BSL merge) |
+| MAJOR | 81 | 81 | 81 | — (unchanged) |
+| SMS | 185 | 185 | 185 | — (unchanged) |
+| COKE_SINTER | 85 | 85 | 85 | — (unchanged) |
+| GENERAL | — | 6 | 6 | **NEW** |
+| MILLS | — | 103 | 103 | **NEW** |
+| BSL | 75 | 75 | — | **MERGED into IRON_MAKING** |
+| **Total groups** | 10 | 12 | 11 | — |
 
 ### Data Integrity
 
@@ -46,8 +47,7 @@ Users now select groups by **technical area** instead of mixed plant/page concer
 
 | Group | Label | Entities | Use Case |
 |-------|-------|----------|----------|
-| **IRON_MAKING** | Iron Making — Blast Furnace | Plant-level + per-furnace BF rates | BF techno data entry |
-| **BSL** | Iron Making — BSL Furnaces | BSL per-furnace detail | BSL furnace detail (subset) |
+| **IRON_MAKING** | Iron Making — Blast Furnace | Plant-level + all furnaces (BSP, DSP, RSP, BSL, ISP, SAIL) | BF techno data entry (consolidated) |
 | **COKE_SINTER** | Coke & Sinter | Coke oven + sinter plant params | Coke/sinter techno data entry |
 | **SMS** | Steel Making — SMS | SMS shop-wise params | SMS/BOF shop data entry |
 | **MILL_BSP** | Mills — BSP | BSP mill params | BSP mill data entry |
