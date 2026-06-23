@@ -274,12 +274,18 @@ def _fetch_prod_multi(cur, plants, item_names, months):
 
 def _compute_sail(techno_data, hm_by_plant, cs_by_plant, months):
     """Compute SAIL-level aggregate for the given months.
-    Returns {("SAIL", parameter_name): value}."""
+    Returns {("SAIL", parameter_name): value}.
+
+    Primary: production-weighted average (HM for BF params, CS for SMS/SEC).
+    Fallback: simple average of available plant values when no production
+              weights exist in production_table for those months.
+    """
     out = {}
 
     # BF params weighted by Hot Metal
     for param in _BF_HM_PARAMS:
         num = den = 0.0
+        plain = []
         for m in months:
             for p in _BF_PLANTS:
                 v = techno_data.get((p, param), {}).get(m)
@@ -287,10 +293,19 @@ def _compute_sail(techno_data, hm_by_plant, cs_by_plant, months):
                 if v is not None and w is not None and w > 0:
                     num += v * w
                     den += w
-        out[("SAIL", param)] = num / den if den > 0 else None
+                elif v is not None:
+                    plain.append(v)
+        if den > 0:
+            out[("SAIL", param)] = num / den
+        elif plain:
+            out[("SAIL", param)] = sum(plain) / len(plain)
+        else:
+            out[("SAIL", param)] = None
 
     # BF Productivity: SAIL = ΣHM / Σ(HM / plant_BFprod)
+    # Fallback: equal-weight harmonic mean
     t_hm = t_denom = 0.0
+    plain_bfp = []
     for m in months:
         for p in _BF_PLANTS:
             hm  = hm_by_plant.get(p, {}).get(m)
@@ -298,11 +313,20 @@ def _compute_sail(techno_data, hm_by_plant, cs_by_plant, months):
             if hm is not None and bfp is not None and bfp > 0:
                 t_hm    += hm
                 t_denom += hm / bfp
-    out[("SAIL", "BF Productivity")] = t_hm / t_denom if t_denom > 0 else None
+            elif bfp is not None and bfp > 0:
+                plain_bfp.append(bfp)
+    if t_denom > 0:
+        out[("SAIL", "BF Productivity")] = t_hm / t_denom
+    elif plain_bfp:
+        denom = sum(1.0 / v for v in plain_bfp)
+        out[("SAIL", "BF Productivity")] = len(plain_bfp) / denom if denom else None
+    else:
+        out[("SAIL", "BF Productivity")] = None
 
     # SMS params weighted by Crude Steel / shops per plant
     for param in _SMS_PARAMS:
         num = den = 0.0
+        plain = []
         for m in months:
             for shop in _SMS_SHOPS:
                 plant = _SMS_SHOP_PLANT[shop]
@@ -313,10 +337,18 @@ def _compute_sail(techno_data, hm_by_plant, cs_by_plant, months):
                     w = cs / n
                     num += v * w
                     den += w
-        out[("SAIL", param)] = num / den if den > 0 else None
+                elif v is not None:
+                    plain.append(v)
+        if den > 0:
+            out[("SAIL", param)] = num / den
+        elif plain:
+            out[("SAIL", param)] = sum(plain) / len(plain)
+        else:
+            out[("SAIL", param)] = None
 
     # Specific Energy Consumption weighted by Crude Steel
     num = den = 0.0
+    plain = []
     for m in months:
         for p in _BF_PLANTS:
             v  = techno_data.get((p, "Specific Energy Consumption"), {}).get(m)
@@ -324,7 +356,14 @@ def _compute_sail(techno_data, hm_by_plant, cs_by_plant, months):
             if v is not None and cs is not None and cs > 0:
                 num += v * cs
                 den += cs
-    out[("SAIL", "Specific Energy Consumption")] = num / den if den > 0 else None
+            elif v is not None:
+                plain.append(v)
+    if den > 0:
+        out[("SAIL", "Specific Energy Consumption")] = num / den
+    elif plain:
+        out[("SAIL", "Specific Energy Consumption")] = sum(plain) / len(plain)
+    else:
+        out[("SAIL", "Specific Energy Consumption")] = None
 
     return out
 

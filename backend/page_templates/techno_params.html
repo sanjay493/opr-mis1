@@ -1,12 +1,11 @@
         {% set _is_major = page.group == 'MAJOR' %}
-        {% set _tsz = '12pt'  %}
-        <div style="padding:4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:{{ _tsz }};">
-          <div style="text-align:center;font-weight:700;font-size:10pt;">{{ page.title }}</div>
+        {% set _tsz = '16pt'  %}
+        <div style="padding:4px;font-family:'Roboto',sans-serif;font-size:{{ _tsz }};">
+          <div style="text-align:center;font-weight:700;font-size:{{ _tsz }};">{{ page.title }}</div>
           {% if page.subtitle %}
-          <div style="text-align:center;font-weight:600;font-size:10pt;margin-bottom:3px;">{{ page.subtitle }}</div>
+          <div style="text-align:center;font-weight:600;font-size:{{ _tsz }};margin-bottom:3px;">{{ page.subtitle }}</div>
           {% endif %}
-          {% set _tbsz = '12pt' %}
-          <table style="width:100%;border-collapse:collapse;border:1px solid #000;table-layout:fixed;font-size:{{ _tbsz }};margin-top:2px;">
+          <table style="width:100%;border-collapse:collapse;border:1px solid #000;table-layout:fixed;font-size:{{ _tsz }};margin-top:2px;">
             <colgroup>
               {% if _is_major %}
               <col style="width:20%"/><col style="width:10%"/>
@@ -50,7 +49,7 @@
               {% set _v = 'border-left:1px solid #000;border-right:1px solid #000;' %}
               {% set _bt = 'border-top:1px solid #000;'    if loop.first else '' %}
               {% set _bb = 'border-bottom:1px solid #000;' if loop.last  else '' %}
-              {% set _box = 'border-top:1.5px solid #000;border-bottom:1.5px solid #000;font-weight:900;' if _sail else (_bt ~ _bb) %}
+              {% set _box = 'border-top:1.5px solid #000;border-bottom:1.5px solid #000;font-weight:700;' if _sail else (_bt ~ _bb) %}
               {% set _td = _v ~ _box %}
               {% set _row_bg = 'background:#dcfce7;' if _sail else '' %}
               <tr style="{{ _row_bg }}">
@@ -58,14 +57,14 @@
                 {% if _is_major %}
                 {% set _sec_unit = sec.rows[0].unit if sec.rows else '' %}
                 {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:900;vertical-align:top;">{{ _sec_label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:700;vertical-align:top;">{{ _sec_label }}</td>
                 {% else %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:900;vertical-align:top;">{{ sec.label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:700;vertical-align:top;">{{ sec.label }}</td>
                 {% endif %}
                 {% endif %}
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;">{{ row.label }}</td>
                 {% if not _is_major %}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;font-size:10pt;">{{ row.unit }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;font-size:{{ _tsz }};">{{ row.unit }}</td>
                 {% endif %}
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy3 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy2 }}</td>
