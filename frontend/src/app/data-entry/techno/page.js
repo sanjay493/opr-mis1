@@ -282,6 +282,10 @@ export default function TechnoManualEntry() {
   const [showCatalogue, setShowCatalogue] = useState(false);
 
   const reportMonth = useMemo(() => formatMonth(year, month), [year, month]);
+  const currentGroupLabel = useMemo(() => {
+    const grp = groups.find(g => g.group_code === groupCode);
+    return grp ? grp.label : FALLBACK_GROUPS[groupCode]?.label || groupCode;
+  }, [groupCode, groups]);
 
   // Load catalogue data once on mount
   useEffect(() => {
@@ -525,7 +529,7 @@ export default function TechnoManualEntry() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 18, color: '#1e293b', fontWeight: 700 }}>
-              {GROUP_LABELS[groupCode] || groupCode}
+              {currentGroupLabel}
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
               Manual legacy data entry — {reportMonth}
