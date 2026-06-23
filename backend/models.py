@@ -7,10 +7,10 @@ class FontConfig(BaseModel):
     All sizes are in points (pt). Users can override per-page via page_layouts."""
     family: Optional[str] = "IBM Plex Sans"
     mono_family: Optional[str] = "IBM Plex Mono"
-    td_size: Optional[float] = 9.5      # table data cells
-    th_size: Optional[float] = 9.0      # table header cells
-    title_size: Optional[float] = 13.0  # page h2 titles
-    heading_size: Optional[float] = 10.5  # section h3 headings
+    td_size: Optional[float] = 11.5      # table data cells (increased from 9.5 for readability)
+    th_size: Optional[float] = 11.0      # table header cells (increased from 9.0 for readability)
+    title_size: Optional[float] = 15.0  # page h2 titles (increased from 13.0 for readability)
+    heading_size: Optional[float] = 12.0  # section h3 headings (increased from 10.5 for consistency)
 
 
 class PageRow(BaseModel):
