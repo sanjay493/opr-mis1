@@ -1262,7 +1262,6 @@ async def api_param_types(unit_type: str = Query(None)):
 
 _GROUP_META = {
     'IRON_MAKING': {'label': 'Iron Making — Blast Furnace',  'type': 'entry'},
-    'BSL':         {'label': 'Iron Making — BSL Furnaces',    'type': 'entry'},
     'COKE_SINTER': {'label': 'Coke & Sinter',                 'type': 'entry'},
     'SMS':         {'label': 'Steel Making — SMS',            'type': 'entry'},
     'MILL_BSP':    {'label': 'Mills — BSP',                   'type': 'entry'},

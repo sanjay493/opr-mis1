@@ -4,15 +4,9 @@
 
 ### 🔥 Iron Making — Blast Furnace
 **Group Code:** `IRON_MAKING`  
-**Entities:** Plant-level (BSP, DSP, RSP, BSL, ISP, SAIL) + Per-furnace (BSP BF-4,6,7,8; DSP BF-2,3,4; etc.)  
-**Params:** CDI Rate, Coke Rate, Nut Coke, Coal/HM, Fuel, BF Productivity, Sinter%, Pellet%  
-**Use When:** Entering or reviewing blast furnace metrics
-
-### 🔥 Iron Making — BSL Furnaces  
-**Group Code:** `BSL`  
-**Entities:** BSL per-furnace detail (BF-1, BF-2, BF-4, BF-5, Plant Shop)  
-**Params:** CDI Rate, Coke Rate, BF Scrap, etc.  
-**Use When:** Focusing on BSL furnace-specific data (subset of IRON_MAKING)
+**Entities:** Plant-level (BSP, DSP, RSP, BSL, ISP, SAIL) + Per-furnace (BSP BF-4,6,7,8; DSP BF-2,3,4; BSL BF-1,2,4,5; etc.)  
+**Params:** CDI Rate, Coke Rate, Nut Coke, Coal/HM, Fuel, BF Productivity, Sinter%, Pellet%, Hot Blast Temp, BF Scrap, etc.  
+**Use When:** Entering or reviewing blast furnace metrics (all BF data in one place)
 
 ### ♨️ Coke & Sinter
 **Group Code:** `COKE_SINTER`  
@@ -86,8 +80,7 @@ Stored in `techno_actuals` for param_id = (CDI Rate, BSP)
 
 | Group | # Params | # Plants/Entities | Estimated Rows |
 |-------|----------|-------------------|-----------------|
-| IRON_MAKING | ~30 | 6 plants + 14 furnaces | ~200 |
-| BSL | ~30 | 5 furnaces + 1 shop | ~50 |
+| IRON_MAKING | ~65 | 6 plants + all furnaces | ~250 |
 | COKE_SINTER | ~30 | Plant-level | ~30 |
 | SMS | ~15 | 8 shops | ~120 |
 | MILL_BSP | ~6 | 2–3 mill sections | ~15 |
