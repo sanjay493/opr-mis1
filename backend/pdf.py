@@ -169,10 +169,10 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
 
         _cfg_fc = FontConfig(
             family=       _g.get("font_family",  "IBM Plex Sans"),
-            td_size=      _g.get("td_size",       9.5),
-            th_size=      _g.get("th_size",       9.0),
-            title_size=   _g.get("title_size",   13.0),
-            heading_size= _g.get("heading_size", 10.5),
+            td_size=      _g.get("td_size",      11.5),  # Increased from 9.5 for better readability
+            th_size=      _g.get("th_size",      11.0),  # Increased from 9.0 for better readability
+            title_size=   _g.get("title_size",   15.0),  # Increased from 13.0 for better readability
+            heading_size= _g.get("heading_size", 12.0),  # Increased from 10.5 for consistency
         )
         fc = font_config or request.font_config or _cfg_fc
         _catalog_entry = FONT_CATALOG.get(fc.family, FONT_CATALOG[_DEFAULT_FONT])
