@@ -1,5 +1,5 @@
 {
-  "_doc": "Edit this file to customize fonts, sizes and margins. Changes apply on the next PDF generation (no restart needed). Per-page keys: fontSize (pt), fontFamily (name), marginTop/marginBottom/marginLR (mm).",
+  "_doc": "SINGLE SOURCE OF TRUTH for page layouts. Edit this file to customize fonts, sizes and margins. Changes apply on the next PDF generation (no restart needed). Do NOT override these values in page templates or frontend CSS. Per-page keys: fontSize (pt), fontFamily (name), marginTop/marginBottom/marginLR (mm).",
 
   "global": {
     "font_family":   "Arial Narrow",
@@ -21,7 +21,7 @@
     "11": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
     "12": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
     "13": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "27": { "fontFamily": "Arial Narrow", "fontSize": 8.5, "marginTop": 4, "marginBottom": 3, "marginLR": 5 },
+    "27": { "fontFamily": "Arial Narrow", "fontSize": 7, "marginTop": 4, "marginBottom": 3, "marginLR": 5, "fitToPage": true },
     "28": { "marginTop": 5, "marginBottom": 5, "marginLR": 5 }
   }
 }
