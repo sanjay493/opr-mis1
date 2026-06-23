@@ -1257,6 +1257,25 @@ async def api_param_types(unit_type: str = Query(None)):
 
 
 # ---------------------------------------------------------------------------
+# Techno group metadata
+# ---------------------------------------------------------------------------
+
+_GROUP_META = {
+    'IRON_MAKING': {'label': 'Iron Making — Blast Furnace',  'type': 'entry'},
+    'BSL':         {'label': 'Iron Making — BSL Furnaces',    'type': 'entry'},
+    'COKE_SINTER': {'label': 'Coke & Sinter',                 'type': 'entry'},
+    'SMS':         {'label': 'Steel Making — SMS',            'type': 'entry'},
+    'MILL_BSP':    {'label': 'Mills — BSP',                   'type': 'entry'},
+    'MILL_DSP':    {'label': 'Mills — DSP',                   'type': 'entry'},
+    'MILL_RSP':    {'label': 'Mills — RSP',                   'type': 'entry'},
+    'MILL_BSL':    {'label': 'Mills — BSL',                   'type': 'entry'},
+    'MILL_ISP':    {'label': 'Mills — ISP',                   'type': 'entry'},
+    'MILLS':       {'label': 'Mills — All Plants',            'type': 'entry'},
+    'GENERAL':     {'label': 'General / Plant-level',         'type': 'entry'},
+    'MAJOR':       {'label': 'Major — Page 27 Display',       'type': 'page'},
+}
+
+# ---------------------------------------------------------------------------
 # Techno manual data entry
 # ---------------------------------------------------------------------------
 
@@ -1271,7 +1290,7 @@ async def get_production_records():
 
 @app.get("/api/techno-groups")
 async def get_techno_groups():
-    """Return distinct group_codes available in techno_param_group."""
+    """Return distinct group_codes with labels and types."""
     conn = sqlite3.connect(db.DB_PATH)
     cur = conn.cursor()
     cur.execute("""
@@ -1280,7 +1299,15 @@ async def get_techno_groups():
         GROUP BY group_code
         ORDER BY group_code
     """)
-    rows = [{"group_code": r[0], "param_count": r[1]} for r in cur.fetchall()]
+    rows = []
+    for group_code, cnt in cur.fetchall():
+        meta = _GROUP_META.get(group_code, {'label': group_code, 'type': 'entry'})
+        rows.append({
+            "group_code": group_code,
+            "label": meta['label'],
+            "type": meta['type'],
+            "param_count": cnt
+        })
     conn.close()
     return {"groups": rows}
 

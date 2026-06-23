@@ -16,17 +16,20 @@ const MONTH_NUM = {
 };
 const YEARS = Array.from({ length: 8 }, (_, i) => (2022 + i).toString());
 
-// group_code → display label
-const GROUP_LABELS = {
-  IRON_MAKING:  'Iron Making — Cross-plant BF',
-  SMS:          'Steel Making — Cross-plant SMS',
-  COKE_SINTER:  'Coke & Sinter — Cross-plant',
-  MAJOR:        'Major — Cross-plant',
-  MILL_BSP:     'Mill — BSP',
-  MILL_DSP:     'Mill — DSP',
-  MILL_RSP:     'Mill — RSP',
-  MILL_BSL:     'Mill — BSL',
-  MILL_ISP:     'Mill — ISP',
+// Fallback group metadata if API fails
+const FALLBACK_GROUPS = {
+  IRON_MAKING: { label: 'Iron Making — Blast Furnace', type: 'entry' },
+  BSL:         { label: 'Iron Making — BSL Furnaces', type: 'entry' },
+  COKE_SINTER: { label: 'Coke & Sinter', type: 'entry' },
+  SMS:         { label: 'Steel Making — SMS', type: 'entry' },
+  MILL_BSP:    { label: 'Mills — BSP', type: 'entry' },
+  MILL_DSP:    { label: 'Mills — DSP', type: 'entry' },
+  MILL_RSP:    { label: 'Mills — RSP', type: 'entry' },
+  MILL_BSL:    { label: 'Mills — BSL', type: 'entry' },
+  MILL_ISP:    { label: 'Mills — ISP', type: 'entry' },
+  MILLS:       { label: 'Mills — All Plants', type: 'entry' },
+  GENERAL:     { label: 'General / Plant-level', type: 'entry' },
+  MAJOR:       { label: 'Major — Page 27 Display', type: 'page' },
 };
 
 const PRIORITY_LABEL = {
@@ -449,15 +452,28 @@ export default function TechnoManualEntry() {
         <div className="control-section">
           <h2>Parameter Group</h2>
           <select className="control-select" value={groupCode} onChange={e => setGroupCode(e.target.value)}>
-            {groups.length > 0
-              ? groups.map(g => (
-                  <option key={g.group_code} value={g.group_code}>
-                    {GROUP_LABELS[g.group_code] || g.group_code} ({g.param_count})
-                  </option>
-                ))
-              : Object.entries(GROUP_LABELS).map(([code, label]) => (
-                  <option key={code} value={code}>{label}</option>
-                ))}
+            {groups.length > 0 ? (
+              <>
+                <optgroup label="Data Entry (by Area)">
+                  {groups.filter(g => g.type === 'entry').map(g => (
+                    <option key={g.group_code} value={g.group_code}>
+                      {g.label} ({g.param_count})
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Page Display Groups">
+                  {groups.filter(g => g.type === 'page').map(g => (
+                    <option key={g.group_code} value={g.group_code}>
+                      {g.label} ({g.param_count})
+                    </option>
+                  ))}
+                </optgroup>
+              </>
+            ) : (
+              Object.entries(FALLBACK_GROUPS).map(([code, meta]) => (
+                <option key={code} value={code}>{meta.label}</option>
+              ))
+            )}
           </select>
           <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }}
             onClick={handleLoad} disabled={loading}>
