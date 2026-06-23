@@ -73,3 +73,17 @@ class ProductionEntryRequest(BaseModel):
     plant: str
     month: str
     entries: List[ProductionEntry]
+
+
+class SpecialSteelRow(BaseModel):
+    product: str
+    quality_grade: str = "TOTAL"
+    section: str = ""
+    order_qty: Optional[float] = None
+    actual_despatch: Optional[float] = None
+
+
+class SpecialSteelSaveRequest(BaseModel):
+    plant: str
+    month: str
+    rows: List[SpecialSteelRow]
