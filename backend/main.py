@@ -19,6 +19,7 @@ from page_special_steel import generate_special_steel_plant, generate_special_st
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
 from page_techno import generate_techno, TECHNO_PAGES, generate_summary_te_table, generate_summary_chart_data, compute_sail_targets
+from page_records import generate_records
 from pdf import build_pdf_response
 from layout_loader import load_layout_config
 
@@ -1258,6 +1259,15 @@ async def api_param_types(unit_type: str = Query(None)):
 # ---------------------------------------------------------------------------
 # Techno manual data entry
 # ---------------------------------------------------------------------------
+
+@app.get("/api/production-records")
+async def get_production_records():
+    """Return best/2nd-best production stats by month, quarter, half, and top-5 years."""
+    try:
+        return generate_records()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/techno-groups")
 async def get_techno_groups():
