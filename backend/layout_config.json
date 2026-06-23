@@ -3,10 +3,10 @@
 
   "global": {
     "font_family":   "Arial Narrow",
-    "td_size":        9.5,
-    "th_size":        9.0,
-    "title_size":    13.0,
-    "heading_size":  10.5
+    "td_size":       11.5,
+    "th_size":       11.0,
+    "title_size":    15.0,
+    "heading_size":  12.0
   },
 
   "pages": {
@@ -21,7 +21,7 @@
     "11": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
     "12": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
     "13": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "27": { "fontFamily": "Arial Narrow", "fontSize": 6.8, "marginTop": 4, "marginBottom": 3, "marginLR": 5 },
+    "27": { "fontFamily": "Arial Narrow", "fontSize": 8.5, "marginTop": 4, "marginBottom": 3, "marginLR": 5 },
     "28": { "marginTop": 5, "marginBottom": 5, "marginLR": 5 }
   }
 }
