@@ -10,8 +10,8 @@ Sheet layout (single sheet "Sheet1"):
 
 Coverage (35 parameters):
   BF Operations  → IRON_MAKING / BF Operations (BSP)
-  SMS-II Ops     → SMS / SMS-II Operations (BSP)
-  SMS-III Ops    → SMS / SMS-III Operations (BSP)
+  SMS-II Ops     → SMS / BSP SMS-2
+  SMS-III Ops    → SMS / BSP SMS-3
   Utilities      → IRON_MAKING / Utilities (BSP)
 """
 
@@ -124,33 +124,33 @@ PARAM_MAP: List[tuple] = [
     (18, "IRON_MAKING", "LD Slag Usage",      "BSP Plant Shop",       "Kg/THM", 4),
     (19, "IRON_MAKING", "Not Dry Cast",       "BSP Plant Shop",       "%",      4),
     (20, "MAJOR",       "Coal to Hot Metal",  "BSP",                  "Ratio",  4),
-    # ── SMS-II Operations (rows 22-36) ──────────────────────────────────
-    (22, "SMS", "SMS-II Operations (BSP)", "Converter Availability",      "% ICH"),
-    (23, "SMS", "SMS-II Operations (BSP)", "Converter Utilisation",       "% Avail hr"),
-    (24, "SMS", "SMS-II Operations (BSP)", "Tap to Tap Time",             "Minutes"),
-    (25, "SMS", "SMS-II Operations (BSP)", "Average Blows/Day",           "Heats/Day"),
-    (26, "SMS", "SMS-II Operations (BSP)", "Average Heat Weight",         "Tonnes"),
-    (27, "SMS", "SMS-II Operations (BSP)", "Avg. Lining Life",            "Heats"),
-    (28, "SMS", "SMS-II Operations (BSP)", "Fe-Mn Consumption",           "Kg/TCS"),
-    (29, "SMS", "SMS-II Operations (BSP)", "Fe-Si Consumption",           "Kg/TCS"),
-    (30, "SMS", "SMS-II Operations (BSP)", "Si-Mn Consumption",           "Kg/TCS"),
-    (31, "SMS", "SMS-II Operations (BSP)", "Oxygen Consumption",          "NM3/TCS"),
-    (32, "SMS", "SMS-II Operations (BSP)", "Alumina Consumption",         "Kg/TCS"),
-    (35, "SMS", "SMS-II Operations (BSP)", "LD Gas Recovery",             "CuM/T"),
-    (36, "SMS", "SMS-II Operations (BSP)", "DS Heats",                    "Nos"),
-    # ── SMS-III Operations (rows 38-51) ─────────────────────────────────
-    (38, "SMS", "SMS-III Operations (BSP)", "Converter Availability",     "% ICH"),
-    (39, "SMS", "SMS-III Operations (BSP)", "Converter Utilisation",      "% Avail hr"),
-    (40, "SMS", "SMS-III Operations (BSP)", "Tap to Tap Time",            "Minutes"),
-    (41, "SMS", "SMS-III Operations (BSP)", "Average Blows/Day",          "Heats/Day"),
-    (42, "SMS", "SMS-III Operations (BSP)", "Average Heat Weight",        "Tonnes"),
-    (43, "SMS", "SMS-III Operations (BSP)", "Fe-Mn Consumption",          "Kg/TCS"),
-    (44, "SMS", "SMS-III Operations (BSP)", "Fe-Si Consumption",          "Kg/TCS"),
-    (45, "SMS", "SMS-III Operations (BSP)", "Si-Mn Consumption",          "Kg/TCS"),
-    (46, "SMS", "SMS-III Operations (BSP)", "Oxygen Consumption",         "NM3/TCS"),
-    (47, "SMS", "SMS-III Operations (BSP)", "Alumina Consumption",        "Kg/TCS"),
-    (50, "SMS", "SMS-III Operations (BSP)", "LD Gas Recovery",            "CuM/T"),
-    (51, "SMS", "SMS-III Operations (BSP)", "DS Heats",                   "Nos"),
+    # ── SMS-2 Operations (rows 22-36) ──────────────────────────────────
+    (22, "SMS", "BSP SMS-2", "Converter Availability",      "% ICH"),
+    (23, "SMS", "BSP SMS-2", "Converter Utilisation",       "% Avail hr"),
+    (24, "SMS", "BSP SMS-2", "Tap to Tap Time",             "Minutes"),
+    (25, "SMS", "BSP SMS-2", "Average Blows/Day",           "Heats/Day"),
+    (26, "SMS", "BSP SMS-2", "Average Heat Weight",         "Tonnes"),
+    (27, "SMS", "BSP SMS-2", "Avg. Lining Life",            "Heats"),
+    (28, "SMS", "BSP SMS-2", "Fe-Mn Consumption",           "Kg/TCS"),
+    (29, "SMS", "BSP SMS-2", "Fe-Si Consumption",           "Kg/TCS"),
+    (30, "SMS", "BSP SMS-2", "Si-Mn Consumption",           "Kg/TCS"),
+    (31, "SMS", "BSP SMS-2", "Oxygen Consumption",          "NM3/TCS"),
+    (32, "SMS", "BSP SMS-2", "Alumina Consumption",         "Kg/TCS"),
+    (35, "SMS", "BSP SMS-2", "LD Gas Recovery",             "CuM/T"),
+    (36, "SMS", "BSP SMS-2", "DS Heats",                    "Nos"),
+    # ── SMS-3 Operations (rows 38-51) ─────────────────────────────────
+    (38, "SMS", "BSP SMS-3", "Converter Availability",     "% ICH"),
+    (39, "SMS", "BSP SMS-3", "Converter Utilisation",      "% Avail hr"),
+    (40, "SMS", "BSP SMS-3", "Tap to Tap Time",            "Minutes"),
+    (41, "SMS", "BSP SMS-3", "Average Blows/Day",          "Heats/Day"),
+    (42, "SMS", "BSP SMS-3", "Average Heat Weight",        "Tonnes"),
+    (43, "SMS", "BSP SMS-3", "Fe-Mn Consumption",          "Kg/TCS"),
+    (44, "SMS", "BSP SMS-3", "Fe-Si Consumption",          "Kg/TCS"),
+    (45, "SMS", "BSP SMS-3", "Si-Mn Consumption",          "Kg/TCS"),
+    (46, "SMS", "BSP SMS-3", "Oxygen Consumption",         "NM3/TCS"),
+    (47, "SMS", "BSP SMS-3", "Alumina Consumption",        "Kg/TCS"),
+    (50, "SMS", "BSP SMS-3", "LD Gas Recovery",            "CuM/T"),
+    (51, "SMS", "BSP SMS-3", "DS Heats",                   "Nos"),
     # ── Utilities (row 54) ───────────────────────────────────────────────
     (54, "IRON_MAKING", "Utilities (BSP)", "Sp. Water Consumption",       "CuM/TCS"),
 ]
