@@ -42,7 +42,9 @@ function SWRow({ row }) {
           ...CTR, backgroundColor: '#1e3a5f', color: '#fff',
           fontWeight: 700, verticalAlign: 'middle', border: '1px solid #334155',
         }}>
-          {row.group}
+          <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+            {row.group}
+          </div>
         </td>
       )}
       {row.show_plant && (

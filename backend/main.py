@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 
 import db
-from models import PDFRequest, ProductionEntry, ProductionEntryRequest
+from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest
 from report_utils import compute_item_row, blank_out_page_data
 from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
@@ -295,6 +295,47 @@ async def generate_pdf(request: PDFRequest):
             p["type"] = "techno_params"
         enriched.append(p)
     return await build_pdf_response(request, pages_override=enriched, page_layouts=request.page_layouts, font_config=request.font_config)
+
+
+# ---------------------------------------------------------------------------
+# Special Steel manual entry
+# ---------------------------------------------------------------------------
+
+@app.get("/api/special-steel-manual")
+def get_special_steel_manual(plant: str = Query(...), month: str = Query(...)):
+    """Return all special_steel_orders rows for a plant+month for manual editing."""
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT product, quality_grade, section, sort_order, order_qty, actual_despatch
+            FROM special_steel_orders
+            WHERE report_month=? AND plant_name=?
+            ORDER BY sort_order ASC, product ASC, quality_grade ASC
+        """, (month, plant))
+        rows = [
+            {"product": r[0], "quality_grade": r[1], "section": r[2],
+             "sort_order": r[3], "order_qty": r[4], "actual_despatch": r[5]}
+            for r in cur.fetchall()
+        ]
+    finally:
+        conn.close()
+    return {"rows": rows, "plant": plant, "month": month}
+
+
+@app.post("/api/special-steel-manual/save")
+def save_special_steel_manual(request: SpecialSteelSaveRequest):
+    """Replace all special steel rows for a plant+month with the supplied data."""
+    db.clear_special_steel_orders(request.month, request.plant)
+    for i, r in enumerate(request.rows):
+        db.save_special_steel_entry(
+            request.month, request.plant,
+            r.product, r.quality_grade,
+            i,
+            r.order_qty, r.actual_despatch,
+            section=r.section,
+        )
+    return {"status": "success", "saved": len(request.rows)}
 
 
 # ---------------------------------------------------------------------------

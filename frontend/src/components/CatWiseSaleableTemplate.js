@@ -41,7 +41,9 @@ function Row({ row }) {
           style={{ ...CELL, backgroundColor: CAT_BG[row.category] || '#e2e8f0',
                    fontWeight: 700, textAlign: 'center', verticalAlign: 'middle',
                    fontSize: 'var(--report-font-size)' }}>
-        {row.category}
+        <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+          {row.category}
+        </div>
       </td>
     );
   } else if (!row.category) {

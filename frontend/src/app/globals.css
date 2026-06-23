@@ -633,7 +633,7 @@ select.form-control {
   --page-margin-top: 4mm;
   --page-margin-bottom: 3mm;
   --page-margin-lr: 8mm;
-  --report-font-size: 6.5pt;
+  --report-font-size: 10pt;
   font-family: 'Arial Narrow', Arial, sans-serif !important;
 }
 .pg-27 table td,
@@ -702,10 +702,10 @@ select.form-control {
   /* Page 27 – portrait with tighter margins so all rows fit on one page */
   @page pg27_layout {
     size: A4 portrait;
-    margin: 7mm 8mm 5mm 8mm;
+    margin: 6mm 8mm 3mm 8mm;
   }
   .a4-page.pg-27 {
     page: pg27_layout;
-    --report-font-size: 6.5pt;
+    --report-font-size: 10pt;
   }
 }

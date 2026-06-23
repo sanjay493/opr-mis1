@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import SpecialSteelManualEntry from '@/components/SpecialSteelManualEntry';
 
 const PLANTS = ['BSP', 'DSP', 'ISP', 'RSP', 'BSL', 'ASP', 'SSP', 'VISL'];
 const MONTHS = [
@@ -631,6 +632,8 @@ export default function DataEntryPage() {
           )}
 
           <StockEntryCard apiBase={API_BASE_URL} />
+
+          <SpecialSteelManualEntry apiBase={API_BASE_URL} />
 
           <ConversionCard apiBase={API_BASE_URL} />
         </div>

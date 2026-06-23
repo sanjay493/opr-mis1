@@ -422,6 +422,38 @@ _PLANT_TITLES = {
 }
 
 
+# ── product-column rowspan helper ────────────────────────────────────────────
+
+def _add_product_spans(rows):
+    """Remove product-hdr rows; annotate grade/product-total rows with
+    product_name, prod_first, prod_rowspan so the frontend can render a
+    merged, vertically-labelled Product column."""
+    out = []
+    cur_prod = ""
+    grp = []   # indices into out[] for the current product group
+
+    def flush():
+        if grp and cur_prod:
+            for k, idx in enumerate(grp):
+                out[idx]["product_name"] = cur_prod
+                out[idx]["prod_first"]   = (k == 0)
+                out[idx]["prod_rowspan"] = len(grp) if k == 0 else 0
+
+    for row in rows:
+        t = row.get("type", "")
+        if t == "product-hdr":
+            flush(); grp.clear(); cur_prod = row["label"]
+        elif t in ("grade", "product-total"):
+            grp.append(len(out))
+            out.append(dict(row))
+        else:
+            flush(); grp.clear(); cur_prod = ""
+            out.append(dict(row))
+
+    flush()
+    return out
+
+
 # ── public API ────────────────────────────────────────────────────────────────
 
 def generate_special_steel_plant(report_month: str, plant: str) -> dict:
@@ -437,6 +469,7 @@ def generate_special_steel_plant(report_month: str, plant: str) -> dict:
         if gen:
             rows, tot_o, tot_a, tot_c, tot_co, tot_ca, tot_cc = gen(
                 cur, report_month, cply_month, ytd_months, cply_ytd_months)
+            rows = _add_product_spans(rows)
         else:
             rows = []
             tot_o = tot_a = tot_c = tot_co = tot_ca = tot_cc = 0

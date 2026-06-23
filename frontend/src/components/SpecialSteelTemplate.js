@@ -24,14 +24,16 @@ const ROW_STYLES = {
 
 // ── plant_detail / isp_summary table (pages 19-23) ───────────────────────────
 
-function DetailRow({ row }) {
+function DetailRow({ row, hasProd }) {
+  const COLS = hasProd ? 12 : 11;
+
   if (row.type === 'separator') {
-    return <tr style={{ height: 2 }}><td colSpan={11} style={{ border: 'none', padding: 0 }} /></tr>;
+    return <tr style={{ height: 2 }}><td colSpan={COLS} style={{ border: 'none', padding: 0 }} /></tr>;
   }
   if (row.type === 'product-hdr') {
     return (
       <tr>
-        <td colSpan={11} style={{
+        <td colSpan={COLS} style={{
           ...LBL, backgroundColor: '#1e3a5f', color: '#fff',
           fontWeight: 700, padding: '2px 5px', border: '1px solid #334155',
         }}>
@@ -40,10 +42,33 @@ function DetailRow({ row }) {
       </tr>
     );
   }
+
   const s = ROW_STYLES[row.type] || {};
+
+  let prodCell = null;
+  if (hasProd) {
+    if (row.prod_first) {
+      prodCell = (
+        <td rowSpan={row.prod_rowspan} style={{
+          ...CELL, backgroundColor: '#1e3a5f', color: '#fff',
+          fontWeight: 700, textAlign: 'center', verticalAlign: 'middle',
+          border: '1px solid #334155',
+        }}>
+          <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+            {row.product_name}
+          </div>
+        </td>
+      );
+    } else if (!row.product_name) {
+      prodCell = <td style={{ ...CELL, ...s }} />;
+    }
+    // prod_first=false + product_name set → covered by rowspan, no td
+  }
+
   return (
     <tr style={s}>
-      <td style={{ ...LBL, ...s, paddingLeft: row.type === 'grade' ? '10px' : '3px' }}>{row.label}</td>
+      {prodCell}
+      <td style={{ ...LBL, ...s, paddingLeft: row.type === 'grade' ? '8px' : '3px' }}>{row.label}</td>
       <td style={{ ...NUM, ...s }}>{row.orders}</td>
       <td style={{ ...NUM, ...s }}>{row.actual}</td>
       <td style={{ ...NUM, ...s }}>{row.pct_ful}</td>
@@ -66,6 +91,9 @@ function DetailTable({ data }) {
     cum_label = '', cum_cply_label = '',
   } = data;
 
+  const hasProd = rows.some(r => r.prod_first);
+  const COLS = hasProd ? 12 : 11;
+
   return (
     <div style={{ padding: '4px 6px', fontFamily: FONT }}>
       <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>
@@ -76,7 +104,8 @@ function DetailTable({ data }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
                       tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
-          <col style={{ width: '24%' }} />
+          {hasProd && <col style={{ width: '5%' }} />}
+          <col style={{ width: hasProd ? '19%' : '24%' }} />
           <col style={{ width: '7.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '5.5%' }} />
           <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
           <col style={{ width: '7.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '5.5%' }} />
@@ -84,6 +113,7 @@ function DetailTable({ data }) {
         </colgroup>
         <thead>
           <tr>
+            {hasProd && <th rowSpan={2} style={TH_S}>Product</th>}
             <th rowSpan={2} style={{ ...TH_S, textAlign: 'left' }}>Quality / Grade</th>
             <th colSpan={3} style={TH_S}>{month_label}</th>
             <th rowSpan={2} style={TH_S}>{cply_label}<br/>Actual</th>
@@ -102,10 +132,11 @@ function DetailTable({ data }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => <DetailRow key={i} row={row} />)}
+          {rows.map((row, i) => <DetailRow key={i} row={row} hasProd={hasProd} />)}
 
-          <tr style={{ height: 3 }}><td colSpan={11} style={{ border: 'none', padding: 0 }} /></tr>
+          <tr style={{ height: 3 }}><td colSpan={COLS} style={{ border: 'none', padding: 0 }} /></tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
+            {hasProd && <td style={NUM} />}
             <td style={{ ...LBL, fontWeight: 600 }}>Saleable Steel Production</td>
             <td style={NUM} colSpan={2}>{saleable_production.current}</td>
             <td style={NUM}></td>
@@ -117,6 +148,7 @@ function DetailTable({ data }) {
             <td style={NUM}>{saleable_production.cum_pct_growth}</td>
           </tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
+            {hasProd && <td style={NUM} />}
             <td style={{ ...LBL, fontWeight: 600 }}>Special Steel % of Saleable Steel</td>
             <td style={NUM} colSpan={2}>{special_pct.current}</td>
             <td style={NUM}></td>
