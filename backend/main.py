@@ -25,6 +25,11 @@ from layout_loader import load_layout_config
 
 db.init_db()
 
+# Mapping of IRON_MAKING param_ids to their corresponding MAJOR param_ids.
+# With recent consolidation of BF params, they share param_ids between groups.
+# This mapping is empty since params are now linked via many-to-many group membership.
+_IM_AVG_TO_MAJOR = {}
+
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
     description="Python API backend to compile and export SAIL MIS reports using WeasyPrint.",
