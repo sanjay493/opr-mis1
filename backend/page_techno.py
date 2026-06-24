@@ -230,7 +230,8 @@ def _annual_map(cur, fy):
 
 
 def _fetch_techno_data(cur, plant_params, months):
-    """Return {(row_label, param_name): {month: actual}} for the given pairs and months."""
+    """Return {(row_label, param_name): {month: actual}} for the given pairs and months.
+    Also computes TMI as HM Consumption + Scrap Consumption if not in DB."""
     if not plant_params or not months:
         return {}
     pp_set  = set(plant_params)
@@ -250,6 +251,22 @@ def _fetch_techno_data(cur, plant_params, months):
     for rl, pn, month, val in cur.fetchall():
         if val is not None and (rl, pn) in pp_set:
             result.setdefault((rl, pn), {})[month] = val
+
+    # Compute TMI as HM Consumption + Scrap Consumption for SMS shops if not in DB
+    for rl in entities:
+        if rl in _SMS_SHOPS:  # Only for SMS shops
+            tmi_data = {}
+            for month in months:
+                hm_v = result.get((rl, "Hot Metal Consumption"), {}).get(month)
+                scrap_v = result.get((rl, "Scrap Consumption"), {}).get(month)
+                if hm_v is not None and scrap_v is not None:
+                    tmi_val = result.get((rl, "TMI"), {}).get(month)
+                    # Only compute if TMI not already in DB
+                    if tmi_val is None:
+                        tmi_data[month] = hm_v + scrap_v
+            if tmi_data:
+                result.setdefault((rl, "TMI"), {}).update(tmi_data)
+
     return result
 
 
@@ -334,7 +351,20 @@ def _compute_sail(techno_data, hm_by_plant, cs_by_plant, months):
             for shop in _SMS_SHOPS:
                 plant = _SMS_SHOP_PLANT[shop]
                 n     = _PLANT_SHOP_CNT[plant]
-                v  = techno_data.get((shop, param), {}).get(m)
+
+                # For TMI: compute as HM Consumption + Scrap Consumption if not in DB
+                if param == "TMI":
+                    hm_v = techno_data.get((shop, "Hot Metal Consumption"), {}).get(m)
+                    scrap_v = techno_data.get((shop, "Scrap Consumption"), {}).get(m)
+                    v = None
+                    if hm_v is not None and scrap_v is not None:
+                        v = hm_v + scrap_v
+                    else:
+                        # Fallback: try to get TMI directly from DB
+                        v = techno_data.get((shop, param), {}).get(m)
+                else:
+                    v = techno_data.get((shop, param), {}).get(m)
+
                 cs = cs_by_plant.get(plant, {}).get(m)
                 if v is not None and cs is not None and cs > 0:
                     w = cs / n
@@ -721,17 +751,16 @@ def generate_techno(report_month: str, page_no: int) -> dict:
         # Build output sections
         sections, by_sec = [], {}
         for param_name, row_label, unit in master:
-            if group == "MILL_DSP" and param_name == "Section Mill":
+            
+          
+            if group == "IRON_MAKING" and param_name not in _IRON_MAKING_VISIBLE:
                 continue
             if group == "COKE_SINTER" and param_name not in _COKE_SINTER_VISIBLE:
                 continue
-            if group == "IRON_MAKING" and param_name not in _IRON_MAKING_VISIBLE:
-                continue
             if group == "SMS" and param_name not in _BOF_VISIBLE:
                 continue
-            if group == "IRON_MAKING" and param_name in _DSP_FURNACE_SECTIONS \
-                    and not (row_label.startswith("DSP") or row_label.startswith("RSP")):
-                continue
+
+          
 
             pk = (row_label, param_name)
             row = {
