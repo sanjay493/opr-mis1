@@ -96,28 +96,42 @@ _PLANT_SHOP_CNT = {"BSP": 2, "DSP": 1, "RSP": 2, "BSL": 2, "ISP": 1}
 
 _SMS_PARAMS = ["Hot Metal Consumption", "Scrap Consumption", "TMI"]
 
-# BSL BF per-furnace aggregation methods (canonical param names)
-_BSL_BF_AGG = {
-    "CDI Rate":        "wtavg",
-    "Coke Rate":       "wtavg",
-    "Nut Coke Rate":   "wtavg",
-    "Fuel Rate":       "wtavg",
-    "Sinter in Burden":"wtavg",
-    "Pellet in Burden":"wtavg",
-    "Si in HM":        "wtavg",
-    "S in HM":         "wtavg",
-    "Slag Rate":       "wtavg",
-    "BF Productivity": "harmonic",
-    "HBT":             "simple",
-    "O2 Enrichment":   "wtavg",
-    "Hot Metal Temp":  "simple",
-    "Iron Ore":        "sum",
+# Plant BF per-furnace aggregation methods (canonical param names)
+# Aggregation happens only if Plant Shop data is missing; otherwise uses stored Plant Shop data
+
+_BF_AGG_METHODS = {
+    # Weighted by HM production
+    "CDI Rate":         "wtavg",
+    "BF Coke Rate":     "wtavg",
+    "Coke Rate":        "wtavg",
+    "Nut Coke Rate":    "wtavg",
+    "Fuel Rate":        "wtavg",
+    "Sinter in Burden": "wtavg",
+    "Pellet in Burden": "wtavg",
+    "Si in HM":         "wtavg",
+    "S in HM":          "wtavg",
+    "Slag Rate":        "wtavg",
+    "O2 Enrichment":    "wtavg",
+    # Harmonic mean
+    "BF Productivity":  "harmonic",
+    # Simple average
+    "HBT":              "simple",
+    "Hot Metal Temp":   "simple",
+    # Sum
+    "Iron Ore":         "sum",
     "Sinter Consumption": "sum",
-    "BF Scrap":        "sum",
+    "BF Scrap":         "sum",
     "Pellet Consumption": "sum",
 }
-_BSL_FURNACES    = ["BSL BF-1", "BSL BF-2", "BSL BF-3", "BSL BF-4", "BSL BF-5"]
-_BSL_BF_ALL      = _BSL_FURNACES + ["BSL Plant Shop"]
+
+# Plant furnace configurations
+_PLANT_FURNACES = {
+    "BSP": ["BSP BF-4", "BSP BF-5", "BSP BF-6", "BSP BF-7", "BSP BF-8"],
+    "RSP": ["RSP BF-1", "RSP BF-4", "RSP BF-5"],
+    "DSP": ["DSP BF-1", "DSP BF-2", "DSP BF-3"],
+    "BSL": ["BSL BF-1", "BSL BF-2", "BSL BF-3", "BSL BF-4", "BSL BF-5"],
+}
+
 
 # ---------------------------------------------------------------------------
 # Formatting helpers
@@ -475,75 +489,143 @@ def _inject_sail_techno(cur, mon_map, cum_map, ccum_map, cply_map,
     # They use stored March till_month_actual only; no computed SAIL values.
 
 
-def _inject_bsl_bf_wtavg(cur, cum_map, ccum_map, fy2_map, fy1_map, fy3_map,
-                          ytd, cply_ytd, fy2_months, fy1_months, fy3_months):
-    """Compute YTD cumulative values for BSL BF per-furnace and Plant Shop params
-    from monthly actuals so that uploading any middle month auto-corrects all cums."""
+def _compute_plant_bf_aggregation(data, hm_data, plant, param, months, method):
+    """Compute aggregated BF value for a plant+param across months.
+
+    Args:
+        data: {(entity, param): {month: value}}
+        hm_data: {(entity, month): hm_value} for furnaces, {month: hm_value} for plant shop
+        plant: plant code (BSP, RSP, DSP, BSL)
+        param: parameter name
+        months: list of months to aggregate over
+        method: aggregation method (wtavg, harmonic, simple, sum)
+
+    Returns:
+        Aggregated value or None
+    """
+    furnaces = _PLANT_FURNACES.get(plant, [])
+    plant_shop = f"{plant} Plant Shop"
+    vals = data.get((plant_shop, param), {})
+
+    # If Plant Shop data exists in DB, use it (don't recompute)
+    if vals:
+        if method == "sum":
+            vs = [v for m in months if (v := vals.get(m)) is not None]
+            return round(sum(vs), 4) if vs else None
+        elif method == "simple":
+            vs = [v for m in months if (v := vals.get(m)) is not None]
+            return round(sum(vs) / len(vs), 4) if vs else None
+        else:  # wtavg, harmonic
+            return _aggregate_from_furnaces(data, hm_data, plant, param, months, method, furnaces)
+
+    # Plant Shop data missing: compute from furnaces
+    return _aggregate_from_furnaces(data, hm_data, plant, param, months, method, furnaces)
+
+
+def _aggregate_from_furnaces(data, hm_data, plant, param, months, method, furnaces):
+    """Compute aggregation from individual furnace data."""
+    if method == "sum":
+        vs = [v for f in furnaces for m in months if (v := data.get((f, param), {}).get(m)) is not None]
+        return round(sum(vs), 4) if vs else None
+
+    if method == "simple":
+        vs = [v for f in furnaces for m in months if (v := data.get((f, param), {}).get(m)) is not None]
+        return round(sum(vs) / len(vs), 4) if vs else None
+
+    if method == "wtavg":
+        num = den = 0.0
+        for m in months:
+            for f in furnaces:
+                v  = data.get((f, param), {}).get(m)
+                hm = hm_data.get((f, m))
+                if v is not None and hm is not None and hm > 0:
+                    num += v * hm
+                    den += hm
+        return round(num / den, 4) if den > 0 else None
+
+    if method == "harmonic":
+        num = den = 0.0
+        for m in months:
+            for f in furnaces:
+                v  = data.get((f, param), {}).get(m)
+                hm = hm_data.get((f, m))
+                if v is not None and v > 0 and hm is not None and hm > 0:
+                    num += hm
+                    den += hm / v
+        return round(num / den, 4) if den > 0 else None
+
+    return None
+
+
+def _inject_bf_aggregation(cur, plant, cum_map, ccum_map, fy2_map, fy1_map, fy3_map,
+                            ytd, cply_ytd, fy2_months, fy1_months, fy3_months):
+    """Compute BF Plant Shop aggregations from per-furnace data for BSP, RSP, DSP, BSL.
+    Only fills Plant Shop if data is missing from DB."""
     all_months = sorted(set(ytd) | set(cply_ytd) | set(fy2_months) | set(fy1_months) | set(fy3_months))
     if not all_months:
         return
 
-    bsl_params = list(_BSL_BF_AGG.keys()) + ["HM Production"]
-    all_pp = {(plant, param) for plant in _BSL_BF_ALL for param in bsl_params}
-    data   = _fetch_techno_data(cur, all_pp, all_months)
+    furnaces = _PLANT_FURNACES.get(plant, [])
+    if not furnaces:
+        return
 
-    # Per-furnace HM Production values
-    fce_hm = {}   # {(furnace, month): hm_val}
-    for furnace in _BSL_FURNACES:
-        for m, v in data.get((furnace, "HM Production"), {}).items():
-            if v and v > 0:
-                fce_hm[(furnace, m)] = v
+    plant_shop = f"{plant} Plant Shop"
 
-    # Total BSL HM from production_table for BSL Plant Shop weighting
+    # Fetch all BF params for this plant (furnaces + plant shop)
+    all_entities = furnaces + [plant_shop]
+    all_pp = {(e, p) for e in all_entities for p in _BF_AGG_METHODS}
+    data = _fetch_techno_data(cur, all_pp, all_months)
+
+    # Get HM production for each furnace and plant
+    if plant == "BSL":
+        # BSL: fetch per-furnace HM from techno_actuals
+        fce_hm = {}
+        for f in furnaces:
+            for m, v in data.get((f, "HM Production"), {}).items():
+                if v and v > 0:
+                    fce_hm[(f, m)] = v
+
+    # Get total plant HM from production_table
     ph_m = ",".join("?" * len(all_months))
     cur.execute(
         f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name='BSL' AND item_name='Hot Metal' AND report_month IN ({ph_m})",
-        all_months,
+        f"WHERE plant_name=? AND item_name='Hot Metal' AND report_month IN ({ph_m})",
+        [plant] + list(all_months),
     )
     prod_hm = {m: v for m, v in cur.fetchall() if v and v > 0}
 
-    def _agg(plant_name, section, months):
-        method  = _BSL_BF_AGG.get(section)
-        if not method:
-            return None
-        vals    = data.get((plant_name, section), {})
-        is_shop = (plant_name == "BSL Plant Shop")
+    # Prepare HM data for aggregation
+    hm_data = {}
+    for f in furnaces:
+        for m in all_months:
+            if plant == "BSL":
+                # BSL: use per-furnace HM from techno data
+                hm_data[(f, m)] = data.get((f, "HM Production"), {}).get(m)
+            else:
+                # Other plants: use total plant HM (assume equal distribution)
+                hm = prod_hm.get(m)
+                if hm:
+                    hm_data[(f, m)] = hm / len(furnaces)
 
-        if method == "sum":
-            vs = [v for m in months if (v := vals.get(m)) is not None]
-            return round(sum(vs), 4) if vs else None
-        if method == "simple":
-            vs = [v for m in months if (v := vals.get(m)) is not None]
-            return round(sum(vs) / len(vs), 4) if vs else None
-        if method == "wtavg":
-            num = den = 0.0
-            for m in months:
-                v  = vals.get(m)
-                hm = prod_hm.get(m) if is_shop else fce_hm.get((plant_name, m))
-                if v is not None and hm:
-                    num += v * hm
-                    den += hm
-            return round(num / den, 4) if den else None
-        if method == "harmonic":
-            num = den = 0.0
-            for m in months:
-                v  = vals.get(m)
-                hm = prod_hm.get(m) if is_shop else fce_hm.get((plant_name, m))
-                if v is not None and v > 0 and hm:
-                    num += hm
-                    den += hm / v
-            return round(num / den, 4) if den else None
-        return None
+    # Compute Plant Shop aggregations for all periods
+    for param in _BF_AGG_METHODS:
+        method = _BF_AGG_METHODS[param]
 
-    for plant_name in _BSL_BF_ALL:
-        for section in _BSL_BF_AGG:
-            key = (plant_name, section)
-            cum_map[key]  = _agg(plant_name, section, ytd)
-            ccum_map[key] = _agg(plant_name, section, cply_ytd)
-            fy3_map[key]  = _agg(plant_name, section, fy3_months)
-            fy2_map[key]  = _agg(plant_name, section, fy2_months)
-            fy1_map[key]  = _agg(plant_name, section, fy1_months)
+        # Check if Plant Shop data already exists
+        shop_data = data.get((plant_shop, param), {})
+
+        # Only compute if Plant Shop data is missing
+        if not shop_data:
+            cum_map[(plant_shop, param)] = _compute_plant_bf_aggregation(
+                data, hm_data, plant, param, ytd, method)
+            ccum_map[(plant_shop, param)] = _compute_plant_bf_aggregation(
+                data, hm_data, plant, param, cply_ytd, method)
+            fy3_map[(plant_shop, param)] = _compute_plant_bf_aggregation(
+                data, hm_data, plant, param, fy3_months, method)
+            fy2_map[(plant_shop, param)] = _compute_plant_bf_aggregation(
+                data, hm_data, plant, param, fy2_months, method)
+            fy1_map[(plant_shop, param)] = _compute_plant_bf_aggregation(
+                data, hm_data, plant, param, fy1_months, method)
 
 
 # ---------------------------------------------------------------------------
@@ -627,11 +709,14 @@ def generate_techno(report_month: str, page_no: int) -> dict:
                 if src in mon_map:
                     mon_map.setdefault(dst, dict(mon_map[src]))
 
-            _inject_bsl_bf_wtavg(
-                cur, cum_map, ccum_map,
-                fy2_map, fy1_map, fy3_map,
-                ytd, cply_ytd, _fy_months(fy - 2), _fy_months(fy - 1), _fy_months(fy - 3),
-            )
+            # Aggregate per-furnace BF data to Plant Shop level for all plants
+            # Only fills Plant Shop if data is missing from DB
+            for plant in _BF_PLANTS:
+                _inject_bf_aggregation(
+                    cur, plant, cum_map, ccum_map,
+                    fy2_map, fy1_map, fy3_map,
+                    ytd, cply_ytd, _fy_months(fy - 2), _fy_months(fy - 1), _fy_months(fy - 3),
+                )
 
         # Build output sections
         sections, by_sec = [], {}
