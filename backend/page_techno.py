@@ -349,9 +349,6 @@ def _compute_sail(techno_data, hm_by_plant, cs_by_plant, months):
         plain = []
         for m in months:
             for shop in _SMS_SHOPS:
-                plant = _SMS_SHOP_PLANT[shop]
-                n     = _PLANT_SHOP_CNT[plant]
-
                 # For TMI: compute as HM Consumption + Scrap Consumption if not in DB
                 if param == "TMI":
                     hm_v = techno_data.get((shop, "Hot Metal Consumption"), {}).get(m)
@@ -365,11 +362,11 @@ def _compute_sail(techno_data, hm_by_plant, cs_by_plant, months):
                 else:
                     v = techno_data.get((shop, param), {}).get(m)
 
-                cs = cs_by_plant.get(plant, {}).get(m)
-                if v is not None and cs is not None and cs > 0:
-                    w = cs / n
-                    num += v * w
-                    den += w
+                # Weight by individual shop's Crude Steel production (not plant total / n)
+                cs_shop = techno_data.get((shop, "Total Crude Steel"), {}).get(m)
+                if v is not None and cs_shop is not None and cs_shop > 0:
+                    num += v * cs_shop
+                    den += cs_shop
                 elif v is not None:
                     plain.append(v)
         if den > 0:
