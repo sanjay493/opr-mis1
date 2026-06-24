@@ -492,9 +492,10 @@ def _inject_sail_techno(cur, mon_map, cum_map, ccum_map, cply_map,
                         fy2_map, fy1_map, fy3_map,
                         ytd, cply_ytd, cply_month, fy2_months, fy1_months, fy3_months,
                         fy2_stored=None, fy1_stored=None):
-    """Compute SAIL weighted-average techno values for current periods only.
+    """Compute SAIL weighted-average techno values for all periods.
     Fills: mon_map (current month), cum_map (YTD), ccum_map (CPLY YTD), cply_map (CPLY month).
-    Historical FY maps (fy1/fy2/fy3) use stored March till_month_actual only — not filled here."""
+    Also fills FY maps (fy1/fy2/fy3) if SAIL values missing but shop data available (use setdefault).
+    Stored March till_month_actual values are never overwritten (setdefault ensures this)."""
     all_months   = sorted(set(ytd) | set(cply_ytd) | {cply_month} | set(fy2_months) | set(fy1_months) | set(fy3_months))
     plant_params = _all_sail_plant_params()
     techno_data  = _fetch_techno_data(cur, plant_params, all_months)
@@ -515,8 +516,16 @@ def _inject_sail_techno(cur, mon_map, cum_map, ccum_map, cply_map,
     for key, val in _compute_sail(techno_data, hm, cs, cply_ytd).items():
         ccum_map.setdefault(key, val)
 
-    # Historical FY maps (fy3, fy2, fy1) are NOT filled here.
-    # They use stored March till_month_actual only; no computed SAIL values.
+    # Compute SAIL for historical FY maps if missing
+    # Use stored March till_month_actual if available; compute from shop data if not
+    for key, val in _compute_sail(techno_data, hm, cs, fy3_months).items():
+        fy3_map.setdefault(key, val)
+
+    for key, val in _compute_sail(techno_data, hm, cs, fy2_months).items():
+        fy2_map.setdefault(key, val)
+
+    for key, val in _compute_sail(techno_data, hm, cs, fy1_months).items():
+        fy1_map.setdefault(key, val)
 
 
 def _compute_plant_bf_aggregation(data, hm_data, plant, param, months, method):
