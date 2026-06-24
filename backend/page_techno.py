@@ -751,8 +751,8 @@ def generate_techno(report_month: str, page_no: int) -> dict:
         # Build output sections
         sections, by_sec = [], {}
         for param_name, row_label, unit in master:
-            
-          
+
+
             if group == "IRON_MAKING" and param_name not in _IRON_MAKING_VISIBLE:
                 continue
             if group == "COKE_SINTER" and param_name not in _COKE_SINTER_VISIBLE:
@@ -760,7 +760,7 @@ def generate_techno(report_month: str, page_no: int) -> dict:
             if group == "SMS" and param_name not in _BOF_VISIBLE:
                 continue
 
-          
+
 
             pk = (row_label, param_name)
             row = {
@@ -779,6 +779,19 @@ def generate_techno(report_month: str, page_no: int) -> dict:
                 by_sec[param_name] = {"label": param_name, "rows": []}
                 sections.append(by_sec[param_name])
             by_sec[param_name]["rows"].append(row)
+
+        # Sort rows within each section: plants first (in order), then SAIL
+        plant_order = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+        for section in sections:
+            def sort_key(row_dict):
+                label = row_dict["label"]
+                if label == "SAIL":
+                    return (999,)  # SAIL at end
+                try:
+                    return (plant_order.index(label), label)
+                except ValueError:
+                    return (len(plant_order), label)  # Unknown plants after SAIL
+            section["rows"].sort(key=sort_key)
 
         return {
             "title":          title,
