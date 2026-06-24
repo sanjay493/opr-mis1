@@ -32,7 +32,7 @@ const defaultFY = () => {
   return `${startYear}-${endYear.toString().padStart(2, '0')}`;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const getDefaultDate = () => {
   const d = new Date();

@@ -2,8 +2,9 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import SailSmsParamsDisplay from '@/components/SailSmsParamsDisplay';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const MONTHS = [
   'April', 'May', 'June', 'July', 'August', 'September',
@@ -584,6 +585,9 @@ export default function TechnoManualEntry() {
             </span>
           </div>
         )}
+
+        {/* Display SAIL SMS Parameters for SMS group */}
+        <SailSmsParamsDisplay apiBase={API_BASE_URL} month={reportMonth} groupCode={groupCode} />
 
         {!loading && filteredSections.map(sec => (
           <SectionTable
