@@ -31,7 +31,7 @@ export default function TechnoParamsTemplate({ data }) {
   if (!data) return null;
   const {
     title, subtitle = '', sections = [],
-    fy2_label = '', fy1_label = '', target_label = '',
+    fy3_label = '', fy2_label = '', fy1_label = '', target_label = '',
     month_labels = [], cply_label = '', cum_label = '', cum_cply_label = '',
   } = data;
 
@@ -61,13 +61,14 @@ export default function TechnoParamsTemplate({ data }) {
           <tr>
             <th rowSpan={2} style={{ ...TH, textAlign: 'left' }}>Parameters</th>
             <th rowSpan={2} style={TH}>Plants</th>
-            <th colSpan={2} style={TH_HIST}>Actual</th>
+            <th colSpan={3} style={TH_HIST}>Actual</th>
             <th rowSpan={2} style={TH_TGT}>{target_label}</th>
             <th colSpan={nMonths} style={TH}>Actual</th>
             <th rowSpan={2} style={TH}>{cply_label}<br/>Actual</th>
             <th colSpan={2} style={TH_CUM}>Actual</th>
           </tr>
           <tr>
+            <th style={TH_HIST}>{fy3_label}</th>
             <th style={TH_HIST}>{fy2_label}</th>
             <th style={TH_HIST}>{fy1_label}</th>
             {month_labels.map((m, i) => <th key={i} style={TH}>{m}</th>)}
@@ -97,6 +98,7 @@ export default function TechnoParamsTemplate({ data }) {
                     </td>
                   )}
                   <td style={{ ...LBL, ...blockBorder, ...sailStyle }}>{row.label}</td>
+                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.fy3}</td>
                   <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.fy2}</td>
                   <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.fy1}</td>
                   <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.target}</td>
