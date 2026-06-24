@@ -43,22 +43,6 @@ const PAGE_LABELS = {
   35: 'Mill Wise Techno – ISP',
 };
 
-const FONT_OPTIONS = [
-  { id: 'IBM Plex Sans',  label: 'IBM Plex Sans (Recommended)' },
-  { id: 'Source Sans 3',  label: 'Source Sans 3' },
-  { id: 'Roboto',         label: 'Roboto' },
-  { id: 'Noto Sans',      label: 'Noto Sans' },
-  { id: 'Lato',           label: 'Lato' },
-];
-
-const FONT_CONFIG_DEFAULTS = {
-  family:       'IBM Plex Sans',
-  td_size:      9.5,
-  th_size:      9.0,
-  title_size:   13.0,
-  heading_size: 10.5,
-};
-
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -176,7 +160,7 @@ function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
   });
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 console.log('API_BASE_URL:', API_BASE_URL);
 
 // In browser environments, failing to fetch is often due to CORS/origin/host reachability.
@@ -208,8 +192,6 @@ const getDefaultDate = () => {
   };
 };
 
-const LAYOUT_DEFAULTS = { fontSize: 9.5, marginTop: 15, marginBottom: 15, marginLR: 15, fitToPage: false };
-
 export default function ReportPage() {
   const defaultDate = getDefaultDate();
   const [pagesData, setPagesData] = useState([]);
@@ -219,67 +201,9 @@ export default function ReportPage() {
   const [selectedYear, setSelectedYear] = useState(defaultDate.year);
   const [pagesDataMonth, setPagesDataMonth] = useState({ name: defaultDate.month, year: defaultDate.year });
   const [isBackendGenerating, setIsBackendGenerating] = useState(false);
-  const [pageLayouts, setPageLayouts] = useState({});
-  const [fontConfig, setFontConfig] = useState(FONT_CONFIG_DEFAULTS);
 
-  // Load layout config from server, then overlay localStorage overrides.
-  // Priority: localStorage (user's UI tweaks) > layout_config.json > hardcoded defaults.
-  useEffect(() => {
-    const savedLayouts = (() => { try { return JSON.parse(localStorage.getItem('reportPageLayouts') || 'null'); } catch { return null; } })();
-    const savedFont    = (() => { try { return JSON.parse(localStorage.getItem('reportFontConfig')   || 'null'); } catch { return null; } })();
-
-    fetchWithTimeout(`${API_BASE_URL}/api/layout-config`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((cfg) => {
-        const cfgPages  = cfg?.pages  || {};
-        const cfgGlobal = cfg?.global || {};
-
-        // Per-page layouts: config file as base, localStorage on top
-        setPageLayouts({ ...cfgPages, ...(savedLayouts || {}) });
-
-        // Global font config: config file fills in anything not in localStorage
-        setFontConfig((prev) => ({
-          ...prev,
-          ...(cfgGlobal.font_family  != null ? { family:       cfgGlobal.font_family  } : {}),
-          ...(cfgGlobal.td_size      != null ? { td_size:      cfgGlobal.td_size      } : {}),
-          ...(cfgGlobal.th_size      != null ? { th_size:      cfgGlobal.th_size      } : {}),
-          ...(cfgGlobal.title_size   != null ? { title_size:   cfgGlobal.title_size   } : {}),
-          ...(cfgGlobal.heading_size != null ? { heading_size: cfgGlobal.heading_size } : {}),
-          ...(savedFont || {}),
-        }));
-      })
-      .catch(() => {
-        // Server unreachable — fall back to localStorage only
-        if (savedLayouts) setPageLayouts(savedLayouts);
-        if (savedFont)    setFontConfig((prev) => ({ ...prev, ...savedFont }));
-      });
-  }, []);
-
-  const curLayout = { ...LAYOUT_DEFAULTS, ...(pageLayouts[activePageNum] || {}) };
-
-  // Apply CSS variables for the currently viewed page
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--report-font-size', `${curLayout.fontSize}pt`);
-    root.style.setProperty('--page-margin-top', `${curLayout.marginTop}mm`);
-    root.style.setProperty('--page-margin-bottom', `${curLayout.marginBottom}mm`);
-    root.style.setProperty('--page-margin-lr', `${curLayout.marginLR}mm`);
-  }, [curLayout.fontSize, curLayout.marginTop, curLayout.marginBottom, curLayout.marginLR]);
-
-  // Persist per-page layouts to localStorage
-  useEffect(() => {
-    try { localStorage.setItem('reportPageLayouts', JSON.stringify(pageLayouts)); } catch {}
-  }, [pageLayouts]);
-
-  // Persist font config to localStorage
-  useEffect(() => {
-    try { localStorage.setItem('reportFontConfig', JSON.stringify(fontConfig)); } catch {}
-  }, [fontConfig]);
-
-  const updateCurLayout = (patch) => setPageLayouts((prev) => ({
-    ...prev,
-    [activePageNum]: { ...curLayout, ...patch },
-  }));
+  // Layout and typography settings now come from backend layout_config.json only
+  // No user customization in the frontend UI
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
   const activePage = pagesData.find((p) => p.page === activePageNum) || pagesData[0];
@@ -356,8 +280,6 @@ export default function ReportPage() {
         body: JSON.stringify({
           month: selectedMonth,
           pages: pagesData,
-          page_layouts: pageLayouts,
-          font_config: fontConfig,
         }),
       });
 
@@ -506,155 +428,15 @@ export default function ReportPage() {
           </div>
         </div>
 
-        {/* Typography — global font settings applied to the whole PDF */}
+        {/* Typography and Layout Settings — now configured via backend layout_config.json only */}
         <div className="control-section">
-          <h2>Typography <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 400 }}>(global)</span></h2>
-
-          <div className="form-group">
-            <label>Font Family</label>
-            <select
-              className="form-control"
-              value={fontConfig.family}
-              onChange={(e) => setFontConfig((prev) => ({ ...prev, family: e.target.value }))}
-            >
-              {FONT_OPTIONS.map((f) => (
-                <option key={f.id} value={f.id}>{f.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Table Cell Size: <strong style={{ color: '#38bdf8' }}>{fontConfig.td_size} pt</strong></label>
-            <input
-              type="range" min="6" max="12" step="0.5"
-              value={fontConfig.td_size}
-              onChange={(e) => setFontConfig((prev) => ({ ...prev, td_size: parseFloat(e.target.value) }))}
-              style={{ width: '100%', accentColor: '#0284c7' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
-              <span>6 pt</span><span>12 pt</span>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Table Header Size: <strong style={{ color: '#38bdf8' }}>{fontConfig.th_size} pt</strong></label>
-            <input
-              type="range" min="6" max="12" step="0.5"
-              value={fontConfig.th_size}
-              onChange={(e) => setFontConfig((prev) => ({ ...prev, th_size: parseFloat(e.target.value) }))}
-              style={{ width: '100%', accentColor: '#0284c7' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
-              <span>6 pt</span><span>12 pt</span>
-            </div>
-          </div>
-
-          <button
-            className="btn btn-secondary"
-            style={{ fontSize: '0.75rem', padding: '5px 8px', marginTop: '4px', width: '100%' }}
-            onClick={() => setFontConfig(FONT_CONFIG_DEFAULTS)}
-          >
-            Reset Typography
-          </button>
-        </div>
-
-        {/* Layout Settings */}
-        <div className="control-section">
-          <h2>Layout Settings <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 400 }}>(Page {activePageNum})</span></h2>
-
-          <div className="form-group">
-            <label>Table Font Size: <strong style={{ color: '#38bdf8' }}>{curLayout.fontSize} pt</strong></label>
-            <input
-              type="range" min="7" max="14" step="0.5"
-              value={curLayout.fontSize}
-              onChange={(e) => updateCurLayout({ fontSize: parseFloat(e.target.value) })}
-              style={{ width: '100%', accentColor: '#0284c7' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
-              <span>7 pt</span><span>14 pt</span>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Top Margin (mm): <strong style={{ color: '#38bdf8' }}>{curLayout.marginTop}</strong></label>
-            <input
-              type="range" min="5" max="30" step="1"
-              value={curLayout.marginTop}
-              onChange={(e) => updateCurLayout({ marginTop: parseInt(e.target.value) })}
-              style={{ width: '100%', accentColor: '#0284c7' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
-              <span>5 mm</span><span>30 mm</span>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Bottom Margin (mm): <strong style={{ color: '#38bdf8' }}>{curLayout.marginBottom}</strong></label>
-            <input
-              type="range" min="5" max="30" step="1"
-              value={curLayout.marginBottom}
-              onChange={(e) => updateCurLayout({ marginBottom: parseInt(e.target.value) })}
-              style={{ width: '100%', accentColor: '#0284c7' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
-              <span>5 mm</span><span>30 mm</span>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Left / Right Margin (mm): <strong style={{ color: '#38bdf8' }}>{curLayout.marginLR}</strong></label>
-            <input
-              type="range" min="5" max="30" step="1"
-              value={curLayout.marginLR}
-              onChange={(e) => updateCurLayout({ marginLR: parseInt(e.target.value) })}
-              style={{ width: '100%', accentColor: '#0284c7' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
-              <span>5 mm</span><span>30 mm</span>
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginTop: '10px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
-              <input
-                type="checkbox"
-                checked={!!curLayout.fitToPage}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    updateCurLayout({ fitToPage: true, marginTop: 8, marginBottom: 8, marginLR: 8, fontSize: 7 });
-                  } else {
-                    updateCurLayout({ fitToPage: false, marginTop: 15, marginBottom: 15, marginLR: 15, fontSize: LAYOUT_DEFAULTS.fontSize });
-                  }
-                }}
-                style={{ accentColor: '#0284c7', width: '14px', height: '14px' }}
-              />
-              <span>Fit to Single Page</span>
-            </label>
-            <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '3px', paddingLeft: '22px' }}>
-              Shrinks font to 7 pt and tightens margins to fit dense content on one page.
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-            <button
-              className="btn btn-secondary"
-              style={{ flex: 1, fontSize: '0.75rem', padding: '5px 8px' }}
-              onClick={() => setPageLayouts((prev) => { const next = { ...prev }; delete next[activePageNum]; return next; })}
-            >
-              Reset Page
-            </button>
-            <button
-              className="btn btn-secondary"
-              style={{ flex: 1, fontSize: '0.75rem', padding: '5px 8px' }}
-              onClick={() => {
-                const all = {};
-                pagesData.forEach((p) => { all[p.page] = { ...curLayout }; });
-                setPageLayouts(all);
-              }}
-            >
-              Apply to All Pages
-            </button>
-          </div>
+          <h2>Layout & Typography</h2>
+          <p style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: '1.4' }}>
+            Font sizes, margins, and layout settings are now configured in the backend <code style={{ backgroundColor: '#1e293b', padding: '2px 6px', borderRadius: '3px', fontFamily: 'monospace', fontSize: '0.75rem' }}>layout_config.json</code> file.
+          </p>
+          <p style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: '1.4', marginTop: '8px' }}>
+            Edit that file to customize per-page layouts and global typography, then regenerate the PDF.
+          </p>
         </div>
 
         {/* Database Actions */}

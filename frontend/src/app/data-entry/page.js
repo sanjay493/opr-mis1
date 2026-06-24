@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import SpecialSteelManualEntry from '@/components/SpecialSteelManualEntry';
+import HotMetalConsumptionEntry from '@/components/HotMetalConsumptionEntry';
 
 const PLANTS = ['BSP', 'DSP', 'ISP', 'RSP', 'BSL', 'ASP', 'SSP', 'VISL'];
 const MONTHS = [
@@ -17,7 +18,7 @@ const MONTH_NUM = {
 };
 const YEARS = Array.from({ length: 8 }, (_, i) => (2023 + i).toString());
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 function getDefaultPeriod() {
   const d = new Date();
@@ -636,6 +637,8 @@ export default function DataEntryPage() {
           )}
 
           <StockEntryCard apiBase={API_BASE_URL} />
+
+          <HotMetalConsumptionEntry apiBase={API_BASE_URL} />
 
           <SpecialSteelManualEntry apiBase={API_BASE_URL} />
 
