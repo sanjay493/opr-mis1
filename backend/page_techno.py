@@ -9,9 +9,9 @@ Column layout:
   <FY-2> Actual | <FY-1> Actual | Target <FY> |
   Apr'YY … <report month> | <CPLY month> | Apr-<Mon>'YY | Apr-<Mon>'YY-1
 
-Annual FY value: stored March till_month_actual first; else AVG(month_actual) for all 12 months
-                 (NULL if fewer than 12 months available).
-YTD value:       stored till_month_actual first; else AVG(month_actual) Apr→month.
+Annual FY value: stored March till_month_actual only (represents full FY Apr-Mar).
+                 Empty if March data not in DB (no fallback averaging).
+YTD value:       stored till_month_actual if present; else computed from monthly actuals Apr→month.
 
 SAIL row computation (MAJOR page + Summary page te_table):
   BF params (Coal/HM, Coke, Nut Coke, CDI Rate, Fuel, Sinter%, Pellet%):
@@ -38,7 +38,7 @@ _DSP_FURNACE_SECTIONS = frozenset({"Si in HM", "S in HM", "HBT"})
 _COKE_SINTER_VISIBLE = frozenset({
     "Dry Coal Charge/Oven", "Coal Tar Yield", "Coke Oven Gas Yield",
     "Crude Benzol Yield", "Amm. Sulphate Yld", "Sinter Productivity",
-    "BOF Slag Utilisation",
+
 })
 
 _BOF_VISIBLE = frozenset({
@@ -51,7 +51,9 @@ _BOF_VISIBLE = frozenset({
 })
 
 _IRON_MAKING_VISIBLE = frozenset({
-    "CDI Rate", "Si in HM", "S in HM", "HBT", "Coke Screen Loss",
+    "CDI Rate", 
+    # "Si in HM", "S in HM", "HBT", 
+    "Coke Screen Loss",
 })
 
 TECHNO_PAGES = {
@@ -107,14 +109,14 @@ _BSL_BF_AGG = {
     "Slag Rate":       "wtavg",
     "BF Productivity": "harmonic",
     "HBT":             "simple",
-    "O2 Enrichment":   "simple",
+    "O2 Enrichment":   "wtavg",
     "Hot Metal Temp":  "simple",
     "Iron Ore":        "sum",
     "Sinter Consumption": "sum",
     "BF Scrap":        "sum",
     "Pellet Consumption": "sum",
 }
-_BSL_FURNACES    = ["BSL BF-1", "BSL BF-2", "BSL BF-4", "BSL BF-5"]
+_BSL_FURNACES    = ["BSL BF-1", "BSL BF-2", "BSL BF-3", "BSL BF-4", "BSL BF-5"]
 _BSL_BF_ALL      = _BSL_FURNACES + ["BSL Plant Shop"]
 
 # ---------------------------------------------------------------------------
@@ -197,10 +199,11 @@ def _ytd_of_month(cur, month):
 
 def _annual_map(cur, fy):
     """(row_label, param_name) → annual value for a past FY.
-    Priority: stored March till_month_actual → AVG(12 months); NULL if <12 months.
+    Uses stored March till_month_actual only (represents full FY Apr-Mar).
+    Empty if March data not in DB. No fallback averaging.
     Returns (map, stored_keys) where stored_keys came from plant-reported till_month_actual."""
     march = f"{fy + 1}-03"
-    # 1. Stored March till_month_actual (plant-reported annual cumulative)
+    # Fetch March till_month_actual (plant-reported annual cumulative Apr-Mar)
     cur.execute("""
         SELECT p.row_label, p.param_name, a.till_month_actual
         FROM techno_actuals a
@@ -209,20 +212,6 @@ def _annual_map(cur, fy):
     """, (march,))
     out = {(r[0], r[1]): r[2] for r in cur.fetchall()}
     stored_keys = set(out.keys())
-    # 2. AVG of all 12 months — only when full year data available
-    months = _fy_months(fy)
-    ph = ",".join("?" * 12)
-    cur.execute(f"""
-        SELECT p.row_label, p.param_name, COUNT(a.actual), AVG(a.actual)
-        FROM techno_actuals a
-        JOIN techno_param p ON a.param_id = p.param_id
-        WHERE a.report_month IN ({ph}) AND a.actual IS NOT NULL
-        GROUP BY p.row_label, p.param_name
-    """, months)
-    for rl, pn, cnt, avg in cur.fetchall():
-        key = (rl, pn)
-        if key not in out:
-            out[key] = avg if cnt == 12 else None
     return out, stored_keys
 
 
@@ -383,8 +372,8 @@ def _all_sail_plant_params():
 
 
 def _inject_plant_weighted_annual(cur, fy_map, ytd_keys, months):
-    """Replace AVG fallbacks with production-weighted annual values for
-    plant-level MAJOR params. Only overrides keys not already in ytd_keys."""
+    """DEPRECATED: No longer used. Historical FY data uses stored March till_month_actual only.
+    Left in place for backwards compatibility but not called by generate_techno()."""
     if not months:
         return
     plant_params = _all_sail_plant_params()
@@ -459,8 +448,9 @@ def _inject_sail_techno(cur, mon_map, cum_map, ccum_map, cply_map,
                         fy2_map, fy1_map, fy3_map,
                         ytd, cply_ytd, cply_month, fy2_months, fy1_months, fy3_months,
                         fy2_stored=None, fy1_stored=None):
-    """Compute SAIL weighted-average techno values and fill gaps in maps.
-    Stored values always win — computed values only fill keys not already set."""
+    """Compute SAIL weighted-average techno values for current periods only.
+    Fills: mon_map (current month), cum_map (YTD), ccum_map (CPLY YTD), cply_map (CPLY month).
+    Historical FY maps (fy1/fy2/fy3) use stored March till_month_actual only — not filled here."""
     all_months   = sorted(set(ytd) | set(cply_ytd) | {cply_month} | set(fy2_months) | set(fy1_months) | set(fy3_months))
     plant_params = _all_sail_plant_params()
     techno_data  = _fetch_techno_data(cur, plant_params, all_months)
@@ -481,14 +471,8 @@ def _inject_sail_techno(cur, mon_map, cum_map, ccum_map, cply_map,
     for key, val in _compute_sail(techno_data, hm, cs, cply_ytd).items():
         ccum_map.setdefault(key, val)
 
-    for key, val in _compute_sail(techno_data, hm, cs, fy3_months).items():
-        fy3_map.setdefault(key, val)
-
-    for key, val in _compute_sail(techno_data, hm, cs, fy2_months).items():
-        fy2_map.setdefault(key, val)
-
-    for key, val in _compute_sail(techno_data, hm, cs, fy1_months).items():
-        fy1_map.setdefault(key, val)
+    # Historical FY maps (fy3, fy2, fy1) are NOT filled here.
+    # They use stored March till_month_actual only; no computed SAIL values.
 
 
 def _inject_bsl_bf_wtavg(cur, cum_map, ccum_map, fy2_map, fy1_map, fy3_map,
@@ -624,9 +608,8 @@ def generate_techno(report_month: str, page_no: int) -> dict:
         tgt_map = {(r[0], r[1]): r[2] for r in cur.fetchall()}
 
         if group == "MAJOR":
-            _inject_plant_weighted_annual(cur, fy3_map, fy3_stored, _fy_months(fy - 3))
-            _inject_plant_weighted_annual(cur, fy2_map, fy2_stored, _fy_months(fy - 2))
-            _inject_plant_weighted_annual(cur, fy1_map, fy1_stored, _fy_months(fy - 1))
+            # Historical FY data (fy1/fy2/fy3) now uses stored March till_month_actual only.
+            # No computed fallbacks — empty if March data not in DB.
             _inject_sail_techno(
                 cur, mon_map, cum_map, ccum_map, cply_map, fy2_map, fy1_map, fy3_map,
                 ytd, cply_ytd, cply_month,
