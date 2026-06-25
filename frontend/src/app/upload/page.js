@@ -803,67 +803,25 @@ export default function UploadPage() {
   const isDspPdf = technoPlant === 'DSP' && technoFile?.name?.toLowerCase().endsWith('.pdf');
 
   const handleDspExtractAllMonths = async () => {
-    if (!technoFile) { alert('Please select the DSP PDF file first.'); return; }
-    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
-    setDspBusy((b) => ({ ...b, production_all: true }));
-    setLogs([]);
-    addLog('info', `DSP: extracting ALL months from production page (report month: ${targetPeriod})...`);
-    const formData = new FormData();
-    formData.append('file', technoFile);
-    formData.append('plant_name', 'DSP');
-    formData.append('month', targetPeriod);
-    formData.append('extract_block', 'production');
-    formData.append('all_months', 'true');
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
-      const rawText = await res.text();
-      let result;
-      try { result = JSON.parse(rawText); } catch (_) { throw new Error(rawText.substring(0, 300)); }
-      if (!res.ok) throw new Error(result.detail || 'extraction failed');
-
-      // Process all-months data by grouping by item
-      const allMonthsMap = {};
-      (result.production_rows || []).forEach((r) => {
-        const key = r.item_name || r.pdf_label;
-        if (!allMonthsMap[key]) {
-          allMonthsMap[key] = { item_name: r.item_name, pdf_label: r.pdf_label, status: r.status, unit: r.unit, months: {} };
-        }
-        allMonthsMap[key].months[r.report_month] = r.value;
-      });
-
-      // Check for month mismatch
-      if (result.month_mismatch) {
-        setDspMonthMismatch(result.month_mismatch);
-        addLog('warning', `⚠ Month mismatch: ${result.month_mismatch.message}`);
-        setDspUseActualMonth(false);
-        // Don't proceed yet - wait for user confirmation
-        return;
-      }
-
-      setDspProdAllMonths({ ...result, grouped_rows: Object.values(allMonthsMap), single_rows: result.production_rows });
-      setDspAllMonthsMode(true);
-      const totalRows = (result.production_rows || []).length;
-      const ok = result.production_rows.filter((r) => r.status === 'ok').length;
-      addLog('success', `✓ ALL months extracted: ${ok}/${totalRows} items mapped across all FY months`);
-    } catch (err) {
-      addLog('error', `DSP all-months extraction failed: ${err.message}`);
-      alert(`Extraction failed: ${err.message}`);
-    } finally {
-      setDspBusy((b) => ({ ...b, production_all: false }));
-    }
+    // Delegate to handleDspExtract with allMonths=true
+    await handleDspExtract('production', true);
   };
 
-  const handleDspExtract = async (block) => {
+  const handleDspExtract = async (block, allMonths = false) => {
     if (!technoFile) { alert('Please select the DSP PDF file first.'); return; }
     const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
-    setDspBusy((b) => ({ ...b, [block]: true }));
+    const busyKey = allMonths ? 'production_all' : block;
+    setDspBusy((b) => ({ ...b, [busyKey]: true }));
     setLogs([]);
-    addLog('info', `DSP: extracting ${block} (${targetPeriod}) from ${technoFile.name}...`);
+    addLog('info', `DSP: extracting ${block} (${targetPeriod}) from ${technoFile.name}${allMonths ? ' (ALL MONTHS)' : ''}...`);
     const formData = new FormData();
     formData.append('file', technoFile);
     formData.append('plant_name', 'DSP');
     formData.append('month', targetPeriod);
     formData.append('extract_block', block);
+    if (allMonths) {
+      formData.append('all_months', 'true');
+    }
     try {
       const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
       const rawText = await res.text();
@@ -871,13 +829,42 @@ export default function UploadPage() {
       try { result = JSON.parse(rawText); } catch (_) { throw new Error(rawText.substring(0, 300)); }
       if (!res.ok) throw new Error(result.detail || 'extraction failed');
       if (block === 'production') {
-        setDspProdResult(result);
-        setDspProdRows((result.production_rows || []).map((r) => ({
-          ...r, selected: r.status === 'ok', item_edit: r.status === 'ok' ? r.item_name : '',
-        })));
-        setDspAllMonthsMode(false);
-        const ok = (result.production_rows || []).filter((r) => r.status === 'ok').length;
-        addLog('success', `Production: ${ok} items extracted. Review below, then Insert Production.`);
+        // Check for month mismatch
+        if (result.month_mismatch) {
+          setDspMonthMismatch(result.month_mismatch);
+          addLog('warning', `⚠ Month mismatch: ${result.month_mismatch.message}`);
+          setDspUseActualMonth(false);
+          // Don't proceed yet - wait for user confirmation
+          setDspBusy((b) => ({ ...b, [busyKey]: false }));
+          return;
+        }
+
+        if (allMonths) {
+          // All-months mode: group rows by item
+          const allMonthsMap = {};
+          (result.production_rows || []).forEach((r) => {
+            const key = r.item_name || r.pdf_label;
+            if (!allMonthsMap[key]) {
+              allMonthsMap[key] = { item_name: r.item_name, pdf_label: r.pdf_label, status: r.status, unit: r.unit, months: {} };
+            }
+            allMonthsMap[key].months[r.report_month] = r.value;
+          });
+
+          setDspProdAllMonths({ ...result, grouped_rows: Object.values(allMonthsMap), single_rows: result.production_rows });
+          setDspAllMonthsMode(true);
+          const totalRows = (result.production_rows || []).length;
+          const ok = result.production_rows.filter((r) => r.status === 'ok').length;
+          addLog('success', `✓ ALL months extracted: ${ok}/${totalRows} items mapped across all FY months`);
+        } else {
+          // Single-month mode: show traditional table
+          setDspProdResult(result);
+          setDspProdRows((result.production_rows || []).map((r) => ({
+            ...r, selected: r.status === 'ok', item_edit: r.status === 'ok' ? r.item_name : '',
+          })));
+          setDspAllMonthsMode(false);
+          const ok = (result.production_rows || []).filter((r) => r.status === 'ok').length;
+          addLog('success', `Production: ${ok} items extracted. Review below, then Insert Production.`);
+        }
       } else if (block === 'techno') {
         setDspTechnoResult(result);
         const ok = (result.techno_param_rows || []).filter((r) => r.status === 'ok').length;
