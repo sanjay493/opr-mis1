@@ -535,9 +535,10 @@ def _block_production(file_path: str, prod_page_idx: int,
     header_col_offset = (header_col_index or 0)
     if header_col_offset > 0 and column_shift == 0:
         # Auto-adjust if not manually set
-        column_shift = -header_col_offset
+        # For PDFs with quarterly aggregates (Q1, Q2, H1), need extra shift
+        column_shift = -header_col_offset - 1  # Extra -1 for quarterly aggregate columns
         import sys
-        print(f"[INFO] Auto-detected column shift: {column_shift} (header starts at col {header_col_index})",
+        print(f"[INFO] Auto-detected column shift: {column_shift} (header starts at col {header_col_index}, +1 for aggregates)",
               file=sys.stderr)
 
     # DEBUG: Print header and month info
