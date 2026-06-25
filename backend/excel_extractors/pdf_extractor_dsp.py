@@ -79,8 +79,20 @@ def _load_maps():
 
 def _norm(s):
     s = re.sub(r'^\s*\d+\s+', '', str(s))          # leading serial number '4 '
-    s = re.sub(r'^\s*[ivx]+\)\s*', '', s.lower())  # roman prefix 'iii) '
-    return re.sub(r'[^a-z0-9]+', ' ', s).strip()
+
+    # Convert roman numerals to numbers before removing them
+    # e.g., "i) BF" → "1 BF" → "1 bf"
+    roman_map = {
+        r'\bi\b': '1', r'\bii\b': '2', r'\biii\b': '3',
+        r'\biv\b': '4', r'\bv\b': '5', r'\bvi\b': '6',
+        r'\bvii\b': '7', r'\bviii\b': '8', r'\bix\b': '9', r'\bx\b': '10'
+    }
+    s = s.lower()
+    for roman, num in roman_map.items():
+        s = re.sub(roman, num, s)
+
+    s = re.sub(r'[^a-z0-9]+', ' ', s).strip()
+    return s
 
 
 def _num(tok):
