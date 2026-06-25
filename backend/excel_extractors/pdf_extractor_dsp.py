@@ -1283,7 +1283,7 @@ def _block_techno(file_path: str, page_index: dict,
                                 # Current year
                                 rows.append({
                                     "group_code": group_code,
-                                    "section":    "BF Parameters",
+                                    "section":    param_label,
                                     "parameter":  f"{furnace_label} {param_label}",
                                     "unit":       param_unit,
                                     "sort_order": param_sort,
@@ -1299,7 +1299,7 @@ def _block_techno(file_path: str, page_index: dict,
                                     prior_yy = str(int(yy) - 1)
                                     rows.append({
                                         "group_code": group_code,
-                                        "section":    "BF Parameters",
+                                        "section":    param_label,
                                         "parameter":  f"{furnace_label} {param_label}",
                                         "unit":       param_unit,
                                         "sort_order": param_sort + 0.5,
@@ -1323,7 +1323,7 @@ def _block_techno(file_path: str, page_index: dict,
                             # Current year
                             rows.append({
                                 "group_code": group_code,
-                                "section":    "BF Parameters",
+                                "section":    param_label,
                                 "parameter":  f"DSP Plant Shop {param_label}",
                                 "unit":       param_unit,
                                 "sort_order": param_sort + 0.2,
@@ -1339,7 +1339,7 @@ def _block_techno(file_path: str, page_index: dict,
                                 prior_yy = str(int(yy) - 1)
                                 rows.append({
                                     "group_code": group_code,
-                                    "section":    "BF Parameters",
+                                    "section":    param_label,
                                     "parameter":  f"DSP Plant Shop {param_label}",
                                     "unit":       param_unit,
                                     "sort_order": param_sort + 0.7,
@@ -1363,7 +1363,7 @@ def _block_techno(file_path: str, page_index: dict,
                             # Current year
                             rows.append({
                                 "group_code": group_code,
-                                "section":    "BF Parameters",
+                                "section":    param_label,
                                 "parameter":  f"DSP Plant Shop {param_label}",
                                 "unit":       param_unit,
                                 "sort_order": param_sort,
@@ -1379,7 +1379,7 @@ def _block_techno(file_path: str, page_index: dict,
                                 prior_yy = str(int(yy) - 1)
                                 rows.append({
                                     "group_code": group_code,
-                                    "section":    "BF Parameters",
+                                    "section":    param_label,
                                     "parameter":  f"DSP Plant Shop {param_label}",
                                     "unit":       param_unit,
                                     "sort_order": param_sort + 0.5,
