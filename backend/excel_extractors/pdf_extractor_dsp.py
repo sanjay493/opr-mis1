@@ -516,6 +516,17 @@ def _block_production(file_path: str, prod_page_idx: int,
         print(f"[INFO] Auto-detected column shift: {column_shift} (header starts at col {header_col_index})",
               file=sys.stderr)
 
+    # DEBUG: Print header and month info
+    import sys
+    print(f"\n[DEBUG] ====== PDF COLUMN STRUCTURE ======", file=sys.stderr)
+    print(f"[DEBUG] Month columns found: {month_cols}", file=sys.stderr)
+    print(f"[DEBUG] Want month: {want_mon} (index in month_cols: {m_idx})", file=sys.stderr)
+    print(f"[DEBUG] Header row tokens: {header_row_text}", file=sys.stderr)
+    print(f"[DEBUG] First month at token position: {header_col_index}", file=sys.stderr)
+    print(f"[DEBUG] Applied column_shift: {column_shift}", file=sys.stderr)
+    print(f"[DEBUG] Data will be extracted from index: {m_idx + column_shift}", file=sys.stderr)
+    print(f"[DEBUG] ====================================\n", file=sys.stderr)
+
     rows = []
     in_saleable = False
     for ln in lines:
@@ -546,6 +557,17 @@ def _block_production(file_path: str, prod_page_idx: int,
         if len(nums) <= data_col_idx or data_col_idx < 0:
             continue
         val = nums[data_col_idx]
+
+        # DEBUG: Print row data for first few items
+        import sys
+        if not hasattr(_block_production, '_row_debug_count'):
+            _block_production._row_debug_count = 0
+        if _block_production._row_debug_count < 5:  # First 5 items
+            print(f"[DEBUG] Row: '{label}' → Raw tokens: {toks}", file=sys.stderr)
+            print(f"[DEBUG]   → All extracted numbers: {nums}", file=sys.stderr)
+            print(f"[DEBUG]   → Extracting from index {data_col_idx} (m_idx={m_idx} + column_shift={column_shift})", file=sys.stderr)
+            print(f"[DEBUG]   → Value: {val} (mapped to: {label})\n", file=sys.stderr)
+            _block_production._row_debug_count += 1
 
         item, convert = None, True
         if label in alias_lookup:
