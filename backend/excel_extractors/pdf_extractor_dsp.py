@@ -556,6 +556,8 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
     rows = []
     # Parameters that should NOT have prior year extraction
     skip_prior_year = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
+    # Parameters with special column handling (different structure in PDF)
+    special_params = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
 
     for keyword, group_code, section, row_label, unit, sort in param_defs:
         for ln in lines:
@@ -565,7 +567,23 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
                 if len(nums) < 4:
                     continue
 
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                # Special handling for parameters with different column structure
+                if keyword in special_params:
+                    # These have [Norm_Hist, Norm_Curr, Actual, Cum, Prior_Actual, Prior_Cum, ...] structure
+                    # Extract starting from index 2 (skipping both norm values)
+                    if len(nums) >= 4:
+                        actual_curr = nums[2] if len(nums) > 2 else None
+                        cum_curr = nums[3] if len(nums) > 3 else None
+                        actual_prior = None  # Skip prior year for these
+                        cum_prior = None
+                    else:
+                        actual_curr = None
+                        cum_curr = None
+                        actual_prior = None
+                        cum_prior = None
+                else:
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
