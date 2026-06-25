@@ -333,8 +333,10 @@ def _te_values(nums, month_diff=0, offset=4):
 def _te_values_techno(nums, report_month_num=None):
     """Extract techno values from techno row (handles variable column count).
 
-    Techno structure: [Norm?] | Current_Month | Current_FY_Cum | Prior_Month | Prior_FY_Cum
-    Some rows have Norm (5 values), others don't (4 values due to regex removing it).
+    Techno structure variants:
+    - 6 values: [Norm_Historical | Norm_Current | Current | CurrentCum | Prior | PriorCum]
+    - 5 values: [Norm | Current | CurrentCum | Prior | PriorCum]
+    - 4 values: [Current | CurrentCum | Prior | PriorCum] (Norm removed by regex)
 
     report_month_num: Month number (1-12) to determine if prior_cum should be included.
     - Prior cumulative is only valid for March (month 3) - represents full FY Apr-Mar
@@ -342,8 +344,16 @@ def _te_values_techno(nums, report_month_num=None):
 
     Returns: (actual_current, cum_current, actual_prior, cum_prior)
     """
-    if len(nums) == 5:
-        # Full structure with Norm: [Norm | Current | CurrentCum | Prior | PriorCum]
+    if len(nums) == 6:
+        # Extra norm column: [Norm_Hist | Norm_Curr | Current | CurrentCum | Prior | PriorCum]
+        actual_current = nums[2]  # Current month (e.g., Apr'25)
+        cum_current = nums[3]     # Current FY cumulative (e.g., 2025-26)
+        actual_prior = nums[4]    # Prior month (e.g., Apr'24)
+        cum_prior = nums[5] if report_month_num == 3 else None
+        return actual_current, cum_current, actual_prior, cum_prior
+
+    elif len(nums) == 5:
+        # Standard structure with Norm: [Norm | Current | CurrentCum | Prior | PriorCum]
         actual_current = nums[1]  # Current month (e.g., Apr'25)
         cum_current = nums[2]     # Current FY cumulative (e.g., 2025-26)
         actual_prior = nums[3]    # Prior month (e.g., Apr'24)
@@ -461,17 +471,14 @@ _WA_PARAMS = {
 }
 
 _MAJOR_PAGE_DEFS = [
-    ("coke rate",                "MAJOR",       "Coke Rate",                        "DSP",     "Kg/THM",    21),
-    ("cdi rate",                 "MAJOR",       "CDI Rate",                         "DSP",     "Kg/THM",    41),
-    ("nut coke rate",            "MAJOR",       "Nut Coke Consumption",             "DSP",     "Kg/THM",    31),
-    ("fuel rate",                "MAJOR",       "Fuel Rate",                        "DSP",     "Kg/THM",    51),
-    ("sinter in burden",         "MAJOR",       "Sinter in Burden",                 "DSP",     "%",         61),
     ("bf productivity",          "MAJOR",       "BF Productivity (Working Volume)", "DSP",     "T/m³/day",  81),
-    ("total metallic input",     "MAJOR",       "TMI",                              "DSP SMS", "Kg/TCS",   112),
     ("gross energy consumption", "MAJOR",       "Specific Energy Consumption",      "DSP",     "G.Cal/TCS",121),
     ("bof slag utilisation",     "COKE_SINTER", "BOF Slag Utilisation",             "DSP",     "%",         41),
     ("loss at skip",             "IRON_MAKING", "Coke Screen Loss",                 "DSP Plant Shop", "%",  31),
 ]
+# NOTE: Removed from Major Techno (will be extracted from Blast Furnace page instead):
+# - Coke Rate, CDI Rate, Nut Coke Rate, Fuel Rate, Sinter in Burden
+# - TMI will be computed from Hot Metal + Scrap Consumption instead
 
 _SMS_PAGE_DEFS = [
     ("gross h.metal",  "MAJOR", "Hot Metal Consumption", "DSP SMS", "Kg/TCS",  92),
