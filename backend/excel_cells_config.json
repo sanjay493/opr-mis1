@@ -97,7 +97,7 @@
   },
 
   "dsp_pdf": {
-    "_doc": "DSP PDF extractor — label text → (item_name_in_DB, convert_to_000T). Edit when PDF headings change. Labels are matched case-insensitively after stripping serial prefixes.",
+    "_doc": "DSP PDF extractor — label text → (item_name_in_DB, convert_to_000T). Edit when PDF headings change. Labels are matched case-insensitively after stripping serial prefixes. Supports both 'bf 2' and '2 bf' formats (roman → numeric conversion).",
     "item_map": [
       ["nos per day",      "Oven Pushing(nos/d)",  false],
       ["sinter",           "Total Sinter",         true],
@@ -105,8 +105,11 @@
       ["sp 2",             "SP-2",                 true],
       ["hot metal",        "Hot Metal",            true],
       ["bf 2",             "BF#2",                 true],
+      ["1 bf",             "BF#2",                 true],
       ["bf 3",             "BF#3",                 true],
+      ["2 bf",             "BF#3",                 true],
       ["bf 4",             "BF#4",                 true],
+      ["3 bf",             "BF#4",                 true],
       ["hm to asp",        "Hot Metal to ASP",     true],
       ["pig iron",         "Pig Iron",             true],
       ["crude steel",      "Total Crude Steel",    true],
