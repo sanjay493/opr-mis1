@@ -330,11 +330,15 @@ def _te_values(nums, month_diff=0, offset=4):
     return actual, cum
 
 
-def _te_values_techno(nums):
+def _te_values_techno(nums, report_month_num=None):
     """Extract techno values from techno row (handles variable column count).
 
     Techno structure: [Norm?] | Current_Month | Current_FY_Cum | Prior_Month | Prior_FY_Cum
     Some rows have Norm (5 values), others don't (4 values due to regex removing it).
+
+    report_month_num: Month number (1-12) to determine if prior_cum should be included.
+    - Prior cumulative is only valid for March (month 3) - represents full FY Apr-Mar
+    - For other months, prior_cum is set to None (Apr-May is not a complete FY)
 
     Returns: (actual_current, cum_current, actual_prior, cum_prior)
     """
@@ -343,7 +347,7 @@ def _te_values_techno(nums):
         actual_current = nums[1]  # Current month (e.g., Apr'25)
         cum_current = nums[2]     # Current FY cumulative (e.g., 2025-26)
         actual_prior = nums[3]    # Prior month (e.g., Apr'24)
-        cum_prior = nums[4]       # Prior FY cumulative (e.g., 2024-25)
+        cum_prior = nums[4] if report_month_num == 3 else None  # Prior FY cum only for March
         return actual_current, cum_current, actual_prior, cum_prior
 
     elif len(nums) == 4:
@@ -351,7 +355,7 @@ def _te_values_techno(nums):
         actual_current = nums[0]  # Current month
         cum_current = nums[1]     # Current FY cumulative
         actual_prior = nums[2]    # Prior month
-        cum_prior = nums[3]       # Prior FY cumulative
+        cum_prior = nums[3] if report_month_num == 3 else None  # Prior FY cum only for March
         return actual_current, cum_current, actual_prior, cum_prior
 
     else:
@@ -485,13 +489,13 @@ _COKE_PAGE_DEFS = [
 # Techno parsing helpers (work on plain text, no pdf object needed)
 # ---------------------------------------------------------------------------
 
-def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, month_diff=0, offset=4):
+def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, month_diff=0, offset=4, report_month_num=None):
     rows = []
     for keyword, label, unit, sort in param_list:
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
@@ -527,13 +531,13 @@ def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, 
     return rows
 
 
-def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0, offset=4):
+def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0, offset=4, report_month_num=None):
     rows = []
     for keyword, group_code, section, row_label, unit, sort in param_defs:
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
@@ -1030,11 +1034,11 @@ def _block_techno(file_path: str, page_index: dict,
         # For techno: use offset=5 (5 columns at right), month_diff=0 (current month)
         rows.extend(_parse_params_from_lines(
             mm_lines, "Merchant Mill", _MM_MSM_PARAMS["Merchant Mill"],
-            pno, want_mon, yy, month_diff=0, offset=5))
+            pno, want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
         msm_lines = _slice_text(text, "TE PARAMETERS - MSM", [])
         rows.extend(_parse_params_from_lines(
             msm_lines, "MSM", _MM_MSM_PARAMS["MSM"],
-            pno, want_mon, yy, month_diff=0, offset=5))
+            pno, want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
 
     wa_idx = page_index.get('wa')
     if wa_idx is not None:
@@ -1044,11 +1048,11 @@ def _block_techno(file_path: str, page_index: dict,
         wp_lines = _slice_text(text, "WHEEL PLANT", ["AXLE PLANT"])
         rows.extend(_parse_params_from_lines(
             wp_lines, "Wheel Plant", _WA_PARAMS["Wheel Plant"],
-            pno, want_mon, yy, month_diff=0, offset=5))
+            pno, want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
         ap_lines = _slice_text(text, "AXLE PLANT", [])
         rows.extend(_parse_params_from_lines(
             ap_lines, "Axle Plant", _WA_PARAMS["Axle Plant"],
-            pno, want_mon, yy, month_diff=0, offset=5))
+            pno, want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
 
     # ── Major techno + SMS ────────────────────────────────────────────────
     major_idx = page_index.get('major')
@@ -1057,7 +1061,7 @@ def _block_techno(file_path: str, page_index: dict,
         # For techno: use offset=5, month_diff=0
         rows.extend(_parse_general_params(
             lines, _MAJOR_PAGE_DEFS, major_idx + 1,
-            want_mon, yy, month_diff=0, offset=5))
+            want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
 
     sms_idx = page_index.get('sms')
     if sms_idx is not None:
@@ -1065,7 +1069,7 @@ def _block_techno(file_path: str, page_index: dict,
         # For techno: use offset=5, month_diff=0
         rows.extend(_parse_general_params(
             lines, _SMS_PAGE_DEFS, sms_idx + 1,
-            want_mon, yy, month_diff=0, offset=5))
+            want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
 
     # ── Coke & Sinter ────────────────────────────────────────────────────
     coke_idx = page_index.get('coke')
@@ -1074,7 +1078,7 @@ def _block_techno(file_path: str, page_index: dict,
         # For techno: use offset=5, month_diff=0
         rows.extend(_parse_general_params(
             lines, _COKE_PAGE_DEFS, coke_idx + 1,
-            want_mon, yy, month_diff=0, offset=5))
+            want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
 
     sint_idx = page_index.get('sint')
     if sint_idx is not None:
