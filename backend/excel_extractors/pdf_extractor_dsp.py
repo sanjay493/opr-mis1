@@ -112,6 +112,20 @@ def _month_header(lines):
     return None
 
 
+def _find_month_column_index(lines, want_mon):
+    """Find the exact column index (in split tokens) of the requested month.
+
+    Returns: (month_index_in_header, total_columns_in_header)
+    This helps identify if columns are shifted in the PDF.
+    """
+    for ln in lines[:15]:
+        toks = [t.upper().rstrip('.') for t in ln.split()]
+        cols = [t for t in toks if t in _MONTHS]
+        if cols and "TOTAL" in toks and want_mon in cols:
+            return cols.index(want_mon), len(cols)
+    return None, None
+
+
 # ---------------------------------------------------------------------------
 # Pass 0: lightweight page index scan
 # ---------------------------------------------------------------------------
@@ -481,6 +495,27 @@ def _block_production(file_path: str, prod_page_idx: int,
     month_diff = len(month_cols) - 1 - m_idx
     n_cols     = len(month_cols) + 1   # data months + TOTAL column
 
+    # AUTO-DETECT column position in header row to find any shifts
+    # This handles PDFs where the month columns appear at different token positions
+    header_col_index = None
+    header_row_text = None
+    for ln in lines[:15]:
+        toks = [t.upper().rstrip('.') for t in ln.split()]
+        if month_cols[0] in toks:
+            header_col_index = toks.index(month_cols[0])
+            header_row_text = toks
+            break
+
+    # If header_col_index != 0, we have prefix columns (SL., i), ii), etc.)
+    # This offset should be applied to m_idx when extracting data
+    header_col_offset = (header_col_index or 0)
+    if header_col_offset > 0 and column_shift == 0:
+        # Auto-adjust if not manually set
+        column_shift = -header_col_offset
+        import sys
+        print(f"[INFO] Auto-detected column shift: {column_shift} (header starts at col {header_col_index})",
+              file=sys.stderr)
+
     rows = []
     in_saleable = False
     for ln in lines:
@@ -506,6 +541,7 @@ def _block_production(file_path: str, prod_page_idx: int,
             continue
 
         # Apply column shift for layout variations (e.g., Sep'25)
+        # column_shift may be auto-detected or manually set
         data_col_idx = m_idx + column_shift
         if len(nums) <= data_col_idx or data_col_idx < 0:
             continue
