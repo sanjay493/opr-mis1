@@ -568,40 +568,40 @@ def _block_production(file_path: str, prod_page_idx: int,
     m_idx      = month_cols.index(want_mon)
     month_diff = len(month_cols) - 1 - m_idx
 
-    # Data columns = months + cumulative (no quarterly aggregates)
-    # The PDF header may have: APR MAY JUN Q1 JUL AUG SEP Q2 H1 TOTAL
-    # But data rows only have: APR MAY JUN JUL AUG SEP CUM_ACTUAL
-    # So n_cols should be: len(months) + 1 (for cumulative column)
-    n_cols = len(month_cols) + 1
-
-    # AUTO-DETECT column position in header row to find any shifts
-    # This handles PDFs where the month columns appear at different token positions
-    header_col_index = None
+    # Find exact position of requested month in HEADER row (including aggregates)
+    want_mon_header_pos = None
     header_row_text = None
+    all_header_cols = None
+
     for ln in lines[:15]:
         toks = [t.upper().rstrip('.') for t in ln.split()]
-        if month_cols[0] in toks:
-            header_col_index = toks.index(month_cols[0])
-            header_row_text = toks
-            break
+        # Find header row: has months AND aggregates (Q1, Q2, H1, TOTAL)
+        has_months = any(m in toks for m in month_cols)
+        has_total = 'TOTAL' in toks
 
-    # If header_col_index != 0, we have prefix columns (SL., i), ii), etc.)
-    # This offset should be applied to m_idx when extracting data
-    header_col_offset = (header_col_index or 0)
-    if header_col_offset > 0 and column_shift == 0:
-        # Auto-adjust for any prefix columns before month data
-        column_shift = -header_col_offset
-        import sys
-        print(f"[INFO] Auto-detected column shift: {column_shift} (header starts at col {header_col_index})",
-              file=sys.stderr)
+        if has_months and has_total:
+            header_row_text = toks
+            # Find position of first month
+            first_month_pos = min((toks.index(m) for m in month_cols if m in toks), default=-1)
+            if first_month_pos >= 0:
+                all_header_cols = toks[first_month_pos:]  # All cols from first month onward
+                # Find position of requested month in this list
+                if want_mon in all_header_cols:
+                    want_mon_header_pos = all_header_cols.index(want_mon)
+                break
+
+    # n_cols = total number of data columns (months + aggregates + cumulative)
+    n_cols = len(all_header_cols) if all_header_cols else (len(month_cols) + 1)
+    m_idx = want_mon_header_pos if want_mon_header_pos is not None else month_cols.index(want_mon)
 
     # DEBUG: Print header and month info
     import sys
     print(f"\n[DEBUG] ====== PDF COLUMN STRUCTURE ======", file=sys.stderr)
     print(f"[DEBUG] Month columns found: {month_cols}", file=sys.stderr)
-    print(f"[DEBUG] Want month: {want_mon} (index in month_cols: {m_idx})", file=sys.stderr)
-    print(f"[DEBUG] Header row tokens: {header_row_text}", file=sys.stderr)
-    print(f"[DEBUG] First month at token position: {header_col_index}", file=sys.stderr)
+    print(f"[DEBUG] All header columns (from first month): {all_header_cols}", file=sys.stderr)
+    print(f"[DEBUG] Want month: {want_mon}", file=sys.stderr)
+    print(f"[DEBUG] Position of {want_mon} in header: {m_idx}", file=sys.stderr)
+    print(f"[DEBUG] Total data columns: {n_cols}", file=sys.stderr)
     print(f"[DEBUG] Applied column_shift: {column_shift}", file=sys.stderr)
     print(f"[DEBUG] Data will be extracted from index: {m_idx + column_shift}", file=sys.stderr)
     print(f"[DEBUG] ====================================\n", file=sys.stderr)
