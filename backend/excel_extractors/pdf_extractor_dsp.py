@@ -114,7 +114,11 @@ def _extract_pdf_report_month(file_path: str) -> str:
     Looks for text like "September 2025" or "Sep'25" on first page.
     Returns "YYYY-MM" format (e.g. "2025-09") or raises ValueError if not found.
     """
-    import pdfplumber
+    try:
+        import pdfplumber
+    except ImportError:
+        raise ValueError("pdfplumber not installed - cannot extract PDF report month")
+
     import re
 
     try:
@@ -959,7 +963,16 @@ def _block_techno(file_path: str, page_index: dict,
     techno_keys = ('major', 'sms', 'coke', 'sint', 'bf_cdi', 'mm', 'wa')
     needed_idxs = {page_index[k] for k in techno_keys if k in page_index}
 
+    print(f"[DSP PDF] Techno page search: looking for {len(techno_keys)} sections: {techno_keys}",
+          flush=True, file=sys.stderr)
+    print(f"[DSP PDF] Page index has: {list(page_index.keys())}",
+          flush=True, file=sys.stderr)
+    print(f"[DSP PDF] Found {len(needed_idxs)} techno pages at indices: {sorted(needed_idxs)}",
+          flush=True, file=sys.stderr)
+
     if not needed_idxs:
+        print(f"[DSP PDF] WARNING: No techno pages found! Returning 0 rows.",
+              flush=True, file=sys.stderr)
         return []
 
     # Read only the specific pages we need; build a sparse page_texts list
@@ -1211,6 +1224,8 @@ def _block_techno(file_path: str, page_index: dict,
                         })
                     break
 
+    print(f"[DSP PDF] Techno extraction complete: {len(rows)} rows extracted",
+          flush=True, file=sys.stderr)
     return rows
 
 
