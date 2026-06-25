@@ -493,16 +493,16 @@ _SMS_PAGE_DEFS = [
     ("si.mn",    "MAJOR", "Silicon Manganese Consumption",     "DSP SMS", "Kg/TCS", 111),
     ("fe-si",    "MAJOR", "Ferro Silicon Consumption",     "DSP SMS", "Kg/TCS", 112),
     ("fe-mn",    "MAJOR", "Ferro Manganese Consumption",     "DSP SMS", "Kg/TCS", 113),
-    ("oxygen.*convt",    "MAJOR", "Oxygen Blow",     "DSP SMS", "Nm³/TCS", 114),
+    ("b.o.f.*gas yield",    "MAJOR", "BOF Gas Yield",     "DSP SMS", "Nm³/TCS", 114),
 ]
 
 _COKE_PAGE_DEFS = [
     ("b.f. coke yield", "COKE_SINTER", "BF Coke Yield",  "DSP", "%",              2),
     ("gross coke yield", "COKE_SINTER", "Gross Coke Yield",  "DSP", "%",              3),
-    ("specific heat.*specific",       "COKE_SINTER", "Sp. Heat Cons.", "DSP", "000 K.Cal/TDC", 11),
+    ("sp. heat cons",       "COKE_SINTER", "Sp. Heat Cons.", "DSP", "000 K.Cal/TDC", 11),
     ("crude tar",       "COKE_SINTER", "Coal Tar Yield", "DSP", "kg/TDC",        21),
     ("coal charge \\(dry\\)", "COKE_SINTER", "Dry Coal Charge/Oven", "DSP", "T",        22),
-    ("specific heat.*power", "COKE_SINTER", "Specific Heat Power", "DSP", "1000 K Cal/T",        23),
+    ("specific heat.*steam|specific power", "COKE_SINTER", "Specific Heat Power", "DSP", "KWH/T",        23),
     ("crude benzol",       "COKE_SINTER", "Crude Benzol", "DSP", "kg/TDC",        24),
     ("c.o.gas yield|c.o gas yield",       "COKE_SINTER", "Coke Oven Gas Yield", "DSP", "Nm³/TDC",        25),
     ("ammonium sulphate",       "COKE_SINTER", "Ammonium Sulphate", "DSP", "Kg/TDC",        26),
