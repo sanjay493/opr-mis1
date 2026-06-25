@@ -330,6 +330,35 @@ def _te_values(nums, month_diff=0, offset=4):
     return actual, cum
 
 
+def _te_values_techno(nums):
+    """Extract techno values from techno row (handles variable column count).
+
+    Techno structure: [Norm?] | Current_Month | Current_FY_Cum | Prior_Month | Prior_FY_Cum
+    Some rows have Norm (5 values), others don't (4 values due to regex removing it).
+
+    Returns: (actual_current, cum_current, actual_prior, cum_prior)
+    """
+    if len(nums) == 5:
+        # Full structure with Norm: [Norm | Current | CurrentCum | Prior | PriorCum]
+        actual_current = nums[1]  # Current month (e.g., Apr'25)
+        cum_current = nums[2]     # Current FY cumulative (e.g., 2025-26)
+        actual_prior = nums[3]    # Prior month (e.g., Apr'24)
+        cum_prior = nums[4]       # Prior FY cumulative (e.g., 2024-25)
+        return actual_current, cum_current, actual_prior, cum_prior
+
+    elif len(nums) == 4:
+        # Norm removed by regex: [Current | CurrentCum | Prior | PriorCum]
+        actual_current = nums[0]  # Current month
+        cum_current = nums[1]     # Current FY cumulative
+        actual_prior = nums[2]    # Prior month
+        cum_prior = nums[3]       # Prior FY cumulative
+        return actual_current, cum_current, actual_prior, cum_prior
+
+    else:
+        # Not enough data
+        return None, None, None, None
+
+
 def _te_values_with_prior(nums, month_diff=0, offset=4):
     """Extract both current and prior year values from techno row.
 
@@ -462,7 +491,7 @@ def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, 
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff, offset)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
@@ -504,7 +533,7 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff, offset)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
