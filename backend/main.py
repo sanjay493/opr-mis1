@@ -300,7 +300,8 @@ async def generate_pdf(request: PDFRequest):
             p.update(generate_techno(request.month, pg))
             p["type"] = "techno_params"
         enriched.append(p)
-    return await build_pdf_response(request, pages_override=enriched, page_layouts=request.page_layouts, font_config=request.font_config)
+    # Layout and typography now come from backend layout_config.json only; ignore frontend overrides
+    return await build_pdf_response(request, pages_override=enriched, page_layouts=None, font_config=None)
 
 
 # ---------------------------------------------------------------------------
@@ -1043,6 +1044,64 @@ async def get_extraction_log(limit: int = 60):
     return {"logs": db.get_extraction_logs(limit=limit)}
 
 
+@app.get("/api/item-mapping-suggestions")
+async def get_item_mapping_suggestions(plant: str):
+    """Get all previously extracted item names and their PDF label mappings.
+
+    Returns:
+      {
+        "items": ["Total Sinter", "Hot Metal", ...],  # All item names extracted for this plant
+        "aliases": {pdf_label: (item_name, convert_t), ...}  # Saved PDF label → item mappings
+      }
+    """
+    conn = sqlite3.connect(db.DB_PATH)
+    cursor = conn.cursor()
+
+    # Get all unique item names for this plant
+    cursor.execute(
+        "SELECT DISTINCT item_name FROM production_table WHERE plant_name = ? ORDER BY item_name",
+        (plant,)
+    )
+    items = [row[0] for row in cursor.fetchall()]
+
+    conn.close()
+
+    # Get aliases
+    aliases = db.get_pdf_item_aliases(plant)
+
+    return {
+        "items": items,
+        "aliases": {k: list(v) for k, v in aliases.items()}  # Convert tuples to lists for JSON
+    }
+
+
+@app.post("/api/save-item-alias")
+async def save_item_alias(payload: dict):
+    """Save a PDF label → item name mapping for future extractions.
+
+    Payload:
+      {
+        "plant": "DSP",
+        "pdf_label": "1 nos total",
+        "item_name": "Oven Pushing(nos/d)",
+        "convert_t": 0
+      }
+    """
+    try:
+        plant = payload.get("plant", "")
+        pdf_label = payload.get("pdf_label", "")
+        item_name = payload.get("item_name", "")
+        convert_t = int(payload.get("convert_t", 1))
+
+        if not all([plant, pdf_label, item_name]):
+            raise ValueError("Missing required fields: plant, pdf_label, item_name")
+
+        db.save_pdf_item_alias(plant, pdf_label, item_name, convert_t)
+        return {"message": f"Saved alias: {pdf_label} → {item_name}"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.get("/api/production-items")
 async def get_production_items(plant: str, month: str):
     conn = sqlite3.connect(db.DB_PATH)
@@ -1404,6 +1463,192 @@ async def save_techno_manual(payload: dict):
         "cleared": cleared,
         "message": f"Saved {saved} value(s), cleared {cleared} value(s) for {month}.",
     }
+
+
+@app.get("/api/sail-sms-params")
+def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
+    """
+    Calculate SAIL consolidated SMS parameters (Hot Metal Consumption, Scrap Consumption)
+    using weighted average by Crude Steel production.
+
+    Returns: {
+        "month": "2026-03",
+        "sail_params": {
+            "Hot Metal Consumption": {
+                "actual": 1042.90,
+                "till_month_actual": 1042.35,
+                "source": "calculated",  # or "db"
+                "unit": "Kg/TCS"
+            },
+            "Scrap Consumption": { ... }
+        }
+    }
+    """
+
+    SMS_SHOPS = [
+        "BSP SMS-2", "BSP SMS-3", "DSP SMS",
+        "RSP SMS-1", "RSP SMS-2",
+        "BSL SMS-1", "BSL SMS-2",
+        "ISP SMS-1",
+    ]
+
+    SMS_SHOP_PLANT = {
+        "BSP SMS-2": "BSP", "BSP SMS-3": "BSP", "DSP SMS": "DSP",
+        "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
+        "BSL SMS-1": "BSL", "BSL SMS-2": "BSL", "ISP SMS-1": "ISP",
+    }
+
+    SMS_PARAMS = ["Hot Metal Consumption", "Scrap Consumption"]
+
+    conn = sqlite3.connect(db.DB_PATH)
+    cursor = conn.cursor()
+
+    result = {"month": month, "sail_params": {}}
+
+    # First check if SAIL values exist in DB
+    cursor.execute(
+        """SELECT p.param_name, a.actual, a.till_month_actual
+           FROM techno_actuals a
+           JOIN techno_param p ON a.param_id = p.param_id
+           WHERE p.row_label = 'SAIL'
+             AND a.report_month = ?
+             AND p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')""",
+        (month,)
+    )
+
+    db_values = {}
+    for param_name, actual, till_month in cursor.fetchall():
+        db_values[param_name] = (actual, till_month, "db")
+
+    # Get SMS shop values
+    cursor.execute(
+        """SELECT p.row_label, p.param_name, a.actual, a.till_month_actual
+           FROM techno_actuals a
+           JOIN techno_param p ON a.param_id = p.param_id
+           WHERE p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')
+             AND a.report_month = ?
+             AND p.row_label IN ({})""".format(','.join(['?' for _ in SMS_SHOPS])),
+        [month] + SMS_SHOPS
+    )
+
+    sms_values = {}
+    for shop, param_name, actual, till_month in cursor.fetchall():
+        if param_name not in sms_values:
+            sms_values[param_name] = {}
+        sms_values[param_name][shop] = (actual, till_month)
+
+    # Get Crude Steel production (monthly and YTD)
+    cursor.execute(
+        """SELECT plant_name, month_actual
+           FROM production_table
+           WHERE item_name = 'Total Crude Steel'
+             AND report_month = ?""",
+        (month,)
+    )
+
+    cs_monthly = {}
+    for plant, value in cursor.fetchall():
+        if value is not None:
+            cs_monthly[plant] = value
+
+    # Get YTD Crude Steel (sum from Apr to this month)
+    # Extract year and month from the month string
+    year, month_num = month.split('-')
+    year, month_num = int(year), int(month_num)
+
+    # Build list of months from Apr (04) of previous year to current month
+    ytd_months = []
+    if month_num >= 4:
+        # Same fiscal year
+        for m in range(4, month_num + 1):
+            ytd_months.append(f"{year}-{m:02d}")
+    else:
+        # Previous fiscal year started in Apr of previous year
+        prev_year = year - 1
+        for m in range(4, 13):
+            ytd_months.append(f"{prev_year}-{m:02d}")
+        for m in range(1, month_num + 1):
+            ytd_months.append(f"{year}-{m:02d}")
+
+    cursor.execute(
+        """SELECT plant_name, SUM(month_actual) as ytd_cs
+           FROM production_table
+           WHERE item_name = 'Total Crude Steel'
+             AND report_month IN ({})
+           GROUP BY plant_name""".format(','.join(['?' for _ in ytd_months])),
+        ytd_months
+    )
+
+    cs_ytd = {}
+    for plant, value in cursor.fetchall():
+        if value is not None:
+            cs_ytd[plant] = value
+
+    conn.close()
+
+    # Calculate weighted averages for each parameter
+    for param_name in SMS_PARAMS:
+        # Check if value exists in DB
+        if param_name in db_values:
+            actual, till_month, source = db_values[param_name]
+            result["sail_params"][param_name] = {
+                "actual": actual,
+                "till_month_actual": till_month,
+                "source": source,
+                "unit": "Kg/TCS"
+            }
+            continue
+
+        # Calculate if not in DB
+        if param_name not in sms_values or not sms_values[param_name]:
+            continue
+
+        shop_values = sms_values[param_name]
+
+        # Count shops per plant
+        shops_per_plant = {}
+        for shop in SMS_SHOPS:
+            plant = SMS_SHOP_PLANT[shop]
+            shops_per_plant[plant] = shops_per_plant.get(plant, 0) + 1
+
+        # Calculate weighted averages directly from SMS shops
+        # Each shop gets equal share of its plant's CS production
+        monthly_sum = 0.0
+        total_cs_monthly_sum = 0.0
+        ytd_sum = 0.0
+        total_cs_ytd_sum = 0.0
+
+        for shop in SMS_SHOPS:
+            if shop not in shop_values:
+                continue
+
+            actual, till = shop_values[shop]
+            plant = SMS_SHOP_PLANT[shop]
+
+            # Each shop gets equal share of plant's CS
+            cs_m = cs_monthly.get(plant, 0) / shops_per_plant[plant]
+            cs_y = cs_ytd.get(plant, 0) / shops_per_plant[plant]
+
+            if actual is not None:
+                monthly_sum += actual * cs_m
+                total_cs_monthly_sum += cs_m
+
+            if till is not None:
+                ytd_sum += till * cs_y
+                total_cs_ytd_sum += cs_y
+
+        actual_value = monthly_sum / total_cs_monthly_sum if total_cs_monthly_sum > 0 else None
+        till_value = ytd_sum / total_cs_ytd_sum if total_cs_ytd_sum > 0 else None
+
+        if actual_value is not None or till_value is not None:
+            result["sail_params"][param_name] = {
+                "actual": actual_value,
+                "till_month_actual": till_value,
+                "source": "calculated",
+                "unit": "Kg/TCS"
+            }
+
+    return result
 
 
 # ---------------------------------------------------------------------------

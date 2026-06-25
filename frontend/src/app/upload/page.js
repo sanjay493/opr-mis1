@@ -376,12 +376,32 @@ export default function UploadPage() {
   const [dspSsRows, setDspSsRows] = useState([]);
   const [dspStockResult, setDspStockResult] = useState(null);
   const [dspBusy, setDspBusy] = useState({ production: false, techno: false, special_steel: false, stock: false, production_all: false });
+
+  // Item mapping suggestions
+  const [dspItemSuggestions, setDspItemSuggestions] = useState(null);  // {items: [...], aliases: {...}}
+  const [dspItemMappingCache, setDspItemMappingCache] = useState({});  // Cache for loaded suggestions
   
   const [isUploading, setIsUploading] = useState(false);
   const [logs, setLogs] = useState([
     { type: 'info', text: 'System ready. Select a spreadsheet and click "Extract Data".' }
   ]);
   const [extractionLog, setExtractionLog] = useState([]);
+
+  const saveDspItemAlias = async (pdfLabel, itemName, convertT = 1) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/save-item-alias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plant: 'DSP', pdf_label: pdfLabel, item_name: itemName, convert_t: convertT }),
+      });
+      if (res.ok) {
+        // Clear cache to reload suggestions
+        setDspItemMappingCache({});
+      }
+    } catch (e) {
+      console.error('Failed to save alias:', e);
+    }
+  };
 
   const fetchExtractionLog = useCallback(async () => {
     try {
@@ -394,6 +414,21 @@ export default function UploadPage() {
   }, []);
 
   useEffect(() => { fetchExtractionLog(); }, [fetchExtractionLog]);
+
+  // Load DSP item suggestions when plant changes
+  useEffect(() => {
+    if (technoPlant === 'DSP' && !dspItemMappingCache['DSP']) {
+      fetch(`${API_BASE_URL}/api/item-mapping-suggestions?plant=DSP`)
+        .then(r => r.json())
+        .then(data => {
+          setDspItemSuggestions(data);
+          setDspItemMappingCache(prev => ({ ...prev, 'DSP': data }));
+        })
+        .catch(e => console.error('Failed to load item suggestions:', e));
+    } else if (technoPlant === 'DSP' && dspItemMappingCache['DSP']) {
+      setDspItemSuggestions(dspItemMappingCache['DSP']);
+    }
+  }, [technoPlant, dspItemMappingCache]);
 
   const addLog = (type, text) => {
     setLogs((prev) => [...prev, { type, text, time: new Date().toLocaleTimeString() }]);
@@ -910,6 +945,12 @@ export default function UploadPage() {
           .map((r) => {
             let value = r.value;
             if (r.unit === 'T' && typeof value === 'number') value = Math.round(value) / 1000;
+
+            // Save this mapping for future use
+            if (r.pdf_label && r.item_name !== r.pdf_label) {
+              saveDspItemAlias(r.pdf_label, r.item_name, r.unit === 'nos/d' ? 0 : 1);
+            }
+
             return { ...r, item_name: r.item_name, value, report_month: r.report_month };
           });
         if (!allMonthsRows.length) { alert('No production rows to insert.'); return; }
@@ -923,6 +964,12 @@ export default function UploadPage() {
         payload.production_rows = chosen.map((r) => {
           let value = r.value;
           if (r.status !== 'ok' && r.unit === 'T' && typeof value === 'number') value = Math.round(value) / 1000;
+
+          // Save this mapping for future use
+          if (r.pdf_label && r.item_edit.trim() !== r.pdf_label) {
+            saveDspItemAlias(r.pdf_label, r.item_edit.trim(), r.unit === 'nos/d' ? 0 : 1);
+          }
+
           return { ...r, item_name: r.item_edit.trim(), value };
         });
         payload.item_overrides = chosen
