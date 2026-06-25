@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
@@ -32,7 +32,7 @@ const defaultFY = () => {
   return `${startYear}-${endYear.toString().padStart(2, '0')}`;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
 
 const getDefaultDate = () => {
   const d = new Date();
@@ -212,6 +212,67 @@ function EditableSpecialSteelTable({ plant, rows, onToggle, onEditGrade, onEditS
   );
 }
 
+function AllMonthsProductionTable({ rows, unit = "'000T" }) {
+  if (!rows || rows.length === 0) return null;
+
+  // Extract unique months from all rows
+  const allMonths = new Set();
+  rows.forEach(r => {
+    if (r.months) Object.keys(r.months).forEach(m => allMonths.add(m));
+  });
+  const sortedMonths = Array.from(allMonths).sort();
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: '9pt', fontWeight: 700, color: '#a5b4fc', margin: '8px 0 6px' }}>
+        Production — All Months ({sortedMonths.length} months extracted) → production_table
+      </div>
+      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 400, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8pt' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 2 }}>
+              <th style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap', minWidth: 150 }}>
+                Item
+              </th>
+              {sortedMonths.map((month) => (
+                <th key={month} style={{ padding: '6px 8px', textAlign: 'center', color: '#60a5fa', fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap', minWidth: 80 }}>
+                  {month}
+                </th>
+              ))}
+              <th style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap', minWidth: 60 }}>
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const ok = r.status === 'ok';
+              return (
+                <tr key={i} style={{
+                  backgroundColor: ok ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)',
+                  borderBottom: '1px solid #1e293b', opacity: ok ? 1 : 0.6,
+                }}>
+                  <td style={{ padding: '4px 10px', color: '#38bdf8', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {r.item_name || r.pdf_label}
+                  </td>
+                  {sortedMonths.map((month) => (
+                    <td key={month} style={{ padding: '4px 8px', textAlign: 'right', color: '#cbd5e1', fontFamily: 'monospace' }}>
+                      {r.months[month] ?? '—'}
+                    </td>
+                  ))}
+                  <td style={{ padding: '4px 10px', color: ok ? '#34d399' : '#f87171', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {ok ? 'ok' : 'unmapped'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
   const selCount = rows.filter((r) => r.selected).length;
   const cellStyle = { padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' };
@@ -308,11 +369,13 @@ export default function UploadPage() {
   // DSP PDF three-step state (independent from the generic technoPreview flow)
   const [dspProdResult, setDspProdResult] = useState(null);
   const [dspProdRows, setDspProdRows] = useState([]);
+  const [dspProdAllMonths, setDspProdAllMonths] = useState(null);  // Multi-month preview
+  const [dspAllMonthsMode, setDspAllMonthsMode] = useState(false); // Toggle between single vs all months
   const [dspTechnoResult, setDspTechnoResult] = useState(null);
   const [dspSsResult, setDspSsResult] = useState(null);
   const [dspSsRows, setDspSsRows] = useState([]);
   const [dspStockResult, setDspStockResult] = useState(null);
-  const [dspBusy, setDspBusy] = useState({ production: false, techno: false, special_steel: false, stock: false });
+  const [dspBusy, setDspBusy] = useState({ production: false, techno: false, special_steel: false, stock: false, production_all: false });
   
   const [isUploading, setIsUploading] = useState(false);
   const [logs, setLogs] = useState([
@@ -700,6 +763,48 @@ export default function UploadPage() {
   // ── DSP PDF three-step helpers ──────────────────────────────────────────
   const isDspPdf = technoPlant === 'DSP' && technoFile?.name?.toLowerCase().endsWith('.pdf');
 
+  const handleDspExtractAllMonths = async () => {
+    if (!technoFile) { alert('Please select the DSP PDF file first.'); return; }
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    setDspBusy((b) => ({ ...b, production_all: true }));
+    setLogs([]);
+    addLog('info', `DSP: extracting ALL months from production page (report month: ${targetPeriod})...`);
+    const formData = new FormData();
+    formData.append('file', technoFile);
+    formData.append('plant_name', 'DSP');
+    formData.append('month', targetPeriod);
+    formData.append('extract_block', 'production');
+    formData.append('all_months', 'true');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
+      const rawText = await res.text();
+      let result;
+      try { result = JSON.parse(rawText); } catch (_) { throw new Error(rawText.substring(0, 300)); }
+      if (!res.ok) throw new Error(result.detail || 'extraction failed');
+
+      // Process all-months data by grouping by item
+      const allMonthsMap = {};
+      (result.production_rows || []).forEach((r) => {
+        const key = r.item_name || r.pdf_label;
+        if (!allMonthsMap[key]) {
+          allMonthsMap[key] = { item_name: r.item_name, pdf_label: r.pdf_label, status: r.status, unit: r.unit, months: {} };
+        }
+        allMonthsMap[key].months[r.report_month] = r.value;
+      });
+
+      setDspProdAllMonths({ ...result, grouped_rows: Object.values(allMonthsMap), single_rows: result.production_rows });
+      setDspAllMonthsMode(true);
+      const totalRows = (result.production_rows || []).length;
+      const ok = result.production_rows.filter((r) => r.status === 'ok').length;
+      addLog('success', `✓ ALL months extracted: ${ok}/${totalRows} items mapped across all FY months`);
+    } catch (err) {
+      addLog('error', `DSP all-months extraction failed: ${err.message}`);
+      alert(`Extraction failed: ${err.message}`);
+    } finally {
+      setDspBusy((b) => ({ ...b, production_all: false }));
+    }
+  };
+
   const handleDspExtract = async (block) => {
     if (!technoFile) { alert('Please select the DSP PDF file first.'); return; }
     const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
@@ -722,6 +827,7 @@ export default function UploadPage() {
         setDspProdRows((result.production_rows || []).map((r) => ({
           ...r, selected: r.status === 'ok', item_edit: r.status === 'ok' ? r.item_name : '',
         })));
+        setDspAllMonthsMode(false);
         const ok = (result.production_rows || []).filter((r) => r.status === 'ok').length;
         addLog('success', `Production: ${ok} items extracted. Review below, then Insert Production.`);
       } else if (block === 'techno') {
@@ -796,18 +902,34 @@ export default function UploadPage() {
       production_rows: [], item_overrides: [], techno_rows: [],
       techno_param_rows: [], special_steel_rows: [],
     };
-    if (block === 'production' && dspProdResult) {
-      const chosen = dspProdRows.filter((r) => r.selected && (r.item_edit || '').trim());
-      if (!chosen.length) { alert('No production rows selected.'); return; }
-      payload.production_rows = chosen.map((r) => {
-        let value = r.value;
-        if (r.status !== 'ok' && r.unit === 'T' && typeof value === 'number') value = Math.round(value) / 1000;
-        return { ...r, item_name: r.item_edit.trim(), value };
-      });
-      payload.item_overrides = chosen
-        .filter((r) => r.pdf_label && (r.status !== 'ok' || r.item_edit.trim() !== r.item_name))
-        .map((r) => ({ pdf_label: r.pdf_label, item_name: r.item_edit.trim(), convert_t: r.unit === 'nos/d' ? 0 : 1 }));
-      payload.sheets = dspProdResult.sheets || '';
+    if (block === 'production' && (dspProdResult || dspProdAllMonths)) {
+      if (dspAllMonthsMode && dspProdAllMonths) {
+        // Insert all-months data: use the single_rows with each month's report_month
+        const allMonthsRows = (dspProdAllMonths.single_rows || [])
+          .filter((r) => r.status === 'ok')
+          .map((r) => {
+            let value = r.value;
+            if (r.unit === 'T' && typeof value === 'number') value = Math.round(value) / 1000;
+            return { ...r, item_name: r.item_name, value, report_month: r.report_month };
+          });
+        if (!allMonthsRows.length) { alert('No production rows to insert.'); return; }
+        payload.production_rows = allMonthsRows;
+        payload.sheets = dspProdAllMonths.sheets || '';
+        // For all-months mode, month is already set from baseResult.month (report month)
+      } else {
+        // Insert single-month data (traditional mode)
+        const chosen = dspProdRows.filter((r) => r.selected && (r.item_edit || '').trim());
+        if (!chosen.length) { alert('No production rows selected.'); return; }
+        payload.production_rows = chosen.map((r) => {
+          let value = r.value;
+          if (r.status !== 'ok' && r.unit === 'T' && typeof value === 'number') value = Math.round(value) / 1000;
+          return { ...r, item_name: r.item_edit.trim(), value };
+        });
+        payload.item_overrides = chosen
+          .filter((r) => r.pdf_label && (r.status !== 'ok' || r.item_edit.trim() !== r.item_name))
+          .map((r) => ({ pdf_label: r.pdf_label, item_name: r.item_edit.trim(), convert_t: r.unit === 'nos/d' ? 0 : 1 }));
+        payload.sheets = dspProdResult.sheets || '';
+      }
     } else if (block === 'techno' && dspTechnoResult) {
       payload.techno_param_rows = (dspTechnoResult.techno_param_rows || []).filter((r) => r.status === 'ok');
       if (!payload.techno_param_rows.length) { alert('No techno rows to insert.'); return; }
@@ -831,7 +953,12 @@ export default function UploadPage() {
       if (!res.ok) throw new Error(result.detail || 'insert failed');
       addLog('success', result.message);
       alert(result.message);
-      if (block === 'production') { setDspProdResult(null); setDspProdRows([]); }
+      if (block === 'production') {
+        setDspProdResult(null);
+        setDspProdRows([]);
+        setDspProdAllMonths(null);
+        setDspAllMonthsMode(false);
+      }
       else if (block === 'techno') { setDspTechnoResult(null); }
       else { setDspSsResult(null); setDspSsRows([]); }
       fetchExtractionLog();
@@ -839,7 +966,7 @@ export default function UploadPage() {
       addLog('error', `DSP ${block} insert failed: ${err.message}`);
       alert(`Insert failed: ${err.message}`);
     } finally {
-      setDspBusy((b) => ({ ...b, [block]: false }));
+      setDspBusy((b) => ({ ...b, [block]: false, production_all: false }));
     }
   };
 
@@ -1054,6 +1181,16 @@ export default function UploadPage() {
                       {dspBusy[block] ? 'Extracting...' : label}
                     </button>
                   ))}
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #334155', fontSize: '8pt', color: '#94a3b8' }}>
+                    Production — extract all FY months at once:
+                  </div>
+                  <button type="button" onClick={handleDspExtractAllMonths}
+                          disabled={dspBusy.production_all}
+                          style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                   backgroundColor: '#06b6d4', border: '1px solid #06b6d4', color: '#fff',
+                                   cursor: dspBusy.production_all ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                    {dspBusy.production_all ? 'Extracting All Months...' : '🔄 Extract All Previous Months'}
+                  </button>
                 </div>
               ) : isAspPdf ? (
                 <button type="button" onClick={handleAspExtract} disabled={aspBusy}
@@ -1455,32 +1592,44 @@ export default function UploadPage() {
           )}
 
           {/* DSP PDF — three independent block preview panels */}
-          {dspProdResult && (
+          {(dspProdResult || dspProdAllMonths) && (
             <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #10b981', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
                   Step 1 — Production&nbsp;
                   <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
-                    DSP {dspProdResult.month} · {dspProdResult.source_type}
+                    DSP {dspProdAllMonths?.month || dspProdResult?.month} · {dspProdAllMonths ? 'ALL MONTHS' : dspProdResult?.source_type}
                   </span>
                 </h3>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => { setDspProdResult(null); setDspProdRows([]); }}
-                          disabled={dspBusy.production}
+                  <button onClick={() => { setDspProdResult(null); setDspProdRows([]); setDspProdAllMonths(null); setDspAllMonthsMode(false); }}
+                          disabled={dspBusy.production || dspBusy.production_all}
                           style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
                                    color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
                     Discard
                   </button>
                   <button onClick={() => handleDspInsert('production')}
-                          disabled={dspBusy.production}
+                          disabled={dspBusy.production || dspBusy.production_all}
                           style={{ backgroundColor: '#10b981', border: '1px solid #10b981', borderRadius: 4,
                                    color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
-                    {dspBusy.production ? 'Inserting...' : `Insert Production (${dspProdRows.filter(r => r.selected && (r.item_edit||'').trim()).length} rows)`}
+                    {dspBusy.production || dspBusy.production_all ? 'Processing...' : `Insert Production (${dspAllMonthsMode
+                      ? (dspProdAllMonths?.grouped_rows || []).filter(r => r.status === 'ok').length + ' items'
+                      : dspProdRows.filter(r => r.selected && (r.item_edit||'').trim()).length + ' rows'})`}
                   </button>
                 </div>
               </div>
-              <EditableProductionTable plant="DSP" rows={dspProdRows}
-                onToggle={toggleDspProdRow} onEditName={editDspProdName} />
+              {dspAllMonthsMode && dspProdAllMonths ? (
+                <>
+                  <AllMonthsProductionTable rows={dspProdAllMonths.grouped_rows} />
+                  <div style={{ fontSize: '8pt', color: '#94a3b8', marginTop: 12, padding: 10, backgroundColor: '#0f172a', borderRadius: 4 }}>
+                    <strong>ℹ️ All Months Mode:</strong> Extract production data for all FY months (APR–SEP, APR–DEC, etc.).
+                    Each row shows values across all extracted months. Click "Insert Production" to save all months to database.
+                  </div>
+                </>
+              ) : (
+                <EditableProductionTable plant="DSP" rows={dspProdRows}
+                  onToggle={toggleDspProdRow} onEditName={editDspProdName} />
+              )}
             </div>
           )}
 
@@ -1781,3 +1930,4 @@ export default function UploadPage() {
     </main>
   );
 }
+
