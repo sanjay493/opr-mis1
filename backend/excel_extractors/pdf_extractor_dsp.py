@@ -1233,13 +1233,14 @@ def extract_preview_flash(file_path: str, report_month: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def extract_preview(file_path: str, report_month: str, aliases: dict = None,
-                    block: str = 'all', column_shift: int = 0) -> dict:
+                    block: str = 'all', column_shift: int = 0, all_months: bool = False) -> dict:
     """Extract DSP data from the OMI PDF or Flash.pdf.
 
     Args:
         block: which sections to process ('all', 'production', 'techno', 'special_steel', 'stock')
         aliases: user-saved mapping {pdf_label: (item_name, convert_to_000T)}
         column_shift: adjust data column position (-1 for Sep'25 left-shifted layout)
+        all_months: if True, extract ALL months from PDF; if False, extract only report_month
 
     No database writes — preview only.
     """
@@ -1310,12 +1311,23 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
     if run_prod:
         print(f"[DSP PDF] Block 1: production (page {page_index['prod']+1}) ...",
               flush=True, file=sys.stderr)
-        # Extract ALL months from the PDF, not just the requested month
-        prod_rows, prod_page_no, month_diff = _block_production_all_months(
-            file_path, page_index['prod'], report_month, y, yy, alias_lookup, column_shift=column_shift)
+
+        if all_months:
+            # Extract ALL months from the PDF
+            print(f"[DSP PDF] MODE: All-months extraction", flush=True, file=sys.stderr)
+            prod_rows, prod_page_no, month_diff = _block_production_all_months(
+                file_path, page_index['prod'], report_month, y, yy, alias_lookup, column_shift=column_shift)
+            mode_label = "all months"
+        else:
+            # Extract only the requested month (single-month mode)
+            print(f"[DSP PDF] MODE: Single-month extraction for {want_mon}'{yy}", flush=True, file=sys.stderr)
+            prod_rows, prod_page_no, month_diff = _block_production(
+                file_path, page_index['prod'], want_mon, y, yy, alias_lookup, column_shift=column_shift)
+            mode_label = "single month"
+
         gc.collect()
         ok_count = sum(1 for r in prod_rows if r["status"] == "ok")
-        print(f"[DSP PDF] Block 1 done: {ok_count}/{len(prod_rows)} rows ok (all months)",
+        print(f"[DSP PDF] Block 1 done: {ok_count}/{len(prod_rows)} rows ok ({mode_label})",
               flush=True, file=sys.stderr)
         if not any(r["status"] == "ok" for r in prod_rows):
             raise ValueError("Production page found but no known items matched.")
