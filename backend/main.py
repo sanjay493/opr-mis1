@@ -1090,15 +1090,29 @@ async def debug_column_detection(
 
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            # Extract with all-months to see structure
-            result = await asyncio.wait_for(
-                loop.run_in_executor(
-                    pool,
-                    lambda: excel_extractor_dsp.extract_preview(
-                        tmp_path, month, block="production", all_months=True)
-                ),
-                timeout=300.0,
-            )
+            # Try extracting with all_months, fall back if not supported
+            try:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        pool,
+                        lambda: excel_extractor_dsp.extract_preview(
+                            tmp_path, month, block="production", all_months=True)
+                    ),
+                    timeout=300.0,
+                )
+            except TypeError as e:
+                if "all_months" in str(e):
+                    # Fall back to single month extraction
+                    result = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            pool,
+                            lambda: excel_extractor_dsp.extract_preview(
+                                tmp_path, month, block="production")
+                        ),
+                        timeout=300.0,
+                    )
+                else:
+                    raise
         finally:
             pool.shutdown(wait=False)
 
