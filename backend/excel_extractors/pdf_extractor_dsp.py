@@ -298,10 +298,8 @@ def _parse_te_nums(line):
     return result
 
 
-def _te_values(nums, month_diff=0, offset=4, with_prior=False):
+def _te_values(nums, month_diff=0, offset=4):
     """Return (actual, cum) from right-aligned numeric list.
-
-    If with_prior=True, also returns (prior_actual, prior_cum) for prior year same month.
 
     month_diff = how many months behind the PDF's last month the requested month
     is (0 = current/last month, 1 = one month back, etc.).
@@ -318,8 +316,6 @@ def _te_values(nums, month_diff=0, offset=4, with_prior=False):
     """
     needed = offset + month_diff
     if len(nums) < needed:
-        if with_prior:
-            return None, None, None, None
         return None, None
 
     # For Merchant Mill and similar pages, the structure is [cum | actual | ...]
@@ -327,30 +323,32 @@ def _te_values(nums, month_diff=0, offset=4, with_prior=False):
     actual = nums[-(offset - 1)] if month_diff == 0 else nums[-offset - month_diff]
     cum = nums[-offset - month_diff] if month_diff == 0 else None
 
-    # Extract prior year same month (e.g., Sep'24 from 2024-25 if extracting Sep'25 from 2025-26)
-    prior_actual = None
-    prior_cum = None
-
-    if with_prior and month_diff == 0:
-        # Prior year data is typically 2 columns to the right of current FY cum
-        # Structure: [...] | want_mon | Cum | CPLY_mon | CPLY_FY [| PRIOR_mon | PRIOR_CUM]
-        try:
-            # Prior month is at -2 from current month (offset-1)
-            prior_idx_month = len(nums) - 2
-            # Prior cum is at -1 (rightmost)
-            prior_idx_cum = len(nums) - 1
-
-            if prior_idx_month >= 0:
-                prior_actual = nums[prior_idx_month]
-            if prior_idx_cum >= 0:
-                prior_cum = nums[prior_idx_cum]
-        except (IndexError, TypeError):
-            prior_actual = None
-            prior_cum = None
-
-    if with_prior:
-        return actual, cum, prior_actual, prior_cum
     return actual, cum
+
+
+def _te_values_with_prior(nums, month_diff=0, offset=4):
+    """Extract both current and prior year values from techno row.
+
+    Returns (actual_current, cum_current, actual_prior, cum_prior) tuple.
+    Prior year data only available when month_diff == 0 (current month).
+
+    Structure: [...months...] | want_mon | Cum | CPLY_mon | CPLY_FY
+    becomes:   nums[-4] | nums[-3] | nums[-2] | nums[-1]
+    """
+    actual_current, cum_current = _te_values(nums, month_diff, offset)
+
+    actual_prior = None
+    cum_prior = None
+
+    if month_diff == 0 and len(nums) >= offset + 2:
+        try:
+            # Prior year columns are the last 2: [CPLY_mon | CPLY_FY]
+            actual_prior = nums[-2]  # CPLY_mon (prior month value)
+            cum_prior = nums[-1]     # CPLY_FY (prior FY cumulative)
+        except (IndexError, TypeError):
+            pass
+
+    return actual_current, cum_current, actual_prior, cum_prior
 
 
 def _find_line_start(text_upper, marker):
@@ -458,22 +456,38 @@ def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, 
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
-                actual, cum, prior_actual, prior_cum = _te_values(nums, month_diff, with_prior=True)
-                if actual is not None:
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff)
+                if actual_curr is not None:
+                    # Current year row
                     rows.append({
                         "group_code": "MILL_DSP",
                         "section":    section,
                         "parameter":  label,
                         "unit":       unit,
                         "sort_order": sort,
-                        "actual":     actual,
-                        "cum_actual": cum,
-                        "prior_actual":     prior_actual,
-                        "prior_cum_actual": prior_cum,
+                        "actual":     actual_curr,
+                        "cum_actual": cum_curr,
+                        "month":      f"{want_mon}'{yy}",
                         "cell":       f"PDF p{page_no} · {want_mon}'{yy}",
                         "found_via":  f"DSP {section}",
                         "status":     "ok",
                     })
+                    # Prior year row (if available)
+                    if actual_prior is not None:
+                        prior_yy = yy - 1
+                        rows.append({
+                            "group_code": "MILL_DSP",
+                            "section":    section,
+                            "parameter":  label,
+                            "unit":       unit,
+                            "sort_order": sort + 0.5,  # Group after current year
+                            "actual":     actual_prior,
+                            "cum_actual": cum_prior,
+                            "month":      f"{want_mon}'{prior_yy}",
+                            "cell":       f"PDF p{page_no} · {want_mon}'{prior_yy}",
+                            "found_via":  f"DSP {section} (prior year)",
+                            "status":     "ok",
+                        })
                 break
     return rows
 
@@ -484,22 +498,38 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
-                actual, cum, prior_actual, prior_cum = _te_values(nums, month_diff, offset, with_prior=True)
-                if actual is not None:
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff, offset)
+                if actual_curr is not None:
+                    # Current year row
                     rows.append({
                         "group_code": group_code,
                         "section":    section,
                         "parameter":  row_label,
                         "unit":       unit,
                         "sort_order": sort,
-                        "actual":     actual,
-                        "cum_actual": cum,
-                        "prior_actual":     prior_actual,
-                        "prior_cum_actual": prior_cum,
+                        "actual":     actual_curr,
+                        "cum_actual": cum_curr,
+                        "month":      f"{want_mon}'{yy}",
                         "cell":       f"PDF p{page_no} · {want_mon}'{yy}",
                         "found_via":  f"DSP {section}",
                         "status":     "ok",
                     })
+                    # Prior year row (if available)
+                    if actual_prior is not None:
+                        prior_yy = yy - 1
+                        rows.append({
+                            "group_code": group_code,
+                            "section":    section,
+                            "parameter":  row_label,
+                            "unit":       unit,
+                            "sort_order": sort + 0.5,
+                            "actual":     actual_prior,
+                            "cum_actual": cum_prior,
+                            "month":      f"{want_mon}'{prior_yy}",
+                            "cell":       f"PDF p{page_no} · {want_mon}'{prior_yy}",
+                            "found_via":  f"DSP {section} (prior year)",
+                            "status":     "ok",
+                        })
                 break
     return rows
 
@@ -1050,22 +1080,39 @@ def _block_techno(file_path: str, page_index: dict,
             for ln in _slice_text(sint_text, marker, stop):
                 if "productivity" in ln.lower():
                     nums = _parse_te_nums(ln)
-                    actual, cum, prior_actual, prior_cum = _te_values(nums, sint_month_diff, offset=4, with_prior=True)
-                    if actual is not None:
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, sint_month_diff, offset=4)
+                    if actual_curr is not None:
+                        sort_base = 31 if label == "DSP SP-1" else 32
+                        # Current year row
                         rows.append({
                             "group_code": "COKE_SINTER",
                             "section":    "Sinter Productivity",
                             "parameter":  label,
                             "unit":       "T/m²/hr",
-                            "sort_order": 31 if label == "DSP SP-1" else 32,
-                            "actual":     actual,
-                            "cum_actual": cum,
-                            "prior_actual":     prior_actual,
-                            "prior_cum_actual": prior_cum,
+                            "sort_order": sort_base,
+                            "actual":     actual_curr,
+                            "cum_actual": cum_curr,
+                            "month":      f"{want_mon}'{yy}",
                             "cell":       f"PDF p{sint_pno} · {want_mon}'{yy}",
                             "found_via":  f"DSP Sinter {label}",
                             "status":     "ok",
                         })
+                        # Prior year row
+                        if actual_prior is not None:
+                            prior_yy = yy - 1
+                            rows.append({
+                                "group_code": "COKE_SINTER",
+                                "section":    "Sinter Productivity",
+                                "parameter":  label,
+                                "unit":       "T/m²/hr",
+                                "sort_order": sort_base + 0.5,
+                                "actual":     actual_prior,
+                                "cum_actual": cum_prior,
+                                "month":      f"{want_mon}'{prior_yy}",
+                                "cell":       f"PDF p{sint_pno} · {want_mon}'{prior_yy}",
+                                "found_via":  f"DSP Sinter {label} (prior year)",
+                                "status":     "ok",
+                            })
                     break
 
     # ── BF furnace-wise CDI ───────────────────────────────────────────────
@@ -1093,43 +1140,75 @@ def _block_techno(file_path: str, page_index: dict,
             for ln in cdi_lines:
                 if furnace_marker in ln.lower():
                     nums = _parse_te_nums(ln)
-                    actual, cum, prior_actual, prior_cum = _te_values(nums, bf_month_diff, offset=4, with_prior=True)
-                    if actual is not None:
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, bf_month_diff, offset=4)
+                    if actual_curr is not None:
+                        # Current year row
                         rows.append({
                             "group_code": "IRON_MAKING",
                             "section":    "CDI",
                             "parameter":  row_label,
                             "unit":       "Kg/THM",
                             "sort_order": sort,
-                            "actual":     actual,
-                            "cum_actual": cum,
-                            "prior_actual":     prior_actual,
-                            "prior_cum_actual": prior_cum,
+                            "actual":     actual_curr,
+                            "cum_actual": cum_curr,
+                            "month":      f"{want_mon}'{yy}",
                             "cell":       f"PDF p{bf_pno} · {want_mon}'{yy}",
                             "found_via":  f"DSP BF CDI {row_label}",
                             "status":     "ok",
                         })
+                        # Prior year row
+                        if actual_prior is not None:
+                            prior_yy = yy - 1
+                            rows.append({
+                                "group_code": "IRON_MAKING",
+                                "section":    "CDI",
+                                "parameter":  row_label,
+                                "unit":       "Kg/THM",
+                                "sort_order": sort + 0.5,
+                                "actual":     actual_prior,
+                                "cum_actual": cum_prior,
+                                "month":      f"{want_mon}'{prior_yy}",
+                                "cell":       f"PDF p{bf_pno} · {want_mon}'{prior_yy}",
+                                "found_via":  f"DSP BF CDI {row_label} (prior year)",
+                                "status":     "ok",
+                            })
                     break
         # Shop-level CDI average: first numeric line not belonging to a specific furnace
         for ln in cdi_lines:
             if not any(m in ln.lower() for m in _fce_markers):
                 nums = _parse_te_nums(ln)
-                actual, cum, prior_actual, prior_cum = _te_values(nums, bf_month_diff, offset=4, with_prior=True)
-                if actual is not None:
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, bf_month_diff, offset=4)
+                if actual_curr is not None:
+                    # Current year row
                     rows.append({
                         "group_code": "IRON_MAKING",
                         "section":    "CDI",
                         "parameter":  "DSP Plant Shop",
                         "unit":       "Kg/THM",
                         "sort_order": 11,
-                        "actual":     actual,
-                        "cum_actual": cum,
-                        "prior_actual":     prior_actual,
-                        "prior_cum_actual": prior_cum,
+                        "actual":     actual_curr,
+                        "cum_actual": cum_curr,
+                        "month":      f"{want_mon}'{yy}",
                         "cell":       f"PDF p{bf_pno} · {want_mon}'{yy}",
                         "found_via":  "DSP BF CDI shop avg",
                         "status":     "ok",
                     })
+                    # Prior year row
+                    if actual_prior is not None:
+                        prior_yy = yy - 1
+                        rows.append({
+                            "group_code": "IRON_MAKING",
+                            "section":    "CDI",
+                            "parameter":  "DSP Plant Shop",
+                            "unit":       "Kg/THM",
+                            "sort_order": 11.5,
+                            "actual":     actual_prior,
+                            "cum_actual": cum_prior,
+                            "month":      f"{want_mon}'{prior_yy}",
+                            "cell":       f"PDF p{bf_pno} · {want_mon}'{prior_yy}",
+                            "found_via":  "DSP BF CDI shop avg (prior year)",
+                            "status":     "ok",
+                        })
                     break
 
     return rows
