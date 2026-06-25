@@ -1061,6 +1061,72 @@ async def get_extraction_log(limit: int = 60):
     return {"logs": db.get_extraction_logs(limit=limit)}
 
 
+@app.post("/api/debug-column-detection")
+async def debug_column_detection(
+    file: UploadFile = File(...),
+    month: str = Form(...),
+):
+    """Debug endpoint: Show which columns are detected for production extraction."""
+    import shutil
+    import tempfile
+    import sys
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename)[1]
+    tmp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+
+        import asyncio, concurrent.futures
+        loop = asyncio.get_running_loop()
+
+        import excel_extractor_dsp
+
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            # Extract with all-months to see structure
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    pool,
+                    lambda: excel_extractor_dsp.extract_preview(
+                        tmp_path, month, block="production", all_months=True)
+                ),
+                timeout=300.0,
+            )
+        finally:
+            pool.shutdown(wait=False)
+
+        # Return production rows grouped by item
+        prod_data = result.get("production_rows", [])
+
+        return {
+            "month": month,
+            "pdf_report_month": result.get("pdf_report_month"),
+            "total_rows": len(prod_data),
+            "rows": prod_data,
+            "note": "All-months extraction - check if multiple months per item, and which month value appears"
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "type": type(e).__name__,
+        }
+
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+
+
 @app.post("/api/debug-techno-extraction")
 async def debug_techno_extraction(
     file: UploadFile = File(...),
