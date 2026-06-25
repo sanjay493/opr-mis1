@@ -514,13 +514,13 @@ _COKE_PAGE_DEFS = [
 ]
 
 _BF_FURNACE_PARAMS = [
-    ("silicon in hm",           "IRON_MAKING", "Silicon in HM",          "%",      51),
-    ("sulphur in hm",           "IRON_MAKING", "Sulphur in HM",          "%",      61),
-    ("blast temperature",       "IRON_MAKING", "Blast Temperature",      "°C",     71),
+    ("si in hm",           "IRON_MAKING", "Silicon in HM",          "%",      51),
+    ("s in hm",           "IRON_MAKING", "Sulphur in HM",          "%",      61),
+    ("blast temp",       "IRON_MAKING", "Blast Temperature",      "°C",     71),
     ("sinter in burden",        "IRON_MAKING", "Sinter in Burden",       "%",     81),
-    ("b.f. coke rate",          "IRON_MAKING", "Coke Rate",              "kg/T",   91),
+    ("coke rate",          "IRON_MAKING", "Coke Rate",              "kg/T",   91),
     ("nut coke rate",           "IRON_MAKING", "Nut Coke Rate",          "kg/T",  101),
-    ("productivity (on working volume):",           "IRON_MAKING", "BF Productivity",          "T/m³/day",  1001),
+    ("productivity.*working",           "IRON_MAKING", "BF Productivity",          "T/m³/day",  1001),
 ]
 
 _BF_SHOP_PARAMS = [
