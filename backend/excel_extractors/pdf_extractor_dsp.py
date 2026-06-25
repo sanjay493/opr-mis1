@@ -454,13 +454,13 @@ _COKE_PAGE_DEFS = [
 # Techno parsing helpers (work on plain text, no pdf object needed)
 # ---------------------------------------------------------------------------
 
-def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, month_diff=0):
+def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, month_diff=0, offset=4):
     rows = []
     for keyword, label, unit, sort in param_list:
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff, offset)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
