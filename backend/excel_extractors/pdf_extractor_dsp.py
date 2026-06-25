@@ -454,8 +454,12 @@ def _parse_special_steel_table(tbl, page_no, want_mon, yy):
 
 def _block_production(file_path: str, prod_page_idx: int,
                       want_mon: str, y: int, yy: str,
-                      alias_lookup: dict):
-    """Open PDF, read only the production page, close, parse and return rows."""
+                      alias_lookup: dict, column_shift: int = 0):
+    """Open PDF, read only the production page, close, parse and return rows.
+
+    Args:
+        column_shift: Adjust data column by this amount (-1 for Sep'25 left-shifted)
+    """
     import pdfplumber
     _ITEM_MAP, _SALEABLE_MAP = _load_maps()
 
@@ -500,9 +504,12 @@ def _block_production(file_path: str, prod_page_idx: int,
         label = _norm(" ".join(label_toks))
         if not label:
             continue
-        if len(nums) <= m_idx:
+
+        # Apply column shift for layout variations (e.g., Sep'25)
+        data_col_idx = m_idx + column_shift
+        if len(nums) <= data_col_idx or data_col_idx < 0:
             continue
-        val = nums[m_idx]
+        val = nums[data_col_idx]
 
         item, convert = None, True
         if label in alias_lookup:
@@ -912,17 +919,14 @@ def extract_preview_flash(file_path: str, report_month: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def extract_preview(file_path: str, report_month: str, aliases: dict = None,
-                    block: str = 'all') -> dict:
+                    block: str = 'all', column_shift: int = 0) -> dict:
     """Extract DSP data from the OMI PDF or Flash.pdf.
 
-    block controls which sections are processed:
-      'all'           — production + techno + special_steel (default)
-      'production'    — Block 1 only
-      'techno'        — Block 2 only
-      'special_steel' — Block 3 only
-      'stock'         — Flash.pdf closing-stock extraction
+    Args:
+        block: which sections to process ('all', 'production', 'techno', 'special_steel', 'stock')
+        aliases: user-saved mapping {pdf_label: (item_name, convert_to_000T)}
+        column_shift: adjust data column position (-1 for Sep'25 left-shifted layout)
 
-    aliases: user-saved mapping {pdf_label: (item_name, convert_to_000T)}
     No database writes — preview only.
     """
     if block == 'stock':
@@ -967,7 +971,7 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
         print(f"[DSP PDF] Block 1: production (page {page_index['prod']+1}) ...",
               flush=True, file=sys.stderr)
         prod_rows, prod_page_no, month_diff = _block_production(
-            file_path, page_index['prod'], want_mon, y, yy, alias_lookup)
+            file_path, page_index['prod'], want_mon, y, yy, alias_lookup, column_shift=column_shift)
         gc.collect()
         ok_count = sum(1 for r in prod_rows if r["status"] == "ok")
         print(f"[DSP PDF] Block 1 done: {ok_count}/{len(prod_rows)} rows ok",
