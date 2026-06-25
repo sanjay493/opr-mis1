@@ -336,15 +336,17 @@ def _te_values_with_prior(nums, month_diff=0, offset=4):
     Returns (actual_current, cum_current, actual_prior, cum_prior) tuple.
     Prior year data only available when month_diff == 0 (current month).
 
-    Structure: [...months...] | want_mon | Cum | CPLY_mon | CPLY_FY
-    becomes:   nums[-4] | nums[-3] | nums[-2] | nums[-1]
+    For offset=4: [...months...] | want_mon | Cum | CPLY_mon | CPLY_FY
+    For offset=5 (techno): [Norm] | want_mon | Cum | CPLY_mon | CPLY_FY (5 values total)
     """
     actual_current, cum_current = _te_values(nums, month_diff, offset)
 
     actual_prior = None
     cum_prior = None
 
-    if month_diff == 0 and len(nums) >= offset + 2:
+    # Extract prior year data if we have enough columns
+    # For offset=4: need at least 4 values; for offset=5: need at least 5 values
+    if month_diff == 0 and len(nums) >= offset:
         try:
             # Prior year columns are the last 2: [CPLY_mon | CPLY_FY]
             actual_prior = nums[-2]  # CPLY_mon (prior month value)
