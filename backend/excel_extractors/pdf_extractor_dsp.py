@@ -696,6 +696,10 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
         except Exception as e:
             print(f"[DSP PDF]   ⚠ Failed to extract {mon_name}: {e}", flush=True, file=sys.stderr)
 
+    print(f"[DSP PDF] ✓ Extracted ALL {len(month_cols)} months: {', '.join(month_cols)}",
+          flush=True, file=sys.stderr)
+    print(f"[DSP PDF] ✓ Total rows extracted: {len(all_rows)}", flush=True, file=sys.stderr)
+
     return all_rows, page_no, month_diff
 
 
