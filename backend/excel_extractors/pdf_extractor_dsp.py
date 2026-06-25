@@ -537,6 +537,10 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
+                # Skip Norm/Best Achieved lines (too few values)
+                if len(nums) < 4:
+                    continue
+
                 actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
                 if actual_curr is not None:
                     # Current year row
