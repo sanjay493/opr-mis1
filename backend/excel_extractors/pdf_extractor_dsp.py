@@ -480,20 +480,20 @@ _MAJOR_PAGE_DEFS = [
 # - TMI will be computed from Hot Metal + Scrap Consumption instead
 
 _SMS_PAGE_DEFS = [
-    ("gross h.metal consumption",  "MAJOR", "Hot Metal Consumption", "DSP SMS", "Kg/TCS",  92),
+    ("gross h.metal",  "MAJOR", "Hot Metal Consumption", "DSP SMS", "Kg/TCS",  92),
     ("total scrap",    "MAJOR", "Scrap Consumption",     "DSP SMS", "Kg/TCS", 102),
-    ("heat size(Cr.steel)",    "MAJOR", "Heat Size",     "DSP SMS", "T", 103),
-    ("refractory consumption(sms)",    "MAJOR", "Refractory Consumption(SMS)",     "DSP SMS", "Kg/TCS", 104),
-    ("refractory consumption(red)",    "MAJOR", "Refractory Consumption(RED)",     "DSP SMS", "Kg/TCS", 104),
-    ("tap to tap time",    "MAJOR", "Tap to Tap Time",     "DSP SMS", "mins", 104),
-    ("conv.availability on ich",    "MAJOR", "Converter Availability",     "DSP SMS", "%", 104),
-    ("conv.utilisation on ich",    "MAJOR", "Converter Utilisation",     "DSP SMS", "%", 104),
-    ("Calcined Lime (conv & lf)",    "MAJOR", "Calcined Lime Consumption",     "DSP SMS", "Kg/TCS", 104),
-    ("Limestone",    "MAJOR", "Limestone Consumption",     "DSP SMS", "Kg/TCS", 104),
-    ("si.mn",    "MAJOR", "Silicon Manganese Consumption",     "DSP SMS", "Kg/TCS", 104),
-    ("fe-si",    "MAJOR", "Ferro Silicon Consumption",     "DSP SMS", "Kg/TCS", 104),
-    ("fe-mn",    "MAJOR", "Ferro Manganese Consumption",     "DSP SMS", "Kg/TCS", 104),
-    ("Oxygen (Convt.)",    "MAJOR", "Oxygen Blow",     "DSP SMS", "Nm³/TCS", 104),
+    ("heat size",    "MAJOR", "Heat Size",     "DSP SMS", "T", 103),
+    ("refractory.*sms",    "MAJOR", "Refractory Consumption(SMS)",     "DSP SMS", "Kg/TCS", 104),
+    ("refractory.*red",    "MAJOR", "Refractory Consumption(RED)",     "DSP SMS", "Kg/TCS", 104),
+    ("tap to tap",    "MAJOR", "Tap to Tap Time",     "DSP SMS", "mins", 104),
+    ("converter availability",    "MAJOR", "Converter Availability",     "DSP SMS", "%", 104),
+    ("converter utilisation",    "MAJOR", "Converter Utilisation",     "DSP SMS", "%", 104),
+    ("calcined lime",    "MAJOR", "Calcined Lime Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("limestone",    "MAJOR", "Limestone Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("si.mn|si-mn",    "MAJOR", "Silicon Manganese Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("fe-si|fe si",    "MAJOR", "Ferro Silicon Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("fe-mn|fe mn",    "MAJOR", "Ferro Manganese Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("oxygen.*conv",    "MAJOR", "Oxygen Blow",     "DSP SMS", "Nm³/TCS", 104),
 ]
 
 _COKE_PAGE_DEFS = [
