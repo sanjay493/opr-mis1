@@ -692,6 +692,8 @@ async def extract_preview_endpoint(
 
         if plant_name == "DSP":
             import excel_extractor_dsp
+            import importlib
+            importlib.reload(excel_extractor_dsp)  # Force reload from disk
             aliases = db.get_pdf_item_aliases("DSP")
             pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             try:
