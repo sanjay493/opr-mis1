@@ -489,9 +489,11 @@ def _block_production(file_path: str, prod_page_idx: int,
     print(f"[DEBUG] PDF file: {file_path}", file=sys.stderr)
     print(f"[DEBUG] Extracting page: {page_no} (index {prod_page_idx})", file=sys.stderr)
     print(f"[DEBUG] Total lines on page: {len(lines)}", file=sys.stderr)
-    print(f"[DEBUG] First 5 lines of page:", file=sys.stderr)
-    for i, ln in enumerate(lines[:5]):
-        print(f"[DEBUG]   Line {i}: {ln[:80]}", file=sys.stderr)
+    print(f"[DEBUG] ====================================", file=sys.stderr)
+    print(f"[DEBUG] ====== FULL PAGE CONTENT ======", file=sys.stderr)
+    for i, ln in enumerate(lines):
+        print(f"[DEBUG] Line {i:3d}: {ln}", file=sys.stderr)
+    print(f"[DEBUG] ====== END FULL PAGE ======", file=sys.stderr)
     print(f"[DEBUG] ====================================\n", file=sys.stderr)
 
     month_cols = _month_header(lines)
