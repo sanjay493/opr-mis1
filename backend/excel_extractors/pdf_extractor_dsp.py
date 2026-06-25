@@ -38,7 +38,8 @@ _MONTH_NAMES = {
 
 # Default label maps — overridden at runtime from excel_cells_config.json ["dsp_pdf"]
 _ITEM_MAP_DEFAULT = [
-    ("ii) nos. per day",        "Oven Pushing(nos/d)",  False),
+    # ("i) Nos.(Total)",      "Oven Pushing(nos/d)",  False),
+    # ("ii) nos. per day",        "Oven Pushing(nos/d)",  False),
     ("sinter",             "Total Sinter",         True),
     ("sp 1",               "SP-1",                 True),
     ("sp 2",               "SP-2",                 True),
@@ -153,10 +154,23 @@ def _extract_pdf_report_month(file_path: str) -> str:
 
 
 def _month_header(lines):
-    """Returns the month-column list from a header line like 'SL. APR MAY TOTAL'."""
+    """Returns the month-column list from a header line like 'SL. APR MAY TOTAL' or 'APR'25 MAY'25 TOTAL'.
+
+    Extracts months in order they appear, skipping duplicates and non-month columns.
+    Handles month names with years like "SEP'25", "Sep'25", etc.
+    """
     for ln in lines[:15]:
-        toks = [t.upper().rstrip('.') for t in ln.split()]
-        cols = [t for t in toks if t in _MONTHS]
+        toks = [t.upper().rstrip('.').rstrip('\'').split('\'')[0] for t in ln.split()]
+        # Extract only month abbreviations (first 3 letters of year-prefixed tokens)
+        cols = []
+        seen = set()
+        for t in toks:
+            # Get first 3 chars (month abbr)
+            mon_abbr = t[:3] if len(t) >= 3 else t
+            if mon_abbr in _MONTHS and mon_abbr not in seen:
+                cols.append(mon_abbr)
+                seen.add(mon_abbr)
+
         if cols and "TOTAL" in toks:
             return cols
     return None
