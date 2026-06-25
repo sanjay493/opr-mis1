@@ -380,6 +380,10 @@ export default function UploadPage() {
   // Item mapping suggestions
   const [dspItemSuggestions, setDspItemSuggestions] = useState(null);  // {items: [...], aliases: {...}}
   const [dspItemMappingCache, setDspItemMappingCache] = useState({});  // Cache for loaded suggestions
+
+  // Month mismatch handling
+  const [dspMonthMismatch, setDspMonthMismatch] = useState(null);  // Warning if PDF month != selected month
+  const [dspUseActualMonth, setDspUseActualMonth] = useState(false);  // User confirmed to use PDF's actual month
   
   const [isUploading, setIsUploading] = useState(false);
   const [logs, setLogs] = useState([
@@ -827,6 +831,15 @@ export default function UploadPage() {
         allMonthsMap[key].months[r.report_month] = r.value;
       });
 
+      // Check for month mismatch
+      if (result.month_mismatch) {
+        setDspMonthMismatch(result.month_mismatch);
+        addLog('warning', `⚠ Month mismatch: ${result.month_mismatch.message}`);
+        setDspUseActualMonth(false);
+        // Don't proceed yet - wait for user confirmation
+        return;
+      }
+
       setDspProdAllMonths({ ...result, grouped_rows: Object.values(allMonthsMap), single_rows: result.production_rows });
       setDspAllMonthsMode(true);
       const totalRows = (result.production_rows || []).length;
@@ -1254,6 +1267,37 @@ export default function UploadPage() {
                 </button>
               )}
             </form>
+
+            {/* ── Month Mismatch Warning Dialog ────────────────────── */}
+            {dspMonthMismatch && (
+              <div style={{ marginTop: 16, padding: 16, backgroundColor: '#fbbf24', borderRadius: 8, border: '1px solid #f59e0b' }}>
+                <div style={{ fontSize: '9pt', fontWeight: 700, color: '#78350f', marginBottom: 12 }}>
+                  ⚠️ Month Mismatch Warning
+                </div>
+                <div style={{ fontSize: '8.5pt', color: '#78350f', marginBottom: 12, lineHeight: 1.5 }}>
+                  {dspMonthMismatch.message}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => {
+                    setDspUseActualMonth(true);
+                    // Re-extract with actual month
+                    setDspMonthMismatch(null);
+                    // Set the month to the actual PDF month
+                    const [pdfYear, pdfMonth] = dspMonthMismatch.actual_month.split('-').map(Number);
+                    setTechnoMonth(months[pdfMonth - 1]);
+                    setTechnoYear(pdfYear.toString());
+                    addLog('info', `Using PDF's actual month: ${dspMonthMismatch.actual_month}`);
+                  }}
+                  style={{ padding: '6px 12px', backgroundColor: '#f59e0b', border: 'none', color: '#fff', borderRadius: 4, fontSize: '8.5pt', fontWeight: 600, cursor: 'pointer' }}>
+                    ✓ Use PDF's Actual Month ({dspMonthMismatch.actual_month})
+                  </button>
+                  <button onClick={() => setDspMonthMismatch(null)}
+                  style={{ padding: '6px 12px', backgroundColor: '#78350f', border: 'none', color: '#fef3c7', borderRadius: 4, fontSize: '8.5pt', fontWeight: 600, cursor: 'pointer' }}>
+                    ✗ Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ── Direct Data Extraction (no preview) ─────────────── */}
             <div style={{ marginTop: 16, borderTop: '1px solid #334155', paddingTop: 12 }}>
