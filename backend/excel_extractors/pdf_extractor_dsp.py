@@ -660,47 +660,133 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
 
     print(f"[DSP PDF] Extracting ALL months from header: {month_cols}", flush=True, file=sys.stderr)
 
+    # Load item maps
+    _ITEM_MAP, _SALEABLE_MAP = _load_maps()
+
+    # Find full header row (with all columns including Q1, Q2, etc.)
+    header_row_idx = None
+    header_toks = None
+    for i, ln in enumerate(lines[:15]):
+        toks = [t.upper().rstrip('.') for t in ln.split()]
+        if month_cols[0] in toks:
+            header_row_idx = i
+            header_toks = toks
+            break
+
+    if not header_toks:
+        raise ValueError("Could not find full header row")
+
+    # Map each month to its position in the header
+    month_positions = {}
+    for mon in month_cols:
+        if mon in header_toks:
+            month_positions[mon] = header_toks.index(mon)
+
+    print(f"[DSP PDF] Month positions in header: {month_positions}", flush=True, file=sys.stderr)
+
     # Calculate FY start month (April = month 4)
     fy_start_month = 4
-    report_m = int(report_month[5:7])
 
-    # Extract for each month in the PDF
+    # Get first month position to use as anchor
+    first_month_idx = min(month_positions.values()) if month_positions else 0
+
+    # Process each data row once, extract ALL month columns
     all_rows = []
-    for mon_name in month_cols:
-        # Map month name back to month number
-        mon_num = _MONTHS.index(mon_name) + 1  # _MONTHS is 0-indexed
+    for ln in lines:
+        toks = ln.split()
+        if not toks or len(toks) < 5:
+            continue
 
-        # Calculate year for this month
-        if mon_num >= fy_start_month:
-            mon_year = y  # Same FY year
-        else:
-            mon_year = y + 1  # Next calendar year (but same FY)
+        # Skip header rows
+        if any(m in toks for m in month_cols) and toks[0].upper() in ['SL', 'NO']:
+            continue
 
-        # Create month string for this extraction
-        mon_str = f"{mon_year}-{mon_num:02d}"
+        # Extract all numbers from this row
+        nums = []
+        for t in reversed(toks):
+            v = _num(t)
+            if v is None:
+                break
+            nums.insert(0, v)
 
-        try:
-            # Extract data for this specific month
-            rows, _, month_diff = _block_production(
-                file_path, prod_page_idx, mon_name, mon_year, str(mon_year)[2:],
-                alias_lookup, column_shift=column_shift)
+        if not nums or len(nums) < len(month_cols):
+            continue
 
-            # Update report_month for each row
-            for row in rows:
-                row_copy = row.copy()
-                row_copy["report_month"] = mon_str
-                all_rows.append(row_copy)
+        # Trim to header size
+        if len(nums) > len(header_toks):
+            nums = nums[len(nums) - len(header_toks):]
 
-            print(f"[DSP PDF]   Extracted {len(rows)} items for {mon_name} ({mon_str})",
-                  flush=True, file=sys.stderr)
-        except Exception as e:
-            print(f"[DSP PDF]   ⚠ Failed to extract {mon_name}: {e}", flush=True, file=sys.stderr)
+        # Get item label
+        label_toks = toks[:len(toks) - len(nums)]
+        label = _norm(" ".join(label_toks))
+        if not label:
+            continue
+
+        # For each month, extract from correct column position
+        for mon_name in month_cols:
+            # Calculate year for this month
+            mon_num = _MONTHS.index(mon_name) + 1
+            if mon_num >= fy_start_month:
+                mon_year = y
+            else:
+                mon_year = y + 1
+            mon_str = f"{mon_year}-{mon_num:02d}"
+
+            # Get column index for this month in header
+            col_idx_in_header = month_positions.get(mon_name)
+            if col_idx_in_header is None:
+                continue
+
+            # Offset from first month
+            col_offset = col_idx_in_header - first_month_idx
+
+            # Check bounds
+            if col_offset < 0 or col_offset >= len(nums):
+                continue
+
+            val = nums[col_offset]
+
+            # Map label to item
+            item = None
+            convert = True
+            in_saleable = "SALEABLE" in label.upper() or "SEMIS" in label.upper()
+            table = _SALEABLE_MAP if in_saleable else _ITEM_MAP
+            for alias, name, conv in table:
+                if label == alias:
+                    item = name
+                    convert = conv
+                    break
+
+            if item is None and in_saleable:
+                for alias, name, conv in _ITEM_MAP:
+                    if label == alias:
+                        item, convert = name, conv
+                        break
+
+            if item is None:
+                item = label
+
+            # Convert units if needed
+            if convert and isinstance(val, (int, float)):
+                val = round(val / 1000.0, 3)
+
+            all_rows.append({
+                "report_month": mon_str,
+                "plant_name": "DSP",
+                "item_name": item,
+                "month_actual": val,
+                "value": val,
+                "unit": "'000T" if convert else "T",
+                "status": "ok" if item != label else "unmapped",
+                "pdf_label": " ".join(label_toks),
+                "cell": f"PDF p{page_no}",
+            })
 
     print(f"[DSP PDF] ✓ Extracted ALL {len(month_cols)} months: {', '.join(month_cols)}",
           flush=True, file=sys.stderr)
     print(f"[DSP PDF] ✓ Total rows extracted: {len(all_rows)}", flush=True, file=sys.stderr)
 
-    return all_rows, page_no, month_diff
+    return all_rows, page_no, 0
 
 
 # ---------------------------------------------------------------------------
