@@ -100,8 +100,8 @@
     "_doc": "DSP PDF extractor — label text → (item_name_in_DB, convert_to_000T). Edit when PDF headings change. Labels are matched case-insensitively after stripping serial prefixes. Supports both 'bf 2' and '2 bf' formats (roman → numeric conversion).",
     "item_map": [
       ["nos per day",        "Oven Pushing(nos/d)",  false],
-      ["ii nos per day",     "Oven Pushing(nos/d)",  false],
-      ["i nos total",        "Oven Pushing(nos/d)",  false],
+      ["2 nos per day",      "Oven Pushing(nos/d)",  false],
+      ["1 nos total",        "Oven Pushing(nos/d)",  false],
       ["2 blend mix",        "2 BLEND MIX",         true],
       ["sinter",             "Total Sinter",         true],
       ["sp 1",               "SP-1",                 true],
