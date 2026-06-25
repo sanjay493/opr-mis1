@@ -517,7 +517,19 @@ def _block_production(file_path: str, prod_page_idx: int,
 
     m_idx      = month_cols.index(want_mon)
     month_diff = len(month_cols) - 1 - m_idx
-    n_cols     = len(month_cols) + 1   # data months + TOTAL column
+
+    # Count ALL data columns including quarterly aggregates (Q1, Q2, H1, etc.)
+    # This handles PDFs with: APR MAY JUN Q1 JUL AUG SEP Q2 H1 TOTAL
+    all_data_cols = []
+    for ln in lines[:15]:
+        toks = [t.upper().rstrip('.') for t in ln.split()]
+        if month_cols[0] in toks:
+            start_idx = toks.index(month_cols[0])
+            total_idx = toks.index('TOTAL') if 'TOTAL' in toks else len(toks) - 1
+            all_data_cols = toks[start_idx:total_idx + 1]
+            break
+
+    n_cols = len(all_data_cols) if all_data_cols else (len(month_cols) + 1)
 
     # AUTO-DETECT column position in header row to find any shifts
     # This handles PDFs where the month columns appear at different token positions
@@ -534,11 +546,10 @@ def _block_production(file_path: str, prod_page_idx: int,
     # This offset should be applied to m_idx when extracting data
     header_col_offset = (header_col_index or 0)
     if header_col_offset > 0 and column_shift == 0:
-        # Auto-adjust if not manually set
-        # For PDFs with quarterly aggregates (Q1, Q2, H1), need extra shift
-        column_shift = -header_col_offset - 1  # Extra -1 for quarterly aggregate columns
+        # Auto-adjust for any prefix columns before month data
+        column_shift = -header_col_offset
         import sys
-        print(f"[INFO] Auto-detected column shift: {column_shift} (header starts at col {header_col_index}, +1 for aggregates)",
+        print(f"[INFO] Auto-detected column shift: {column_shift} (header starts at col {header_col_index})",
               file=sys.stderr)
 
     # DEBUG: Print header and month info
