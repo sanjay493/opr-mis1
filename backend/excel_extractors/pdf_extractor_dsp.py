@@ -1084,7 +1084,7 @@ def _block_techno(file_path: str, page_index: dict,
                         })
                         # Prior year row
                         if actual_prior is not None:
-                            prior_yy = yy - 1
+                            prior_yy = str(int(yy) - 1)
                             rows.append({
                                 "group_code": "COKE_SINTER",
                                 "section":    "Sinter Productivity",
@@ -1135,7 +1135,7 @@ def _block_techno(file_path: str, page_index: dict,
                         })
                         # Prior year row
                         if actual_prior is not None:
-                            prior_yy = yy - 1
+                            prior_yy = str(int(yy) - 1)
                             rows.append({
                                 "group_code": "IRON_MAKING",
                                 "section":    "CDI",
