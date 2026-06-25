@@ -858,9 +858,29 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
 # ---------------------------------------------------------------------------
 
 def _block_techno(file_path: str, page_index: dict,
-                  want_mon: str, yy: str, month_diff: int) -> list:
-    """Open PDF, read only the techno pages (by index), close, parse rows."""
+                  want_mon: str, y: int, yy: str, month_diff: int) -> list:
+    """Open PDF, read only the techno pages (by index), close, parse rows.
+
+    Args:
+        y: Full year (e.g., 2025) for FY calculation
+        yy: 2-digit year string (e.g., '25') for display
+        want_mon: Month name (e.g., 'SEP')
+        month_diff: Column offset for month extraction
+    """
     import pdfplumber
+    import sys
+
+    # Calculate correct FY year (April=start, Jan-Mar=end of next year)
+    report_month_num = _MONTHS.index(want_mon) + 1
+    fy_start_month = 4
+    if report_month_num < fy_start_month:
+        fy_year = y - 1
+    else:
+        fy_year = y
+    fy_year2 = fy_year + 1
+    fy_label = f"{fy_year}-{fy_year2}"
+
+    print(f"[DSP PDF] Techno: Month {want_mon}'{yy} → FY {fy_label}", flush=True, file=sys.stderr)
 
     techno_keys = ('major', 'sms', 'coke', 'sint', 'bf_cdi', 'mm', 'wa')
     needed_idxs = {page_index[k] for k in techno_keys if k in page_index}
@@ -1349,7 +1369,7 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
 
         print("[DSP PDF] Block 2: techno parameters ...", flush=True, file=sys.stderr)
         try:
-            techno_rows = _block_techno(file_path, page_index, want_mon, yy, month_diff)
+            techno_rows = _block_techno(file_path, page_index, want_mon, y, yy, month_diff)
             print(f"[DSP PDF] Block 2 done: {len(techno_rows)} techno rows",
                   flush=True, file=sys.stderr)
         except Exception as exc:
