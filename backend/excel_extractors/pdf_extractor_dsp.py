@@ -684,8 +684,20 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
 
     print(f"[DSP PDF] Month positions in header: {month_positions}", flush=True, file=sys.stderr)
 
-    # Calculate FY start month (April = month 4)
+    # Calculate FY based on report month
+    # FY 2025-26 = April 2025 to March 2026
+    # If report is March 2026 (2026-03): FY starts April 2025, so FY start year = 2025
+    # If report is Sept 2025 (2025-09): FY starts April 2025, so FY start year = 2025
+    report_month_num = int(report_month[5:7])
     fy_start_month = 4
+    if report_month_num < fy_start_month:
+        # Report in Jan-Mar: FY started previous calendar year
+        fy_start_year = y - 1
+    else:
+        # Report in Apr-Dec: FY started this calendar year
+        fy_start_year = y
+
+    print(f"[DSP PDF] Report month: {report_month}, FY start year: {fy_start_year}", flush=True, file=sys.stderr)
 
     # Get first month position to use as anchor
     first_month_idx = min(month_positions.values()) if month_positions else 0
@@ -724,12 +736,14 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
 
         # For each month, extract from correct column position
         for mon_name in month_cols:
-            # Calculate year for this month
+            # Calculate year for this month based on FY
             mon_num = _MONTHS.index(mon_name) + 1
             if mon_num >= fy_start_month:
-                mon_year = y
+                # April-Dec: same year as FY start
+                mon_year = fy_start_year
             else:
-                mon_year = y + 1
+                # Jan-Mar: next calendar year
+                mon_year = fy_start_year + 1
             mon_str = f"{mon_year}-{mon_num:02d}"
 
             # Get column index for this month in header
