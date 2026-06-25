@@ -471,7 +471,6 @@ _WA_PARAMS = {
 }
 
 _MAJOR_PAGE_DEFS = [
-    ("bf productivity",          "MAJOR",       "BF Productivity (Working Volume)", "DSP",     "T/m³/day",  81),
     ("gross energy consumption", "MAJOR",       "Specific Energy Consumption",      "DSP",     "G.Cal/TCS",121),
     ("bof slag utilisation",     "COKE_SINTER", "BOF Slag Utilisation",             "DSP",     "%",         41),
     ("loss at skip",             "IRON_MAKING", "Coke Screen Loss",                 "DSP Plant Shop", "%",  31),
@@ -498,6 +497,7 @@ _BF_FURNACE_PARAMS = [
     ("sinter in burden",        "IRON_MAKING", "Sinter in Burden",       "%",     81),
     ("b.f. coke rate",          "IRON_MAKING", "Coke Rate",              "kg/T",   91),
     ("nut coke rate",           "IRON_MAKING", "Nut Coke Rate",          "kg/T",  101),
+    ("productivity (on working volume):",           "IRON_MAKING", "BF Productivity",          "T/m³/day",  1001),
 ]
 
 _BF_SHOP_PARAMS = [
@@ -1256,63 +1256,67 @@ def _block_techno(file_path: str, page_index: dict,
 
         # Extract furnace-wise parameters
         for param_keyword, group_code, param_label, param_unit, param_sort in _BF_FURNACE_PARAMS:
-            # Find parameter section
-            param_section_lines = [ln for ln in bf_lines if param_keyword in ln.lower()]
+            # Find the line with this parameter keyword
+            param_start = -1
+            for i, ln in enumerate(bf_lines):
+                if param_keyword in ln.lower():
+                    param_start = i
+                    break
 
-            if param_section_lines:
-                furnace_data = {}
-                for furnace_marker, furnace_label, _ in [
-                    ("furnace-ii",  "DSP BF-2", 0),
-                    ("furnace-iii", "DSP BF-3", 0),
-                    ("furnace-iv",  "DSP BF-4", 0),
-                ]:
-                    for ln in param_section_lines:
-                        if furnace_marker in ln.lower():
-                            nums = _parse_te_nums(ln)
-                            if len(nums) >= 4:
-                                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
-                                if actual_curr is not None:
-                                    # Current year
+            if param_start == -1:
+                continue
+
+            # Extract furnace-wise and shop data from lines following this parameter
+            for furnace_marker, furnace_label, _ in [
+                ("furnace-ii",  "DSP BF-2", 0),
+                ("furnace-iii", "DSP BF-3", 0),
+                ("furnace-iv",  "DSP BF-4", 0),
+            ]:
+                # Look in next 20 lines for furnace marker
+                for i in range(param_start + 1, min(param_start + 20, len(bf_lines))):
+                    ln = bf_lines[i]
+                    if furnace_marker in ln.lower():
+                        nums = _parse_te_nums(ln)
+                        if len(nums) >= 4:
+                            actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                            if actual_curr is not None:
+                                # Current year
+                                rows.append({
+                                    "group_code": group_code,
+                                    "section":    "BF Parameters",
+                                    "parameter":  f"{furnace_label} {param_label}",
+                                    "unit":       param_unit,
+                                    "sort_order": param_sort,
+                                    "actual":     actual_curr,
+                                    "cum_actual": cum_curr,
+                                    "month":      f"{want_mon}'{yy}",
+                                    "cell":       f"PDF p{bf_pno} · {want_mon}'{yy}",
+                                    "found_via":  f"DSP BF {param_label}",
+                                    "status":     "ok",
+                                })
+                                # Prior year
+                                if actual_prior is not None:
+                                    prior_yy = str(int(yy) - 1)
                                     rows.append({
                                         "group_code": group_code,
                                         "section":    "BF Parameters",
                                         "parameter":  f"{furnace_label} {param_label}",
                                         "unit":       param_unit,
-                                        "sort_order": param_sort,
-                                        "actual":     actual_curr,
-                                        "cum_actual": cum_curr,
-                                        "month":      f"{want_mon}'{yy}",
-                                        "cell":       f"PDF p{bf_pno} · {want_mon}'{yy}",
-                                        "found_via":  f"DSP BF {param_label}",
+                                        "sort_order": param_sort + 0.5,
+                                        "actual":     actual_prior,
+                                        "cum_actual": cum_prior,
+                                        "month":      f"{want_mon}'{prior_yy}",
+                                        "cell":       f"PDF p{bf_pno} · {want_mon}'{prior_yy}",
+                                        "found_via":  f"DSP BF {param_label} (prior year)",
                                         "status":     "ok",
                                     })
-                                    # Prior year
-                                    if actual_prior is not None:
-                                        prior_yy = str(int(yy) - 1)
-                                        rows.append({
-                                            "group_code": group_code,
-                                            "section":    "BF Parameters",
-                                            "parameter":  f"{furnace_label} {param_label}",
-                                            "unit":       param_unit,
-                                            "sort_order": param_sort + 0.5,
-                                            "actual":     actual_prior,
-                                            "cum_actual": cum_prior,
-                                            "month":      f"{want_mon}'{prior_yy}",
-                                            "cell":       f"PDF p{bf_pno} · {want_mon}'{prior_yy}",
-                                            "found_via":  f"DSP BF {param_label} (prior year)",
-                                            "status":     "ok",
-                                        })
-                            break
-
-                # Shop level for this parameter
-                shop_ln = None
-                for ln in param_section_lines:
-                    if "shop" in ln.lower():
-                        shop_ln = ln
                         break
 
-                if shop_ln:
-                    nums = _parse_te_nums(shop_ln)
+            # Shop level for this parameter
+            for i in range(param_start + 1, min(param_start + 20, len(bf_lines))):
+                ln = bf_lines[i]
+                if "shop" in ln.lower():
+                    nums = _parse_te_nums(ln)
                     if len(nums) >= 4:
                         actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
                         if actual_curr is not None:
@@ -1346,46 +1350,47 @@ def _block_techno(file_path: str, page_index: dict,
                                     "found_via":  f"DSP BF {param_label} shop (prior year)",
                                     "status":     "ok",
                                 })
+                    break
 
         # Extract shop-only parameters (Slag Rate, Fuel Rate)
         for param_keyword, group_code, param_label, param_unit, param_sort in _BF_SHOP_PARAMS:
-            param_section_lines = [ln for ln in bf_lines if param_keyword in ln.lower()]
-            if param_section_lines:
-                ln = param_section_lines[0]
-                nums = _parse_te_nums(ln)
-                if len(nums) >= 4:
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
-                    if actual_curr is not None:
-                        # Current year
-                        rows.append({
-                            "group_code": group_code,
-                            "section":    "BF Parameters",
-                            "parameter":  f"DSP Plant Shop {param_label}",
-                            "unit":       param_unit,
-                            "sort_order": param_sort,
-                            "actual":     actual_curr,
-                            "cum_actual": cum_curr,
-                            "month":      f"{want_mon}'{yy}",
-                            "cell":       f"PDF p{bf_pno} · {want_mon}'{yy}",
-                            "found_via":  f"DSP BF {param_label}",
-                            "status":     "ok",
-                        })
-                        # Prior year
-                        if actual_prior is not None:
-                            prior_yy = str(int(yy) - 1)
+            for i, ln in enumerate(bf_lines):
+                if param_keyword in ln.lower():
+                    nums = _parse_te_nums(ln)
+                    if len(nums) >= 4:
+                        actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                        if actual_curr is not None:
+                            # Current year
                             rows.append({
                                 "group_code": group_code,
                                 "section":    "BF Parameters",
                                 "parameter":  f"DSP Plant Shop {param_label}",
                                 "unit":       param_unit,
-                                "sort_order": param_sort + 0.5,
-                                "actual":     actual_prior,
-                                "cum_actual": cum_prior,
-                                "month":      f"{want_mon}'{prior_yy}",
-                                "cell":       f"PDF p{bf_pno} · {want_mon}'{prior_yy}",
-                                "found_via":  f"DSP BF {param_label} (prior year)",
+                                "sort_order": param_sort,
+                                "actual":     actual_curr,
+                                "cum_actual": cum_curr,
+                                "month":      f"{want_mon}'{yy}",
+                                "cell":       f"PDF p{bf_pno} · {want_mon}'{yy}",
+                                "found_via":  f"DSP BF {param_label}",
                                 "status":     "ok",
                             })
+                            # Prior year
+                            if actual_prior is not None:
+                                prior_yy = str(int(yy) - 1)
+                                rows.append({
+                                    "group_code": group_code,
+                                    "section":    "BF Parameters",
+                                    "parameter":  f"DSP Plant Shop {param_label}",
+                                    "unit":       param_unit,
+                                    "sort_order": param_sort + 0.5,
+                                    "actual":     actual_prior,
+                                    "cum_actual": cum_prior,
+                                    "month":      f"{want_mon}'{prior_yy}",
+                                    "cell":       f"PDF p{bf_pno} · {want_mon}'{prior_yy}",
+                                    "found_via":  f"DSP BF {param_label} (prior year)",
+                                    "status":     "ok",
+                                })
+                    break
 
     print(f"[DSP PDF] Techno extraction complete: {len(rows)} rows extracted",
           flush=True, file=sys.stderr)
