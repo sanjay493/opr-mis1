@@ -1274,8 +1274,8 @@ def _block_techno(file_path: str, page_index: dict,
                     # Current year row
                     rows.append({
                         "group_code": "IRON_MAKING",
-                        "section":    "CDI",
-                        "parameter":  "DSP Plant Shop",
+                        "section":    "DSP Plant Shop",
+                        "parameter":  "CDI",
                         "unit":       "Kg/THM",
                         "sort_order": 11,
                         "actual":     actual_curr,
@@ -1290,8 +1290,8 @@ def _block_techno(file_path: str, page_index: dict,
                         prior_yy = str(int(yy) - 1)
                         rows.append({
                             "group_code": "IRON_MAKING",
-                            "section":    "CDI",
-                            "parameter":  "DSP Plant Shop",
+                            "section":    "DSP Plant Shop",
+                            "parameter":  "CDI",
                             "unit":       "Kg/THM",
                             "sort_order": 11.5,
                             "actual":     actual_prior,
