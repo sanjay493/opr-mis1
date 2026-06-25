@@ -184,8 +184,15 @@ def _scan_page_index(file_path: str, max_pages: int = 120) -> dict:
                     continue
                 if h2 and h2 not in up:
                     continue
-                if key == 'prod' and not _month_header(lines):
-                    continue
+
+                # For PRODUCTION MONTHWISE: skip TABLE OF CONTENTS pages
+                # TOC pages have "INDEX" or "CONTENTS" in them
+                if key == 'prod':
+                    if 'INDEX' in up or 'CONTENTS' in up or 'TABLE OF' in up:
+                        continue  # Skip TOC pages
+                    if not _month_header(lines):
+                        continue
+
                 found[key] = i
                 done.add(key)
                 print(f"[DSP PDF] scan: found '{key}' on page {i+1}", flush=True, file=sys.stderr)
