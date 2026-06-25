@@ -633,6 +633,72 @@ def _block_production(file_path: str, prod_page_idx: int,
     return rows, page_no, month_diff
 
 
+def _block_production_all_months(file_path: str, prod_page_idx: int,
+                                  report_month: str, y: int, yy: str,
+                                  alias_lookup: dict, column_shift: int = 0):
+    """Extract production data for ALL months in the report, not just the requested month.
+
+    Args:
+        report_month: Report month in YYYY-MM format (e.g., '2025-09')
+        y, yy: Year as full and 2-digit integers
+        Returns: (all_month_rows, page_no, month_diff)
+               where all_month_rows has data for each month in the PDF header
+    """
+    import pdfplumber
+    import sys
+
+    with pdfplumber.open(file_path) as pdf:
+        text = pdf.pages[prod_page_idx].extract_text() or ""
+
+    lines = text.splitlines()
+    page_no = prod_page_idx + 1
+
+    # Find all months in header
+    month_cols = _month_header(lines)
+    if not month_cols:
+        raise ValueError(f"Month header not found on page {page_no}")
+
+    print(f"[DSP PDF] Extracting ALL months from header: {month_cols}", flush=True, file=sys.stderr)
+
+    # Calculate FY start month (April = month 4)
+    fy_start_month = 4
+    report_m = int(report_month[5:7])
+
+    # Extract for each month in the PDF
+    all_rows = []
+    for mon_name in month_cols:
+        # Map month name back to month number
+        mon_num = _MONTHS.index(mon_name) + 1  # _MONTHS is 0-indexed
+
+        # Calculate year for this month
+        if mon_num >= fy_start_month:
+            mon_year = y  # Same FY year
+        else:
+            mon_year = y + 1  # Next calendar year (but same FY)
+
+        # Create month string for this extraction
+        mon_str = f"{mon_year}-{mon_num:02d}"
+
+        try:
+            # Extract data for this specific month
+            rows, _, month_diff = _block_production(
+                file_path, prod_page_idx, mon_name, mon_year, str(mon_year)[2:],
+                alias_lookup, column_shift=column_shift)
+
+            # Update report_month for each row
+            for row in rows:
+                row_copy = row.copy()
+                row_copy["report_month"] = mon_str
+                all_rows.append(row_copy)
+
+            print(f"[DSP PDF]   Extracted {len(rows)} items for {mon_name} ({mon_str})",
+                  flush=True, file=sys.stderr)
+        except Exception as e:
+            print(f"[DSP PDF]   ⚠ Failed to extract {mon_name}: {e}", flush=True, file=sys.stderr)
+
+    return all_rows, page_no, month_diff
+
+
 # ---------------------------------------------------------------------------
 # Block 2: Techno parameters
 # ---------------------------------------------------------------------------
@@ -1064,11 +1130,12 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
     if run_prod:
         print(f"[DSP PDF] Block 1: production (page {page_index['prod']+1}) ...",
               flush=True, file=sys.stderr)
-        prod_rows, prod_page_no, month_diff = _block_production(
-            file_path, page_index['prod'], want_mon, y, yy, alias_lookup, column_shift=column_shift)
+        # Extract ALL months from the PDF, not just the requested month
+        prod_rows, prod_page_no, month_diff = _block_production_all_months(
+            file_path, page_index['prod'], report_month, y, yy, alias_lookup, column_shift=column_shift)
         gc.collect()
         ok_count = sum(1 for r in prod_rows if r["status"] == "ok")
-        print(f"[DSP PDF] Block 1 done: {ok_count}/{len(prod_rows)} rows ok",
+        print(f"[DSP PDF] Block 1 done: {ok_count}/{len(prod_rows)} rows ok (all months)",
               flush=True, file=sys.stderr)
         if not any(r["status"] == "ok" for r in prod_rows):
             raise ValueError("Production page found but no known items matched.")
