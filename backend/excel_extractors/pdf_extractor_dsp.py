@@ -483,9 +483,24 @@ def _block_production(file_path: str, prod_page_idx: int,
     page_no = prod_page_idx + 1
     lines   = text.splitlines()
 
+    # DEBUG: Show page and content info
+    import sys
+    print(f"\n[DEBUG] ====== PDF PAGE EXTRACTION ======", file=sys.stderr)
+    print(f"[DEBUG] PDF file: {file_path}", file=sys.stderr)
+    print(f"[DEBUG] Extracting page: {page_no} (index {prod_page_idx})", file=sys.stderr)
+    print(f"[DEBUG] Total lines on page: {len(lines)}", file=sys.stderr)
+    print(f"[DEBUG] First 5 lines of page:", file=sys.stderr)
+    for i, ln in enumerate(lines[:5]):
+        print(f"[DEBUG]   Line {i}: {ln[:80]}", file=sys.stderr)
+    print(f"[DEBUG] ====================================\n", file=sys.stderr)
+
     month_cols = _month_header(lines)
     if not month_cols:
-        raise ValueError("Month header row not found on the production page.")
+        print(f"[ERROR] Month header NOT found on page {page_no}!", file=sys.stderr)
+        print(f"[ERROR] Page content sample:", file=sys.stderr)
+        for i, ln in enumerate(lines[:20]):
+            print(f"[ERROR]   {i}: {ln}", file=sys.stderr)
+        raise ValueError(f"Month header row not found on page {page_no}. This may be the wrong page!")
     if want_mon not in month_cols:
         raise ValueError(
             f"Report month {want_mon}'{yy} not present in this PDF "
