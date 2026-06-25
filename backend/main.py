@@ -663,6 +663,7 @@ async def extract_preview_endpoint(
     plant_name: str = Form(...),
     month: str = Form(...),
     extract_block: str = Form("all"),
+    all_months: str = Form(default="false"),
 ):
     """Extract production + techno data from an RSP report for review.
     Returns previews only — nothing is written to the DB."""
@@ -687,6 +688,7 @@ async def extract_preview_endpoint(
 
         import asyncio, concurrent.futures
         loop = asyncio.get_running_loop()
+        all_months_bool = all_months.lower() == "true"
 
         if plant_name == "DSP":
             import excel_extractor_dsp
@@ -697,7 +699,7 @@ async def extract_preview_endpoint(
                     loop.run_in_executor(
                         pool,
                         lambda: excel_extractor_dsp.extract_preview(
-                            tmp_path, month, aliases=aliases, block=extract_block)
+                            tmp_path, month, aliases=aliases, block=extract_block, all_months=all_months_bool)
                     ),
                     timeout=300.0,
                 )
@@ -1042,6 +1044,83 @@ async def save_techno_entries(payload: dict):
 @app.get("/api/extraction-log")
 async def get_extraction_log(limit: int = 60):
     return {"logs": db.get_extraction_logs(limit=limit)}
+
+
+@app.post("/api/debug-techno-extraction")
+async def debug_techno_extraction(
+    file: UploadFile = File(...),
+    month: str = Form(...),
+):
+    """Debug endpoint: Extract and return techno data with detailed column info."""
+    import shutil
+    import tempfile
+    import sys
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename)[1]
+    tmp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+
+        import asyncio, concurrent.futures
+        loop = asyncio.get_running_loop()
+
+        import excel_extractor_dsp
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    pool,
+                    lambda: excel_extractor_dsp.extract_preview(
+                        tmp_path, month, block="techno")
+                ),
+                timeout=300.0,
+            )
+        finally:
+            pool.shutdown(wait=False)
+
+        # Return only techno data
+        techno_data = result.get("techno_param_rows", [])
+
+        # Group by section for easier debugging
+        by_section = {}
+        for row in techno_data:
+            section = row.get("section", "Unknown")
+            if section not in by_section:
+                by_section[section] = []
+            by_section[section].append(row)
+
+        return {
+            "month": month,
+            "total_rows": len(techno_data),
+            "by_section": {
+                section: {
+                    "count": len(rows),
+                    "rows": rows
+                }
+                for section, rows in by_section.items()
+            },
+            "raw_rows": techno_data,
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "type": type(e).__name__,
+        }
+
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
 
 
 @app.get("/api/item-mapping-suggestions")
