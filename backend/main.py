@@ -692,19 +692,32 @@ async def extract_preview_endpoint(
 
         if plant_name == "DSP":
             import excel_extractor_dsp
-            import importlib
-            importlib.reload(excel_extractor_dsp)  # Force reload from disk
             aliases = db.get_pdf_item_aliases("DSP")
             pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             try:
-                result = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        pool,
-                        lambda: excel_extractor_dsp.extract_preview(
-                            tmp_path, month, aliases=aliases, block=extract_block, all_months=all_months_bool)
-                    ),
-                    timeout=300.0,
-                )
+                # Try with all_months parameter first, fall back if not supported
+                try:
+                    result = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            pool,
+                            lambda: excel_extractor_dsp.extract_preview(
+                                tmp_path, month, aliases=aliases, block=extract_block, all_months=all_months_bool)
+                        ),
+                        timeout=300.0,
+                    )
+                except TypeError as e:
+                    if "all_months" in str(e):
+                        # Fall back to calling without all_months parameter
+                        result = await asyncio.wait_for(
+                            loop.run_in_executor(
+                                pool,
+                                lambda: excel_extractor_dsp.extract_preview(
+                                    tmp_path, month, aliases=aliases, block=extract_block)
+                            ),
+                            timeout=300.0,
+                        )
+                    else:
+                        raise
             except asyncio.TimeoutError:
                 raise HTTPException(status_code=504,
                     detail="PDF extraction timed out after 5 minutes. "
