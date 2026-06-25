@@ -39,7 +39,7 @@ _MONTH_NAMES = {
 # Default label maps — overridden at runtime from excel_cells_config.json ["dsp_pdf"]
 _ITEM_MAP_DEFAULT = [
     # ("i) Nos.(Total)",      "Oven Pushing(nos/d)",  False),
-    # ("ii) nos. per day",        "Oven Pushing(nos/d)",  False),
+    ("ii) nos. per day",        "Oven Pushing(nos/d)",  False),
     ("sinter",             "Total Sinter",         True),
     ("sp 1",               "SP-1",                 True),
     ("sp 2",               "SP-2",                 True),
@@ -480,14 +480,38 @@ _MAJOR_PAGE_DEFS = [
 # - TMI will be computed from Hot Metal + Scrap Consumption instead
 
 _SMS_PAGE_DEFS = [
-    ("gross h.metal",  "MAJOR", "Hot Metal Consumption", "DSP SMS", "Kg/TCS",  92),
+    ("gross h.metal consumption",  "MAJOR", "Hot Metal Consumption", "DSP SMS", "Kg/TCS",  92),
     ("total scrap",    "MAJOR", "Scrap Consumption",     "DSP SMS", "Kg/TCS", 102),
+    ("heat size(Cr.steel)",    "MAJOR", "Heat Size",     "DSP SMS", "T", 103),
+    ("refractory consumption(sms)",    "MAJOR", "Refractory Consumption(SMS)",     "DSP SMS", "Kg/TCS", 104),
+    ("refractory consumption(red)",    "MAJOR", "Refractory Consumption(RED)",     "DSP SMS", "Kg/TCS", 104),
+    ("tap to tap time",    "MAJOR", "Tap to Tap Time",     "DSP SMS", "mins", 104),
+    ("conv.availability on ich",    "MAJOR", "Converter Availability",     "DSP SMS", "%", 104),
+    ("conv.utilisation on ich",    "MAJOR", "Converter Utilisation",     "DSP SMS", "%", 104),
+    ("Calcined Lime (conv & lf)",    "MAJOR", "Calcined Lime Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("Limestone",    "MAJOR", "Limestone Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("si.mn",    "MAJOR", "Silicon Manganese Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("fe-si",    "MAJOR", "Ferro Silicon Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("fe-mn",    "MAJOR", "Ferro Manganese Consumption",     "DSP SMS", "Kg/TCS", 104),
+    ("Oxygen (Convt.)",    "MAJOR", "Oxygen Blow",     "DSP SMS", "Nm³/TCS", 104),
 ]
 
 _COKE_PAGE_DEFS = [
     ("b.f. coke yield", "COKE_SINTER", "BF Coke Yield",  "DSP", "%",              2),
     ("specific heat",   "COKE_SINTER", "Sp. Heat Cons.", "DSP", "000 K.Cal/TDC", 11),
     ("crude tar",       "COKE_SINTER", "Coal Tar Yield", "DSP", "kg/TDC",        21),
+    ("coal charge (dry) per oven",       "COKE_SINTER", "Dry Coal Charge/Oven", "DSP", "T",        22),
+    ("specific heat",       "COKE_SINTER", "Specific Heat", "DSP", "1000 K Cal/T",        23),
+    ("crude benzol",       "COKE_SINTER", "Crude Benzol", "DSP", "kg/TDC",        24),
+    ("c.o.gas yield",       "COKE_SINTER", "Coke Oven Gas Yield", "DSP", "Nm³/TDC",        25),
+    ("Ammonium Sulphate",       "COKE_SINTER", "Ammonium Sulphate", "DSP", "Kg/TDC",        26),
+    ("c.o.gas yield",       "COKE_SINTER", "Coke Oven Gas Yield", "DSP", "Nm³/TDC",        27),
+    ("m10",       "COKE_SINTER", "M10", "DSP", "%",        28),
+    ("m40",       "COKE_SINTER", "M40", "DSP", "%",        29),
+    ("average ash in b.f.coke",       "COKE_SINTER", "Average Ash in Coke", "DSP", "%",        30),
+    ("average ash in coal blend",       "COKE_SINTER", "Average Ash in Coal Blend", "DSP", "%",        31),
+    ("average v.m. in coal blend",       "COKE_SINTER", "Average Volatile Matter in Coal Blend", "DSP", "%",        32),
+    ("productivity",       "COKE_SINTER", "Sinter M/c Productivity", "DSP", "T/m2/Hr",        33),
 ]
 
 _BF_FURNACE_PARAMS = [
@@ -558,10 +582,21 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
     skip_prior_year = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
     # Parameters with special column handling (different structure in PDF)
     special_params = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
+    # Parameters that require specific unit filtering (skip rows with different units)
+    unit_filtered = {"crude benzol", "crude tar"}  # Only extract rows with matching unit
 
     for keyword, group_code, section, row_label, unit, sort in param_defs:
         for ln in lines:
             if keyword in ln.lower():
+                # Unit filtering: skip rows with wrong unit (e.g., skip Lit./TDC, keep only Kg/TDC)
+                if keyword in unit_filtered:
+                    # Extract unit from line (should be between param name and first number)
+                    # Look for unit abbreviations like "Lit./TDC", "Kg/TDC", etc.
+                    line_lower = ln.lower()
+                    # Check if unwanted units are in the line before expected unit
+                    if "lit." in line_lower and "kg" not in line_lower:
+                        continue  # Skip Lit./TDC rows, wait for Kg/TDC
+
                 nums = _parse_te_nums(ln)
                 # Skip Norm/Best Achieved lines (too few values)
                 if len(nums) < 4:
