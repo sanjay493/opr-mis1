@@ -31,6 +31,11 @@ PLANT = "DSP"
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
            "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
+_MONTH_NAMES = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+}
+
 # Default label maps — overridden at runtime from excel_cells_config.json ["dsp_pdf"]
 _ITEM_MAP_DEFAULT = [
     ("nos per day",        "Oven Pushing(nos/d)",  False),
@@ -100,6 +105,51 @@ def _num(tok):
     if re.fullmatch(r'-?\d+(\.\d+)?', t):
         return float(t)
     return None
+
+
+def _extract_pdf_report_month(file_path: str) -> str:
+    """Extract report month from first page of PDF.
+
+    Looks for text like "September 2025" or "Sep'25" on first page.
+    Returns "YYYY-MM" format (e.g. "2025-09") or raises ValueError if not found.
+    """
+    import pdfplumber
+    import re
+
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            first_page_text = (pdf.pages[0].extract_text() or "").upper()
+    except Exception as e:
+        raise ValueError(f"Cannot read PDF first page: {e}")
+
+    # Try to find month name (full or abbreviated) + year
+    # Patterns: "SEPTEMBER 2025", "SEP 2025", "SEP'25", "September'25"
+    patterns = [
+        r'(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)[\'|\s]+(20\d{2})',
+        r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[\'|\s]+(20\d{2})',
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, first_page_text)
+        if match:
+            month_str = match.group(1)
+            year_str = match.group(2)
+
+            # Map month name to number
+            month_num = None
+            for name, num in _MONTH_NAMES.items():
+                if month_str.upper().startswith(name[:3]):
+                    month_num = num
+                    break
+
+            if month_num:
+                year = int(year_str)
+                return f"{year}-{month_num:02d}"
+
+    raise ValueError(
+        f"Could not find report month on first page of PDF. "
+        f"Expected format like 'September 2025' or 'SEP 2025'."
+    )
 
 
 def _month_header(lines):
@@ -1201,9 +1251,35 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
     for raw_label, (a_item, a_conv) in (aliases or {}).items():
         alias_lookup[_norm(raw_label)] = (a_item, bool(a_conv))
 
+    # Extract actual PDF report month from first page
+    try:
+        actual_report_month = _extract_pdf_report_month(file_path)
+        pdf_year, pdf_month = int(actual_report_month[:4]), int(actual_report_month[5:7])
+        pdf_mon_name = _MONTHS[pdf_month - 1]
+        print(f"[DSP PDF] PDF report month detected: {pdf_mon_name}'{str(pdf_year)[2:]} ({actual_report_month})",
+              flush=True, file=sys.stderr)
+    except Exception as e:
+        print(f"[DSP PDF] ⚠ Could not detect PDF month from first page: {e}",
+              flush=True, file=sys.stderr)
+        actual_report_month = report_month
+        pdf_year, pdf_month = int(report_month[:4]), int(report_month[5:7])
+        pdf_mon_name = _MONTHS[pdf_month - 1]
+
     y, m    = int(report_month[:4]), int(report_month[5:7])
     want_mon = _MONTHS[m - 1]
     yy       = str(y)[2:]
+
+    # Check if selected month matches PDF month
+    month_mismatch = None
+    if actual_report_month != report_month:
+        month_mismatch = {
+            "selected_month": report_month,
+            "actual_month": actual_report_month,
+            "message": f"Selected month {want_mon}'{yy} but PDF is for {pdf_mon_name}'{str(pdf_year)[2:]}. "
+                       f"Extract from PDF's actual month instead?"
+        }
+        print(f"[DSP PDF] ⚠ Month mismatch: selected {report_month}, PDF is {actual_report_month}",
+              flush=True, file=sys.stderr)
 
     file_kb = 0
     try:
@@ -1292,6 +1368,8 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
     return {
         "plant":               PLANT,
         "month":               report_month,
+        "pdf_report_month":    actual_report_month,  # Actual month from PDF
+        "month_mismatch":      month_mismatch,       # Warning if mismatch
         "source_type":         "DSP OMI PDF Report",
         "sheets":              sheets,
         "workbook_sheets":     workbook_sheets,
