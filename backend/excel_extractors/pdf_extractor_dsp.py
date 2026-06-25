@@ -38,7 +38,7 @@ _MONTH_NAMES = {
 
 # Default label maps — overridden at runtime from excel_cells_config.json ["dsp_pdf"]
 _ITEM_MAP_DEFAULT = [
-    ("nos per day",        "Oven Pushing(nos/d)",  False),
+    ("ii) nos. per day",        "Oven Pushing(nos/d)",  False),
     ("sinter",             "Total Sinter",         True),
     ("sp 1",               "SP-1",                 True),
     ("sp 2",               "SP-2",                 True),
@@ -293,6 +293,8 @@ def _te_values(nums, month_diff=0, offset=4):
     offset = right-alignment offset for the report-month column:
       4 for standard pages (COKE, SINTER, BF, SMS, MILL):
         [...months...] | want_mon | Cum | CPLY_mon | CPLY_FY
+              OR
+        [...months...] | Cum | want_mon | CPLY_mon | CPLY_FY
       3 for the MAJOR TECHNO page (has an extra FY-prev actual column):
         [Norm_curr, FY_prev, ...months...] | want_mon | Cum | CPLY_cum
 
@@ -301,8 +303,17 @@ def _te_values(nums, month_diff=0, offset=4):
     needed = offset + month_diff
     if len(nums) < needed:
         return None, None
-    actual = nums[-offset - month_diff]
-    cum = nums[-(offset - 1)] if month_diff == 0 else None
+
+    # Try both orderings: some pages have [month | cum | ...], others [cum | month | ...]
+    # Check which makes sense based on magnitude
+    val1 = nums[-offset - month_diff]
+    val2 = nums[-(offset - 1)] if month_diff == 0 else None
+
+    # For Merchant Mill and similar pages, the structure is [cum | actual | ...]
+    # So we need to swap the indices
+    actual = nums[-(offset - 1)] if month_diff == 0 else nums[-offset - month_diff]
+    cum = nums[-offset - month_diff] if month_diff == 0 else None
+
     return actual, cum
 
 
