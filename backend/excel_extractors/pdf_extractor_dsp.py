@@ -554,6 +554,9 @@ def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, 
 
 def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0, offset=4, report_month_num=None):
     rows = []
+    # Parameters that should NOT have prior year extraction
+    skip_prior_year = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
+
     for keyword, group_code, section, row_label, unit, sort in param_defs:
         for ln in lines:
             if keyword in ln.lower():
@@ -578,8 +581,8 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
                         "found_via":  f"DSP {section}",
                         "status":     "ok",
                     })
-                    # Prior year row (if available)
-                    if actual_prior is not None:
+                    # Prior year row (if available and keyword not in skip list)
+                    if actual_prior is not None and keyword not in skip_prior_year:
                         prior_yy = str(int(yy) - 1)
                         rows.append({
                             "group_code": group_code,
