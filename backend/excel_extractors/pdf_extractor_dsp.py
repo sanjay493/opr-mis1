@@ -498,20 +498,19 @@ _SMS_PAGE_DEFS = [
 
 _COKE_PAGE_DEFS = [
     ("b.f. coke yield", "COKE_SINTER", "BF Coke Yield",  "DSP", "%",              2),
-    ("specific heat",   "COKE_SINTER", "Sp. Heat Cons.", "DSP", "000 K.Cal/TDC", 11),
+    ("sp. heat cons", "COKE_SINTER", "Sp. Heat Cons.", "DSP", "000 K.Cal/TDC", 11),
     ("crude tar",       "COKE_SINTER", "Coal Tar Yield", "DSP", "kg/TDC",        21),
-    ("coal charge (dry) per oven",       "COKE_SINTER", "Dry Coal Charge/Oven", "DSP", "T",        22),
-    ("specific heat",       "COKE_SINTER", "Specific Heat", "DSP", "1000 K Cal/T",        23),
+    ("dry coal charge", "COKE_SINTER", "Dry Coal Charge/Oven", "DSP", "T",        22),
+    ("specific heat cons", "COKE_SINTER", "Specific Heat", "DSP", "1000 K Cal/T",        23),
     ("crude benzol",       "COKE_SINTER", "Crude Benzol", "DSP", "kg/TDC",        24),
-    ("c.o.gas yield",       "COKE_SINTER", "Coke Oven Gas Yield", "DSP", "Nm³/TDC",        25),
-    ("Ammonium Sulphate",       "COKE_SINTER", "Ammonium Sulphate", "DSP", "Kg/TDC",        26),
-    ("c.o.gas yield",       "COKE_SINTER", "Coke Oven Gas Yield", "DSP", "Nm³/TDC",        27),
-    ("m10",       "COKE_SINTER", "M10", "DSP", "%",        28),
-    ("m40",       "COKE_SINTER", "M40", "DSP", "%",        29),
+    ("coke oven gas yield",       "COKE_SINTER", "Coke Oven Gas Yield", "DSP", "Nm³/TDC",        25),
+    ("ammonium sulphate",       "COKE_SINTER", "Ammonium Sulphate", "DSP", "Kg/TDC",        26),
+    ("m10 in coke",       "COKE_SINTER", "M10", "DSP", "%",        28),
+    ("m40 in coke",       "COKE_SINTER", "M40", "DSP", "%",        29),
     ("average ash in b.f.coke",       "COKE_SINTER", "Average Ash in Coke", "DSP", "%",        30),
     ("average ash in coal blend",       "COKE_SINTER", "Average Ash in Coal Blend", "DSP", "%",        31),
     ("average v.m. in coal blend",       "COKE_SINTER", "Average Volatile Matter in Coal Blend", "DSP", "%",        32),
-    ("productivity",       "COKE_SINTER", "Sinter M/c Productivity", "DSP", "T/m2/Hr",        33),
+    ("sinter.*productivity",       "COKE_SINTER", "Sinter M/c Productivity", "DSP", "T/m2/Hr",        33),
 ]
 
 _BF_FURNACE_PARAMS = [
