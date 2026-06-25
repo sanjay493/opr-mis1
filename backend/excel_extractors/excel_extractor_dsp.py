@@ -24,12 +24,19 @@ def clean_val(val) -> Optional[float]:
         return None
 
 
-def extract_and_save_excel(file_path: str, report_month: str = "", source_file_name: str = "") -> bool:
+def extract_and_save_excel(file_path: str, report_month: str = "", source_file_name: str = "", column_shift: int = 0) -> bool:
     """
     Dispatcher for DSP Excel uploads.
 
     DSP MCR-I report ('mcr1_*.xls') is a tab-separated ASCII text file
     despite the .xls extension. Detect binary vs text by reading first bytes.
+
+    Args:
+        file_path: Path to the Excel file
+        report_month: Report month (optional, auto-detected from file)
+        source_file_name: Original filename for logging
+        column_shift: Column shift adjustment (-1 for left shift, +1 for right shift)
+                     Use -1 when data is in columns C-D instead of D-E
     """
     try:
         with open(file_path, 'rb') as f:
@@ -41,7 +48,7 @@ def extract_and_save_excel(file_path: str, report_month: str = "", source_file_n
                 "Please upload the MCR-I report (tab-separated .xls file)."
             )
 
-        return _extract_mcr_report(file_path, source_file_name)
+        return _extract_mcr_report(file_path, source_file_name, column_shift=column_shift)
 
     except ValueError as ve:
         logger.error(f"DSP validation error: {ve}")
@@ -55,7 +62,7 @@ def extract_and_save_excel(file_path: str, report_month: str = "", source_file_n
 # Extractor — DSP MCR-I (tab-separated text file, month-end daily report)
 # ---------------------------------------------------------------------------
 
-def _extract_mcr_report(file_path: str, source_file_name: str) -> bool:
+def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int = 0) -> bool:
     """
     Extracts cumulative production data from DSP MCR-I report (tab-separated text).
 
@@ -65,6 +72,10 @@ def _extract_mcr_report(file_path: str, source_file_name: str) -> bool:
       Col C (2): Actual On Date
       Col D (3): Actual To Date (cumulative)
       Col E (4): Monthly Rate
+
+    Args:
+        column_shift: Adjust columns left (-1) or right (+1) for layout variations
+                     Sep'25 uses column_shift=-1 (data in C-D instead of D-E)
 
     Date: row 1, col C (index 2) = "31.05.2026" (DD.MM.YYYY)
 
@@ -125,8 +136,10 @@ def _extract_mcr_report(file_path: str, source_file_name: str) -> bool:
     db_report_month = f"{year}-{m_num}"
     logger.info(f"DSP MCR: month auto-detected → {db_report_month}")
 
-    COL_D = 3  # Actual To Date (cumulative)
-    COL_E = 4  # Monthly Rate
+    COL_D = 3 + column_shift  # Actual To Date (cumulative)
+    COL_E = 4 + column_shift  # Monthly Rate
+    if column_shift != 0:
+        logger.info(f"DSP MCR: column shift applied → {column_shift} (COL_D={COL_D}, COL_E={COL_E})")
 
     NO_CONVERT = {"Oven Pushing(nos/d)"}
 
@@ -202,7 +215,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str) -> bool:
 # Preview — MCR-I (no DB writes, returns standard preview dict)
 # ---------------------------------------------------------------------------
 
-def _mcr_preview(file_path: str, report_month: str) -> dict:
+def _mcr_preview(file_path: str, report_month: str, column_shift: int = 0) -> dict:
     with open(file_path, encoding='utf-8', errors='replace') as f:
         lines = [line.rstrip('\r\n').split('\t') for line in f.readlines()]
 
@@ -229,8 +242,8 @@ def _mcr_preview(file_path: str, report_month: str) -> dict:
     else:
         db_month = report_month
 
-    COL_D = 3
-    COL_E = 4
+    COL_D = 3 + column_shift
+    COL_E = 4 + column_shift
     NO_CONVERT = {"Oven Pushing(nos/d)"}
 
     row_specs = [
@@ -291,8 +304,12 @@ def _mcr_preview(file_path: str, report_month: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def extract_preview(file_path: str, report_month: str, aliases: dict = None,
-                    block: str = 'all') -> dict:
-    """DSP preview: delegates to pdf_extractor_dsp for .pdf, else MCR-I text."""
+                    block: str = 'all', column_shift: int = 0) -> dict:
+    """DSP preview: delegates to pdf_extractor_dsp for .pdf, else MCR-I text.
+
+    Args:
+        column_shift: Column offset for data extraction (-1 for Sep'25 left-shifted layout)
+    """
     import os as _os
     suffix = _os.path.splitext(file_path)[1].lower()
 
@@ -308,5 +325,5 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
             "Binary XLS format is not supported for DSP. "
             "Upload the MCR-I tab-separated .xls file or the OMI PDF report."
         )
-    return _mcr_preview(file_path, report_month)
+    return _mcr_preview(file_path, report_month, column_shift=column_shift)
 
