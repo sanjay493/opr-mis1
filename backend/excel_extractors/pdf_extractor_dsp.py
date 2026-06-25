@@ -963,17 +963,13 @@ def _block_techno(file_path: str, page_index: dict,
     techno_keys = ('major', 'sms', 'coke', 'sint', 'bf_cdi', 'mm', 'wa')
     needed_idxs = {page_index[k] for k in techno_keys if k in page_index}
 
-    print(f"[DSP PDF] Techno page search: looking for {len(techno_keys)} sections: {techno_keys}",
-          flush=True, file=sys.stderr)
-    print(f"[DSP PDF] Page index has: {list(page_index.keys())}",
-          flush=True, file=sys.stderr)
-    print(f"[DSP PDF] Found {len(needed_idxs)} techno pages at indices: {sorted(needed_idxs)}",
-          flush=True, file=sys.stderr)
-
     if not needed_idxs:
         print(f"[DSP PDF] WARNING: No techno pages found! Returning 0 rows.",
               flush=True, file=sys.stderr)
         return []
+
+    print(f"[DSP PDF] Techno: Found {len(needed_idxs)} pages, structure: [Norm | {want_mon}'25 | 2025-26 | {want_mon}'24 | 2024-25]",
+          flush=True, file=sys.stderr)
 
     # Read only the specific pages we need; build a sparse page_texts list
     # (all other positions are empty strings so _find_page_by_heading still works
@@ -988,93 +984,66 @@ def _block_techno(file_path: str, page_index: dict,
     rows = []
 
     # ── Mill techno (MM/MSM and Wheel & Axle) ────────────────────────────
+    # NOTE: Techno pages have FIXED structure (no month columns to detect):
+    # [Norm | Current_Month_Actual | Current_FY_Cum | Prior_Month_Actual | Prior_FY_Cum]
+    # Use offset=5 and month_diff=0 (always current month in these fixed columns)
+
     mm_idx = page_index.get('mm')
     if mm_idx is not None:
         text = page_texts[mm_idx]
         pno  = mm_idx + 1
         lines = text.splitlines()
 
-        # Detect month_diff for this page (may differ from production page)
-        mm_month_diff = month_diff  # default
-        mm_month_cols = _month_header(lines)
-        if mm_month_cols and want_mon in mm_month_cols:
-            mm_month_diff = len(mm_month_cols) - 1 - mm_month_cols.index(want_mon)
-            print(f"[DSP PDF] Merchant Mill: detected month_diff={mm_month_diff} (months: {mm_month_cols})",
-                  flush=True, file=sys.stderr)
-
         mm_lines  = _slice_text(text, "TE PARAMETERS - MERCHANT MILL",
                                  ["PRODUCTION - MSM", "TE PARAMETERS - MSM"])
+        # For techno: use offset=5 (5 columns at right), month_diff=0 (current month)
         rows.extend(_parse_params_from_lines(
             mm_lines, "Merchant Mill", _MM_MSM_PARAMS["Merchant Mill"],
-            pno, want_mon, yy, mm_month_diff))
+            pno, want_mon, yy, month_diff=0, offset=5))
         msm_lines = _slice_text(text, "TE PARAMETERS - MSM", [])
         rows.extend(_parse_params_from_lines(
             msm_lines, "MSM", _MM_MSM_PARAMS["MSM"],
-            pno, want_mon, yy, mm_month_diff))
+            pno, want_mon, yy, month_diff=0, offset=5))
 
     wa_idx = page_index.get('wa')
     if wa_idx is not None:
         text = page_texts[wa_idx]
         pno  = wa_idx + 1
-        lines = text.splitlines()
-
-        # Detect month_diff for this page (may differ from production page)
-        wa_month_diff = month_diff  # default
-        wa_month_cols = _month_header(lines)
-        if wa_month_cols and want_mon in wa_month_cols:
-            wa_month_diff = len(wa_month_cols) - 1 - wa_month_cols.index(want_mon)
-            print(f"[DSP PDF] Wheel & Axle: detected month_diff={wa_month_diff} (months: {wa_month_cols})",
-                  flush=True, file=sys.stderr)
 
         wp_lines = _slice_text(text, "WHEEL PLANT", ["AXLE PLANT"])
         rows.extend(_parse_params_from_lines(
             wp_lines, "Wheel Plant", _WA_PARAMS["Wheel Plant"],
-            pno, want_mon, yy, wa_month_diff))
+            pno, want_mon, yy, month_diff=0, offset=5))
         ap_lines = _slice_text(text, "AXLE PLANT", [])
         rows.extend(_parse_params_from_lines(
             ap_lines, "Axle Plant", _WA_PARAMS["Axle Plant"],
-            pno, want_mon, yy, wa_month_diff))
+            pno, want_mon, yy, month_diff=0, offset=5))
 
     # ── Major techno + SMS ────────────────────────────────────────────────
     major_idx = page_index.get('major')
     if major_idx is not None:
         lines = page_texts[major_idx].splitlines()
-        major_month_diff = month_diff
-        major_month_cols = _month_header(lines)
-        if major_month_cols and want_mon in major_month_cols:
-            major_month_diff = len(major_month_cols) - 1 - major_month_cols.index(want_mon)
-            print(f"[DSP PDF] Major Techno: detected month_diff={major_month_diff} (months: {major_month_cols})",
-                  flush=True, file=sys.stderr)
+        # For techno: use offset=5, month_diff=0
         rows.extend(_parse_general_params(
             lines, _MAJOR_PAGE_DEFS, major_idx + 1,
-            want_mon, yy, major_month_diff, offset=3))
+            want_mon, yy, month_diff=0, offset=5))
 
     sms_idx = page_index.get('sms')
     if sms_idx is not None:
         lines = page_texts[sms_idx].splitlines()
-        sms_month_diff = month_diff
-        sms_month_cols = _month_header(lines)
-        if sms_month_cols and want_mon in sms_month_cols:
-            sms_month_diff = len(sms_month_cols) - 1 - sms_month_cols.index(want_mon)
-            print(f"[DSP PDF] SMS: detected month_diff={sms_month_diff} (months: {sms_month_cols})",
-                  flush=True, file=sys.stderr)
+        # For techno: use offset=5, month_diff=0
         rows.extend(_parse_general_params(
             lines, _SMS_PAGE_DEFS, sms_idx + 1,
-            want_mon, yy, sms_month_diff, offset=4))
+            want_mon, yy, month_diff=0, offset=5))
 
     # ── Coke & Sinter ────────────────────────────────────────────────────
     coke_idx = page_index.get('coke')
     if coke_idx is not None:
         lines = page_texts[coke_idx].splitlines()
-        coke_month_diff = month_diff
-        coke_month_cols = _month_header(lines)
-        if coke_month_cols and want_mon in coke_month_cols:
-            coke_month_diff = len(coke_month_cols) - 1 - coke_month_cols.index(want_mon)
-            print(f"[DSP PDF] Coke: detected month_diff={coke_month_diff} (months: {coke_month_cols})",
-                  flush=True, file=sys.stderr)
+        # For techno: use offset=5, month_diff=0
         rows.extend(_parse_general_params(
             lines, _COKE_PAGE_DEFS, coke_idx + 1,
-            want_mon, yy, coke_month_diff, offset=4))
+            want_mon, yy, month_diff=0, offset=5))
 
     sint_idx = page_index.get('sint')
     if sint_idx is not None:
@@ -1093,7 +1062,8 @@ def _block_techno(file_path: str, page_index: dict,
             for ln in _slice_text(sint_text, marker, stop):
                 if "productivity" in ln.lower():
                     nums = _parse_te_nums(ln)
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, sint_month_diff, offset=4)
+                    # For techno: use offset=5, month_diff=0
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff=0, offset=5)
                     if actual_curr is not None:
                         sort_base = 31 if label == "DSP SP-1" else 32
                         # Current year row
@@ -1133,15 +1103,6 @@ def _block_techno(file_path: str, page_index: dict,
     if bf_idx is not None:
         bf_text = page_texts[bf_idx]
         bf_pno  = bf_idx + 1
-        bf_lines = bf_text.splitlines()
-
-        # Detect month_diff for this page (may differ from production page)
-        bf_month_diff = month_diff  # default
-        bf_month_cols = _month_header(bf_lines)
-        if bf_month_cols and want_mon in bf_month_cols:
-            bf_month_diff = len(bf_month_cols) - 1 - bf_month_cols.index(want_mon)
-            print(f"[DSP PDF] Blast Furnace CDI: detected month_diff={bf_month_diff} (months: {bf_month_cols})",
-                  flush=True, file=sys.stderr)
 
         cdi_lines = _slice_text(bf_text, "CDI RATE", ["FUEL RATE", "SINTER IN BURDEN"])
         _fce_markers = ("furnace-ii", "furnace-iii", "furnace-iv")
@@ -1153,7 +1114,8 @@ def _block_techno(file_path: str, page_index: dict,
             for ln in cdi_lines:
                 if furnace_marker in ln.lower():
                     nums = _parse_te_nums(ln)
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, bf_month_diff, offset=4)
+                    # For techno: use offset=5, month_diff=0
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff=0, offset=5)
                     if actual_curr is not None:
                         # Current year row
                         rows.append({
