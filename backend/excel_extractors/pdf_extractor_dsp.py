@@ -568,18 +568,11 @@ def _block_production(file_path: str, prod_page_idx: int,
     m_idx      = month_cols.index(want_mon)
     month_diff = len(month_cols) - 1 - m_idx
 
-    # Count ALL data columns including quarterly aggregates (Q1, Q2, H1, etc.)
-    # This handles PDFs with: APR MAY JUN Q1 JUL AUG SEP Q2 H1 TOTAL
-    all_data_cols = []
-    for ln in lines[:15]:
-        toks = [t.upper().rstrip('.') for t in ln.split()]
-        if month_cols[0] in toks:
-            start_idx = toks.index(month_cols[0])
-            total_idx = toks.index('TOTAL') if 'TOTAL' in toks else len(toks) - 1
-            all_data_cols = toks[start_idx:total_idx + 1]
-            break
-
-    n_cols = len(all_data_cols) if all_data_cols else (len(month_cols) + 1)
+    # Data columns = months + cumulative (no quarterly aggregates)
+    # The PDF header may have: APR MAY JUN Q1 JUL AUG SEP Q2 H1 TOTAL
+    # But data rows only have: APR MAY JUN JUL AUG SEP CUM_ACTUAL
+    # So n_cols should be: len(months) + 1 (for cumulative column)
+    n_cols = len(month_cols) + 1
 
     # AUTO-DETECT column position in header row to find any shifts
     # This handles PDFs where the month columns appear at different token positions
