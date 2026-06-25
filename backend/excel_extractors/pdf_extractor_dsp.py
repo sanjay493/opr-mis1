@@ -478,7 +478,7 @@ def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, 
                     })
                     # Prior year row (if available)
                     if actual_prior is not None:
-                        prior_yy = yy - 1
+                        prior_yy = str(int(yy) - 1)
                         rows.append({
                             "group_code": "MILL_DSP",
                             "section":    section,
@@ -520,7 +520,7 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
                     })
                     # Prior year row (if available)
                     if actual_prior is not None:
-                        prior_yy = yy - 1
+                        prior_yy = str(int(yy) - 1)
                         rows.append({
                             "group_code": group_code,
                             "section":    section,
