@@ -1152,7 +1152,8 @@ def _block_techno(file_path: str, page_index: dict,
         for ln in cdi_lines:
             if not any(m in ln.lower() for m in _fce_markers):
                 nums = _parse_te_nums(ln)
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, bf_month_diff, offset=4)
+                # For techno: use offset=5, month_diff=0
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff=0, offset=5)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
@@ -1170,7 +1171,7 @@ def _block_techno(file_path: str, page_index: dict,
                     })
                     # Prior year row
                     if actual_prior is not None:
-                        prior_yy = yy - 1
+                        prior_yy = str(int(yy) - 1)
                         rows.append({
                             "group_code": "IRON_MAKING",
                             "section":    "CDI",
