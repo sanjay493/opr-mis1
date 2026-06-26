@@ -113,16 +113,16 @@ PARAM_MAP: List[tuple] = [
     # ── Blast Furnace Operations (rows 9-20) ─────────────────────────────
     # source_priority=4: secondary to BSP Monthly Tech Excel for shop-level params
     # source_priority=5: only source for per-furnace CDI
-    ( 9, "IRON_MAKING", "CDI",               "BSP Plant Shop",       "Kg/THM", 4),
+    ( 9, "IRON_MAKING", "CDI",               "BSP",       "Kg/THM", 4),
     (11, "IRON_MAKING", "CDI",               "BSP BF-4",             "Kg/THM", 5),
     (12, "IRON_MAKING", "CDI",               "BSP BF-5",             "Kg/THM", 5),
     (13, "IRON_MAKING", "CDI",               "BSP BF-6",             "Kg/THM", 5),
     (14, "IRON_MAKING", "CDI",               "BSP BF-7",             "Kg/THM", 5),
     (15, "IRON_MAKING", "CDI",               "BSP BF-8",             "Kg/THM", 5),
-    (16, "IRON_MAKING", "Fuel Rate",          "BSP Plant Shop",       "Kg/THM", 4),
-    (17, "IRON_MAKING", "Pellet in Burden",   "BSP Plant Shop",       "%",      4),
-    (18, "IRON_MAKING", "LD Slag Usage",      "BSP Plant Shop",       "Kg/THM", 4),
-    (19, "IRON_MAKING", "Not Dry Cast",       "BSP Plant Shop",       "%",      4),
+    (16, "IRON_MAKING", "Fuel Rate",          "BSP",       "Kg/THM", 4),
+    (17, "IRON_MAKING", "Pellet in Burden",   "BSP",       "%",      4),
+    (18, "IRON_MAKING", "LD Slag Usage",      "BSP",       "Kg/THM", 4),
+    (19, "IRON_MAKING", "Not Dry Cast",       "BSP",       "%",      4),
     (20, "MAJOR",       "Coal to Hot Metal",  "BSP",                  "Ratio",  4),
     # ── SMS-2 Operations (rows 22-36) ──────────────────────────────────
     (22, "SMS", "BSP SMS-2", "Converter Availability",      "% ICH"),
@@ -152,7 +152,7 @@ PARAM_MAP: List[tuple] = [
     (50, "SMS", "BSP SMS-3", "LD Gas Recovery",            "CuM/T"),
     (51, "SMS", "BSP SMS-3", "DS Heats",                   "Nos"),
     # ── Utilities (row 54) ───────────────────────────────────────────────
-    (54, "IRON_MAKING", "Utilities (BSP)", "Sp. Water Consumption",       "CuM/TCS"),
+    (54, "GENERAL",     "Utilities",       "Sp. Water Consumption",       "CuM/TCS"),
 ]
 
 

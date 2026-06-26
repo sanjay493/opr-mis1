@@ -25,6 +25,8 @@ from typing import Optional, List, Dict, Any
 import openpyxl
 from openpyxl.utils import get_column_letter
 
+from extraction_utils import calculate_tmi_consumption
+
 try:
     import xlrd
     _XLRD_AVAILABLE = True
@@ -297,16 +299,16 @@ PARAM_MAP_3PAGE: List[tuple] = [
     (54, "COKE_SINTER", "Sinter Plant SP-3",    "Productivity",              "T/m²/hr"),
     (55, "COKE_SINTER", "Sinter Plant SP-3",    "Basicity",                  ""),
     # ── Blast Furnaces (rows 58-70) ─────────────────────────────────────────
-    (58, "IRON_MAKING", "Sinter in Burden",       "BSP Plant Shop",           "%"),
-    (59, "IRON_MAKING", "BF Coke Rate",           "BSP Plant Shop",           "Kg/THM"),
-    (60, "IRON_MAKING", "Coke Screen Loss",        "BSP Plant Shop",           "25mm%"),
-    (68, "IRON_MAKING", "CDI",                    "BSP Plant Shop",           "Kg/THM"),
-    (69, "IRON_MAKING", "Slag Rate",              "BSP Plant Shop",           "Kg/THM"),
-    (70, "IRON_MAKING", "Nut Coke Rate",           "BSP Plant Shop",           "Kg/THM"),
+    (58, "IRON_MAKING", "Sinter in Burden",       "BSP",           "%"),
+    (59, "IRON_MAKING", "BF Coke Rate",           "BSP",           "Kg/THM"),
+    (60, "IRON_MAKING", "Coke Screen Loss",        "BSP",           "25mm%"),
+    (68, "IRON_MAKING", "CDI",                    "BSP",           "Kg/THM"),
+    (69, "IRON_MAKING", "Slag Rate",              "BSP",           "Kg/THM"),
+    (70, "IRON_MAKING", "Nut Coke Rate",           "BSP",           "Kg/THM"),
     # ── BF Productivity (rows 65-67) ────────────────────────────────────────
     (65, "IRON_MAKING", "BF Productivity",        "BSP BF-7",                 "T/m³/day"),
     (66, "IRON_MAKING", "BF Productivity",        "BSP BF-8",                 "T/m³/day"),
-    (67, "IRON_MAKING", "BF Productivity",        "BSP Plant Shop",           "T/m³/day"),
+    (67, "IRON_MAKING", "BF Productivity",        "BSP",           "T/m³/day"),
     # ── SMS-II Consumption (rows 76-78) ─────────────────────────────────────
     (76, "SMS", "SMS-II Consumption",            "Hot Metal",                "Kg/TCS"),
     (77, "SMS", "SMS-II Consumption",            "Scrap",                    "Kg/TCS"),
@@ -379,16 +381,16 @@ _OISCO_UNIT_COL   = 4
 PARAM_MAP_OISCO: List[tuple] = [
     # (row_1based, group_code, section, label, unit)
     # ── Blast Furnace Operations (rows 9-20) ─────────────────────────────────
-    ( 9, "IRON_MAKING", "CDI",                 "BSP Plant Shop",          "Kg/THM"),
+    ( 9, "IRON_MAKING", "CDI",                 "BSP",          "Kg/THM"),
     (11, "IRON_MAKING", "CDI",                 "BSP BF-4",                "Kg/THM"),
     (12, "IRON_MAKING", "CDI",                 "BSP BF-5",                "Kg/THM"),
     (13, "IRON_MAKING", "CDI",                 "BSP BF-6",                "Kg/THM"),
     (14, "IRON_MAKING", "CDI",                 "BSP BF-7",                "Kg/THM"),
     (15, "IRON_MAKING", "CDI",                 "BSP BF-8",                "Kg/THM"),
-    (16, "IRON_MAKING", "Fuel Rate",           "BSP Plant Shop",          "Kg/THM"),
-    (17, "IRON_MAKING", "Pellet in Burden",    "BSP Plant Shop",          "%"),
-    (18, "IRON_MAKING", "LD Slag Usage",       "BSP Plant Shop",          "Kg/THM"),
-    (19, "IRON_MAKING", "Not Dry Cast",        "BSP Plant Shop",          "%"),
+    (16, "IRON_MAKING", "Fuel Rate",           "BSP",          "Kg/THM"),
+    (17, "IRON_MAKING", "Pellet in Burden",    "BSP",          "%"),
+    (18, "IRON_MAKING", "LD Slag Usage",       "BSP",          "Kg/THM"),
+    (19, "IRON_MAKING", "Not Dry Cast",        "BSP",          "%"),
     (20, "MAJOR",       "Coal to Hot Metal",   "BSP",                     "Ratio"),
     # ── SMS-2 Operations (rows 22-36) ───────────────────────────────────────
     (22, "SMS", "BSP SMS-2", "Converter Availability",      "% ICH"),
@@ -418,7 +420,7 @@ PARAM_MAP_OISCO: List[tuple] = [
     (50, "SMS", "BSP SMS-3", "LD Gas Recovery",            "m³/T"),
     (51, "SMS", "BSP SMS-3", "DS Heats",                   "Nos."),
     # ── Utilities (row 54) ───────────────────────────────────────────────────
-    (54, "BSP",          "Utilities (BSP)", "Sp. Water Consumption",       "m³/TCS"),
+    (54, "GENERAL",      "Utilities", "Sp. Water Consumption",             "m³/TCS"),
 ]
 
 
@@ -666,6 +668,9 @@ def _extract_techno_3page_preview(wb, file_path: str, report_month: str) -> dict
             "file_label": file_label, "plant": "BSP", "month": db_month,
             "found_via": f"hardcoded R{row_1b}", "status": status,
         })
+
+    # Calculate TMI as HM Consumption + Scrap Consumption
+    rows_out = calculate_tmi_consumption(rows_out)
 
     ok_count = sum(1 for r in rows_out if r["status"] == "ok")
     logger.info(

@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
+import GlobalNavbar from '@/components/GlobalNavbar';
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -1092,7 +1092,11 @@ export default function UploadPage() {
   };
 
   return (
-    <main className="app-container">
+    <>
+      {/* Global Navbar */}
+      <GlobalNavbar />
+
+      <main className="app-container">
       {/* Sidebar Control Panel */}
       <div className="sidebar no-print">
         <div className="sidebar-header">
@@ -1101,28 +1105,9 @@ export default function UploadPage() {
               <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
               <polyline points="14 2 14 8 20 8" />
             </svg>
-            SAIL MIS Portal
+            Excel Ingestion
           </h1>
-          <p>Excel Ingestion Engine</p>
-        </div>
-
-        {/* Navigation Section */}
-        <div className="control-section">
-          <h2>Navigation</h2>
-          <Link href="/" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-            Back to Dashboard
-          </Link>
-          <Link href="/report" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none', borderColor: 'var(--primary)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-              <polyline points="14 2 14 8 20 8" />
-            </svg>
-            Report Engine
-          </Link>
+          <p>Data Upload Engine</p>
         </div>
 
         {/* Unified Data Upload — single section with mode toggle */}
@@ -2006,6 +1991,7 @@ export default function UploadPage() {
         </div>
       </div>
     </main>
+    </>
   );
 }
 

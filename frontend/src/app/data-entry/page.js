@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import Link from 'next/link';
+import GlobalNavbar from '@/components/GlobalNavbar';
 import SpecialSteelManualEntry from '@/components/SpecialSteelManualEntry';
 import HotMetalConsumptionEntry from '@/components/HotMetalConsumptionEntry';
 
@@ -18,7 +18,7 @@ const MONTH_NUM = {
 };
 const YEARS = Array.from({ length: 8 }, (_, i) => (2023 + i).toString());
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
 
 function getDefaultPeriod() {
   const d = new Date();
@@ -435,111 +435,94 @@ export default function DataEntryPage() {
   );
 
   return (
-    <main className="app-container">
-      {/* Sidebar */}
-      <div className="sidebar no-print">
-        <div className="sidebar-header">
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary)' }}>
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M3 9h18M9 21V9" />
-            </svg>
-            SAIL MIS Portal
-          </h1>
-          <p>Production Data Entry</p>
-        </div>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#f8fafc',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* Global Navbar */}
+      <GlobalNavbar />
 
-        <div className="control-section">
-          <h2>Navigation</h2>
-          <Link href="/" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            Dashboard
-          </Link>
-          <Link href="/upload" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Excel Upload
-          </Link>
-          <Link href="/report" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Report Engine
-          </Link>
-          <Link href="/data-entry/targets" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            TE Annual Targets
-          </Link>
-          <Link href="/data-entry/techno" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            Techno Data Entry
-          </Link>
-          <Link href="/data-entry/ipt" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-            IPT Data Entry
-          </Link>
-          <Link href="/records" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            Production Records
-          </Link>
-        </div>
-
-        <div className="control-section" style={{ marginTop: '15px' }}>
-          <h2>Select Plant &amp; Period</h2>
-
-          <div className="form-group" style={{ marginBottom: '12px' }}>
-            <label>Plant</label>
-            <select className="form-control" value={plant} onChange={e => { setPlant(e.target.value); setLoaded(false); setItems([]); }}>
-              {PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: '12px' }}>
-            <label>Month</label>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <select className="form-control" style={{ flex: 2 }} value={month} onChange={e => { setMonth(e.target.value); setLoaded(false); setItems([]); }}>
-                {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-              <select className="form-control" style={{ flex: 1 }} value={year} onChange={e => { setYear(e.target.value); setLoaded(false); setItems([]); }}>
-                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <button className="btn btn-primary" style={{ width: '100%', backgroundColor: '#6366f1', borderColor: '#6366f1' }} onClick={handleLoad} disabled={loading}>
-            {loading ? 'Loading...' : 'Load Items'}
-          </button>
-
-          {loaded && (
-            <button
-              className="btn btn-primary"
-              style={{ width: '100%', marginTop: '10px', backgroundColor: hasChanges ? '#10b981' : '#334155', borderColor: hasChanges ? '#10b981' : '#334155', cursor: hasChanges ? 'pointer' : 'default' }}
-              onClick={handleSave}
-              disabled={saving || !hasChanges}
-            >
-              {saving ? 'Saving...' : `Save to DB`}
-            </button>
-          )}
-        </div>
-
-        {status && (
-          <div style={{ margin: '12px 0', padding: '10px 12px', borderRadius: '6px', fontSize: '0.8rem', backgroundColor: status.type === 'success' ? '#064e3b' : '#7f1d1d', color: status.type === 'success' ? '#6ee7b7' : '#fca5a5', border: `1px solid ${status.type === 'success' ? '#065f46' : '#991b1b'}` }}>
-            {status.text}
-          </div>
-        )}
-
-        <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#64748b', textAlign: 'center', paddingTop: '15px' }}>
-          SAIL Informatics Report Portal • v1.0.0
-        </div>
-      </div>
-
-      {/* Main content area */}
-      <div className="preview-area" style={{ padding: '30px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+      {/* Main content area - full width */}
+      <div style={{ flex: 1, padding: '40px 32px', overflowY: 'auto' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ marginBottom: '32px' }}>
             <h1 style={{ fontSize: '18pt', fontWeight: '800', color: '#0f172a', margin: '0 0 4px 0' }}>
               Production Data Entry
             </h1>
-            <p style={{ fontSize: '10pt', color: '#64748b', margin: 0 }}>
+            <p style={{ fontSize: '10pt', color: '#64748b', margin: '0 0 16px 0' }}>
               Enter actual production values for each item. Plan values come from the uploaded ABP and can also be edited.
             </p>
+
+            {/* Plant & Period Selection */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '16px',
+              marginBottom: '16px'
+            }}>
+              <div>
+                <label style={{ fontSize: '9.5pt', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '6px' }}>Plant</label>
+                <select
+                  className="form-control"
+                  value={plant}
+                  onChange={e => { setPlant(e.target.value); setLoaded(false); setItems([]); }}
+                  style={{ padding: '8px 12px', fontSize: '9.5pt' }}
+                >
+                  {PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '9.5pt', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '6px' }}>Month</label>
+                <select
+                  className="form-control"
+                  value={month}
+                  onChange={e => { setMonth(e.target.value); setLoaded(false); setItems([]); }}
+                  style={{ padding: '8px 12px', fontSize: '9.5pt' }}
+                >
+                  {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '9.5pt', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '6px' }}>Year</label>
+                <select
+                  className="form-control"
+                  value={year}
+                  onChange={e => { setYear(e.target.value); setLoaded(false); setItems([]); }}
+                  style={{ padding: '8px 12px', fontSize: '9.5pt' }}
+                >
+                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', backgroundColor: '#6366f1', borderColor: '#6366f1', padding: '8px 12px', fontSize: '9.5pt' }}
+                  onClick={handleLoad}
+                  disabled={loading}
+                >
+                  {loading ? 'Loading...' : 'Load Items'}
+                </button>
+              </div>
+            </div>
+
+            {status && (
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: '6px',
+                fontSize: '9.5pt',
+                backgroundColor: status.type === 'success' ? '#064e3b' : '#7f1d1d',
+                color: status.type === 'success' ? '#6ee7b7' : '#fca5a5',
+                border: `1px solid ${status.type === 'success' ? '#065f46' : '#991b1b'}`,
+                marginBottom: '16px'
+              }}>
+                {status.text}
+              </div>
+            )}
           </div>
 
           {!loaded && !loading && (
@@ -645,6 +628,7 @@ export default function DataEntryPage() {
           <ConversionCard apiBase={API_BASE_URL} />
         </div>
       </div>
-    </main>
+    </div>
   );
 }
+

@@ -294,11 +294,11 @@ _TECHNO_PARAM_MAP = [
     ("Sheet1", 10,  6, 1000.0, "COKE_SINTER", "Energy",                "Sp. Heat Cons.",                    "Kcal/TCO"),
     ("Sheet1", 26,  6,    1.0, "COKE_SINTER", "Energy",                "Specific Energy Consumption",       "KWH/TCHS"),
     ("Sheet1", 31,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Machine Productivity",              "T/m²/hr"),
-    ("Sheet1", 33,  6,    1.0, "IRON_MAKING", "BF Productivity",       "BSL Plant Shop",                    "T/m³/day"),
-    ("Sheet1", 35,  6,    1.0, "IRON_MAKING", "BF Coke Rate",          "BSL Plant Shop",                    "Kg/THM"),
-    ("Sheet1", 37,  6,    1.0, "IRON_MAKING", "CDI",                   "BSL Plant Shop",                    "Kg/THM"),
+    ("Sheet1", 33,  6,    1.0, "IRON_MAKING", "BF Productivity",       "BSL",                               "T/m³/day"),
+    ("Sheet1", 35,  6,    1.0, "IRON_MAKING", "BF Coke Rate",          "BSL",                               "Kg/THM"),
+    ("Sheet1", 37,  6,    1.0, "IRON_MAKING", "CDI",                   "BSL",                               "Kg/THM"),
     ("Sheet1", 37,  6,    1.0, "MAJOR",       "CDI Rate",              "BSL",                               "kg/Thm"),
-    ("Sheet1", 39,  6,    1.0, "IRON_MAKING", "Fuel Rate",             "BSL Plant Shop",                    "Kg/THM"),
+    ("Sheet1", 39,  6,    1.0, "IRON_MAKING", "Fuel Rate",             "BSL",                               "Kg/THM"),
     ("Sheet1", 41,  6,    1.0, "MAJOR",       "Coal to Hot Metal",     "BSL",                               "Ratio"),
     ("Sheet1", 49,  6,    1.0, "MILL_BSL",    "CRM 1&2",               "Yield of HR Coil",                  "%"),
     ("Sheet1", 51,  6,    1.0, "MILL_BSL",    "CRM 3",                 "Yield of HR Coil",                  "%"),
@@ -332,9 +332,9 @@ _TECHNO_PARAM_MAP = [
     ("Sheet3", 43,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter M/c Availability",           "%"),
     ("Sheet3", 46,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter M/c Utilization",            "%"),
     # ── Sheet4 ─────────────────────────────────────────────────────────────
-    ("Sheet4", 31,  6,    1.0, "IRON_MAKING", "Sinter in Burden",      "BSL Plant Shop",                    "%"),
-    ("Sheet4", 33,  6,    1.0, "IRON_MAKING", "O2 Enrichment",         "BSL Plant Shop",                    "%"),
-    ("Sheet4", 35,  6,    1.0, "IRON_MAKING", "Coke Screen Loss",      "BSL Plant Shop",                    "%"),
+    ("Sheet4", 31,  6,    1.0, "IRON_MAKING", "Sinter in Burden",      "BSL",                               "%"),
+    ("Sheet4", 33,  6,    1.0, "IRON_MAKING", "O2 Enrichment",         "BSL",                               "%"),
+    ("Sheet4", 35,  6,    1.0, "IRON_MAKING", "Coke Screen Loss",      "BSL",                               "%"),
     ("Sheet4", 37,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Slag Rate",                          "Kg/THM"),
     ("Sheet4", 38,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "BF Gas Yield",                       "Nm³/THM"),
     ("Sheet4", 39,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "CV of BF Gas",                       "Kcal/Nm³"),
@@ -778,7 +778,7 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     shop_cdi_val = _monthly(shop_cdi_cols[10]) if len(shop_cdi_cols) > 10 else None
     rows_out.append({
         'group_code': 'IRON_MAKING', 'section': 'CDI',
-        'parameter': 'BSL Plant Shop', 'unit': 'Kg/THM',
+        'parameter': 'BSL', 'unit': 'Kg/THM',
         'actual': shop_cdi_val, 'cum_actual': None,
         'source_priority': 4,   # Monthly Tech Excel (priority 5) can override this shop avg
         'sort_order': sort_idx * 10, 'cell': 'PDF fuel-table col-10 BF Shop',
@@ -815,7 +815,7 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     # compute_bf_shop_averages() at priority 4 will not overwrite these.
     for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'),
                         ('BF-4', 'BSL BF-4'), ('BF-5', 'BSL BF-5'),
-                        ('BF Shop', 'BSL Plant Shop')]:
+                        ('BF Shop', 'BSL')]:
         cols_f = TABLE_DATA['fuel'].get(fce, [])
         cols_p = TABLE_DATA['prod'].get(fce, [])
         cols_r = TABLE_DATA['raw'].get(fce, [])

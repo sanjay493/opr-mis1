@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import GlobalNavbar from '@/components/GlobalNavbar';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -50,6 +50,308 @@ function RankBadge({ rank }) {
   );
 }
 
+// ── Vertical Bar Chart Component ───────────────────────────────────────────
+function VerticalBarChart({ data, item, title, isMonthChart = false }) {
+  if (!data || data.length === 0) {
+    return <div style={{ padding: '20px', color: '#94a3b8', textAlign: 'center' }}>No data available</div>;
+  }
+
+  // For month chart, maintain April-to-March order; otherwise sort by value descending
+  let chartData = isMonthChart ? data : [...data].sort((a, b) => (b.total || 0) - (a.total || 0));
+
+  const maxValue = Math.max(...chartData.map(d => d.total || 0), 1);
+
+  // Get rank (1-based) for each data point when sorted by value
+  const sortedByValue = [...data].sort((a, b) => (b.total || 0) - (a.total || 0));
+  const getRankForValue = (val) => {
+    return sortedByValue.findIndex(d => d.total === val) + 1;
+  };
+
+  // Color mapping: Rank 1=Gold, Rank 2=Silver, Rank 3=Bronze, Rest=Light Pellet Green
+  const getRankColor = (value) => {
+    const rank = getRankForValue(value);
+    if (rank === 1) return { bar: '#d97706', label: 'gold' };              // Golden
+    if (rank === 2) return { bar: '#a8adb5', label: 'silver' };            // Silver
+    if (rank === 3) return { bar: '#a85a36', label: 'bronze' };            // Bronze
+    return { bar: '#86efac', label: 'green' };                              // Light Pellet Green
+  };
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(12, 1fr)',
+      gap: '8px',
+      alignItems: 'flex-end',
+      padding: '20px',
+      backgroundColor: '#fff',
+      borderRadius: '8px',
+      minHeight: '320px',
+      overflowX: 'auto'
+    }}>
+      {chartData.map((entry, idx) => {
+        const colors = getRankColor(entry.total);
+        const barHeight = (entry.total / maxValue) * 100;
+        const rank = getRankForValue(entry.total);
+
+        return (
+          <div
+            key={idx}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '6px',
+              justifyContent: 'flex-end'
+            }}
+          >
+            {/* Quantity Label (Top) */}
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '900',
+              color: colors.bar,
+              textAlign: 'center',
+              maxWidth: '100%',
+              minHeight: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+              transform: 'rotate(-70deg)',
+              transformOrigin: 'center',
+              whiteSpace: 'nowrap',
+              letterSpacing: '0.5px'
+            }}>
+              {fmt(entry.total)}
+            </div>
+
+            {/* Bar Container */}
+            <div style={{
+              width: '100%',
+              height: '180px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              position: 'relative'
+            }}>
+              {/* Bar - Scaled to show difference */}
+              <div
+                style={{
+                  width: '85%',
+                  height: `${Math.max(barHeight, 3)}%`,
+                  backgroundColor: colors.bar,
+                  borderRadius: '4px 4px 0 0',
+                  transition: 'all 0.3s ease',
+                  boxShadow: `0 2px 6px ${colors.bar}50`,
+                  position: 'relative',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'flex-start',
+                  paddingTop: '2px'
+                }}
+              >
+                {/* Rank Badge (Inside Bar if space) */}
+                {barHeight > 25 && rank <= 3 && (
+                  <div style={{
+                    width: '16px',
+                    height: '16px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    color: colors.bar,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '9px',
+                    fontWeight: '900',
+                    border: `1px solid ${colors.bar}`,
+                    flexShrink: 0,
+                    marginTop: '2px'
+                  }}>
+                    {rank}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Period Label (Bottom) */}
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '900',
+              color: colors.bar,
+              textAlign: 'center',
+              maxWidth: '100%',
+              minHeight: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: '2px',
+              lineHeight: '1.2'
+            }}>
+              {entry.period}
+            </div>
+
+            {/* Rank Badge (Outside Bar if needed) */}
+            {barHeight <= 25 && rank <= 3 && (
+              <div style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: colors.bar,
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '8px',
+                fontWeight: '900',
+                border: '1px solid white'
+              }}>
+                {rank}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Horizontal Bar Chart Component (for Quarter/Half/Top5) ─────────────────
+function BarChart({ data, item, title }) {
+  if (!data || data.length === 0) {
+    return <div style={{ padding: '20px', color: '#94a3b8', textAlign: 'center' }}>No data available</div>;
+  }
+
+  // Sort by value descending
+  const sortedData = [...data].sort((a, b) => (b.total || 0) - (a.total || 0));
+  const maxValue = Math.max(...sortedData.map(d => d.total || 0), 1);
+
+  // Get rank for each entry
+  const getRankForValue = (val) => {
+    return sortedData.findIndex(d => d.total === val) + 1;
+  };
+
+  // Color mapping: Rank 1=Gold, Rank 2=Silver, Rank 3=Bronze, Rest=Light Pellet Green
+  const getRankColor = (index) => {
+    if (index === 0) return { bar: '#d97706', bg: '#fef3c7' };               // Golden
+    if (index === 1) return { bar: '#a8adb5', bg: '#f3f4f6' };               // Silver
+    if (index === 2) return { bar: '#a85a36', bg: '#faf5f0' };               // Bronze
+    return { bar: '#86efac', bg: '#f0fdf4' };                                 // Light Pellet Green
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {sortedData.slice(0, 10).map((entry, idx) => {
+        const colors = getRankColor(idx);
+        const barWidth = (entry.total / maxValue) * 100;
+        const rank = idx + 1;
+
+        return (
+          <div
+            key={idx}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '120px 1fr 80px',
+              gap: '12px',
+              alignItems: 'center',
+              padding: '12px',
+              backgroundColor: colors.bg,
+              borderRadius: '8px',
+              border: `2px solid ${colors.bar}`
+            }}
+          >
+            {/* Label */}
+            <div style={{
+              fontSize: '12px',
+              fontWeight: '700',
+              color: '#1e293b',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {rank <= 3 && (
+                <span style={{
+                  display: 'inline-block',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  background: colors.bar,
+                  color: '#fff',
+                  fontSize: '10px',
+                  fontWeight: '900',
+                  textAlign: 'center',
+                  lineHeight: '20px',
+                  marginRight: '6px'
+                }}>
+                  {rank}
+                </span>
+              )}
+              {entry.period}
+            </div>
+
+            {/* Bar */}
+            <div style={{
+              height: '32px',
+              backgroundColor: '#e5e7eb',
+              borderRadius: '6px',
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${barWidth}%`,
+                  backgroundColor: colors.bar,
+                  borderRadius: '6px',
+                  transition: 'width 0.3s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  paddingRight: '8px'
+                }}
+              >
+                {barWidth > 15 && (
+                  <span style={{
+                    color: '#fff',
+                    fontSize: '11px',
+                    fontWeight: '700'
+                  }}>
+                    {fmt(entry.total)}
+                  </span>
+                )}
+              </div>
+              {barWidth <= 15 && (
+                <span style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  color: colors.bar
+                }}>
+                  {fmt(entry.total)}
+                </span>
+              )}
+            </div>
+
+            {/* Rank Badge */}
+            <div style={{
+              textAlign: 'right',
+              fontSize: '11px',
+              fontWeight: '700',
+              color: colors.bar
+            }}>
+              {rank <= 3 && `#${rank}`}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Best-ever badge ────────────────────────────────────────────────────────
 function BestBadge() {
   return (
@@ -89,156 +391,123 @@ function RecordPair({ rows, bestPeriod, bestMonth, isCal }) {
   );
 }
 
-// ── Calendar Month table ───────────────────────────────────────────────────
+// ── Calendar Month Bar Chart (Vertical - April to March) ──────────────────
 function CalMonthTable({ data, item, bestMonth }) {
   const calData = data?.cal_months?.[item] || {};
-  const TH = { padding: '8px 10px', background: C.subHdr, color: '#e2e8f0', fontWeight: 700,
-               fontSize: '8.5pt', borderRight: `1px solid #475569`, textAlign: 'center' };
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
-        <thead>
-          <tr>
-            <th style={{ ...TH, textAlign: 'left', width: 110 }}>Month</th>
-            <th style={{ ...TH }}>Best (Rank #1)</th>
-            <th style={{ ...TH, borderRight: 'none' }}>2nd Best (Rank #2)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {CAL_MONTHS.map((name, i) => {
-            const mon_num = i + 1;
-            const rows = calData[mon_num] || [];
-            const isBestRow = rows.some(r => r.month === bestMonth);
-            return (
-              <tr key={name} style={{ background: isBestRow ? C.bestBg : i % 2 === 0 ? '#fff' : '#f8fafc',
-                                      borderBottom: `1px solid ${C.tblBorder}` }}>
-                <td style={{ padding: '7px 12px', fontWeight: 700, color: C.subHdr, fontSize: '9.5pt',
-                             borderRight: `1px solid ${C.tblBorder}` }}>
-                  {name}
-                  {isBestRow && <BestBadge />}
-                </td>
-                <RecordPair rows={rows} bestMonth={bestMonth} isCal={true} />
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+
+  // FY month order: April (4) to March (3)
+  const FY_MONTHS = [
+    { num: 4, name: 'Apr' }, { num: 5, name: 'May' }, { num: 6, name: 'Jun' },
+    { num: 7, name: 'Jul' }, { num: 8, name: 'Aug' }, { num: 9, name: 'Sep' },
+    { num: 10, name: 'Oct' }, { num: 11, name: 'Nov' }, { num: 12, name: 'Dec' },
+    { num: 1, name: 'Jan' }, { num: 2, name: 'Feb' }, { num: 3, name: 'Mar' }
+  ];
+
+  // Convert to flat array maintaining FY month order
+  const chartData = FY_MONTHS
+    .map(({ num, name }) => {
+      const rows = calData[num] || [];
+      if (rows.length === 0) return null;
+      // Extract year from month data if available, otherwise use current year
+      const monthData = rows[0]?.month || '';
+      const yearMatch = monthData.match(/\d{4}/);
+      const year = yearMatch ? yearMatch[0] : new Date().getFullYear();
+
+      return {
+        period: `${name} ${year}`,  // e.g., "Apr 2024"
+        total: rows[0]?.total,
+        month: rows[0]?.month,
+        isBest: rows.some(r => r.month === bestMonth)
+      };
+    })
+    .filter(Boolean);
+
+  return <VerticalBarChart data={chartData} item={item} title="FY Month Production (Apr-Mar)" isMonthChart={true} />;
 }
 
-// ── FY Quarter table ───────────────────────────────────────────────────────
+// ── FY Quarter Bar Chart (Vertical) ───────────────────────────────────────
 function FYQuarterTable({ data, item, bestQuarterPeriod }) {
   const qData = data?.fy_quarters?.[item] || {};
-  const TH = { padding: '8px 10px', background: C.subHdr, color: '#e2e8f0', fontWeight: 700,
-               fontSize: '8.5pt', borderRight: `1px solid #475569`, textAlign: 'center' };
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
-        <thead>
-          <tr>
-            <th style={{ ...TH, textAlign: 'left', width: 150 }}>Quarter</th>
-            <th style={TH}>Best (Rank #1)</th>
-            <th style={{ ...TH, borderRight: 'none' }}>2nd Best (Rank #2)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {FY_QUARTERS.map((ql, i) => {
-            const rows = qData[ql] || [];
-            const isBestRow = rows.length > 0 && bestQuarterPeriod &&
-              bestQuarterPeriod.includes(rows[0].period) && bestQuarterPeriod.includes(ql);
-            return (
-              <tr key={ql} style={{ background: isBestRow ? C.bestBg : i % 2 === 0 ? '#fff' : '#f8fafc',
-                                    borderBottom: `1px solid ${C.tblBorder}` }}>
-                <td style={{ padding: '7px 12px', fontWeight: 700, color: C.subHdr, fontSize: '9.5pt',
-                             borderRight: `1px solid ${C.tblBorder}` }}>
-                  {ql}
-                  {isBestRow && <BestBadge />}
-                </td>
-                <RecordPair rows={rows} bestPeriod={bestQuarterPeriod} isCal={false} />
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+
+  // Convert to flat array - maintain Q1-Q4 order
+  const chartData = FY_QUARTERS
+    .map((ql, i) => {
+      const rows = qData[ql] || [];
+      if (rows.length === 0) return null;
+      const qMatch = ql.match(/Q\d/)[0];  // Extract "Q1", "Q2", etc.
+      const periodData = rows[0]?.period || '';
+      // Extract FY year from period data if available
+      const fyMatch = periodData.match(/FY[\d]{2,4}/);
+      const fy = fyMatch ? fyMatch[0] : `FY${new Date().getFullYear().toString().slice(-2)}`;
+
+      return {
+        period: `${qMatch} ${fy}`,  // e.g., "Q1 FY25"
+        total: rows[0]?.total,
+        isBest: rows.length > 0 && bestQuarterPeriod && rows[0].period === bestQuarterPeriod
+      };
+    })
+    .filter(Boolean);
+
+  return <VerticalBarChart data={chartData} item={item} title="FY Quarter Production" isMonthChart={false} />;
 }
 
-// ── FY Half table ──────────────────────────────────────────────────────────
+// ── FY Half Bar Chart (Vertical) ──────────────────────────────────────────
 function FYHalfTable({ data, item }) {
   const hData = data?.fy_halves?.[item] || {};
-  const TH = { padding: '8px 10px', background: C.subHdr, color: '#e2e8f0', fontWeight: 700,
-               fontSize: '8.5pt', borderRight: `1px solid #475569`, textAlign: 'center' };
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
-        <thead>
-          <tr>
-            <th style={{ ...TH, textAlign: 'left', width: 150 }}>Half Year</th>
-            <th style={TH}>Best (Rank #1)</th>
-            <th style={{ ...TH, borderRight: 'none' }}>2nd Best (Rank #2)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {FY_HALVES.map((hl, i) => {
-            const rows = hData[hl] || [];
-            return (
-              <tr key={hl} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc',
-                                    borderBottom: `1px solid ${C.tblBorder}` }}>
-                <td style={{ padding: '7px 12px', fontWeight: 700, color: C.subHdr, fontSize: '9.5pt',
-                             borderRight: `1px solid ${C.tblBorder}` }}>{hl}</td>
-                <RecordPair rows={rows} isCal={false} />
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+
+  // Convert to flat array - maintain H1-H2 order
+  const chartData = FY_HALVES
+    .map((hl, i) => {
+      const rows = hData[hl] || [];
+      if (rows.length === 0) return null;
+      const hMatch = hl.match(/H\d/)[0];  // Extract "H1", "H2"
+      const periodData = rows[0] || {};
+      // Extract FY year or use current
+      const fy = `FY${new Date().getFullYear().toString().slice(-2)}`;
+
+      return {
+        period: `${hMatch} ${fy}`,  // e.g., "H1 FY25"
+        total: rows[0]?.total
+      };
+    })
+    .filter(Boolean);
+
+  return <VerticalBarChart data={chartData} item={item} title="FY Half Year Production" isMonthChart={false} />;
 }
 
 // ── Top 5 table (FY + CY side by side) ────────────────────────────────────
 function Top5Table({ data, item }) {
-  const fyRows = data?.top5_fy?.[item] || [];
-  const cyRows = data?.top5_cy?.[item] || [];
-  const TH  = { padding: '8px 10px', background: C.subHdr, color: '#e2e8f0', fontWeight: 700, fontSize: '8.5pt', textAlign: 'center' };
-  const TD  = (rank, bg) => ({ padding: '7px 12px', textAlign: 'center', fontSize: '9pt',
-    background: bg, fontWeight: rank === 1 ? 700 : rank === 2 ? 600 : 400,
-    color: rank === 1 ? C.rank1 : rank === 2 ? C.silver : '#334155',
-    borderBottom: `1px solid ${C.tblBorder}` });
+  const fyRows = (data?.top5_fy?.[item] || []).map((row, idx) => ({
+    ...row,
+    period: `${row.period} FY${new Date().getFullYear().toString().slice(-2)}`
+  }));
+  const cyRows = (data?.top5_cy?.[item] || []).map((row, idx) => ({
+    ...row,
+    period: `${row.period} CY${new Date().getFullYear()}`
+  }));
+
   return (
-    <div style={{ display: 'flex', gap: 20 }}>
-      {[{ label: 'Financial Year (Apr-Mar)', rows: fyRows },
-        { label: 'Calendar Year (Jan-Dec)',  rows: cyRows }].map(({ label, rows }) => (
-        <div key={label} style={{ flex: 1, border: `1px solid ${C.tblBorder}`, borderRadius: 6, overflow: 'hidden' }}>
-          <div style={{ padding: '8px 14px', background: C.subHdr, color: '#e2e8f0', fontWeight: 700, fontSize: '9pt' }}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      gap: '20px'
+    }}>
+      {[
+        { label: 'Top 5 Financial Years', rows: fyRows },
+        { label: 'Top 5 Calendar Years', rows: cyRows }
+      ].map(({ label, rows }) => (
+        <div key={label}>
+          <h3 style={{
+            fontSize: '12px',
+            fontWeight: '800',
+            color: '#0f172a',
+            marginBottom: '10px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em'
+          }}>
             {label}
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ ...TH, textAlign: 'left', width: 50 }}>Rank</th>
-                <th style={TH}>Period</th>
-                <th style={{ ...TH }}>Production ({ITEM_UNIT[item]})</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const bg = i === 0 ? C.rank1Bg : i === 1 ? '#f8fafc' : '#fff';
-                return (
-                  <tr key={i}>
-                    <td style={{ ...TD(i + 1, bg), textAlign: 'center' }}><RankBadge rank={i + 1} /></td>
-                    <td style={{ ...TD(i + 1, bg), fontWeight: i === 0 ? 700 : 500 }}>{r.period}</td>
-                    <td style={{ ...TD(i + 1, bg), fontWeight: 700, fontSize: '10pt' }}>{fmt(r.total)}</td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
-                <tr><td colSpan={3} style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>No data</td></tr>
-              )}
-            </tbody>
-          </table>
+          </h3>
+          <VerticalBarChart data={rows} item={item} title={label} isMonthChart={false} />
         </div>
       ))}
     </div>
@@ -275,7 +544,9 @@ export default function RecordsPage() {
   const [group,   setGroup]   = useState('sail5');   // sail5 | all8
   const [item,    setItem]    = useState(ITEMS[0]);
   const [section, setSection] = useState(SECTIONS[0]);
+  const [autoRotate, setAutoRotate] = useState(true);
 
+  // Fetch data on mount
   useEffect(() => {
     setLoading(true);
     fetch(`${API_BASE}/api/production-records`)
@@ -283,6 +554,21 @@ export default function RecordsPage() {
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
   }, []);
+
+  // Auto-rotate sections every 5 minutes
+  useEffect(() => {
+    if (!autoRotate) return;
+
+    const interval = setInterval(() => {
+      setSection(prev => {
+        const currentIdx = SECTIONS.indexOf(prev);
+        const nextIdx = (currentIdx + 1) % SECTIONS.length;
+        return SECTIONS[nextIdx];
+      });
+    }, 5 * 60 * 1000); // 5 minutes in milliseconds
+
+    return () => clearInterval(interval);
+  }, [autoRotate]);
 
   const grpData = data?.[group];
   const bestMonth   = grpData?.best_month?.[item]?.month;
@@ -304,145 +590,395 @@ export default function RecordsPage() {
   });
 
   return (
-    <main className="app-container">
-      {/* ── Sidebar ── */}
-      <div className="sidebar no-print">
-        <div className="sidebar-header">
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                 strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary)' }}>
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-            </svg>
-            SAIL MIS Portal
-          </h1>
-          <p>Production Records</p>
-        </div>
+    <>
+      {/* Global Navbar */}
+      <GlobalNavbar />
 
-        <div className="control-section">
-          <h2>Navigation</h2>
-          {[
-            { href: '/', label: 'Dashboard' },
-            { href: '/upload', label: 'Excel Upload' },
-            { href: '/report', label: 'Report Engine' },
-            { href: '/data-entry', label: 'Data Entry' },
-            { href: '/data-entry/techno', label: 'Techno Data Entry' },
-          ].map(({ href, label }) => (
-            <Link key={href} href={href} className="btn btn-secondary"
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                           gap: 8, marginBottom: 8, textDecoration: 'none' }}>
-              {label}
-            </Link>
-          ))}
-        </div>
-
-        <div className="control-section" style={{ marginTop: 16 }}>
-          <h2>Plant Group</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {[['sail5', 'SAIL-5 (BSP/DSP/RSP/BSL/ISP)'], ['all8', 'ALL-8 (incl. ASP/SSP/VISL)']].map(([k, lbl]) => (
-              <button key={k} style={toggleBtn(group === k)} onClick={() => setGroup(k)}>{lbl}</button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#64748b', textAlign: 'center', paddingTop: 15 }}>
-          SAIL Informatics Report Portal • v1.0.0
-        </div>
-      </div>
-
-      {/* ── Main content ── */}
-      <div className="preview-area" style={{ padding: '28px 32px', overflowY: 'auto', background: '#f8fafc' }}>
-        {/* Page title */}
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: '16pt', fontWeight: 800, color: '#0f172a', margin: '0 0 4px 0' }}>
+      <main style={{
+        backgroundColor: '#f0f4f8',
+        padding: '40px 32px',
+        width: '100%',
+        minHeight: 'calc(100vh - 70px)'
+      }}>
+        {/* Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <h1 style={{
+            fontSize: '32px',
+            fontWeight: '900',
+            color: '#0f172a',
+            margin: '0 0 8px 0',
+            letterSpacing: '-0.02em'
+          }}>
             Production Records Dashboard
           </h1>
-          <p style={{ fontSize: '9.5pt', color: '#64748b', margin: 0 }}>
-            Best &amp; 2nd-best production by calendar month, FY quarter, FY half · Top-5 FY &amp; calendar years
-            · <strong>{group === 'sail5' ? 'SAIL-5 (BSP/DSP/RSP/BSL/ISP)' : 'ALL-8 (incl. ASP/SSP/VISL)'}</strong>
-            &nbsp;·&nbsp;Unit: &#39;000 Tonnes
+          <p style={{
+            fontSize: '13px',
+            color: '#64748b',
+            margin: '0',
+            lineHeight: '1.6'
+          }}>
+            Real-time production metrics with auto-rotating views every 5 minutes
           </p>
         </div>
 
+        {/* Two-Column Layout: Left Controls (1/3) + Right Chart (2/3) */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 2fr',
+          gap: '24px',
+          maxWidth: '1600px',
+          margin: '0 auto',
+          alignItems: 'start'
+        }}>
+          {/* ═══ LEFT PANEL: CONTROLS ═══ */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+
         {loading && (
-          <div style={{ padding: 60, textAlign: 'center', color: '#64748b', fontSize: '10pt' }}>
+          <div style={{
+            padding: '80px 40px',
+            textAlign: 'center',
+            color: '#94a3b8',
+            fontSize: '14px'
+          }}>
+            <div style={{ marginBottom: '16px' }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+                   style={{ margin: '0 auto', color: '#cbd5e1', animation: 'spin 2s linear infinite' }}>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+            </div>
             Loading records data…
           </div>
         )}
 
         {error && (
-          <div style={{ padding: 20, background: '#fef2f2', border: '1px solid #fca5a5',
-                        borderRadius: 8, color: '#991b1b', fontSize: '9.5pt' }}>
+          <div style={{
+            padding: '20px 24px',
+            background: '#fef2f2',
+            border: '1px solid #fca5a5',
+            borderRadius: '8px',
+            color: '#991b1b',
+            fontSize: '13px'
+          }}>
             Error loading data: {error}
           </div>
         )}
 
-        {!loading && !error && data && (
-          <>
-            {/* Item tabs */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-              {ITEMS.map(it => (
-                <button key={it} style={tabBtn(item === it)} onClick={() => setItem(it)}>
-                  {ITEM_SHORT[it]}
-                </button>
-              ))}
+          {/* Best Records Display - Top Inline */}
+          {!loading && !error && data && (
+            <>
+              {(() => {
+                const bm = grpData?.best_month?.[item];
+                const bq = grpData?.best_quarter?.[item];
+                return (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '12px',
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{
+                      backgroundColor: '#fef3c7',
+                      borderRadius: '10px',
+                      padding: '14px',
+                      border: '2px solid #fcd34d',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+                    }}>
+                      <div style={{ fontSize: '9px', fontWeight: '700', color: '#92400e', marginBottom: '4px', textTransform: 'uppercase' }}>🥇 Best Month</div>
+                      <div style={{ fontSize: '16px', fontWeight: '900', color: '#92400e' }}>{fmt(bm?.total)}</div>
+                      <div style={{ fontSize: '8px', color: '#b45309', marginTop: '3px' }}>{bm?.period || '—'}</div>
+                    </div>
+                    <div style={{
+                      backgroundColor: '#d1fae5',
+                      borderRadius: '10px',
+                      padding: '14px',
+                      border: '2px solid #6ee7b7',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+                    }}>
+                      <div style={{ fontSize: '9px', fontWeight: '700', color: '#065f46', marginBottom: '4px', textTransform: 'uppercase' }}>🥇 Best Quarter</div>
+                      <div style={{ fontSize: '16px', fontWeight: '900', color: '#065f46' }}>{fmt(bq?.total)}</div>
+                      <div style={{ fontSize: '8px', color: '#047857', marginTop: '3px' }}>{bq?.period || '—'}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Bottom Section: Two-Column Layout */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+                flex: 1,
+                minHeight: '350px',
+                alignItems: 'center'
+              }}>
+                {/* Left Column: Plant Group + Item */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  {/* Plant Group Selector */}
+                  <div style={{
+                    backgroundColor: '#fff',
+                    borderRadius: '10px',
+                    padding: '14px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <label style={{
+                      display: 'block',
+                      fontSize: '10px',
+                      fontWeight: '800',
+                      color: '#1e293b',
+                      marginBottom: '8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      🏭 Plant
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {[
+                        ['sail5', '5 Plants'],
+                        ['all8', 'All 8']
+                      ].map(([key, label]) => (
+                        <button
+                          key={key}
+                          onClick={() => setGroup(key)}
+                          style={{
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            border: `2px solid ${group === key ? '#0284c7' : '#e2e8f0'}`,
+                            background: group === key ? '#f0f9ff' : '#fff',
+                            color: group === key ? '#0284c7' : '#475569',
+                            fontSize: '11px',
+                            fontWeight: group === key ? '700' : '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Production Item Selector */}
+                  <div style={{
+                    backgroundColor: '#fff',
+                    borderRadius: '10px',
+                    padding: '14px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                    border: '1px solid #e2e8f0',
+                    flex: 1
+                  }}>
+                    <label style={{
+                      display: 'block',
+                      fontSize: '10px',
+                      fontWeight: '800',
+                      color: '#1e293b',
+                      marginBottom: '8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      📊 Item
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {ITEMS.map(it => (
+                        <button
+                          key={it}
+                          onClick={() => setItem(it)}
+                          style={{
+                            padding: '7px 10px',
+                            borderRadius: '6px',
+                            border: `2px solid ${item === it ? '#0284c7' : '#e2e8f0'}`,
+                            background: item === it ? '#f0f9ff' : '#fff',
+                            color: item === it ? '#0284c7' : '#475569',
+                            fontSize: '10px',
+                            fontWeight: item === it ? '700' : '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            textAlign: 'left'
+                          }}
+                        >
+                          {ITEM_SHORT[it]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Time Period (Full Height) */}
+                <div style={{
+                  backgroundColor: '#fff',
+                  borderRadius: '10px',
+                  padding: '14px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '10px',
+                    fontWeight: '800',
+                    color: '#1e293b',
+                    marginBottom: '8px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    ⏱️ Period
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1 }}>
+                    {SECTIONS.map(s => (
+                      <button
+                        key={s}
+                        onClick={() => {
+                          setSection(s);
+                          setAutoRotate(false);
+                        }}
+                        style={{
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          border: `2px solid ${section === s ? '#10b981' : '#e2e8f0'}`,
+                          background: section === s ? '#f0fdf4' : '#fff',
+                          color: section === s ? '#10b981' : '#475569',
+                          fontSize: '10px',
+                          fontWeight: section === s ? '700' : '600',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          textAlign: 'left'
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{
+                    marginTop: 'auto',
+                    paddingTop: '8px',
+                    borderTop: '1px solid #e2e8f0',
+                    fontSize: '9px',
+                    color: '#64748b',
+                    textAlign: 'center'
+                  }}>
+                    {autoRotate ? '🔄 Auto' : '⏸️ Manual'}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+          </div>
+
+          {/* ═══ RIGHT PANEL: CHART DISPLAY ═══ */}
+          {!loading && !error && data && (
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '12px',
+            padding: '24px',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
+            border: '1px solid #e2e8f0',
+            minHeight: '350px',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Chart Header */}
+            <div style={{
+              marginBottom: '20px',
+              paddingBottom: '16px',
+              borderBottom: '2px solid #e2e8f0'
+            }}>
+              <h2 style={{
+                fontSize: '18px',
+                fontWeight: '800',
+                color: '#0f172a',
+                margin: '0 0 4px 0'
+              }}>
+                {section} — {ITEM_SHORT[item]}
+              </h2>
+              <p style={{
+                fontSize: '11px',
+                color: '#64748b',
+                margin: '0',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}>
+                {group === 'sail5' ? '5 Plants (SAIL-5)' : 'All 8 Plants'} • Unit: '000 Tonnes
+              </p>
             </div>
 
-            {/* Best-ever strip */}
-            <BestEverStrip data={grpData} item={item} />
-
-            {/* Section tabs */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-              {SECTIONS.map(s => (
-                <button key={s} style={tabBtn(section === s)} onClick={() => setSection(s)}>{s}</button>
-              ))}
-            </div>
-
-            {/* Content card */}
-            <div style={{ background: '#fff', border: `1px solid ${C.tblBorder}`, borderRadius: 8, overflow: 'hidden' }}>
-              {/* Card header */}
-              <div style={{ padding: '12px 18px', background: C.hdr, color: C.hdrText,
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: '10pt' }}>
-                  {section} — {ITEM_SHORT[item]}
-                </span>
-                <span style={{ fontSize: '8.5pt', color: '#94a3b8' }}>
-                  {group === 'sail5' ? 'SAIL-5' : 'ALL-8'} · ★ = Best Ever
-                </span>
-              </div>
-
-              <div style={{ padding: 16 }}>
-                {section === 'Calendar Month' && (
-                  <CalMonthTable data={grpData} item={item} bestMonth={bestMonth} />
-                )}
-                {section === 'FY Quarter' && (
-                  <FYQuarterTable data={grpData} item={item} bestQuarterPeriod={bestQuarter} />
-                )}
-                {section === 'FY Half' && (
-                  <FYHalfTable data={grpData} item={item} />
-                )}
-                {section === 'Top 5 Years' && (
-                  <Top5Table data={grpData} item={item} />
-                )}
-              </div>
+            {/* Chart Display */}
+            <div style={{
+              flexGrow: 1,
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              {section === 'Calendar Month' && (
+                <CalMonthTable data={grpData} item={item} bestMonth={bestMonth} />
+              )}
+              {section === 'FY Quarter' && (
+                <FYQuarterTable data={grpData} item={item} bestQuarterPeriod={bestQuarter} />
+              )}
+              {section === 'FY Half' && (
+                <FYHalfTable data={grpData} item={item} />
+              )}
+              {section === 'Top 5 Years' && (
+                <Top5Table data={grpData} item={item} />
+              )}
             </div>
 
             {/* Legend */}
-            <div style={{ marginTop: 12, display: 'flex', gap: 16, fontSize: '8pt', color: '#64748b', flexWrap: 'wrap' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 3, background: C.rank1Bg,
-                               border: `1px solid #fcd34d`, display: 'inline-block' }}/>
-                Rank #1 (Best in period)
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 3, background: C.bestBg,
-                               border: `1px solid ${C.bestBorder}`, display: 'inline-block' }}/>
-                ★ Best Ever across all years
-              </span>
-              <span>Only complete periods counted (12 months for FY/CY, 3 months for quarters, 6 for halves)</span>
+            <div style={{
+              marginTop: '20px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e2e8f0',
+              fontSize: '11px',
+              color: '#64748b'
+            }}>
+              <div style={{ fontWeight: '700', marginBottom: '8px', textTransform: 'uppercase' }}>Color Legend:</div>
+              <div style={{
+                display: 'flex',
+                gap: '16px',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '14px', height: '14px', borderRadius: '2px', background: '#d97706' }}/>
+                  <span>🥇 Rank 1</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '14px', height: '14px', borderRadius: '2px', background: '#a8adb5' }}/>
+                  <span>🥈 Rank 2</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '14px', height: '14px', borderRadius: '2px', background: '#a85a36' }}/>
+                  <span>🥉 Rank 3</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '14px', height: '14px', borderRadius: '2px', background: '#86efac' }}/>
+                  <span>🌿 Others</span>
+                </div>
+              </div>
             </div>
-          </>
-        )}
-      </div>
-    </main>
+          </div>
+          )}
+        </div>
+      </main>
+
+      {/* ── Global Styles ── */}
+      <style>{`
+        html, body {
+          overflow-y: auto;
+          overflow-x: hidden;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </>
   );
 }

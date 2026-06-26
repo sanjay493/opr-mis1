@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import Link from 'next/link';
+import GlobalNavbar from '@/components/GlobalNavbar';
 import SailSmsParamsDisplay from '@/components/SailSmsParamsDisplay';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
 
 const MONTHS = [
   'April', 'May', 'June', 'July', 'August', 'September',
@@ -406,7 +406,11 @@ export default function TechnoManualEntry() {
   const filledRows = sections.reduce((s, sec) => s + sec.rows.filter(r => r.actual !== null || r.till_month_actual !== null).length, 0);
 
   return (
-    <main className="app-container">
+    <>
+      {/* Global Navbar */}
+      <GlobalNavbar />
+
+      <main className="app-container">
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <div className="sidebar no-print">
         <div className="sidebar-header">
@@ -414,28 +418,9 @@ export default function TechnoManualEntry() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
             </svg>
-            SAIL MIS Portal
+            Techno Data Entry
           </h1>
-          <p>Techno Data Entry</p>
-        </div>
-
-        <div className="control-section">
-          <h2>Navigation</h2>
-          <Link href="/" className="btn btn-secondary"
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, textDecoration: 'none', justifyContent: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
-            </svg>
-            Dashboard
-          </Link>
-          <Link href="/data-entry" className="btn btn-secondary"
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, textDecoration: 'none', justifyContent: 'center' }}>
-            Production Entry
-          </Link>
-          <Link href="/data-entry/targets" className="btn btn-secondary"
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', justifyContent: 'center' }}>
-            Techno Targets
-          </Link>
+          <p>Parameter Management</p>
         </div>
 
         <div className="control-section">
@@ -617,5 +602,6 @@ export default function TechnoManualEntry() {
         )}
       </div>
     </main>
+    </>
   );
 }

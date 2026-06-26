@@ -26,6 +26,8 @@ from typing import Optional, List, Dict, Any
 import openpyxl
 from openpyxl.utils import get_column_letter
 
+from extraction_utils import calculate_tmi_consumption
+
 try:
     import xlrd
     _XLRD_AVAILABLE = True
@@ -143,16 +145,16 @@ PARAM_MAP: List[tuple] = [
     (54, "COKE_SINTER", "Sinter Plant SP-3",    "Productivity",              "T/m2/hr"),
     (55, "COKE_SINTER", "Sinter Plant SP-3",    "Basicity",                  ""),
     # ── Blast Furnaces — burden & rates (rows 58-60, 68-70) ──────────────
-    (58, "IRON_MAKING", "Sinter in Burden",  "BSP Plant Shop",       "%"),
-    (59, "IRON_MAKING", "BF Coke Rate",      "BSP Plant Shop",       "Kg/THM"),
-    (60, "IRON_MAKING", "Coke Screen Loss",  "BSP Plant Shop",       "%"),
-    (68, "IRON_MAKING", "CDI",               "BSP Plant Shop",       "Kg/THM"),
-    (69, "IRON_MAKING", "Slag Rate",         "BSP Plant Shop",       "Kg/THM"),
-    (70, "IRON_MAKING", "Nut Coke Rate",     "BSP Plant Shop",       "Kg/THM"),
+    (58, "IRON_MAKING", "Sinter in Burden",  "BSP",       "%"),
+    (59, "IRON_MAKING", "BF Coke Rate",      "BSP",       "Kg/THM"),
+    (60, "IRON_MAKING", "Coke Screen Loss",  "BSP",       "%"),
+    (68, "IRON_MAKING", "CDI",               "BSP",       "Kg/THM"),
+    (69, "IRON_MAKING", "Slag Rate",         "BSP",       "Kg/THM"),
+    (70, "IRON_MAKING", "Nut Coke Rate",     "BSP",       "Kg/THM"),
     # ── BF Productivity (rows 65-67) ────────────────────────────────────
     (65, "IRON_MAKING", "BF Productivity",   "BSP BF-7",             "T/m³/day"),
     (66, "IRON_MAKING", "BF Productivity",   "BSP BF-8",             "T/m³/day"),
-    (67, "IRON_MAKING", "BF Productivity",   "BSP Plant Shop",       "T/m³/day"),
+    (67, "IRON_MAKING", "BF Productivity",   "BSP",       "T/m³/day"),
     # ── SMS-II Consumption (rows 76-78) ─────────────────────────────────
     (76, "SMS", "SMS-II Consumption",            "Hot Metal",                "Kg/T CS"),
     (77, "SMS", "SMS-II Consumption",            "Scrap",                    "Kg/T CS"),
@@ -346,6 +348,9 @@ def extract_preview(file_path: str, report_month: str) -> Dict[str, Any]:
             "found_via":  f"hardcoded R{row_1b}",
             "status":     status,
         })
+
+    # Calculate TMI as HM Consumption + Scrap Consumption
+    rows_out = calculate_tmi_consumption(rows_out)
 
     ok_count = sum(1 for r in rows_out if r["status"] == "ok")
     logger.info(

@@ -1,296 +1,423 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import Link from 'next/link';
+import GlobalNavbar from '@/components/GlobalNavbar';
 
-export default function LandingPage() {
+export default function HomePage() {
+
+  const featureHighlights = [
+    {
+      title: 'Production Data Entry',
+      description: 'Enter or update actual production values per plant and month with ABP plan comparison',
+      icon: '📋',
+      link: '/data-entry',
+      color: '#6366f1',
+      bgColor: 'rgba(99, 102, 241, 0.1)'
+    },
+    {
+      title: 'Excel Integration',
+      description: 'Upload plant spreadsheets, execute extractors, and populate database tables automatically',
+      icon: '📊',
+      link: '/upload',
+      color: '#10b981',
+      bgColor: 'rgba(16, 185, 129, 0.1)'
+    },
+    {
+      title: 'Report Engine',
+      description: 'Review compiled pages, edit cells directly, and generate publication-ready PDF reports',
+      icon: '📄',
+      link: '/report',
+      color: '#0284c7',
+      bgColor: 'rgba(2, 132, 199, 0.1)'
+    }
+  ];
+
   return (
     <main style={{
       minHeight: '100vh',
       backgroundColor: '#0f172a',
       fontFamily: 'system-ui, -apple-system, sans-serif',
-      color: '#f8fafc',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '40px 20px',
-      position: 'relative',
-      overflow: 'hidden'
+      color: '#f8fafc'
     }}>
-      {/* Background soft radial blobs for premium aesthetics */}
+      {/* Animated background */}
       <div style={{
-        position: 'absolute',
-        width: '600px',
-        height: '600px',
+        position: 'fixed',
+        width: '800px',
+        height: '800px',
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(2, 132, 199, 0.15) 0%, rgba(0,0,0,0) 70%)',
-        top: '-10%',
+        background: 'radial-gradient(circle, rgba(2, 132, 199, 0.12) 0%, rgba(0,0,0,0) 70%)',
+        top: '-15%',
         left: '-10%',
-        zIndex: 0
+        zIndex: 0,
+        pointerEvents: 'none'
       }} />
       <div style={{
-        position: 'absolute',
+        position: 'fixed',
         width: '600px',
         height: '600px',
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(0,0,0,0) 70%)',
+        background: 'radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, rgba(0,0,0,0) 70%)',
         bottom: '-10%',
-        right: '-10%',
-        zIndex: 0
+        right: '-5%',
+        zIndex: 0,
+        pointerEvents: 'none'
       }} />
 
-      <div style={{ maxWidth: '1000px', width: '100%', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '40px' }}>
-        
-        {/* Portal Header */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: '#1e293b',
-            border: '1px solid #334155',
-            padding: '6px 16px',
-            borderRadius: '20px',
-            fontSize: '0.85rem',
-            color: '#38bdf8',
-            fontWeight: '600',
-            marginBottom: '16px'
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            System Active • Version 1.0.0
-          </div>
-          
-          <h1 style={{
-            fontSize: '28pt',
-            fontWeight: '900',
-            letterSpacing: '-0.02em',
-            margin: '0 0 12px 0',
-            lineHeight: '1.2',
-            background: 'linear-gradient(to right, #f8fafc, #94a3b8)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
-          }}>
-            SAIL Operations Monthly Informatics (OMI)
-          </h1>
-          <p style={{
-            fontSize: '11pt',
-            color: '#94a3b8',
-            maxWidth: '640px',
-            margin: '0 auto',
-            lineHeight: '1.5'
-          }}>
-            Interactive management portal to extract spreadsheet metrics, edit report page cells directly, save configurations, and compile publication-ready PDF reports.
-          </p>
-        </div>
+      {/* Global Navbar */}
+      <GlobalNavbar />
 
-        {/* Action Portal Cards */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-          gap: '24px',
-          width: '100%'
+      {/* Main Content */}
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        {/* Hero Section */}
+        <section style={{
+          maxWidth: '1600px',
+          margin: '0 auto',
+          padding: '80px 32px 60px',
+          textAlign: 'center'
         }}>
-          
-          {/* Card 1: Excel uploader */}
-          <Link href="/upload" style={{ textDecoration: 'none' }}>
-            <div style={{
-              height: '100%',
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '12px',
-              padding: '30px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-            }}
-            className="portal-card"
-            >
-              <div style={{
-                width: '48px',
-                height: '48px',
+          <div style={{ marginBottom: '32px' }}>
+            <h1 style={{
+              fontSize: '42pt',
+              fontWeight: '900',
+              letterSpacing: '-0.02em',
+              margin: '0 0 16px 0',
+              background: 'linear-gradient(to right, #f8fafc, #94a3b8)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              lineHeight: '1.1'
+            }}>
+              SAIL Operations Monthly Informatics
+            </h1>
+            <p style={{
+              fontSize: '13pt',
+              color: '#94a3b8',
+              maxWidth: '700px',
+              margin: '0 auto',
+              lineHeight: '1.6'
+            }}>
+              Comprehensive management portal for production data, inventory tracking, and publication-ready report generation
+            </p>
+          </div>
+
+          {/* CTA Buttons */}
+          <div style={{
+            display: 'flex',
+            gap: '16px',
+            justifyContent: 'center',
+            marginTop: '32px'
+          }}>
+            <Link href="/data-entry" style={{ textDecoration: 'none' }}>
+              <button style={{
+                padding: '12px 28px',
                 borderRadius: '8px',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                border: 'none',
+                backgroundColor: '#0284c7',
+                color: '#f8fafc',
+                fontWeight: '700',
+                fontSize: '10pt',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#0369a1';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 10px 20px rgba(2, 132, 199, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#0284c7';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+              >
+                <span>📋</span> Enter Production Data
+              </button>
+            </Link>
+
+            <Link href="/report" style={{ textDecoration: 'none' }}>
+              <button style={{
+                padding: '12px 28px',
+                borderRadius: '8px',
+                border: '1px solid #334155',
+                backgroundColor: 'transparent',
+                color: '#cbd5e1',
+                fontWeight: '700',
+                fontSize: '10pt',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(2, 132, 199, 0.1)';
+                e.currentTarget.style.borderColor = '#0284c7';
+                e.currentTarget.style.color = '#38bdf8';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.borderColor = '#334155';
+                e.currentTarget.style.color = '#cbd5e1';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              >
+                <span>📄</span> View Reports
+              </button>
+            </Link>
+          </div>
+        </section>
+
+        {/* Features Grid */}
+        <section style={{
+          maxWidth: '1600px',
+          margin: '0 auto',
+          padding: '60px 32px'
+        }}>
+          <div style={{ marginBottom: '40px' }}>
+            <h2 style={{
+              fontSize: '28pt',
+              fontWeight: '900',
+              margin: '0 0 12px 0',
+              letterSpacing: '-0.01em'
+            }}>
+              Core Features
+            </h2>
+            <p style={{
+              fontSize: '11pt',
+              color: '#94a3b8',
+              margin: 0
+            }}>
+              Everything you need for comprehensive operations management
+            </p>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
+            gap: '24px'
+          }}>
+            {featureHighlights.map((feature, idx) => (
+              <Link key={idx} href={feature.link} style={{ textDecoration: 'none' }}>
+                <div style={{
+                  height: '100%',
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #334155',
+                  borderRadius: '12px',
+                  padding: '32px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-6px)';
+                  e.currentTarget.style.borderColor = feature.color;
+                  e.currentTarget.style.boxShadow = `0 16px 32px rgba(0, 0, 0, 0.3)`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.borderColor = '#334155';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+                >
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '12px',
+                    backgroundColor: feature.bgColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '28px'
+                  }}>
+                    {feature.icon}
+                  </div>
+                  <div>
+                    <h3 style={{
+                      fontSize: '14pt',
+                      fontWeight: '800',
+                      margin: '0 0 8px 0',
+                      color: '#f1f5f9'
+                    }}>
+                      {feature.title}
+                    </h3>
+                    <p style={{
+                      fontSize: '9.5pt',
+                      color: '#94a3b8',
+                      margin: 0,
+                      lineHeight: '1.5'
+                    }}>
+                      {feature.description}
+                    </p>
+                  </div>
+                  <div style={{
+                    marginTop: 'auto',
+                    paddingTop: '16px',
+                    borderTop: '1px solid rgba(51, 65, 85, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '10pt',
+                    fontWeight: '600',
+                    color: feature.color
+                  }}>
+                    Explore →
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* Info Section */}
+        <section style={{
+          maxWidth: '1600px',
+          margin: '0 auto',
+          padding: '60px 32px'
+        }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '24px'
+          }}>
+            <div style={{
+              backgroundColor: 'rgba(2, 132, 199, 0.1)',
+              border: '1px solid rgba(2, 132, 199, 0.3)',
+              borderRadius: '12px',
+              padding: '24px',
+              borderLeft: '4px solid #0284c7'
+            }}>
+              <h4 style={{
+                fontSize: '11pt',
+                fontWeight: '800',
+                margin: '0 0 8px 0',
+                color: '#38bdf8'
+              }}>
+                🚀 Quick Start
+              </h4>
+              <p style={{
+                fontSize: '9pt',
+                color: '#94a3b8',
+                margin: 0,
+                lineHeight: '1.6'
+              }}>
+                Upload spreadsheets, refine data directly in the system, and generate reports with a few clicks.
+              </p>
+            </div>
+
+            <div style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '12px',
+              padding: '24px',
+              borderLeft: '4px solid #10b981'
+            }}>
+              <h4 style={{
+                fontSize: '11pt',
+                fontWeight: '800',
+                margin: '0 0 8px 0',
                 color: '#10b981'
               }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-              </div>
-
-              <div>
-                <h3 style={{ fontSize: '14pt', fontWeight: '800', color: '#f1f5f9', margin: '0 0 8px 0' }}>
-                  Excel Ingestion & Extraction
-                </h3>
-                <p style={{ fontSize: '9.5pt', color: '#94a3b8', lineHeight: '1.5', margin: 0 }}>
-                  Upload raw plant spreadsheets (coordinate parsed for RSP), execute cell extractors, and dynamically populate database production & techno-economic tables.
-                </p>
-              </div>
-
-              <div style={{
-                marginTop: 'auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '9.5pt',
-                color: '#10b981',
-                fontWeight: '600'
+                ✓ Data Integrity
+              </h4>
+              <p style={{
+                fontSize: '9pt',
+                color: '#94a3b8',
+                margin: 0,
+                lineHeight: '1.6'
               }}>
-                Access Uploader
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                  <polyline points="12 5 19 12 12 19" />
-                </svg>
-              </div>
+                Compare actuals against ABP plans with instant % variance calculations for performance tracking.
+              </p>
             </div>
-          </Link>
 
-          {/* Card 2: Manual Data Entry */}
-          <Link href="/data-entry" style={{ textDecoration: 'none' }}>
             <div style={{
-              height: '100%',
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
               borderRadius: '12px',
-              padding: '30px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-            }}
-            className="portal-card"
-            >
-              <div style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#6366f1'
+              padding: '24px',
+              borderLeft: '4px solid #6366f1'
+            }}>
+              <h4 style={{
+                fontSize: '11pt',
+                fontWeight: '800',
+                margin: '0 0 8px 0',
+                color: '#818cf8'
               }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <path d="M3 9h18M9 21V9"/>
-                </svg>
-              </div>
-
-              <div>
-                <h3 style={{ fontSize: '14pt', fontWeight: '800', color: '#f1f5f9', margin: '0 0 8px 0' }}>
-                  Manual Data Entry
-                </h3>
-                <p style={{ fontSize: '9.5pt', color: '#94a3b8', lineHeight: '1.5', margin: 0 }}>
-                  Directly enter or correct actual production values per plant and month. Items are pre-loaded from ABP plan targets for easy comparison.
-                </p>
-              </div>
-
-              <div style={{
-                marginTop: 'auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '9.5pt',
-                color: '#6366f1',
-                fontWeight: '600'
+                📊 Professional Reports
+              </h4>
+              <p style={{
+                fontSize: '9pt',
+                color: '#94a3b8',
+                margin: 0,
+                lineHeight: '1.6'
               }}>
-                Open Entry Form
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                  <polyline points="12 5 19 12 12 19" />
-                </svg>
-              </div>
+                Generate publication-ready PDFs with customizable layouts and direct page content editing.
+              </p>
             </div>
-          </Link>
+          </div>
+        </section>
 
-          {/* Card 3: Report Editor */}
-          <Link href="/report" style={{ textDecoration: 'none' }}>
-            <div style={{
-              height: '100%',
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '12px',
-              padding: '30px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-            }}
-            className="portal-card"
-            >
-              <div style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(2, 132, 199, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#0284c7'
-              }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-              </div>
-
-              <div>
-                <h3 style={{ fontSize: '14pt', fontWeight: '800', color: '#f1f5f9', margin: '0 0 8px 0' }}>
-                  Interactive Report Engine
-                </h3>
-                <p style={{ fontSize: '9.5pt', color: '#94a3b8', lineHeight: '1.5', margin: 0 }}>
-                  Review compiled MIS pages, edit cells directly with live aggregates, save configs, and compile high-fidelity A4 layout PDF documents using WeasyPrint.
-                </p>
-              </div>
-
-              <div style={{
-                marginTop: 'auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '9.5pt',
-                color: '#38bdf8',
-                fontWeight: '600'
-              }}>
-                Open Report Engine
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                  <polyline points="12 5 19 12 12 19" />
-                </svg>
-              </div>
-            </div>
-          </Link>
-
-        </div>
-
-        {/* Footer info */}
-        <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', marginTop: '20px' }}>
-          Steel Authority of India Limited • Operations Directorate • MIS Group
-        </div>
+        {/* Footer */}
+        <footer style={{
+          borderTop: '1px solid rgba(51, 65, 85, 0.3)',
+          padding: '40px 32px',
+          textAlign: 'center'
+        }}>
+          <p style={{ fontSize: '9pt', color: '#64748b', margin: '0 0 8px 0' }}>
+            SAIL Operations Directorate • MIS Group • Steel Authority of India Limited
+          </p>
+          <p style={{ fontSize: '8.5pt', color: '#475569', margin: 0 }}>
+            Version 1.0.0 • Production Ready
+          </p>
+        </footer>
       </div>
-      
-      {/* Inline styles for hover micro-animations */}
+
+      {/* Global Styles */}
       <style>{`
-        .portal-card:hover {
-          transform: translateY(-4px);
-          border-color: #38bdf8 !important;
-          box-shadow: 0 10px 20px rgba(2, 132, 199, 0.15), 0 6px 6px rgba(0,0,0,0.2) !important;
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
+
+        * {
+          scrollbar-width: thin;
+          scrollbar-color: #334155 #0f172a;
+        }
+
+        ::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+          background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+          background: #334155;
+          border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+          background: #475569;
+        }
+
+        @media (max-width: 1024px) {
+          nav div:nth-child(1) {
+            gap: 16px !important;
+          }
         }
       `}</style>
     </main>
   );
 }
+

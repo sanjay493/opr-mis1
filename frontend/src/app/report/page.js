@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import GlobalNavbar from '@/components/GlobalNavbar';
 import PageRenderer from '../../components/PageRenderer';
 
 // Edit these labels to change what appears in the Page Selector dropdown
@@ -160,7 +160,7 @@ function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
   });
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
 console.log('API_BASE_URL:', API_BASE_URL);
 
 // In browser environments, failing to fetch is often due to CORS/origin/host reachability.
@@ -306,8 +306,12 @@ export default function ReportPage() {
   };
 
   return (
-    <main className="app-container">
-      {/* Sidebar Control Panel */}
+    <>
+      {/* Global Navbar */}
+      <GlobalNavbar />
+
+      <main className="app-container">
+      {/* Sidebar Control Panel - Customized for Report Only */}
       <div className="sidebar no-print">
         <div className="sidebar-header">
           <h1>
@@ -315,29 +319,9 @@ export default function ReportPage() {
               <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
               <polyline points="14 2 14 8 20 8" />
             </svg>
-            SAIL MIS Portal
+            Report Engine
           </h1>
-          <p>Report Viewer & Editor</p>
-        </div>
-
-        {/* Navigation Section */}
-        <div className="control-section">
-          <h2>Navigation</h2>
-          <Link href="/" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px', textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-            Back to Dashboard
-          </Link>
-          <Link href="/upload" className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none', borderColor: 'var(--primary)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Excel Ingestion
-          </Link>
+          <p>Viewer & Editor</p>
         </div>
 
         {/* Report Selector */}
@@ -509,5 +493,7 @@ export default function ReportPage() {
         )}
       </div>
     </main>
+    </>
   );
 }
+

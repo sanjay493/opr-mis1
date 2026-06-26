@@ -188,6 +188,8 @@ _NAME_NORMALIZE: dict[str, str] = {
     "coal to hot metal ratio":          "Coal to Hot Metal",
     "nut coke consumption":             "Nut Coke Rate",
     "cdi":                              "CDI Rate",
+    "hot metal consumption":            "Hot Metal Consumption",
+    "hm consumption":                   "Hot Metal Consumption",
 }
 
 

@@ -812,7 +812,7 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list) -> dic
                     sec, u, so = _CROSS_BF[cross_name]
                     techno_param_rows.append({
                         "group_code": "IRON_MAKING", "section": sec,
-                        "parameter": "ISP Plant Shop", "unit": u,
+                        "parameter": "ISP", "unit": u,
                         "sort_order": so, "actual": v, "cum_actual": y,
                         "cell": cell_ref, "found_via": f"ISP B-FCE {isp_name}",
                         "status": "ok" if v is not None else "no value",
