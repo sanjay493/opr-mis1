@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Techno JSON Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        label {
+            font-weight: 600;
+            color: #2c3e50;
+            min-width: 100px;
+        }
+
+        select, button {
+            padding: 10px 15px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            background: white;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button.secondary {
+            background: #95a5a6;
+        }
+
+        button.secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            background: #ecf0f1;
+            color: #2c3e50;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #bdc3c7;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        tr:hover {
+            background: #f9f9f9;
+        }
+
+        .value {
+            color: #27ae60;
+            font-weight: 500;
+        }
+
+        .unit {
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+
+        .source {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .source.excel {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+
+        .source.legacy {
+            background: #f39c12;
+            color: white;
+        }
+
+        .source.calculated {
+            background: #3498db;
+            color: white;
+        }
+
+        .error {
+            color: #e74c3c;
+            padding: 15px;
+            background: #fadbd8;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #3498db;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .json-display {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Techno JSON API Dashboard</h1>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Plant:</label>
+                <select id="plant">
+                    <option value="">-- Loading plants --</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Month:</label>
+                <select id="month">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>View:</label>
+                <select id="view">
+                    <option value="furnace">Furnace Data</option>
+                    <option value="plant">Plant Consolidated</option>
+                    <option value="parameters">Available Parameters</option>
+                    <option value="months">Available Months</option>
+                    <option value="furnaces">Available Furnaces</option>
+                </select>
+            </div>
+
+            <button onclick="loadData()">📊 Load Data</button>
+            <button class="secondary" onclick="showJSON()">📋 Show JSON</button>
+        </div>
+
+        <div id="stats" class="stats"></div>
+
+        <div class="content">
+            <div class="card">
+                <div class="card-header" id="tableHeader">Data</div>
+                <div class="card-body" id="tableContent">
+                    <div class="loading">Select options and click "Load Data"</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">📝 Raw JSON Response</div>
+                <div class="card-body" id="jsonContent">
+                    <div class="loading">JSON response will appear here</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8082/api';
+        let lastResponse = null;
+        let availableData = {};
+
+        // Load plants and months on startup
+        window.addEventListener('load', async () => {
+            await loadAvailableData();
+        });
+
+        async function loadAvailableData() {
+            try {
+                const response = await fetch(`${API_BASE}/techno-available-data`);
+                const data = await response.json();
+                availableData = data;
+
+                // Load plants
+                const plantSelect = document.getElementById('plant');
+                plantSelect.innerHTML = '<option value="">-- Select Plant --</option>';
+
+                if (data.plants && data.plants.length > 0) {
+                    data.plants.forEach(plant => {
+                        const option = document.createElement('option');
+                        option.value = plant;
+                        option.textContent = plant;
+                        plantSelect.appendChild(option);
+                    });
+                    plantSelect.value = data.plants[0];
+
+                    // Load months for first plant
+                    updateMonthsForPlant(data.plants[0]);
+                }
+            } catch (error) {
+                console.error('Error loading available data:', error);
+                document.getElementById('plant').innerHTML = '<option>Error loading</option>';
+                document.getElementById('month').innerHTML = '<option>Error loading</option>';
+            }
+        }
+
+        function updateMonthsForPlant(plant) {
+            const monthSelect = document.getElementById('month');
+            monthSelect.innerHTML = '<option value="">-- Select Month --</option>';
+
+            if (availableData.months && availableData.months[plant]) {
+                availableData.months[plant].forEach(month => {
+                    const option = document.createElement('option');
+                    option.value = month;
+                    option.textContent = month;
+                    monthSelect.appendChild(option);
+                });
+                monthSelect.value = availableData.months[plant][0];
+            }
+        }
+
+        // Update months when plant changes
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('plant').addEventListener('change', (e) => {
+                updateMonthsForPlant(e.target.value);
+            });
+        });
+
+        async function loadData() {
+            const plant = document.getElementById('plant').value;
+            const month = document.getElementById('month').value;
+            const view = document.getElementById('view').value;
+
+            if (!month) {
+                alert('Please select a month');
+                return;
+            }
+
+            document.getElementById('tableContent').innerHTML = '<div class="loading">Loading...</div>';
+            document.getElementById('jsonContent').innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                let url;
+                let headerText = '';
+
+                switch(view) {
+                    case 'furnace':
+                        url = `${API_BASE}/techno-furnace-data?plant=${plant}&report_month=${month}`;
+                        headerText = `Furnace Data - ${plant} (${month})`;
+                        break;
+                    case 'plant':
+                        url = `${API_BASE}/techno-plant-data?plant=${plant}&report_month=${month}`;
+                        headerText = `Plant Consolidated - ${plant} (${month})`;
+                        break;
+                    case 'parameters':
+                        url = `${API_BASE}/techno-parameters-list`;
+                        headerText = 'Available Parameters';
+                        break;
+                    case 'months':
+                        url = `${API_BASE}/techno-months-available`;
+                        headerText = 'Available Months';
+                        break;
+                    case 'furnaces':
+                        url = `${API_BASE}/techno-furnaces-for-plant?plant=${plant}`;
+                        headerText = `Furnaces - ${plant}`;
+                        break;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+                lastResponse = data;
+
+                document.getElementById('tableHeader').textContent = headerText;
+                displayData(data, view, plant, month);
+                displayJSON(data);
+                displayStats(data, view);
+
+            } catch (error) {
+                document.getElementById('tableContent').innerHTML =
+                    `<div class="error">Error: ${error.message}</div>`;
+                document.getElementById('jsonContent').innerHTML =
+                    `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        function displayData(data, view, plant, month) {
+            let html = '';
+
+            if (view === 'furnace') {
+                html = displayFurnaceData(data);
+            } else if (view === 'plant') {
+                html = displayPlantData(data);
+            } else if (view === 'parameters') {
+                html = displayParameters(data);
+            } else if (view === 'months') {
+                html = displayMonths(data);
+            } else if (view === 'furnaces') {
+                html = displayFurnaces(data);
+            }
+
+            document.getElementById('tableContent').innerHTML = html;
+        }
+
+        function displayFurnaceData(data) {
+            if (!data.furnaces) return '<div class="error">No furnace data</div>';
+
+            let html = '<table><tr><th>Furnace</th><th>Parameter</th><th>Value</th><th>Unit</th><th>Source</th></tr>';
+
+            for (const [furnace, params] of Object.entries(data.furnaces)) {
+                for (const [param, info] of Object.entries(params)) {
+                    const sourceClass = info.source.toLowerCase();
+                    html += `<tr>
+                        <td><strong>${furnace}</strong></td>
+                        <td>${param}</td>
+                        <td class="value">${formatValue(info.value)}</td>
+                        <td class="unit">${info.unit}</td>
+                        <td><span class="source ${sourceClass}">${info.source}</span></td>
+                    </tr>`;
+                }
+            }
+
+            html += '</table>';
+            return html;
+        }
+
+        function displayPlantData(data) {
+            if (!data.data) return '<div class="error">No plant data</div>';
+
+            let html = '<table><tr><th>Parameter</th><th>Value</th><th>Unit</th><th>Method</th><th>Source</th></tr>';
+
+            for (const [param, info] of Object.entries(data.data)) {
+                const sourceClass = (info.source || 'calculated').toLowerCase();
+                html += `<tr>
+                    <td><strong>${param}</strong></td>
+                    <td class="value">${formatValue(info.value)}</td>
+                    <td class="unit">${info.unit || 'N/A'}</td>
+                    <td><small>${info.calculation_method || 'N/A'}</small></td>
+                    <td><span class="source ${sourceClass}">${info.source || 'calculated'}</span></td>
+                </tr>`;
+            }
+
+            html += '</table>';
+            return html;
+        }
+
+        function displayParameters(data) {
+            if (!data.parameters) return '<div class="error">No parameters</div>';
+
+            let html = '<table><tr><th>Parameter</th></tr>';
+            data.parameters.forEach(param => {
+                html += `<tr><td>${param}</td></tr>`;
+            });
+            html += '</table>';
+            return html;
+        }
+
+        function displayMonths(data) {
+            if (!data.months) return '<div class="error">No months</div>';
+
+            let html = '<table><tr><th>Month</th></tr>';
+            data.months.forEach(month => {
+                html += `<tr><td>${month}</td></tr>`;
+            });
+            html += '</table>';
+            return html;
+        }
+
+        function displayFurnaces(data) {
+            if (!data.furnaces) return '<div class="error">No furnaces</div>';
+
+            let html = '<table><tr><th>Furnace</th></tr>';
+            data.furnaces.forEach(furnace => {
+                html += `<tr><td>${furnace}</td></tr>`;
+            });
+            html += '</table>';
+            return html;
+        }
+
+        function displayJSON(data) {
+            const json = JSON.stringify(data, null, 2);
+            document.getElementById('jsonContent').innerHTML =
+                `<div class="json-display">${escapeHtml(json)}</div>`;
+        }
+
+        function displayStats(data, view) {
+            let stats = [];
+
+            if (view === 'furnace' && data.furnaces) {
+                const furnaceCount = Object.keys(data.furnaces).length;
+                const paramCount = Object.values(data.furnaces).reduce((sum, f) =>
+                    sum + Object.keys(f).length, 0);
+
+                stats.push({ label: 'Furnaces', value: furnaceCount });
+                stats.push({ label: 'Parameters', value: paramCount });
+            } else if (view === 'plant' && data.data) {
+                const paramCount = Object.keys(data.data).length;
+                stats.push({ label: 'Parameters', value: paramCount });
+            } else if (view === 'parameters' && data.parameters) {
+                stats.push({ label: 'Total', value: data.count });
+            } else if (view === 'months' && data.months) {
+                stats.push({ label: 'Total', value: data.count });
+            } else if (view === 'furnaces' && data.furnaces) {
+                stats.push({ label: 'Total', value: data.count });
+            }
+
+            let html = '';
+            stats.forEach(stat => {
+                html += `<div class="stat-box">
+                    <div class="stat-value">${stat.value}</div>
+                    <div class="stat-label">${stat.label}</div>
+                </div>`;
+            });
+
+            document.getElementById('stats').innerHTML = html;
+        }
+
+        function showJSON() {
+            if (!lastResponse) {
+                alert('Load data first');
+                return;
+            }
+            const json = JSON.stringify(lastResponse, null, 2);
+            const win = window.open();
+            win.document.write('<pre>' + escapeHtml(json) + '</pre>');
+        }
+
+        function formatValue(value) {
+            if (typeof value === 'number') {
+                return value.toFixed(2);
+            }
+            return value;
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+    </script>
+</body>
+</html>

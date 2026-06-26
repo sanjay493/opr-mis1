@@ -203,8 +203,253 @@ def init_db():
         )
     """)
 
+    # 12. NEW: Techno Furnace-wise Data (JSON-based)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS techno_furnace_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plant TEXT NOT NULL,                    -- "BSP", "DSP", "RSP", "BSL", "ISP"
+            furnace TEXT NOT NULL,                  -- "BF-1", "BF-2", "SMS-1", etc.
+            report_month TEXT NOT NULL,             -- "2026-06" (YYYY-MM)
+
+            data JSON NOT NULL,                     -- {param: {value, unit, source, ...}}
+
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(plant, furnace, report_month)
+        )
+    """)
+
+    # 13. NEW: Techno Plant-level Consolidated Data (JSON-based)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS techno_plant_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plant TEXT NOT NULL,                    -- "BSP", "DSP", "RSP", "BSL", "ISP"
+            report_month TEXT NOT NULL,             -- "2026-06" (YYYY-MM)
+
+            data JSON NOT NULL,                     -- {param: {value, unit, calculation_method, ...}}
+            calculation_details JSON,               -- {param: {formula, furnaces_used, total_weight, ...}}
+
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(plant, report_month)
+        )
+    """)
+
+    # 14. NEW: SAIL Consolidated Data (JSON-based)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS techno_sail_consolidated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_month TEXT NOT NULL UNIQUE,     -- "2026-06" (YYYY-MM)
+
+            data JSON NOT NULL,                     -- {param: value}
+            calculation_method JSON,                -- {param: "SAIL_direct" | "avg_5_plants"}
+
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # 15. NEW: Production Actuals (JSON-based) — replaces production_table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS production_data_json (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_month TEXT NOT NULL,
+            data TEXT NOT NULL,                     -- JSON: {plant_name: {item_name: value}}
+            source TEXT DEFAULT 'excel',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(report_month)
+        )
+    """)
+
+    # 16. NEW: Production Plans (JSON-based) — replaces production_plan_table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS production_plan_json (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_month TEXT NOT NULL,
+            data TEXT NOT NULL,                     -- JSON: {plant_name: {item_name: value}}
+            source TEXT DEFAULT 'excel',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(report_month)
+        )
+    """)
+
+    # 17. NEW: Special Steel Orders (JSON-based) — replaces special_steel_orders (partial)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS special_steel_json (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_month TEXT NOT NULL,
+            data TEXT NOT NULL,                     -- JSON: {plant: [{product, grade, section, sort_order, qty, dispatch}]}
+            source TEXT DEFAULT 'excel',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(report_month)
+        )
+    """)
+
+    # 18. NEW: Stock Data (JSON-based) — replaces stock_table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stock_data_json (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            stock_month TEXT NOT NULL,
+            data TEXT NOT NULL,                     -- JSON: {plant: {item_type: {stock_type: value}}}
+            source TEXT DEFAULT 'excel',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(stock_month)
+        )
+    """)
+
+    # 19. NEW: Inter-Plant Transfer Data (JSON-based) — replaces ipt_table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ipt_data_json (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_month TEXT NOT NULL,
+            data TEXT NOT NULL,                     -- JSON: {item: [{from_plant, to_plant, unit, sort_order, plan, actual, plan_tonnage, actual_tonnage}]}
+            source TEXT DEFAULT 'excel',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(report_month)
+        )
+    """)
+
     conn.commit()
     conn.close()
+
+# ============================================================================
+# JSON-based extraction helpers
+# ============================================================================
+
+def insert_production_data_json(report_month: str, data: Dict[str, Dict[str, float]], source: str = 'excel') -> bool:
+    """Insert production actuals as JSON."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO production_data_json (report_month, data, source)
+            VALUES (?, ?, ?)
+            ON CONFLICT(report_month) DO UPDATE SET
+                data = excluded.data,
+                source = excluded.source,
+                updated_at = CURRENT_TIMESTAMP
+        """, (report_month, json.dumps(data), source))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error inserting production_data_json: {e}")
+        return False
+
+def insert_production_plan_json(report_month: str, data: Dict[str, Dict[str, float]], source: str = 'excel') -> bool:
+    """Insert production plans as JSON."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO production_plan_json (report_month, data, source)
+            VALUES (?, ?, ?)
+            ON CONFLICT(report_month) DO UPDATE SET
+                data = excluded.data,
+                source = excluded.source,
+                updated_at = CURRENT_TIMESTAMP
+        """, (report_month, json.dumps(data), source))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error inserting production_plan_json: {e}")
+        return False
+
+def insert_special_steel_json(report_month: str, data: Dict, source: str = 'excel') -> bool:
+    """Insert special steel orders as JSON."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO special_steel_json (report_month, data, source)
+            VALUES (?, ?, ?)
+            ON CONFLICT(report_month) DO UPDATE SET
+                data = excluded.data,
+                source = excluded.source,
+                updated_at = CURRENT_TIMESTAMP
+        """, (report_month, json.dumps(data), source))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error inserting special_steel_json: {e}")
+        return False
+
+def insert_stock_data_json(stock_month: str, data: Dict, source: str = 'excel') -> bool:
+    """Insert stock data as JSON."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO stock_data_json (stock_month, data, source)
+            VALUES (?, ?, ?)
+            ON CONFLICT(stock_month) DO UPDATE SET
+                data = excluded.data,
+                source = excluded.source,
+                updated_at = CURRENT_TIMESTAMP
+        """, (stock_month, json.dumps(data), source))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error inserting stock_data_json: {e}")
+        return False
+
+def insert_ipt_data_json(report_month: str, data: Dict, source: str = 'excel') -> bool:
+    """Insert IPT data as JSON."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO ipt_data_json (report_month, data, source)
+            VALUES (?, ?, ?)
+            ON CONFLICT(report_month) DO UPDATE SET
+                data = excluded.data,
+                source = excluded.source,
+                updated_at = CURRENT_TIMESTAMP
+        """, (report_month, json.dumps(data), source))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error inserting ipt_data_json: {e}")
+        return False
+
+# Query helpers for JSON tables
+
+def get_production_data_json(report_month: str) -> Optional[Dict]:
+    """Get production actuals as JSON."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT data FROM production_data_json WHERE report_month = ?", (report_month,))
+        row = cursor.fetchone()
+        conn.close()
+        return json.loads(row[0]) if row else None
+    except Exception as e:
+        logger.error(f"Error querying production_data_json: {e}")
+        return None
+
+def get_production_plan_json(report_month: str) -> Optional[Dict]:
+    """Get production plans as JSON."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT data FROM production_plan_json WHERE report_month = ?", (report_month,))
+        row = cursor.fetchone()
+        conn.close()
+        return json.loads(row[0]) if row else None
+    except Exception as e:
+        logger.error(f"Error querying production_plan_json: {e}")
+        return None
+
 
 def get_ytd_months(report_month: str) -> List[str]:
     """Returns YYYY-MM strings from April of the current FY up to report_month."""
@@ -818,3 +1063,185 @@ def get_extraction_logs(limit: int = 60) -> List[Dict[str, Any]]:
     """, (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ============================================================================
+# NEW: Techno JSON-based Furnace/Plant Data Functions
+# ============================================================================
+
+def insert_techno_furnace_data(plant: str, furnace: str, report_month: str, data: Dict[str, Any]):
+    """
+    Insert or update furnace-level techno data (JSON format)
+
+    Args:
+        plant: "BSP", "DSP", "RSP", etc.
+        furnace: "BF-1", "BF-2", "SMS-1", etc.
+        report_month: "2026-06"
+        data: {param: {value, unit, source, ...}}
+    """
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO techno_furnace_data (plant, furnace, report_month, data, created_at, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+        ON CONFLICT(plant, furnace, report_month)
+        DO UPDATE SET
+            data = excluded.data,
+            updated_at = datetime('now')
+    """, (plant, furnace, report_month, json.dumps(data)))
+
+    conn.commit()
+    conn.close()
+
+
+def get_techno_furnace_data(plant: str, report_month: str, furnace: str = "") -> Dict[str, Any]:
+    """
+    Retrieve furnace-level techno data (all furnaces for a plant-month, or specific furnace)
+
+    Returns: {furnace: {param: {value, unit, ...}}} or specific furnace data
+    """
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    if furnace:
+        cursor.execute("""
+            SELECT furnace, data
+            FROM techno_furnace_data
+            WHERE plant = ? AND report_month = ? AND furnace = ?
+        """, [plant, report_month, furnace])
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return {row['furnace']: json.loads(row['data'])}
+        return {}
+    else:
+        cursor.execute("""
+            SELECT furnace, data
+            FROM techno_furnace_data
+            WHERE plant = ? AND report_month = ?
+            ORDER BY furnace
+        """, [plant, report_month])
+        rows = cursor.fetchall()
+        conn.close()
+
+        result = {}
+        for row in rows:
+            result[row['furnace']] = json.loads(row['data'])
+        return result
+
+
+def insert_techno_plant_data(plant: str, report_month: str, data: Dict[str, Any],
+                              calculation_details: Dict[str, Any] = None):
+    """
+    Insert or update plant-level consolidated techno data (JSON format)
+
+    Args:
+        plant: "BSP", "DSP", "RSP", etc.
+        report_month: "2026-06"
+        data: {param: {value, unit, calculation_method, ...}}
+        calculation_details: {param: {formula, furnaces_used, ...}}
+    """
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO techno_plant_data (plant, report_month, data, calculation_details, created_at, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+        ON CONFLICT(plant, report_month)
+        DO UPDATE SET
+            data = excluded.data,
+            calculation_details = excluded.calculation_details,
+            updated_at = datetime('now')
+    """, (plant, report_month, json.dumps(data), json.dumps(calculation_details or {})))
+
+    conn.commit()
+    conn.close()
+
+
+def get_techno_plant_data(plant: str, report_month: str) -> Dict[str, Any]:
+    """
+    Retrieve plant-level consolidated techno data
+
+    Returns: {data: {param: {value, unit, ...}}, calculation_details: {...}}
+    """
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT data, calculation_details
+        FROM techno_plant_data
+        WHERE plant = ? AND report_month = ?
+    """, [plant, report_month])
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            'data': json.loads(row['data']),
+            'calculation_details': json.loads(row['calculation_details']) if row['calculation_details'] else {}
+        }
+    return {'data': {}, 'calculation_details': {}}
+
+
+def insert_techno_sail_consolidated(report_month: str, data: Dict[str, float],
+                                     calculation_method: Dict[str, str] = None):
+    """
+    Insert or update SAIL consolidated techno data (JSON format)
+
+    Args:
+        report_month: "2026-06"
+        data: {param: value}  (consolidated across 5 plants)
+        calculation_method: {param: "SAIL_direct" | "avg_5_plants"}
+    """
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO techno_sail_consolidated (report_month, data, calculation_method, last_updated)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT(report_month)
+        DO UPDATE SET
+            data = excluded.data,
+            calculation_method = excluded.calculation_method,
+            last_updated = datetime('now')
+    """, (report_month, json.dumps(data), json.dumps(calculation_method or {})))
+
+    conn.commit()
+    conn.close()
+
+
+def get_techno_sail_consolidated(report_month: str) -> Dict[str, Any]:
+    """
+    Retrieve SAIL consolidated techno data
+
+    Returns: {data: {param: value}, calculation_method: {param: "SAIL_direct" | "avg_5_plants"}}
+    """
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT data, calculation_method
+        FROM techno_sail_consolidated
+        WHERE report_month = ?
+    """, [report_month])
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            'data': json.loads(row['data']),
+            'calculation_method': json.loads(row['calculation_method']) if row['calculation_method'] else {}
+        }
+    return {'data': {}, 'calculation_method': {}}
