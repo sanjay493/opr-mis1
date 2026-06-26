@@ -571,10 +571,14 @@
     .pg-{{ page.page }} td { font-family: '{{ _pl.get("fontFamily") }}', Arial, sans-serif !important; }
     {% endif %}
     {% if _pl.get('fitToPage') %}
+    {% if not _pl.get('fontSize') %}
     .pg-{{ page.page }} th,
-    .pg-{{ page.page }} td { font-size: 7pt !important; padding: 1px 2px !important; line-height: 1.0 !important; }
+    .pg-{{ page.page }} td { font-size: 7pt !important; }
+    {% endif %}
+    .pg-{{ page.page }} th,
+    .pg-{{ page.page }} td { padding: 1px 2px !important; line-height: 1.0 !important; }
     .pg-{{ page.page }} .report-title-section { margin-bottom: 6px !important; }
-    .pg-{{ page.page }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; font-size: 7pt !important; }
+    .pg-{{ page.page }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; {% if not _pl.get('fontSize') %}font-size: 7pt !important;{% endif %} }
     .pg-{{ page.page }} .highlights-box li { margin-bottom: 1px !important; }
     {% endif %}
     {% endif %}

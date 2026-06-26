@@ -26,6 +26,8 @@ extract_preview() returns rows for review — NO database writes.
 import gc
 import re
 
+from extraction_utils import calculate_tmi_consumption
+
 PLANT = "DSP"
 
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
@@ -473,7 +475,7 @@ _WA_PARAMS = {
 _MAJOR_PAGE_DEFS = [
     ("gross energy consumption", "MAJOR",       "Specific Energy Consumption",      "DSP",     "G.Cal/TCS",121),
     ("bof slag utilisation",     "COKE_SINTER", "BOF Slag Utilisation",             "DSP",     "%",         41),
-    ("loss at skip",             "IRON_MAKING", "Coke Screen Loss",                 "DSP Plant Shop", "%",  31),
+    ("loss at skip",             "IRON_MAKING", "Coke Screen Loss",                 "DSP", "%",  31),
 ]
 # NOTE: Removed from Major Techno (will be extracted from Blast Furnace page instead):
 # - Coke Rate, CDI Rate, Nut Coke Rate, Fuel Rate, Sinter in Burden
@@ -1276,7 +1278,7 @@ def _block_techno(file_path: str, page_index: dict,
                     # Current year row
                     rows.append({
                         "group_code": "IRON_MAKING",
-                        "section":    "DSP Plant Shop",
+                        "section":    "DSP",
                         "parameter":  "CDI",
                         "unit":       "Kg/THM",
                         "sort_order": 11,
@@ -1292,7 +1294,7 @@ def _block_techno(file_path: str, page_index: dict,
                         prior_yy = str(int(yy) - 1)
                         rows.append({
                             "group_code": "IRON_MAKING",
-                            "section":    "DSP Plant Shop",
+                            "section":    "DSP",
                             "parameter":  "CDI",
                             "unit":       "Kg/THM",
                             "sort_order": 11.5,
@@ -1381,7 +1383,7 @@ def _block_techno(file_path: str, page_index: dict,
                             # Current year
                             rows.append({
                                 "group_code": group_code,
-                                "section":    "DSP Plant Shop",
+                                "section":    "DSP",
                                 "parameter":  param_label,
                                 "unit":       param_unit,
                                 "sort_order": param_sort + 0.2,
@@ -1397,7 +1399,7 @@ def _block_techno(file_path: str, page_index: dict,
                                 prior_yy = str(int(yy) - 1)
                                 rows.append({
                                     "group_code": group_code,
-                                    "section":    "DSP Plant Shop",
+                                    "section":    "DSP",
                                     "parameter":  param_label,
                                     "unit":       param_unit,
                                     "sort_order": param_sort + 0.7,
@@ -1421,7 +1423,7 @@ def _block_techno(file_path: str, page_index: dict,
                             # Current year
                             rows.append({
                                 "group_code": group_code,
-                                "section":    "DSP Plant Shop",
+                                "section":    "DSP",
                                 "parameter":  param_label,
                                 "unit":       param_unit,
                                 "sort_order": param_sort,
@@ -1437,7 +1439,7 @@ def _block_techno(file_path: str, page_index: dict,
                                 prior_yy = str(int(yy) - 1)
                                 rows.append({
                                     "group_code": group_code,
-                                    "section":    "DSP Plant Shop",
+                                    "section":    "DSP",
                                     "parameter":  param_label,
                                     "unit":       param_unit,
                                     "sort_order": param_sort + 0.5,
@@ -1815,6 +1817,10 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
         print(f"[DSP PDF] Block 3 done: {len(ss_rows)} rows, note={ss_note!r}",
               flush=True, file=sys.stderr)
         gc.collect()
+
+    # Calculate TMI as HM Consumption + Scrap Consumption
+    if techno_rows:
+        techno_rows = calculate_tmi_consumption(techno_rows)
 
     # ── Build result ──────────────────────────────────────────────────────
     sheets = f"PDF page {prod_page_no} (PRODUCTION MONTHWISE)"

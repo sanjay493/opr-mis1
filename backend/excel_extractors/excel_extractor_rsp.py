@@ -21,6 +21,8 @@ import sqlite3
 import os
 from typing import Optional
 
+from extraction_utils import calculate_tmi_consumption
+
 logger = logging.getLogger("excel_extractor")
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
@@ -254,7 +256,7 @@ _BLOWS_DAILY_AVG = {"SMS-1 Avg Blows per day", "SMS-2 Avg Blows per day"}
 # P18 techno param name → (group_code, section, row_label, unit, sort_order)
 # These are also written to techno_monthly so page 29 (IRON MAKING) can display them.
 _IRON_MAKING_PARAM_MAP = {
-    "CDI":                  ("IRON_MAKING", "CDI",               "RSP Plant Shop",       "Kg/THM", 15),
+    "CDI":                  ("IRON_MAKING", "CDI",               "RSP",       "Kg/THM", 15),
     "CDI BF-1":             ("IRON_MAKING", "CDI",               "RSP BF-1",             "Kg/THM", 18),
     "CDI BF-4":             ("IRON_MAKING", "CDI",               "RSP BF-4",             "Kg/THM", 19),
     "CDI BF-5":             ("IRON_MAKING", "CDI",               "RSP BF-5",             "Kg/THM", 20),
@@ -274,15 +276,15 @@ _IRON_MAKING_PARAM_MAP = {
     "Hot Blast Temp BF-4":  ("IRON_MAKING", "HBT",               "RSP BF-4",             "°C",     104),
     "Hot Blast Temp BF-5":  ("IRON_MAKING", "HBT",               "RSP BF-5",             "°C",     105),
     # Shop-level rows — RSP source file provides shop averages directly
-    "Coke Rate":            ("IRON_MAKING", "BF Coke Rate",      "RSP Plant Shop",       "Kg/THM",  48),
-    "Nut Coke Rate":        ("IRON_MAKING", "Nut Coke Rate",     "RSP Plant Shop",       "Kg/THM",  58),
-    "BF Productivity":      ("IRON_MAKING", "BF Productivity",   "RSP Plant Shop",       "T/m³/day",68),
-    "Si% in HM":            ("IRON_MAKING", "Si in HM",          "RSP Plant Shop",       "%",       79),
-    "Hot Blast Temp":       ("IRON_MAKING", "HBT",               "RSP Plant Shop",       "°C",      99),
-    "Fuel Rate":            ("IRON_MAKING", "Fuel Rate",         "RSP Plant Shop",       "Kg/THM", 109),
-    "Sinter% in Burden":    ("IRON_MAKING", "Sinter in Burden",  "RSP Plant Shop",       "%",      119),
-    "Pellet% in Burden":    ("IRON_MAKING", "Pellet in Burden",  "RSP Plant Shop",       "%",      129),
-    "O2 Enrichment":        ("IRON_MAKING", "O2 Enrichment",     "RSP Plant Shop",       "%",      149),
+    "Coke Rate":            ("IRON_MAKING", "BF Coke Rate",      "RSP",       "Kg/THM",  48),
+    "Nut Coke Rate":        ("IRON_MAKING", "Nut Coke Rate",     "RSP",       "Kg/THM",  58),
+    "BF Productivity":      ("IRON_MAKING", "BF Productivity",   "RSP",       "T/m³/day",68),
+    "Si% in HM":            ("IRON_MAKING", "Si in HM",          "RSP",       "%",       79),
+    "Hot Blast Temp":       ("IRON_MAKING", "HBT",               "RSP",       "°C",      99),
+    "Fuel Rate":            ("IRON_MAKING", "Fuel Rate",         "RSP",       "Kg/THM", 109),
+    "Sinter% in Burden":    ("IRON_MAKING", "Sinter in Burden",  "RSP",       "%",      119),
+    "Pellet% in Burden":    ("IRON_MAKING", "Pellet in Burden",  "RSP",       "%",      129),
+    "O2 Enrichment":        ("IRON_MAKING", "O2 Enrichment",     "RSP",       "%",      149),
     "O2 Enrichment BF-1":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-1",             "%",      146),
     "O2 Enrichment BF-4":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-4",             "%",      147),
     "O2 Enrichment BF-5":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-5",             "%",      148),
@@ -848,6 +850,9 @@ def _preview_production_from_cells(ws, cells):
 
 def _preview_techno_from_cells(ws, cells, days_in_month=None, ytd_days=None):
     rows = []
+    techno_values_with_cells = {}
+
+    # First pass: extract all values with cell references
     for param, (m_cell, y_cell) in cells.items():
         mv = clean_val(ws[m_cell].value)
         yv = clean_val(ws[y_cell].value)
@@ -856,7 +861,25 @@ def _preview_techno_from_cells(ws, cells, days_in_month=None, ytd_days=None):
                 mv = round(mv / days_in_month, 1)
             if ytd_days and yv is not None:
                 yv = round(yv / ytd_days, 1)
+        techno_values_with_cells[param] = (mv, yv, m_cell, y_cell)
 
+    # Extract just the values for TMI calculation
+    techno_values = {k: (v[0], v[1]) for k, v in techno_values_with_cells.items()}
+
+    # Calculate TMI as HM Consumption + Scrap Consumption for all SMS units
+    techno_values = calculate_tmi_consumption(techno_values)
+
+    # Rebuild with cell references
+    for param, (mv, yv) in techno_values.items():
+        if param in techno_values_with_cells:
+            _, _, m_cell, y_cell = techno_values_with_cells[param]
+        else:
+            # New calculated TMI parameter - use a dummy cell ref
+            m_cell = y_cell = "CALC"
+        techno_values_with_cells[param] = (mv, yv, m_cell, y_cell)
+
+    # Second pass: build rows (including calculated TMI)
+    for param, (mv, yv, m_cell, y_cell) in techno_values_with_cells.items():
         # Mapping correctness check: read the workbook label at the resolved row
         row_num   = openpyxl.utils.coordinate_to_tuple(m_cell)[0]
         row_label = str(ws.cell(row=row_num, column=1).value or "").strip()
@@ -1245,6 +1268,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
     ytd_days_val    = _ytd_days(year_i, month_i)
 
     sheet_p18 = wb[p18_name]
+    techno_values = {}
     for param, (month_cell, ytd_cell) in _build_p18_cells(sheet_p18, col_p18).items():
         month_val = clean_val(sheet_p18[month_cell].value)
         ytd_val   = clean_val(sheet_p18[ytd_cell].value)
@@ -1253,6 +1277,12 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
                 month_val = round(month_val / days_in_month, 1)
             if ytd_val is not None:
                 ytd_val = round(ytd_val / ytd_days_val, 1)
+        techno_values[param] = (month_val, ytd_val)
+
+    # Calculate TMI as HM Consumption + Scrap Consumption for all SMS units
+    techno_values = calculate_tmi_consumption(techno_values)
+
+    for param, (month_val, ytd_val) in techno_values.items():
         if month_val is not None or ytd_val is not None:
             vals_extracted += 1
         cursor.execute("""

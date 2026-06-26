@@ -1900,6 +1900,117 @@ async def delete_ipt_entry_api(payload: dict):
     return {"status": "ok", "message": "Deleted."}
 
 
+@app.get("/api/techno-parameters")
+async def get_techno_parameters():
+    """Get list of all available techno parameters"""
+    try:
+        conn = sqlite3.connect(db.DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT param_name FROM techno_param
+            WHERE param_name IS NOT NULL AND param_name != ''
+            ORDER BY param_name
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+        parameters = [row['param_name'] for row in rows]
+        return {"parameters": parameters}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/techno-data")
+async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
+    """Get techno data for selected plants and parameters
+    Query params:
+      - plants: comma-separated plant codes (e.g., "BSP,RSP,DSP")
+      - parameters: comma-separated parameter names
+    """
+    try:
+        if not plants or not parameters:
+            raise HTTPException(status_code=400, detail="plants and parameters parameters required")
+
+        plant_list = [p.strip() for p in plants.split(',') if p.strip()]
+        param_list = [p.strip() for p in parameters.split(',') if p.strip()]
+
+        if not plant_list or not param_list:
+            raise HTTPException(status_code=400, detail="At least one plant and parameter required")
+
+        conn = sqlite3.connect(db.DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get techno data for selected plants and parameters
+        placeholders_plants = ','.join('?' * len(plant_list))
+        placeholders_params = ','.join('?' * len(param_list))
+
+        cursor.execute(f"""
+            SELECT
+                tp.param_name,
+                tp.row_label as plant,
+                ta.report_month,
+                ta.actual,
+                ta.till_month_actual
+            FROM techno_actuals ta
+            JOIN techno_param tp ON ta.param_id = tp.param_id
+            WHERE tp.row_label IN ({placeholders_plants})
+              AND tp.param_name IN ({placeholders_params})
+            ORDER BY tp.param_name, tp.row_label, ta.report_month
+        """, plant_list + param_list)
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        # Format data by plant and parameter
+        data = {}
+        for row in rows:
+            param = row['param_name']
+            plant = row['plant']
+            month = row['report_month']
+            value = row['actual']
+
+            if plant not in data:
+                data[plant] = {}
+            if param not in data[plant]:
+                data[plant][param] = {}
+
+            data[plant][param][month] = value
+
+        # For "All" plants, try to get SAIL consolidated values
+        # Also add SAIL data if not already included
+        if 'all' in [p.lower() for p in plant_list]:
+            # Fetch SAIL data
+            cursor.execute(f"""
+                SELECT
+                    tp.param_name,
+                    ta.report_month,
+                    ta.actual
+                FROM techno_actuals ta
+                JOIN techno_param tp ON ta.param_id = tp.param_id
+                WHERE tp.row_label = 'SAIL'
+                  AND tp.param_name IN ({placeholders_params})
+                ORDER BY tp.param_name, ta.report_month
+            """, param_list)
+
+            sail_rows = cursor.fetchall()
+            if 'SAIL' not in data:
+                data['SAIL'] = {}
+            for row in sail_rows:
+                param = row['param_name']
+                month = row['report_month']
+                value = row['actual']
+                if param not in data['SAIL']:
+                    data['SAIL'][param] = {}
+                data['SAIL'][param][month] = value
+
+        return {"data": data, "plants": plant_list, "parameters": param_list, "has_sail": 'SAIL' in data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8082))
