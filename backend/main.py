@@ -2,8 +2,11 @@ import os
 import json
 import sqlite3
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 
 import db
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest
@@ -22,6 +25,8 @@ from page_techno import generate_techno, TECHNO_PAGES, generate_summary_te_table
 from page_records import generate_records
 from pdf import build_pdf_response
 from layout_loader import load_layout_config
+from api_techno_json import router as techno_json_router
+from api_file_upload import router as upload_router
 
 db.init_db()
 
@@ -38,6 +43,8 @@ app = FastAPI(
 allowed_origins = [
     "http://localhost:3000", "http://127.0.0.1:3000",
     "http://localhost:3001", "http://127.0.0.1:3001",
+    "http://localhost:8000", "http://127.0.0.1:8000",  # Dashboard
+    "file://",  # File protocol for local HTML
 ]
 frontend_origin = os.environ.get("FRONTEND_ORIGIN")
 if frontend_origin:
@@ -57,6 +64,30 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
+
+# Include JSON-based techno data router
+app.include_router(techno_json_router)
+
+# Include file upload router
+app.include_router(upload_router)
+
+# Serve dashboard
+@app.get("/dashboard")
+async def get_dashboard():
+    """Serve the Techno JSON Dashboard"""
+    dashboard_path = Path(__file__).parent / "dashboard.html"
+    if dashboard_path.exists():
+        return FileResponse(dashboard_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Dashboard not found")
+
+# Serve upload page
+@app.get("/upload")
+async def get_upload_page():
+    """Serve the File Upload page"""
+    upload_path = Path(__file__).parent / "upload.html"
+    if upload_path.exists():
+        return FileResponse(upload_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Upload page not found")
 
 FRONTEND_DATA_PATH = os.path.join(os.path.dirname(__file__), "mis_data.json")
 

@@ -260,6 +260,7 @@ _IRON_MAKING_PARAM_MAP = {
     "CDI BF-1":             ("IRON_MAKING", "CDI",               "RSP BF-1",             "Kg/THM", 18),
     "CDI BF-4":             ("IRON_MAKING", "CDI",               "RSP BF-4",             "Kg/THM", 19),
     "CDI BF-5":             ("IRON_MAKING", "CDI",               "RSP BF-5",             "Kg/THM", 20),
+    "Coal to Hot metal ratio": ("IRON_MAKING", "Coal to Hot Metal", "RSP",           "Ratio", 11),
     "Coke Rate BF-1":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-1",             "Kg/THM",  53),
     "Coke Rate BF-4":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-4",             "Kg/THM",  54),
     "Coke Rate BF-5":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-5",             "Kg/THM",  55),

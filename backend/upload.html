@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAIL MIS - File Upload</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        select, input[type="text"], input[type="month"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+
+        select:focus, input[type="text"]:focus, input[type="month"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .file-upload {
+            position: relative;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            background: #f8f9ff;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-upload:hover {
+            background: #f0f2ff;
+            border-color: #764ba2;
+        }
+
+        .file-upload input[type="file"] {
+            display: none;
+        }
+
+        .file-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        .file-text {
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .file-hint {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .file-name {
+            margin-top: 10px;
+            color: #667eea;
+            font-weight: 500;
+            font-size: 12px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .btn-upload {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-upload:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-upload:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-clear {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+            display: block;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+            display: block;
+        }
+
+        .result-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .result-content {
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .help-text {
+            background: #f0f2ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .help-text strong {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📤 File Upload</h1>
+        <p class="subtitle">Upload Excel files and auto-populate JSON tables</p>
+
+        <form id="uploadForm">
+            <!-- Plant Selection -->
+            <div class="form-group">
+                <label for="plant">Plant *</label>
+                <select id="plant" name="plant" required>
+                    <option value="">-- Select Plant --</option>
+                    <option value="BSP">BSP (Bhilai)</option>
+                    <option value="DSP">DSP (Durgapur)</option>
+                    <option value="RSP">RSP (Rourkela)</option>
+                    <option value="BSL">BSL (Bokaro)</option>
+                    <option value="ISP">ISP (Iisco)</option>
+                </select>
+            </div>
+
+            <!-- Extractor Type Selection -->
+            <div class="form-group">
+                <label for="extractorType">Extractor Type *</label>
+                <select id="extractorType" name="extractor_type" required>
+                    <option value="">-- Select Type --</option>
+                    <option value="oisco">OISCO</option>
+                    <option value="techno">TechnoMya</option>
+                    <option value="rsp">RSP</option>
+                </select>
+            </div>
+
+            <!-- Month Selection -->
+            <div class="form-group">
+                <label for="month">Report Month *</label>
+                <input type="month" id="month" name="report_month" required>
+            </div>
+
+            <!-- File Upload -->
+            <div class="form-group">
+                <label>Excel File *</label>
+                <div class="file-upload" id="fileUpload">
+                    <div class="file-icon">📁</div>
+                    <div class="file-text">Click to upload or drag and drop</div>
+                    <div class="file-hint">Excel files only (.xlsx, .xls)</div>
+                    <div class="file-name" id="fileName"></div>
+                    <input type="file" id="fileInput" name="file" accept=".xlsx,.xls" required>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="button-group">
+                <button type="submit" class="btn-upload" id="submitBtn">Upload & Extract</button>
+                <button type="reset" class="btn-clear">Clear</button>
+            </div>
+        </form>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <span>Extracting and inserting data...</span>
+        </div>
+
+        <!-- Results -->
+        <div class="result" id="result">
+            <div class="result-title" id="resultTitle"></div>
+            <div class="result-content" id="resultContent"></div>
+        </div>
+
+        <!-- Help -->
+        <div class="help-text">
+            <strong>📌 How to use:</strong><br>
+            1. Select Plant (BSP, DSP, RSP, etc.)<br>
+            2. Select Extractor Type (OISCO, TechnoMya, RSP)<br>
+            3. Choose Report Month<br>
+            4. Upload your Excel file<br>
+            5. Data auto-populates in JSON tables!
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const fileUpload = document.getElementById('fileUpload');
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+        const resultTitle = document.getElementById('resultTitle');
+        const resultContent = document.getElementById('resultContent');
+        const submitBtn = document.getElementById('submitBtn');
+
+        // File upload handling
+        fileUpload.addEventListener('click', () => fileInput.click());
+
+        fileUpload.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUpload.style.background = '#f0f2ff';
+        });
+
+        fileUpload.addEventListener('dragleave', () => {
+            fileUpload.style.background = '#f8f9ff';
+        });
+
+        fileUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUpload.style.background = '#f8f9ff';
+            fileInput.files = e.dataTransfer.files;
+            updateFileName();
+        });
+
+        fileInput.addEventListener('change', updateFileName);
+
+        function updateFileName() {
+            if (fileInput.files && fileInput.files[0]) {
+                fileName.textContent = `✓ ${fileInput.files[0].name}`;
+            } else {
+                fileName.textContent = '';
+            }
+        }
+
+        // Form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const plant = document.getElementById('plant').value;
+            const extractorType = document.getElementById('extractorType').value;
+            const month = document.getElementById('month').value;
+            const file = fileInput.files[0];
+
+            if (!plant || !extractorType || !month || !file) {
+                alert('Please fill in all fields and select a file');
+                return;
+            }
+
+            // Show loading
+            loading.classList.add('active');
+            result.style.display = 'none';
+            submitBtn.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('plant', plant);
+                formData.append('extractor_type', extractorType);
+                formData.append('report_month', month);
+                formData.append('file', file);
+
+                const response = await fetch('http://127.0.0.1:8082/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                loading.classList.remove('active');
+
+                if (data.status === 'success') {
+                    showSuccess(data.data);
+                    form.reset();
+                    updateFileName();
+                } else {
+                    showError(data.message || 'Unknown error');
+                }
+            } catch (error) {
+                loading.classList.remove('active');
+                showError(error.message);
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        function showSuccess(data) {
+            result.classList.remove('error');
+            result.classList.add('success');
+            resultTitle.textContent = '✓ Upload Successful!';
+
+            const html = `
+                <strong>Plant:</strong> ${data.plant}<br>
+                <strong>Month:</strong> ${data.month}<br>
+                <strong>Furnaces:</strong> ${data.furnaces_inserted}<br>
+                <strong>Furnace Parameters:</strong> ${data.furnace_parameters}<br>
+                <strong>Plant Data Source:</strong> ${data.plant_data_source}<br>
+                <strong>Plant Parameters:</strong> ${data.plant_parameters}<br>
+                <br>
+                ✓ Data inserted into JSON tables!
+            `;
+
+            resultContent.innerHTML = html;
+            result.style.display = 'block';
+        }
+
+        function showError(message) {
+            result.classList.remove('success');
+            result.classList.add('error');
+            resultTitle.textContent = '✗ Upload Failed';
+            resultContent.innerHTML = `Error: ${message}`;
+            result.style.display = 'block';
+        }
+
+        // Set default month to current month
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        document.getElementById('month').value = `${year}-${month}`;
+    </script>
+</body>
+</html>

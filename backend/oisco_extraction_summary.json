@@ -1,0 +1,167 @@
+{
+  "file": "D:\\opr-mis1\\Report_format\\monthly\\BSPOISCO_MAY'25.xlsx",
+  "report_month": "2025-05",
+  "total_parameters": 37,
+  "parameters_with_values": 34,
+  "unique_sections": 9,
+  "groups": {
+    "IRON_MAKING": {
+      "count": 10,
+      "with_value": 9
+    },
+    "MAJOR": {
+      "count": 1,
+      "with_value": 0
+    },
+    "SMS": {
+      "count": 25,
+      "with_value": 24
+    },
+    "GENERAL": {
+      "count": 1,
+      "with_value": 1
+    }
+  },
+  "sample_data": [
+    {
+      "group_code": "IRON_MAKING",
+      "section": "CDI",
+      "parameter": "BSP",
+      "unit": "Kg/THM",
+      "actual": 120.98999015729751
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "CDI",
+      "parameter": "BSP BF-4",
+      "unit": "Kg/THM",
+      "actual": 113.65230928905034
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "CDI",
+      "parameter": "BSP BF-5",
+      "unit": "Kg/THM",
+      "actual": null
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "CDI",
+      "parameter": "BSP BF-6",
+      "unit": "Kg/THM",
+      "actual": 112.5824453341546
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "CDI",
+      "parameter": "BSP BF-7",
+      "unit": "Kg/THM",
+      "actual": 103.16571401008127
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "CDI",
+      "parameter": "BSP BF-8",
+      "unit": "Kg/THM",
+      "actual": 134.53519188823654
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "Fuel Rate",
+      "parameter": "BSP",
+      "unit": "Kg/THM",
+      "actual": 563.7946032276635
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "Pellet in Burden",
+      "parameter": "BSP",
+      "unit": "%",
+      "actual": 14.941140383184543
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "LD Slag Usage",
+      "parameter": "BSP",
+      "unit": "Kg/THM",
+      "actual": 0.0
+    },
+    {
+      "group_code": "IRON_MAKING",
+      "section": "Not Dry Cast",
+      "parameter": "BSP",
+      "unit": "%",
+      "actual": 0.18083182640144665
+    },
+    {
+      "group_code": "MAJOR",
+      "section": "Coal to Hot Metal",
+      "parameter": "BSP",
+      "unit": "Ratio",
+      "actual": null
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Converter Availability",
+      "unit": "% ICH",
+      "actual": 88.1
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Converter Utilisation",
+      "unit": "% Avail hr",
+      "actual": 73.0
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Tap to Tap Time",
+      "unit": "Minutes",
+      "actual": 54.52
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Average Blows/Day",
+      "unit": "Heats/Day",
+      "actual": 51.0
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Average Heat Weight",
+      "unit": "Tonnes",
+      "actual": 120.25806451612904
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Avg. Lining Life",
+      "unit": "Heats",
+      "actual": null
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Fe-Mn Consumption",
+      "unit": "Kg/TCS",
+      "actual": 0.0
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Fe-Si Consumption",
+      "unit": "Kg/TCS",
+      "actual": 1.706
+    },
+    {
+      "group_code": "SMS",
+      "section": "BSP SMS-2",
+      "parameter": "Si-Mn Consumption",
+      "unit": "Kg/TCS",
+      "actual": 18.101
+    }
+  ]
+}
