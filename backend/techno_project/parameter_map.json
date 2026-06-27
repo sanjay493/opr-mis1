@@ -1,0 +1,32 @@
+{
+  "Dry Coal Charge": {
+    "key": "dry_coal_charge",
+    "unit": "T / Oven",
+    "type": "float"
+  },
+  "H/Coke Yield(+25mm)": {
+    "key": "bf_coke_yield",
+    "unit": "% dry coal",
+    "type": "float"
+  },
+  "Crude Tar Yield": {
+    "key": "crude_tar_yield",
+    "unit": "% dry coal",
+    "type": "float"
+  },
+  "Coke Screen Loss": {
+    "key": "coke_screen_loss",
+    "unit": "%",
+    "type": "float"
+  },
+    "Specific productivity": {
+        "key": "specific_productivity",
+        "unit":"T/m2/hr",
+        "type": "float"
+    },
+    "LD Slag Cons.": {
+        "key": "ld_slag_cons",
+        "unit":"kg/T",
+        "type": "float"
+    }
+}

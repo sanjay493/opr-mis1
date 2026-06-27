@@ -1,0 +1,43 @@
+{
+  "BF-1": {
+    "coke_rate": 97,
+    "CDI": 105,
+    "bf_productivity": 101,
+    "nut_coke_rate":109
+  },
+  "BF-4": {
+    "coke_rate": 98,
+    "CDI": 106,
+    "bf_productivity": 102,
+    "nut_coke_rate":110
+  },
+  "BF-5": {
+    "coke_rate": 99,
+    "CDI": 107,
+    "bf_productivity": 103,
+    "nut_coke_rate":111
+  },
+  "Shop": {
+    "coke_rate": 100,
+    "CDI": 108,
+    "bf_productivity": 104,
+    "nut_coke_rate":112
+  },
+  "BATTERY - (1-5)": {
+    "bf_coke_yield": 8,
+    "dry_coal_charge": 10
+  },
+  "BATTERY - 6": {
+    "dry_coal_charge": 17,
+    "bf_coke_yield": 21,
+    "crude_tar_yield": 27,
+    "Ammonium_sulphate_yield": 28
+  },
+  "General":{
+    "coke_screen_loss": 31},
+
+    "SP-1": {
+    "specific_productivity": 38,
+    "ld_slag_cons": 43
+  }
+}
