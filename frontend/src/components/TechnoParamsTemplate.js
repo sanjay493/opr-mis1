@@ -1,121 +1,183 @@
 'use client';
 
-// ── style tokens ──────────────────────────────────────────────────────────────
-const BLACK  = '1px solid #000';
-const NONE   = 0;
+const B = '1px solid #000';
 
-// Base cell — vertical dividers only, no horizontal lines inside a parameter block
-const CELL = {
-  padding: '1.5px 4px', lineHeight: 1.2,
-  fontSize: 'var(--report-font-size)',
-  borderLeft: BLACK, borderRight: BLACK,
-  borderTop: NONE, borderBottom: NONE,
-};
-const NUM = { ...CELL, textAlign: 'right' };
-const LBL = { ...CELL, textAlign: 'left' };
-
-// Header — no background, black border
-const TH = {
-  color: '#000', padding: '2px 3px',
-  textAlign: 'center', verticalAlign: 'middle',
-  border: BLACK, fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
-};
-const TH_HIST = { ...TH };
-const TH_TGT  = { ...TH };
-const TH_CUM  = { ...TH };
-
-// SAIL row — bold + top border to form a box (bottom comes from isLast blockBorder)
-const SAIL = { fontWeight: 700, borderTop: BLACK };
+const cell = (extra = {}) => ({
+  padding: '1.5px 3px', lineHeight: 1.15,
+  fontSize: 'var(--report-font-size, 6.5pt)',
+  borderLeft: B, borderRight: B, borderTop: 0, borderBottom: 0,
+  ...extra,
+});
+const NUM = cell({ textAlign: 'right', whiteSpace: 'nowrap' });
+const LBL = cell({ textAlign: 'left' });
+const th = (extra = {}) => ({
+  color: '#000', padding: '2px 3px', textAlign: 'center',
+  verticalAlign: 'middle', border: B,
+  fontSize: 'var(--report-font-size, 6.5pt)', lineHeight: 1.15, fontWeight: 700,
+  ...extra,
+});
 
 export default function TechnoParamsTemplate({ data }) {
   if (!data) return null;
   const {
-    title, subtitle = '', sections = [],
+    title, subtitle = '', sections = [], group = '',
     fy3_label = '', fy2_label = '', fy1_label = '', target_label = '',
     month_labels = [], cply_label = '', cum_label = '', cum_cply_label = '',
   } = data;
 
+  // Mill pages (31-35): sections = mills, rows = params with individual units
+  // Param pages (27-30): sections = params (with shared unit), rows = plants/shops
+  const isMill = (group || '').startsWith('MILL_');
   const nMonths = month_labels.length;
-  const dataCols = 3 + nMonths + 3;
-  const dataColWidth = `${72 / dataCols}%`;
+  // data cols: FY-3, FY-2, FY-1, Target, Apr…Month, CPLY-month, YTD, YTD-CPLY
+  const nData = 3 + 1 + nMonths + 1 + 1 + 1;
+
+  // Widths: fixed text columns take a fixed share; data columns share the rest equally
+  const fixedPct = isMill ? 27 : 23;   // mill: Mill(8)+Param(14)+Unit(5); param: Param(16)+Shop(7)
+  const dataW    = `${(100 - fixedPct) / nData}%`;
+
+  const bk = (first, last) => ({
+    ...(first ? { borderTop: B }    : {}),
+    ...(last  ? { borderBottom: B } : {}),
+  });
+
+  const renderDataCells = (row, bkSt, sailSt) => (
+    <>
+      <td style={{ ...NUM, ...bkSt, ...sailSt }}>{row.fy3}</td>
+      <td style={{ ...NUM, ...bkSt, ...sailSt }}>{row.fy2}</td>
+      <td style={{ ...NUM, ...bkSt, ...sailSt }}>{row.fy1}</td>
+      <td style={{ ...NUM, ...bkSt, ...sailSt }}>{row.target}</td>
+      {(row.months || []).map((v, mi) => (
+        <td key={mi} style={{ ...NUM, ...bkSt, ...sailSt }}>{v}</td>
+      ))}
+      <td style={{ ...NUM, ...bkSt, ...sailSt }}>{row.cply}</td>
+      <td style={{ ...NUM, ...bkSt, ...sailSt }}>{row.cum}</td>
+      <td style={{ ...NUM, ...bkSt, ...sailSt }}>{row.cum_cply}</td>
+    </>
+  );
 
   return (
     <div style={{ padding: '6px', fontFamily: "'Arial Narrow', Arial, sans-serif" }}>
-      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem' }}>{title}</div>
+      {/* Page title */}
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 1 }}>
+        {title}
+      </div>
       {subtitle && (
         <div style={{ textAlign: 'center', fontWeight: 600, fontSize: '0.76rem', marginBottom: 4 }}>
           {subtitle}
         </div>
       )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', border: BLACK,
-                      tableLayout: 'fixed', fontSize: 'var(--report-font-size)', marginTop: 4 }}>
+      <table style={{
+        width: '100%', borderCollapse: 'collapse', border: B,
+        tableLayout: 'fixed', fontSize: 'var(--report-font-size, 6.5pt)', marginTop: 4,
+      }}>
         <colgroup>
-          <col style={{ width: '14%' }} />
-          <col style={{ width: '14%' }} />
-          {Array.from({ length: dataCols }).map((_, i) => (
-            <col key={i} style={{ width: dataColWidth }} />
-          ))}
+          {isMill ? (
+            <>
+              <col style={{ width: '8%'  }} />  {/* Mill name */}
+              <col style={{ width: '14%' }} />  {/* Parameter name */}
+              <col style={{ width: '5%'  }} />  {/* Unit */}
+            </>
+          ) : (
+            <>
+              <col style={{ width: '16%' }} />  {/* Parameter (unit) */}
+              <col style={{ width: '7%'  }} />  {/* Shop / Plant */}
+            </>
+          )}
+          {/* FY-3, FY-2, FY-1, Target */}
+          {[0, 1, 2, 3].map(i => <col key={`f${i}`} style={{ width: dataW }} />)}
+          {/* Monthly Apr → report month */}
+          {month_labels.map((_, i) => <col key={`m${i}`} style={{ width: dataW }} />)}
+          {/* CPLY month, YTD, YTD-CPLY */}
+          {[0, 1, 2].map(i => <col key={`c${i}`} style={{ width: dataW }} />)}
         </colgroup>
+
         <thead>
+          {/* Row 1 — group headers */}
           <tr>
-            <th rowSpan={2} style={{ ...TH, textAlign: 'left' }}>Parameters</th>
-            <th rowSpan={2} style={TH}>Plants</th>
-            <th colSpan={3} style={TH_HIST}>Actual</th>
-            <th rowSpan={2} style={TH_TGT}>{target_label}</th>
-            <th colSpan={nMonths} style={TH}>Actual</th>
-            <th rowSpan={2} style={TH}>{cply_label}<br/>Actual</th>
-            <th colSpan={2} style={TH_CUM}>Actual</th>
+            {isMill ? (
+              <>
+                <th rowSpan={2} style={th({ textAlign: 'left' })}>Mill</th>
+                <th rowSpan={2} style={th({ textAlign: 'left' })}>Parameters</th>
+                <th rowSpan={2} style={th()}>Unit</th>
+              </>
+            ) : (
+              <>
+                <th rowSpan={2} style={th({ textAlign: 'left' })}>Parameters</th>
+                <th rowSpan={2} style={th()}>Shop /<br />Plant</th>
+              </>
+            )}
+            <th colSpan={3} style={th()}>Actual</th>
+            <th rowSpan={2} style={th()}>{target_label || 'Target'}</th>
+            {nMonths > 0 && <th colSpan={nMonths} style={th()}>Actual (Month-wise)</th>}
+            <th rowSpan={2} style={th()}>{cply_label || 'CPLY'}<br />Actual</th>
+            <th colSpan={2} style={th()}>Cumulative</th>
           </tr>
+          {/* Row 2 — individual column labels */}
           <tr>
-            <th style={TH_HIST}>{fy3_label}</th>
-            <th style={TH_HIST}>{fy2_label}</th>
-            <th style={TH_HIST}>{fy1_label}</th>
-            {month_labels.map((m, i) => <th key={i} style={TH}>{m}</th>)}
-            <th style={TH_CUM}>{cum_label}</th>
-            <th style={TH_CUM}>{cum_cply_label}</th>
+            <th style={th()}>{fy3_label}</th>
+            <th style={th()}>{fy2_label}</th>
+            <th style={th()}>{fy1_label}</th>
+            {month_labels.map((m, i) => <th key={i} style={th()}>{m}</th>)}
+            <th style={th()}>{cum_label}</th>
+            <th style={th()}>{cum_cply_label}</th>
           </tr>
         </thead>
+
         <tbody>
           {sections.map((sec, si) =>
             sec.rows.map((row, ri) => {
-              const sail     = row.label === 'SAIL';
-              const isFirst  = ri === 0;
-              const isLast   = ri === sec.rows.length - 1;
-              // outer black border per parameter block — top on first row, bottom on last
-              const topBorder    = isFirst ? { borderTop: BLACK }    : {};
-              const bottomBorder = isLast  ? { borderBottom: BLACK } : {};
-              const blockBorder  = { ...topBorder, ...bottomBorder };
-              const sailStyle    = sail ? SAIL : {};
+              const isFirst = ri === 0;
+              const isLast  = ri === sec.rows.length - 1;
+              const bkSt    = bk(isFirst, isLast);
+              const sailSt  = row.label === 'SAIL' ? { fontWeight: 700, borderTop: B } : {};
 
               return (
                 <tr key={`${si}-${ri}`}>
-                  {isFirst && (
+                  {/* ── Param pages: first col = param name + unit (rowspan) ── */}
+                  {!isMill && isFirst && (
                     <td rowSpan={sec.rows.length}
                         style={{ ...LBL, fontWeight: 700, verticalAlign: 'top',
-                                 borderTop: BLACK, borderBottom: BLACK }}>
-                      {sec.label}{sec.rows[0]?.unit ? ` (${sec.rows[0].unit})` : ''}
+                                 borderTop: B, borderBottom: B }}>
+                      {sec.label}
+                      {sec.rows[0]?.unit
+                        ? <span style={{ fontWeight: 400 }}> ({sec.rows[0].unit})</span>
+                        : ''}
                     </td>
                   )}
-                  <td style={{ ...LBL, ...blockBorder, ...sailStyle }}>{row.label}</td>
-                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.fy3}</td>
-                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.fy2}</td>
-                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.fy1}</td>
-                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.target}</td>
-                  {row.months.map((v, mi) => (
-                    <td key={mi} style={{ ...NUM, ...blockBorder, ...sailStyle }}>{v}</td>
-                  ))}
-                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.cply}</td>
-                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.cum}</td>
-                  <td style={{ ...NUM, ...blockBorder, ...sailStyle }}>{row.cum_cply}</td>
+
+                  {/* ── Mill pages: first col = mill name (rowspan) ── */}
+                  {isMill && isFirst && (
+                    <td rowSpan={sec.rows.length}
+                        style={{ ...LBL, fontWeight: 700, verticalAlign: 'middle',
+                                 textAlign: 'center', borderTop: B, borderBottom: B }}>
+                      {sec.label}
+                    </td>
+                  )}
+
+                  {/* Row label: plant/shop for param pages; param name for mill pages */}
+                  <td style={{ ...LBL, ...bkSt, ...sailSt }}>{row.label}</td>
+
+                  {/* Unit column only on mill pages (per-row unit) */}
+                  {isMill && (
+                    <td style={{ ...cell({ textAlign: 'center', color: '#374151' }), ...bkSt }}>
+                      {row.unit}
+                    </td>
+                  )}
+
+                  {renderDataCells(row, bkSt, sailSt)}
                 </tr>
               );
             })
           )}
         </tbody>
       </table>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem',
-                    color: '#475569', marginTop: 3 }}>
+
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        fontSize: '0.6rem', color: '#475569', marginTop: 3,
+      }}>
         <span>figures are provisional</span>
         <span>for internal circulation only</span>
       </div>

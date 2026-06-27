@@ -1220,3 +1220,380 @@ def generate_summary_chart_html(chart_data: dict) -> str:
             "</div>"
         )
     return '<div style="margin-top:6px;">' + rows_html + "</div>"
+
+
+# ---------------------------------------------------------------------------
+# MAJOR page from techno_data table (replaces legacy techno_actuals path)
+# ---------------------------------------------------------------------------
+
+def generate_major_techno_from_db(report_month: str) -> dict:
+    """
+    Generate page 27 (MAJOR TECHNO-ECONOMIC PARAMETERS) from techno_data.
+    FY columns use the till_month value from the March row of each past FY,
+    which represents the full-year cumulative.
+    """
+    import json as _json
+
+    fy         = _fy_start(report_month)
+    ytd        = db.get_ytd_months(report_month)
+    cply_month = db.get_cply_month(report_month)
+
+    # March month for past FYs: till_month of March = full-year cumulative
+    # FY (fy-1) ends March of year fy; FY (fy-2) ends March of year fy-1; etc.
+    fy1_march = f"{fy}-03"
+    fy2_march = f"{fy - 1}-03"
+    fy3_march = f"{fy - 2}-03"
+
+    all_months = sorted(set(ytd) | {cply_month, fy1_march, fy2_march, fy3_march})
+
+    # store[(plant, month)][unit] = {"month": {...}, "till_month": {...}}
+    store = {}
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    try:
+        ph = ",".join("?" * len(all_months))
+        cur.execute(
+            f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
+            all_months,
+        )
+        for plant, rm, unit, tj in cur.fetchall():
+            store.setdefault((plant, rm), {})[unit] = _json.loads(tj)
+    finally:
+        conn.close()
+
+    _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+    plants_with_data = sorted(
+        {p for (p, rm) in store if rm == report_month},
+        key=lambda p: _PLANT_ORDER.index(p) if p in _PLANT_ORDER else 99,
+    )
+
+    def _gv(plant, rm, unit, key, period="month"):
+        return store.get((plant, rm), {}).get(unit, {}).get(period, {}).get(key)
+
+    def _fy_val(plant, march_rm, src_unit, src_key):
+        """Full-year value = till_month of March row for that FY."""
+        return _gv(plant, march_rm, src_unit, src_key, "till_month")
+
+    def _build_row(label, unit_str, month_fn, cum_fn, cply_fn, fy1_fn, fy2_fn, fy3_fn, cum_cply_fn=None):
+        return {
+            "label":  label,
+            "unit":   unit_str,
+            "fy3":    _fmt(fy3_fn()),
+            "fy2":    _fmt(fy2_fn()),
+            "fy1":    _fmt(fy1_fn()),
+            "target": "",
+            "months":    [_fmt(month_fn(m)) for m in ytd],
+            "cply":      _fmt(cply_fn()),
+            "cum":       _fmt(cum_fn()),
+            "cum_cply":  _fmt(cum_cply_fn()) if cum_cply_fn else "",
+        }
+
+    def unit_section(param_name, unit_str, src_unit, src_key):
+        """One row per plant that has src_unit data for the report month."""
+        rows = []
+        for p in plants_with_data:
+            if not store.get((p, report_month), {}).get(src_unit):
+                continue
+            rows.append(_build_row(
+                p, unit_str,
+                month_fn     = lambda m, _p=p: _gv(_p, m, src_unit, src_key),
+                cum_fn       = lambda     _p=p: _gv(_p, report_month, src_unit, src_key, "till_month"),
+                cply_fn      = lambda     _p=p: _gv(_p, cply_month,   src_unit, src_key),
+                fy1_fn       = lambda     _p=p: _fy_val(_p, fy1_march, src_unit, src_key),
+                fy2_fn       = lambda     _p=p: _fy_val(_p, fy2_march, src_unit, src_key),
+                fy3_fn       = lambda     _p=p: _fy_val(_p, fy3_march, src_unit, src_key),
+                cum_cply_fn  = lambda     _p=p: _gv(_p, cply_month,   src_unit, src_key, "till_month"),
+            ))
+        return {"label": param_name, "rows": rows}
+
+    _SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS"]
+
+    def sms_section(param_name, unit_str, src_key, tmi=False):
+        """One row per (plant, SMS-unit) pair that has data for the report month."""
+        rows = []
+        for p in plants_with_data:
+            p_units = store.get((p, report_month), {})
+            for su in _SMS_UNIT_ORDER:
+                if not p_units.get(su):
+                    continue
+                if tmi:
+                    def _tmi(plant, rm, period, _su=su):
+                        hm = _gv(plant, rm, _su, "specific_hm_consumption",   period)
+                        sc = _gv(plant, rm, _su, "specific_scrap_consumption", period)
+                        if hm is not None and sc is not None:
+                            return hm + sc
+                        return hm if hm is not None else sc
+                    rows.append(_build_row(
+                        f"{p} {su}", unit_str,
+                        month_fn    = lambda m, _p=p: _tmi(_p, m, "month"),
+                        cum_fn      = lambda     _p=p: _tmi(_p, report_month, "till_month"),
+                        cply_fn     = lambda     _p=p: _tmi(_p, cply_month,   "month"),
+                        fy1_fn      = lambda     _p=p: _tmi(_p, fy1_march, "till_month"),
+                        fy2_fn      = lambda     _p=p: _tmi(_p, fy2_march, "till_month"),
+                        fy3_fn      = lambda     _p=p: _tmi(_p, fy3_march, "till_month"),
+                        cum_cply_fn = lambda     _p=p: _tmi(_p, cply_month,   "till_month"),
+                    ))
+                else:
+                    rows.append(_build_row(
+                        f"{p} {su}", unit_str,
+                        month_fn    = lambda m, _p=p, _su=su: _gv(_p, m,            _su, src_key),
+                        cum_fn      = lambda     _p=p, _su=su: _gv(_p, report_month, _su, src_key, "till_month"),
+                        cply_fn     = lambda     _p=p, _su=su: _gv(_p, cply_month,   _su, src_key),
+                        fy1_fn      = lambda     _p=p, _su=su: _fy_val(_p, fy1_march, _su, src_key),
+                        fy2_fn      = lambda     _p=p, _su=su: _fy_val(_p, fy2_march, _su, src_key),
+                        fy3_fn      = lambda     _p=p, _su=su: _fy_val(_p, fy3_march, _su, src_key),
+                        cum_cply_fn = lambda     _p=p, _su=su: _gv(_p, cply_month,   _su, src_key, "till_month"),
+                    ))
+        return {"label": param_name, "rows": rows}
+
+    raw_sections = [
+        unit_section("Coal to Hot Metal",           "kg/kg",     "General",  "coal_to_hm"),
+        unit_section("Coke Rate",                   "kg/thm",    "BF_Shop",  "coke_rate"),
+        unit_section("Nut Coke Rate",               "kg/thm",    "BF_Shop",  "nut_coke_rate"),
+        unit_section("CDI Rate",                    "kg/thm",    "BF_Shop",  "cdi"),
+        unit_section("Fuel Rate",                   "kg/thm",    "BF_Shop",  "fuel_rate"),
+        unit_section("Sinter in Burden",            "%",         "BF_Shop",  "sinter% in burden"),
+        unit_section("Pellet in Burden",            "%",         "BF_Shop",  "pellet% in burden"),
+        unit_section("BF Productivity",             "t/m³/day", "BF_Shop", "bf_productivity"),
+        sms_section ("Hot Metal Consumption",       "kg/tcs",    "specific_hm_consumption"),
+        sms_section ("Scrap Consumption",           "kg/tcs",    "specific_scrap_consumption"),
+        sms_section ("TMI",                         "kg/tcs",    None,  tmi=True),
+        unit_section("Specific Energy Consumption", "Gcal/tcs",  "General",  "specific_energy_consumption"),
+    ]
+    sections = [s for s in raw_sections if s["rows"]]
+
+    return {
+        "title":          "MAJOR TECHNO-ECONOMIC PARAMETERS",
+        "subtitle":       "",
+        "variant":        "techno_params",
+        "group":          "MAJOR",
+        "fy3_label":      _fy_label(fy - 3),
+        "fy2_label":      _fy_label(fy - 2),
+        "fy1_label":      _fy_label(fy - 1),
+        "target_label":   f"Target {_fy_label(fy)}",
+        "month_labels":   [_mlabel(m) for m in ytd],
+        "cply_label":     _mlabel(cply_month),
+        "cum_label":      _cum_label(ytd),
+        "cum_cply_label": _cum_label([db.get_cply_month(m) for m in ytd]),
+        "sections":       sections,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Pages 28-35 from techno_data table
+# ---------------------------------------------------------------------------
+
+# Schema for "param" pages (28-30): sections=parameters, rows=plant×unit combos
+# Each entry: (section_label, unit_str, [(src_unit, src_key), ...])
+# Schema for "mill" pages (31-35): sections=mill-units, rows=params for one plant
+# Each entry: (mill_unit_name, [(param_label, src_key, unit_str), ...])
+
+_TECHNO_DB_SCHEMA = {
+    28: {
+        "type": "param",
+        "sections": [
+            # Coke oven parameters (COB-old = battery 1-5, COB-new = battery 6)
+            ("BF Coke Yield",          "%",          [("COB-old", "bf_coke_yield"),       ("COB-new", "bf_coke_yield")]),
+            ("Dry Coal Charge/Oven",   "t/oven",     [("COB-old", "dry_coal_charge"),     ("COB-new", "dry_coal_charge")]),
+            ("Sp. Heat Consmn./t DC",  "kcal/kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged")]),
+            ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "cog_yield")]),
+            ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield")]),
+            ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield")]),   # add row to hardcoded_map when available
+            ("Amm. Sulphate Yield",    "kg/t",       [("COB-new", "ammonium_sulphate_yield")]),
+        ],
+    },
+    29: {
+        "type": "param",
+        "sections": [
+            # Sinter plants
+            ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity")]),
+            ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons")]),
+            # Blast furnaces
+            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF_Shop", "cdi")]),
+            ("Coke Screen Loss",    "%",         [("General", "coke_screen_loss")]),
+        ],
+    },
+    30: {
+        "type": "param",
+        "sections": [
+            ("HM Consumption",      "kg/tcs", [("SMS-1", "specific_hm_consumption"),   ("SMS-2", "specific_hm_consumption")]),
+            ("Scrap Consumption",   "kg/tcs", [("SMS-1", "specific_scrap_consumption"), ("SMS-2", "specific_scrap_consumption")]),
+            ("Average Blows/Day",   "Nos",    [("SMS-1", "average_blows_per_day"),      ("SMS-2", "average_blows_per_day")]),
+            ("Average Heat Weight", "t",      [("SMS-1", "average_heat_weight"),        ("SMS-2", "average_heat_weight")]),
+            ("Average Lining Life", "heats",  [("SMS-1", "average_lining_life"),        ("SMS-2", "average_lining_life")]),
+            ("Fe-Mn Consumption",   "kg/t",   [("SMS-1", "fe-mn"),  ("SMS-2", "fe-mn")]),
+            ("Fe-Si Consumption",   "kg/t",   [("SMS-1", "fe-si"),  ("SMS-2", "fe-si")]),
+            ("Si-Mn Consumption",   "kg/t",   [("SMS-1", "si-mn"),  ("SMS-2", "si-mn")]),
+            ("Oxygen Blowing",      "NM3/t",  [("SMS-1", "oxygen_blowing"),  ("SMS-2", "oxygen_blowing")]),
+            ("Caster Yield",        "%",      [("SMS-1", "caster_yield"),    ("SMS-2", "caster_yield")]),
+        ],
+    },
+    # Mill pages: sections = mill-unit, rows = params for that plant
+    31: {"type": "mill", "plant": "BSP", "sections": []},
+    32: {"type": "mill", "plant": "DSP", "sections": []},
+    33: {
+        "type": "mill",
+        "plant": "RSP",
+        "sections": [
+            ("PM", [
+                ("Yield Prime",       "yield_prime",               "%"),
+                ("Yield Total",       "yield_total",               "%"),
+                ("Avg Slab Weight",   "average_slab_weight",       "t"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+                ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+            ]),
+            ("NPM", [
+                ("Yield Prime",       "yield_prime",               "%"),
+                ("Yield Total",       "yield_total",               "%"),
+                ("Avg Slab Weight",   "average_slab_weight",       "t"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+                ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+            ]),
+            ("HSM-2", [
+                ("HR Coil Yield",     "yield_total",                  "%"),
+                ("Avg Slab Weight",   "average_slab_weight",          "t"),
+                ("Availability",      "availability",                 "%"),
+                ("Utilisation",       "utilisation",                  "%"),
+                ("Rolling Rate",      "rolling_rate",                 "t/hr"),
+                ("RH Fce Avail.",     "average_furnace_availability", "Nos/day"),
+                ("Sp. Power Consmn.", "specific_power_consumption",   "kWh/t"),
+            ]),
+            ("SSM", [
+                ("Yield",             "yield",            "%"),
+                ("Acid Consumption",  "acid_consumption", "kg/t"),
+                ("Availability",      "availability",     "%"),
+                ("Utilisation",       "utilisation",      "%"),
+                ("Rolling Rate",      "rolling_rate",     "t/hr"),
+            ]),
+            ("SWP", [
+                ("Yield",             "yield",        "%"),
+                ("Availability",      "availability", "%"),
+                ("Utilisation",       "utilisation",  "%"),
+                ("Rolling Rate",      "rolling_rate", "t/hr"),
+            ]),
+            ("ERW", [
+                ("Yield",             "yield",        "%"),
+                ("Availability",      "availability", "%"),
+                ("Utilisation",       "utilisation",  "%"),
+                ("Rolling Rate",      "rolling_rate", "t/hr"),
+            ]),
+        ],
+    },
+    34: {"type": "mill", "plant": "BSL", "sections": []},
+    35: {"type": "mill", "plant": "ISP", "sections": []},
+}
+
+
+def generate_techno_from_db(report_month: str, page_no: int) -> dict:
+    """
+    Generate techno pages 28-35 from techno_data.
+    FY columns use till_month from March of each past FY.
+    """
+    import json as _json
+
+    if page_no not in TECHNO_PAGES or page_no not in _TECHNO_DB_SCHEMA:
+        return {}
+
+    group, title, subtitle = TECHNO_PAGES[page_no]
+    cfg = _TECHNO_DB_SCHEMA[page_no]
+
+    fy         = _fy_start(report_month)
+    ytd        = db.get_ytd_months(report_month)
+    cply_month = db.get_cply_month(report_month)
+    fy1_march  = f"{fy}-03"
+    fy2_march  = f"{fy - 1}-03"
+    fy3_march  = f"{fy - 2}-03"
+
+    all_months = sorted(set(ytd) | {cply_month, fy1_march, fy2_march, fy3_march})
+
+    store = {}
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    try:
+        ph = ",".join("?" * len(all_months))
+        cur.execute(
+            f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
+            all_months,
+        )
+        for plant, rm, unit, tj in cur.fetchall():
+            store.setdefault((plant, rm), {})[unit] = _json.loads(tj)
+    finally:
+        conn.close()
+
+    _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+    available_plants = sorted(
+        {p for (p, rm) in store if rm == report_month},
+        key=lambda p: _PLANT_ORDER.index(p) if p in _PLANT_ORDER else 99,
+    )
+
+    def _gv(plant, rm, unit, key, period="month"):
+        return store.get((plant, rm), {}).get(unit, {}).get(period, {}).get(key)
+
+    def _make_row(label, unit_str, plant, src_unit, src_key):
+        return {
+            "label":    label,
+            "unit":     unit_str,
+            "fy3":      _fmt(_gv(plant, fy3_march,    src_unit, src_key, "till_month")),
+            "fy2":      _fmt(_gv(plant, fy2_march,    src_unit, src_key, "till_month")),
+            "fy1":      _fmt(_gv(plant, fy1_march,    src_unit, src_key, "till_month")),
+            "target":   "",
+            "months":   [_fmt(_gv(plant, m, src_unit, src_key)) for m in ytd],
+            "cply":     _fmt(_gv(plant, cply_month,   src_unit, src_key)),
+            "cum":      _fmt(_gv(plant, report_month, src_unit, src_key, "till_month")),
+            "cum_cply": _fmt(_gv(plant, cply_month,   src_unit, src_key, "till_month")),
+        }
+
+    sections = []
+
+    if cfg["type"] == "param":
+        # sections = parameters, rows = available plant×unit combos
+        multi_plant = len(available_plants) > 1
+        for (sec_label, unit_str, unit_specs) in cfg["sections"]:
+            rows = []
+            for (src_unit, src_key) in unit_specs:
+                for plant in available_plants:
+                    if store.get((plant, report_month), {}).get(src_unit) is None:
+                        continue
+                    label = f"{plant} {src_unit}" if multi_plant else src_unit
+                    rows.append(_make_row(label, unit_str, plant, src_unit, src_key))
+            if rows:
+                sections.append({"label": sec_label, "rows": rows})
+
+    elif cfg["type"] == "mill":
+        # sections = mill units, rows = params for that fixed plant
+        plant = cfg.get("plant", "RSP")
+        for (src_unit, param_specs) in cfg.get("sections", []):
+            if store.get((plant, report_month), {}).get(src_unit) is None:
+                continue
+            rows = []
+            for (param_label, src_key, unit_str) in param_specs:
+                # include row if current month or any FY has a value
+                has_val = any(
+                    _gv(plant, rm, src_unit, src_key, p) is not None
+                    for rm in [report_month, fy1_march, fy2_march, fy3_march]
+                    for p in ["month", "till_month"]
+                )
+                if has_val:
+                    rows.append(_make_row(param_label, unit_str, plant, src_unit, src_key))
+            if rows:
+                sections.append({"label": src_unit, "rows": rows})
+
+    return {
+        "title":          title,
+        "subtitle":       subtitle,
+        "variant":        "techno_params",
+        "group":          group,
+        "fy3_label":      _fy_label(fy - 3),
+        "fy2_label":      _fy_label(fy - 2),
+        "fy1_label":      _fy_label(fy - 1),
+        "target_label":   f"Target {_fy_label(fy)}",
+        "month_labels":   [_mlabel(m) for m in ytd],
+        "cply_label":     _mlabel(cply_month),
+        "cum_label":      _cum_label(ytd),
+        "cum_cply_label": _cum_label([db.get_cply_month(m) for m in ytd]),
+        "sections":       sections,
+    }

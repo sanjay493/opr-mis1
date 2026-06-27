@@ -21,12 +21,43 @@ from page_segment_wise import generate_segment_wise
 from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, generate_special_steel_isp_sail
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
-from page_techno import generate_techno, TECHNO_PAGES, generate_summary_te_table, generate_summary_chart_data, compute_sail_targets
+from page_techno import (generate_techno, TECHNO_PAGES, generate_summary_te_table,
+                          generate_summary_chart_data, compute_sail_targets,
+                          generate_major_techno_from_db, generate_techno_from_db)
 from page_records import generate_records
+
+def _safe_te_table(month):
+    try:
+        return generate_summary_te_table(month)
+    except Exception:
+        return []
+
+def _safe_chart_data(month):
+    try:
+        return generate_summary_chart_data(month)
+    except Exception:
+        return {}
+
+def _safe_techno(month, pg):
+    try:
+        return generate_techno(month, pg)
+    except Exception:
+        if pg == 27:
+            try:
+                return generate_major_techno_from_db(month)
+            except Exception:
+                pass
+        elif 28 <= pg <= 35:
+            try:
+                return generate_techno_from_db(month, pg)
+            except Exception:
+                pass
+        return {}
 from pdf import build_pdf_response
 from layout_loader import load_layout_config
-from api_techno_json import router as techno_json_router
 from api_file_upload import router as upload_router
+from api_rsp_techno import router as rsp_techno_router
+from api_bsp_techno import router as bsp_techno_router
 
 db.init_db()
 
@@ -65,11 +96,12 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-# Include JSON-based techno data router
-app.include_router(techno_json_router)
-
 # Include file upload router
 app.include_router(upload_router)
+
+# Include RSP and BSP Technopara routers
+app.include_router(rsp_techno_router)
+app.include_router(bsp_techno_router)
 
 # Serve dashboard
 @app.get("/dashboard")
@@ -129,8 +161,8 @@ def get_data(month: str = "2025-11"):
                 if page.get("page") == 3 or page.get("type") == "summary":
                     for row in page.get("production_table", []):
                         row["values"] = compute_item_row(month, row.get("item"))
-                    page["te_table"] = generate_summary_te_table(month)
-                    page["chart_data"] = generate_summary_chart_data(month)
+                    page["te_table"] = _safe_te_table(month)
+                    page["chart_data"] = _safe_chart_data(month)
                 if page.get("page") == 4 or page.get("type") == "page4_table":
                     page["rows"] = generate_page4_rows(month)
                 if page.get("page") == 5:
@@ -226,7 +258,7 @@ def get_data(month: str = "2025-11"):
                 page.update(generate_ipt(month))
                 page["type"] = "ipt_status"
             if pg in TECHNO_PAGES:
-                page.update(generate_techno(month, pg))
+                page.update(_safe_techno(month, pg))
                 page["type"] = "techno_params"
 
         return pages_config
@@ -285,7 +317,7 @@ async def generate_pdf(request: PDFRequest):
         p = page.dict()
         pg = p.get("page", 0)
         if pg == 3 or p.get("type") == "summary":
-            p["te_table"] = generate_summary_te_table(request.month)
+            p["te_table"] = _safe_te_table(request.month)
         if pg == 13:
             concast = generate_concast_data(request.month)
             p["monthly"] = concast["monthly"]
@@ -328,7 +360,7 @@ async def generate_pdf(request: PDFRequest):
             p.update(generate_ipt(request.month))
             p["type"] = "ipt_status"
         if pg in TECHNO_PAGES:
-            p.update(generate_techno(request.month, pg))
+            p.update(_safe_techno(request.month, pg))
             p["type"] = "techno_params"
         enriched.append(p)
     # Layout and typography now come from backend layout_config.json only; ignore frontend overrides

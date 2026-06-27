@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: {},
+  turbopack: {
+    // Restrict Turbopack's workspace root to this directory only.
+    // Without this, Turbopack walks up to H:\opr-mis1 (where the Playwright
+    // package-lock.json lives) and scans the entire Python backend folder,
+    // causing 60-second compiles and Rust OOM crashes.
+    root: '.',
+  },
   allowedDevOrigins: ['192.168.1.7', 'localhost', '127.0.0.1'],
   async rewrites() {
     return [
