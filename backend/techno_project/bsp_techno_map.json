@@ -1,0 +1,110 @@
+{
+  "_comment": "BSP 3-page-Tech.xlsx row map. Sheet=Sheet1. Row 4 cols D-O = Apr-Mar, Col P = ACTUAL (cum). Row 3 Col A = month name. Edit row numbers to match your actual file.",
+
+  "COB": {
+    "bf_coke_yield":            37,
+    "crude_tar_yield":          38,
+    "ammonium_sulphate_yield":  39,
+    "crude_benzol_yield":       40
+  },
+
+  "SP-2": {
+    "machine_availability":     45,
+    "machine_utilisation":      46,
+    "specific_productivity":    48,
+    "basicity":                 49
+  },
+
+  "SP-3": {
+    "machine_availability":     51,
+    "machine_utilisation":      52,
+    "specific_productivity":    54,
+    "basicity":                 55
+  },
+
+  "BF_Shop": {
+    "sinter% in burden":        58,
+    "coke_rate":                59,
+    "coke_screen_loss":         60,
+    "cdi":                      68,
+    "slag_rate":                69,
+    "nut_coke_rate":            70,
+    "bf_productivity":          67
+  },
+
+  "BF-7": {
+    "bf_productivity":          65
+  },
+
+  "BF-8": {
+    "bf_productivity":          66
+  },
+
+  "SMS-2": {
+    "specific_hm_consumption":       76,
+    "specific_scrap_consumption":    77,
+    "tmi":                           78
+  },
+
+  "SMS-3": {
+    "specific_hm_consumption":       90,
+    "specific_scrap_consumption":    91,
+    "tmi":                           92
+  },
+
+  "RSM": {
+    "yield":              97,
+    "rolling_rate":       98,
+    "availability":       99,
+    "utilisation":       100,
+    "heat_consumption":  137,
+    "power_consumption": 153
+  },
+
+  "URM": {
+    "yield":             103,
+    "rolling_rate":      104,
+    "availability":      105,
+    "utilisation":       106,
+    "heat_consumption":  138,
+    "power_consumption": 154
+  },
+
+  "MM": {
+    "yield":             109,
+    "rolling_rate":      110,
+    "availability":      111,
+    "utilisation":       112,
+    "heat_consumption":  139,
+    "power_consumption": 155
+  },
+
+  "WRM": {
+    "yield":             115,
+    "rolling_rate":      116,
+    "availability":      117,
+    "utilisation":       118,
+    "heat_consumption":  140,
+    "power_consumption": 156
+  },
+
+  "BRM": {
+    "yield":             121,
+    "rolling_rate":      122,
+    "availability":      123,
+    "utilisation":       124
+  },
+
+  "PM": {
+    "yield":             127,
+    "rolling_rate":      128,
+    "availability":      130,
+    "utilisation":       131,
+    "heat_consumption":  141,
+    "power_consumption": 157
+  },
+
+  "General": {
+    "specific_energy_consumption": 161
+  }
+}

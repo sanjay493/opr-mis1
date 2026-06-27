@@ -3,23 +3,42 @@ from pathlib import Path
 from openpyxl import load_workbook
 from typing import Dict, List
 
+_MONTH_ABBRS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
+_MONTH_NUM_TO_ABBR = {
+    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+    7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'
+}
+_MONTH_ABBR_TO_NUM = {
+    'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+    'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+}
+_NEXT_YEAR_MONTHS = {'Jan', 'Feb', 'Mar'}
+
 
 class TechnoExtractor:
-    def __init__(self, excel_file: str):
+    def __init__(self, excel_file: str, report_month: str = None):
+        """
+        Args:
+            excel_file: Path to the RSP technopara Excel file.
+            report_month: Report month in YYYY-MM format (e.g. "2026-05").
+                         When provided, the matching month column is read directly.
+                         When None, auto-detects the last filled month column.
+        """
         self.excel_file = Path(excel_file)
+        self.report_month = report_month  # YYYY-MM or None
         self.workbook = None
         self.ws = None
-        self.report_month = None
         self.month_col = None
         self.cum_col = None
-        self.hardcoded_map = self.load_hardcoded_map()
+        self.hardcoded_map = self._load_hardcoded_map()
 
-    def load_hardcoded_map(self) -> Dict:
+    def _load_hardcoded_map(self) -> Dict:
+        map_path = Path(__file__).parent / "hardcoded_map.json"
         try:
-            with open("hardcoded_map.json", "r", encoding="utf-8") as f:
+            with open(map_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except FileNotFoundError:
-            print("Error: hardcoded_map.json not found!")
+            print(f"Error: hardcoded_map.json not found at {map_path}!")
             return {}
 
     def open_workbook(self):
@@ -32,43 +51,77 @@ class TechnoExtractor:
             norm = sheet.lower().replace(" ", "").replace("-", "")
             if norm in ["page18", "page1-8", "page-1-8"]:
                 self.ws = self.workbook[sheet]
-                print(f"✅ Loaded sheet: {sheet}")
+                print(f"Loaded sheet: {sheet}")
                 return
-        raise Exception("Sheet not found.")
+        raise Exception("Sheet 'page1-8' (or 'page18') not found in workbook.")
 
     def detect_month_column(self):
-        header = [str(c.value).strip() if c.value else "" for c in self.ws[3]]
-        months = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
+        """Find the month column and cumulative column in row 3.
 
-        for month in months:
-            if month not in header:
-                continue
-            col = header.index(month)
-            valid = sum(1 for r in range(5, 40) if isinstance(self.ws.cell(r + 1, col + 1).value, (int, float)))
-            if valid > 5:
-                self.month_col = col
-                break
+        If report_month was provided, seeks that specific month's column.
+        Otherwise falls back to the last month column that has valid numeric data.
+        """
+        header = [str(c.value).strip() if c.value else "" for c in self.ws[3]]
+
+        if self.report_month:
+            try:
+                month_num = int(self.report_month.split('-')[1])
+                target_abbr = _MONTH_NUM_TO_ABBR.get(month_num)
+                if target_abbr and target_abbr in header:
+                    self.month_col = header.index(target_abbr)
+            except (ValueError, IndexError, AttributeError):
+                pass
 
         if self.month_col is None:
-            raise Exception("Cannot detect report month")
+            # Scan in reverse order (Mar -> Apr) to find the last filled month
+            for abbr in reversed(_MONTH_ABBRS):
+                if abbr not in header:
+                    continue
+                col = header.index(abbr)
+                valid = sum(
+                    1 for r in range(5, 40)
+                    if isinstance(self.ws.cell(r + 1, col + 1).value, (int, float))
+                )
+                if valid > 5:
+                    self.month_col = col
+                    break
+
+        if self.month_col is None:
+            raise Exception("Cannot detect report month column in row 3")
+
+        if "Cum." not in header:
+            raise Exception("Cannot find 'Cum.' column in row 3")
         self.cum_col = header.index("Cum.")
 
     def detect_report_month(self):
+        """Auto-detect report month from FY cell + detected column.
+        Only used when report_month was not provided externally.
+        """
+        if self.report_month:
+            return
+
         try:
             fy = str(self.ws["AM2"].value)
             start_year = int(fy.split("-")[0])
-        except:
+        except Exception:
             start_year = 2026
-        # Assuming current month is Apr for now
-        self.report_month = f"{start_year}04"
+
+        header = [str(c.value).strip() if c.value else "" for c in self.ws[3]]
+        detected_abbr = _MONTH_ABBRS[0]  # Apr default
+        if self.month_col is not None and self.month_col < len(header):
+            detected_abbr = header[self.month_col]
+
+        month_num = _MONTH_ABBR_TO_NUM.get(detected_abbr, 4)
+        year = start_year + (1 if detected_abbr in _NEXT_YEAR_MONTHS else 0)
+        self.report_month = f"{year}-{month_num:02d}"
 
     def extract(self) -> List[Dict]:
         self.load_sheet()
         self.detect_month_column()
-        self.detect_report_month()
+        if not self.report_month:
+            self.detect_report_month()
 
         records = []
-
         print("\n--- Starting Hardcoded Extraction ---\n")
 
         for unit_name, params in self.hardcoded_map.items():
@@ -76,29 +129,36 @@ class TechnoExtractor:
 
             for param_key, row_num in params.items():
                 try:
-                    row = list(self.ws.iter_rows(min_row=row_num, max_row=row_num, values_only=True))[0]
+                    row = list(self.ws.iter_rows(
+                        min_row=row_num, max_row=row_num, values_only=True
+                    ))[0]
 
                     month_val = row[self.month_col] if self.month_col < len(row) else None
-                    till_val = row[self.cum_col] if self.cum_col and self.cum_col < len(row) else None
+                    till_val = (
+                        row[self.cum_col]
+                        if self.cum_col is not None and self.cum_col < len(row)
+                        else None
+                    )
 
-                    if month_val in ("#DIV/0!", "#VALUE!", "-", "--", None):
+                    _bad = {"#DIV/0!", "#VALUE!", "-", "--", None, ""}
+                    if month_val in _bad or (isinstance(month_val, str) and not month_val.strip()):
                         month_val = None
-                    if till_val in ("#DIV/0!", "#VALUE!", "-", "--", None):
+                    if till_val in _bad or (isinstance(till_val, str) and not till_val.strip()):
                         till_val = None
 
                     techno["month"][param_key] = month_val
                     techno["till_month"][param_key] = till_val
                 except Exception as e:
-                    print(f"Warning: Could not read row {row_num} for {param_key}")
+                    print(f"Warning: Could not read row {row_num} for {param_key}: {e}")
 
-            if techno["month"]:
+            if any(v is not None for v in techno["month"].values()):
                 records.append({
                     "report_month": self.report_month,
                     "plant": "RSP",
                     "unit": unit_name,
-                    "techno_json": techno
+                    "techno_json": techno,
                 })
                 print(f"  Extracted: {unit_name}")
 
-        print(f"\n✅ Extraction Completed. Total Records: {len(records)}")
+        print(f"\nExtraction Completed. Total Records: {len(records)}")
         return records

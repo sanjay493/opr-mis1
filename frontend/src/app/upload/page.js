@@ -336,6 +336,86 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
   );
 }
 
+function RspTechnoPreviewTable({ preview }) {
+  const [openUnit, setOpenUnit] = useState(null);
+
+  if (!preview || !preview.records?.length) return null;
+
+  const totalParams = preview.records.reduce(
+    (s, r) => s + Object.keys(r.techno_json?.month || {}).length, 0
+  );
+
+  return (
+    <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #10b981', borderRadius: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+        <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+          RSP Technopara Preview
+          <span style={{ fontSize: '8.5pt', color: '#94a3b8', fontWeight: 400, marginLeft: 10 }}>
+            {preview.report_month} · {preview.source_file}
+          </span>
+        </h3>
+        <span style={{ fontSize: '8.5pt', color: '#10b981', fontWeight: 600 }}>
+          {preview.units_extracted} units · {totalParams} parameters
+        </span>
+      </div>
+
+      {preview.records.map((rec) => {
+        const monthData = rec.techno_json?.month || {};
+        const tillData = rec.techno_json?.till_month || {};
+        const params = Object.keys(monthData);
+        const isOpen = openUnit === rec.unit;
+        const nonNullCount = params.filter(p => monthData[p] != null && monthData[p] !== '').length;
+
+        return (
+          <div key={rec.unit} style={{ marginBottom: 6, border: '1px solid #334155', borderRadius: 5, overflow: 'hidden' }}>
+            <button
+              onClick={() => setOpenUnit(isOpen ? null : rec.unit)}
+              style={{
+                width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '7px 12px', background: isOpen ? '#1e3a5f' : '#0f172a',
+                color: '#f1f5f9', border: 'none', cursor: 'pointer', fontSize: '9pt', fontWeight: 600,
+              }}
+            >
+              <span>{rec.unit}</span>
+              <span style={{ color: '#94a3b8', fontSize: '8pt', fontWeight: 400 }}>
+                {nonNullCount}/{params.length} values &nbsp;{isOpen ? '▲' : '▼'}
+              </span>
+            </button>
+
+            {isOpen && (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#0f172a' }}>
+                      <th style={{ padding: '5px 12px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', minWidth: 180 }}>Parameter</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', color: '#60a5fa', fontWeight: 600, borderBottom: '1px solid #334155', minWidth: 90 }}>Month</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', minWidth: 90 }}>Cumulative</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {params.map((param, idx) => {
+                      const mv = monthData[param];
+                      const tv = tillData[param];
+                      const fmt = v => (v != null && v !== '') ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—';
+                      return (
+                        <tr key={param} style={{ backgroundColor: idx % 2 ? '#16242e' : '#0f172a', borderBottom: '1px solid #1e293b' }}>
+                          <td style={{ padding: '4px 12px', color: '#38bdf8', fontWeight: 500 }}>{param}</td>
+                          <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: mv != null ? '#e2e8f0' : '#475569' }}>{fmt(mv)}</td>
+                          <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: tv != null ? '#94a3b8' : '#475569' }}>{fmt(tv)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function UploadPage() {
   const defaultDate = getDefaultDate();
   const [uploadMode, setUploadMode] = useState('preview'); // 'preview' | 'plan'
@@ -360,6 +440,8 @@ export default function UploadPage() {
   const [isPlanBusy, setIsPlanBusy] = useState(false);
   const [ssRows, setSsRows] = useState([]);       // editable copy of special_steel_rows
   const [isTechnoBusy, setIsTechnoBusy] = useState(false);
+  const [isRspTechnoBusy, setIsRspTechnoBusy] = useState(false);
+  const [rspTechnoPreview, setRspTechnoPreview] = useState(null);
 
   // ASP PDF state (single-step auto-detect: REP or FL file)
   const [aspResult, setAspResult] = useState(null);
@@ -704,6 +786,7 @@ export default function UploadPage() {
 
   // ── ASP PDF handlers ────────────────────────────────────────────────────
   const isAspPdf = technoPlant === 'ASP';
+  const isRspTechno = technoPlant === 'RSP_TECHNO';
 
   const handleAspExtract = async (e) => {
     e.preventDefault();
@@ -798,6 +881,60 @@ export default function UploadPage() {
       const named = name.trim() !== '';
       return { ...r, item_edit: name, selected: named ? (r.selected || r.status !== 'ok') : false };
     }));
+
+  // ── RSP Technopara handlers ─────────────────────────────────────────────
+  const handleRspTechnoExtract = async (e) => {
+    e.preventDefault();
+    if (!technoFile) { alert('Please select the RSP Technopara Excel file first.'); return; }
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    setIsRspTechnoBusy(true);
+    setRspTechnoPreview(null);
+    setLogs([]);
+    addLog('info', `RSP Technopara: extracting ${technoFile.name} for ${targetPeriod}...`);
+    const formData = new FormData();
+    formData.append('file', technoFile);
+    formData.append('report_month', targetPeriod);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/rsp-techno/preview`, { method: 'POST', body: formData });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || 'Extraction failed');
+      addLog('success', `Preview ready: ${result.units_extracted} units, ${result.total_params} parameters for ${targetPeriod}. Review below, then Insert.`);
+      setRspTechnoPreview(result);
+    } catch (err) {
+      addLog('error', `RSP Technopara extraction failed: ${err.message}`);
+    } finally {
+      setIsRspTechnoBusy(false);
+    }
+  };
+
+  const handleRspTechnoInsert = async () => {
+    if (!rspTechnoPreview) return;
+    setIsRspTechnoBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/rsp-techno/insert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          report_month: rspTechnoPreview.report_month,
+          source_file: rspTechnoPreview.source_file,
+          records: rspTechnoPreview.records,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || 'Insert failed');
+      addLog('success', result.message);
+      addLog('success', 'View at: Data Entry → Techno → RSP Techno Excel Extract.');
+      setRspTechnoPreview(null);
+      setTechnoFile(null);
+      const fi = document.getElementById('techno-file-input');
+      if (fi) fi.value = '';
+      fetchExtractionLog();
+    } catch (err) {
+      addLog('error', `RSP Technopara insert failed: ${err.message}`);
+    } finally {
+      setIsRspTechnoBusy(false);
+    }
+  };
 
   // ── DSP PDF three-step helpers ──────────────────────────────────────────
   const isDspPdf = technoPlant === 'DSP' && technoFile?.name?.toLowerCase().endsWith('.pdf');
@@ -1136,7 +1273,8 @@ export default function UploadPage() {
                 <label>Plant Source</label>
                 <select className="form-control" value={technoPlant}
                         onChange={(e) => setTechnoPlant(e.target.value)}>
-                  <option value="RSP">RSP (Excel)</option>
+                  <option value="RSP">RSP (Excel — production / general)</option>
+                  <option value="RSP_TECHNO">RSP Technopara (page1-8 Excel)</option>
                   <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
                   <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
                   <option value="BSP">BSP (PPC MIS Month-End .xls / Techno / OISCO / Special Steel .xlsx)</option>
@@ -1161,7 +1299,8 @@ export default function UploadPage() {
               </div>
               <div className="form-group" style={{ marginBottom: '15px' }}>
                 <label>
-                  {technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
+                  {technoPlant === 'RSP_TECHNO' ? 'RSP Technopara Excel (.xlsx — sheet: page1-8)'
+                    : technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
                     : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
                     : technoPlant === 'BSP' ? 'BSP File (.xls Month-End PPC MIS or .xlsx Techno/OISCO/SS)'
                     : technoPlant === 'BSL' ? 'BSL — DPR Mail (.xlsx) or Techno (.xls) or Corporate SS (.xlsx) or BF Performance PDF (.pdf)'
@@ -1176,7 +1315,9 @@ export default function UploadPage() {
                        suppressHydrationWarning
                        onChange={(e) => setTechnoFile(e.target.files[0])} />
                 <div style={{ fontSize: '7.5pt', color: '#fbbf24', marginTop: '4px' }}>
-                  {technoPlant === 'DSP'
+                  {technoPlant === 'RSP_TECHNO'
+                    ? 'RSP Technopara monthly Excel (e.g. technoparaMay2026.xlsx). Sheet must be named page1-8. Extracts BF, SMS, Sinter, Coke oven & General params unit-wise into techno_data table. Select the report month above first.'
+                    : technoPlant === 'DSP'
                     ? 'OMI PDF: production + special steel + techno. MCR-I .xls: 21 production items. Month auto-detected.'
                     : technoPlant === 'ISP'
                     ? 'Morning Report (DAILYREPORT1): ~19 items, month from K5. Final Monthly: ~17 items, set month above. Summarized Monthly (B-FCE): ~37 techno params.'
@@ -1230,6 +1371,13 @@ export default function UploadPage() {
                                  backgroundColor: '#0ea5e9', border: '1px solid #0ea5e9', color: '#fff',
                                  cursor: aspBusy ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
                   {aspBusy ? 'Extracting ASP PDF...' : 'Extract ASP PDF (REP / FL)'}
+                </button>
+              ) : isRspTechno ? (
+                <button type="button" onClick={handleRspTechnoExtract} disabled={isRspTechnoBusy}
+                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                 backgroundColor: '#10b981', border: '1px solid #10b981', color: '#fff',
+                                 cursor: isRspTechnoBusy ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                  {isRspTechnoBusy ? 'Extracting...' : 'Extract & Save RSP Technopara'}
                 </button>
               ) : (
                 <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
@@ -1406,6 +1554,32 @@ export default function UploadPage() {
               </div>
             </div>
           )}
+
+          {/* RSP Technopara preview summary + insert controls */}
+          {rspTechnoPreview && (
+            <div>
+              <div style={{ fontSize: '9pt', color: '#94a3b8', marginBottom: 10 }}>
+                <strong style={{ color: '#10b981' }}>RSP Technopara</strong> · {rspTechnoPreview.report_month}
+                <div style={{ marginTop: 4, color: '#64748b' }}>
+                  {rspTechnoPreview.units_extracted} units · {rspTechnoPreview.total_params} parameters
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                <button onClick={handleRspTechnoInsert} disabled={isRspTechnoBusy}
+                        style={{ flex: 1, padding: '7px 0', fontSize: '8.5pt', fontWeight: 700,
+                                 backgroundColor: '#10b981', border: 'none', color: '#fff',
+                                 borderRadius: 4, cursor: 'pointer' }}>
+                  {isRspTechnoBusy ? 'Saving...' : `Save ${rspTechnoPreview.units_extracted} units to DB`}
+                </button>
+                <button onClick={() => { setRspTechnoPreview(null); }}
+                        disabled={isRspTechnoBusy}
+                        style={{ padding: '7px 14px', fontSize: '8.5pt', background: 'none',
+                                 border: '1px solid #64748b', color: '#94a3b8', borderRadius: 4, cursor: 'pointer' }}>
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#64748b', textAlign: 'center', paddingTop: '15px' }}>
@@ -1554,6 +1728,11 @@ export default function UploadPage() {
               </div>
             );
           })()}
+
+          {/* RSP Technopara preview — unit-wise techno params before DB insert */}
+          {rspTechnoPreview && (
+            <RspTechnoPreviewTable preview={rspTechnoPreview} />
+          )}
 
           {/* RSP extraction preview — verify production + techno before insertion */}
           {technoPreview && (

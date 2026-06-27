@@ -115,68 +115,8 @@ def init_db():
         )
     """)
 
-    # 8. Techno parameter master — normalised single-source (replaces techno_param_master).
-    #    param_name : canonical parameter name ("Coke Rate", "Coal to Hot Metal")
-    #    row_label  : entity label ("BSP", "BSP Plant Shop", "BSL BF-3", "BSP Merchant Mill")
-    #    Migrate once: rename old techno_* tables to _old_* on first run.
-    cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='techno_param'"
-    )
-    if not cursor.fetchone():
-        # One-time migration: rename legacy tables so new schema can be created clean.
-        for _old in ("techno_param_master", "techno_table", "techno_monthly", "techno_target",
-                     "plant_units", "techno_param_types"):
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (_old,)
-            )
-            if cursor.fetchone():
-                cursor.execute(f"ALTER TABLE {_old} RENAME TO _old_{_old}")
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_param (
-            param_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            param_name TEXT NOT NULL,
-            row_label  TEXT NOT NULL,
-            unit       TEXT DEFAULT '',
-            sort_order INTEGER DEFAULT 0,
-            UNIQUE(param_name, row_label)
-        )
-    """)
-
-    # 8b. Group membership (many-to-many param ↔ page group)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_param_group (
-            param_id   INTEGER NOT NULL REFERENCES techno_param(param_id),
-            group_code TEXT NOT NULL,
-            sort_order INTEGER DEFAULT 0,
-            PRIMARY KEY(param_id, group_code)
-        )
-    """)
-
-    # 9. Techno monthly actuals (replaces techno_table + techno_monthly)
-    #    actual            : monthly value only
-    #    till_month_actual : plant-reported Apr→month cumulative; NULL = compute on fly
-    #    source            : 'manual' | 'excel'
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_actuals (
-            report_month      TEXT NOT NULL,
-            param_id          INTEGER NOT NULL REFERENCES techno_param(param_id),
-            actual            REAL,
-            till_month_actual REAL,
-            source            TEXT DEFAULT 'manual',
-            PRIMARY KEY(report_month, param_id)
-        )
-    """)
-
-    # 10. Techno annual targets per FY ('2026-27')
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_target (
-            fy       TEXT,
-            param_id INTEGER REFERENCES techno_param(param_id),
-            target   REAL,
-            PRIMARY KEY (fy, param_id)
-        )
-    """)
+    # (techno_param, techno_param_group, techno_actuals, techno_target removed —
+    #  replaced by techno_data and the JSON-based techno tables)
 
     # 11a. User-defined PDF label → item_name aliases (learned from preview edits)
     cursor.execute("""
@@ -203,253 +143,22 @@ def init_db():
         )
     """)
 
-    # 12. NEW: Techno Furnace-wise Data (JSON-based)
+    # 12. Technopara data — all plants (BSP, DSP, RSP, BSL, ISP), unit-wise JSON
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_furnace_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            plant TEXT NOT NULL,                    -- "BSP", "DSP", "RSP", "BSL", "ISP"
-            furnace TEXT NOT NULL,                  -- "BF-1", "BF-2", "SMS-1", etc.
-            report_month TEXT NOT NULL,             -- "2026-06" (YYYY-MM)
-
-            data JSON NOT NULL,                     -- {param: {value, unit, source, ...}}
-
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-            UNIQUE(plant, furnace, report_month)
-        )
-    """)
-
-    # 13. NEW: Techno Plant-level Consolidated Data (JSON-based)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_plant_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            plant TEXT NOT NULL,                    -- "BSP", "DSP", "RSP", "BSL", "ISP"
-            report_month TEXT NOT NULL,             -- "2026-06" (YYYY-MM)
-
-            data JSON NOT NULL,                     -- {param: {value, unit, calculation_method, ...}}
-            calculation_details JSON,               -- {param: {formula, furnaces_used, total_weight, ...}}
-
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-            UNIQUE(plant, report_month)
-        )
-    """)
-
-    # 14. NEW: SAIL Consolidated Data (JSON-based)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_sail_consolidated (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_month TEXT NOT NULL UNIQUE,     -- "2026-06" (YYYY-MM)
-
-            data JSON NOT NULL,                     -- {param: value}
-            calculation_method JSON,                -- {param: "SAIL_direct" | "avg_5_plants"}
-
-            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # 15. NEW: Production Actuals (JSON-based) — replaces production_table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS production_data_json (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_month TEXT NOT NULL,
-            data TEXT NOT NULL,                     -- JSON: {plant_name: {item_name: value}}
-            source TEXT DEFAULT 'excel',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(report_month)
-        )
-    """)
-
-    # 16. NEW: Production Plans (JSON-based) — replaces production_plan_table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS production_plan_json (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_month TEXT NOT NULL,
-            data TEXT NOT NULL,                     -- JSON: {plant_name: {item_name: value}}
-            source TEXT DEFAULT 'excel',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(report_month)
-        )
-    """)
-
-    # 17. NEW: Special Steel Orders (JSON-based) — replaces special_steel_orders (partial)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS special_steel_json (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_month TEXT NOT NULL,
-            data TEXT NOT NULL,                     -- JSON: {plant: [{product, grade, section, sort_order, qty, dispatch}]}
-            source TEXT DEFAULT 'excel',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(report_month)
-        )
-    """)
-
-    # 18. NEW: Stock Data (JSON-based) — replaces stock_table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS stock_data_json (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            stock_month TEXT NOT NULL,
-            data TEXT NOT NULL,                     -- JSON: {plant: {item_type: {stock_type: value}}}
-            source TEXT DEFAULT 'excel',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(stock_month)
-        )
-    """)
-
-    # 19. NEW: Inter-Plant Transfer Data (JSON-based) — replaces ipt_table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ipt_data_json (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_month TEXT NOT NULL,
-            data TEXT NOT NULL,                     -- JSON: {item: [{from_plant, to_plant, unit, sort_order, plan, actual, plan_tonnage, actual_tonnage}]}
-            source TEXT DEFAULT 'excel',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(report_month)
+        CREATE TABLE IF NOT EXISTS techno_data (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            plant        TEXT NOT NULL,   -- "BSP", "DSP", "RSP", "BSL", "ISP"
+            report_month TEXT NOT NULL,   -- "2026-05" (YYYY-MM)
+            unit         TEXT NOT NULL,   -- "BF-1", "BF_Shop", "SMS-1", "COB-old", etc.
+            techno_json  TEXT NOT NULL,   -- {"month": {param_key: value}, "till_month": {param_key: value}}
+            source_file  TEXT DEFAULT '',
+            created_at   TEXT,
+            UNIQUE(plant, report_month, unit)
         )
     """)
 
     conn.commit()
     conn.close()
-
-# ============================================================================
-# JSON-based extraction helpers
-# ============================================================================
-
-def insert_production_data_json(report_month: str, data: Dict[str, Dict[str, float]], source: str = 'excel') -> bool:
-    """Insert production actuals as JSON."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO production_data_json (report_month, data, source)
-            VALUES (?, ?, ?)
-            ON CONFLICT(report_month) DO UPDATE SET
-                data = excluded.data,
-                source = excluded.source,
-                updated_at = CURRENT_TIMESTAMP
-        """, (report_month, json.dumps(data), source))
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        logger.error(f"Error inserting production_data_json: {e}")
-        return False
-
-def insert_production_plan_json(report_month: str, data: Dict[str, Dict[str, float]], source: str = 'excel') -> bool:
-    """Insert production plans as JSON."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO production_plan_json (report_month, data, source)
-            VALUES (?, ?, ?)
-            ON CONFLICT(report_month) DO UPDATE SET
-                data = excluded.data,
-                source = excluded.source,
-                updated_at = CURRENT_TIMESTAMP
-        """, (report_month, json.dumps(data), source))
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        logger.error(f"Error inserting production_plan_json: {e}")
-        return False
-
-def insert_special_steel_json(report_month: str, data: Dict, source: str = 'excel') -> bool:
-    """Insert special steel orders as JSON."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO special_steel_json (report_month, data, source)
-            VALUES (?, ?, ?)
-            ON CONFLICT(report_month) DO UPDATE SET
-                data = excluded.data,
-                source = excluded.source,
-                updated_at = CURRENT_TIMESTAMP
-        """, (report_month, json.dumps(data), source))
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        logger.error(f"Error inserting special_steel_json: {e}")
-        return False
-
-def insert_stock_data_json(stock_month: str, data: Dict, source: str = 'excel') -> bool:
-    """Insert stock data as JSON."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO stock_data_json (stock_month, data, source)
-            VALUES (?, ?, ?)
-            ON CONFLICT(stock_month) DO UPDATE SET
-                data = excluded.data,
-                source = excluded.source,
-                updated_at = CURRENT_TIMESTAMP
-        """, (stock_month, json.dumps(data), source))
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        logger.error(f"Error inserting stock_data_json: {e}")
-        return False
-
-def insert_ipt_data_json(report_month: str, data: Dict, source: str = 'excel') -> bool:
-    """Insert IPT data as JSON."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO ipt_data_json (report_month, data, source)
-            VALUES (?, ?, ?)
-            ON CONFLICT(report_month) DO UPDATE SET
-                data = excluded.data,
-                source = excluded.source,
-                updated_at = CURRENT_TIMESTAMP
-        """, (report_month, json.dumps(data), source))
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        logger.error(f"Error inserting ipt_data_json: {e}")
-        return False
-
-# Query helpers for JSON tables
-
-def get_production_data_json(report_month: str) -> Optional[Dict]:
-    """Get production actuals as JSON."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT data FROM production_data_json WHERE report_month = ?", (report_month,))
-        row = cursor.fetchone()
-        conn.close()
-        return json.loads(row[0]) if row else None
-    except Exception as e:
-        logger.error(f"Error querying production_data_json: {e}")
-        return None
-
-def get_production_plan_json(report_month: str) -> Optional[Dict]:
-    """Get production plans as JSON."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT data FROM production_plan_json WHERE report_month = ?", (report_month,))
-        row = cursor.fetchone()
-        conn.close()
-        return json.loads(row[0]) if row else None
-    except Exception as e:
-        logger.error(f"Error querying production_plan_json: {e}")
-        return None
-
 
 def get_ytd_months(report_month: str) -> List[str]:
     """Returns YYYY-MM strings from April of the current FY up to report_month."""
@@ -1245,3 +954,103 @@ def get_techno_sail_consolidated(report_month: str) -> Dict[str, Any]:
             'calculation_method': json.loads(row['calculation_method']) if row['calculation_method'] else {}
         }
     return {'data': {}, 'calculation_method': {}}
+
+
+# ============================================================================
+# Techno Data helpers  (techno_data table — all plants)
+# ============================================================================
+
+def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
+    """Insert or replace techno data for one plant/unit/month."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(plant, report_month, unit) DO UPDATE SET
+            techno_json = excluded.techno_json,
+            source_file = excluded.source_file,
+            created_at  = datetime('now')
+    """, (plant, report_month, unit, json.dumps(techno_json), source_file))
+    conn.commit()
+    conn.close()
+
+
+def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techno_json: Dict, source_file: str = ''):
+    """Merge new_techno_json into any existing row (non-null values win; existing non-null kept if new value is null).
+    Use this when multiple source files contribute different parameters to the same plant/unit/month."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT techno_json FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+        [plant, report_month, unit],
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        existing = json.loads(row[0])
+        merged: Dict = {}
+        for period in ("month", "till_month"):
+            base = dict(existing.get(period, {}))
+            for k, v in new_techno_json.get(period, {}).items():
+                if v is not None:
+                    base[k] = v        # new non-null overwrites
+                # if v is None, keep existing value (base already has it)
+            merged[period] = base
+    else:
+        merged = new_techno_json
+
+    upsert_techno_data(plant, report_month, unit, merged, source_file)
+
+
+def get_techno_data(plant: str, report_month: str, unit: str = None) -> Dict:
+    """Return {unit: {month: {...}, till_month: {...}}} for a given plant/month."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    if unit:
+        cursor.execute(
+            "SELECT unit, techno_json FROM techno_data WHERE plant = ? AND report_month = ? AND unit = ?",
+            [plant, report_month, unit]
+        )
+    else:
+        cursor.execute(
+            "SELECT unit, techno_json FROM techno_data WHERE plant = ? AND report_month = ? ORDER BY unit",
+            [plant, report_month]
+        )
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = {}
+    for row in rows:
+        try:
+            result[row['unit']] = json.loads(row['techno_json'])
+        except (json.JSONDecodeError, TypeError):
+            result[row['unit']] = {}
+    return result
+
+
+def get_techno_months(plant: str = None) -> List[str]:
+    """Return distinct report_month values in techno_data, newest first.
+    Optionally filter by plant."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    if plant:
+        cursor.execute(
+            "SELECT DISTINCT report_month FROM techno_data WHERE plant = ? ORDER BY report_month DESC",
+            [plant]
+        )
+    else:
+        cursor.execute(
+            "SELECT DISTINCT report_month FROM techno_data ORDER BY report_month DESC"
+        )
+    months = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return months

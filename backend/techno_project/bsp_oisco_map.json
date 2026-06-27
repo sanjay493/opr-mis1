@@ -1,0 +1,53 @@
+{
+  "_comment": "BSP OISCO Excel row map. Sheet=Sheet1. Row 6 = month headers (APR MAY ... CUM). Data col = col matching month abbr; cum col = data_col+1. Edit row numbers to match your actual file.",
+
+  "BF_Shop": {
+    "cdi":              9,
+    "fuel_rate":        16,
+    "pellet% in burden": 17,
+    "ld_slag_usage":    18,
+    "not_dry_cast":     19
+  },
+
+  "BF-4": { "cdi": 11 },
+  "BF-5": { "cdi": 12 },
+  "BF-6": { "cdi": 13 },
+  "BF-7": { "cdi": 14 },
+  "BF-8": { "cdi": 15 },
+
+  "General": {
+    "coal_to_hm":                20,
+    "specific_water_consumption": 54
+  },
+
+  "SMS-2": {
+    "converter_availability":  22,
+    "converter_utilisation":   23,
+    "tap_to_tap_time":         24,
+    "average_blows_per_day":   25,
+    "average_heat_weight":     26,
+    "average_lining_life":     27,
+    "fe-mn":                   28,
+    "fe-si":                   29,
+    "si-mn":                   30,
+    "oxygen_blowing":          31,
+    "alumina_consumption":     32,
+    "ld_gas_recovery":         35,
+    "ds_heats":                36
+  },
+
+  "SMS-3": {
+    "converter_availability":  38,
+    "converter_utilisation":   39,
+    "tap_to_tap_time":         40,
+    "average_blows_per_day":   41,
+    "average_heat_weight":     42,
+    "fe-mn":                   43,
+    "fe-si":                   44,
+    "si-mn":                   45,
+    "oxygen_blowing":          46,
+    "alumina_consumption":     47,
+    "ld_gas_recovery":         50,
+    "ds_heats":                51
+  }
+}
