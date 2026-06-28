@@ -255,8 +255,8 @@ export default function TechnoTargetsPage() {
     if (param === 'Coke Rate') {
       return (
         <div style={{ padding: '12px 16px', backgroundColor: '#f0f9ff', borderTop: '1px solid #e0e7ff' }}>
-          <div style={{ fontSize: '10pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>{calcData.formula}</div>
-          <table style={{ width: '100%', fontSize: '9pt', borderCollapse: 'collapse' }}>
+          <div style={{ fontSize: '12pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>{calcData.formula}</div>
+          <table style={{ width: '100%', fontSize: '13pt', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
                 <th style={{ padding: '4px 8px', textAlign: 'left' }}>Plant</th>
@@ -288,8 +288,8 @@ export default function TechnoTargetsPage() {
     if (param === 'BF Productivity') {
       return (
         <div style={{ padding: '12px 16px', backgroundColor: '#f0f9ff', borderTop: '1px solid #e0e7ff' }}>
-          <div style={{ fontSize: '10pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>{calcData.formula}</div>
-          <table style={{ width: '100%', fontSize: '9pt', borderCollapse: 'collapse' }}>
+          <div style={{ fontSize: '12pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>{calcData.formula}</div>
+          <table style={{ width: '100%', fontSize: '13pt', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
                 <th style={{ padding: '4px 8px', textAlign: 'left' }}>Plant</th>
@@ -321,9 +321,9 @@ export default function TechnoTargetsPage() {
     if (param === 'Hot Metal Consumption' || param === 'Scrap Consumption') {
       return (
         <div style={{ padding: '12px 16px', backgroundColor: '#f0fdf4', borderTop: '1px solid #d1fae5' }}>
-          <div style={{ fontSize: '10pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>{calcData.formula}</div>
-          <div style={{ fontSize: '9pt', color: '#047857', marginBottom: '8px', fontStyle: 'italic' }}>{calcData.description}</div>
-          <table style={{ width: '100%', fontSize: '9pt', borderCollapse: 'collapse' }}>
+          <div style={{ fontSize: '12pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>{calcData.formula}</div>
+          <div style={{ fontSize: '13pt', color: '#047857', marginBottom: '8px', fontStyle: 'italic' }}>{calcData.description}</div>
+          <table style={{ width: '100%', fontSize: '13pt', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
                 <th style={{ padding: '4px 8px', textAlign: 'left' }}>Shop</th>
@@ -378,7 +378,7 @@ export default function TechnoTargetsPage() {
           onChange={e => !isDerived && handleChange(type, key1, key2, e.target.value)}
           readOnly={isDerived}
           style={{
-            width: '100%', padding: '6px 8px', fontSize: '10pt', textAlign: 'right',
+            width: '100%', padding: '6px 8px', fontSize: '12pt', textAlign: 'right',
             border: `1px solid ${isDerived ? '#cbd5e1' : changed ? '#fbbf24' : '#cbd5e1'}`,
             borderRadius: '4px',
             backgroundColor: isDerived ? '#f5f5f5' : changed ? '#fffbeb' : saved ? '#f0fdf4' : '#fff',
@@ -389,7 +389,7 @@ export default function TechnoTargetsPage() {
           title={isDerived ? 'Auto-calculated' : ''}
         />
         {isDerived && (
-          <span style={{ position: 'absolute', right: '8px', top: '6px', fontSize: '8pt', color: '#9ca3af', pointerEvents: 'none' }}>🔒</span>
+          <span style={{ position: 'absolute', right: '8px', top: '6px', fontSize: '12pt', color: '#9ca3af', pointerEvents: 'none' }}>🔒</span>
         )}
       </div>
     );
@@ -401,10 +401,10 @@ export default function TechnoTargetsPage() {
 
       <main style={{ flex: 1, overflow: 'auto', padding: '32px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
         <div style={{ marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '24pt', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>
+          <h1 style={{ fontSize: '28pt', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>
             📊 Techno-Economic Annual Targets
           </h1>
-          <p style={{ fontSize: '11pt', color: '#64748b', margin: '0' }}>
+          <p style={{ fontSize: '13pt', color: '#64748b', margin: '0' }}>
             BF parameters weighted by HM production | SMS parameters weighted by Crude Steel production | SAIL auto-calculated
           </p>
         </div>
@@ -415,20 +415,20 @@ export default function TechnoTargetsPage() {
           flexWrap: 'wrap', backgroundColor: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0'
         }}>
           <div>
-            <label style={{ fontSize: '10pt', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '12pt', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>
               Financial Year
             </label>
-            <select value={fy} onChange={e => setFy(e.target.value)} style={{ padding: '8px 12px', fontSize: '11pt', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+            <select value={fy} onChange={e => setFy(e.target.value)} style={{ padding: '8px 12px', fontSize: '13pt', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
               {FY_LIST.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
-          <button onClick={handleLoad} disabled={loading} style={{ padding: '8px 16px', fontSize: '11pt', fontWeight: '600', borderRadius: '4px', border: 'none', backgroundColor: '#6366f1', color: '#fff', cursor: 'pointer', marginTop: '18px' }}>
+          <button onClick={handleLoad} disabled={loading} style={{ padding: '8px 16px', fontSize: '13pt', fontWeight: '600', borderRadius: '4px', border: 'none', backgroundColor: '#6366f1', color: '#fff', cursor: 'pointer', marginTop: '18px' }}>
             {loading ? 'Loading...' : 'Load'}
           </button>
-          <button onClick={handleRecalculate} disabled={recalculating || (bfParams.length === 0 && smsParams.length === 0)} style={{ padding: '8px 16px', fontSize: '11pt', fontWeight: '600', borderRadius: '4px', border: 'none', backgroundColor: '#0891b2', color: '#fff', cursor: 'pointer', marginTop: '18px' }}>
+          <button onClick={handleRecalculate} disabled={recalculating || (bfParams.length === 0 && smsParams.length === 0)} style={{ padding: '8px 16px', fontSize: '13pt', fontWeight: '600', borderRadius: '4px', border: 'none', backgroundColor: '#0891b2', color: '#fff', cursor: 'pointer', marginTop: '18px' }}>
             {recalculating ? 'Calculating...' : 'Recalculate SAIL'}
           </button>
-          <button onClick={handleSave} disabled={saving || !hasChanges()} style={{ padding: '8px 16px', fontSize: '11pt', fontWeight: '600', borderRadius: '4px', border: 'none', backgroundColor: hasChanges() ? '#10b981' : '#94a3b8', color: '#fff', cursor: hasChanges() ? 'pointer' : 'default', marginTop: '18px' }}>
+          <button onClick={handleSave} disabled={saving || !hasChanges()} style={{ padding: '8px 16px', fontSize: '13pt', fontWeight: '600', borderRadius: '4px', border: 'none', backgroundColor: hasChanges() ? '#10b981' : '#94a3b8', color: '#fff', cursor: hasChanges() ? 'pointer' : 'default', marginTop: '18px' }}>
             {saving ? 'Saving...' : 'Save All'}
           </button>
         </div>
@@ -436,7 +436,7 @@ export default function TechnoTargetsPage() {
         {/* Status */}
         {status && (
           <div style={{
-            padding: '12px 16px', marginBottom: '16px', borderRadius: '6px', fontSize: '11pt',
+            padding: '12px 16px', marginBottom: '16px', borderRadius: '6px', fontSize: '13pt',
             backgroundColor: status.type === 'success' ? '#dcfce7' : '#fee2e2',
             color: status.type === 'success' ? '#166534' : '#991b1b',
             border: `1px solid ${status.type === 'success' ? '#bbf7d0' : '#fecaca'}`
@@ -448,7 +448,7 @@ export default function TechnoTargetsPage() {
         {/* Production Data Source */}
         {prodMetadata && (
           <div style={{
-            padding: '12px 16px', marginBottom: '16px', borderRadius: '6px', fontSize: '10pt',
+            padding: '12px 16px', marginBottom: '16px', borderRadius: '6px', fontSize: '12pt',
             backgroundColor: '#f0f9ff', color: '#0c4a6e', border: '1px solid #e0e7ff'
           }}>
             <div style={{ fontWeight: '600', marginBottom: '8px' }}>📊 Production Plan Data Source</div>
@@ -468,13 +468,13 @@ export default function TechnoTargetsPage() {
             </div>
             <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
               <strong>Months Included (FY {prodMetadata.fy}):</strong>
-              <div style={{ fontSize: '9pt', color: '#0c4a6e', marginTop: '4px' }}>
+              <div style={{ fontSize: '13pt', color: '#0c4a6e', marginTop: '4px' }}>
                 {prodMetadata.months_included?.join(' • ')}
               </div>
             </div>
             <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
               <strong>HM Production by Plant (Annual):</strong>
-              <div style={{ fontSize: '9pt', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '4px' }}>
+              <div style={{ fontSize: '13pt', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '4px' }}>
                 {Object.entries(prodMetadata.hm_weights || {}).map(([plant, weight]) => (
                   <div key={plant} style={{ padding: '4px 8px', backgroundColor: '#e0f2fe', borderRadius: '4px' }}>
                     {plant}: {weight.toLocaleString()}
@@ -484,7 +484,7 @@ export default function TechnoTargetsPage() {
             </div>
             <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
               <strong>CS Production by Plant (Annual):</strong>
-              <div style={{ fontSize: '9pt', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '4px' }}>
+              <div style={{ fontSize: '13pt', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '4px' }}>
                 {Object.entries(prodMetadata.cs_weights || {}).map(([plant, weight]) => (
                   <div key={plant} style={{ padding: '4px 8px', backgroundColor: '#e0f2fe', borderRadius: '4px' }}>
                     {plant}: {weight.toLocaleString()}
@@ -494,13 +494,13 @@ export default function TechnoTargetsPage() {
             </div>
             <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
               <strong>SMS Shop-wise Crude Steel Production (Weighted Average):</strong>
-              <div style={{ fontSize: '9pt', marginTop: '4px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+              <div style={{ fontSize: '13pt', marginTop: '4px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                 {Object.entries(prodMetadata.shop_to_plant || {}).map(([shop, plant]) => {
                   const weight = prodMetadata.shop_cs_weights?.[shop];
                   return (
                     <div key={shop} style={{ padding: '8px', backgroundColor: '#bfdbfe', borderRadius: '3px', textAlign: 'center' }}>
-                      <div style={{ fontWeight: '600', color: '#0c4a6e', fontSize: '9pt' }}>{shop}</div>
-                      <div style={{ fontSize: '8pt', color: '#0c4a6e', marginTop: '4px' }}>
+                      <div style={{ fontWeight: '600', color: '#0c4a6e', fontSize: '13pt' }}>{shop}</div>
+                      <div style={{ fontSize: '12pt', color: '#0c4a6e', marginTop: '4px' }}>
                         {weight?.toLocaleString() || '0'}
                       </div>
                     </div>
@@ -514,17 +514,17 @@ export default function TechnoTargetsPage() {
         {/* BF Parameters Table */}
         {bfParams.length > 0 && (
           <div style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '14pt', fontWeight: '700', color: '#1e293b', marginBottom: '12px' }}>⚒️ BF / Iron-Making Parameters</h2>
-            <p style={{ fontSize: '10pt', color: '#64748b', marginBottom: '12px' }}>Weighted by Plant Hot Metal Production Target</p>
+            <h2 style={{ fontSize: '16pt', fontWeight: '700', color: '#1e293b', marginBottom: '12px' }}>⚒️ BF / Iron-Making Parameters</h2>
+            <p style={{ fontSize: '12pt', color: '#64748b', marginBottom: '12px' }}>Weighted by Plant Hot Metal Production Target</p>
             <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', maxHeight: 'calc(100vh - 400px)', display: 'flex', flexDirection: 'column' }}>
               <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr style={{ backgroundColor: '#1e3a5f', color: '#fff' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '11pt' }}>Parameter</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', minWidth: '80px' }}>Unit</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '13pt' }}>Parameter</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '13pt', minWidth: '80px' }}>Unit</th>
                       {PLANTS.map(plant => (
-                        <th key={plant} style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', backgroundColor: plant === 'SAIL' ? '#166534' : '#1e3a5f', minWidth: '110px' }}>
+                        <th key={plant} style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '13pt', backgroundColor: plant === 'SAIL' ? '#166534' : '#1e3a5f', minWidth: '110px' }}>
                           {plant}
                         </th>
                       ))}
@@ -533,8 +533,8 @@ export default function TechnoTargetsPage() {
                   <tbody>
                     {bfParams.map((param, idx) => (
                       <tr key={param.name} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
-                        <td style={{ padding: '10px 16px', fontSize: '11pt', fontWeight: '500', color: '#1e293b' }}>{param.name}</td>
-                        <td style={{ padding: '10px 16px', textAlign: 'center', fontSize: '10pt', color: '#475569' }}>{param.unit}</td>
+                        <td style={{ padding: '10px 16px', fontSize: '13pt', fontWeight: '500', color: '#1e293b' }}>{param.name}</td>
+                        <td style={{ padding: '10px 16px', textAlign: 'center', fontSize: '12pt', color: '#475569' }}>{param.unit}</td>
                         {PLANTS.map(plant => (
                           <td key={`${plant}-${param.name}`} style={{ padding: '8px 12px', textAlign: 'right' }}>
                             {plant === 'SAIL' ? renderCell('sail', param.name, null) : renderCell('plant', plant, param.name)}
@@ -549,16 +549,16 @@ export default function TechnoTargetsPage() {
             {/* BF Calculation Details */}
             {(bfCalcDetails['Coke Rate'] || bfCalcDetails['BF Productivity']) && (
               <div style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '11pt', fontWeight: '600', color: '#0c4a6e', margin: '0 0 12px 0' }}>📐 Calculation Details</h3>
+                <h3 style={{ fontSize: '13pt', fontWeight: '600', color: '#0c4a6e', margin: '0 0 12px 0' }}>📐 Calculation Details</h3>
                 {bfCalcDetails['Coke Rate'] && (
                   <div style={{ marginBottom: '12px' }}>
-                    <div style={{ fontSize: '10pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>Coke Rate SAIL</div>
+                    <div style={{ fontSize: '12pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>Coke Rate SAIL</div>
                     {renderCalcDetails('Coke Rate', bfCalcDetails['Coke Rate'])}
                   </div>
                 )}
                 {bfCalcDetails['BF Productivity'] && (
                   <div>
-                    <div style={{ fontSize: '10pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>BF Productivity SAIL</div>
+                    <div style={{ fontSize: '12pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>BF Productivity SAIL</div>
                     {renderCalcDetails('BF Productivity', bfCalcDetails['BF Productivity'])}
                   </div>
                 )}
@@ -570,17 +570,17 @@ export default function TechnoTargetsPage() {
         {/* SMS Parameters Table */}
         {smsParams.length > 0 && (
           <div>
-            <h2 style={{ fontSize: '14pt', fontWeight: '700', color: '#1e293b', marginBottom: '12px' }}>🏭 SMS / Steel Making Parameters</h2>
-            <p style={{ fontSize: '10pt', color: '#64748b', marginBottom: '12px' }}>Shop-wise values with SAIL as weighted average by Crude Steel Production</p>
+            <h2 style={{ fontSize: '16pt', fontWeight: '700', color: '#1e293b', marginBottom: '12px' }}>🏭 SMS / Steel Making Parameters</h2>
+            <p style={{ fontSize: '12pt', color: '#64748b', marginBottom: '12px' }}>Shop-wise values with SAIL as weighted average by Crude Steel Production</p>
 
             {/* SMS Shop Summary Table */}
             {prodMetadata?.shop_cs_weights && (
               <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '24px' }}>
                 <div style={{ padding: '12px 16px', backgroundColor: '#f0fdf4', borderBottom: '1px solid #d1fae5' }}>
-                  <h3 style={{ fontSize: '11pt', fontWeight: '700', color: '#065f46', margin: '0' }}>📋 SMS Shop Summary (CS Production & Targets)</h3>
+                  <h3 style={{ fontSize: '13pt', fontWeight: '700', color: '#065f46', margin: '0' }}>📋 SMS Shop Summary (CS Production & Targets)</h3>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12pt' }}>
                     <thead style={{ backgroundColor: '#ecfdf5', borderBottom: '2px solid #d1fae5' }}>
                       <tr>
                         <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '700' }}>SMS Shop</th>
@@ -632,9 +632,9 @@ export default function TechnoTargetsPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr style={{ backgroundColor: '#1e3a5f', color: '#fff' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '11pt', minWidth: '150px' }}>SMS Shop</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '13pt', minWidth: '150px' }}>SMS Shop</th>
                       {smsParams.map(param => (
-                        <th key={param.name} style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', minWidth: '120px' }}>
+                        <th key={param.name} style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '13pt', minWidth: '120px' }}>
                           {param.name}
                         </th>
                       ))}
@@ -643,7 +643,7 @@ export default function TechnoTargetsPage() {
                   <tbody>
                     {smsShops.map((shop, idx) => (
                       <tr key={shop} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
-                        <td style={{ padding: '10px 16px', fontSize: '11pt', fontWeight: '500', color: '#1e293b' }}>{shop}</td>
+                        <td style={{ padding: '10px 16px', fontSize: '13pt', fontWeight: '500', color: '#1e293b' }}>{shop}</td>
                         {smsParams.map(param => (
                           <td key={`${shop}-${param.name}`} style={{ padding: '8px 12px', textAlign: 'right' }}>
                             {renderCell('sms', shop, param.name)}
@@ -653,7 +653,7 @@ export default function TechnoTargetsPage() {
                     ))}
                     {/* SAIL Row */}
                     <tr style={{ borderBottom: 'none', backgroundColor: '#f0fdf4', borderTop: '2px solid #e2e8f0' }}>
-                      <td style={{ padding: '10px 16px', fontSize: '11pt', fontWeight: '700', color: '#166534', backgroundColor: '#ecfdf5' }}>SAIL</td>
+                      <td style={{ padding: '10px 16px', fontSize: '13pt', fontWeight: '700', color: '#166534', backgroundColor: '#ecfdf5' }}>SAIL</td>
                       {smsParams.map(param => (
                         <td key={`sail-${param.name}`} style={{ padding: '8px 12px', textAlign: 'right' }}>
                           {renderCell('sail', param.name, null)}
@@ -667,16 +667,16 @@ export default function TechnoTargetsPage() {
             {/* SMS Calculation Details */}
             {(smsCalcDetails['Hot Metal Consumption'] || smsCalcDetails['Scrap Consumption']) && (
               <div style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '11pt', fontWeight: '600', color: '#065f46', margin: '0 0 12px 0' }}>📐 Calculation Details</h3>
+                <h3 style={{ fontSize: '13pt', fontWeight: '600', color: '#065f46', margin: '0 0 12px 0' }}>📐 Calculation Details</h3>
                 {smsCalcDetails['Hot Metal Consumption'] && (
                   <div style={{ marginBottom: '12px' }}>
-                    <div style={{ fontSize: '10pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>HM Consumption SAIL</div>
+                    <div style={{ fontSize: '12pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>HM Consumption SAIL</div>
                     {renderCalcDetails('Hot Metal Consumption', smsCalcDetails['Hot Metal Consumption'])}
                   </div>
                 )}
                 {smsCalcDetails['Scrap Consumption'] && (
                   <div>
-                    <div style={{ fontSize: '10pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>Scrap Consumption SAIL</div>
+                    <div style={{ fontSize: '12pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>Scrap Consumption SAIL</div>
                     {renderCalcDetails('Scrap Consumption', smsCalcDetails['Scrap Consumption'])}
                   </div>
                 )}
