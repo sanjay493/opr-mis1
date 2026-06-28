@@ -2530,7 +2530,10 @@ async def recalculate_sail_weighted(payload: dict):
                 item_name = "Total Crude Steel"
             else:
                 # For multi-SMS-shop plants, use specific SMS entry
-                item_name = shop
+                # Database stores "SMS-2", not "BSP SMS-2"
+                # Extract SMS part: "BSP SMS-2" → "SMS-2"
+                shop_parts = shop.split()
+                item_name = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
 
             cur.execute(f"""
                 SELECT SUM(month_actual)
