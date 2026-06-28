@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
+import { useStockData, useSaveStockEntry } from '@/hooks/useDataEntryAPI';
 
 const STOCK_PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
 const STOCK_ITEMS = [
@@ -25,36 +26,40 @@ function StockEntryCard({ apiBase }) {
   const [stockMonth, setStockMonth] = useState(defaultMonth);
   const [values, setValues] = useState({});
   const [savedValues, setSavedValues] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
-  const [loaded, setLoaded] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
 
   const key = (item_type, stock_type) => `${item_type}||${stock_type}`;
 
-  const handleLoad = async () => {
-    setLoading(true);
-    setStatus(null);
-    setLoaded(false);
-    try {
-      const res = await fetch(`${apiBase}/api/stock-data?plant=${encodeURIComponent(plant)}&stock_month=${encodeURIComponent(stockMonth)}`);
-      if (!res.ok) throw new Error(await res.text());
-      const json = await res.json();
+  // Use React Query to fetch stock data
+  const { data: stockData, isLoading: loading, error: loadError } = useStockData(plant, stockMonth, shouldLoad);
+  const { mutate: saveEntry, isPending: saving } = useSaveStockEntry();
+
+  // Update local state when stock data loads
+  useEffect(() => {
+    if (stockData?.data) {
       const map = {};
-      json.data.forEach(r => { map[key(r.item_type, r.stock_type)] = String(r.stock ?? ''); });
+      stockData.data.forEach(r => { map[key(r.item_type, r.stock_type)] = String(r.stock ?? ''); });
       setSavedValues(map);
       const edits = {};
       STOCK_ITEMS.forEach(it => { edits[key(it.item_type, it.stock_type)] = map[key(it.item_type, it.stock_type)] ?? ''; });
       setValues(edits);
-      setLoaded(true);
-    } catch (err) {
-      setStatus({ type: 'error', text: `Load failed: ${err.message}` });
-    } finally {
-      setLoading(false);
+      setStatus(null);
     }
+  }, [stockData]);
+
+  // Show load error
+  useEffect(() => {
+    if (loadError) {
+      setStatus({ type: 'error', text: `Load failed: ${loadError.message}` });
+    }
+  }, [loadError]);
+
+  const handleLoad = () => {
+    setShouldLoad(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const entries = STOCK_ITEMS
       .filter(it => {
         const v = values[key(it.item_type, it.stock_type)];
@@ -66,24 +71,21 @@ function StockEntryCard({ apiBase }) {
         stock: parseFloat(values[key(it.item_type, it.stock_type)]),
       }));
     if (!entries.length) { setStatus({ type: 'error', text: 'No values to save.' }); return; }
-    setSaving(true);
     setStatus(null);
-    try {
-      const res = await fetch(`${apiBase}/api/stock-entry`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const json = await res.json();
-      setStatus({ type: 'success', text: json.message });
-      const newSaved = { ...savedValues };
-      entries.forEach(e => { newSaved[key(e.item_type, e.stock_type)] = String(e.stock); });
-      setSavedValues(newSaved);
-    } catch (err) {
-      setStatus({ type: 'error', text: `Save failed: ${err.message}` });
-    } finally {
-      setSaving(false);
-    }
+    saveEntry(
+      { entries },
+      {
+        onSuccess: (json) => {
+          setStatus({ type: 'success', text: json.message || 'Saved successfully!' });
+          const newSaved = { ...savedValues };
+          entries.forEach(e => { newSaved[key(e.item_type, e.stock_type)] = String(e.stock); });
+          setSavedValues(newSaved);
+        },
+        onError: (err) => {
+          setStatus({ type: 'error', text: `Save failed: ${err.message}` });
+        },
+      }
+    );
   };
 
   const hasChanges = STOCK_ITEMS.some(it => {
@@ -113,14 +115,14 @@ function StockEntryCard({ apiBase }) {
           <div style={{ padding: '14px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: '8pt', color: '#64748b', marginBottom: 4 }}>Plant</div>
-              <select value={plant} onChange={e => { setPlant(e.target.value); setLoaded(false); setValues({}); setSavedValues({}); }}
+              <select value={plant} onChange={e => { setPlant(e.target.value); setValues({}); setSavedValues({}); setShouldLoad(false); }}
                 style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid #cbd5e1', fontSize: '9pt', backgroundColor: '#fff' }}>
                 {STOCK_PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
               <div style={{ fontSize: '8pt', color: '#64748b', marginBottom: 4 }}>Stock as on 1st of</div>
-              <input type="month" value={stockMonth} onChange={e => { setStockMonth(e.target.value); setLoaded(false); setValues({}); setSavedValues({}); }}
+              <input type="month" value={stockMonth} onChange={e => { setStockMonth(e.target.value); setValues({}); setSavedValues({}); setShouldLoad(false); }}
                 style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid #cbd5e1', fontSize: '9pt', backgroundColor: '#fff' }} />
             </div>
             <button onClick={handleLoad} disabled={loading}
@@ -130,7 +132,7 @@ function StockEntryCard({ apiBase }) {
           </div>
 
           {/* Grid */}
-          {loaded && (
+          {stockData && (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -172,7 +174,7 @@ function StockEntryCard({ apiBase }) {
             </div>
           )}
 
-          {!loaded && !loading && (
+          {!stockData && !loading && (
             <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '9.5pt' }}>
               Select plant and month, then click <strong>Load</strong> to view / edit stock values.
             </div>
@@ -186,7 +188,7 @@ function StockEntryCard({ apiBase }) {
             </div>
           )}
 
-          {loaded && (
+          {stockData && (
             <div style={{ padding: '12px 20px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button onClick={() => { setValues(Object.fromEntries(STOCK_ITEMS.map(it => [key(it.item_type, it.stock_type), savedValues[key(it.item_type, it.stock_type)] ?? '']))); setStatus(null); }}
                 disabled={!hasChanges}
