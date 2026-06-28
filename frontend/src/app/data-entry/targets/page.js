@@ -322,6 +322,7 @@ export default function TechnoTargetsPage() {
       return (
         <div style={{ padding: '12px 16px', backgroundColor: '#f0fdf4', borderTop: '1px solid #d1fae5' }}>
           <div style={{ fontSize: '10pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>{calcData.formula}</div>
+          <div style={{ fontSize: '9pt', color: '#047857', marginBottom: '8px', fontStyle: 'italic' }}>{calcData.description}</div>
           <table style={{ width: '100%', fontSize: '9pt', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
@@ -487,6 +488,25 @@ export default function TechnoTargetsPage() {
                 {Object.entries(prodMetadata.cs_weights || {}).map(([plant, weight]) => (
                   <div key={plant} style={{ padding: '4px 8px', backgroundColor: '#e0f2fe', borderRadius: '4px' }}>
                     {plant}: {weight.toLocaleString()}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
+              <strong>SMS Shop-wise CS Production (Distributed equally among SMS shops per plant):</strong>
+              <div style={{ fontSize: '9pt', marginTop: '4px' }}>
+                {Object.entries(prodMetadata.shops_per_plant || {}).map(([plant, count]) => (
+                  <div key={plant} style={{ marginBottom: '6px', padding: '6px 8px', backgroundColor: '#e0f2fe', borderRadius: '4px' }}>
+                    <strong>{plant}</strong> (Plant CS: {prodMetadata.cs_weights?.[plant]?.toLocaleString()} ÷ {count} shops):
+                    <div style={{ marginTop: '4px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '6px' }}>
+                      {Object.entries(prodMetadata.shop_to_plant || {})
+                        .filter(([_, p]) => p === plant)
+                        .map(([shop, _]) => (
+                          <div key={shop} style={{ padding: '4px 6px', backgroundColor: '#bfdbfe', borderRadius: '3px' }}>
+                            {shop}: {prodMetadata.shop_cs_weights?.[shop]?.toLocaleString()}
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 ))}
               </div>
