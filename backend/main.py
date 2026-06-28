@@ -2248,14 +2248,12 @@ async def list_techno_plan_months(plant: str = Query(None)):
 @app.get("/api/techno-major-parameters")
 async def get_techno_major_parameters():
     """
-    Get list of MAJOR techno-economic parameters for targets page.
-    Response: { parameters: [
-        {name: "Coke Rate", unit: "kg/thm"},
-        {name: "CDI Rate", unit: "kg/thm"},
-        ...
-    ]}
+    Get list of MAJOR techno-economic parameters grouped by type.
+    BF params: weighted by plant HM production
+    SMS params: weighted by plant Crude Steel production
+    Response: { bf_params: [...], sms_params: [...] }
     """
-    major_params = [
+    bf_params = [
         {"name": "Coal to Hot Metal", "unit": "kg/kg"},
         {"name": "Coke Rate", "unit": "kg/thm"},
         {"name": "Nut Coke Rate", "unit": "kg/thm"},
@@ -2264,12 +2262,25 @@ async def get_techno_major_parameters():
         {"name": "Sinter in Burden", "unit": "%"},
         {"name": "Pellet in Burden", "unit": "%"},
         {"name": "BF Productivity", "unit": "t/m³/day"},
+        {"name": "Specific Energy Consumption", "unit": "Gcal/tcs"},
+    ]
+    sms_params = [
         {"name": "Hot Metal Consumption", "unit": "kg/tcs"},
         {"name": "Scrap Consumption", "unit": "kg/tcs"},
         {"name": "TMI", "unit": "kg/tcs"},
-        {"name": "Specific Energy Consumption", "unit": "Gcal/tcs"},
     ]
-    return {"parameters": major_params}
+    sms_shops = [
+        "BSP SMS-2", "BSP SMS-3",
+        "DSP SMS",
+        "RSP SMS-1", "RSP SMS-2",
+        "BSL SMS-1", "BSL SMS-2",
+        "ISP SMS-1",
+    ]
+    return {
+        "bf_params": bf_params,
+        "sms_params": sms_params,
+        "sms_shops": sms_shops,
+    }
 
 
 @app.get("/api/techno-sail-targets")
@@ -2383,6 +2394,198 @@ async def save_techno_plant_targets(payload: dict):
                 saved_count += 1
 
         return {"status": "success", "fy": fy, "report_month": report_month, "plants_saved": saved_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/techno-sms-targets")
+async def get_techno_sms_targets(fy: str = Query("2026-27")):
+    """
+    Get SMS-wise (shop-wise) techno targets for a given FY.
+    Response: { fy, report_month, sms_shops: {shop: {param: value}} }
+    """
+    try:
+        fy_year = int(fy.split("-")[0])
+        report_month = f"{fy_year}-03"
+
+        sms_shops = [
+            "BSP SMS-2", "BSP SMS-3",
+            "DSP SMS",
+            "RSP SMS-1", "RSP SMS-2",
+            "BSL SMS-1", "BSL SMS-2",
+            "ISP SMS-1",
+        ]
+        result = {}
+
+        for shop in sms_shops:
+            shop_data = db.get_techno_plan(shop.split()[0], report_month)
+            if shop_data:
+                result[shop] = {}
+                shop_json = shop_data if isinstance(shop_data, dict) else {}
+                for param_name, param_value in shop_json.items():
+                    if param_value is not None:
+                        result[shop][param_name] = param_value
+
+        return {"fy": fy, "report_month": report_month, "sms_shops": result}
+    except Exception as e:
+        return {"fy": fy, "sms_shops": {}, "error": str(e)}
+
+
+@app.post("/api/techno-sms-targets")
+async def save_techno_sms_targets(payload: dict):
+    """
+    Save SMS-wise (shop-wise) techno targets.
+    Payload: { fy: str, sms_shops: {shop: {param: value}} }
+    """
+    try:
+        fy = payload.get("fy", "")
+        sms_data = payload.get("sms_shops", {})
+
+        if not fy:
+            raise ValueError("fy is required")
+
+        fy_year = int(fy.split("-")[0])
+        report_month = f"{fy_year}-03"
+
+        saved_count = 0
+        for shop, params in sms_data.items():
+            if params:
+                plant = shop.split()[0]  # Extract plant from "BSP SMS-2"
+                unit = shop
+                db.save_techno_plan(plant, report_month, unit, json.dumps(params))
+                saved_count += 1
+
+        return {"status": "success", "fy": fy, "report_month": report_month, "shops_saved": saved_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/techno-recalculate-sail-weighted")
+async def recalculate_sail_weighted(payload: dict):
+    """
+    Recalculate SAIL targets using weighted averages based on production targets.
+
+    BF Parameters: Weighted by Plant Hot Metal production target
+    SMS Parameters: Weighted by Plant Crude Steel production target
+
+    Payload: { fy: str }
+    Response: { status, fy, sail_bf: {param: value}, sail_sms: {param: value} }
+    """
+    try:
+        fy = payload.get("fy", "")
+        if not fy:
+            raise ValueError("fy is required")
+
+        fy_year = int(fy.split("-")[0])
+        report_month = f"{fy_year}-03"
+
+        # Get all months of this FY for production targets
+        months = (
+            [f"{fy_year}-{m:02d}" for m in range(4, 13)] +
+            [f"{fy_year + 1}-{m:02d}" for m in range(1, 4)]
+        )
+
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+
+        # Fetch HM production targets by plant (for BF params)
+        ph = ",".join("?" * len(months))
+        cur.execute(f"""
+            SELECT plant_name, SUM(month_actual)
+            FROM production_plan_table
+            WHERE report_month IN ({ph}) AND item_name = 'Hot Metal'
+              AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
+            GROUP BY plant_name
+        """, months)
+        hm_weights = {row[0]: row[1] for row in cur.fetchall() if row[1]}
+
+        # Fetch CS production targets by plant (for SMS params)
+        cur.execute(f"""
+            SELECT plant_name, SUM(month_actual)
+            FROM production_plan_table
+            WHERE report_month IN ({ph}) AND item_name = 'Total Crude Steel'
+              AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
+            GROUP BY plant_name
+        """, months)
+        cs_weights = {row[0]: row[1] for row in cur.fetchall() if row[1]}
+
+        # Get plant-level BF targets
+        plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
+        bf_targets = {}
+        for plant in plants:
+            plant_data = db.get_techno_plant_plan(plant, report_month)
+            if plant_data:
+                for param, value in plant_data.items():
+                    v = value.get('value') if isinstance(value, dict) else value
+                    if v is not None:
+                        if param not in bf_targets:
+                            bf_targets[param] = []
+                        weight = hm_weights.get(plant, 0)
+                        if weight:
+                            bf_targets[param].append((v, weight))
+
+        # Calculate weighted averages for BF params
+        sail_bf = {}
+        for param, values in bf_targets.items():
+            if param == "BF Productivity":
+                # Harmonic mean for BF Productivity
+                num = sum(w for v, w in values)
+                denom = sum(w / v if v > 0 else 0 for v, w in values)
+                sail_bf[param] = round(num / denom, 3) if denom > 0 else None
+            else:
+                # Arithmetic mean for other BF params
+                total_val = sum(v * w for v, w in values)
+                total_weight = sum(w for v, w in values)
+                sail_bf[param] = round(total_val / total_weight, 3) if total_weight else None
+
+        # Get SMS-wise targets
+        sms_shops = [
+            "BSP SMS-2", "BSP SMS-3",
+            "DSP SMS",
+            "RSP SMS-1", "RSP SMS-2",
+            "BSL SMS-1", "BSL SMS-2",
+            "ISP SMS-1",
+        ]
+        sms_targets = {}
+        for param in ["Hot Metal Consumption", "Scrap Consumption"]:
+            sms_targets[param] = []
+            for shop in sms_shops:
+                plant = shop.split()[0]
+                shop_data = db.get_techno_plan(plant, report_month)
+                if isinstance(shop_data, dict):
+                    param_val = shop_data.get(param)
+                    if param_val is not None:
+                        weight = cs_weights.get(plant, 0)
+                        if weight:
+                            sms_targets[param].append((param_val, weight))
+
+        # Calculate weighted averages for SMS params
+        sail_sms = {}
+        for param, values in sms_targets.items():
+            if values:
+                total_val = sum(v * w for v, w in values)
+                total_weight = sum(w for v, w in values)
+                sail_sms[param] = round(total_val / total_weight, 3) if total_weight else None
+
+        # Calculate TMI as HM + Scrap
+        if "Hot Metal Consumption" in sail_sms and "Scrap Consumption" in sail_sms:
+            hm = sail_sms["Hot Metal Consumption"]
+            sc = sail_sms["Scrap Consumption"]
+            if hm is not None and sc is not None:
+                sail_sms["TMI"] = round(hm + sc, 3)
+
+        conn.close()
+
+        # Save computed SAIL values
+        db.save_sail_techno_plan(report_month, {**sail_bf, **sail_sms})
+
+        return {
+            "status": "success",
+            "fy": fy,
+            "report_month": report_month,
+            "sail_bf": sail_bf,
+            "sail_sms": sail_sms,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
