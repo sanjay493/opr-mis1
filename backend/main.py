@@ -2524,14 +2524,23 @@ async def recalculate_sail_weighted(payload: dict):
                         if weight:
                             bf_targets[param].append((v, weight))
 
-        # Calculate weighted averages for BF params
+        # Calculate weighted averages for BF params with calculation details
         sail_bf = {}
+        bf_calc_steps = {}
         for param, values in bf_targets.items():
             if param == "BF Productivity":
                 # Harmonic mean for BF Productivity
                 num = sum(w for v, w in values)
                 denom = sum(w / v if v > 0 else 0 for v, w in values)
                 sail_bf[param] = round(num / denom, 3) if denom > 0 else None
+                # Store calculation details
+                bf_calc_steps[param] = {
+                    "formula": "Harmonic Mean: Total HM / Σ(HM/Productivity)",
+                    "values": [{"plant": plants[i], "value": v, "hm_weight": w, "reciprocal": round(w/v, 6) if v > 0 else 0} for i, (v, w) in enumerate(values)],
+                    "total_hm": num,
+                    "sum_reciprocal": round(denom, 6),
+                    "result": sail_bf[param]
+                }
             elif param == "Fuel Rate":
                 # Skip Fuel Rate here - will calculate as Coke + Nut Coke + CDI
                 continue
@@ -2540,6 +2549,15 @@ async def recalculate_sail_weighted(payload: dict):
                 total_val = sum(v * w for v, w in values)
                 total_weight = sum(w for v, w in values)
                 sail_bf[param] = round(total_val / total_weight, 3) if total_weight else None
+                # Store calculation details for Coke Rate
+                if param == "Coke Rate":
+                    bf_calc_steps[param] = {
+                        "formula": "Weighted Average: Σ(Value × HM_Weight) / Σ(HM_Weight)",
+                        "values": [{"plant": plants[i], "value": v, "hm_weight": w, "product": round(v*w, 2)} for i, (v, w) in enumerate(values)],
+                        "sum_products": round(total_val, 2),
+                        "sum_weights": total_weight,
+                        "result": sail_bf[param]
+                    }
 
         # Calculate Fuel Rate = Coke Rate + Nut Coke Rate + CDI Rate
         coke_sail = sail_bf.get("Coke Rate")
@@ -2580,11 +2598,39 @@ async def recalculate_sail_weighted(payload: dict):
 
         # Calculate weighted averages for SMS params using shop CS weights
         sail_sms = {}
+        sms_calc_steps = {}
+        sms_shop_mapping = {
+            "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
+            "DSP SMS": "DSP",
+            "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
+            "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
+            "ISP SMS-1": "ISP",
+        }
+
         for param, values in sms_targets.items():
             if values:
                 total_val = sum(v * w for v, w in values)
                 total_weight = sum(w for v, w in values)
                 sail_sms[param] = round(total_val / total_weight, 3) if total_weight else None
+
+                # Store calculation details for HM Consumption and Scrap
+                if param in ["Hot Metal Consumption", "Scrap Consumption"]:
+                    shop_details = []
+                    for shop, (v, w) in zip(sms_shops, values):
+                        shop_details.append({
+                            "shop": shop,
+                            "plant": sms_shop_mapping.get(shop),
+                            "value": v,
+                            "cs_weight": w,
+                            "product": round(v*w, 2)
+                        })
+                    sms_calc_steps[param] = {
+                        "formula": "Weighted Average: Σ(Shop_Value × Shop_CS_Weight) / Σ(Shop_CS_Weight)",
+                        "shops": shop_details,
+                        "sum_products": round(total_val, 2),
+                        "sum_weights": total_weight,
+                        "result": sail_sms[param]
+                    }
 
         # Calculate TMI as HM + Scrap
         if "Hot Metal Consumption" in sail_sms and "Scrap Consumption" in sail_sms:
@@ -2592,6 +2638,12 @@ async def recalculate_sail_weighted(payload: dict):
             sc = sail_sms["Scrap Consumption"]
             if hm is not None and sc is not None:
                 sail_sms["TMI"] = round(hm + sc, 3)
+                sms_calc_steps["TMI"] = {
+                    "formula": "TMI = HM Consumption + Scrap Consumption",
+                    "hm_consumption": hm,
+                    "scrap_consumption": sc,
+                    "result": sail_sms["TMI"]
+                }
 
         conn.close()
 
@@ -2604,6 +2656,8 @@ async def recalculate_sail_weighted(payload: dict):
             "report_month": report_month,
             "sail_bf": sail_bf,
             "sail_sms": sail_sms,
+            "bf_calculations": bf_calc_steps,
+            "sms_calculations": sms_calc_steps,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
