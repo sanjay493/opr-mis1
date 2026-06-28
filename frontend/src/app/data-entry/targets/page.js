@@ -1,410 +1,270 @@
 'use client';
-import React, { useState, useCallback, useRef, useMemo } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useCallback } from 'react';
+import GlobalNavbar from '@/components/GlobalNavbar';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
 
 const FY_LIST = ['2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29'];
+const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
 
-// BF / plant-level params — columns are plants
-const PLANT_COLS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
-
-// SMS params rendered in a separate section — columns are shops
-const SMS_SECTIONS = ['Hot Metal Consumption', 'Scrap Consumption', 'TMI'];
-const SMS_SHOP_ORDER = [
-  'BSP SMS-2', 'BSP SMS-3',
-  'DSP SMS',
-  'RSP SMS-1', 'RSP SMS-2',
-  'BSL SMS-1', 'BSL SMS-2',
-  'ISP SMS-1',
-  'SAIL',
-];
-
-// Which sections belong to the SMS div vs BF div
-function isSmsSection(section) {
-  return SMS_SECTIONS.includes(section);
-}
-
-// ── Sub-components ──────────────────────────────────────────────────────────
-
-function SectionHeader({ title }) {
-  return (
-    <div style={{
-      background: '#1e3a5f', color: '#fff', padding: '8px 12px',
-      fontWeight: 700, fontSize: 14, borderRadius: '4px 4px 0 0', marginTop: 20,
-    }}>
-      {title}
-    </div>
-  );
-}
-
-function Cell({ val, readOnly, onChange, title: tip }) {
-  return (
-    <td style={{ padding: '3px 4px' }}>
-      <input
-        type="text"
-        value={val}
-        readOnly={readOnly}
-        onChange={readOnly ? undefined : e => onChange(e.target.value)}
-        title={tip || ''}
-        style={{
-          width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1',
-          borderRadius: 3, fontSize: 12, textAlign: 'right',
-          background: readOnly ? '#f0fdf4' : '#fff',
-          fontWeight: readOnly ? 700 : 400,
-          color: readOnly ? '#166534' : '#1e293b',
-          cursor: readOnly ? 'default' : 'text',
-          outline: 'none',
-        }}
-      />
-    </td>
-  );
-}
-
-const TH = ({ children, style = {} }) => (
-  <th style={{
-    padding: '7px 6px', background: '#1e3a5f', color: '#fff',
-    textAlign: 'center', fontSize: 12, minWidth: 74, ...style,
-  }}>
-    {children}
-  </th>
-);
-
-// ── BF / Plant-level table ───────────────────────────────────────────────────
-function BFTable({ sections, edits, onChange }) {
-  const bfSections = sections.filter(s => !isSmsSection(s.section));
-
-  const pivotRows = bfSections.map(sec => {
-    const byLabel = {};
-    for (const r of sec.rows) byLabel[r.row_label] = { param_id: r.param_id, val: edits[r.param_id] ?? '' };
-    return { section: sec.section, unit: sec.unit, byLabel };
-  });
-
-  return (
-    <>
-      <SectionHeader title="BF / Iron-making & Energy Parameters" />
-      <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 4px 4px' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-          <thead>
-            <tr>
-              <TH style={{ textAlign: 'left', minWidth: 200 }}>Parameter</TH>
-              <TH style={{ minWidth: 70 }}>Unit</TH>
-              {PLANT_COLS.map(p => (
-                <TH key={p} style={p === 'SAIL' ? { background: '#166534' } : {}}>{p}</TH>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pivotRows.map((row, ri) => (
-              <tr key={row.section} style={{ background: ri % 2 === 0 ? '#f8fafc' : '#fff', borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ padding: '5px 10px', fontWeight: 600, whiteSpace: 'nowrap', fontSize: 13 }}>{row.section}</td>
-                <td style={{ padding: '5px 6px', textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: 12, whiteSpace: 'nowrap' }}>
-                  {row.unit}
-                </td>
-                {PLANT_COLS.map(p => {
-                  const cell = row.byLabel[p];
-                  if (!cell) return <td key={p} style={{ padding: '5px 6px', textAlign: 'center', color: '#cbd5e1', fontSize: 12 }}>—</td>;
-                  const isSail = p === 'SAIL';
-                  return (
-                    <td key={p} style={{ padding: '3px 4px' }}>
-                      <input
-                        type="text"
-                        value={cell.val}
-                        onChange={e => onChange(cell.param_id, e.target.value)}
-                        style={{
-                          width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1',
-                          borderRadius: 3, fontSize: 12, textAlign: 'right', outline: 'none',
-                          background: isSail ? '#f0fdf4' : '#fff',
-                          fontWeight: isSail ? 700 : 400,
-                          color: isSail ? '#166534' : '#1e293b',
-                        }}
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-        SAIL column is editable — use <strong>Recalculate SAIL</strong> to fill from plant values, then override any value manually before saving.
-      </p>
-    </>
-  );
-}
-
-// ── SMS / Shop-level table ────────────────────────────────────────────────────
-function SMSTable({ sections, edits, computedTmi, onChange }) {
-  const smsSections = sections.filter(s => isSmsSection(s.section));
-  if (!smsSections.length) return null;
-
-  // pivot: section → shop → {param_id, val}
-  const pivotRows = smsSections.map(sec => {
-    const isTmi = sec.section === 'TMI';
-    const byShop = {};
-    for (const r of sec.rows) {
-      const val = isTmi && r.row_label !== 'SAIL'
-        ? (computedTmi[r.param_id] ?? edits[r.param_id] ?? '')
-        : (edits[r.param_id] ?? '');
-      byShop[r.row_label] = { param_id: r.param_id, val, computed: isTmi };
-    }
-    return { section: sec.section, unit: sec.unit, byShop, isTmi };
-  });
-
-  // Only show shops that exist in the data
-  const presentShops = SMS_SHOP_ORDER.filter(sh =>
-    smsSections.some(s => s.rows.some(r => r.row_label === sh))
-  );
-
-  return (
-    <>
-      <SectionHeader title="SMS Parameters (Shop-wise)" />
-      <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 4px 4px' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-          <thead>
-            {/* Plant group header */}
-            <tr style={{ background: '#334155', color: '#fff' }}>
-              <th style={{ padding: '4px 10px', fontSize: 12 }} rowSpan={2}>Parameter</th>
-              <th style={{ padding: '4px 6px', fontSize: 12 }} rowSpan={2}>Unit</th>
-              <th colSpan={2} style={{ padding: '4px 6px', fontSize: 12, borderLeft: '1px solid #475569', textAlign: 'center' }}>BSP</th>
-              <th colSpan={1} style={{ padding: '4px 6px', fontSize: 12, borderLeft: '1px solid #475569', textAlign: 'center' }}>DSP</th>
-              <th colSpan={2} style={{ padding: '4px 6px', fontSize: 12, borderLeft: '1px solid #475569', textAlign: 'center' }}>RSP</th>
-              <th colSpan={2} style={{ padding: '4px 6px', fontSize: 12, borderLeft: '1px solid #475569', textAlign: 'center' }}>BSL</th>
-              <th colSpan={1} style={{ padding: '4px 6px', fontSize: 12, borderLeft: '1px solid #475569', textAlign: 'center' }}>ISP</th>
-              <th colSpan={1} style={{ padding: '4px 6px', fontSize: 12, borderLeft: '1px solid #475569', background: '#166534', textAlign: 'center' }}>SAIL</th>
-            </tr>
-            <tr style={{ background: '#1e3a5f', color: '#fff' }}>
-              {presentShops.map(sh => (
-                <th key={sh} style={{
-                  padding: '5px 6px', fontSize: 11, textAlign: 'center', minWidth: 72,
-                  borderLeft: ['DSP SMS','RSP SMS-1','BSL SMS-1','ISP SMS-1','SAIL'].includes(sh) ? '1px solid #475569' : undefined,
-                  background: sh === 'SAIL' ? '#166534' : undefined,
-                }}>
-                  {sh}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pivotRows.map((row, ri) => (
-              <tr key={row.section} style={{ background: ri % 2 === 0 ? '#f8fafc' : '#fff', borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ padding: '5px 10px', fontWeight: 600, whiteSpace: 'nowrap', fontSize: 13 }}>{row.section}</td>
-                <td style={{ padding: '5px 6px', textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: 12, whiteSpace: 'nowrap' }}>
-                  {row.unit}
-                </td>
-                {presentShops.map(sh => {
-                  const cell = row.byShop[sh];
-                  if (!cell) return <td key={sh} style={{ padding: '5px 6px', textAlign: 'center', color: '#cbd5e1', fontSize: 12 }}>—</td>;
-                  const isSail = sh === 'SAIL';
-                  const isTmiShop = row.isTmi && !isSail;
-                  return (
-                    <td key={sh} style={{ padding: '3px 4px' }}>
-                      <input
-                        type="text"
-                        value={cell.val}
-                        readOnly={isTmiShop}
-                        onChange={isTmiShop ? undefined : e => onChange(cell.param_id, e.target.value)}
-                        title={isTmiShop ? 'TMI = HM + Scrap (computed live)' : isSail ? 'Editable — use Recalculate SAIL or enter manually' : ''}
-                        style={{
-                          width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1',
-                          borderRadius: 3, fontSize: 12, textAlign: 'right', outline: 'none',
-                          background: (isSail || isTmiShop) ? '#f0fdf4' : '#fff',
-                          fontWeight: (isSail || isTmiShop) ? 700 : 400,
-                          color: (isSail || isTmiShop) ? '#166534' : '#1e293b',
-                          cursor: isTmiShop ? 'default' : 'text',
-                        }}
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-        TMI shop cells = HM + Scrap (computed live, read-only) · SAIL cells editable — use <strong>Recalculate SAIL</strong> to fill from shops, then override if needed.
-      </p>
-    </>
-  );
-}
-
-// ── Main page ────────────────────────────────────────────────────────────────
 export default function TechnoTargetsPage() {
   const [fy, setFy] = useState('2026-27');
-  const [sections, setSections] = useState([]);
+  const [parameters, setParameters] = useState([]);
+  const [targets, setTargets] = useState({});
   const [edits, setEdits] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
   const [status, setStatus] = useState(null);
-  const [loaded, setLoaded] = useState(false);
-  const loadedFy = useRef('');
 
+  // Load parameters and targets
   const handleLoad = useCallback(async () => {
     setLoading(true);
     setStatus(null);
-    setLoaded(false);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/techno-targets?fy=${encodeURIComponent(fy)}`);
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      // Only show MAJOR group sections (all returned sections)
-      setSections(data.sections || []);
-      const init = {};
-      for (const sec of (data.sections || [])) {
-        for (const r of sec.rows) {
-          init[r.param_id] = r.target == null ? '' : String(r.target);
-        }
+      const [paramsRes, targetsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/techno-major-parameters`),
+        fetch(`${API_BASE_URL}/api/techno-sail-targets?fy=${encodeURIComponent(fy)}`),
+      ]);
+
+      if (!paramsRes.ok || !targetsRes.ok) {
+        throw new Error('Failed to load parameters or targets');
       }
-      setEdits(init);
-      loadedFy.current = fy;
-      setLoaded(true);
-    } catch (e) {
-      setStatus({ type: 'error', text: String(e) });
+
+      const paramsData = await paramsRes.json();
+      const targetsData = await targetsRes.json();
+
+      setParameters(paramsData.parameters || []);
+      setTargets(targetsData.targets || {});
+      setEdits(Object.assign({}, targetsData.targets || {}));
+    } catch (err) {
+      setStatus({ type: 'error', text: `Load failed: ${err.message}` });
     } finally {
       setLoading(false);
     }
   }, [fy]);
 
-  const handleChange = useCallback((param_id, val) => {
-    setEdits(prev => ({ ...prev, [param_id]: val }));
-  }, []);
+  // Auto-load on FY change
+  useEffect(() => {
+    handleLoad();
+  }, [fy, handleLoad]);
 
-  // Compute shop-level TMI = HM + Scrap in real time
-  const computedTmi = useMemo(() => {
-    const hmSec    = sections.find(s => s.section === 'Hot Metal Consumption');
-    const scrapSec = sections.find(s => s.section === 'Scrap Consumption');
-    const tmiSec   = sections.find(s => s.section === 'TMI');
-    if (!hmSec || !scrapSec || !tmiSec) return {};
-    const result = {};
-    for (const tmiRow of tmiSec.rows) {
-      if (tmiRow.row_label === 'SAIL') continue;
-      const hmRow    = hmSec.rows.find(r => r.row_label === tmiRow.row_label);
-      const scrapRow = scrapSec.rows.find(r => r.row_label === tmiRow.row_label);
-      if (!hmRow || !scrapRow) continue;
-      const hm    = parseFloat(edits[hmRow.param_id]);
-      const scrap = parseFloat(edits[scrapRow.param_id]);
-      if (!isNaN(hm) && !isNaN(scrap)) {
-        result[tmiRow.param_id] = String(Math.round((hm + scrap) * 1000) / 1000);
-      }
-    }
-    return result;
-  }, [sections, edits]);
+  // Handle parameter value change
+  const handleChange = (param, value) => {
+    setEdits(prev => ({ ...prev, [param]: value }));
+  };
 
-  const [recalcLoading, setRecalcLoading] = useState(false);
-
-  // Fetch computed SAIL values from backend and populate edits (does NOT save)
-  const handleRecalcSail = async () => {
-    setRecalcLoading(true);
+  // Recalculate SAIL targets
+  const handleRecalculate = async () => {
+    setRecalculating(true);
     setStatus(null);
     try {
-      // First save current plant/shop values so backend can compute from them
-      const mergedEdits = { ...edits, ...computedTmi };
-      const rows = Object.entries(mergedEdits).map(([param_id, target]) => ({
-        param_id: Number(param_id),
-        target: target === '' ? null : target,
-      }));
-      const saveRes = await fetch(`${API_BASE_URL}/api/techno-targets`, {
+      const res = await fetch(`${API_BASE_URL}/api/techno-recalculate-sail`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fy: loadedFy.current, rows }),
+        body: JSON.stringify({ fy }),
       });
-      if (!saveRes.ok) throw new Error(await saveRes.text());
 
-      // Reload — now SAIL values are the computed ones from backend
-      await handleLoad();
-      setStatus({ type: 'success', text: 'SAIL values recalculated from plant targets. Review and adjust if needed, then Save All.' });
-    } catch (e) {
-      setStatus({ type: 'error', text: String(e) });
+      if (!res.ok) throw new Error(await res.text());
+      const result = await res.json();
+
+      // Update SAIL values with computed values
+      const newEdits = { ...edits };
+      Object.entries(result.computed || {}).forEach(([param, value]) => {
+        newEdits[param] = value?.toString() || '';
+      });
+      setEdits(newEdits);
+      setStatus({ type: 'success', text: 'SAIL targets recalculated from plant-level values' });
+    } catch (err) {
+      setStatus({ type: 'error', text: `Recalculation failed: ${err.message}` });
     } finally {
-      setRecalcLoading(false);
+      setRecalculating(false);
     }
   };
 
+  // Save all targets
   const handleSave = async () => {
     setSaving(true);
     setStatus(null);
+
+    // Convert to numeric values
+    const editedTargets = {};
+    Object.entries(edits).forEach(([param, val]) => {
+      if (val !== '' && val !== null) {
+        try {
+          editedTargets[param] = parseFloat(val);
+        } catch {
+          editedTargets[param] = val;
+        }
+      }
+    });
+
     try {
-      // Merge computed TMI shop values; SAIL values are saved exactly as shown (user may have overridden them)
-      const mergedEdits = { ...edits, ...computedTmi };
-      const rows = Object.entries(mergedEdits).map(([param_id, target]) => ({
-        param_id: Number(param_id),
-        target: target === '' ? null : target,
-      }));
-      const res = await fetch(`${API_BASE_URL}/api/techno-targets`, {
+      const res = await fetch(`${API_BASE_URL}/api/techno-sail-targets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fy: loadedFy.current, rows, skip_sail_compute: true }),
+        body: JSON.stringify({ fy, targets: editedTargets }),
       });
+
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setStatus({ type: 'success', text: `Saved ${data.saved} targets for FY ${data.fy}` });
-    } catch (e) {
-      setStatus({ type: 'error', text: String(e) });
+
+      setTargets(editedTargets);
+      setStatus({ type: 'success', text: `Saved ${Object.keys(editedTargets).length} parameter(s) for FY ${fy}` });
+    } catch (err) {
+      setStatus({ type: 'error', text: `Save failed: ${err.message}` });
     } finally {
       setSaving(false);
     }
   };
 
+  // Check for changes
+  const hasChanges = JSON.stringify(targets) !== JSON.stringify(edits);
+
   return (
-    <div style={{ fontFamily: 'IBM Plex Sans, Arial, sans-serif', maxWidth: 1200, margin: '0 auto', padding: '24px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <Link href="/data-entry" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: 14 }}>
-          ← Data Entry
-        </Link>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Techno-Economic Annual Targets</h1>
-      </div>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+      <GlobalNavbar />
 
-      {/* FY Selector */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
-        <label style={{ fontWeight: 600, fontSize: 14 }}>Financial Year:</label>
-        <select value={fy} onChange={e => { setFy(e.target.value); setLoaded(false); }}
-          style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid #cbd5e1', fontSize: 14 }}>
-          {FY_LIST.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <button onClick={handleLoad} disabled={loading}
-          style={{ padding: '6px 18px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
-          {loading ? 'Loading…' : 'Load'}
-        </button>
-        {loaded && (
-          <>
-            <button onClick={handleRecalcSail} disabled={recalcLoading || saving}
-              style={{ padding: '6px 16px', background: '#0369a1', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
-              title="Compute SAIL values from plant targets using formula. Review and adjust before saving.">
-              {recalcLoading ? 'Computing…' : '⟳ Recalculate SAIL'}
-            </button>
-            <button onClick={handleSave} disabled={saving || recalcLoading}
-              style={{ padding: '6px 18px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
-              {saving ? 'Saving…' : 'Save All'}
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Status */}
-      {status && (
-        <div style={{
-          padding: '8px 14px', borderRadius: 4, marginBottom: 14, fontSize: 13,
-          background: status.type === 'success' ? '#dcfce7' : '#fee2e2',
-          color: status.type === 'success' ? '#166534' : '#991b1b',
-          border: `1px solid ${status.type === 'success' ? '#86efac' : '#fca5a5'}`,
-        }}>
-          {status.text}
+      <main style={{ padding: '32px', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '24pt', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>
+            📊 Techno-Economic Annual Targets
+          </h1>
+          <p style={{ fontSize: '11pt', color: '#64748b', margin: '0' }}>
+            SAIL consolidated targets for techno-economic parameters. SAIL values can be recalculated from plant-level targets or edited manually.
+          </p>
         </div>
-      )}
 
-      {/* Tables */}
-      {loaded && (
-        <>
-          <BFTable sections={sections} edits={edits} onChange={handleChange} />
-          <SMSTable sections={sections} edits={edits} computedTmi={computedTmi} onChange={handleChange} />
-        </>
-      )}
+        {/* Controls */}
+        <div style={{
+          display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '24px',
+          flexWrap: 'wrap', backgroundColor: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0'
+        }}>
+          <div>
+            <label style={{ fontSize: '10pt', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>
+              Financial Year
+            </label>
+            <select
+              value={fy}
+              onChange={e => setFy(e.target.value)}
+              style={{ padding: '8px 12px', fontSize: '11pt', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+            >
+              {FY_LIST.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
 
-      {!loaded && !loading && (
-        <p style={{ color: '#94a3b8', fontSize: 14 }}>Select a financial year and click Load to view / edit targets.</p>
-      )}
+          <button
+            onClick={handleLoad}
+            disabled={loading}
+            style={{
+              padding: '8px 16px', fontSize: '11pt', fontWeight: '600', borderRadius: '4px',
+              border: 'none', backgroundColor: '#6366f1', color: '#fff', cursor: 'pointer',
+              marginTop: '18px'
+            }}
+          >
+            {loading ? 'Loading...' : 'Load'}
+          </button>
+
+          <button
+            onClick={handleRecalculate}
+            disabled={recalculating || parameters.length === 0}
+            style={{
+              padding: '8px 16px', fontSize: '11pt', fontWeight: '600', borderRadius: '4px',
+              border: 'none', backgroundColor: '#0891b2', color: '#fff', cursor: 'pointer',
+              marginTop: '18px'
+            }}
+          >
+            {recalculating ? 'Calculating...' : 'Recalculate SAIL'}
+          </button>
+
+          <button
+            onClick={handleSave}
+            disabled={saving || !hasChanges}
+            style={{
+              padding: '8px 16px', fontSize: '11pt', fontWeight: '600', borderRadius: '4px',
+              border: 'none', backgroundColor: hasChanges ? '#10b981' : '#94a3b8', color: '#fff',
+              cursor: hasChanges ? 'pointer' : 'default', marginTop: '18px'
+            }}
+          >
+            {saving ? 'Saving...' : 'Save All'}
+          </button>
+        </div>
+
+        {/* Status */}
+        {status && (
+          <div style={{
+            padding: '12px 16px', marginBottom: '16px', borderRadius: '6px', fontSize: '11pt',
+            backgroundColor: status.type === 'success' ? '#dcfce7' : '#fee2e2',
+            color: status.type === 'success' ? '#166534' : '#991b1b',
+            border: `1px solid ${status.type === 'success' ? '#bbf7d0' : '#fecaca'}`
+          }}>
+            {status.text}
+          </div>
+        )}
+
+        {/* Parameters Table */}
+        {parameters.length > 0 && (
+          <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#1e3a5f', color: '#fff' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '11pt' }}>Parameter</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', minWidth: '80px' }}>Unit</th>
+                  {PLANTS.map(plant => (
+                    <th key={plant}
+                      style={{
+                        padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt',
+                        backgroundColor: plant === 'SAIL' ? '#166534' : '#1e3a5f', minWidth: '100px'
+                      }}
+                    >
+                      {plant}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {parameters.map((param, idx) => (
+                  <tr key={param.name} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
+                    <td style={{ padding: '10px 16px', fontSize: '11pt', fontWeight: '500', color: '#1e293b' }}>
+                      {param.name}
+                    </td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center', fontSize: '10pt', color: '#475569' }}>
+                      {param.unit}
+                    </td>
+                    {PLANTS.map(plant => (
+                      <td key={`${param.name}-${plant}`} style={{ padding: '8px 12px', textAlign: 'right' }}>
+                        {plant === 'SAIL' ? (
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={edits[param.name] ?? ''}
+                            onChange={e => handleChange(param.name, e.target.value)}
+                            style={{
+                              width: '100%', padding: '6px 8px', fontSize: '10pt', textAlign: 'right',
+                              border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#fff'
+                            }}
+                            placeholder="–"
+                          />
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '10pt' }}>–</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {parameters.length === 0 && !loading && (
+          <div style={{
+            padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '11pt',
+            backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0'
+          }}>
+            Select a financial year and click <strong>Load</strong> to view parameters.
+          </div>
+        )}
+      </main>
     </div>
   );
 }
