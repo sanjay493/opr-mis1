@@ -2509,6 +2509,33 @@ async def recalculate_sail_weighted(payload: dict):
         """, months)
         cs_weights = {row[0]: row[1] for row in cur.fetchall() if row[1]}
 
+        # Fetch SMS-wise Crude Steel production (base items only, not product breakdowns)
+        # E.g., use "BSP SMS-2" (2525), not "BSP SMS-2 BLOOM" (800) or "BSP SMS-2 SLAB" (1725)
+        shop_to_plant = {
+            "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
+            "DSP SMS": "DSP",
+            "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
+            "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
+            "ISP SMS-1": "ISP",
+        }
+
+        shop_cs_weights = {}
+        for shop, plant in shop_to_plant.items():
+            # Query exact shop item name (base SMS entry, not product type breakdowns)
+            cur.execute(f"""
+                SELECT SUM(month_actual)
+                FROM production_plan_table
+                WHERE report_month IN ({ph})
+                  AND item_name = ?
+                  AND plant_name = ?
+            """, months + [shop, plant])
+            result = cur.fetchone()
+            shop_cs_weights[shop] = result[0] if result[0] else 0
+
+        shops_per_plant = {}
+        for shop, plant in shop_to_plant.items():
+            shops_per_plant[plant] = shops_per_plant.get(plant, 0) + 1
+
         # Store metadata about production targets used
         production_metadata = {
             "source": "production_plan_table",
