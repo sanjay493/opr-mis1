@@ -880,51 +880,70 @@ def generate_summary_te_table(report_month: str) -> list:
             return {"parameter": param_name, "unit": unit, "values": [tgt_val] + vals}
 
         def prod_entry(item_name, unit, plan_data, actual_data):
-            """Entry for production data items with Apr-ReportMonth expansion."""
-            # Check if we're past April (May onwards)
+            """Entry for production data items - Auto mode switches table structure."""
             report_month_num = int(report_month.split('-')[1])
             is_expanded = report_month_num > 4  # May onwards (month > 4)
 
             vals = []
 
             if is_expanded:
-                # From May onwards: April | Apr-ReportMonth (Plan, Actual, %FF) | Apr-CPLY (Plan, Actual, %FF) | Growth%
+                # From May onwards: Full expanded table with all 8 columns
+                # Structure: Month APP | Month Act | %Ful | CPLY Act | %Gr w.r.t CPLY |
+                #           Apr-Mon APP | Apr-Mon Act | %Ful | Apr-CPLY Act | %Gr w.r.t Apr-CPLY | Unit | %Gr
 
-                # April only (actual)
-                april_actual = sum(actual_data.get(p, {}).get(fy_april, 0) for p in _BF_PLANTS)
-                vals.append(_fmt(april_actual if april_actual > 0 else None))
+                # 1. Current Month Plan
+                month_plan = sum(plan_data.get(p, {}).get(report_month, 0) for p in _BF_PLANTS)
+                vals.append(_fmt(month_plan if month_plan > 0 else None))
 
-                # Apr-Report month (Plan, Actual, %FF)
+                # 2. Current Month Actual
+                month_actual = sum(actual_data.get(p, {}).get(report_month, 0) for p in _BF_PLANTS)
+                vals.append(_fmt(month_actual if month_actual > 0 else None))
+
+                # 3. Current Month % Fulfillment
+                month_ff = (month_actual / month_plan * 100) if month_plan > 0 else 0
+                vals.append(_fmt(month_ff if month_ff > 0 else None))
+
+                # 4. CPLY Month Actual
+                cply_month_actual = sum(actual_data.get(p, {}).get(cply_month, 0) for p in _BF_PLANTS)
+                vals.append(_fmt(cply_month_actual if cply_month_actual > 0 else None))
+
+                # 5. % Growth w.r.t CPLY Month
+                month_growth = ((month_actual - cply_month_actual) / cply_month_actual * 100) if cply_month_actual > 0 else 0
+                vals.append(_fmt(month_growth))
+
+                # 6. Apr-ReportMonth Plan
                 ytd_months = [m for m in ytd if m >= fy_april]  # Months from April to report month
+                ytd_plan = sum(plan_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in ytd_months)
+                vals.append(_fmt(ytd_plan if ytd_plan > 0 else None))
 
-                plan_sum = sum(plan_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in ytd_months)
-                actual_sum = sum(actual_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in ytd_months)
-                ff_percent = (actual_sum / plan_sum * 100) if plan_sum > 0 else 0
+                # 7. Apr-ReportMonth Actual
+                ytd_actual = sum(actual_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in ytd_months)
+                vals.append(_fmt(ytd_actual if ytd_actual > 0 else None))
 
-                vals.append(_fmt(plan_sum if plan_sum > 0 else None))        # Apr-ReportMonth Plan
-                vals.append(_fmt(actual_sum if actual_sum > 0 else None))    # Apr-ReportMonth Actual
-                vals.append(_fmt(ff_percent if ff_percent > 0 else None))    # %FF
+                # 8. Apr-ReportMonth % Fulfillment
+                ytd_ff = (ytd_actual / ytd_plan * 100) if ytd_plan > 0 else 0
+                vals.append(_fmt(ytd_ff if ytd_ff > 0 else None))
 
-                # Apr-CPLY month (Plan, Actual, %FF)
+                # 9. Apr-CPLY Month Actual
                 cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
+                cply_ytd_actual = sum(actual_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in cply_ytd_months)
+                vals.append(_fmt(cply_ytd_actual if cply_ytd_actual > 0 else None))
 
-                cply_plan_sum = sum(plan_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in cply_ytd_months)
-                cply_actual_sum = sum(actual_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in cply_ytd_months)
-                cply_ff = (cply_actual_sum / cply_plan_sum * 100) if cply_plan_sum > 0 else 0
+                # 10. % Growth w.r.t Apr-CPLY
+                ytd_growth = ((ytd_actual - cply_ytd_actual) / cply_ytd_actual * 100) if cply_ytd_actual > 0 else 0
+                vals.append(_fmt(ytd_growth))
 
-                vals.append(_fmt(cply_plan_sum if cply_plan_sum > 0 else None))      # Apr-CPLY Plan
-                vals.append(_fmt(cply_actual_sum if cply_actual_sum > 0 else None))  # Apr-CPLY Actual
-                vals.append(_fmt(cply_ff if cply_ff > 0 else None))                  # CPLY %FF
-
-                # Growth %
-                growth = ((actual_sum - cply_actual_sum) / cply_actual_sum * 100) if cply_actual_sum > 0 else 0
-                vals.append(_fmt(growth if actual_sum > 0 else None))
             else:
-                # Before May: April only
-                april_actual = sum(actual_data.get(p, {}).get(fy_april, 0) for p in _BF_PLANTS)
-                vals.append(_fmt(april_actual if april_actual > 0 else None))
+                # April: Simple structure - April data only
+                april_plan = sum(plan_data.get(p, {}).get(report_month, 0) for p in _BF_PLANTS)
+                april_actual = sum(actual_data.get(p, {}).get(report_month, 0) for p in _BF_PLANTS)
+                april_ff = (april_actual / april_plan * 100) if april_plan > 0 else 0
 
-            return {"parameter": item_name, "unit": unit, "values": [""] + vals}
+                vals.append(_fmt(april_plan if april_plan > 0 else None))
+                vals.append(_fmt(april_actual if april_actual > 0 else None))
+                vals.append(_fmt(april_ff if april_ff > 0 else None))
+
+            return {"parameter": item_name, "unit": unit, "values": [""] + vals, "is_expanded": is_expanded}
 
         # Fetch plan data for fulfillment calculation
         plan_items = ["Hot Metal", "Total Crude Steel", "Saleable Steel", "Finished Steel"]
