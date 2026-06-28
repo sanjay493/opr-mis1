@@ -494,19 +494,14 @@ export default function TechnoTargetsPage() {
             </div>
             <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
               <strong>SMS Shop-wise Crude Steel Production (Weighted Average):</strong>
-              <div style={{ fontSize: '9pt', marginTop: '4px' }}>
-                <div style={{ marginBottom: '8px', padding: '8px', backgroundColor: '#e0f2fe', borderRadius: '4px', fontStyle: 'italic' }}>
-                  Multi-shop plants use specific SMS items | Single-shop plants (DSP, ISP) use Total Crude Steel
-                </div>
+              <div style={{ fontSize: '9pt', marginTop: '4px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                 {Object.entries(prodMetadata.shop_to_plant || {}).map(([shop, plant]) => {
                   const weight = prodMetadata.shop_cs_weights?.[shop];
-                  const isSingleShop = ['DSP', 'ISP'].includes(plant);
-                  const source = isSingleShop ? 'Total Crude Steel' : `${shop}`;
                   return (
-                    <div key={shop} style={{ padding: '6px 8px', backgroundColor: '#bfdbfe', borderRadius: '3px', marginBottom: '4px' }}>
-                      <strong>{shop}</strong>
-                      <div style={{ fontSize: '8pt', color: '#0c4a6e', marginTop: '2px' }}>
-                        Source: {source} | Weight: {weight?.toLocaleString() || '0'}
+                    <div key={shop} style={{ padding: '8px', backgroundColor: '#bfdbfe', borderRadius: '3px', textAlign: 'center' }}>
+                      <div style={{ fontWeight: '600', color: '#0c4a6e', fontSize: '9pt' }}>{shop}</div>
+                      <div style={{ fontSize: '8pt', color: '#0c4a6e', marginTop: '4px' }}>
+                        {weight?.toLocaleString() || '0'}
                       </div>
                     </div>
                   );

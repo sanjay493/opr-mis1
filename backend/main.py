@@ -2509,9 +2509,8 @@ async def recalculate_sail_weighted(payload: dict):
         """, months)
         cs_weights = {row[0]: row[1] for row in cur.fetchall() if row[1]}
 
-        # Fetch SMS-wise Crude Steel production
-        # Plants with multiple SMS shops: use specific SMS entries (e.g., "BSP SMS-2")
-        # Plants with single SMS shop (DSP, ISP): use "Total Crude Steel"
+        # Simple weighted average for all SMS shops
+        # SAIL = Σ(Shop_Value × Shop_Production) / Σ(Shop_Production)
         shop_to_plant = {
             "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
             "DSP SMS": "DSP",
@@ -2520,50 +2519,24 @@ async def recalculate_sail_weighted(payload: dict):
             "ISP SMS-1": "ISP",
         }
 
-        # Plants with only one SMS shop
-        single_sms_plants = {"DSP", "ISP"}
-
+        # Fetch SMS-wise Crude Steel production for each shop
         shop_cs_weights = {}
         for shop, plant in shop_to_plant.items():
-            if plant in single_sms_plants:
-                # For single-SMS-shop plants, use Total Crude Steel production
-                item_name_pattern = "Total Crude Steel"
-                use_like = False
-            else:
-                # For multi-SMS-shop plants, use specific SMS entry
-                # Database stores various formats:
-                # - BSP: "SMS-2", "SMS-3" (exact)
-                # - RSP/BSL: "SMS-1 CCM-1", "SMS-2 CCM-1&2", etc. (with product types)
-                # Use LIKE to match both "SMS-X" and "SMS-X %"
-                shop_parts = shop.split()
-                item_name_pattern = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
-                use_like = True
+            # Extract SMS identifier: "BSP SMS-2" → "SMS-2"
+            shop_parts = shop.split()
+            sms_identifier = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
 
-            if use_like:
-                # Sum all items starting with SMS identifier (e.g., "SMS-2" or "SMS-2 CCM-1")
-                cur.execute(f"""
-                    SELECT SUM(month_actual)
-                    FROM production_plan_table
-                    WHERE report_month IN ({ph})
-                      AND (item_name = ? OR item_name LIKE ?)
-                      AND plant_name = ?
-                """, months + [item_name_pattern, item_name_pattern + " %", plant])
-            else:
-                # Exact match for Total Crude Steel
-                cur.execute(f"""
-                    SELECT SUM(month_actual)
-                    FROM production_plan_table
-                    WHERE report_month IN ({ph})
-                      AND item_name = ?
-                      AND plant_name = ?
-                """, months + [item_name_pattern, plant])
+            # Sum all items matching SMS identifier (e.g., "SMS-2", "SMS-2 BLOOM", "SMS-2 CCM-1")
+            cur.execute(f"""
+                SELECT SUM(month_actual)
+                FROM production_plan_table
+                WHERE report_month IN ({ph})
+                  AND (item_name = ? OR item_name LIKE ?)
+                  AND plant_name = ?
+            """, months + [sms_identifier, sms_identifier + " %", plant])
 
             result = cur.fetchone()
             shop_cs_weights[shop] = result[0] if result[0] else 0
-
-        shops_per_plant = {}
-        for shop, plant in shop_to_plant.items():
-            shops_per_plant[plant] = shops_per_plant.get(plant, 0) + 1
 
         # Store metadata about production targets used
         production_metadata = {
@@ -2575,7 +2548,6 @@ async def recalculate_sail_weighted(payload: dict):
             "hm_weights": hm_weights,
             "cs_weights": cs_weights,
             "shop_cs_weights": {shop: round(w, 2) for shop, w in shop_cs_weights.items()},
-            "shops_per_plant": shops_per_plant,
             "shop_to_plant": shop_to_plant
         }
 
