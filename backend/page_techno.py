@@ -829,15 +829,21 @@ def generate_summary_te_table(report_month: str) -> list:
     cply_month = db.get_cply_month(report_month)
     cply_ytd   = [db.get_cply_month(m) for m in ytd]
 
+    # Include April in the months (FY starts from April)
+    fy_april = f"{fy}-04"
+
     conn = sqlite3.connect(db.DB_PATH)
     cur  = conn.cursor()
     try:
-        all_months   = sorted(set(ytd) | set(cply_ytd) | {cply_month})
+        all_months   = sorted(set(ytd) | set(cply_ytd) | {cply_month, fy_april})
         plant_params = _all_sail_plant_params()
         techno_data  = _fetch_techno_data(cur, plant_params, all_months)
-        prod_raw     = _fetch_prod_multi(cur, _BF_PLANTS, ["Hot Metal", "Total Crude Steel"], all_months)
+        prod_items = ["Hot Metal", "Total Crude Steel", "Saleable Steel", "Finished Steel"]
+        prod_raw     = _fetch_prod_multi(cur, _BF_PLANTS, prod_items, all_months)
         hm = prod_raw["Hot Metal"]
         cs = prod_raw["Total Crude Steel"]
+        saleable = prod_raw.get("Saleable Steel", {})
+        finished = prod_raw.get("Finished Steel", {})
 
         # Targets for SAIL row in MAJOR group
         cur.execute("""
@@ -855,15 +861,31 @@ def generate_summary_te_table(report_month: str) -> list:
                        for ms in period_sets]
             return {"parameter": param_name, "unit": unit, "values": [tgt_val] + vals}
 
-        period_sets = [[report_month], [cply_month], ytd, cply_ytd]
+        def prod_entry(item_name, unit, period_sets, prod_data):
+            """Entry for production data items."""
+            vals = []
+            for ms in period_sets:
+                total = sum(prod_data.get((plant, m), 0) for plant in _BF_PLANTS for m in (ms if isinstance(ms, list) else [ms]))
+                vals.append(_fmt(total if total > 0 else None))
+            return {"parameter": item_name, "unit": unit, "values": [""] + vals}
 
-        return [
+        # Include report month and April, plus cply month and ytd
+        period_sets = [[report_month], [fy_april], [cply_month], ytd, cply_ytd]
+
+        result = [
             entry("Coke Rate",                  "kg/thm",   period_sets),
             entry("CDI Rate",                   "kg/thm",   period_sets),
             entry("Fuel Rate",                  "kg/thm",   period_sets),
             entry("BF Productivity",            "t/m3/day", period_sets),
             entry("Specific Energy Consumption","Gcal/tcs", period_sets),
+            # Add production data rows
+            prod_entry("Hot Metal",             "000 T",    period_sets, hm),
+            prod_entry("Total Crude Steel",     "000 T",    period_sets, cs),
+            prod_entry("Saleable Steel",        "000 T",    period_sets, saleable),
+            prod_entry("Finished Steel",        "000 T",    period_sets, finished),
         ]
+
+        return result
     finally:
         conn.close()
 
