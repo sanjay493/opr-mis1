@@ -577,6 +577,61 @@ export default function TechnoTargetsPage() {
           <div>
             <h2 style={{ fontSize: '14pt', fontWeight: '700', color: '#1e293b', marginBottom: '12px' }}>🏭 SMS / Steel Making Parameters</h2>
             <p style={{ fontSize: '10pt', color: '#64748b', marginBottom: '12px' }}>Shop-wise values with SAIL as weighted average by Crude Steel Production</p>
+
+            {/* SMS Shop Summary Table */}
+            {prodMetadata?.shop_cs_weights && (
+              <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '24px' }}>
+                <div style={{ padding: '12px 16px', backgroundColor: '#f0fdf4', borderBottom: '1px solid #d1fae5' }}>
+                  <h3 style={{ fontSize: '11pt', fontWeight: '700', color: '#065f46', margin: '0' }}>📋 SMS Shop Summary (CS Production & Targets)</h3>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
+                    <thead style={{ backgroundColor: '#ecfdf5', borderBottom: '2px solid #d1fae5' }}>
+                      <tr>
+                        <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '700' }}>SMS Shop</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700' }}>CS Production</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700' }}>HM Consumption</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700' }}>Scrap Consumption</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700' }}>TMI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {smsShops.map((shop, idx) => {
+                        const csWeight = prodMetadata.shop_cs_weights[shop];
+                        const hmValue = getValue('sms', shop, 'Hot Metal Consumption');
+                        const scrapValue = getValue('sms', shop, 'Scrap Consumption');
+                        const tmiValue = getValue('sms', shop, 'TMI');
+                        return (
+                          <tr key={shop} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
+                            <td style={{ padding: '8px 12px', fontWeight: '500', color: '#1e293b' }}>{shop}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: '#0891b2', fontWeight: '600' }}>{csWeight?.toLocaleString() || '—'}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: '#065f46' }}>{hmValue || '—'}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: '#065f46' }}>{scrapValue || '—'}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: '#059669', fontWeight: '500' }}>{tmiValue || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                      {/* SAIL Row */}
+                      <tr style={{ backgroundColor: '#f0fdf4', borderTop: '2px solid #d1fae5', fontWeight: '700' }}>
+                        <td style={{ padding: '10px 12px', color: '#166534' }}>SAIL</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#0891b2' }}>
+                          {Object.values(prodMetadata.shop_cs_weights || {}).reduce((a, b) => a + (b || 0), 0).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#166534' }}>
+                          {getValue('sail', 'Hot Metal Consumption', null) || '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#166534' }}>
+                          {getValue('sail', 'Scrap Consumption', null) || '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#166534' }}>
+                          {getValue('sail', 'TMI', null) || '—'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', maxHeight: 'calc(100vh - 400px)', display: 'flex', flexDirection: 'column' }}>
               <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
