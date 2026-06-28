@@ -1358,6 +1358,38 @@ def normalize_item_name(name):
     name = name.replace('BILLET', 'Billet')
     return name.strip()
 
+# Custom sort order for production items
+PRODUCTION_ITEM_ORDER = [
+    'Oven Pushing (nos/day)',
+    'SP-1',
+    'SP-2',
+    'Total Sinter',
+    'BF#2',
+    'BF#3',
+    'BF#4',
+    'Hot Metal',
+    'Hot Metal to ASP',
+    'Hot Metal to PCM',
+    'Billet Caster',
+    'Bloom Caster',
+    'BRC Bloom',
+    'BRC Round',
+    'Round Production',
+    'BRC',
+    'Total Caster',
+    'BOTTOM_POURING_INGOT',
+    'Pig Iron',
+    'WAP',
+    'wheel plant',
+    'Axle plant',
+    'MM',
+    'MSM',
+    'Finished Steel',
+    'Blooms for Sale',
+    'Saleable Semis',
+    'Saleable Steel',
+]
+
 @app.get("/api/production-items")
 async def get_production_items(plant: str, month: str):
     conn = sqlite3.connect(db.DB_PATH)
@@ -1382,7 +1414,18 @@ async def get_production_items(plant: str, month: str):
 
     conn.close()
 
-    all_items = sorted(set(plan_rows.keys()) | set(actual_rows.keys()))
+    all_items = set(plan_rows.keys()) | set(actual_rows.keys())
+
+    # Sort items using custom order, with remaining items at the end
+    def sort_key(item):
+        try:
+            return PRODUCTION_ITEM_ORDER.index(item)
+        except ValueError:
+            # Items not in the custom order appear at the end, sorted alphabetically
+            return len(PRODUCTION_ITEM_ORDER) + hash(item)
+
+    sorted_items = sorted(all_items, key=sort_key)
+
     return {
         "items": [
             {
@@ -1390,7 +1433,7 @@ async def get_production_items(plant: str, month: str):
                 "plan_value": plan_rows.get(name),
                 "actual_value": actual_rows.get(name),
             }
-            for name in all_items
+            for name in sorted_items
         ],
         "plant": plant,
         "month": month,
