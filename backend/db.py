@@ -1054,3 +1054,137 @@ def get_techno_months(plant: str = None) -> List[str]:
     months = [row[0] for row in cursor.fetchall()]
     conn.close()
     return months
+
+
+# ---------------------------------------------------------------------------
+# Techno Plan (Targets) Functions - Uses techno_plan tables
+# ---------------------------------------------------------------------------
+
+def get_techno_plan(plant: str, report_month: str) -> Dict[str, Any]:
+    """Fetch techno plan data for a plant/month from techno_plan table."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT techno_json FROM techno_plan WHERE plant = ? AND report_month = ?",
+        (plant, report_month)
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    if row and row[0]:
+        try:
+            return json.loads(row[0])
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def save_techno_plan(plant: str, report_month: str, unit: str, techno_json: str, source_file: str = ""):
+    """Save or update techno plan data for a plant/month/unit."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    from datetime import datetime
+    now = datetime.now().isoformat()
+
+    cur.execute("""
+        INSERT INTO techno_plan (plant, report_month, unit, techno_json, source_file, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(plant, report_month, unit)
+        DO UPDATE SET techno_json = excluded.techno_json, updated_at = excluded.updated_at
+    """, (plant, report_month, unit, techno_json, source_file, now, now))
+    conn.commit()
+    conn.close()
+
+
+def get_techno_plant_plan(plant: str, report_month: str) -> Dict[str, Any]:
+    """Fetch aggregated plant-level techno plan data."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT data FROM techno_plant_plan WHERE plant = ? AND report_month = ?",
+        (plant, report_month)
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    if row and row[0]:
+        try:
+            return json.loads(row[0])
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def save_techno_plant_plan(plant: str, report_month: str, data: Dict, calculation_details: Dict = None):
+    """Save or update aggregated plant-level techno plan data."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO techno_plant_plan (plant, report_month, data, calculation_details)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(plant, report_month)
+        DO UPDATE SET data = excluded.data, calculation_details = excluded.calculation_details
+    """, (plant, report_month, json.dumps(data), json.dumps(calculation_details or {})))
+    conn.commit()
+    conn.close()
+
+
+def get_sail_techno_plan(report_month: str) -> Dict[str, Any]:
+    """Fetch SAIL consolidated techno plan data."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT data FROM techno_sail_plan WHERE report_month = ?",
+        (report_month,)
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    if row and row[0]:
+        try:
+            return json.loads(row[0])
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def save_sail_techno_plan(report_month: str, data: Dict):
+    """Save or update SAIL consolidated techno plan data."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO techno_sail_plan (report_month, data)
+        VALUES (?, ?)
+        ON CONFLICT(report_month)
+        DO UPDATE SET data = excluded.data
+    """, (report_month, json.dumps(data)))
+    conn.commit()
+    conn.close()
+
+
+def list_techno_plan_months(plant: str = None) -> List[str]:
+    """List distinct months in techno_plan table, optionally filtered by plant."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    if plant:
+        cursor.execute(
+            "SELECT DISTINCT report_month FROM techno_plan WHERE plant = ? ORDER BY report_month DESC",
+            (plant,)
+        )
+    else:
+        cursor.execute(
+            "SELECT DISTINCT report_month FROM techno_plan ORDER BY report_month DESC"
+        )
+    months = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return months

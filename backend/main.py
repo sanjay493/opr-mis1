@@ -2150,6 +2150,127 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------------------------------------------------------------------
+# Techno Plan (Targets) API Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/techno-plan")
+async def get_techno_plan(plant: str = Query(...), report_month: str = Query(...)):
+    """
+    Get techno plan data for a plant/month.
+    Response: { plant, report_month, data: {unit: {param: value}} }
+    """
+    try:
+        plan_data = db.get_techno_plan(plant, report_month)
+        return {"plant": plant, "report_month": report_month, "data": plan_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/techno-plan")
+async def save_techno_plan(payload: dict):
+    """
+    Save techno plan data.
+    Payload: { plant, report_month, unit, techno_json, source_file? }
+    """
+    try:
+        plant = payload.get("plant")
+        report_month = payload.get("report_month")
+        unit = payload.get("unit", "")
+        techno_json = payload.get("techno_json", "{}")
+        source_file = payload.get("source_file", "")
+
+        if not all([plant, report_month]):
+            raise ValueError("plant and report_month required")
+
+        if isinstance(techno_json, dict):
+            techno_json = json.dumps(techno_json)
+
+        db.save_techno_plan(plant, report_month, unit, techno_json, source_file)
+        return {"status": "success", "plant": plant, "report_month": report_month}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/techno-plant-plan")
+async def get_techno_plant_plan(plant: str = Query(...), report_month: str = Query(...)):
+    """
+    Get aggregated plant-level techno plan data.
+    Response: { plant, report_month, data: {param: {value, unit, ...}} }
+    """
+    try:
+        plan_data = db.get_techno_plant_plan(plant, report_month)
+        return {"plant": plant, "report_month": report_month, "data": plan_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/techno-plant-plan")
+async def save_techno_plant_plan(payload: dict):
+    """
+    Save aggregated plant-level techno plan data.
+    Payload: { plant, report_month, data: {param: {value, unit, ...}}, calculation_details? }
+    """
+    try:
+        plant = payload.get("plant")
+        report_month = payload.get("report_month")
+        data = payload.get("data", {})
+        calculation_details = payload.get("calculation_details")
+
+        if not all([plant, report_month]):
+            raise ValueError("plant and report_month required")
+
+        db.save_techno_plant_plan(plant, report_month, data, calculation_details)
+        return {"status": "success", "plant": plant, "report_month": report_month}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sail-techno-plan")
+async def get_sail_techno_plan(report_month: str = Query(...)):
+    """
+    Get SAIL consolidated techno plan data.
+    Response: { report_month, data: {param: {value, unit, ...}} }
+    """
+    try:
+        plan_data = db.get_sail_techno_plan(report_month)
+        return {"report_month": report_month, "data": plan_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sail-techno-plan")
+async def save_sail_techno_plan(payload: dict):
+    """
+    Save SAIL consolidated techno plan data.
+    Payload: { report_month, data: {param: {value, unit, ...}} }
+    """
+    try:
+        report_month = payload.get("report_month")
+        data = payload.get("data", {})
+
+        if not report_month:
+            raise ValueError("report_month required")
+
+        db.save_sail_techno_plan(report_month, data)
+        return {"status": "success", "report_month": report_month}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/techno-plan-months")
+async def list_techno_plan_months(plant: str = Query(None)):
+    """
+    List available months in techno_plan table, optionally filtered by plant.
+    Response: { months: ["2026-04", "2026-05", ...] }
+    """
+    try:
+        months = db.list_techno_plan_months(plant)
+        return {"months": months}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8082))
