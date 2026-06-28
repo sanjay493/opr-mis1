@@ -1,4 +1,5 @@
 import "./globals.css";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 export const metadata = {
   title: "SAIL Operations Monthly Informatics (OMI) Report Portal",
@@ -9,7 +10,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );
