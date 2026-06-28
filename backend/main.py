@@ -2532,11 +2532,21 @@ async def recalculate_sail_weighted(payload: dict):
                 num = sum(w for v, w in values)
                 denom = sum(w / v if v > 0 else 0 for v, w in values)
                 sail_bf[param] = round(num / denom, 3) if denom > 0 else None
+            elif param == "Fuel Rate":
+                # Skip Fuel Rate here - will calculate as Coke + Nut Coke + CDI
+                continue
             else:
                 # Arithmetic mean for other BF params
                 total_val = sum(v * w for v, w in values)
                 total_weight = sum(w for v, w in values)
                 sail_bf[param] = round(total_val / total_weight, 3) if total_weight else None
+
+        # Calculate Fuel Rate = Coke Rate + Nut Coke Rate + CDI Rate
+        coke_sail = sail_bf.get("Coke Rate")
+        nut_coke_sail = sail_bf.get("Nut Coke Rate")
+        cdi_sail = sail_bf.get("CDI Rate")
+        if coke_sail is not None and nut_coke_sail is not None and cdi_sail is not None:
+            sail_bf["Fuel Rate"] = round(coke_sail + nut_coke_sail + cdi_sail, 3)
 
         # Get SMS-wise targets
         sms_shops = [

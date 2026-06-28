@@ -80,7 +80,32 @@ export default function TechnoTargetsPage() {
     const fullKey = type === 'plant' ? `plant|${key1}|${key2}` :
                     type === 'sms' ? `sms|${key1}|${key2}` :
                     `sail|${key1}`;
-    setEdits(prev => ({ ...prev, [fullKey]: value }));
+
+    const newEdits = { ...edits, [fullKey]: value };
+
+    // Auto-calculate derived values
+    if (type === 'plant') {
+      // Calculate Fuel Rate = Coke Rate + Nut Coke Rate + CDI Rate
+      if (['Coke Rate', 'Nut Coke Rate', 'CDI Rate'].includes(key2)) {
+        const coke = parseFloat(newEdits[`plant|${key1}|Coke Rate`]) || 0;
+        const nutCoke = parseFloat(newEdits[`plant|${key1}|Nut Coke Rate`]) || 0;
+        const cdi = parseFloat(newEdits[`plant|${key1}|CDI Rate`]) || 0;
+        if (coke > 0 || nutCoke > 0 || cdi > 0) {
+          newEdits[`plant|${key1}|Fuel Rate`] = (coke + nutCoke + cdi).toFixed(3);
+        }
+      }
+    } else if (type === 'sms') {
+      // Calculate TMI = HM Consumption + Scrap Consumption
+      if (['Hot Metal Consumption', 'Scrap Consumption'].includes(key2)) {
+        const hm = parseFloat(newEdits[`sms|${key1}|Hot Metal Consumption`]) || 0;
+        const scrap = parseFloat(newEdits[`sms|${key1}|Scrap Consumption`]) || 0;
+        if (hm > 0 || scrap > 0) {
+          newEdits[`sms|${key1}|TMI`] = (hm + scrap).toFixed(3);
+        }
+      }
+    }
+
+    setEdits(newEdits);
   };
 
   const handleRecalculate = async () => {
@@ -218,25 +243,41 @@ export default function TechnoTargetsPage() {
     return Object.values(edits).some(v => v !== '');
   };
 
+  const isDerivedField = (type, key2) => {
+    if (type === 'plant') return key2 === 'Fuel Rate';
+    if (type === 'sms') return key2 === 'TMI';
+    return false;
+  };
+
   const renderCell = (type, key1, key2) => {
+    const isDerived = isDerivedField(type, key2);
     const value = getValue(type, key1, key2);
     const saved = getSavedValue(type, key1, key2);
     const changed = isChanged(type, key1, key2);
+
     return (
-      <input
-        type="number"
-        step="0.001"
-        value={value}
-        onChange={e => handleChange(type, key1, key2, e.target.value)}
-        style={{
-          width: '100%', padding: '6px 8px', fontSize: '10pt', textAlign: 'right',
-          border: `1px solid ${changed ? '#fbbf24' : '#cbd5e1'}`,
-          borderRadius: '4px',
-          backgroundColor: changed ? '#fffbeb' : saved ? '#f0fdf4' : '#fff',
-          color: changed ? '#92400e' : saved ? '#065f46' : '#1e293b'
-        }}
-        placeholder="–"
-      />
+      <div style={{ position: 'relative' }}>
+        <input
+          type="number"
+          step="0.001"
+          value={value}
+          onChange={e => !isDerived && handleChange(type, key1, key2, e.target.value)}
+          readOnly={isDerived}
+          style={{
+            width: '100%', padding: '6px 8px', fontSize: '10pt', textAlign: 'right',
+            border: `1px solid ${isDerived ? '#cbd5e1' : changed ? '#fbbf24' : '#cbd5e1'}`,
+            borderRadius: '4px',
+            backgroundColor: isDerived ? '#f5f5f5' : changed ? '#fffbeb' : saved ? '#f0fdf4' : '#fff',
+            color: isDerived ? '#9ca3af' : changed ? '#92400e' : saved ? '#065f46' : '#1e293b',
+            cursor: isDerived ? 'not-allowed' : 'text'
+          }}
+          placeholder="–"
+          title={isDerived ? 'Auto-calculated' : ''}
+        />
+        {isDerived && (
+          <span style={{ position: 'absolute', right: '8px', top: '6px', fontSize: '8pt', color: '#9ca3af', pointerEvents: 'none' }}>🔒</span>
+        )}
+      </div>
     );
   };
 
