@@ -2517,7 +2517,10 @@ async def recalculate_sail_weighted(payload: dict):
             "hm_item": "Hot Metal",
             "cs_item": "Total Crude Steel",
             "hm_weights": hm_weights,
-            "cs_weights": cs_weights
+            "cs_weights": cs_weights,
+            "shop_cs_weights": {shop: round(w, 2) for shop, w in shop_cs_weights.items()},
+            "shops_per_plant": shops_per_plant,
+            "shop_to_plant": shop_to_plant
         }
 
         # Get plant-level BF targets
@@ -2586,11 +2589,26 @@ async def recalculate_sail_weighted(payload: dict):
             "ISP SMS-1",
         ]
 
-        # Fetch shop-wise Crude Steel production weights
+        # Map shops to plants and count SMS shops per plant
+        shop_to_plant = {
+            "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
+            "DSP SMS": "DSP",
+            "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
+            "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
+            "ISP SMS-1": "ISP",
+        }
+
+        shops_per_plant = {}
+        for shop, plant in shop_to_plant.items():
+            shops_per_plant[plant] = shops_per_plant.get(plant, 0) + 1
+
+        # Calculate shop-wise Crude Steel production weights
+        # Distribute plant CS equally among SMS shops in that plant
         shop_cs_weights = {}
-        for shop in sms_shops:
-            plant = shop.split()[0]
-            shop_cs_weights[shop] = cs_weights.get(plant, 0)
+        for shop, plant in shop_to_plant.items():
+            plant_cs = cs_weights.get(plant, 0)
+            num_shops = shops_per_plant.get(plant, 1)
+            shop_cs_weights[shop] = plant_cs / num_shops if num_shops > 0 else 0
 
         # Get SMS targets and calculate weighted avg by shop-wise CS production
         sms_targets = {}
@@ -2632,14 +2650,15 @@ async def recalculate_sail_weighted(payload: dict):
                             "shop": shop,
                             "plant": sms_shop_mapping.get(shop),
                             "value": v,
-                            "cs_weight": w,
+                            "cs_weight": round(w, 2),
                             "product": round(v*w, 2)
                         })
                     sms_calc_steps[param] = {
                         "formula": "Weighted Average: Σ(Shop_Value × Shop_CS_Weight) / Σ(Shop_CS_Weight)",
+                        "description": "Each SMS shop weighted by its share of plant CS production (plant CS / # of SMS shops in plant)",
                         "shops": shop_details,
                         "sum_products": round(total_val, 2),
-                        "sum_weights": total_weight,
+                        "sum_weights": round(total_weight, 2),
                         "result": sail_sms[param]
                     }
 
