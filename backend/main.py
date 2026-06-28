@@ -2608,7 +2608,7 @@ async def recalculate_sail_weighted(payload: dict):
         if coke_sail is not None and nut_coke_sail is not None and cdi_sail is not None:
             sail_bf["Fuel Rate"] = round(coke_sail + nut_coke_sail + cdi_sail, 3)
 
-        # Get SMS-wise targets and weights by shop
+        # SMS shops and their mapping (shop_cs_weights already fetched above)
         sms_shops = [
             "BSP SMS-2", "BSP SMS-3",
             "DSP SMS",
@@ -2616,27 +2616,6 @@ async def recalculate_sail_weighted(payload: dict):
             "BSL SMS-1", "BSL SMS-2",
             "ISP SMS-1",
         ]
-
-        # Map shops to plants and count SMS shops per plant
-        shop_to_plant = {
-            "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
-            "DSP SMS": "DSP",
-            "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
-            "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS-1": "ISP",
-        }
-
-        shops_per_plant = {}
-        for shop, plant in shop_to_plant.items():
-            shops_per_plant[plant] = shops_per_plant.get(plant, 0) + 1
-
-        # Calculate shop-wise Crude Steel production weights
-        # Distribute plant CS equally among SMS shops in that plant
-        shop_cs_weights = {}
-        for shop, plant in shop_to_plant.items():
-            plant_cs = cs_weights.get(plant, 0)
-            num_shops = shops_per_plant.get(plant, 1)
-            shop_cs_weights[shop] = plant_cs / num_shops if num_shops > 0 else 0
 
         # Get SMS targets and calculate weighted avg by shop-wise CS production
         sms_targets = {}
@@ -2682,8 +2661,8 @@ async def recalculate_sail_weighted(payload: dict):
                             "product": round(v*w, 2)
                         })
                     sms_calc_steps[param] = {
-                        "formula": "Weighted Average: Σ(Shop_Value × Shop_CS_Weight) / Σ(Shop_CS_Weight)",
-                        "description": "Each SMS shop weighted by actual Crude Steel production (Multi-shop plants: specific SMS items | Single-shop plants (DSP,ISP): Total Crude Steel)",
+                        "formula": "Weighted Average: Σ(Shop_Value × Shop_CS) / Σ(Shop_CS)",
+                        "description": "Simple weighted average: each SMS shop value weighted by its actual Crude Steel production",
                         "shops": shop_details,
                         "sum_products": round(total_val, 2),
                         "sum_weights": round(total_weight, 2),
