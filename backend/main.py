@@ -1347,6 +1347,17 @@ async def save_item_alias(payload: dict):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def normalize_item_name(name):
+    """Normalize item names to consistent format"""
+    if not name:
+        return name
+    # Convert BF-X to BF#X (remove hyphen before hash)
+    name = name.replace('BF-', 'BF#')
+    # Standardize spacing and capitalization for common items
+    name = name.replace('Oven Pushing(nos/d)', 'Oven Pushing (nos/day)')
+    name = name.replace('BILLET', 'Billet')
+    return name.strip()
+
 @app.get("/api/production-items")
 async def get_production_items(plant: str, month: str):
     conn = sqlite3.connect(db.DB_PATH)
@@ -1355,12 +1366,20 @@ async def get_production_items(plant: str, month: str):
         "SELECT item_name, month_actual FROM production_plan_table WHERE plant_name = ? AND report_month = ? ORDER BY item_name",
         (plant, month),
     )
-    plan_rows = {row[0]: row[1] for row in cursor.fetchall()}
+    plan_rows = {}
+    for row in cursor.fetchall():
+        normalized = normalize_item_name(row[0])
+        plan_rows[normalized] = row[1]
+
     cursor.execute(
         "SELECT item_name, month_actual FROM production_table WHERE plant_name = ? AND report_month = ?",
         (plant, month),
     )
-    actual_rows = {row[0]: row[1] for row in cursor.fetchall()}
+    actual_rows = {}
+    for row in cursor.fetchall():
+        normalized = normalize_item_name(row[0])
+        actual_rows[normalized] = row[1]
+
     conn.close()
 
     all_items = sorted(set(plan_rows.keys()) | set(actual_rows.keys()))
