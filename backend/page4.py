@@ -6,7 +6,7 @@ from constants import FIVE_PLANTS as _5P
 PAGE4_ITEMS = [
     {
         "display": "OVEN PUSHING (Nos./day)",
-        "db_item": "Oven Pushing(nos/d)",
+        "db_item": "Oven Pushing (nos/day)",
         "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"],
         "sail_set": _5P,
         "is_nos_day": True,
