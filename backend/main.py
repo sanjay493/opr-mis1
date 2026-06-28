@@ -2328,6 +2328,64 @@ async def recalculate_sail_targets(payload: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/techno-plant-targets")
+async def get_techno_plant_targets(fy: str = Query("2026-27"), plant: str = Query(None)):
+    """
+    Get plant-level techno targets for a given FY.
+    If plant specified, return targets for that plant only.
+    Otherwise return for all 5 plants.
+    Response: { fy, report_month, plants: {plant: {param: value}} }
+    """
+    try:
+        fy_year = int(fy.split("-")[0])
+        report_month = f"{fy_year}-03"
+
+        plants_to_fetch = [plant] if plant else ["BSP", "DSP", "RSP", "BSL", "ISP"]
+        result = {}
+
+        for p in plants_to_fetch:
+            plant_data = db.get_techno_plant_plan(p, report_month)
+            result[p] = {}
+            for param_name, param_info in plant_data.items():
+                if isinstance(param_info, dict):
+                    value = param_info.get('value')
+                else:
+                    value = param_info
+                if value is not None:
+                    result[p][param_name] = value
+
+        return {"fy": fy, "report_month": report_month, "plants": result}
+    except Exception as e:
+        return {"fy": fy, "plants": {}, "error": str(e)}
+
+
+@app.post("/api/techno-plant-targets")
+async def save_techno_plant_targets(payload: dict):
+    """
+    Save plant-level techno targets.
+    Payload: { fy: str, plants: {plant: {param: value}} }
+    """
+    try:
+        fy = payload.get("fy", "")
+        plants_data = payload.get("plants", {})
+
+        if not fy:
+            raise ValueError("fy is required")
+
+        fy_year = int(fy.split("-")[0])
+        report_month = f"{fy_year}-03"
+
+        saved_count = 0
+        for plant, params in plants_data.items():
+            if params:
+                db.save_techno_plant_plan(plant, report_month, params)
+                saved_count += 1
+
+        return {"status": "success", "fy": fy, "report_month": report_month, "plants_saved": saved_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8082))

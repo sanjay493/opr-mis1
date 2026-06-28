@@ -10,7 +10,8 @@ const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
 export default function TechnoTargetsPage() {
   const [fy, setFy] = useState('2026-27');
   const [parameters, setParameters] = useState([]);
-  const [targets, setTargets] = useState({});
+  const [plantTargets, setPlantTargets] = useState({});
+  const [sailTargets, setSailTargets] = useState({});
   const [edits, setEdits] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -22,21 +23,35 @@ export default function TechnoTargetsPage() {
     setLoading(true);
     setStatus(null);
     try {
-      const [paramsRes, targetsRes] = await Promise.all([
+      const [paramsRes, plantRes, sailRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/techno-major-parameters`),
+        fetch(`${API_BASE_URL}/api/techno-plant-targets?fy=${encodeURIComponent(fy)}`),
         fetch(`${API_BASE_URL}/api/techno-sail-targets?fy=${encodeURIComponent(fy)}`),
       ]);
 
-      if (!paramsRes.ok || !targetsRes.ok) {
+      if (!paramsRes.ok || !plantRes.ok || !sailRes.ok) {
         throw new Error('Failed to load parameters or targets');
       }
 
       const paramsData = await paramsRes.json();
-      const targetsData = await targetsRes.json();
+      const plantData = await plantRes.json();
+      const sailData = await sailRes.json();
 
       setParameters(paramsData.parameters || []);
-      setTargets(targetsData.targets || {});
-      setEdits(Object.assign({}, targetsData.targets || {}));
+      setPlantTargets(plantData.plants || {});
+      setSailTargets(sailData.targets || {});
+
+      // Initialize edits with loaded data
+      const initialEdits = {};
+      Object.entries(plantData.plants || {}).forEach(([plant, params]) => {
+        Object.entries(params || {}).forEach(([param, value]) => {
+          initialEdits[`${plant}|${param}`] = value?.toString() || '';
+        });
+      });
+      Object.entries(sailData.targets || {}).forEach(([param, value]) => {
+        initialEdits[`SAIL|${param}`] = value?.toString() || '';
+      });
+      setEdits(initialEdits);
     } catch (err) {
       setStatus({ type: 'error', text: `Load failed: ${err.message}` });
     } finally {
@@ -50,8 +65,8 @@ export default function TechnoTargetsPage() {
   }, [fy, handleLoad]);
 
   // Handle parameter value change
-  const handleChange = (param, value) => {
-    setEdits(prev => ({ ...prev, [param]: value }));
+  const handleChange = (plant, param, value) => {
+    setEdits(prev => ({ ...prev, [`${plant}|${param}`]: value }));
   };
 
   // Recalculate SAIL targets
@@ -71,7 +86,7 @@ export default function TechnoTargetsPage() {
       // Update SAIL values with computed values
       const newEdits = { ...edits };
       Object.entries(result.computed || {}).forEach(([param, value]) => {
-        newEdits[param] = value?.toString() || '';
+        newEdits[`SAIL|${param}`] = value?.toString() || '';
       });
       setEdits(newEdits);
       setStatus({ type: 'success', text: 'SAIL targets recalculated from plant-level values' });
@@ -87,29 +102,65 @@ export default function TechnoTargetsPage() {
     setSaving(true);
     setStatus(null);
 
-    // Convert to numeric values
-    const editedTargets = {};
-    Object.entries(edits).forEach(([param, val]) => {
-      if (val !== '' && val !== null) {
-        try {
-          editedTargets[param] = parseFloat(val);
-        } catch {
-          editedTargets[param] = val;
+    // Organize edits by plant
+    const plantData = {};
+    const sailData = {};
+
+    Object.entries(edits).forEach(([key, val]) => {
+      if (val === '' || val === null) return;
+      const [plant, param] = key.split('|');
+      try {
+        const numVal = parseFloat(val);
+        if (plant === 'SAIL') {
+          sailData[param] = numVal;
+        } else {
+          if (!plantData[plant]) plantData[plant] = {};
+          plantData[plant][param] = numVal;
         }
+      } catch {
+        // Skip invalid values
       }
     });
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/techno-sail-targets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fy, targets: editedTargets }),
-      });
+      const requests = [];
 
-      if (!res.ok) throw new Error(await res.text());
+      // Save plant targets if any
+      if (Object.keys(plantData).length > 0) {
+        requests.push(
+          fetch(`${API_BASE_URL}/api/techno-plant-targets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fy, plants: plantData }),
+          })
+        );
+      }
 
-      setTargets(editedTargets);
-      setStatus({ type: 'success', text: `Saved ${Object.keys(editedTargets).length} parameter(s) for FY ${fy}` });
+      // Save SAIL targets if any
+      if (Object.keys(sailData).length > 0) {
+        requests.push(
+          fetch(`${API_BASE_URL}/api/techno-sail-targets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fy, targets: sailData }),
+          })
+        );
+      }
+
+      if (requests.length === 0) {
+        setStatus({ type: 'error', text: 'No values to save.' });
+        setSaving(false);
+        return;
+      }
+
+      const responses = await Promise.all(requests);
+      for (const res of responses) {
+        if (!res.ok) throw new Error(await res.text());
+      }
+
+      setStatus({ type: 'success', text: `Saved targets for FY ${fy}` });
+      setPlantTargets(plantData);
+      setSailTargets(sailData);
     } catch (err) {
       setStatus({ type: 'error', text: `Save failed: ${err.message}` });
     } finally {
@@ -118,19 +169,38 @@ export default function TechnoTargetsPage() {
   };
 
   // Check for changes
-  const hasChanges = JSON.stringify(targets) !== JSON.stringify(edits);
+  const hasChanges = () => {
+    return Object.entries(edits).some(([key, val]) => {
+      if (val === '' || val === null) return false;
+      const [plant, param] = key.split('|');
+      if (plant === 'SAIL') {
+        return sailTargets[param]?.toString() !== val;
+      } else {
+        return plantTargets[plant]?.[param]?.toString() !== val;
+      }
+    });
+  };
+
+  const getValue = (plant, param) => edits[`${plant}|${param}`] ?? '';
+  const getSavedValue = (plant, param) => {
+    if (plant === 'SAIL') {
+      return sailTargets[param];
+    }
+    return plantTargets[plant]?.[param];
+  };
+  const isChanged = (plant, param) => getValue(plant, param) !== getSavedValue(plant, param)?.toString();
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <GlobalNavbar />
 
-      <main style={{ padding: '32px', maxWidth: '1200px', margin: '0 auto' }}>
+      <main style={{ padding: '32px', maxWidth: '1400px', margin: '0 auto' }}>
         <div style={{ marginBottom: '32px' }}>
           <h1 style={{ fontSize: '24pt', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>
             📊 Techno-Economic Annual Targets
           </h1>
           <p style={{ fontSize: '11pt', color: '#64748b', margin: '0' }}>
-            SAIL consolidated targets for techno-economic parameters. SAIL values can be recalculated from plant-level targets or edited manually.
+            Enter targets for each parameter by plant. SAIL can be recalculated from plant-level targets or edited manually.
           </p>
         </div>
 
@@ -178,11 +248,11 @@ export default function TechnoTargetsPage() {
 
           <button
             onClick={handleSave}
-            disabled={saving || !hasChanges}
+            disabled={saving || !hasChanges()}
             style={{
               padding: '8px 16px', fontSize: '11pt', fontWeight: '600', borderRadius: '4px',
-              border: 'none', backgroundColor: hasChanges ? '#10b981' : '#94a3b8', color: '#fff',
-              cursor: hasChanges ? 'pointer' : 'default', marginTop: '18px'
+              border: 'none', backgroundColor: hasChanges() ? '#10b981' : '#94a3b8', color: '#fff',
+              cursor: hasChanges() ? 'pointer' : 'default', marginTop: '18px'
             }}
           >
             {saving ? 'Saving...' : 'Save All'}
@@ -204,55 +274,61 @@ export default function TechnoTargetsPage() {
         {/* Parameters Table */}
         {parameters.length > 0 && (
           <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#1e3a5f', color: '#fff' }}>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '11pt' }}>Parameter</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', minWidth: '80px' }}>Unit</th>
-                  {PLANTS.map(plant => (
-                    <th key={plant}
-                      style={{
-                        padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt',
-                        backgroundColor: plant === 'SAIL' ? '#166534' : '#1e3a5f', minWidth: '100px'
-                      }}
-                    >
-                      {plant}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {parameters.map((param, idx) => (
-                  <tr key={param.name} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
-                    <td style={{ padding: '10px 16px', fontSize: '11pt', fontWeight: '500', color: '#1e293b' }}>
-                      {param.name}
-                    </td>
-                    <td style={{ padding: '10px 16px', textAlign: 'center', fontSize: '10pt', color: '#475569' }}>
-                      {param.unit}
-                    </td>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#1e3a5f', color: '#fff' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '11pt' }}>Parameter</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', minWidth: '80px' }}>Unit</th>
                     {PLANTS.map(plant => (
-                      <td key={`${param.name}-${plant}`} style={{ padding: '8px 12px', textAlign: 'right' }}>
-                        {plant === 'SAIL' ? (
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={edits[param.name] ?? ''}
-                            onChange={e => handleChange(param.name, e.target.value)}
-                            style={{
-                              width: '100%', padding: '6px 8px', fontSize: '10pt', textAlign: 'right',
-                              border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#fff'
-                            }}
-                            placeholder="–"
-                          />
-                        ) : (
-                          <span style={{ color: '#94a3b8', fontSize: '10pt' }}>–</span>
-                        )}
-                      </td>
+                      <th key={plant}
+                        style={{
+                          padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt',
+                          backgroundColor: plant === 'SAIL' ? '#166534' : '#1e3a5f', minWidth: '110px'
+                        }}
+                      >
+                        {plant}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {parameters.map((param, idx) => (
+                    <tr key={param.name} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
+                      <td style={{ padding: '10px 16px', fontSize: '11pt', fontWeight: '500', color: '#1e293b' }}>
+                        {param.name}
+                      </td>
+                      <td style={{ padding: '10px 16px', textAlign: 'center', fontSize: '10pt', color: '#475569' }}>
+                        {param.unit}
+                      </td>
+                      {PLANTS.map(plant => {
+                        const value = getValue(plant, param.name);
+                        const saved = getSavedValue(plant, param.name);
+                        const changed = isChanged(plant, param.name);
+                        return (
+                          <td key={`${plant}-${param.name}`} style={{ padding: '8px 12px', textAlign: 'right' }}>
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={value}
+                              onChange={e => handleChange(plant, param.name, e.target.value)}
+                              style={{
+                                width: '100%', padding: '6px 8px', fontSize: '10pt', textAlign: 'right',
+                                border: `1px solid ${changed ? '#fbbf24' : '#cbd5e1'}`,
+                                borderRadius: '4px',
+                                backgroundColor: changed ? '#fffbeb' : saved ? '#f0fdf4' : '#fff',
+                                color: changed ? '#92400e' : saved ? '#065f46' : '#1e293b'
+                              }}
+                              placeholder="–"
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
