@@ -1357,6 +1357,7 @@ def normalize_item_name(name):
     name = name.replace('Oven Pushing(nos/d)', 'Oven Pushing (nos/day)')
     name = name.replace('BILLET', 'Billet')
     name = name.replace('BILLET for Sale', 'Billet for Sale')
+    name = name.replace('BOTTOM_POURING_INGOT', 'Bottom Pouring Ingot')
     # Standardize Semis Steel to Saleable Semis
     name = name.replace('Semis Steel', 'Saleable Semis')
     return name.strip()
@@ -1380,7 +1381,8 @@ PRODUCTION_ITEM_ORDER = [
     'Round Production',
     'BRC',
     'Total Caster',
-    'BOTTOM_POURING_INGOT',
+    'Bottom Pouring Ingot',
+    'Total Crude Steel',
     'Pig Iron',
     'WAP',
     'wheel plant',
