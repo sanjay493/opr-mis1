@@ -109,16 +109,17 @@ export default function ProductionDataEntryPage() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      height: '100vh',
       backgroundColor: '#f8fafc',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      overflow: 'hidden'
     }}>
       <GlobalNavbar />
 
-      <div style={{ flex: 1, padding: '40px 32px', overflowY: 'auto' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <div style={{ marginBottom: '32px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '40px 32px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ marginBottom: '32px', flexShrink: 0 }}>
             <h1 style={{ fontSize: '18pt', fontWeight: '800', color: '#0f172a', margin: '0 0 4px 0' }}>
               📊 Production Data Entry
             </h1>
@@ -191,10 +192,10 @@ export default function ProductionDataEntryPage() {
             )}
 
             {loaded && items.length > 0 && (
-              <div>
-                <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', borderRadius: '6px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                    <thead>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', marginBottom: '16px', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                       <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
                         <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '700', fontSize: '9pt', color: '#475569' }}>Item</th>
                         <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', fontSize: '9pt', color: '#475569' }}>Plan ('000T)</th>
@@ -242,7 +243,7 @@ export default function ProductionDataEntryPage() {
                   </table>
                 </div>
 
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '16px' }}>
                   <button
                     onClick={() => { setItems(items.map(it => ({ ...it, plan_edit: String(it.plan_value ?? ''), actual_edit: String(it.actual_value ?? '') }))); setStatus(null); }}
                     disabled={!hasChanges}
@@ -262,7 +263,7 @@ export default function ProductionDataEntryPage() {
             )}
 
             {!loaded && !loading && (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '9.5pt', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+              <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '9.5pt', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 Select plant, month, and year, then click <strong>Load Items</strong> to enter production data.
               </div>
             )}
