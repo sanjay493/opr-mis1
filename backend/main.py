@@ -2256,17 +2256,18 @@ async def get_techno_major_parameters():
     ]}
     """
     major_params = [
+        {"name": "Coal to Hot Metal", "unit": "kg/kg"},
         {"name": "Coke Rate", "unit": "kg/thm"},
+        {"name": "Nut Coke Rate", "unit": "kg/thm"},
         {"name": "CDI Rate", "unit": "kg/thm"},
         {"name": "Fuel Rate", "unit": "kg/thm"},
+        {"name": "Sinter in Burden", "unit": "%"},
+        {"name": "Pellet in Burden", "unit": "%"},
         {"name": "BF Productivity", "unit": "t/m³/day"},
         {"name": "Hot Metal Consumption", "unit": "kg/tcs"},
         {"name": "Scrap Consumption", "unit": "kg/tcs"},
         {"name": "TMI", "unit": "kg/tcs"},
         {"name": "Specific Energy Consumption", "unit": "Gcal/tcs"},
-        {"name": "Nut Coke Rate", "unit": "kg/thm"},
-        {"name": "Sinter in Burden", "unit": "%"},
-        {"name": "Pellet in Burden", "unit": "%"},
     ]
     return {"parameters": major_params}
 
