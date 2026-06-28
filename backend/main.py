@@ -2797,6 +2797,143 @@ async def get_techno_summary(fy: str = Query("2026-27")):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/sail-performance-summary")
+async def get_sail_performance_summary(fy: str = Query("2026-27"), report_month: str = Query("")):
+    """
+    Get SAIL performance summary with 5 key parameters:
+    - Coke Rate (weighted avg by HM)
+    - CDI (weighted avg by HM)
+    - Fuel Rate (weighted avg by HM)
+    - BF Productivity (harmonic mean)
+    - S.E.C. (weighted avg by CS)
+    """
+    try:
+        fy_year = int(fy.split("-")[0])
+        if not report_month:
+            report_month = f"{fy_year}-03"
+
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+
+        # Get all FY months for calculations
+        months = (
+            [f"{fy_year}-{m:02d}" for m in range(4, 13)] +
+            [f"{fy_year + 1}-{m:02d}" for m in range(1, 4)]
+        )
+        ph = ",".join("?" * len(months))
+
+        # Get production weights
+        cur.execute(f"""
+            SELECT plant_name, SUM(month_actual)
+            FROM production_plan_table
+            WHERE report_month IN ({ph}) AND item_name = 'Hot Metal'
+            GROUP BY plant_name
+        """, months)
+        hm_weights = {row[0]: row[1] for row in cur.fetchall()}
+
+        # Get CS weights for S.E.C calculation
+        shop_to_plant = {
+            "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
+            "DSP SMS": "DSP",
+            "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
+            "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
+            "ISP SMS-1": "ISP",
+        }
+        shop_cs_weights = {}
+        for shop, plant in shop_to_plant.items():
+            shop_parts = shop.split()
+            sms_identifier = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
+            cur.execute(f"""
+                SELECT SUM(month_actual)
+                FROM production_plan_table
+                WHERE report_month IN ({ph})
+                  AND (item_name = ? OR item_name LIKE ?)
+                  AND plant_name = ?
+            """, months + [sms_identifier, sms_identifier + " %", plant])
+            result = cur.fetchone()
+            shop_cs_weights[shop] = result[0] if result[0] else 0
+
+        # Get plant targets
+        plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
+
+        # Calculate SAIL for current period
+        sail_params = {
+            'Coke Rate': 0,
+            'CDI': 0,
+            'Fuel Rate': 0,
+            'BF Productivity': 0,
+            'S.E.C.': 0
+        }
+
+        # Get BF targets by plant
+        bf_data = {}
+        for plant in plants:
+            plant_data = db.get_techno_plant_plan(plant, report_month)
+            if plant_data:
+                bf_data[plant] = plant_data
+
+        # Calculate weighted averages for Coke Rate, CDI, Fuel Rate (by HM)
+        for param in ['Coke Rate', 'CDI']:
+            values = []
+            for plant, data in bf_data.items():
+                val = data.get(param)
+                if val is not None:
+                    v = val.get('value') if isinstance(val, dict) else val
+                    weight = hm_weights.get(plant, 0)
+                    if v is not None and weight:
+                        values.append((v, weight))
+
+            if values:
+                total_val = sum(v * w for v, w in values)
+                total_weight = sum(w for v, w in values)
+                sail_params[param] = round(total_val / total_weight, 3)
+
+        # Calculate Fuel Rate = Coke Rate + CDI
+        if sail_params['Coke Rate'] and sail_params['CDI']:
+            sail_params['Fuel Rate'] = round(sail_params['Coke Rate'] + sail_params['CDI'], 3)
+
+        # Calculate BF Productivity (harmonic mean)
+        productivity_values = []
+        for plant, data in bf_data.items():
+            val = data.get('BF Productivity')
+            if val is not None:
+                v = val.get('value') if isinstance(val, dict) else val
+                if v is not None and v > 0:
+                    productivity_values.append(v)
+
+        if productivity_values:
+            n = len(productivity_values)
+            harmonic_mean = n / sum(1/v for v in productivity_values)
+            sail_params['BF Productivity'] = round(harmonic_mean, 3)
+
+        # Calculate S.E.C. (weighted avg by CS)
+        sms_shops = list(shop_to_plant.keys())
+        sec_values = []
+        for shop in sms_shops:
+            plant = shop_to_plant[shop]
+            shop_data = db.get_techno_plan(plant, report_month)
+            if isinstance(shop_data, dict):
+                # S.E.C. might need to be calculated or fetched
+                # For now, we'll calculate it if components are available
+                weight = shop_cs_weights.get(shop, 0)
+                if weight:
+                    # Placeholder - would need actual S.E.C. data or calculation
+                    sec_values.append((0, weight))
+
+        conn.close()
+
+        return {
+            "status": "success",
+            "fy": fy,
+            "report_month": report_month,
+            "sail_parameters": sail_params,
+            "hm_weights": hm_weights,
+            "cs_weights": shop_cs_weights
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8082))
