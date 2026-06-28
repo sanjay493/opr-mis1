@@ -1356,6 +1356,7 @@ def normalize_item_name(name):
     # Standardize spacing and capitalization for common items
     name = name.replace('Oven Pushing(nos/d)', 'Oven Pushing (nos/day)')
     name = name.replace('BILLET', 'Billet')
+    name = name.replace('BILLET for Sale', 'Billet for Sale')
     # Standardize Semis Steel to Saleable Semis
     name = name.replace('Semis Steel', 'Saleable Semis')
     return name.strip()
@@ -1387,6 +1388,7 @@ PRODUCTION_ITEM_ORDER = [
     'MM',
     'MSM',
     'Finished Steel',
+    'Billet for Sale',
     'Blooms for Sale',
     'Saleable Semis',
     'Saleable Steel',
