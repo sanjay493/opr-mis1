@@ -70,7 +70,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         
         # Cell row offsets
         production_cells = {
-            "Oven Pushing(nos/d)": 7,
+            "Oven Pushing (nos/day)": 7,
             "SP-1": 11,
             "SP-2": 12,
             "Total Sinter": 10,
