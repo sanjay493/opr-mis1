@@ -22,10 +22,10 @@ from constants import FIVE_PLANTS as _5P, FIVE_PLANTS_VISL as _5PV, ALL_PLANTS a
 
 PAGE5_PLANTS = [
     ("SAIL", [
-        ("Oven Pushing(nos/d)", ("AGG_NOS", "Oven Pushing(nos/d)", _5P),  False, True),
+        ("Oven Pushing (nos/day)", ("AGG_NOS", "Oven Pushing (nos/day)", _5P),  False, True),
         ("Sinter",              ("AGG",     "Total Sinter",         _5P),  False, False),
         ("Hot Metal",           ("AGG",     "Hot Metal",            _5PV), True,  False),
-        ("Ingot",               ("AGG",     "BOTTOM_POURING_INGOT", _5P),  False, False),
+        ("Ingot",               ("AGG",     "Bottom Pouring Ingot", _5P),  False, False),
         ("Concast",             ("AGG",     "Total Caster",         _5P),  False, False),
         ("Crude Steel(Tot)",    ("AGG",     "Total Crude Steel",    _ALL), True,  False),
         ("Saleable Steel",      ("AGG",     "Saleable Steel",       _ALL), True,  False),
@@ -35,7 +35,7 @@ PAGE5_PLANTS = [
         ("Pig Iron",            ("AGG",     "Pig Iron",             _5PV), False, False),
     ]),
     ("BSP", [
-        ("Oven Pushing(nos/d)", "Oven Pushing(nos/d)",   False, True),
+        ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
         ("Sinter Plant-II",     "SP-2",                  False, False),
         ("Sinter plant-III",    "SP-3",                  False, False),
         ("Sinter (Tot)",        "Total Sinter",          True,  False),
@@ -49,12 +49,12 @@ PAGE5_PLANTS = [
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
     ("DSP", [
-        ("Oven Pushing(nos/d)", "Oven Pushing(nos/d)",   False, True),
+        ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
         ("SP-I",                "SP-1",                  False, False),
         ("SP-II",               "SP-2",                  False, False),
         ("Sinter (Tot)",        "Total Sinter",          True,  False),
         ("Hot Metal",           "Hot Metal",             True,  False),
-        ("Ingot",               "BOTTOM_POURING_INGOT",  False, False),
+        ("Ingot",               "Bottom Pouring Ingot",  False, False),
         ("Concast",             "Total Caster",          False, False),
         ("Crude Steel(Tot)",    "Total Crude Steel",     True,  False),
         ("Saleable Steel",      "Saleable Steel",        True,  False),
@@ -66,7 +66,7 @@ PAGE5_PLANTS = [
 
 PAGE6_PLANTS = [
     ("RSP", [
-        ("Oven Pushing(nos/d)", "Oven Pushing(nos/d)",   False, True),
+        ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
         ("SP-I",                "SP-1",                  False, False),
         ("SP-II",               "SP-2",                  False, False),
         ("SP-III",              "SP-3",                  False, False),
@@ -85,7 +85,7 @@ PAGE6_PLANTS = [
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
     ("BSL", [
-        ("Oven Pushing(nos/d)", "Oven Pushing(nos/d)",   False, True),
+        ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
         ("Sinter",              "Total Sinter",          False, False),
         ("Hot Metal",           "Hot Metal",             True,  False),
         ("SMS-1(CC slab)",      "SMS-1 CCM-1",           False, False),
@@ -98,7 +98,7 @@ PAGE6_PLANTS = [
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
     ("ISP", [
-        ("Oven Pushing(nos/d)", "Oven Pushing(nos/d)",   False, True),
+        ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
         ("Sinter",              "Total Sinter",          False, False),
         ("Hot Metal",           "Hot Metal",             True,  False),
         ("Crude Steel (Total)", "Total Crude Steel",     True,  False),

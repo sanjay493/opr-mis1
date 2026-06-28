@@ -40,7 +40,7 @@ TREND_PAGES = {
     7: {
         "display": "OVEN PUSHING",
         "unit": "Nos./day",
-        "db_item": "Oven Pushing(nos/d)",
+        "db_item": "Oven Pushing (nos/day)",
         "is_nos": True,
         "groups": [
             ("BSP",  ["BSP"]),
