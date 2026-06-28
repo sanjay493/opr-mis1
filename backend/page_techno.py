@@ -288,6 +288,24 @@ def _fetch_prod_multi(cur, plants, item_names, months):
             result[item][plant][month] = val
     return result
 
+def _fetch_plan_multi(cur, plants, item_names, months):
+    """Return {item_name: {plant: {month: value}}} from production_plan_table."""
+    if not plants or not item_names or not months:
+        return {i: {p: {} for p in plants} for i in item_names}
+    ph_p = ",".join("?" * len(plants))
+    ph_m = ",".join("?" * len(months))
+    ph_i = ",".join("?" * len(item_names))
+    cur.execute(
+        f"SELECT item_name, plant_name, report_month, month_actual FROM production_plan_table "
+        f"WHERE plant_name IN ({ph_p}) AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
+        list(plants) + list(item_names) + list(months),
+    )
+    result = {i: {p: {} for p in plants} for i in item_names}
+    for item, plant, month, val in cur.fetchall():
+        if val is not None and item in result and plant in result[item]:
+            result[item][plant][month] = val
+    return result
+
 # ---------------------------------------------------------------------------
 # SAIL weighted-average computation
 # ---------------------------------------------------------------------------
@@ -861,16 +879,60 @@ def generate_summary_te_table(report_month: str) -> list:
                        for ms in period_sets]
             return {"parameter": param_name, "unit": unit, "values": [tgt_val] + vals}
 
-        def prod_entry(item_name, unit, period_sets, prod_data):
-            """Entry for production data items."""
+        def prod_entry(item_name, unit, plan_data, actual_data):
+            """Entry for production data items with Apr-ReportMonth expansion."""
+            # Check if we're past April (May onwards)
+            report_month_num = int(report_month.split('-')[1])
+            is_expanded = report_month_num > 4  # May onwards (month > 4)
+
             vals = []
-            for ms in period_sets:
-                total = sum(prod_data.get((plant, m), 0) for plant in _BF_PLANTS for m in (ms if isinstance(ms, list) else [ms]))
-                vals.append(_fmt(total if total > 0 else None))
+
+            if is_expanded:
+                # From May onwards: April | Apr-ReportMonth (Plan, Actual, %FF) | Apr-CPLY (Plan, Actual, %FF) | Growth%
+
+                # April only (actual)
+                april_actual = sum(actual_data.get(p, {}).get(fy_april, 0) for p in _BF_PLANTS)
+                vals.append(_fmt(april_actual if april_actual > 0 else None))
+
+                # Apr-Report month (Plan, Actual, %FF)
+                ytd_months = [m for m in ytd if m >= fy_april]  # Months from April to report month
+
+                plan_sum = sum(plan_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in ytd_months)
+                actual_sum = sum(actual_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in ytd_months)
+                ff_percent = (actual_sum / plan_sum * 100) if plan_sum > 0 else 0
+
+                vals.append(_fmt(plan_sum if plan_sum > 0 else None))        # Apr-ReportMonth Plan
+                vals.append(_fmt(actual_sum if actual_sum > 0 else None))    # Apr-ReportMonth Actual
+                vals.append(_fmt(ff_percent if ff_percent > 0 else None))    # %FF
+
+                # Apr-CPLY month (Plan, Actual, %FF)
+                cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
+
+                cply_plan_sum = sum(plan_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in cply_ytd_months)
+                cply_actual_sum = sum(actual_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in cply_ytd_months)
+                cply_ff = (cply_actual_sum / cply_plan_sum * 100) if cply_plan_sum > 0 else 0
+
+                vals.append(_fmt(cply_plan_sum if cply_plan_sum > 0 else None))      # Apr-CPLY Plan
+                vals.append(_fmt(cply_actual_sum if cply_actual_sum > 0 else None))  # Apr-CPLY Actual
+                vals.append(_fmt(cply_ff if cply_ff > 0 else None))                  # CPLY %FF
+
+                # Growth %
+                growth = ((actual_sum - cply_actual_sum) / cply_actual_sum * 100) if cply_actual_sum > 0 else 0
+                vals.append(_fmt(growth if actual_sum > 0 else None))
+            else:
+                # Before May: April only
+                april_actual = sum(actual_data.get(p, {}).get(fy_april, 0) for p in _BF_PLANTS)
+                vals.append(_fmt(april_actual if april_actual > 0 else None))
+
             return {"parameter": item_name, "unit": unit, "values": [""] + vals}
 
-        # Include report month and April, plus cply month and ytd
-        period_sets = [[report_month], [fy_april], [cply_month], ytd, cply_ytd]
+        # Fetch plan data for fulfillment calculation
+        plan_items = ["Hot Metal", "Total Crude Steel", "Saleable Steel", "Finished Steel"]
+        plan_raw = _fetch_plan_multi(cur, _BF_PLANTS, plan_items, all_months)
+        hm_plan = plan_raw.get("Hot Metal", {})
+        cs_plan = plan_raw.get("Total Crude Steel", {})
+        saleable_plan = plan_raw.get("Saleable Steel", {})
+        finished_plan = plan_raw.get("Finished Steel", {})
 
         result = [
             entry("Coke Rate",                  "kg/thm",   period_sets),
@@ -878,11 +940,11 @@ def generate_summary_te_table(report_month: str) -> list:
             entry("Fuel Rate",                  "kg/thm",   period_sets),
             entry("BF Productivity",            "t/m3/day", period_sets),
             entry("Specific Energy Consumption","Gcal/tcs", period_sets),
-            # Add production data rows
-            prod_entry("Hot Metal",             "000 T",    period_sets, hm),
-            prod_entry("Total Crude Steel",     "000 T",    period_sets, cs),
-            prod_entry("Saleable Steel",        "000 T",    period_sets, saleable),
-            prod_entry("Finished Steel",        "000 T",    period_sets, finished),
+            # Add production data rows with expanded Apr-ReportMonth structure
+            prod_entry("Hot Metal",             "000 T",    hm_plan, hm),
+            prod_entry("Total Crude Steel",     "000 T",    cs_plan, cs),
+            prod_entry("Saleable Steel",        "000 T",    saleable_plan, saleable),
+            prod_entry("Finished Steel",        "000 T",    finished_plan, finished),
         ]
 
         return result
