@@ -187,7 +187,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
 
         _default_rc = {
             "COB#1-8":             (3,  5,  False),
-            "Oven Pushing(nos/d)": (5,  5,  False),
+            "Oven Pushing (nos/day)": (5,  5,  False),
             "SP-2":                (7,  5,  True),
             "SP-3":                (8,  5,  True),
             "Total Sinter":        (9,  5,  True),
@@ -897,7 +897,7 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
     COL_F, COL_J, COL_N = 5, 9, 13
     _PROD_CELLS = [
         ("COB#1-8",             3,  COL_F, False, "F4"),
-        ("Oven Pushing(nos/d)", 5,  COL_F, False, "F6"),
+        ("Oven Pushing (nos/day)", 5,  COL_F, False, "F6"),
         ("SP-2",                7,  COL_F, True,  "F8"),
         ("SP-3",                8,  COL_F, True,  "F9"),
         ("Total Sinter",        9,  COL_F, True,  "F10"),

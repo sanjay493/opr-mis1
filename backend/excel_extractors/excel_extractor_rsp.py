@@ -90,7 +90,7 @@ COL_MAP_P18 = {
 }
 CUM_COL_P18 = 39   # column AM — cumulative (Apr-to-month average)
 
-NO_CONVERT = {"Oven Pushing(nos/d)", "COB#6", "COB#1-5"}
+NO_CONVERT = {"Oven Pushing (nos/day)", "COB#6", "COB#1-5"}
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ NO_CONVERT = {"Oven Pushing(nos/d)", "COB#6", "COB#1-5"}
 P9_ITEMS = [
     ("COB#6",                ["cob no 6", "cob 6", "cob#6"],              6),
     ("COB#1-5",              ["cob no 1 5", "cob 1 5"],                   7),
-    ("Oven Pushing(nos/d)",  ["oven pushing"],                             8),
+    ("Oven Pushing (nos/day)",  ["oven pushing"],                             8),
     ("SP-1",                 ["sp 1", "sinter plant 1"],                   9),
     ("SP-2",                 ["sp 2", "sinter plant 2"],                  10),
     ("SP-3",                 ["sp 3", "sinter plant 3"],                  11),
@@ -460,7 +460,7 @@ def _build_p18_cells(ws, col: str) -> dict:
 MORNING_CELLS = {
     "COB#1-5":             "F10",
     "COB#6":               "F11",
-    "Oven Pushing(nos/d)": "F12",
+    "Oven Pushing (nos/day)": "F12",
     "SP-1":                "E41",
     "SP-2":                "E42",
     "SP-3":                "E43",

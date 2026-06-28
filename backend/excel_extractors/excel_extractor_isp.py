@@ -83,7 +83,7 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
     Cell map — sheet 'DAILYREPORT1':
       E9:       COB#10              — monthly avg, no unit conversion
       E10:      COB#11              — monthly avg, no unit conversion
-      E11:      Oven Pushing(nos/d) — monthly avg nos/day, no unit conversion
+      E11:      Oven Pushing (nos/day) — monthly avg nos/day, no unit conversion
       E12:      SP-1                — tonnes → /1000
       E13:      SP-2                — tonnes → /1000
       E14:      Total Sinter        — tonnes → /1000
@@ -131,12 +131,12 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
     from cells_loader import get_extractor_config
     _cfg = get_extractor_config("isp_morning")
 
-    NO_CONVERT = set(_cfg.get("no_convert", ["COB#10", "COB#11", "Oven Pushing(nos/d)"]))
+    NO_CONVERT = set(_cfg.get("no_convert", ["COB#10", "COB#11", "Oven Pushing (nos/day)"]))
 
     production_cells = _cfg.get("cells", {
         "COB#10":               "E9",
         "COB#11":               "E10",
-        "Oven Pushing(nos/d)":  "E11",
+        "Oven Pushing (nos/day)":  "E11",
         "SP-1":                 "E12",
         "SP-2":                 "E13",
         "Total Sinter":         "E14",
@@ -250,13 +250,13 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
 
     ws = wb["Maj Production Summ"]
 
-    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing(nos/d)"}
+    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
 
     # item_name → row number (column is dynamic per month via col_map)
     production_cells = {
         "COB#10":                6,
         "COB#11":                7,
-        "Oven Pushing(nos/d)":   8,
+        "Oven Pushing (nos/day)":   8,
         "Total Sinter":          16,
         "Hot Metal":             17,
         "Pig Iron":              26,
@@ -335,11 +335,11 @@ def _preview_morning_report_rows(wb):
     else:
         raise ValueError("Cell K5 is empty — cannot determine report month.")
 
-    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing(nos/d)"}
+    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
     production_cells = {
         "COB#10":               "E9",
         "COB#11":               "E10",
-        "Oven Pushing(nos/d)":  "E11",
+        "Oven Pushing (nos/day)":  "E11",
         "SP-1":                 "E12",
         "SP-2":                 "E13",
         "Total Sinter":         "E14",
@@ -410,12 +410,12 @@ def _preview_monthly_report_rows(wb, report_month: str):
         raise ValueError(f"Month column mapping not found for month code '{month_num}'.")
 
     ws = wb["Maj Production Summ"]
-    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing(nos/d)"}
+    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
 
     production_cells = {
         "COB#10":               6,
         "COB#11":               7,
-        "Oven Pushing(nos/d)":  8,
+        "Oven Pushing (nos/day)":  8,
         "Total Sinter":         16,
         "Hot Metal":            17,
         "Pig Iron":             26,

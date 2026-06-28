@@ -90,7 +90,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         # (column_letter) → (db_item_name, nos_per_day)
         # nos_per_day=True → store as-is; False → round to 3 dp (already '000 T)
         col_item_map = {
-            "B": ("Oven Pushing(nos/d)",  True),
+            "B": ("Oven Pushing (nos/day)",  True),
             "C": ("Total Sinter",         False),
             "D": ("Hot Metal",            False),
             "E": ("Total Crude Steel",    False),

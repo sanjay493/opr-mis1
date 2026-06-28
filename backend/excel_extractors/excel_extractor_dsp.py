@@ -80,7 +80,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
     Date: row 1, col C (index 2) = "31.05.2026" (DD.MM.YYYY)
 
     Row map (1-based). Col E (index 4) = Monthly Rate except Round Production:
-      Row 5:  Oven Pushing(nos/d)  — nos/day avg, no unit conversion
+      Row 5:  Oven Pushing (nos/day)  — nos/day avg, no unit conversion
       Row 13: SP-1                 — tonnes → /1000
       Row 14: SP-2                 — tonnes → /1000
       Row 15: Total Sinter         — tonnes → /1000
@@ -141,12 +141,12 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
     if column_shift != 0:
         logger.info(f"DSP MCR: column shift applied → {column_shift} (COL_D={COL_D}, COL_E={COL_E})")
 
-    NO_CONVERT = {"Oven Pushing(nos/d)"}
+    NO_CONVERT = {"Oven Pushing (nos/day)"}
 
     # (row_1based, col_0based, item_name_in_production_table)
     # Note: "Bloom Caster " and "Blooms for Sale " have trailing spaces matching plan table
     production_rows = [
-        (5,  COL_E, "Oven Pushing(nos/d)"),   # avg nos/day — no /1000
+        (5,  COL_E, "Oven Pushing (nos/day)"),   # avg nos/day — no /1000
         (13, COL_E, "SP-1"),
         (14, COL_E, "SP-2"),
         (15, COL_E, "Total Sinter"),
@@ -244,10 +244,10 @@ def _mcr_preview(file_path: str, report_month: str, column_shift: int = 0) -> di
 
     COL_D = 3 + column_shift
     COL_E = 4 + column_shift
-    NO_CONVERT = {"Oven Pushing(nos/d)"}
+    NO_CONVERT = {"Oven Pushing (nos/day)"}
 
     row_specs = [
-        (5,  COL_E, "Oven Pushing(nos/d)"),
+        (5,  COL_E, "Oven Pushing (nos/day)"),
         (13, COL_E, "SP-1"),
         (14, COL_E, "SP-2"),
         (15, COL_E, "Total Sinter"),

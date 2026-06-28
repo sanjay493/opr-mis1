@@ -72,7 +72,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         production_cells = {
             "COB#6": 6,
             "COB#1-5": 5,
-            "Oven Pushing(nos/d)": 7,
+            "Oven Pushing (nos/day)": 7,
             "SP-1": 8,
             "SP-2": 9,
             "SP-3": 10,
@@ -123,7 +123,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                     vals_extracted += 1
                     # In plan sheet, if numbers are already in thousands, preserve them
                     # (only round to 3 decimal places to keep precision)
-                    if db_item not in ("Oven Pushing(nos/d)", "COB#6", "COB#1-5"):
+                    if db_item not in ("Oven Pushing (nos/day)", "COB#6", "COB#1-5"):
                         val = round(val, 3)
                 
                 # Insert or replace in production_plan_table (using column 'month_actual' as per DB schema)

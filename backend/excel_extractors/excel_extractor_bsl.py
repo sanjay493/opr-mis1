@@ -69,7 +69,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     Date is auto-detected from cell O1 (stored as a Python datetime by Excel).
 
     Cell map — sheet 'DPR':
-      Oven Pushing(nos/d)  P6    — nos/day average, no unit conversion
+      Oven Pushing (nos/day)  P6    — nos/day average, no unit conversion
       Total Sinter         P7    — tonnes → /1000
       Hot Metal            P8
       Pig Iron             E30
@@ -120,11 +120,11 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     from cells_loader import get_extractor_config
     _cfg = get_extractor_config("bsl_dpr")
 
-    NO_CONVERT = set(_cfg.get("no_convert", ["Oven Pushing(nos/d)"]))
+    NO_CONVERT = set(_cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
 
     # Cell map: item_name → A1-style address. Falls back to hardcoded defaults.
     production_cells = _cfg.get("cells", {
-        "Oven Pushing(nos/d)": "P6",
+        "Oven Pushing (nos/day)": "P6",
         "Total Sinter":        "P7",
         "Hot Metal":           "P8",
         "Pig Iron":            "E30",
@@ -920,9 +920,9 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
 
     logger.info("BSL DPR preview: month from O1 → %s", db_month)
 
-    NO_CONVERT = {"Oven Pushing(nos/d)"}
+    NO_CONVERT = {"Oven Pushing (nos/day)"}
     CELL_MAP = {
-        "Oven Pushing(nos/d)": "P6",
+        "Oven Pushing (nos/day)": "P6",
         "Total Sinter":        "P7",
         "Hot Metal":           "P8",
         "Pig Iron":            "E30",
