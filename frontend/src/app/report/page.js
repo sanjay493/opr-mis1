@@ -1,8 +1,9 @@
 ﻿'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import PageRenderer from '../../components/PageRenderer';
+import { useReportData, useSaveReportData, useGeneratePDF } from '@/hooks/useReportAPI';
 
 // Edit these labels to change what appears in the Page Selector dropdown
 const PAGE_LABELS = {
@@ -163,27 +164,6 @@ function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
 console.log('API_BASE_URL:', API_BASE_URL);
 
-// In browser environments, failing to fetch is often due to CORS/origin/host reachability.
-// Add a lightweight timeout so the user sees faster feedback in DevTools.
-const fetchWithTimeout = (url, options = {}, timeoutMs = 30000) => {
-  return new Promise((resolve, reject) => {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => {
-      ctrl.abort();
-      reject(new Error(`Request timed out after ${timeoutMs}ms: ${url}`));
-    }, timeoutMs);
-    fetch(url, { ...options, signal: ctrl.signal })
-      .then((res) => {
-        clearTimeout(t);
-        resolve(res);
-      })
-      .catch((err) => {
-        clearTimeout(t);
-        reject(err);
-      });
-  });
-};
-
 const getDefaultDate = () => {
   const d = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
   return {
@@ -195,72 +175,48 @@ const getDefaultDate = () => {
 export default function ReportPage() {
   const defaultDate = getDefaultDate();
   const [pagesData, setPagesData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [activePageNum, setActivePageNum] = useState(1);
   const [selectedMonthName, setSelectedMonthName] = useState(defaultDate.month);
   const [selectedYear, setSelectedYear] = useState(defaultDate.year);
-  const [pagesDataMonth, setPagesDataMonth] = useState({ name: defaultDate.month, year: defaultDate.year });
-  const [isBackendGenerating, setIsBackendGenerating] = useState(false);
-
-  // Layout and typography settings now come from backend layout_config.json only
-  // No user customization in the frontend UI
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
-  const activePage = pagesData.find((p) => p.page === activePageNum) || pagesData[0];
 
-  // Fetch report data dynamically from DB when month/year changes
+  // Use React Query to fetch report data - automatically cached for 10 minutes
+  const { data: rawData, isLoading, error } = useReportData(selectedMonth);
+  const { mutate: saveData, isPending: isSaving } = useSaveReportData();
+  const { mutate: generatePDF, isPending: isGeneratingPDF } = useGeneratePDF();
+
+  // Format data when it loads
   useEffect(() => {
-    let active = true;
-    const loadReportData = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetchWithTimeout(
-          `${API_BASE_URL}/api/data?month=${encodeURIComponent(selectedMonth)}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          if (active) {
-            const normalized = data.map((p) => {
-              if (p.page === 4) return { ...p, type: 'page4_table' };
-              if (p.page === 5 || p.page === 6) return { ...p, type: 'performance_summary_table' };
-              return p;
-            });
-            const formatted = getFormattedPagesData(normalized, selectedMonthName, selectedYear, 'November', '2025');
-            setPagesData(formatted);
-            setPagesDataMonth({ name: selectedMonthName, year: selectedYear });
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load data from SQLite database:", err);
-      } finally {
-        if (active) setIsLoading(false);
-      }
-    };
-    loadReportData();
-    return () => { active = false; };
-  }, [selectedMonthName, selectedYear]);
-
-  const handleSaveToDatabase = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/data`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          month: selectedMonth,
-          pages: pagesData,
-        }),
+    if (rawData) {
+      const normalized = rawData.map((p) => {
+        if (p.page === 4) return { ...p, type: 'page4_table' };
+        if (p.page === 5 || p.page === 6) return { ...p, type: 'performance_summary_table' };
+        return p;
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to save report data');
-      }
-      alert('Changes saved successfully to SQLite database!');
-    } catch (error) {
-      console.error(error);
-      alert('Error saving data to SQLite database. Ensure backend is running.');
+      const formatted = getFormattedPagesData(normalized, selectedMonthName, selectedYear, 'November', '2025');
+      setPagesData(formatted);
     }
+  }, [rawData, selectedMonthName, selectedYear]);
+
+  const activePage = useMemo(
+    () => pagesData.find((p) => p.page === activePageNum) || pagesData[0],
+    [pagesData, activePageNum]
+  );
+
+  const handleSaveToDatabase = () => {
+    saveData(
+      { month: selectedMonth, pages: pagesData },
+      {
+        onSuccess: () => {
+          alert('Changes saved successfully to SQLite database!');
+        },
+        onError: (error) => {
+          console.error(error);
+          alert('Error saving data to SQLite database. Ensure backend is running.');
+        },
+      }
+    );
   };
 
   const handleCellChange = (updatedPageData) => {
@@ -269,40 +225,26 @@ export default function ReportPage() {
     );
   };
 
-  const handleBackendExport = async () => {
-    setIsBackendGenerating(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/generate-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+  const handleBackendExport = () => {
+    generatePDF(
+      { month: selectedMonth },
+      {
+        onSuccess: (blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `SAIL_MIS_Report_${selectedMonthName}_${selectedYear}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
         },
-        body: JSON.stringify({
-          month: selectedMonth,
-          pages: pagesData,
-        }),
-      });
-
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        throw new Error(errBody.error || `HTTP ${response.status}`);
+        onError: (error) => {
+          console.error(error);
+          alert(`PDF generation failed: ${error.message}`);
+        },
       }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `SAIL_MIS_Report_${selectedMonthName}_${selectedYear}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(error);
-      alert(`PDF generation failed: ${error.message}`);
-    } finally {
-      setIsBackendGenerating(false);
-    }
+    );
   };
 
   return (
@@ -429,6 +371,7 @@ export default function ReportPage() {
           <button
             className="btn btn-primary"
             onClick={handleSaveToDatabase}
+            disabled={isSaving}
             style={{ width: '100%' }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px', verticalAlign: 'middle' }}>
@@ -436,7 +379,7 @@ export default function ReportPage() {
               <polyline points="17 21 17 13 7 13 7 21" />
               <polyline points="7 3 7 8 15 8" />
             </svg>
-            Save Changes to DB
+            {isSaving ? 'Saving...' : 'Save Changes to DB'}
           </button>
         </div>
 
@@ -446,10 +389,10 @@ export default function ReportPage() {
           <button
             className="btn btn-secondary"
             onClick={handleBackendExport}
-            disabled={isBackendGenerating}
+            disabled={isGeneratingPDF}
             style={{ borderColor: 'var(--primary)', color: '#38bdf8' }}
           >
-            {isBackendGenerating ? (
+            {isGeneratingPDF ? (
               'Compiling PDF Backend...'
             ) : (
               <>
