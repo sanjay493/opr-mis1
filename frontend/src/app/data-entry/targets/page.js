@@ -20,6 +20,8 @@ export default function TechnoTargetsPage() {
   const [saving, setSaving] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
   const [status, setStatus] = useState(null);
+  const [bfCalcDetails, setBfCalcDetails] = useState({});
+  const [smsCalcDetails, setSmsCalcDetails] = useState({});
 
   // Load parameters and targets
   const handleLoad = useCallback(async () => {
@@ -129,6 +131,8 @@ export default function TechnoTargetsPage() {
         newEdits[`sail|${param}`] = value?.toString() || '';
       });
       setEdits(newEdits);
+      setBfCalcDetails(result.bf_calculations || {});
+      setSmsCalcDetails(result.sms_calculations || {});
       setStatus({ type: 'success', text: 'SAIL targets recalculated using HM/CS production weights' });
     } catch (err) {
       setStatus({ type: 'error', text: `Recalculation failed: ${err.message}` });
@@ -241,6 +245,113 @@ export default function TechnoTargetsPage() {
 
   const hasChanges = () => {
     return Object.values(edits).some(v => v !== '');
+  };
+
+  const renderCalcDetails = (param, calcData) => {
+    if (!calcData) return null;
+
+    if (param === 'Coke Rate') {
+      return (
+        <div style={{ padding: '12px 16px', backgroundColor: '#f0f9ff', borderTop: '1px solid #e0e7ff' }}>
+          <div style={{ fontSize: '10pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>{calcData.formula}</div>
+          <table style={{ width: '100%', fontSize: '9pt', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+                <th style={{ padding: '4px 8px', textAlign: 'left' }}>Plant</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>Value</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>HM Weight</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>Product</th>
+              </tr>
+            </thead>
+            <tbody>
+              {calcData.values?.map((v, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '4px 8px' }}>{v.plant}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{v.value}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{v.hm_weight}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{v.product}</td>
+                </tr>
+              ))}
+              <tr style={{ backgroundColor: '#e0f2fe', fontWeight: '600' }}>
+                <td colSpan="2" style={{ padding: '6px 8px' }}>SAIL = Σ(Products) / Σ(Weights)</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}>{calcData.sum_weights}</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}>{calcData.sum_products} / {calcData.sum_weights} = <strong>{calcData.result}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (param === 'BF Productivity') {
+      return (
+        <div style={{ padding: '12px 16px', backgroundColor: '#f0f9ff', borderTop: '1px solid #e0e7ff' }}>
+          <div style={{ fontSize: '10pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>{calcData.formula}</div>
+          <table style={{ width: '100%', fontSize: '9pt', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+                <th style={{ padding: '4px 8px', textAlign: 'left' }}>Plant</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>Productivity</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>HM Weight</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>Reciprocal (W/P)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {calcData.values?.map((v, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '4px 8px' }}>{v.plant}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{v.value}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{v.hm_weight}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{v.reciprocal}</td>
+                </tr>
+              ))}
+              <tr style={{ backgroundColor: '#e0f2fe', fontWeight: '600' }}>
+                <td colSpan="2" style={{ padding: '6px 8px' }}>SAIL = Total HM / Σ(Reciprocals)</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}>{calcData.total_hm}</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}>{calcData.total_hm} / {calcData.sum_reciprocal} = <strong>{calcData.result}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (param === 'Hot Metal Consumption' || param === 'Scrap Consumption') {
+      return (
+        <div style={{ padding: '12px 16px', backgroundColor: '#f0fdf4', borderTop: '1px solid #d1fae5' }}>
+          <div style={{ fontSize: '10pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>{calcData.formula}</div>
+          <table style={{ width: '100%', fontSize: '9pt', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+                <th style={{ padding: '4px 8px', textAlign: 'left' }}>Shop</th>
+                <th style={{ padding: '4px 8px', textAlign: 'left' }}>Plant</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>Value</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>CS Weight</th>
+                <th style={{ padding: '4px 8px', textAlign: 'right' }}>Product</th>
+              </tr>
+            </thead>
+            <tbody>
+              {calcData.shops?.map((s, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '4px 8px' }}>{s.shop}</td>
+                  <td style={{ padding: '4px 8px' }}>{s.plant}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{s.value}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{s.cs_weight}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{s.product}</td>
+                </tr>
+              ))}
+              <tr style={{ backgroundColor: '#dcfce7', fontWeight: '600' }}>
+                <td colSpan="3" style={{ padding: '6px 8px' }}>SAIL = Σ(Products) / Σ(Weights)</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}>{calcData.sum_weights}</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}>{calcData.sum_products} / {calcData.sum_weights} = <strong>{calcData.result}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   const isDerivedField = (type, key2) => {
@@ -366,6 +477,24 @@ export default function TechnoTargetsPage() {
                 </table>
               </div>
             </div>
+            {/* BF Calculation Details */}
+            {(bfCalcDetails['Coke Rate'] || bfCalcDetails['BF Productivity']) && (
+              <div style={{ marginTop: '16px' }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: '600', color: '#0c4a6e', margin: '0 0 12px 0' }}>📐 Calculation Details</h3>
+                {bfCalcDetails['Coke Rate'] && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '10pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>Coke Rate SAIL</div>
+                    {renderCalcDetails('Coke Rate', bfCalcDetails['Coke Rate'])}
+                  </div>
+                )}
+                {bfCalcDetails['BF Productivity'] && (
+                  <div>
+                    <div style={{ fontSize: '10pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>BF Productivity SAIL</div>
+                    {renderCalcDetails('BF Productivity', bfCalcDetails['BF Productivity'])}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -411,6 +540,24 @@ export default function TechnoTargetsPage() {
                 </table>
               </div>
             </div>
+            {/* SMS Calculation Details */}
+            {(smsCalcDetails['Hot Metal Consumption'] || smsCalcDetails['Scrap Consumption']) && (
+              <div style={{ marginTop: '16px' }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: '600', color: '#065f46', margin: '0 0 12px 0' }}>📐 Calculation Details</h3>
+                {smsCalcDetails['Hot Metal Consumption'] && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '10pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>HM Consumption SAIL</div>
+                    {renderCalcDetails('Hot Metal Consumption', smsCalcDetails['Hot Metal Consumption'])}
+                  </div>
+                )}
+                {smsCalcDetails['Scrap Consumption'] && (
+                  <div>
+                    <div style={{ fontSize: '10pt', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>Scrap Consumption SAIL</div>
+                    {renderCalcDetails('Scrap Consumption', smsCalcDetails['Scrap Consumption'])}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </main>
