@@ -733,15 +733,21 @@ def generate_techno(report_month: str, page_no: int) -> dict:
         """, (cply_month,))
         cply_map = {(r[0], r[1]): r[2] for r in cur.fetchall()}
 
-        # Annual targets
-        cur.execute("""
-            SELECT p.row_label, p.param_name, tt.target
-            FROM techno_target tt
-            JOIN techno_param p ON tt.param_id = p.param_id
-            JOIN techno_param_group g ON p.param_id = g.param_id
-            WHERE tt.fy = ? AND g.group_code = ?
-        """, (_fy_label(fy), group))
-        tgt_map = {(r[0], r[1]): r[2] for r in cur.fetchall()}
+        # Annual targets from new techno_plan structure
+        # Convert FY to report_month format (e.g., "2026-27" -> "2026-03")
+        fy_year = int(_fy_label(fy).split("-")[0])
+        report_month = f"{fy_year}-03"  # FY targets stored as March
+
+        # Fetch SAIL targets
+        sail_tgt = _get_techno_plan_targets(report_month)
+
+        # Fetch plant-level targets for other groups
+        plant_tgt = {}
+        for plant in _BF_PLANTS:
+            plant_tgt.update(_get_plant_techno_plan_targets(plant, report_month))
+
+        # Combine into tgt_map
+        tgt_map = {**sail_tgt, **plant_tgt}
 
         if group == "MAJOR":
             # Historical FY data (fy1/fy2/fy3) now uses stored March till_month_actual only.
@@ -863,15 +869,11 @@ def generate_summary_te_table(report_month: str) -> list:
         saleable = prod_raw.get("Saleable Steel", {})
         finished = prod_raw.get("Finished Steel", {})
 
-        # Targets for SAIL row in MAJOR group
-        cur.execute("""
-            SELECT p.param_name, tt.target
-            FROM techno_target tt
-            JOIN techno_param p ON tt.param_id = p.param_id
-            JOIN techno_param_group g ON p.param_id = g.param_id
-            WHERE tt.fy = ? AND g.group_code = 'MAJOR' AND p.row_label = 'SAIL'
-        """, (_fy_label(fy),))
-        tgt_by_param = dict(cur.fetchall())
+        # Targets for SAIL row from new techno_plan structure
+        fy_year = int(_fy_label(fy).split("-")[0])
+        report_month = f"{fy_year}-03"  # FY targets stored as March
+        sail_tgt = _get_techno_plan_targets(report_month)
+        tgt_by_param = {param.split("|")[-1]: val for (_, param), val in sail_tgt.items()}
 
         def entry(param_name, unit, period_sets):
             tgt_val = _fmt(tgt_by_param.get(param_name))
@@ -984,15 +986,11 @@ def generate_summary_chart_data(report_month: str) -> dict:
     conn = sqlite3.connect(db.DB_PATH)
     cur  = conn.cursor()
     try:
-        # Targets for current FY SAIL row
-        cur.execute("""
-            SELECT p.param_name, tt.target
-            FROM techno_target tt
-            JOIN techno_param p ON tt.param_id = p.param_id
-            JOIN techno_param_group g ON p.param_id = g.param_id
-            WHERE tt.fy = ? AND g.group_code = 'MAJOR' AND p.row_label = 'SAIL'
-        """, (_fy_label(fy),))
-        tgt_by_param = dict(cur.fetchall())
+        # Targets for current FY SAIL row from new techno_plan structure
+        fy_year = int(_fy_label(fy).split("-")[0])
+        report_month_fy = f"{fy_year}-03"  # FY targets stored as March
+        sail_tgt = _get_techno_plan_targets(report_month_fy)
+        tgt_by_param = {param.split("|")[-1]: val for (_, param), val in sail_tgt.items()}
 
         # Fetch component data for current FY months
         fetch_months = cur_fy_months if cur_fy_months else [report_month]
@@ -1054,14 +1052,62 @@ def generate_summary_chart_data(report_month: str) -> dict:
 # SAIL target computation
 # ---------------------------------------------------------------------------
 
+def _get_techno_plan_targets(report_month: str) -> dict:
+    """
+    Fetch techno plan/target data from techno_sail_plan.
+    Returns {(row_label, param_name): value} dictionary.
+    """
+    try:
+        sail_data = db.get_sail_techno_plan(report_month)
+        # Convert from flat {param_name: value} to {(row_label, param_name): value}
+        tgt = {}
+        for param_name, value in sail_data.items():
+            tgt[("SAIL", param_name)] = value
+        return tgt
+    except Exception:
+        return {}
+
+
+def _get_plant_techno_plan_targets(plant: str, report_month: str) -> dict:
+    """
+    Fetch plant-level techno plan data from techno_plant_plan.
+    Returns {(row_label, param_name): value} dictionary.
+    """
+    try:
+        plant_data = db.get_techno_plant_plan(plant, report_month)
+        # Convert from {param_name: {value, unit, ...}} to {(plant, param_name): value}
+        tgt = {}
+        for param_name, param_info in plant_data.items():
+            if isinstance(param_info, dict):
+                value = param_info.get('value')
+            else:
+                value = param_info
+            if value is not None:
+                tgt[(plant, param_name)] = value
+        return tgt
+    except Exception:
+        return {}
+
+
 def compute_sail_targets(fy: str) -> dict:
-    """Compute SAIL-level techno targets from plant-level targets.
-    Returns {(plant_name, parameter_name): value} for SAIL rows."""
+    """
+    Compute or retrieve SAIL-level techno targets.
+    Uses new techno_sail_plan table structure.
+    Returns {(plant_name, parameter_name): value} for SAIL rows.
+    """
     try:
         fy_start = int(fy.split("-")[0])
+        report_month = f"{fy_start}-03"  # FY targets stored as March
     except (ValueError, IndexError):
         return {}
 
+    # Try to fetch from techno_sail_plan
+    sail_data = db.get_sail_techno_plan(report_month)
+    if sail_data:
+        # Convert to expected format
+        return {("SAIL", param): value for param, value in sail_data.items()}
+
+    # If no data, compute from plant-level targets
     conn = sqlite3.connect(db.DB_PATH)
     cur  = conn.cursor()
 
@@ -1085,18 +1131,11 @@ def compute_sail_targets(fy: str) -> dict:
         if val and val > 0:
             (hm_wt if item == "Hot Metal" else cs_wt)[plant] = val
 
-    # Plant-level targets from techno_target joined with techno_param
-    cur.execute("""
-        SELECT p.row_label, p.param_name, tt.target
-        FROM techno_target tt
-        JOIN techno_param p ON tt.param_id = p.param_id
-        JOIN techno_param_group g ON p.param_id = g.param_id
-        WHERE tt.fy = ? AND g.group_code IN ('MAJOR','SMS')
-          AND p.row_label != 'SAIL'
-    """, (fy,))
-    tgt = {}   # {(row_label, param_name): target}
-    for rl, pn, t in cur.fetchall():
-        tgt[(rl, pn)] = t
+    # Fetch plant-level targets from techno_plant_plan
+    tgt = {}
+    for plant in _BF_PLANTS:
+        plant_tgt = _get_plant_techno_plan_targets(plant, report_month)
+        tgt.update(plant_tgt)
     conn.close()
 
     out = {}
@@ -1152,22 +1191,17 @@ def compute_sail_targets(fy: str) -> dict:
             den += cs
     out[("SAIL", "Specific Energy Consumption")] = round(num / den, 3) if den > 0 else None
 
-    # Convert (row_label, param_name) keys → param_id for save_techno_target
-    conn2 = sqlite3.connect(db.DB_PATH)
-    cur2  = conn2.cursor()
-    result = {}
+    # Save SAIL targets to techno_sail_plan using new structure
+    sail_data = {}
     for (rl, pn), val in out.items():
-        if val is None:
-            continue
-        cur2.execute(
-            "SELECT param_id FROM techno_param WHERE row_label=? AND param_name=?",
-            (rl, pn),
-        )
-        row = cur2.fetchone()
-        if row:
-            result[row[0]] = val
-    conn2.close()
-    return result
+        if val is not None and rl == "SAIL":
+            sail_data[pn] = val
+
+    if sail_data:
+        db.save_sail_techno_plan(report_month, sail_data)
+
+    # Return in format expected by callers (convert to param_name format)
+    return {pn: val for pn, val in sail_data.items()}
 
 
 # ---------------------------------------------------------------------------
