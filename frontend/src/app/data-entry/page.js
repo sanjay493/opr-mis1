@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import SpecialSteelManualEntry from '@/components/SpecialSteelManualEntry';
 import HotMetalConsumptionEntry from '@/components/HotMetalConsumptionEntry';
+import { useStockData, useSaveStockEntry, useConversionData, useSaveConversion } from '@/hooks/useDataEntryAPI';
 
 const PLANTS = ['BSP', 'DSP', 'ISP', 'RSP', 'BSL', 'ASP', 'SSP', 'VISL'];
 const MONTHS = [
@@ -47,38 +48,42 @@ function StockEntryCard({ apiBase }) {
   };
   const [plant, setPlant] = useState('BSP');
   const [stockMonth, setStockMonth] = useState(defaultMonth);
-  const [values, setValues] = useState({});   // key: `${item_type}||${stock_type}` → edit string
+  const [values, setValues] = useState({});
   const [savedValues, setSavedValues] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
-  const [loaded, setLoaded] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
 
   const key = (item_type, stock_type) => `${item_type}||${stock_type}`;
 
-  const handleLoad = async () => {
-    setLoading(true);
-    setStatus(null);
-    setLoaded(false);
-    try {
-      const res = await fetch(`${apiBase}/api/stock-data?plant=${encodeURIComponent(plant)}&stock_month=${encodeURIComponent(stockMonth)}`);
-      if (!res.ok) throw new Error(await res.text());
-      const json = await res.json();
+  // Use React Query to fetch stock data
+  const { data: stockData, isLoading: loading, error: loadError } = useStockData(plant, stockMonth, shouldLoad);
+  const { mutate: saveEntry, isPending: saving } = useSaveStockEntry();
+
+  // Update local state when stock data loads
+  useEffect(() => {
+    if (stockData?.data) {
       const map = {};
-      json.data.forEach(r => { map[key(r.item_type, r.stock_type)] = String(r.stock ?? ''); });
+      stockData.data.forEach(r => { map[key(r.item_type, r.stock_type)] = String(r.stock ?? ''); });
       setSavedValues(map);
       const edits = {};
       STOCK_ITEMS.forEach(it => { edits[key(it.item_type, it.stock_type)] = map[key(it.item_type, it.stock_type)] ?? ''; });
       setValues(edits);
-      setLoaded(true);
-    } catch (err) {
-      setStatus({ type: 'error', text: `Load failed: ${err.message}` });
-    } finally {
-      setLoading(false);
+      setStatus(null);
     }
+  }, [stockData]);
+
+  // Show load error
+  useEffect(() => {
+    if (loadError) {
+      setStatus({ type: 'error', text: `Load failed: ${loadError.message}` });
+    }
+  }, [loadError]);
+
+  const handleLoad = () => {
+    setShouldLoad(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const entries = STOCK_ITEMS
       .filter(it => {
         const v = values[key(it.item_type, it.stock_type)];
@@ -90,24 +95,21 @@ function StockEntryCard({ apiBase }) {
         stock: parseFloat(values[key(it.item_type, it.stock_type)]),
       }));
     if (!entries.length) { setStatus({ type: 'error', text: 'No values to save.' }); return; }
-    setSaving(true);
     setStatus(null);
-    try {
-      const res = await fetch(`${apiBase}/api/stock-entry`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const json = await res.json();
-      setStatus({ type: 'success', text: json.message });
-      const newSaved = { ...savedValues };
-      entries.forEach(e => { newSaved[key(e.item_type, e.stock_type)] = String(e.stock); });
-      setSavedValues(newSaved);
-    } catch (err) {
-      setStatus({ type: 'error', text: `Save failed: ${err.message}` });
-    } finally {
-      setSaving(false);
-    }
+    saveEntry(
+      { entries },
+      {
+        onSuccess: (json) => {
+          setStatus({ type: 'success', text: json.message || 'Saved successfully!' });
+          const newSaved = { ...savedValues };
+          entries.forEach(e => { newSaved[key(e.item_type, e.stock_type)] = String(e.stock); });
+          setSavedValues(newSaved);
+        },
+        onError: (err) => {
+          setStatus({ type: 'error', text: `Save failed: ${err.message}` });
+        },
+      }
+    );
   };
 
   const hasChanges = STOCK_ITEMS.some(it => {
@@ -149,7 +151,7 @@ function StockEntryCard({ apiBase }) {
       </div>
 
       {/* Grid */}
-      {loaded && (
+      {stockData && (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -191,7 +193,7 @@ function StockEntryCard({ apiBase }) {
         </div>
       )}
 
-      {!loaded && !loading && (
+      {!stockData && !loading && (
         <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '9.5pt' }}>
           Select plant and month, then click <strong>Load</strong> to view / edit stock values.
         </div>
@@ -205,7 +207,7 @@ function StockEntryCard({ apiBase }) {
         </div>
       )}
 
-      {loaded && (
+      {stockData && (
         <div style={{ padding: '12px 20px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button onClick={() => { setValues(Object.fromEntries(STOCK_ITEMS.map(it => [key(it.item_type, it.stock_type), savedValues[key(it.item_type, it.stock_type)] ?? '']))); setStatus(null); }}
             disabled={!hasChanges}
@@ -230,10 +232,7 @@ function ConversionCard({ apiBase }) {
     return (d.getMonth() + 1 >= 4 ? d.getFullYear() : d.getFullYear() - 1).toString();
   };
   const [fyStart, setFyStart] = useState(getDefaultFy);
-  const [convData, setConvData] = useState({});
   const [edits, setEdits] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
 
   const fyMonths = useMemo(() => {
@@ -241,47 +240,43 @@ function ConversionCard({ apiBase }) {
     return [`${y}-04`,`${y}-05`,`${y}-06`,`${y}-07`,`${y}-08`,`${y}-09`,`${y}-10`,`${y}-11`,`${y}-12`,`${y+1}-01`,`${y+1}-02`,`${y+1}-03`];
   }, [fyStart]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setEdits({});
-    try {
-      const res = await fetch(`${apiBase}/api/conversion-data?fy_start=${fyStart}`);
-      if (!res.ok) throw new Error(await res.text());
-      const json = await res.json();
-      setConvData(json.data);
-    } catch (err) {
-      setStatus({ type: 'error', text: `Load failed: ${err.message}` });
-    } finally {
-      setLoading(false);
-    }
-  }, [fyStart, apiBase]);
+  // Use React Query for conversion data
+  const { data: convResponse, isLoading: loading, error: loadError } = useConversionData(fyStart);
+  const convData = convResponse?.data || {};
+  const { mutate: saveConversion, isPending: saving } = useSaveConversion();
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Show load error
+  useEffect(() => {
+    if (loadError) {
+      setStatus({ type: 'error', text: `Load failed: ${loadError.message}` });
+    }
+  }, [loadError]);
 
   const currentVal = m => edits[m] !== undefined ? edits[m] : String(convData[m] ?? '');
   const hasEdits = fyMonths.some(m => edits[m] !== undefined && edits[m] !== String(convData[m] ?? ''));
 
-  const handleSave = async () => {
-    setSaving(true);
+  const handleSave = () => {
     setStatus(null);
     const entries = fyMonths
       .filter(m => edits[m] !== undefined && edits[m] !== '')
       .map(m => ({ month: m, value: parseFloat(edits[m]) }))
       .filter(e => !isNaN(e.value));
-    try {
-      const res = await fetch(`${apiBase}/api/conversion-entry`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setStatus({ type: 'success', text: `Saved ${entries.length} conversion value(s).` });
-      await loadData();
-    } catch (err) {
-      setStatus({ type: 'error', text: `Save failed: ${err.message}` });
-    } finally {
-      setSaving(false);
+    if (!entries.length) {
+      setStatus({ type: 'error', text: 'No values to save.' });
+      return;
     }
+    saveConversion(
+      { fyStart, entries },
+      {
+        onSuccess: (response) => {
+          setStatus({ type: 'success', text: `Saved ${entries.length} conversion value(s).` });
+          setEdits({});
+        },
+        onError: (err) => {
+          setStatus({ type: 'error', text: `Save failed: ${err.message}` });
+        },
+      }
+    );
   };
 
   return (
