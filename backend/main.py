@@ -2245,6 +2245,89 @@ async def list_techno_plan_months(plant: str = Query(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/techno-major-parameters")
+async def get_techno_major_parameters():
+    """
+    Get list of MAJOR techno-economic parameters for targets page.
+    Response: { parameters: [
+        {name: "Coke Rate", unit: "kg/thm"},
+        {name: "CDI Rate", unit: "kg/thm"},
+        ...
+    ]}
+    """
+    major_params = [
+        {"name": "Coke Rate", "unit": "kg/thm"},
+        {"name": "CDI Rate", "unit": "kg/thm"},
+        {"name": "Fuel Rate", "unit": "kg/thm"},
+        {"name": "BF Productivity", "unit": "t/m³/day"},
+        {"name": "Hot Metal Consumption", "unit": "kg/tcs"},
+        {"name": "Scrap Consumption", "unit": "kg/tcs"},
+        {"name": "TMI", "unit": "kg/tcs"},
+        {"name": "Specific Energy Consumption", "unit": "Gcal/tcs"},
+        {"name": "Nut Coke Rate", "unit": "kg/thm"},
+        {"name": "Sinter in Burden", "unit": "%"},
+        {"name": "Pellet in Burden", "unit": "%"},
+    ]
+    return {"parameters": major_params}
+
+
+@app.get("/api/techno-sail-targets")
+async def get_techno_sail_targets(fy: str = Query("2026-27")):
+    """
+    Get SAIL techno targets for a given FY.
+    Response: { fy, report_month, targets: {param: value} }
+    """
+    try:
+        fy_year = int(fy.split("-")[0])
+        report_month = f"{fy_year}-03"
+
+        targets = db.get_sail_techno_plan(report_month)
+        return {"fy": fy, "report_month": report_month, "targets": targets}
+    except Exception as e:
+        return {"fy": fy, "targets": {}, "error": str(e)}
+
+
+@app.post("/api/techno-sail-targets")
+async def save_techno_sail_targets(payload: dict):
+    """
+    Save SAIL techno targets.
+    Payload: { fy: str, targets: {param: value} }
+    """
+    try:
+        fy = payload.get("fy", "")
+        targets = payload.get("targets", {})
+
+        if not fy:
+            raise ValueError("fy is required")
+
+        fy_year = int(fy.split("-")[0])
+        report_month = f"{fy_year}-03"
+
+        db.save_sail_techno_plan(report_month, targets)
+        return {"status": "success", "fy": fy, "report_month": report_month}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/techno-recalculate-sail")
+async def recalculate_sail_targets(payload: dict):
+    """
+    Recalculate SAIL targets from plant-level targets.
+    Payload: { fy: str }
+    """
+    try:
+        fy = payload.get("fy", "")
+        if not fy:
+            raise ValueError("fy is required")
+
+        from page_techno import compute_sail_targets
+        computed = compute_sail_targets(fy)
+
+        return {"status": "success", "fy": fy, "computed": computed}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8082))
