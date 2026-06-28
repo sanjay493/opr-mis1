@@ -2548,7 +2548,7 @@ async def recalculate_sail_weighted(payload: dict):
         if coke_sail is not None and nut_coke_sail is not None and cdi_sail is not None:
             sail_bf["Fuel Rate"] = round(coke_sail + nut_coke_sail + cdi_sail, 3)
 
-        # Get SMS-wise targets
+        # Get SMS-wise targets and weights by shop
         sms_shops = [
             "BSP SMS-2", "BSP SMS-3",
             "DSP SMS",
@@ -2556,20 +2556,29 @@ async def recalculate_sail_weighted(payload: dict):
             "BSL SMS-1", "BSL SMS-2",
             "ISP SMS-1",
         ]
+
+        # Fetch shop-wise Crude Steel production weights
+        shop_cs_weights = {}
+        for shop in sms_shops:
+            plant = shop.split()[0]
+            shop_cs_weights[shop] = cs_weights.get(plant, 0)
+
+        # Get SMS targets and calculate weighted avg by shop-wise CS production
         sms_targets = {}
         for param in ["Hot Metal Consumption", "Scrap Consumption"]:
             sms_targets[param] = []
             for shop in sms_shops:
                 plant = shop.split()[0]
+                # Get shop-level data from techno_plan (unit field contains shop name)
                 shop_data = db.get_techno_plan(plant, report_month)
                 if isinstance(shop_data, dict):
                     param_val = shop_data.get(param)
                     if param_val is not None:
-                        weight = cs_weights.get(plant, 0)
+                        weight = shop_cs_weights.get(shop, 0)
                         if weight:
                             sms_targets[param].append((param_val, weight))
 
-        # Calculate weighted averages for SMS params
+        # Calculate weighted averages for SMS params using shop CS weights
         sail_sms = {}
         for param, values in sms_targets.items():
             if values:

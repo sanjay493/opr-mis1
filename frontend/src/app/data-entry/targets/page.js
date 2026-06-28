@@ -373,39 +373,40 @@ export default function TechnoTargetsPage() {
         {smsParams.length > 0 && (
           <div>
             <h2 style={{ fontSize: '14pt', fontWeight: '700', color: '#1e293b', marginBottom: '12px' }}>🏭 SMS / Steel Making Parameters</h2>
-            <p style={{ fontSize: '10pt', color: '#64748b', marginBottom: '12px' }}>Weighted by Plant Crude Steel Production Target</p>
+            <p style={{ fontSize: '10pt', color: '#64748b', marginBottom: '12px' }}>Shop-wise values with SAIL as weighted average by Crude Steel Production</p>
             <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', maxHeight: 'calc(100vh - 400px)', display: 'flex', flexDirection: 'column' }}>
               <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr style={{ backgroundColor: '#1e3a5f', color: '#fff' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '11pt' }}>SMS Shop</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', minWidth: '80px' }}>Unit</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', fontSize: '11pt', minWidth: '150px' }}>SMS Shop</th>
                       {smsParams.map(param => (
-                        <th key={param.name} style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', minWidth: '110px' }}>
+                        <th key={param.name} style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', minWidth: '120px' }}>
                           {param.name}
                         </th>
                       ))}
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '700', fontSize: '11pt', backgroundColor: '#166534', color: '#fff', minWidth: '110px' }}>
-                        SAIL
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {smsShops.map((shop, idx) => (
                       <tr key={shop} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
                         <td style={{ padding: '10px 16px', fontSize: '11pt', fontWeight: '500', color: '#1e293b' }}>{shop}</td>
-                        <td style={{ padding: '10px 16px', textAlign: 'center', fontSize: '10pt', color: '#475569' }}>kg/tcs</td>
                         {smsParams.map(param => (
                           <td key={`${shop}-${param.name}`} style={{ padding: '8px 12px', textAlign: 'right' }}>
                             {renderCell('sms', shop, param.name)}
                           </td>
                         ))}
-                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                          {renderCell('sail', `${shop}-SAIL`, null)}
-                        </td>
                       </tr>
                     ))}
+                    {/* SAIL Row */}
+                    <tr style={{ borderBottom: 'none', backgroundColor: '#f0fdf4', borderTop: '2px solid #e2e8f0' }}>
+                      <td style={{ padding: '10px 16px', fontSize: '11pt', fontWeight: '700', color: '#166534', backgroundColor: '#ecfdf5' }}>SAIL</td>
+                      {smsParams.map(param => (
+                        <td key={`sail-${param.name}`} style={{ padding: '8px 12px', textAlign: 'right' }}>
+                          {renderCell('sail', param.name, null)}
+                        </td>
+                      ))}
+                    </tr>
                   </tbody>
                 </table>
               </div>
