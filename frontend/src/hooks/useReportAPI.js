@@ -101,17 +101,18 @@ export function useSaveReportData() {
 // Generate PDF mutation
 export function useGeneratePDF() {
   return useMutation({
-    mutationFn: async ({ month }) => {
+    mutationFn: async ({ month, pages }) => {
       const response = await fetch(`${API_BASE_URL}/api/generate-pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ month }),
+        body: JSON.stringify({ month, pages }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate PDF');
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.error || `HTTP ${response.status}`);
       }
       return response.blob();
     },

@@ -227,7 +227,7 @@ export default function ReportPage() {
 
   const handleBackendExport = () => {
     generatePDF(
-      { month: selectedMonth },
+      { month: selectedMonth, pages: pagesData },
       {
         onSuccess: (blob) => {
           const url = window.URL.createObjectURL(blob);
