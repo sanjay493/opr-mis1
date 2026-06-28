@@ -2527,21 +2527,37 @@ async def recalculate_sail_weighted(payload: dict):
         for shop, plant in shop_to_plant.items():
             if plant in single_sms_plants:
                 # For single-SMS-shop plants, use Total Crude Steel production
-                item_name = "Total Crude Steel"
+                item_name_pattern = "Total Crude Steel"
+                use_like = False
             else:
                 # For multi-SMS-shop plants, use specific SMS entry
-                # Database stores "SMS-2", not "BSP SMS-2"
-                # Extract SMS part: "BSP SMS-2" → "SMS-2"
+                # Database stores various formats:
+                # - BSP: "SMS-2", "SMS-3" (exact)
+                # - RSP/BSL: "SMS-1 CCM-1", "SMS-2 CCM-1&2", etc. (with product types)
+                # Use LIKE to match both "SMS-X" and "SMS-X %"
                 shop_parts = shop.split()
-                item_name = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
+                item_name_pattern = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
+                use_like = True
 
-            cur.execute(f"""
-                SELECT SUM(month_actual)
-                FROM production_plan_table
-                WHERE report_month IN ({ph})
-                  AND item_name = ?
-                  AND plant_name = ?
-            """, months + [item_name, plant])
+            if use_like:
+                # Sum all items starting with SMS identifier (e.g., "SMS-2" or "SMS-2 CCM-1")
+                cur.execute(f"""
+                    SELECT SUM(month_actual)
+                    FROM production_plan_table
+                    WHERE report_month IN ({ph})
+                      AND (item_name = ? OR item_name LIKE ?)
+                      AND plant_name = ?
+                """, months + [item_name_pattern, item_name_pattern + " %", plant])
+            else:
+                # Exact match for Total Crude Steel
+                cur.execute(f"""
+                    SELECT SUM(month_actual)
+                    FROM production_plan_table
+                    WHERE report_month IN ({ph})
+                      AND item_name = ?
+                      AND plant_name = ?
+                """, months + [item_name_pattern, plant])
+
             result = cur.fetchone()
             shop_cs_weights[shop] = result[0] if result[0] else 0
 
