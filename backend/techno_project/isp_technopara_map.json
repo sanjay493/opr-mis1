@@ -1,0 +1,118 @@
+{
+  "B-FCE": {
+    "BF-5": {
+      "coke_rate": 39,
+      "cdi": 41,
+      "fuel_rate": 42,
+      "bf_productivity": 49,
+      "nut_coke_rate": 40,
+      "sinter% in burden": 52,
+    "pellet% in burden": 53,
+    "oxygen_enrichment": 93,
+    "hot_blast_temp": 81,
+    "si%_in_hm": 83,
+    "s%_in_hm": 84,
+    "furnace_availability":78,
+    "slag_rate":82
+    
+    },
+    "SP":{"return_fines":71},
+    "General":{"coal_to_hm": "75/1000",
+  "coke_screen_loss":72}
+
+  },
+  "SMS": {
+    "SMS": {
+      "specific_hm_consumption": 89,
+      "specific_scrap_consumption": 90,
+      "average_blows_per_day": "10/days",
+      "specific_refractory_consumption":104,
+      "specific_lpg_consumption":103,
+      "average_heat_weight": 52,
+      "fe-mn": "74",
+      "fe-si": 78,
+      "si-mn": 77,
+      "oxygen_blowing": 96,
+      "caster_yield": 53,
+      "converter_utilisation": "(134+135+136)/3"
+    }
+  },
+  "SINTER": {
+    "SP": {
+      "specific_productivity": 81,
+      "ld_slag_cons": 95,
+      "basicity": 112,
+      "fe%_in_sinter": 106
+    }
+  },
+  "WRM": {
+    "WRM": {
+      "yield_total": 161,
+      "availability": 166,
+      "utilisation": 168,
+      "rolling_rate": 178,
+      "specific_power_consumption": 173,
+      "specific_heat_consumption":171,
+      "total_gas_consumption":"174+175+176+177",
+      "cbm_gas_consumption":177
+    }
+  },
+  "BM": {
+    "BM": {
+       "yield_total": 58,
+      "availability": 67,
+      "utilisation": 69,
+      "rolling_rate": 79,
+      "specific_power_consumption": 74,
+      "specific_heat_consumption":72,
+      "total_gas_consumption":"75+76+77+78",
+      "cbm_gas_consumption":78
+    }
+  },
+  "USM": {
+    "USM": {
+       "yield_total": 123,
+      "availability": 132,
+      "utilisation": 134,
+      "rolling_rate": 144,
+      "specific_power_consumption": 139,
+      "specific_heat_consumption":137,
+      "total_gas_consumption":"140+141+142+143",
+      "cbm_gas_consumption":143
+
+    }
+  },
+  "COKE OVENS": {
+    "COB-old": {
+      "dry_coal_charge": "17/8",
+      "cog_yield": 164,
+      "ash_blend_coal":153,
+      "ash_in_coke":157,
+      "m40_coke":158,
+      "m10_coke":159,
+      "csr_coke":160,
+      "cri_coke":161
+    },
+    "COB-new": {
+      "bf_coke_yield": 37,
+      "cog_yield": 189,
+      "dry_coal_charge": "18/9",
+      "crude_tar_yield": 81,
+      "crude_benzol_yield": 85,
+      "ammonium_sulphate_yield": 84,
+      "ash_blend_coal":178,
+      "ash_in_coke":182,
+      "m40_coke":183,
+      "m10_coke":184,
+      "csr_coke":185,
+      "cri_coke":186
+    }
+  },
+  "Maj Techno Summ": {
+    "General": {
+      "specific_energy_consumption": 24,
+      "specific_water_consumption": 27,
+      "specific_co2_emissions": 28
+    }
+  }
+}

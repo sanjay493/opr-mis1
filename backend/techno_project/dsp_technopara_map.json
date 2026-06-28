@@ -1,0 +1,343 @@
+{
+  "description": "DSP Techno Parameter Mapping - Parameters extracted from DSP PDF reports",
+  "extraction_method": "PDF text parsing with keyword matching",
+  "note": "Parameters are auto-detected from PDF content based on keywords",
+
+  "Merchant Mill": {
+    "plant": "DSP",
+    "parameters": {
+      "yield": {
+        "parameter": "Yield",
+        "unit": "%"
+      },
+      "rolling_rate": {
+        "parameter": "Rolling Rate",
+        "unit": "T/Hr."
+      },
+      "mill_availability": {
+        "parameter": "Mill Availability",
+        "unit": "%"
+      },
+      "mill_utilisation": {
+        "parameter": "Mill Utilisation",
+        "unit": "%Avl."
+      },
+      "on_ich": {
+        "parameter": "On ICH",
+        "unit": "%"
+      },
+      "specific_heat_consumption": {
+        "parameter": "Specific Heat",
+        "unit": "M.Cal/T"
+      },
+      "specific_power_consumption": {
+        "parameter": "Specific Power",
+        "unit": "KWH/T"
+      }
+    }
+  },
+
+  "MSM": {
+    "plant": "DSP",
+    "parameters": {
+      "yield": {
+        "parameter": "Yield",
+        "unit": "%"
+      },
+      "rolling_rate": {
+        "parameter": "Rolling Rate",
+        "unit": "T/Utl.Hr."
+      },
+      "mill_availability": {
+        "parameter": "Mill Availability",
+        "unit": "%"
+      },
+      "mill_utilisation": {
+        "parameter": "Mill Utilisation",
+        "unit": "%Avl."
+      },
+      "on_ich": {
+        "parameter": "On ICH",
+        "unit": "%"
+      },
+      "specific_heat_consumption": {
+        "parameter": "Specific Heat",
+        "unit": "M.Cal/T"
+      },
+      "specific_power_consumption": {
+        "parameter": "Specific Power",
+        "unit": "KWH/T"
+      }
+    }
+  },
+
+  "Wheel Plant": {
+    "plant": "DSP",
+    "parameters": {
+      "finished_wheel_over_ingot_round": {
+        "parameter": "Finished Wheel over Ingot/Round",
+        "unit": "%"
+      },
+      "rolling_rate": {
+        "parameter": "Rolling Rate",
+        "unit": "Nos./Hr."
+      },
+      "forging_availability": {
+        "parameter": "Forging Availability",
+        "unit": "%"
+      },
+      "forging_utilisation": {
+        "parameter": "Forging Utilisation",
+        "unit": "%Avl."
+      },
+      "on_ich": {
+        "parameter": "On ICH",
+        "unit": "%"
+      },
+      "specific_heat_consumption": {
+        "parameter": "Specific Heat",
+        "unit": "M.Cal/T"
+      },
+      "specific_power_consumption": {
+        "parameter": "Specific Power",
+        "unit": "KWH/T"
+      }
+    }
+  },
+
+  "Axle Plant": {
+    "plant": "DSP",
+    "parameters": {
+      "yield_over_good_bloom": {
+        "parameter": "Yield over good Bloom",
+        "unit": "%"
+      },
+      "forging_rate": {
+        "parameter": "Forging Rate",
+        "unit": "Nos./Hr."
+      },
+      "forging_availability": {
+        "parameter": "Forging Availability",
+        "unit": "%"
+      },
+      "forging_utilisation": {
+        "parameter": "Forging Utilisation",
+        "unit": "%Avl."
+      },
+      "on_ich": {
+        "parameter": "On ICH",
+        "unit": "%"
+      },
+      "specific_heat_consumption": {
+        "parameter": "Specific Heat",
+        "unit": "M.Cal/T"
+      },
+      "specific_power_consumption": {
+        "parameter": "Specific Power",
+        "unit": "KWH/T"
+      }
+    }
+  },
+
+  "Major Techno": {
+    "plant": "DSP",
+    "parameters": {
+      "specific_energy_consumption": {
+        "parameter": "Specific Energy Consumption",
+        "unit": "G.Cal/TCS"
+      },
+      "bof_slag_utilisation": {
+        "parameter": "BOF Slag Utilisation",
+        "unit": "%"
+      },
+      "coke_screen_loss": {
+        "parameter": "Coke Screen Loss",
+        "unit": "%"
+      }
+    }
+  },
+
+  "SMS": {
+    "plant": "DSP",
+    "parameters": {
+      "hot_metal_consumption": {
+        "parameter": "Hot Metal Consumption",
+        "unit": "Kg/TCS"
+      },
+      "scrap_consumption": {
+        "parameter": "Scrap Consumption",
+        "unit": "Kg/TCS"
+      },
+      "heat_size": {
+        "parameter": "Heat Size",
+        "unit": "T"
+      },
+      "refractory_consumption_sms": {
+        "parameter": "Refractory Consumption (SMS)",
+        "unit": "Kg/TCS"
+      },
+      "refractory_consumption_red": {
+        "parameter": "Refractory Consumption (RED)",
+        "unit": "Kg/TCS"
+      },
+      "tap_to_tap_time": {
+        "parameter": "Tap to Tap Time",
+        "unit": "mins"
+      },
+      "converter_availability": {
+        "parameter": "Converter Availability",
+        "unit": "%"
+      },
+      "converter_utilisation": {
+        "parameter": "Converter Utilisation",
+        "unit": "%"
+      },
+      "calcined_lime_consumption": {
+        "parameter": "Calcined Lime Consumption",
+        "unit": "Kg/TCS"
+      },
+      "limestone_consumption": {
+        "parameter": "Limestone Consumption",
+        "unit": "Kg/TCS"
+      },
+      "silicon_manganese_consumption": {
+        "parameter": "Silicon Manganese Consumption",
+        "unit": "Kg/TCS"
+      },
+      "ferro_silicon_consumption": {
+        "parameter": "Ferro Silicon Consumption",
+        "unit": "Kg/TCS"
+      },
+      "ferro_manganese_consumption": {
+        "parameter": "Ferro Manganese Consumption",
+        "unit": "Kg/TCS"
+      },
+      "bof_gas_yield": {
+        "parameter": "BOF Gas Yield",
+        "unit": "Nm³/TCS"
+      }
+    }
+  },
+
+  "Coke": {
+    "plant": "DSP",
+    "parameters": {
+      "bf_coke_yield": {
+        "parameter": "BF Coke Yield",
+        "unit": "%"
+      },
+      "gross_coke_yield": {
+        "parameter": "Gross Coke Yield",
+        "unit": "%"
+      },
+      "specific_heat_consumption": {
+        "parameter": "Sp. Heat Cons.",
+        "unit": "000 K.Cal/TDC"
+      },
+      "coal_tar_yield": {
+        "parameter": "Coal Tar Yield",
+        "unit": "kg/TDC"
+      },
+      "dry_coal_charge_per_oven": {
+        "parameter": "Dry Coal Charge/Oven",
+        "unit": "T"
+      },
+      "specific_heat_power": {
+        "parameter": "Specific Heat Power",
+        "unit": "KWH/T"
+      },
+      "crude_benzol": {
+        "parameter": "Crude Benzol",
+        "unit": "kg/TDC"
+      },
+      "coke_oven_gas_yield": {
+        "parameter": "Coke Oven Gas Yield",
+        "unit": "Nm³/TDC"
+      },
+      "ammonium_sulphate": {
+        "parameter": "Ammonium Sulphate",
+        "unit": "Kg/TDC"
+      },
+      "m10": {
+        "parameter": "M10",
+        "unit": "%"
+      },
+      "m40": {
+        "parameter": "M40",
+        "unit": "%"
+      },
+      "average_ash_in_coke": {
+        "parameter": "Average Ash in Coke",
+        "unit": "%"
+      },
+      "average_ash_in_coal_blend": {
+        "parameter": "Average Ash in Coal Blend",
+        "unit": "%"
+      },
+      "average_volatile_matter_in_coal_blend": {
+        "parameter": "Average Volatile Matter in Coal Blend",
+        "unit": "%"
+      }
+    }
+  },
+
+  "Blast Furnace": {
+    "plant": "DSP",
+    "parameters": {
+      "silicon_in_hm": {
+        "parameter": "Silicon in HM",
+        "unit": "%"
+      },
+      "sulphur_in_hm": {
+        "parameter": "Sulphur in HM",
+        "unit": "%"
+      },
+      "avg_hot_metal_temperature": {
+        "parameter": "Avg Hot Metal Temperature",
+        "unit": "°C"
+      },
+      "blast_temperature": {
+        "parameter": "Blast Temperature",
+        "unit": "°C"
+      },
+      "sinter_in_burden": {
+        "parameter": "Sinter in Burden",
+        "unit": "%"
+      },
+      "coke_rate": {
+        "parameter": "Coke Rate",
+        "unit": "kg/T"
+      },
+      "nut_coke_rate": {
+        "parameter": "Nut Coke Rate",
+        "unit": "kg/T"
+      },
+      "bf_productivity_useful": {
+        "parameter": "BF Productivity (useful)",
+        "unit": "T/m³/day"
+      },
+      "bf_productivity_working": {
+        "parameter": "BF Productivity (working)",
+        "unit": "T/m³/day"
+      }
+    }
+  },
+
+  "Blast Furnace Shop": {
+    "plant": "DSP",
+    "parameters": {
+      "slag_rate": {
+        "parameter": "Slag Rate",
+        "unit": "kg/THM"
+      },
+      "slag_offtake": {
+        "parameter": "Slag Offtake",
+        "unit": "%"
+      },
+      "fuel_rate": {
+        "parameter": "Fuel Rate",
+        "unit": "kg/T"
+      }
+    }
+  }
+}

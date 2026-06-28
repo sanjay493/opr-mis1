@@ -52,7 +52,10 @@
     "fe-si": 170,
     "si-mn": 171,
     "oxygen_blowing": 178,
-    "caster_yield": 182
+    "caster_yield": 182,
+     "converter_availability":  161,
+    "converter_utilisation":   162,
+    "tap_to_tap_time":         176
   },
   "SMS-2": {
     "specific_hm_consumption": 191,
@@ -64,7 +67,10 @@
     "fe-si": 198,
     "si-mn": 199,
     "oxygen_blowing": 207,
-    "caster_yield": 211
+    "caster_yield": 211,
+     "converter_availability":  188,
+    "converter_utilisation":   189,
+    "tap_to_tap_time":         205
   },
 
 

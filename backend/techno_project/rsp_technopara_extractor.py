@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, time
 from pathlib import Path
 from openpyxl import load_workbook
 from typing import Dict, List
@@ -33,13 +34,26 @@ class TechnoExtractor:
         self.hardcoded_map = self._load_hardcoded_map()
 
     def _load_hardcoded_map(self) -> Dict:
-        map_path = Path(__file__).parent / "hardcoded_map.json"
+        map_path = Path(__file__).parent / "rsp_technopara_map.json"
         try:
             with open(map_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except FileNotFoundError:
-            print(f"Error: hardcoded_map.json not found at {map_path}!")
+            print(f"Error: rsp_technopara_map.json not found at {map_path}!")
             return {}
+
+    @staticmethod
+    def _clean_value(val):
+        if isinstance(val, time):
+            return val.strftime("%H:%M:%S")
+        if isinstance(val, datetime):
+            return val.time().strftime("%H:%M:%S")
+        if isinstance(val, str) and not val.strip():
+            return None
+        _bad = {"#DIV/0!", "#VALUE!", "-", "--", None, ""}
+        if val in _bad:
+            return None
+        return val
 
     def open_workbook(self):
         self.workbook = load_workbook(self.excel_file, data_only=True)
@@ -140,11 +154,8 @@ class TechnoExtractor:
                         else None
                     )
 
-                    _bad = {"#DIV/0!", "#VALUE!", "-", "--", None, ""}
-                    if month_val in _bad or (isinstance(month_val, str) and not month_val.strip()):
-                        month_val = None
-                    if till_val in _bad or (isinstance(till_val, str) and not till_val.strip()):
-                        till_val = None
+                    month_val = self._clean_value(month_val)
+                    till_val = self._clean_value(till_val)
 
                     techno["month"][param_key] = month_val
                     techno["till_month"][param_key] = till_val
