@@ -396,10 +396,10 @@ export default function TechnoTargetsPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc' }}>
       <GlobalNavbar />
 
-      <main style={{ padding: '32px', maxWidth: '1400px', margin: '0 auto' }}>
+      <main style={{ flex: 1, overflow: 'auto', padding: '32px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
         <div style={{ marginBottom: '32px' }}>
           <h1 style={{ fontSize: '24pt', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>
             📊 Techno-Economic Annual Targets
