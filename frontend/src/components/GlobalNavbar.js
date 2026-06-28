@@ -14,7 +14,8 @@ export default function GlobalNavbar() {
         { label: 'Production Entry', link: '/data-entry', icon: '📊' },
         { label: 'Opening Stock', link: '/data-entry/opening-stock', icon: '📦' },
         { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
-        { label: 'Techno Data', link: '/data-entry/techno', icon: '🔧' },
+        { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },
+        { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
         { label: 'IPT Status', link: '/data-entry/ipt', icon: '↔️' },
         { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' }
       ]

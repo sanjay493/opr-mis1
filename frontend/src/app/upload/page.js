@@ -701,8 +701,9 @@ export default function UploadPage() {
         item_name: r.item_edit.trim(),
         convert_t: r.unit === 'nos/d' ? 0 : 1,
       }));
-    const techno_rows = (technoPreview.techno_rows || []).filter((r) => r.status === 'ok');
-    const techno_param_rows = (technoPreview.techno_param_rows || []).filter((r) => r.status === 'ok');
+    // Techno rows intentionally excluded — use Techno Manual Entry page instead
+    const techno_rows = [];
+    const techno_param_rows = [];
     const special_steel_rows = ssRows
       .filter((r) => r.selected && r.status === 'ok')
       .map((r) => ({
@@ -1274,11 +1275,10 @@ export default function UploadPage() {
                 <select className="form-control" value={technoPlant}
                         onChange={(e) => setTechnoPlant(e.target.value)}>
                   <option value="RSP">RSP (Excel — production / general)</option>
-                  <option value="RSP_TECHNO">RSP Technopara (page1-8 Excel)</option>
                   <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
                   <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
-                  <option value="BSP">BSP (PPC MIS Month-End .xls / Techno / OISCO / Special Steel .xlsx)</option>
-                  <option value="BSL">BSL (Techno .xls / Corporate SS .xlsx / BF PDF)</option>
+                  <option value="BSP">BSP (PPC MIS Month-End .xls / Special Steel .xlsx)</option>
+                  <option value="BSL">BSL (DPR .xlsx / Corporate SS .xlsx)</option>
                   <option value="ASP">ASP (xlsx or PDF — REP / FL actuals)</option>
                   <option value="SSP">SSP (PDF — Monthly DPR)</option>
                   <option value="VISL">VISL (PDF — Monthly Report)</option>
@@ -1342,9 +1342,8 @@ export default function UploadPage() {
                   </div>
                   {[
                     ['production', '1. Extract Production', '#10b981'],
-                    ['techno', '2. Extract Techno', '#8b5cf6'],
-                    ['special_steel', '3. Extract Special Steel', '#f59e0b'],
-                    ['stock', '4. Extract Stock (Flash.pdf)', '#ef4444'],
+                    ['special_steel', '2. Extract Special Steel', '#f59e0b'],
+                    ['stock', '3. Extract Stock (Flash.pdf)', '#ef4444'],
                   ].map(([block, label, color]) => (
                     <button key={block} type="button" onClick={() => handleDspExtract(block)}
                             disabled={dspBusy[block]}
@@ -1729,12 +1728,7 @@ export default function UploadPage() {
             );
           })()}
 
-          {/* RSP Technopara preview — unit-wise techno params before DB insert */}
-          {rspTechnoPreview && (
-            <RspTechnoPreviewTable preview={rspTechnoPreview} />
-          )}
-
-          {/* RSP extraction preview — verify production + techno before insertion */}
+          {/* RSP extraction preview — verify production + stock + special-steel before insertion */}
           {technoPreview && (
             <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #8b5cf6', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -1806,29 +1800,12 @@ export default function UploadPage() {
                 );
               })()}
 
-              {/* 4. Old-style techno params → techno_table */}
-              {technoPreview.techno_rows?.length > 0 && (
-                <TechnoCheckTable rows={technoPreview.techno_rows} />
-              )}
-
-              {/* 5. Mill techno params → techno_monthly */}
-              {technoPreview.techno_param_rows?.length > 0 && (
-                <PreviewTable
-                  title={`Mill Techno Parameters (${technoPreview.techno_param_rows.filter(r => r.status === 'ok').length} ok) → techno_monthly`}
-                  headers={['Plant', 'Shop', 'Parameter', 'Unit', 'Month', 'Actual', 'Cum', 'Cell', 'Found via', 'Status']}
-                  rows={technoPreview.techno_param_rows.map((r) => [
-                    r.plant, r.section, r.parameter, r.unit, r.month, r.actual ?? '', r.cum_actual ?? '', r.cell, r.found_via, r.status,
-                  ])}
-                />
-              )}
-
               <div style={{ fontSize: '8pt', color: '#94a3b8', marginTop: 8 }}>
                 Production: only <strong style={{ color: '#34d399' }}>ticked</strong> rows are inserted — untick any
                 row to skip it, or type an item name on an <strong style={{ color: '#f87171' }}>unmapped</strong> row
                 to map &amp; include it (raw tonne values are stored as &apos;000T). Renamed / newly mapped labels are
                 remembered and applied automatically in future {technoPreview.plant} extractions.
-                Techno tables: rows with status <strong style={{ color: '#34d399' }}>ok</strong> are inserted;
-                "not found" / "no value" rows are skipped.
+                <span style={{ color: '#fbbf24' }}> Techno parameters are excluded from this flow — use the Techno Manual Entry page.</span>
               </div>
             </div>
           )}
@@ -1872,41 +1849,6 @@ export default function UploadPage() {
                 <EditableProductionTable plant="DSP" rows={dspProdRows}
                   onToggle={toggleDspProdRow} onEditName={editDspProdName} />
               )}
-            </div>
-          )}
-
-          {dspTechnoResult && (
-            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #8b5cf6', borderRadius: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
-                  Step 2 — Techno Parameters&nbsp;
-                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
-                    DSP {dspTechnoResult.month}
-                  </span>
-                </h3>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setDspTechnoResult(null)}
-                          disabled={dspBusy.techno}
-                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
-                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
-                    Discard
-                  </button>
-                  <button onClick={() => handleDspInsert('techno')}
-                          disabled={dspBusy.techno}
-                          style={{ backgroundColor: '#8b5cf6', border: '1px solid #8b5cf6', borderRadius: 4,
-                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
-                    {dspBusy.techno ? 'Inserting...' : `Insert Techno (${(dspTechnoResult.techno_param_rows||[]).filter(r=>r.status==='ok').length} rows)`}
-                  </button>
-                </div>
-              </div>
-              <PreviewTable
-                title={`Techno Parameters — ${(dspTechnoResult.techno_param_rows||[]).filter(r=>r.status==='ok').length} ok → techno_monthly`}
-                headers={['Group', 'Section', 'Parameter', 'Unit', 'Actual', 'Cum', 'Cell', 'Status']}
-                rows={(dspTechnoResult.techno_param_rows||[]).map((r) => [
-                  r.group_code, r.section, r.parameter, r.unit,
-                  r.actual ?? '', r.cum_actual ?? '', r.cell, r.status,
-                ])}
-              />
             </div>
           )}
 

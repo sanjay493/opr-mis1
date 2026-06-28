@@ -35,10 +35,13 @@ def _get_extractor(plant: str):
     elif plant.upper() == "DSP":
         from dsp_technopara_extractor import DspTechnoExtractor
         return DspTechnoExtractor
+    elif plant.upper() == "BSL":
+        from bsl_technopara_extractor import BslTechnoExtractor
+        return BslTechnoExtractor
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Plant '{plant}' not supported. Supported: RSP, BSP, ISP, DSP"
+            detail=f"Plant '{plant}' not supported. Supported: RSP, BSP, ISP, DSP, BSL"
         )
 
 

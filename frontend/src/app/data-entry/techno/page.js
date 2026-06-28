@@ -44,7 +44,7 @@ function StatusMsg({ status }) {
 }
 
 // ── Single file-upload row used for each file type ────────────────────────────
-function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, plant, accent = '#1e3a5f' }) {
+function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, plant, accent = '#1e3a5f', accept = '.xlsx,.xls' }) {
   const [file, setFile] = React.useState(null);
   const [busy,  setBusy]  = React.useState(false);
   const [status, setStatus] = React.useState(null);
@@ -84,7 +84,7 @@ function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, plant, a
         padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 7,
       }}>
         <span style={{ fontSize: 11, color: '#64748b', minWidth: 160, fontWeight: 600 }}>{label}</span>
-        <input ref={inputRef} type="file" accept=".xlsx,.xls"
+        <input ref={inputRef} type="file" accept={accept}
           onChange={e => { setFile(e.target.files[0]); setStatus(null); }}
           style={{ fontSize: 11, flex: 1 }}
         />
@@ -143,7 +143,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
   const isBsp = plant === 'BSP';
   const isIsp = plant === 'ISP';
   const isDsp = plant === 'DSP';
-  const hasExtraction = isRsp || isBsp || isIsp || isDsp;
+  const isBsl = plant === 'BSL';
+  const hasExtraction = isRsp || isBsp || isIsp || isDsp || isBsl;
 
   return (
     <div>
@@ -216,6 +217,38 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             apiBase={apiBase}
             onSuccess={loadData}
             accent="#dc2626"
+            accept=".pdf"
+          />
+        </div>
+      )}
+
+      {/* BSL: two file types — Techno Excel + BF Performance PDF */}
+      {isBsl && (
+        <div style={{
+          marginBottom: 16, padding: '12px 14px',
+          background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 10 }}>
+            BSL Techno Upload — upload Techno Excel and/or BF Performance PDF (both merged automatically)
+          </div>
+          <ExtractRow
+            label="BSL Techno Excel (.xls/.xlsx)"
+            endpoint="/api/techno/extract"
+            plant="BSL"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#166534"
+          />
+          <ExtractRow
+            label="BSL BF Performance PDF"
+            endpoint="/api/techno/extract"
+            plant="BSL"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#15803d"
+            accept=".pdf"
           />
         </div>
       )}
@@ -370,7 +403,8 @@ export default function TechnoDataEntry() {
               {plant === 'BSP' && 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel. Both merged automatically.'}
               {plant === 'ISP' && 'Extract from multi-sheet ISP Technopara Excel.'}
               {plant === 'DSP' && 'Extract from DSP Monthly Report PDF.'}
-              {!['RSP', 'BSP', 'ISP', 'DSP'].includes(plant) && `${plant} extraction coming soon.`}
+              {plant === 'BSL' && 'Upload Techno Excel and/or BF Performance PDF. Both merged automatically.'}
+              {!['RSP', 'BSP', 'ISP', 'DSP', 'BSL'].includes(plant) && `${plant} extraction coming soon.`}
             </div>
           </div>
         </div>
