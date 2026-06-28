@@ -2701,6 +2701,102 @@ async def recalculate_sail_weighted(payload: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/techno-summary")
+async def get_techno_summary(fy: str = Query("2026-27")):
+    """
+    Get comprehensive techno targets summary for PDF and visualization
+    Returns BF and SMS targets with graph data
+    """
+    try:
+        fy_year = int(fy.split("-")[0])
+        report_month = f"{fy_year}-03"
+
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+
+        # Get all plants and their BF targets
+        plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
+        bf_data = {}
+        for plant in plants:
+            plant_data = db.get_techno_plant_plan(plant, report_month)
+            if plant_data:
+                bf_data[plant] = plant_data
+
+        # Get all SMS shops and their targets
+        sms_shops = [
+            "BSP SMS-2", "BSP SMS-3",
+            "DSP SMS",
+            "RSP SMS-1", "RSP SMS-2",
+            "BSL SMS-1", "BSL SMS-2",
+            "ISP SMS-1",
+        ]
+        sms_data = {}
+        for shop in sms_shops:
+            plant = shop.split()[0]
+            shop_data = db.get_techno_plan(plant, report_month)
+            if shop_data:
+                sms_data[shop] = shop_data
+
+        # Get SAIL targets
+        sail_data = db.get_sail_techno_plan(report_month)
+
+        # Get production data for context
+        months = (
+            [f"{fy_year}-{m:02d}" for m in range(4, 13)] +
+            [f"{fy_year + 1}-{m:02d}" for m in range(1, 4)]
+        )
+        ph = ",".join("?" * len(months))
+
+        # HM production by plant
+        cur.execute(f"""
+            SELECT plant_name, SUM(month_actual)
+            FROM production_plan_table
+            WHERE report_month IN ({ph}) AND item_name = 'Hot Metal'
+              AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
+            GROUP BY plant_name
+        """, months)
+        hm_weights = {row[0]: row[1] for row in cur.fetchall()}
+
+        # CS production by plant and SMS shop
+        shop_to_plant = {
+            "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
+            "DSP SMS": "DSP",
+            "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
+            "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
+            "ISP SMS-1": "ISP",
+        }
+        shop_cs_weights = {}
+        for shop, plant in shop_to_plant.items():
+            shop_parts = shop.split()
+            sms_identifier = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
+            cur.execute(f"""
+                SELECT SUM(month_actual)
+                FROM production_plan_table
+                WHERE report_month IN ({ph})
+                  AND (item_name = ? OR item_name LIKE ?)
+                  AND plant_name = ?
+            """, months + [sms_identifier, sms_identifier + " %", plant])
+            result = cur.fetchone()
+            shop_cs_weights[shop] = result[0] if result[0] else 0
+
+        conn.close()
+
+        return {
+            "status": "success",
+            "fy": fy,
+            "report_month": report_month,
+            "bf_targets": bf_data,
+            "sms_targets": sms_data,
+            "sail_targets": sail_data,
+            "production_context": {
+                "hm_weights": hm_weights,
+                "sms_cs_weights": shop_cs_weights
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8082))
