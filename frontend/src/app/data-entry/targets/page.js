@@ -22,6 +22,7 @@ export default function TechnoTargetsPage() {
   const [status, setStatus] = useState(null);
   const [bfCalcDetails, setBfCalcDetails] = useState({});
   const [smsCalcDetails, setSmsCalcDetails] = useState({});
+  const [prodMetadata, setProdMetadata] = useState(null);
 
   // Load parameters and targets
   const handleLoad = useCallback(async () => {
@@ -133,6 +134,7 @@ export default function TechnoTargetsPage() {
       setEdits(newEdits);
       setBfCalcDetails(result.bf_calculations || {});
       setSmsCalcDetails(result.sms_calculations || {});
+      setProdMetadata(result.production_metadata || null);
       setStatus({ type: 'success', text: 'SAIL targets recalculated using HM/CS production weights' });
     } catch (err) {
       setStatus({ type: 'error', text: `Recalculation failed: ${err.message}` });
@@ -439,6 +441,56 @@ export default function TechnoTargetsPage() {
             border: `1px solid ${status.type === 'success' ? '#bbf7d0' : '#fecaca'}`
           }}>
             {status.text}
+          </div>
+        )}
+
+        {/* Production Data Source */}
+        {prodMetadata && (
+          <div style={{
+            padding: '12px 16px', marginBottom: '16px', borderRadius: '6px', fontSize: '10pt',
+            backgroundColor: '#f0f9ff', color: '#0c4a6e', border: '1px solid #e0e7ff'
+          }}>
+            <div style={{ fontWeight: '600', marginBottom: '8px' }}>📊 Production Plan Data Source</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <strong>Source Table:</strong> production_plan_table
+              </div>
+              <div>
+                <strong>Financial Year:</strong> {prodMetadata.fy}
+              </div>
+              <div>
+                <strong>HM Weight (item):</strong> {prodMetadata.hm_item}
+              </div>
+              <div>
+                <strong>CS Weight (item):</strong> {prodMetadata.cs_item}
+              </div>
+            </div>
+            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
+              <strong>Months Included (FY {prodMetadata.fy}):</strong>
+              <div style={{ fontSize: '9pt', color: '#0c4a6e', marginTop: '4px' }}>
+                {prodMetadata.months_included?.join(' • ')}
+              </div>
+            </div>
+            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
+              <strong>HM Production by Plant (Annual):</strong>
+              <div style={{ fontSize: '9pt', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '4px' }}>
+                {Object.entries(prodMetadata.hm_weights || {}).map(([plant, weight]) => (
+                  <div key={plant} style={{ padding: '4px 8px', backgroundColor: '#e0f2fe', borderRadius: '4px' }}>
+                    {plant}: {weight.toLocaleString()}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
+              <strong>CS Production by Plant (Annual):</strong>
+              <div style={{ fontSize: '9pt', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '4px' }}>
+                {Object.entries(prodMetadata.cs_weights || {}).map(([plant, weight]) => (
+                  <div key={plant} style={{ padding: '4px 8px', backgroundColor: '#e0f2fe', borderRadius: '4px' }}>
+                    {plant}: {weight.toLocaleString()}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

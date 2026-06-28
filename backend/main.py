@@ -2509,6 +2509,17 @@ async def recalculate_sail_weighted(payload: dict):
         """, months)
         cs_weights = {row[0]: row[1] for row in cur.fetchall() if row[1]}
 
+        # Store metadata about production targets used
+        production_metadata = {
+            "source": "production_plan_table",
+            "fy": fy,
+            "months_included": months,
+            "hm_item": "Hot Metal",
+            "cs_item": "Total Crude Steel",
+            "hm_weights": hm_weights,
+            "cs_weights": cs_weights
+        }
+
         # Get plant-level BF targets
         plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
         bf_targets = {}
@@ -2658,6 +2669,7 @@ async def recalculate_sail_weighted(payload: dict):
             "sail_sms": sail_sms,
             "bf_calculations": bf_calc_steps,
             "sms_calculations": sms_calc_steps,
+            "production_metadata": production_metadata,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
