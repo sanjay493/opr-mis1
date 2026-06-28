@@ -1288,25 +1288,36 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             "cum_cply":  _fmt(cum_cply_fn()) if cum_cply_fn else "",
         }
 
-    def unit_section(param_name, unit_str, src_unit, src_key):
-        """One row per plant that has src_unit data for the report month."""
+    def unit_section(param_name, unit_str, src_units, src_key):
+        """One row per plant.  src_units: single unit name OR list tried in order
+        (first unit with data for that plant wins).  Enables ISP BF-5 fallback
+        when no BF_Shop unit exists."""
+        if isinstance(src_units, str):
+            src_units = [src_units]
         rows = []
         for p in plants_with_data:
-            if not store.get((p, report_month), {}).get(src_unit):
+            p_data = store.get((p, report_month), {})
+            src_unit = next((u for u in src_units if p_data.get(u)), None)
+            if not src_unit:
                 continue
             rows.append(_build_row(
                 p, unit_str,
-                month_fn     = lambda m, _p=p: _gv(_p, m, src_unit, src_key),
-                cum_fn       = lambda     _p=p: _gv(_p, report_month, src_unit, src_key, "till_month"),
-                cply_fn      = lambda     _p=p: _gv(_p, cply_month,   src_unit, src_key),
-                fy1_fn       = lambda     _p=p: _fy_val(_p, fy1_march, src_unit, src_key),
-                fy2_fn       = lambda     _p=p: _fy_val(_p, fy2_march, src_unit, src_key),
-                fy3_fn       = lambda     _p=p: _fy_val(_p, fy3_march, src_unit, src_key),
-                cum_cply_fn  = lambda     _p=p: _gv(_p, cply_month,   src_unit, src_key, "till_month"),
+                month_fn     = lambda m, _p=p, _u=src_unit: _gv(_p, m,             _u, src_key),
+                cum_fn       = lambda     _p=p, _u=src_unit: _gv(_p, report_month,  _u, src_key, "till_month"),
+                cply_fn      = lambda     _p=p, _u=src_unit: _gv(_p, cply_month,    _u, src_key),
+                fy1_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy1_march, _u, src_key),
+                fy2_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy2_march, _u, src_key),
+                fy3_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy3_march, _u, src_key),
+                cum_cply_fn  = lambda     _p=p, _u=src_unit: _gv(_p, cply_month,    _u, src_key, "till_month"),
             ))
         return {"label": param_name, "rows": rows}
 
-    _SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS"]
+    # BF_Shop is preferred (shop average); fall back to individual furnace units
+    # for plants that publish per-furnace only (e.g. ISP has BF-5, no BF_Shop)
+    _BF_UNITS = ["BF_Shop", "BF-5", "BF-4", "BF-2", "BF-1", "BF-3"]
+
+    # SMS unit scan order — covers RSP/BSP (SMS-1/2/3), ISP/DSP (SMS), BSL (SMS-I/II)
+    _SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS", "SMS-I", "SMS-II"]
 
     def sms_section(param_name, unit_str, src_key, tmi=False):
         """One row per (plant, SMS-unit) pair that has data for the report month."""
@@ -1347,18 +1358,18 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         return {"label": param_name, "rows": rows}
 
     raw_sections = [
-        unit_section("Coal to Hot Metal",           "kg/kg",     "General",  "coal_to_hm"),
-        unit_section("Coke Rate",                   "kg/thm",    "BF_Shop",  "coke_rate"),
-        unit_section("Nut Coke Rate",               "kg/thm",    "BF_Shop",  "nut_coke_rate"),
-        unit_section("CDI Rate",                    "kg/thm",    "BF_Shop",  "cdi"),
-        unit_section("Fuel Rate",                   "kg/thm",    "BF_Shop",  "fuel_rate"),
-        unit_section("Sinter in Burden",            "%",         "BF_Shop",  "sinter% in burden"),
-        unit_section("Pellet in Burden",            "%",         "BF_Shop",  "pellet% in burden"),
-        unit_section("BF Productivity",             "t/m³/day", "BF_Shop", "bf_productivity"),
-        sms_section ("Hot Metal Consumption",       "kg/tcs",    "specific_hm_consumption"),
-        sms_section ("Scrap Consumption",           "kg/tcs",    "specific_scrap_consumption"),
-        sms_section ("TMI",                         "kg/tcs",    None,  tmi=True),
-        unit_section("Specific Energy Consumption", "Gcal/tcs",  "General",  "specific_energy_consumption"),
+        unit_section("Coal to Hot Metal",           "kg/kg",      "General",   "coal_to_hm"),
+        unit_section("Coke Rate",                   "kg/thm",     _BF_UNITS,   "coke_rate"),
+        unit_section("Nut Coke Rate",               "kg/thm",     _BF_UNITS,   "nut_coke_rate"),
+        unit_section("CDI Rate",                    "kg/thm",     _BF_UNITS,   "cdi"),
+        unit_section("Fuel Rate",                   "kg/thm",     _BF_UNITS,   "fuel_rate"),
+        unit_section("Sinter in Burden",            "%",          _BF_UNITS,   "sinter% in burden"),
+        unit_section("Pellet in Burden",            "%",          _BF_UNITS,   "pellet% in burden"),
+        unit_section("BF Productivity",             "t/m³/day",   _BF_UNITS,   "bf_productivity"),
+        sms_section ("Hot Metal Consumption",       "kg/tcs",     "specific_hm_consumption"),
+        sms_section ("Scrap Consumption",           "kg/tcs",     "specific_scrap_consumption"),
+        sms_section ("TMI",                         "kg/tcs",     None,  tmi=True),
+        unit_section("Specific Energy Consumption", "Gcal/tcs",   "General",   "specific_energy_consumption"),
     ]
     sections = [s for s in raw_sections if s["rows"]]
 
@@ -1405,10 +1416,10 @@ _TECHNO_DB_SCHEMA = {
     29: {
         "type": "param",
         "sections": [
-            # Sinter plants
-            ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity")]),
-            ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons")]),
-            # Blast furnaces
+            # Sinter plants — RSP: SP-1/SP-2/SP-3, ISP: SP
+            ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity"), ("SP", "specific_productivity")]),
+            ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons")]),
+            # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5 (shared unit name)
             ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF_Shop", "cdi")]),
             ("Coke Screen Loss",    "%",         [("General", "coke_screen_loss")]),
         ],
@@ -1416,16 +1427,15 @@ _TECHNO_DB_SCHEMA = {
     30: {
         "type": "param",
         "sections": [
-            ("HM Consumption",      "kg/tcs", [("SMS-1", "specific_hm_consumption"),   ("SMS-2", "specific_hm_consumption")]),
-            ("Scrap Consumption",   "kg/tcs", [("SMS-1", "specific_scrap_consumption"), ("SMS-2", "specific_scrap_consumption")]),
-            ("Average Blows/Day",   "Nos",    [("SMS-1", "average_blows_per_day"),      ("SMS-2", "average_blows_per_day")]),
-            ("Average Heat Weight", "t",      [("SMS-1", "average_heat_weight"),        ("SMS-2", "average_heat_weight")]),
-            ("Average Lining Life", "heats",  [("SMS-1", "average_lining_life"),        ("SMS-2", "average_lining_life")]),
-            ("Fe-Mn Consumption",   "kg/t",   [("SMS-1", "fe-mn"),  ("SMS-2", "fe-mn")]),
-            ("Fe-Si Consumption",   "kg/t",   [("SMS-1", "fe-si"),  ("SMS-2", "fe-si")]),
-            ("Si-Mn Consumption",   "kg/t",   [("SMS-1", "si-mn"),  ("SMS-2", "si-mn")]),
-            ("Oxygen Blowing",      "NM3/t",  [("SMS-1", "oxygen_blowing"),  ("SMS-2", "oxygen_blowing")]),
-            ("Caster Yield",        "%",      [("SMS-1", "caster_yield"),    ("SMS-2", "caster_yield")]),
+            # SMS shops — RSP: SMS-1/SMS-2, BSP: SMS-2/SMS-3, ISP/DSP: SMS, BSL: SMS-I/SMS-II
+            ("Average Blows/Day",   "Nos",   [("SMS-1", "average_blows_per_day"), ("SMS-2", "average_blows_per_day"), ("SMS-3", "average_blows_per_day"), ("SMS", "average_blows_per_day")]),
+            ("Average Heat Weight", "t",     [("SMS-1", "average_heat_weight"),   ("SMS-2", "average_heat_weight"),   ("SMS-3", "average_heat_weight"),   ("SMS", "average_heat_weight")]),
+            ("Average Lining Life", "heats", [("SMS-1", "average_lining_life"),   ("SMS-2", "average_lining_life"),   ("SMS-3", "average_lining_life"),   ("SMS-I", "average_lining_life"), ("SMS-II", "average_lining_life")]),
+            ("Fe-Mn Consumption",   "kg/t",  [("SMS-1", "fe-mn"),  ("SMS-2", "fe-mn"),  ("SMS-3", "fe-mn"),  ("SMS", "fe-mn"),  ("SMS-I", "fe-mn"),  ("SMS-II", "fe-mn")]),
+            ("Fe-Si Consumption",   "kg/t",  [("SMS-1", "fe-si"),  ("SMS-2", "fe-si"),  ("SMS-3", "fe-si"),  ("SMS", "fe-si"),  ("SMS-I", "fe-si"),  ("SMS-II", "fe-si")]),
+            ("Si-Mn Consumption",   "kg/t",  [("SMS-1", "si-mn"),  ("SMS-2", "si-mn"),  ("SMS-3", "si-mn"),  ("SMS", "si-mn"),  ("SMS-I", "si-mn"),  ("SMS-II", "si-mn")]),
+            ("Oxygen Blowing",      "NM3/t", [("SMS-1", "oxygen_blowing"), ("SMS-2", "oxygen_blowing"), ("SMS-3", "oxygen_blowing"), ("SMS", "oxygen_blowing"), ("SMS-I", "oxygen_blowing"), ("SMS-II", "oxygen_blowing")]),
+            ("Caster Yield",        "%",     [("SMS-1", "caster_yield"),   ("SMS-2", "caster_yield"),   ("SMS-3", "caster_yield"),   ("SMS", "caster_yield")]),
         ],
     },
     # Mill pages: sections = mill-unit, rows = params for that plant
@@ -1434,23 +1444,50 @@ _TECHNO_DB_SCHEMA = {
         "plant": "BSP",
         "sections": [
             ("PM", [
-                ("Yield Prime",       "yield_prime",               "%"),
-                ("Yield Total",       "yield_total",               "%"),
-                ("Avg Slab Weight",   "average_slab_weight",       "t"),
-                ("Availability",      "availability",              "%"),
-                ("Utilisation",       "utilisation",               "%"),
-                ("Rolling Rate",      "rolling_rate",              "t/hr"),
-                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
-                ("Sp. Heat Consmn.",  "specific_heat_consumption", "kcal/t"),
+                ("Yield",             "yield",             "%"),
+                ("Availability",      "availability",      "%"),
+                ("Utilisation",       "utilisation",       "%"),
+                ("Rolling Rate",      "rolling_rate",      "t/hr"),
+                ("Sp. Heat Consmn.",  "heat_consumption",  "kcal/t"),
+                ("Sp. Power Consmn.", "power_consumption", "kWh/t"),
             ]),
             ("RSM", [
-                ("Yield Prime",       "yield_prime",               "%"),
-                ("Yield Total",       "yield_total",               "%"),
-                ("Avg Slab Weight",   "average_slab_weight",       "t"),
-                ("Availability",      "availability",              "%"),
-                ("Utilisation",       "utilisation",               "%"),
-                ("Rolling Rate",      "rolling_rate",              "t/hr"),
-                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+                ("Yield",             "yield",             "%"),
+                ("Availability",      "availability",      "%"),
+                ("Utilisation",       "utilisation",       "%"),
+                ("Rolling Rate",      "rolling_rate",      "t/hr"),
+                ("Sp. Heat Consmn.",  "heat_consumption",  "kcal/t"),
+                ("Sp. Power Consmn.", "power_consumption", "kWh/t"),
+            ]),
+            ("MM", [
+                ("Yield",             "yield",             "%"),
+                ("Availability",      "availability",      "%"),
+                ("Utilisation",       "utilisation",       "%"),
+                ("Rolling Rate",      "rolling_rate",      "t/hr"),
+                ("Sp. Heat Consmn.",  "heat_consumption",  "kcal/t"),
+                ("Sp. Power Consmn.", "power_consumption", "kWh/t"),
+            ]),
+            ("URM", [
+                ("Yield",             "yield",             "%"),
+                ("Availability",      "availability",      "%"),
+                ("Utilisation",       "utilisation",       "%"),
+                ("Rolling Rate",      "rolling_rate",      "t/hr"),
+                ("Sp. Heat Consmn.",  "heat_consumption",  "kcal/t"),
+                ("Sp. Power Consmn.", "power_consumption", "kWh/t"),
+            ]),
+            ("WRM", [
+                ("Yield",             "yield",             "%"),
+                ("Availability",      "availability",      "%"),
+                ("Utilisation",       "utilisation",       "%"),
+                ("Rolling Rate",      "rolling_rate",      "t/hr"),
+                ("Sp. Heat Consmn.",  "heat_consumption",  "kcal/t"),
+                ("Sp. Power Consmn.", "power_consumption", "kWh/t"),
+            ]),
+            ("BRM", [
+                ("Yield",             "yield",             "%"),
+                ("Availability",      "availability",      "%"),
+                ("Utilisation",       "utilisation",       "%"),
+                ("Rolling Rate",      "rolling_rate",      "t/hr"),
             ]),
         ],
     },
@@ -1458,18 +1495,41 @@ _TECHNO_DB_SCHEMA = {
         "type": "mill",
         "plant": "DSP",
         "sections": [
-            ("Blooming Mill", [
-                ("Yield",             "yield",                     "%"),
-                ("Availability",      "availability",              "%"),
-                ("Utilisation",       "utilisation",               "%"),
-                ("Rolling Rate",      "rolling_rate",              "t/hr"),
-                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+            ("Merchant Mill", [
+                ("Yield",             "yield",              "%"),
+                ("Availability",      "mill_availability",  "%"),
+                ("Utilisation",       "mill_utilisation",   "%"),
+                ("Rolling Rate",      "rolling_rate",       "t/hr"),
+                ("On ICH",            "on_ich",             "%"),
+                ("Sp. Heat Consmn.",  "specific_heat",      "M.Cal/T"),
+                ("Sp. Power Consmn.", "specific_power",     "kWh/T"),
             ]),
-            ("SMS", [
-                ("HM Consumption",    "specific_hm_consumption",   "kg/tcs"),
-                ("Scrap Consumption", "specific_scrap_consumption","kg/tcs"),
-                ("Availability",      "availability",              "%"),
-                ("Utilisation",       "utilisation",               "%"),
+            ("MSM", [
+                ("Yield",             "yield",              "%"),
+                ("Availability",      "mill_availability",  "%"),
+                ("Utilisation",       "mill_utilisation",   "%"),
+                ("Rolling Rate",      "rolling_rate",       "t/hr"),
+                ("On ICH",            "on_ich",             "%"),
+                ("Sp. Heat Consmn.",  "specific_heat",      "M.Cal/T"),
+                ("Sp. Power Consmn.", "specific_power",     "kWh/T"),
+            ]),
+            ("Wheel Plant", [
+                ("Yield",             "finished_wheel_over_ingot_round", "%"),
+                ("Availability",      "forging_availability",            "%"),
+                ("Utilisation",       "forging_utilisation",             "%"),
+                ("Rolling Rate",      "rolling_rate",                    "Nos./Hr."),
+                ("On ICH",            "on_ich",                          "%"),
+                ("Sp. Heat Consmn.",  "specific_heat",                   "M.Cal/T"),
+                ("Sp. Power Consmn.", "specific_power",                  "kWh/T"),
+            ]),
+            ("Axle Plant", [
+                ("Yield",             "yield_over_good_bloom", "%"),
+                ("Availability",      "forging_availability",  "%"),
+                ("Utilisation",       "forging_utilisation",   "%"),
+                ("Forging Rate",      "forging_rate",          "Nos./Hr."),
+                ("On ICH",            "on_ich",                "%"),
+                ("Sp. Heat Consmn.",  "specific_heat",         "M.Cal/T"),
+                ("Sp. Power Consmn.", "specific_power",        "kWh/T"),
             ]),
         ],
     },
@@ -1529,17 +1589,36 @@ _TECHNO_DB_SCHEMA = {
         "type": "mill",
         "plant": "BSL",
         "sections": [
-            ("BF Shop", [
-                ("Coke Rate",         "coke_rate",                 "kg/thm"),
-                ("CDI Rate",          "cdi",                       "kg/thm"),
-                ("Fuel Rate",         "fuel_rate",                 "kg/thm"),
-                ("BF Productivity",   "bf_productivity",           "t/m³/day"),
+            # BF_Shop — shop averages from Techno Excel and BF PDF
+            ("BF_Shop", [
+                ("BF Productivity",   "bf_productivity",     "T/m³/day"),
+                ("Coke Rate",         "coke_rate",           "Kg/THM"),
+                ("CDI Rate",          "cdi",                 "Kg/THM"),
+                ("Fuel Rate",         "fuel_rate",           "Kg/THM"),
+                ("Sinter in Burden",  "sinter_in_burden",    "%"),
+                ("O2 Enrichment",     "o2_enrichment",       "%"),
+                ("Slag Rate",         "slag_rate",           "Kg/THM"),
+                ("Furnace Avail.",    "furnace_availability",  "%"),
+                ("Furnace Util.",     "furnace_utilization",  "%"),
             ]),
-            ("SMS", [
-                ("HM Consumption",    "specific_hm_consumption",   "kg/tcs"),
-                ("Scrap Consumption", "specific_scrap_consumption","kg/tcs"),
-                ("Average Lining Life", "average_lining_life",     "heats"),
-                ("Caster Yield",      "caster_yield",              "%"),
+            # SMS-I and SMS-II from BSL Techno Excel SMS-I/SMS-II sheets
+            ("SMS-I", [
+                ("Avg Lining Life",   "average_lining_life",       "Heats"),
+                ("HM Consumption",    "specific_hm_consumption",   "Kg/TCS"),
+                ("Scrap Cons.",       "specific_scrap_consumption", "Kg/TCS"),
+                ("Fe-Mn Cons.",       "fe-mn",                     "Kg/TCS"),
+                ("Fe-Si Cons.",       "fe-si",                     "Kg/TCS"),
+                ("Si-Mn Cons.",       "si-mn",                     "Kg/TCS"),
+                ("Oxygen Blowing",    "oxygen_blowing",            "Nm³/TCS"),
+            ]),
+            ("SMS-II", [
+                ("Avg Lining Life",   "average_lining_life",       "Heats"),
+                ("HM Consumption",    "specific_hm_consumption",   "Kg/TCS"),
+                ("Scrap Cons.",       "specific_scrap_consumption", "Kg/TCS"),
+                ("Fe-Mn Cons.",       "fe-mn",                     "Kg/TCS"),
+                ("Fe-Si Cons.",       "fe-si",                     "Kg/TCS"),
+                ("Si-Mn Cons.",       "si-mn",                     "Kg/TCS"),
+                ("Oxygen Blowing",    "oxygen_blowing",            "Nm³/TCS"),
             ]),
         ],
     },
@@ -1547,11 +1626,29 @@ _TECHNO_DB_SCHEMA = {
         "type": "mill",
         "plant": "ISP",
         "sections": [
-            ("SMS", [
-                ("HM Consumption",    "specific_hm_consumption",   "kg/tcs"),
-                ("Scrap Consumption", "specific_scrap_consumption","kg/tcs"),
-                ("Converter Availability", "converter_availability","%"),
-                ("Caster Yield",      "caster_yield",              "%"),
+            ("BM", [
+                ("Yield",             "yield_total",               "%"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+                ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+                ("Sp. Heat Consmn.",  "specific_heat_consumption", "kcal/t"),
+            ]),
+            ("USM", [
+                ("Yield",             "yield_total",               "%"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+                ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+                ("Sp. Heat Consmn.",  "specific_heat_consumption", "kcal/t"),
+            ]),
+            ("WRM", [
+                ("Yield",             "yield_total",               "%"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+                ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+                ("Sp. Heat Consmn.",  "specific_heat_consumption", "kcal/t"),
             ]),
         ],
     },
