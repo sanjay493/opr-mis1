@@ -2509,8 +2509,9 @@ async def recalculate_sail_weighted(payload: dict):
         """, months)
         cs_weights = {row[0]: row[1] for row in cur.fetchall() if row[1]}
 
-        # Fetch SMS-wise Crude Steel production (base items only, not product breakdowns)
-        # E.g., use "BSP SMS-2" (2525), not "BSP SMS-2 BLOOM" (800) or "BSP SMS-2 SLAB" (1725)
+        # Fetch SMS-wise Crude Steel production
+        # Plants with multiple SMS shops: use specific SMS entries (e.g., "BSP SMS-2")
+        # Plants with single SMS shop (DSP, ISP): use "Total Crude Steel"
         shop_to_plant = {
             "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
             "DSP SMS": "DSP",
@@ -2519,16 +2520,25 @@ async def recalculate_sail_weighted(payload: dict):
             "ISP SMS-1": "ISP",
         }
 
+        # Plants with only one SMS shop
+        single_sms_plants = {"DSP", "ISP"}
+
         shop_cs_weights = {}
         for shop, plant in shop_to_plant.items():
-            # Query exact shop item name (base SMS entry, not product type breakdowns)
+            if plant in single_sms_plants:
+                # For single-SMS-shop plants, use Total Crude Steel production
+                item_name = "Total Crude Steel"
+            else:
+                # For multi-SMS-shop plants, use specific SMS entry
+                item_name = shop
+
             cur.execute(f"""
                 SELECT SUM(month_actual)
                 FROM production_plan_table
                 WHERE report_month IN ({ph})
                   AND item_name = ?
                   AND plant_name = ?
-            """, months + [shop, plant])
+            """, months + [item_name, plant])
             result = cur.fetchone()
             shop_cs_weights[shop] = result[0] if result[0] else 0
 
