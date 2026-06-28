@@ -303,30 +303,30 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
         />
       </div>
 
-      {/* ── TE parameters table: Target | Month | CPLY | Apr-Mon | CPLY Apr-Mon ── */}
+      {/* ── SAIL Performance Summary Table ── */}
       <div>
         <div style={{ fontWeight: '700', fontSize: '0.95em', marginBottom: '3px' }}>
-          TE parameters performance:
+          SAIL Performance Summary - Key BF Parameters:
         </div>
         <table className="report-table" style={{ tableLayout: 'fixed', width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ width: '24%', textAlign: 'left' }}>Parameter</th>
-              <th style={{ width: '10%' }}>Unit</th>
-              <th style={{ width: '13%' }}>{targetHeader}</th>
-              <th style={{ width: '13%' }}>{shortMonth}&#39;{shortYear}</th>
-              <th style={{ width: '13%' }}>{shortMonth}&#39;{shortPrevYear}</th>
-              <th style={{ width: '14%' }}>Apr-{shortMonth}&#39;{shortYear}</th>
-              <th style={{ width: '13%' }}>Apr-{shortMonth}&#39;{shortPrevYear}</th>
+              <th style={{ width: '20%', textAlign: 'left' }}>Parameter</th>
+              <th style={{ width: '8%', textAlign: 'center' }}>Unit</th>
+              <th style={{ width: '11%', textAlign: 'center' }}>Target<br/>26-27</th>
+              <th style={{ width: '11%', textAlign: 'center' }}>{shortMonth}&#39;{shortYear}<br/>(Report)</th>
+              <th style={{ width: '11%', textAlign: 'center' }}>{shortMonth}&#39;{shortPrevYear}<br/>(CPLY)</th>
+              <th style={{ width: '13%', textAlign: 'center' }}>Apr-{shortMonth}&#39;{shortYear}<br/>(YTD)</th>
+              <th style={{ width: '13%', textAlign: 'center' }}>Apr-{shortMonth}&#39;{shortPrevYear}<br/>(CPLY YTD)</th>
             </tr>
           </thead>
           <tbody>
             {te_table.map((row, rIdx) => (
               <tr key={rIdx}>
                 <td className="label-cell" style={{ fontWeight: '600' }}>{row.parameter}</td>
-                <td className="label-cell" style={{ fontStyle: 'italic', color: '#475569' }}>{row.unit}</td>
+                <td className="label-cell" style={{ fontStyle: 'italic', color: '#475569', textAlign: 'center' }}>{row.unit}</td>
                 {[0, 1, 2, 3, 4].map(vIdx => (
-                  <td key={vIdx}>
+                  <td key={vIdx} style={{ textAlign: 'right' }}>
                     <input type="text" className="editor-input"
                       style={{ color: 'black', textAlign: 'right', fontWeight: vIdx === 1 ? '700' : '400' }}
                       value={(row.values || [])[vIdx] ?? ''}
@@ -338,6 +338,14 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* ── SAIL Bar Charts 2×2: Coke Rate, CDI, BF Productivity, S.E.C. ── */}
+      <div style={{ marginTop: '12px' }}>
+        <div style={{ fontWeight: '700', fontSize: '0.95em', marginBottom: '6px' }}>
+          Historical Performance & Trends (Last 3 FY + Plan + Current Month):
+        </div>
+        {chart_data && <ChartGrid chartData={chart_data} />}
       </div>
 
       {/* ── Bar charts 2×2 ── */}
