@@ -2623,14 +2623,14 @@ async def recalculate_sail_weighted(payload: dict):
             sms_targets[param] = []
             for shop in sms_shops:
                 plant = shop.split()[0]
-                # Get shop-level data from techno_plan (unit field contains shop name)
+                # Get shop-level data from techno_plan
                 shop_data = db.get_techno_plan(plant, report_month)
+                weight = shop_cs_weights.get(shop, 0)
+
                 if isinstance(shop_data, dict):
                     param_val = shop_data.get(param)
                     if param_val is not None:
-                        weight = shop_cs_weights.get(shop, 0)
-                        if weight:
-                            sms_targets[param].append((param_val, weight))
+                        sms_targets[param].append((param_val, weight))
 
         # Calculate weighted averages for SMS params using shop CS weights
         sail_sms = {}
