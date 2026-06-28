@@ -1537,70 +1537,44 @@ async def save_stock_entry_manual(payload: dict):
 @app.get("/api/techno-targets")
 async def get_techno_targets(fy: str = Query("2026-27")):
     """
-    Return all MAJOR-group techno params with their targets for the given FY.
-    Response: { fy, sections: [{section, unit, rows: [{row_label, param_id, target}]}] }
+    Return SAIL consolidated techno plan/targets for the given FY.
+    Migration endpoint: Uses new techno_sail_plan structure.
+    Response: { fy, data: {param: value} }
     """
-    conn = sqlite3.connect(db.DB_PATH)
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT p.param_name, p.row_label, p.unit, p.param_id,
-               t.target
-        FROM techno_param p
-        JOIN techno_param_group g ON p.param_id = g.param_id
-        LEFT JOIN techno_target t ON t.param_id = p.param_id AND t.fy = ?
-        WHERE g.group_code = 'MAJOR'
-        ORDER BY g.sort_order, p.param_id
-    """, (fy,))
-    rows = cur.fetchall()
-    conn.close()
+    try:
+        # Convert FY to report_month format (e.g., "2026-27" -> "2026-03" for March of that FY)
+        fy_year = int(fy.split('-')[0])
+        report_month = f"{fy_year}-03"  # FY targets stored as March of that year
 
-    # Pivot by param_name (the "section" in the old schema)
-    sections_map = {}
-    section_order = []
-    for param_name, row_label, unit, param_id, target in rows:
-        if param_name not in sections_map:
-            sections_map[param_name] = {"section": param_name, "unit": unit, "rows": []}
-            section_order.append(param_name)
-        sections_map[param_name]["rows"].append({
-            "row_label": row_label,
-            "param_id": param_id,
-            "target": target,
-        })
-
-    return {"fy": fy, "sections": [sections_map[s] for s in section_order]}
+        plan_data = db.get_sail_techno_plan(report_month)
+        return {"fy": fy, "report_month": report_month, "data": plan_data}
+    except Exception as e:
+        return {"fy": fy, "data": {}, "error": str(e)}
 
 
 @app.post("/api/techno-targets")
 async def save_techno_targets(payload: dict):
     """
-    Save techno targets. Payload: { fy: str, rows: [{param_id, target}] }
+    Save SAIL consolidated techno plan/targets.
+    Migration endpoint: Uses new techno_sail_plan structure.
+    Payload: { fy: str, data: {param: value} }
     """
-    fy = payload.get("fy", "")
-    rows = payload.get("rows", [])
-    if not fy:
-        raise HTTPException(status_code=400, detail="fy is required")
-    saved = 0
-    for r in rows:
-        param_id = r.get("param_id")
-        target = r.get("target")
-        if param_id is None:
-            continue
-        try:
-            target_val = float(target) if target not in (None, "", "–") else None
-        except (ValueError, TypeError):
-            target_val = None
-        db.save_techno_target(fy, param_id, target_val)
-        saved += 1
+    try:
+        fy = payload.get("fy", "")
+        data = payload.get("data", {})
 
-    # Auto-compute SAIL unless caller explicitly wants to save SAIL as-is
-    sail_computed = 0
-    if not payload.get("skip_sail_compute", False):
-        computed = compute_sail_targets(fy)
-        for sail_pid, sail_val in computed.items():
-            db.save_techno_target(fy, sail_pid, sail_val)
-        sail_computed = len(computed)
+        if not fy:
+            raise ValueError("fy is required")
 
-    return {"status": "success", "fy": fy, "saved": saved, "sail_computed": sail_computed}
+        # Convert FY to report_month format
+        fy_year = int(fy.split('-')[0])
+        report_month = f"{fy_year}-03"  # FY targets stored as March of that year
+
+        db.save_sail_techno_plan(report_month, data)
+
+        return {"status": "success", "fy": fy, "report_month": report_month, "saved": len(data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------------------------------------------------------------------
