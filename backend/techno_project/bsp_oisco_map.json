@@ -5,9 +5,10 @@
     "cdi":              9,
     "fuel_rate":        16,
     "pellet% in burden": 17,
-    "ld_slag_usage":    18,
+    "ld_slag_cons":    18,
     "not_dry_cast":     19
   },
+
 
   "BF-4": { "cdi": 11 },
   "BF-5": { "cdi": 12 },
@@ -17,7 +18,8 @@
 
   "General": {
     "coal_to_hm":                20,
-    "specific_water_consumption": 54
+    "specific_water_consumption": 55,
+    "specific_co2_emissions":56
   },
 
   "SMS-2": {
@@ -32,6 +34,8 @@
     "si-mn":                   30,
     "oxygen_blowing":          31,
     "alumina_consumption":     32,
+    "lime_consumtion": 33,
+    "pellet_consumption":34,
     "ld_gas_recovery":         35,
     "ds_heats":                36
   },
@@ -47,6 +51,8 @@
     "si-mn":                   45,
     "oxygen_blowing":          46,
     "alumina_consumption":     47,
+    "lime_consumtion": 48,
+    "pellet_consumption":49,
     "ld_gas_recovery":         50,
     "ds_heats":                51
   }

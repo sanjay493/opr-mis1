@@ -44,7 +44,7 @@ function StatusMsg({ status }) {
 }
 
 // ── Single file-upload row used for each file type ────────────────────────────
-function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, accent = '#1e3a5f' }) {
+function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, plant, accent = '#1e3a5f' }) {
   const [file, setFile] = React.useState(null);
   const [busy,  setBusy]  = React.useState(false);
   const [status, setStatus] = React.useState(null);
@@ -63,8 +63,9 @@ function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, accent =
     const form = new FormData();
     form.append('file', file);
     form.append('report_month', reportMonth);
+    if (plant) form.append('plant', plant);
     try {
-      const res  = await fetch(`${apiBase}${endpoint}`, { method: 'POST', body: form });
+      const res = await fetch(`${apiBase}${endpoint}`, { method: 'POST', body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Extraction failed');
       setStatus({ type: 'success', text: `Extracted ${json.units_extracted} units for ${reportMonth}` });
@@ -112,7 +113,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
     setLoading(true);
     try {
       const res = await fetch(
-        `${apiBase}/api/rsp-techno/data?plant=${plant}&report_month=${reportMonth}`
+        `${apiBase}/api/techno/data?plant=${plant}&report_month=${reportMonth}`
       );
       if (res.ok) {
         const json = await res.json();
@@ -140,6 +141,9 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
   const tillParams = unitData?.till_month || {};
   const isRsp = plant === 'RSP';
   const isBsp = plant === 'BSP';
+  const isIsp = plant === 'ISP';
+  const isDsp = plant === 'DSP';
+  const hasExtraction = isRsp || isBsp || isIsp || isDsp;
 
   return (
     <div>
@@ -148,7 +152,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         <div style={{ marginBottom: 16 }}>
           <ExtractRow
             label="RSP Technopara Excel (page1-8 sheet)"
-            endpoint="/api/rsp-techno/extract"
+            endpoint="/api/techno/extract"
+            plant="RSP"
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
@@ -185,6 +190,36 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         </div>
       )}
 
+      {/* ISP: single file extract bar */}
+      {plant === 'ISP' && (
+        <div style={{ marginBottom: 16 }}>
+          <ExtractRow
+            label="ISP Technopara Excel"
+            endpoint="/api/techno/extract"
+            plant="ISP"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#7c3aed"
+          />
+        </div>
+      )}
+
+      {/* DSP: single file extract bar (PDF) */}
+      {plant === 'DSP' && (
+        <div style={{ marginBottom: 16 }}>
+          <ExtractRow
+            label="DSP Monthly Report PDF"
+            endpoint="/api/techno/extract"
+            plant="DSP"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#dc2626"
+          />
+        </div>
+      )}
+
       {loading && (
         <div style={{ textAlign: 'center', padding: 40, color: '#64748b', fontSize: 14 }}>
           Loading {plant} data…
@@ -197,12 +232,12 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           border: '2px dashed #e2e8f0', borderRadius: 8,
         }}>
           No techno data for <strong>{plant}</strong> — <strong>{reportMonth}</strong>.
-          {(isRsp || isBsp) && (
+          {hasExtraction && (
             <span style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
-              Upload the Excel file(s) above to extract and save data.
+              Upload the {isDsp ? 'PDF' : 'Excel'} file above to extract and save data.
             </span>
           )}
-          {!isRsp && !isBsp && (
+          {!hasExtraction && (
             <span style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
               {plant} extraction support coming soon.
             </span>
@@ -256,10 +291,11 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
                   {Object.keys(monthParams).map((param, idx) => {
                     const mv = monthParams[param];
                     const tv = tillParams[param];
-                    const fmt = v =>
-                      (v != null && v !== '')
-                        ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 })
-                        : '—';
+                    const fmt = v => {
+                      if (v == null || v === '') return '—';
+                      if (typeof v === 'string' && v.includes(':')) return v;
+                      return Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 });
+                    };
                     return (
                       <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
                         <td style={{ padding: '6px 14px', color: '#1e293b', fontWeight: 500 }}>{param}</td>
@@ -331,8 +367,10 @@ export default function TechnoDataEntry() {
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>
               Data stored in <code>techno_data</code> table.<br />
               {plant === 'RSP' && 'Extract from Technopara Excel (page1-8 sheet).'}
-              {plant === 'BSP' && 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel. Both are merged automatically.'}
-              {plant !== 'RSP' && plant !== 'BSP' && `${plant} extraction coming soon.`}
+              {plant === 'BSP' && 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel. Both merged automatically.'}
+              {plant === 'ISP' && 'Extract from multi-sheet ISP Technopara Excel.'}
+              {plant === 'DSP' && 'Extract from DSP Monthly Report PDF.'}
+              {!['RSP', 'BSP', 'ISP', 'DSP'].includes(plant) && `${plant} extraction coming soon.`}
             </div>
           </div>
         </div>

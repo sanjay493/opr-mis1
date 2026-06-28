@@ -1,6 +1,6 @@
 import json
 
-from extractor import TechnoExtractor
+from rsp_technopara_extractor import TechnoExtractor
 
 extractor = TechnoExtractor("upload/technoparaMay2026.xlsx")
 records = extractor.extract()

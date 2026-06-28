@@ -1429,8 +1429,50 @@ _TECHNO_DB_SCHEMA = {
         ],
     },
     # Mill pages: sections = mill-unit, rows = params for that plant
-    31: {"type": "mill", "plant": "BSP", "sections": []},
-    32: {"type": "mill", "plant": "DSP", "sections": []},
+    31: {
+        "type": "mill",
+        "plant": "BSP",
+        "sections": [
+            ("PM", [
+                ("Yield Prime",       "yield_prime",               "%"),
+                ("Yield Total",       "yield_total",               "%"),
+                ("Avg Slab Weight",   "average_slab_weight",       "t"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+                ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+                ("Sp. Heat Consmn.",  "specific_heat_consumption", "kcal/t"),
+            ]),
+            ("RSM", [
+                ("Yield Prime",       "yield_prime",               "%"),
+                ("Yield Total",       "yield_total",               "%"),
+                ("Avg Slab Weight",   "average_slab_weight",       "t"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+                ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+            ]),
+        ],
+    },
+    32: {
+        "type": "mill",
+        "plant": "DSP",
+        "sections": [
+            ("Blooming Mill", [
+                ("Yield",             "yield",                     "%"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+                ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
+            ]),
+            ("SMS", [
+                ("HM Consumption",    "specific_hm_consumption",   "kg/tcs"),
+                ("Scrap Consumption", "specific_scrap_consumption","kg/tcs"),
+                ("Availability",      "availability",              "%"),
+                ("Utilisation",       "utilisation",               "%"),
+            ]),
+        ],
+    },
     33: {
         "type": "mill",
         "plant": "RSP",
@@ -1483,8 +1525,36 @@ _TECHNO_DB_SCHEMA = {
             ]),
         ],
     },
-    34: {"type": "mill", "plant": "BSL", "sections": []},
-    35: {"type": "mill", "plant": "ISP", "sections": []},
+    34: {
+        "type": "mill",
+        "plant": "BSL",
+        "sections": [
+            ("BF Shop", [
+                ("Coke Rate",         "coke_rate",                 "kg/thm"),
+                ("CDI Rate",          "cdi",                       "kg/thm"),
+                ("Fuel Rate",         "fuel_rate",                 "kg/thm"),
+                ("BF Productivity",   "bf_productivity",           "t/m³/day"),
+            ]),
+            ("SMS", [
+                ("HM Consumption",    "specific_hm_consumption",   "kg/tcs"),
+                ("Scrap Consumption", "specific_scrap_consumption","kg/tcs"),
+                ("Average Lining Life", "average_lining_life",     "heats"),
+                ("Caster Yield",      "caster_yield",              "%"),
+            ]),
+        ],
+    },
+    35: {
+        "type": "mill",
+        "plant": "ISP",
+        "sections": [
+            ("SMS", [
+                ("HM Consumption",    "specific_hm_consumption",   "kg/tcs"),
+                ("Scrap Consumption", "specific_scrap_consumption","kg/tcs"),
+                ("Converter Availability", "converter_availability","%"),
+                ("Caster Yield",      "caster_yield",              "%"),
+            ]),
+        ],
+    },
 }
 
 

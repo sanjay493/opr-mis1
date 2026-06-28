@@ -72,26 +72,7 @@ export default function TechnoParamsTemplate({ data }) {
         width: '100%', borderCollapse: 'collapse', border: B,
         tableLayout: 'fixed', fontSize: 'var(--report-font-size, 6.5pt)', marginTop: 4,
       }}>
-        <colgroup>
-          {isMill ? (
-            <>
-              <col style={{ width: '8%'  }} />  {/* Mill name */}
-              <col style={{ width: '14%' }} />  {/* Parameter name */}
-              <col style={{ width: '5%'  }} />  {/* Unit */}
-            </>
-          ) : (
-            <>
-              <col style={{ width: '16%' }} />  {/* Parameter (unit) */}
-              <col style={{ width: '7%'  }} />  {/* Shop / Plant */}
-            </>
-          )}
-          {/* FY-3, FY-2, FY-1, Target */}
-          {[0, 1, 2, 3].map(i => <col key={`f${i}`} style={{ width: dataW }} />)}
-          {/* Monthly Apr → report month */}
-          {month_labels.map((_, i) => <col key={`m${i}`} style={{ width: dataW }} />)}
-          {/* CPLY month, YTD, YTD-CPLY */}
-          {[0, 1, 2].map(i => <col key={`c${i}`} style={{ width: dataW }} />)}
-        </colgroup>
+        <colgroup>{isMill ? (<><col style={{ width: '8%' }} /><col style={{ width: '14%' }} /><col style={{ width: '5%' }} /></>) : (<><col style={{ width: '16%' }} /><col style={{ width: '7%' }} /></>)}{[0, 1, 2, 3].map(i => <col key={`f${i}`} style={{ width: dataW }} />)}{month_labels.map((_, i) => <col key={`m${i}`} style={{ width: dataW }} />)}{[0, 1, 2].map(i => <col key={`c${i}`} style={{ width: dataW }} />)}</colgroup>
 
         <thead>
           {/* Row 1 — group headers */}

@@ -58,6 +58,9 @@ from layout_loader import load_layout_config
 from api_file_upload import router as upload_router
 from api_rsp_techno import router as rsp_techno_router
 from api_bsp_techno import router as bsp_techno_router
+from api_isp_techno import router as isp_techno_router
+from api_dsp_techno import router as dsp_techno_router
+from api_unified_techno import router as unified_techno_router
 
 db.init_db()
 
@@ -99,9 +102,12 @@ app.add_middleware(
 # Include file upload router
 app.include_router(upload_router)
 
-# Include RSP and BSP Technopara routers
+# Include RSP, BSP, ISP, and DSP Technopara routers
 app.include_router(rsp_techno_router)
 app.include_router(bsp_techno_router)
+app.include_router(isp_techno_router)
+app.include_router(dsp_techno_router)
+app.include_router(unified_techno_router)
 
 # Serve dashboard
 @app.get("/dashboard")
