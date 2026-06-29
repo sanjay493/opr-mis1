@@ -77,8 +77,8 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
             
             "Hot Metal": 9,
             "Pig Iron": 11,
-            "CCM-1&2": 12,
-            "CCM-3": 13,
+            "SMS CCM-1&2": 12,
+            "SMS CCM-3": 13,
             "Total Crude Steel": 14,
             "WRMILL": 16,
             "BARMILL": 17,

@@ -91,7 +91,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
 
             "Round Production": 28,
             "Blooms for Sale ": 29,
-            "Total Caster": 30,
+            "SMS Total Caster": 30,
             "MM": 32,
             "MSM": 35,
             "WAP": 36,

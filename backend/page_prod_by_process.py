@@ -18,10 +18,10 @@ _CS = "Total Crude Steel"
 # CC item names per plant (same approach as page17_concast._ACT)
 _CC: dict = {
     "BSP":  ["SMS-2", "SMS-3"],
-    "DSP":  "Total Caster",
+    "DSP":  "SMS Total Caster",
     "RSP":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
     "BSL":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2"],
-    "ISP":  ["CCM-1&2", "CCM-3"],
+    "ISP":  ["SMS CCM-1&2", "SMS CCM-3"],
     "ASP":  "Total Caster",   # returns 0 if absent from DB
     "SSP":  _CS,              # SSP is 100 % CC
     "VISL": _CS,

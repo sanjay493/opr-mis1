@@ -118,6 +118,26 @@ def init_db():
     # (techno_param, techno_param_group, techno_actuals, techno_target removed —
     #  replaced by techno_data and the JSON-based techno tables)
 
+    # 10a. Unified Techno Plan table — all levels (units, plants, SAIL) by FY
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS techno_plan_fy (
+            plant_name   TEXT NOT NULL,   -- "BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"
+            unit         TEXT NOT NULL,   -- "BF-1", "SMS-2", "Shop" (for plant or SAIL level)
+            fy           TEXT NOT NULL,   -- "2026-27" (FY format)
+
+            techno_json  JSON NOT NULL,   -- {param: {value, unit, ...}, ...}
+            is_user_supplied INTEGER DEFAULT 0,  -- 1: user entered, 0: calculated
+            calculated_json JSON,         -- For SAIL: calculated values for comparison
+            calculation_method JSON,      -- {param: method, ...}
+
+            created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by   TEXT,
+
+            PRIMARY KEY (plant_name, unit, fy)
+        )
+    """)
+
     # 11a. User-defined PDF label → item_name aliases (learned from preview edits)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pdf_item_alias (
@@ -195,6 +215,19 @@ def get_fy_months(report_month: str) -> List[str]:
             cur_m = 1
             cur_y += 1
     return result
+
+
+def get_fy_for_month(report_month: str) -> str:
+    """Returns FY string (e.g., '2026-27') for a given report_month (e.g., '2026-05')."""
+    try:
+        y, m = int(report_month[:4]), int(report_month[5:7])
+    except (ValueError, IndexError):
+        return report_month
+    # FY starts Apr (month 4), so Apr-Dec of year Y → FY Y-Y+1, Jan-Mar of year Y → FY Y-1-Y
+    if m >= 4:
+        return f"{y}-{y+1}"
+    else:
+        return f"{y-1}-{y}"
 
 
 def get_cply_month(report_month: str) -> str:
@@ -1036,6 +1069,61 @@ def get_techno_data(plant: str, report_month: str, unit: str = None) -> Dict:
     return result
 
 
+def get_sail_techno_actuals(report_month: str) -> Dict[str, Any]:
+    """Fetch SAIL consolidated techno actuals (stored, not calculated).
+    Returns: {unit: {month: {...}, till_month: {...}}} where unit is typically 'Shop'
+    """
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT unit, techno_json FROM techno_data WHERE plant = 'SAIL' AND report_month = ? ORDER BY unit",
+        [report_month]
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = {}
+    for row in rows:
+        try:
+            result[row['unit']] = json.loads(row['techno_json'])
+        except (json.JSONDecodeError, TypeError):
+            result[row['unit']] = {}
+    return result
+
+
+def save_sail_techno_actuals(report_month: str, unit: str, techno_json: Dict,
+                             calculation_details: Dict = None, source_file: str = ""):
+    """Save SAIL consolidated techno actuals with calculation metadata."""
+    init_db()
+    from datetime import datetime
+    now = datetime.now().isoformat()
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(plant, report_month, unit)
+        DO UPDATE SET
+            techno_json = excluded.techno_json,
+            source_file = excluded.source_file,
+            created_at = excluded.created_at
+    """, ("SAIL", report_month, unit, json.dumps(techno_json), source_file, now))
+
+    # Store calculation details separately if provided
+    if calculation_details:
+        # Store in a JSON comment or separate table (for now embed in the unit name or metadata)
+        # Alternative: Create techno_calc_metadata table
+        pass
+
+    conn.commit()
+    conn.close()
+
+
 def get_techno_months(plant: str = None) -> List[str]:
     """Return distinct report_month values in techno_data, newest first.
     Optionally filter by plant."""
@@ -1060,28 +1148,56 @@ def get_techno_months(plant: str = None) -> List[str]:
 # Techno Plan (Targets) Functions - Uses techno_plan tables
 # ---------------------------------------------------------------------------
 
-def get_techno_plan(plant: str, report_month: str) -> Dict[str, Any]:
-    """Fetch techno plan data for a plant/month from techno_plan table."""
+def get_techno_plan(plant: str, fy: str, unit: str = "") -> Dict[str, Any]:
+    """Fetch techno plan data from unified techno_plan_fy table.
+    If unit specified, returns that specific unit's data.
+    Otherwise returns all units for the plant."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    cur.execute(
-        "SELECT techno_json FROM techno_plan WHERE plant = ? AND report_month = ?",
-        (plant, report_month)
-    )
-    row = cur.fetchone()
-    conn.close()
 
-    if row and row[0]:
-        try:
-            return json.loads(row[0])
-        except json.JSONDecodeError:
-            return {}
-    return {}
+    if unit:
+        cur.execute(
+            "SELECT techno_json, is_user_supplied, calculated_json FROM techno_plan_fy WHERE plant_name = ? AND fy = ? AND unit = ?",
+            (plant, fy, unit)
+        )
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            try:
+                return {
+                    'data': json.loads(row['techno_json']) if row['techno_json'] else {},
+                    'is_user_supplied': bool(row['is_user_supplied']),
+                    'calculated': json.loads(row['calculated_json']) if row['calculated_json'] else {}
+                }
+            except json.JSONDecodeError:
+                return {'data': {}, 'is_user_supplied': False, 'calculated': {}}
+        return {'data': {}, 'is_user_supplied': False, 'calculated': {}}
+    else:
+        cur.execute(
+            "SELECT unit, techno_json, is_user_supplied, calculated_json FROM techno_plan_fy WHERE plant_name = ? AND fy = ? ORDER BY unit",
+            (plant, fy)
+        )
+        rows = cur.fetchall()
+        conn.close()
+        result = {}
+        for row in rows:
+            try:
+                result[row['unit']] = {
+                    'data': json.loads(row['techno_json']) if row['techno_json'] else {},
+                    'is_user_supplied': bool(row['is_user_supplied']),
+                    'calculated': json.loads(row['calculated_json']) if row['calculated_json'] else {}
+                }
+            except json.JSONDecodeError:
+                result[row['unit']] = {'data': {}, 'is_user_supplied': False, 'calculated': {}}
+        return result
 
 
-def save_techno_plan(plant: str, report_month: str, unit: str, techno_json: str, source_file: str = ""):
-    """Save or update techno plan data for a plant/month/unit."""
+def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
+                    is_user_supplied: bool = False, calculated_json: Dict = None,
+                    calculation_method: Dict = None, created_by: str = ""):
+    """Save or update techno plan data for a plant/unit/FY in unified table."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -1089,102 +1205,103 @@ def save_techno_plan(plant: str, report_month: str, unit: str, techno_json: str,
     now = datetime.now().isoformat()
 
     cur.execute("""
-        INSERT INTO techno_plan (plant, report_month, unit, techno_json, source_file, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(plant, report_month, unit)
-        DO UPDATE SET techno_json = excluded.techno_json, updated_at = excluded.updated_at
-    """, (plant, report_month, unit, techno_json, source_file, now, now))
+        INSERT INTO techno_plan_fy
+            (plant_name, unit, fy, techno_json, is_user_supplied, calculated_json, calculation_method, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(plant_name, unit, fy)
+        DO UPDATE SET
+            techno_json = excluded.techno_json,
+            is_user_supplied = excluded.is_user_supplied,
+            calculated_json = excluded.calculated_json,
+            calculation_method = excluded.calculation_method,
+            updated_at = excluded.updated_at
+    """, (plant, unit, fy, json.dumps(techno_json), int(is_user_supplied),
+          json.dumps(calculated_json or {}), json.dumps(calculation_method or {}), created_by, now, now))
     conn.commit()
     conn.close()
 
 
-def get_techno_plant_plan(plant: str, report_month: str) -> Dict[str, Any]:
-    """Fetch aggregated plant-level techno plan data."""
+def get_techno_plant_plan(plant: str, fy: str) -> Dict[str, Any]:
+    """Fetch plant-level techno plan data (unit='Shop') for a FY."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute(
-        "SELECT data FROM techno_plant_plan WHERE plant = ? AND report_month = ?",
-        (plant, report_month)
+        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name = ? AND fy = ? AND unit = 'Shop'",
+        (plant, fy)
     )
     row = cur.fetchone()
     conn.close()
 
-    if row and row[0]:
+    if row:
         try:
-            return json.loads(row[0])
+            return {
+                'data': json.loads(row['techno_json']) if row['techno_json'] else {},
+                'is_user_supplied': bool(row['is_user_supplied']),
+                'calculated': json.loads(row['calculated_json']) if row['calculated_json'] else {},
+                'calculation_method': json.loads(row['calculation_method']) if row['calculation_method'] else {}
+            }
         except json.JSONDecodeError:
-            return {}
-    return {}
+            return {'data': {}, 'is_user_supplied': False, 'calculated': {}, 'calculation_method': {}}
+    return {'data': {}, 'is_user_supplied': False, 'calculated': {}, 'calculation_method': {}}
 
 
-def save_techno_plant_plan(plant: str, report_month: str, data: Dict, calculation_details: Dict = None):
-    """Save or update aggregated plant-level techno plan data."""
+def save_techno_plant_plan(plant: str, fy: str, data: Dict, is_user_supplied: bool = False,
+                          calculated_json: Dict = None, calculation_method: Dict = None, created_by: str = ""):
+    """Save or update plant-level techno plan data (unit='Shop') for a FY."""
+    init_db()
+    save_techno_plan(plant, fy, 'Shop', data, is_user_supplied, calculated_json, calculation_method, created_by)
+
+
+def get_sail_techno_plan(fy: str) -> Dict[str, Any]:
+    """Fetch SAIL consolidated techno plan data (plant_name='SAIL', unit='Shop') for a FY."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO techno_plant_plan (plant, report_month, data, calculation_details)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(plant, report_month)
-        DO UPDATE SET data = excluded.data, calculation_details = excluded.calculation_details
-    """, (plant, report_month, json.dumps(data), json.dumps(calculation_details or {})))
-    conn.commit()
-    conn.close()
-
-
-def get_sail_techno_plan(report_month: str) -> Dict[str, Any]:
-    """Fetch SAIL consolidated techno plan data."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute(
-        "SELECT data FROM techno_sail_plan WHERE report_month = ?",
-        (report_month,)
+        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name = 'SAIL' AND fy = ? AND unit = 'Shop'",
+        (fy,)
     )
     row = cur.fetchone()
     conn.close()
 
-    if row and row[0]:
+    if row:
         try:
-            return json.loads(row[0])
+            return {
+                'data': json.loads(row['techno_json']) if row['techno_json'] else {},
+                'is_user_supplied': bool(row['is_user_supplied']),
+                'calculated': json.loads(row['calculated_json']) if row['calculated_json'] else {},
+                'calculation_method': json.loads(row['calculation_method']) if row['calculation_method'] else {}
+            }
         except json.JSONDecodeError:
-            return {}
-    return {}
+            return {'data': {}, 'is_user_supplied': False, 'calculated': {}, 'calculation_method': {}}
+    return {'data': {}, 'is_user_supplied': False, 'calculated': {}, 'calculation_method': {}}
 
 
-def save_sail_techno_plan(report_month: str, data: Dict):
-    """Save or update SAIL consolidated techno plan data."""
+def save_sail_techno_plan(fy: str, data: Dict, is_user_supplied: bool = False,
+                         calculated_json: Dict = None, calculation_method: Dict = None, created_by: str = ""):
+    """Save or update SAIL consolidated techno plan data (plant_name='SAIL', unit='Shop') for a FY."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO techno_sail_plan (report_month, data)
-        VALUES (?, ?)
-        ON CONFLICT(report_month)
-        DO UPDATE SET data = excluded.data
-    """, (report_month, json.dumps(data)))
-    conn.commit()
-    conn.close()
+    save_techno_plan('SAIL', fy, 'Shop', data, is_user_supplied, calculated_json, calculation_method, created_by)
 
 
-def list_techno_plan_months(plant: str = None) -> List[str]:
-    """List distinct months in techno_plan table, optionally filtered by plant."""
+def list_techno_plan_fys(plant: str = None) -> List[str]:
+    """List distinct FYs in techno_plan_fy table, optionally filtered by plant."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     if plant:
         cursor.execute(
-            "SELECT DISTINCT report_month FROM techno_plan WHERE plant = ? ORDER BY report_month DESC",
+            "SELECT DISTINCT fy FROM techno_plan_fy WHERE plant_name = ? ORDER BY fy DESC",
             (plant,)
         )
     else:
         cursor.execute(
-            "SELECT DISTINCT report_month FROM techno_plan ORDER BY report_month DESC"
+            "SELECT DISTINCT fy FROM techno_plan_fy ORDER BY fy DESC"
         )
-    months = [row[0] for row in cursor.fetchall()]
+    fys = [row[0] for row in cursor.fetchall()]
     conn.close()
-    return months
+    return fys
