@@ -230,8 +230,41 @@ def _annual_map(cur, fy):
 
 
 def _fetch_techno_data(cur, plant_params, months):
-    """Return {(row_label, param_name): {month: actual}} for the given pairs and months.
-    Also computes TMI as HM Consumption + Scrap Consumption if not in DB."""
+    """Return {(plant, unit, period): {param: {value, unit}}} from techno_data table.
+    Works with new JSON schema: techno_json = {month: {...}, till_month: {...}}"""
+    if not plant_params or not months:
+        return {}
+
+    # plant_params is a list of (plant, unit) tuples
+    plants_set = set(p for p, _ in plant_params)
+    units_set = set(u for _, u in plant_params)
+
+    result = {}
+
+    # Fetch techno_data for all combinations
+    for plant in plants_set:
+        for unit in units_set:
+            for month in months:
+                cur.execute(
+                    "SELECT techno_json FROM techno_data WHERE plant = ? AND unit = ? AND report_month = ?",
+                    (plant, unit, month)
+                )
+                row = cur.fetchone()
+                if row:
+                    import json
+                    try:
+                        techno_json = json.loads(row[0])
+                        # Store in result keyed by (plant, unit, 'month') for current month
+                        result[(plant, unit, 'month')] = techno_json.get('month', {})
+                        # Store till_month for YTD
+                        result[(plant, unit, 'till_month')] = techno_json.get('till_month', {})
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+    return result
+
+def _fetch_techno_data_old(cur, plant_params, months):
+    """Legacy function - kept for backward compatibility. Returns {(row_label, param_name): {month: actual}}"""
     if not plant_params or not months:
         return {}
     pp_set  = set(plant_params)
@@ -240,34 +273,37 @@ def _fetch_techno_data(cur, plant_params, months):
     ph_m  = ",".join("?" * len(months))
     ph_p  = ",".join("?" * len(entities))
     ph_pm = ",".join("?" * len(params))
-    cur.execute(
-        f"SELECT p.row_label, p.param_name, a.report_month, a.actual "
-        f"FROM techno_actuals a "
-        f"JOIN techno_param p ON a.param_id = p.param_id "
-        f"WHERE a.report_month IN ({ph_m}) AND p.row_label IN ({ph_p}) AND p.param_name IN ({ph_pm})",
-        list(months) + entities + params,
-    )
-    result = {}
-    for rl, pn, month, val in cur.fetchall():
-        if val is not None and (rl, pn) in pp_set:
-            result.setdefault((rl, pn), {})[month] = val
+    try:
+        cur.execute(
+            f"SELECT p.row_label, p.param_name, a.report_month, a.actual "
+            f"FROM techno_actuals a "
+            f"JOIN techno_param p ON a.param_id = p.param_id "
+            f"WHERE a.report_month IN ({ph_m}) AND p.row_label IN ({ph_p}) AND p.param_name IN ({ph_pm})",
+            list(months) + entities + params,
+        )
+        result = {}
+        for rl, pn, month, val in cur.fetchall():
+            if val is not None and (rl, pn) in pp_set:
+                result.setdefault((rl, pn), {})[month] = val
 
-    # Compute TMI as HM Consumption + Scrap Consumption for SMS shops if not in DB
-    for rl in entities:
-        if rl in _SMS_SHOPS:  # Only for SMS shops
-            tmi_data = {}
-            for month in months:
-                hm_v = result.get((rl, "Hot Metal Consumption"), {}).get(month)
-                scrap_v = result.get((rl, "Scrap Consumption"), {}).get(month)
-                if hm_v is not None and scrap_v is not None:
-                    tmi_val = result.get((rl, "TMI"), {}).get(month)
-                    # Only compute if TMI not already in DB
-                    if tmi_val is None:
-                        tmi_data[month] = hm_v + scrap_v
-            if tmi_data:
-                result.setdefault((rl, "TMI"), {}).update(tmi_data)
+        # Compute TMI as HM Consumption + Scrap Consumption for SMS shops if not in DB
+        for rl in entities:
+            if rl in _SMS_SHOPS:  # Only for SMS shops
+                tmi_data = {}
+                for month in months:
+                    hm_v = result.get((rl, "Hot Metal Consumption"), {}).get(month)
+                    scrap_v = result.get((rl, "Scrap Consumption"), {}).get(month)
+                    if hm_v is not None and scrap_v is not None:
+                        tmi_val = result.get((rl, "TMI"), {}).get(month)
+                        # Only compute if TMI not already in DB
+                        if tmi_val is None:
+                            tmi_data[month] = hm_v + scrap_v
+                if tmi_data:
+                    result.setdefault((rl, "TMI"), {}).update(tmi_data)
 
-    return result
+        return result
+    except Exception:
+        return {}
 
 
 def _fetch_prod_multi(cur, plants, item_names, months):
@@ -847,130 +883,245 @@ def generate_techno(report_month: str, page_no: int) -> dict:
 # ---------------------------------------------------------------------------
 
 def generate_summary_te_table(report_month: str) -> list:
-    """Generate the te_table for the SAIL Performance Summary page (page 3)."""
+    """Generate the te_table for the SAIL Performance Summary page (page 3).
+    Shows ONLY SAIL techno parameters from stored SAIL actuals and plan data.
+    """
     fy         = _fy_start(report_month)
     ytd        = db.get_ytd_months(report_month)
     cply_month = db.get_cply_month(report_month)
     cply_ytd   = [db.get_cply_month(m) for m in ytd]
+    fy_str = f"{fy}-{fy + 1}"  # e.g., "2026-27"
 
-    # Include April in the months (FY starts from April)
-    fy_april = f"{fy}-04"
-
-    conn = sqlite3.connect(db.DB_PATH)
-    cur  = conn.cursor()
     try:
-        all_months   = sorted(set(ytd) | set(cply_ytd) | {cply_month, fy_april})
-        plant_params = _all_sail_plant_params()
-        techno_data  = _fetch_techno_data(cur, plant_params, all_months)
-        prod_items = ["Hot Metal", "Total Crude Steel", "Saleable Steel", "Finished Steel"]
-        prod_raw     = _fetch_prod_multi(cur, _BF_PLANTS, prod_items, all_months)
-        hm = prod_raw["Hot Metal"]
-        cs = prod_raw["Total Crude Steel"]
-        saleable = prod_raw.get("Saleable Steel", {})
-        finished = prod_raw.get("Finished Steel", {})
+        # Fetch SAIL plan data (from techno_plan_fy table)
+        sail_plan_result = db.get_sail_techno_plan(fy_str)
+        sail_plan_data = sail_plan_result.get('data', {})
 
-        # Targets for SAIL row from new techno_plan structure
-        fy_year = int(_fy_label(fy).split("-")[0])
-        report_month = f"{fy_year}-03"  # FY targets stored as March
-        sail_tgt = _get_techno_plan_targets(report_month)
-        tgt_by_param = {param.split("|")[-1]: val for (_, param), val in sail_tgt.items()}
+        # Extract plan values for each parameter
+        plan_by_param = {}
+        for param_name, param_obj in sail_plan_data.items():
+            value = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
+            plan_by_param[param_name] = value
 
-        def entry(param_name, unit, period_sets):
-            tgt_val = _fmt(tgt_by_param.get(param_name))
-            vals    = [_fmt(_compute_sail(techno_data, hm, cs, ms).get(("SAIL", param_name)))
-                       for ms in period_sets]
-            return {"parameter": param_name, "unit": unit, "values": [tgt_val] + vals}
+        # Fetch stored SAIL actuals (calculated and stored)
+        # Current month actual
+        sail_current = db.get_sail_techno_actuals(report_month).get('Shop', {})
+        sail_current_month = sail_current.get('month', {})
 
-        def prod_entry(item_name, unit, plan_data, actual_data):
-            """Entry for production data items - Auto mode switches table structure."""
-            report_month_num = int(report_month.split('-')[1])
-            is_expanded = report_month_num > 4  # May onwards (month > 4)
+        # CPLY month actual
+        cply_month_actual_data = db.get_sail_techno_actuals(cply_month).get('Shop', {})
+        cply_month_actual = cply_month_actual_data.get('month', {})
 
-            vals = []
+        # YTD (till_month) actual
+        sail_ytd_data = db.get_sail_techno_actuals(report_month).get('Shop', {})
+        sail_ytd = sail_ytd_data.get('till_month', {})
 
-            if is_expanded:
-                # From May onwards: Full expanded table with all 8 columns
-                # Structure: Month APP | Month Act | %Ful | CPLY Act | %Gr w.r.t CPLY |
-                #           Apr-Mon APP | Apr-Mon Act | %Ful | Apr-CPLY Act | %Gr w.r.t Apr-CPLY | Unit | %Gr
+        # CPLY YTD actual
+        cply_ytd_last_month = cply_ytd[-1] if cply_ytd else cply_month
+        cply_ytd_data = db.get_sail_techno_actuals(cply_ytd_last_month).get('Shop', {})
+        cply_ytd_actual = cply_ytd_data.get('till_month', {})
 
-                # 1. Current Month Plan
-                month_plan = sum(plan_data.get(p, {}).get(report_month, 0) for p in _BF_PLANTS)
-                vals.append(_fmt(month_plan if month_plan > 0 else None))
+        def entry(param_name, unit):
+            """Create SAIL techno parameter row with plan and actual values."""
+            # Get plan value
+            plan_val = _fmt(plan_by_param.get(param_name))
 
-                # 2. Current Month Actual
-                month_actual = sum(actual_data.get(p, {}).get(report_month, 0) for p in _BF_PLANTS)
-                vals.append(_fmt(month_actual if month_actual > 0 else None))
+            # Get stored SAIL actual values
+            current_val = sail_current_month.get(param_name, {}).get('value') if isinstance(sail_current_month.get(param_name), dict) else sail_current_month.get(param_name)
+            cply_val = cply_month_actual.get(param_name, {}).get('value') if isinstance(cply_month_actual.get(param_name), dict) else cply_month_actual.get(param_name)
+            ytd_val = sail_ytd.get(param_name, {}).get('value') if isinstance(sail_ytd.get(param_name), dict) else sail_ytd.get(param_name)
+            cply_ytd_val = cply_ytd_actual.get(param_name, {}).get('value') if isinstance(cply_ytd_actual.get(param_name), dict) else cply_ytd_actual.get(param_name)
 
-                # 3. Current Month % Fulfillment
-                month_ff = (month_actual / month_plan * 100) if month_plan > 0 else 0
-                vals.append(_fmt(month_ff if month_ff > 0 else None))
+            # Return row: [plan, current_month_actual, cply_actual, ytd_actual, cply_ytd_actual]
+            return {
+                "parameter": param_name,
+                "unit": unit,
+                "values": [plan_val, _fmt(current_val), _fmt(cply_val), _fmt(ytd_val), _fmt(cply_ytd_val)]
+            }
 
-                # 4. CPLY Month Actual
-                cply_month_actual = sum(actual_data.get(p, {}).get(cply_month, 0) for p in _BF_PLANTS)
-                vals.append(_fmt(cply_month_actual if cply_month_actual > 0 else None))
-
-                # 5. % Growth w.r.t CPLY Month
-                month_growth = ((month_actual - cply_month_actual) / cply_month_actual * 100) if cply_month_actual > 0 else 0
-                vals.append(_fmt(month_growth))
-
-                # 6. Apr-ReportMonth Plan
-                ytd_months = [m for m in ytd if m >= fy_april]  # Months from April to report month
-                ytd_plan = sum(plan_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in ytd_months)
-                vals.append(_fmt(ytd_plan if ytd_plan > 0 else None))
-
-                # 7. Apr-ReportMonth Actual
-                ytd_actual = sum(actual_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in ytd_months)
-                vals.append(_fmt(ytd_actual if ytd_actual > 0 else None))
-
-                # 8. Apr-ReportMonth % Fulfillment
-                ytd_ff = (ytd_actual / ytd_plan * 100) if ytd_plan > 0 else 0
-                vals.append(_fmt(ytd_ff if ytd_ff > 0 else None))
-
-                # 9. Apr-CPLY Month Actual
-                cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
-                cply_ytd_actual = sum(actual_data.get(p, {}).get(m, 0) for p in _BF_PLANTS for m in cply_ytd_months)
-                vals.append(_fmt(cply_ytd_actual if cply_ytd_actual > 0 else None))
-
-                # 10. % Growth w.r.t Apr-CPLY
-                ytd_growth = ((ytd_actual - cply_ytd_actual) / cply_ytd_actual * 100) if cply_ytd_actual > 0 else 0
-                vals.append(_fmt(ytd_growth))
-
-            else:
-                # April: Simple structure - April data only
-                april_plan = sum(plan_data.get(p, {}).get(report_month, 0) for p in _BF_PLANTS)
-                april_actual = sum(actual_data.get(p, {}).get(report_month, 0) for p in _BF_PLANTS)
-                april_ff = (april_actual / april_plan * 100) if april_plan > 0 else 0
-
-                vals.append(_fmt(april_plan if april_plan > 0 else None))
-                vals.append(_fmt(april_actual if april_actual > 0 else None))
-                vals.append(_fmt(april_ff if april_ff > 0 else None))
-
-            return {"parameter": item_name, "unit": unit, "values": [""] + vals, "is_expanded": is_expanded}
-
-        # Fetch plan data for fulfillment calculation
-        plan_items = ["Hot Metal", "Total Crude Steel", "Saleable Steel", "Finished Steel"]
-        plan_raw = _fetch_plan_multi(cur, _BF_PLANTS, plan_items, all_months)
-        hm_plan = plan_raw.get("Hot Metal", {})
-        cs_plan = plan_raw.get("Total Crude Steel", {})
-        saleable_plan = plan_raw.get("Saleable Steel", {})
-        finished_plan = plan_raw.get("Finished Steel", {})
-
+        # Only SAIL techno parameters
         result = [
-            entry("Coke Rate",                  "kg/thm",   period_sets),
-            entry("CDI Rate",                   "kg/thm",   period_sets),
-            entry("Fuel Rate",                  "kg/thm",   period_sets),
-            entry("BF Productivity",            "t/m3/day", period_sets),
-            entry("Specific Energy Consumption","Gcal/tcs", period_sets),
-            # Add production data rows with expanded Apr-ReportMonth structure
-            prod_entry("Hot Metal",             "000 T",    hm_plan, hm),
-            prod_entry("Total Crude Steel",     "000 T",    cs_plan, cs),
-            prod_entry("Saleable Steel",        "000 T",    saleable_plan, saleable),
-            prod_entry("Finished Steel",        "000 T",    finished_plan, finished),
+            entry("Coke Rate",                  "kg/thm"),
+            entry("CDI Rate",                   "kg/thm"),
+            entry("Fuel Rate",                  "kg/thm"),
+            entry("BF Productivity",            "t/m3/day"),
+            entry("Specific Energy Consumption","Gcal/tcs"),
         ]
 
         return result
-    finally:
-        conn.close()
+
+    except Exception as e:
+        # Return empty structure if error (will show empty table)
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Auto-calculate and store SAIL actuals (materialized view)
+# ---------------------------------------------------------------------------
+
+def calculate_and_store_sail_actuals(report_month: str) -> dict:
+    """
+    Calculate SAIL techno actuals from plant-level data and store them.
+    Works with new techno_data JSON schema.
+    Called automatically after plant data extraction/update.
+
+    Returns: {success: bool, message: str, sail_data: {...}, calc_details: {...}}
+    """
+    import json as _json
+    from datetime import datetime
+
+    try:
+        fy = _fy_start(report_month)
+        ytd = db.get_ytd_months(report_month)
+        all_months = sorted(set(ytd) | {report_month})
+
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+
+        try:
+            # Fetch plant techno data from new JSON schema
+            # Expected format: techno_json = {"month": {...}, "till_month": {...}}
+            # Units available: BF_Shop (plant shop), BF-1...BF-8 (furnaces), SMS-1...SMS-3, etc.
+            plant_data = {}  # {(plant, month, "month"|"till_month"): {param: value}}
+
+            for plant in _BF_PLANTS:
+                for month in all_months:
+                    # Try BF_Shop first (consolidated plant level)
+                    cur.execute(
+                        "SELECT techno_json FROM techno_data WHERE plant=? AND unit='BF_Shop' AND report_month=?",
+                        (plant, month)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        try:
+                            techno_json = _json.loads(row[0])
+                            plant_data[(plant, month, "month")] = techno_json.get("month", {})
+                            plant_data[(plant, month, "till_month")] = techno_json.get("till_month", {})
+                        except (_json.JSONDecodeError, TypeError):
+                            pass
+
+            sail_month_data = {}
+            sail_ytd_data = {}
+
+            # Map parameter names to their lowercase underscore versions in the data
+            param_map = {
+                "Coke Rate": "coke_rate",
+                "CDI Rate": "cdi",
+                "Fuel Rate": "fuel_rate",
+                "BF Productivity": "bf_productivity",
+                "Specific Energy Consumption": "specific_energy_consumption"
+            }
+
+            # Calculate each parameter
+            for param_display, param_key in param_map.items():
+                # Get current month value (weighted by HM production)
+                param_values_month = []
+                total_hm_month = 0.0
+
+                for plant in _BF_PLANTS:
+                    pdata = plant_data.get((plant, report_month, "month"), {})
+                    if param_key in pdata:
+                        pval = pdata[param_key]
+                        if pval is not None and isinstance(pval, (int, float)):
+                            # Get HM weight for this plant/month
+                            cur.execute(
+                                "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name='Hot Metal' AND report_month=?",
+                                (plant, report_month)
+                            )
+                            hm_row = cur.fetchone()
+                            hm_val = hm_row[0] if hm_row else 0
+                            if hm_val and hm_val > 0:
+                                param_values_month.append((pval, hm_val))
+                                total_hm_month += hm_val
+
+                # Calculate weighted average for month
+                if param_values_month and total_hm_month > 0:
+                    if param_display == "BF Productivity":
+                        # Harmonic mean for productivity
+                        hm_sum = 0.0
+                        for pval, hm in param_values_month:
+                            if pval > 0:
+                                hm_sum += hm / pval
+                        sail_month_data[param_display] = total_hm_month / hm_sum if hm_sum > 0 else None
+                    else:
+                        # Weighted average for other params
+                        weighted_sum = sum(pval * hm for pval, hm in param_values_month)
+                        sail_month_data[param_display] = weighted_sum / total_hm_month
+                elif param_values_month:
+                    # Fallback to simple average if no weights
+                    sail_month_data[param_display] = sum(pval for pval, _ in param_values_month) / len(param_values_month)
+
+                # Calculate YTD value (till_month)
+                param_values_ytd = []
+                total_hm_ytd = 0.0
+
+                for plant in _BF_PLANTS:
+                    pdata = plant_data.get((plant, report_month, "till_month"), {})
+                    if param_key in pdata:
+                        pval = pdata[param_key]
+                        if pval is not None and isinstance(pval, (int, float)):
+                            # Sum HM for the period
+                            cur.execute(
+                                f"SELECT SUM(month_actual) FROM production_table WHERE plant_name=? AND item_name='Hot Metal' AND report_month IN ({','.join('?' * len(ytd))})",
+                                [plant] + ytd
+                            )
+                            hm_row = cur.fetchone()
+                            hm_val = hm_row[0] if hm_row and hm_row[0] else 0
+                            if hm_val > 0:
+                                param_values_ytd.append((pval, hm_val))
+                                total_hm_ytd += hm_val
+
+                # Calculate weighted average for YTD
+                if param_values_ytd and total_hm_ytd > 0:
+                    if param_display == "BF Productivity":
+                        hm_sum = 0.0
+                        for pval, hm in param_values_ytd:
+                            if pval > 0:
+                                hm_sum += hm / pval
+                        sail_ytd_data[param_display] = total_hm_ytd / hm_sum if hm_sum > 0 else None
+                    else:
+                        weighted_sum = sum(pval * hm for pval, hm in param_values_ytd)
+                        sail_ytd_data[param_display] = weighted_sum / total_hm_ytd
+
+            # Build SAIL techno_json with display names
+            sail_techno_json = {"month": {}, "till_month": {}}
+
+            for param_display in param_map.keys():
+                if param_display in sail_month_data and sail_month_data[param_display] is not None:
+                    sail_techno_json["month"][param_display] = {
+                        "value": round(sail_month_data[param_display], 3),
+                        "unit": "kg/thm" if param_display in ["Coke Rate", "CDI Rate", "Fuel Rate"] else ("t/m3/day" if param_display == "BF Productivity" else "Gcal/tcs")
+                    }
+                if param_display in sail_ytd_data and sail_ytd_data[param_display] is not None:
+                    sail_techno_json["till_month"][param_display] = {
+                        "value": round(sail_ytd_data[param_display], 3),
+                        "unit": ""
+                    }
+
+            # Save SAIL actuals
+            db.save_sail_techno_actuals(report_month, "Shop", sail_techno_json, {})
+
+            return {
+                "success": True,
+                "message": f"SAIL actuals calculated and stored for {report_month}",
+                "sail_data": sail_techno_json,
+                "calc_details": {"method": "weighted_average_by_HM", "calculated_at": datetime.now().isoformat()}
+            }
+
+        finally:
+            conn.close()
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error calculating SAIL actuals: {str(e)}",
+            "sail_data": {},
+            "calc_details": {}
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -1054,15 +1205,19 @@ def generate_summary_chart_data(report_month: str) -> dict:
 
 def _get_techno_plan_targets(report_month: str) -> dict:
     """
-    Fetch techno plan/target data from techno_sail_plan.
+    Fetch techno plan/target data from techno_plan_fy (SAIL/Shop).
     Returns {(row_label, param_name): value} dictionary.
     """
     try:
-        sail_data = db.get_sail_techno_plan(report_month)
-        # Convert from flat {param_name: value} to {(row_label, param_name): value}
+        fy = db.get_fy_for_month(report_month)
+        sail_result = db.get_sail_techno_plan(fy)
+        sail_data = sail_result.get('data', {})
+        # Convert from {param_name: {value, unit}} to {(row_label, param_name): value}
         tgt = {}
-        for param_name, value in sail_data.items():
-            tgt[("SAIL", param_name)] = value
+        for param_name, param_obj in sail_data.items():
+            value = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
+            if value is not None:
+                tgt[("SAIL", param_name)] = value
         return tgt
     except Exception:
         return {}
@@ -1070,18 +1225,17 @@ def _get_techno_plan_targets(report_month: str) -> dict:
 
 def _get_plant_techno_plan_targets(plant: str, report_month: str) -> dict:
     """
-    Fetch plant-level techno plan data from techno_plant_plan.
+    Fetch plant-level techno plan data from techno_plan_fy (plant/Shop).
     Returns {(row_label, param_name): value} dictionary.
     """
     try:
-        plant_data = db.get_techno_plant_plan(plant, report_month)
-        # Convert from {param_name: {value, unit, ...}} to {(plant, param_name): value}
+        fy = db.get_fy_for_month(report_month)
+        plan_result = db.get_techno_plant_plan(plant, fy)
+        plant_data = plan_result.get('data', {}) if plan_result else {}
+        # Convert from {param_name: {value, unit}} to {(plant, param_name): value}
         tgt = {}
-        for param_name, param_info in plant_data.items():
-            if isinstance(param_info, dict):
-                value = param_info.get('value')
-            else:
-                value = param_info
+        for param_name, param_obj in plant_data.items():
+            value = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
             if value is not None:
                 tgt[(plant, param_name)] = value
         return tgt
@@ -1092,24 +1246,43 @@ def _get_plant_techno_plan_targets(plant: str, report_month: str) -> dict:
 def compute_sail_targets(fy: str) -> dict:
     """
     Compute or retrieve SAIL-level techno targets.
-    Uses new techno_sail_plan table structure.
+    Uses unified techno_plan_fy table (plant_name='SAIL', unit='Shop').
     Returns {(plant_name, parameter_name): value} for SAIL rows.
     """
+    import traceback
+    print(f"\n[DEBUG] compute_sail_targets called with fy={fy}")
     try:
         fy_start = int(fy.split("-")[0])
-        report_month = f"{fy_start}-03"  # FY targets stored as March
-    except (ValueError, IndexError):
+    except (ValueError, IndexError) as e:
+        print(f"[ERROR] Failed to parse FY: {e}")
         return {}
 
-    # Try to fetch from techno_sail_plan
-    sail_data = db.get_sail_techno_plan(report_month)
-    if sail_data:
-        # Convert to expected format
-        return {("SAIL", param): value for param, value in sail_data.items()}
+    try:
+        print(f"[DEBUG] Fetching SAIL plan from techno_plan_fy for fy={fy}")
+        # Try to fetch from techno_plan_fy
+        sail_result = db.get_sail_techno_plan(fy)
+        sail_data = sail_result.get('data', {})
+        print(f"[DEBUG] SAIL result retrieved: is_user_supplied={sail_result.get('is_user_supplied')}, data_count={len(sail_data)}")
 
-    # If no data, compute from plant-level targets
-    conn = sqlite3.connect(db.DB_PATH)
-    cur  = conn.cursor()
+        # If user-supplied data exists, return it
+        if sail_result.get('is_user_supplied') and sail_data:
+            result = {}
+            for param, param_obj in sail_data.items():
+                value = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
+                if value is not None:
+                    result[("SAIL", param)] = value
+            print(f"[DEBUG] Returning user-supplied SAIL targets: {len(result)} params")
+            return result
+
+        # If no data, compute from plant-level targets
+        print(f"[DEBUG] Computing SAIL from plant-level targets")
+        conn = sqlite3.connect(db.DB_PATH)
+        cur  = conn.cursor()
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Exception in compute_sail_targets: {e}")
+        traceback.print_exc()
+        raise
 
     # Annual production plan weights
     months = (
@@ -1131,12 +1304,25 @@ def compute_sail_targets(fy: str) -> dict:
         if val and val > 0:
             (hm_wt if item == "Hot Metal" else cs_wt)[plant] = val
 
-    # Fetch plant-level targets from techno_plant_plan
-    tgt = {}
-    for plant in _BF_PLANTS:
-        plant_tgt = _get_plant_techno_plan_targets(plant, report_month)
-        tgt.update(plant_tgt)
-    conn.close()
+    try:
+        # Fetch plant-level targets from techno_plant_plan
+        # Need a report_month to pass to _get_plant_techno_plan_targets (it will convert to FY)
+        report_month_for_fy = f"{fy_start}-04"  # Any month from the FY works
+        print(f"[DEBUG] Using report_month_for_fy={report_month_for_fy} to fetch plant targets")
+        tgt = {}
+        for plant in _BF_PLANTS:
+            print(f"[DEBUG]   Fetching targets for {plant}")
+            plant_tgt = _get_plant_techno_plan_targets(plant, report_month_for_fy)
+            tgt.update(plant_tgt)
+            print(f"[DEBUG]   Got {len(plant_tgt)} target params for {plant}")
+        conn.close()
+        print(f"[DEBUG] Total plant targets collected: {len(tgt)} params")
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Exception fetching plant targets: {e}")
+        traceback.print_exc()
+        conn.close()
+        raise
 
     out = {}
 
@@ -1191,17 +1377,21 @@ def compute_sail_targets(fy: str) -> dict:
             den += cs
     out[("SAIL", "Specific Energy Consumption")] = round(num / den, 3) if den > 0 else None
 
-    # Save SAIL targets to techno_sail_plan using new structure
-    sail_data = {}
+    # Prepare SAIL data in {param: {value, unit}} format for storage
+    sail_data_formatted = {}
     for (rl, pn), val in out.items():
         if val is not None and rl == "SAIL":
-            sail_data[pn] = val
+            # Store in unified format with value and unit
+            sail_data_formatted[pn] = {"value": val, "unit": ""}  # Unit can be added later
 
-    if sail_data:
-        db.save_sail_techno_plan(report_month, sail_data)
+    if sail_data_formatted:
+        # Save calculated SAIL targets (not user-supplied)
+        db.save_sail_techno_plan(fy, sail_data_formatted, is_user_supplied=False,
+                                calculated_json=sail_data_formatted, calculation_method={})
 
-    # Return in format expected by callers (convert to param_name format)
-    return {pn: val for pn, val in sail_data.items()}
+    # Return in format expected by callers
+    return {pn: val.get('value') if isinstance(val, dict) else val
+            for pn, val in sail_data_formatted.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -1368,12 +1558,16 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     Generate page 27 (MAJOR TECHNO-ECONOMIC PARAMETERS) from techno_data.
     FY columns use the till_month value from the March row of each past FY,
     which represents the full-year cumulative.
+    Also includes 2026-27 plan from techno_plant_plan table.
     """
     import json as _json
 
     fy         = _fy_start(report_month)
     ytd        = db.get_ytd_months(report_month)
     cply_month = db.get_cply_month(report_month)
+
+    # For plan data, use March of target FY (e.g., 2026-03 for FY 2026-27)
+    plan_month = f"{fy}-03"
 
     # March month for past FYs: till_month of March = full-year cumulative
     # FY (fy-1) ends March of year fy; FY (fy-2) ends March of year fy-1; etc.
@@ -1411,14 +1605,14 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         """Full-year value = till_month of March row for that FY."""
         return _gv(plant, march_rm, src_unit, src_key, "till_month")
 
-    def _build_row(label, unit_str, month_fn, cum_fn, cply_fn, fy1_fn, fy2_fn, fy3_fn, cum_cply_fn=None):
+    def _build_row(label, unit_str, month_fn, cum_fn, cply_fn, fy1_fn, fy2_fn, fy3_fn, cum_cply_fn=None, target_fn=None):
         return {
             "label":  label,
             "unit":   unit_str,
             "fy3":    _fmt(fy3_fn()),
             "fy2":    _fmt(fy2_fn()),
             "fy1":    _fmt(fy1_fn()),
-            "target": "",
+            "target": _fmt(target_fn()) if target_fn else "",
             "months":    [_fmt(month_fn(m)) for m in ytd],
             "cply":      _fmt(cply_fn()),
             "cum":       _fmt(cum_fn()),
@@ -1437,6 +1631,14 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             src_unit = next((u for u in src_units if p_data.get(u)), None)
             if not src_unit:
                 continue
+
+            # Fetch plan data from techno_plant_plan table
+            plan_data = db.get_techno_plant_plan(p, plan_month)
+            plan_value = None
+            if plan_data and param_name in plan_data:
+                val = plan_data[param_name]
+                plan_value = val.get('value') if isinstance(val, dict) else val
+
             rows.append(_build_row(
                 p, unit_str,
                 month_fn     = lambda m, _p=p, _u=src_unit: _gv(_p, m,             _u, src_key),
@@ -1446,6 +1648,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 fy2_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy2_march, _u, src_key),
                 fy3_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy3_march, _u, src_key),
                 cum_cply_fn  = lambda     _p=p, _u=src_unit: _gv(_p, cply_month,    _u, src_key, "till_month"),
+                target_fn    = lambda     _pv=plan_value: _pv,
             ))
         return {"label": param_name, "rows": rows}
 
@@ -1464,6 +1667,15 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             for su in _SMS_UNIT_ORDER:
                 if not p_units.get(su):
                     continue
+
+                # Fetch plan data from techno_plan table for SMS shops
+                shop_name = f"{p} {su}".replace("SMS", "SMS")  # Normalize shop name
+                plan_data = db.get_techno_plan(p, plan_month)
+                plan_value = None
+                if plan_data and param_name in plan_data:
+                    val = plan_data[param_name]
+                    plan_value = val.get('value') if isinstance(val, dict) else val
+
                 if tmi:
                     def _tmi(plant, rm, period, _su=su):
                         hm = _gv(plant, rm, _su, "specific_hm_consumption",   period)
@@ -1480,6 +1692,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                         fy2_fn      = lambda     _p=p: _tmi(_p, fy2_march, "till_month"),
                         fy3_fn      = lambda     _p=p: _tmi(_p, fy3_march, "till_month"),
                         cum_cply_fn = lambda     _p=p: _tmi(_p, cply_month,   "till_month"),
+                        target_fn   = lambda     _pv=plan_value: _pv,
                     ))
                 else:
                     rows.append(_build_row(
@@ -1491,6 +1704,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                         fy2_fn      = lambda     _p=p, _su=su: _fy_val(_p, fy2_march, _su, src_key),
                         fy3_fn      = lambda     _p=p, _su=su: _fy_val(_p, fy3_march, _su, src_key),
                         cum_cply_fn = lambda     _p=p, _su=su: _gv(_p, cply_month,   _su, src_key, "till_month"),
+                        target_fn   = lambda     _pv=plan_value: _pv,
                     ))
         return {"label": param_name, "rows": rows}
 
@@ -1828,6 +2042,21 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     finally:
         conn.close()
 
+    # Fetch plan data from techno_plan_fy for the current FY
+    fy_str = f"{fy}-{fy + 1}"  # e.g., "2026-27"
+    plan_store = {}
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT plant_name, unit, techno_json FROM techno_plan_fy WHERE fy = ?",
+            (fy_str,)
+        )
+        for plant_name, unit, tj in cur.fetchall():
+            plan_store[(plant_name, unit)] = _json.loads(tj) if tj else {}
+    finally:
+        conn.close()
+
     _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP"]
     available_plants = sorted(
         {p for (p, rm) in store if rm == report_month},
@@ -1837,14 +2066,24 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     def _gv(plant, rm, unit, key, period="month"):
         return store.get((plant, rm), {}).get(unit, {}).get(period, {}).get(key)
 
+    def _get_plan_value(plant, unit, param_key):
+        """Get planned value for a parameter from techno_plan_fy."""
+        plan_data = plan_store.get((plant, unit), {})
+        param_obj = plan_data.get(param_key, {})
+        # Handle both {value, unit} format and flat value
+        if isinstance(param_obj, dict):
+            return param_obj.get('value')
+        return param_obj
+
     def _make_row(label, unit_str, plant, src_unit, src_key):
+        target_val = _get_plan_value(plant, src_unit, src_key)
         return {
             "label":    label,
             "unit":     unit_str,
             "fy3":      _fmt(_gv(plant, fy3_march,    src_unit, src_key, "till_month")),
             "fy2":      _fmt(_gv(plant, fy2_march,    src_unit, src_key, "till_month")),
             "fy1":      _fmt(_gv(plant, fy1_march,    src_unit, src_key, "till_month")),
-            "target":   "",
+            "target":   _fmt(target_val),
             "months":   [_fmt(_gv(plant, m, src_unit, src_key)) for m in ytd],
             "cply":     _fmt(_gv(plant, cply_month,   src_unit, src_key)),
             "cum":      _fmt(_gv(plant, report_month, src_unit, src_key, "till_month")),

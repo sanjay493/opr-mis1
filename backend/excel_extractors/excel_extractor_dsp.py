@@ -155,7 +155,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
         (20, COL_E, "BILLET Caster"),          # Total CC Billet
         (21, COL_E, "Bloom Caster "),          # CC Bloom M/c-3
         (23, COL_D, "Round Production"),       # CC Round M/c-4 — col E blank for M/c-4
-        (25, COL_E, "Total Caster"),
+        (25, COL_E, "SMS Total Caster"),
         (26, COL_E, "BOTTOM_POURING_INGOT"),
         (27, COL_E, "Total Crude Steel"),
         (30, COL_E, "MSM"),
@@ -256,7 +256,7 @@ def _mcr_preview(file_path: str, report_month: str, column_shift: int = 0) -> di
         (20, COL_E, "BILLET Caster"),
         (21, COL_E, "Bloom Caster "),
         (23, COL_D, "Round Production"),
-        (25, COL_E, "Total Caster"),
+        (25, COL_E, "SMS Total Caster"),
         (26, COL_E, "BOTTOM_POURING_INGOT"),
         (27, COL_E, "Total Crude Steel"),
         (30, COL_E, "MSM"),

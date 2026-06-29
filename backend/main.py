@@ -1380,7 +1380,7 @@ PRODUCTION_ITEM_ORDER = [
     'BRC Round',
     'Round Production',
     'BRC',
-    'Total Caster',
+    'SMS Total Caster',
     'Bottom Pouring Ingot',
     'Total Crude Steel',
     'Pig Iron',
@@ -1456,6 +1456,20 @@ async def save_production_entry(request: ProductionEntryRequest):
         if entry.plan_value is not None:
             db.save_production_plan(request.month, request.plant, entry.item_name, entry.plan_value)
             saved.append(f"plan:{entry.item_name}")
+
+    # AUTO-TRIGGER: Recalculate SAIL if production (HM/CS) weights changed
+    # These affect SAIL weighting calculations
+    items_updated = [e.item_name for e in request.entries]
+    weight_items = ["Hot Metal", "Total Crude Steel"]
+    if any(item in weight_items for item in items_updated):
+        try:
+            from page_techno import calculate_and_store_sail_actuals
+            sail_result = calculate_and_store_sail_actuals(request.month)
+            if sail_result['success']:
+                print(f"✓ SAIL actuals recalculated after production update")
+        except Exception as e:
+            print(f"⚠ SAIL recalculation failed: {e}")
+
     return {"status": "success", "saved": saved, "count": len(saved)}
 
 
@@ -1542,12 +1556,8 @@ async def get_techno_targets(fy: str = Query("2026-27")):
     Response: { fy, data: {param: value} }
     """
     try:
-        # Convert FY to report_month format (e.g., "2026-27" -> "2026-03" for March of that FY)
-        fy_year = int(fy.split('-')[0])
-        report_month = f"{fy_year}-03"  # FY targets stored as March of that year
-
-        plan_data = db.get_sail_techno_plan(report_month)
-        return {"fy": fy, "report_month": report_month, "data": plan_data}
+        plan_data = db.get_sail_techno_plan(fy)
+        return {"fy": fy, "data": plan_data}
     except Exception as e:
         return {"fy": fy, "data": {}, "error": str(e)}
 
@@ -1566,13 +1576,9 @@ async def save_techno_targets(payload: dict):
         if not fy:
             raise ValueError("fy is required")
 
-        # Convert FY to report_month format
-        fy_year = int(fy.split('-')[0])
-        report_month = f"{fy_year}-03"  # FY targets stored as March of that year
+        db.save_sail_techno_plan(fy, data)
 
-        db.save_sail_techno_plan(report_month, data)
-
-        return {"status": "success", "fy": fy, "report_month": report_month, "saved": len(data)}
+        return {"status": "success", "fy": fy, "saved": len(data)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2167,14 +2173,14 @@ async def save_techno_plan(payload: dict):
 
 
 @app.get("/api/techno-plant-plan")
-async def get_techno_plant_plan(plant: str = Query(...), report_month: str = Query(...)):
+async def get_techno_plant_plan(plant: str = Query(...), fy: str = Query(...)):
     """
-    Get aggregated plant-level techno plan data.
-    Response: { plant, report_month, data: {param: {value, unit, ...}} }
+    Get plant-level techno plan data (unit='Shop') for a FY.
+    Response: { plant, fy, data: {}, is_user_supplied: bool, calculated: {} }
     """
     try:
-        plan_data = db.get_techno_plant_plan(plant, report_month)
-        return {"plant": plant, "report_month": report_month, "data": plan_data}
+        result = db.get_techno_plant_plan(plant, fy)
+        return {"plant": plant, "fy": fy, **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2182,33 +2188,35 @@ async def get_techno_plant_plan(plant: str = Query(...), report_month: str = Que
 @app.post("/api/techno-plant-plan")
 async def save_techno_plant_plan(payload: dict):
     """
-    Save aggregated plant-level techno plan data.
-    Payload: { plant, report_month, data: {param: {value, unit, ...}}, calculation_details? }
+    Save plant-level techno plan data for a FY.
+    Payload: { plant, fy, data: {param: {value, unit}, ...}, is_user_supplied?: bool, calculated?: {}, calculation_method?: {} }
     """
     try:
         plant = payload.get("plant")
-        report_month = payload.get("report_month")
+        fy = payload.get("fy")
         data = payload.get("data", {})
-        calculation_details = payload.get("calculation_details")
+        is_user_supplied = payload.get("is_user_supplied", False)
+        calculated = payload.get("calculated")
+        calculation_method = payload.get("calculation_method")
 
-        if not all([plant, report_month]):
-            raise ValueError("plant and report_month required")
+        if not all([plant, fy]):
+            raise ValueError("plant and fy required")
 
-        db.save_techno_plant_plan(plant, report_month, data, calculation_details)
-        return {"status": "success", "plant": plant, "report_month": report_month}
+        db.save_techno_plant_plan(plant, fy, data, is_user_supplied, calculated, calculation_method)
+        return {"status": "success", "plant": plant, "fy": fy}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/sail-techno-plan")
-async def get_sail_techno_plan(report_month: str = Query(...)):
+async def get_sail_techno_plan(fy: str = Query(...)):
     """
-    Get SAIL consolidated techno plan data.
-    Response: { report_month, data: {param: {value, unit, ...}} }
+    Get SAIL consolidated techno plan data for a FY.
+    Response: { fy, data: {}, is_user_supplied: bool, calculated: {} (if differs from data) }
     """
     try:
-        plan_data = db.get_sail_techno_plan(report_month)
-        return {"report_month": report_month, "data": plan_data}
+        result = db.get_sail_techno_plan(fy)
+        return {"fy": fy, **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2216,31 +2224,56 @@ async def get_sail_techno_plan(report_month: str = Query(...)):
 @app.post("/api/sail-techno-plan")
 async def save_sail_techno_plan(payload: dict):
     """
-    Save SAIL consolidated techno plan data.
-    Payload: { report_month, data: {param: {value, unit, ...}} }
+    Save SAIL consolidated techno plan data for a FY.
+    Payload: { fy, data: {param: {value, unit}, ...}, is_user_supplied?: bool, calculated?: {}, calculation_method?: {} }
     """
     try:
-        report_month = payload.get("report_month")
+        fy = payload.get("fy")
         data = payload.get("data", {})
+        is_user_supplied = payload.get("is_user_supplied", False)
+        calculated = payload.get("calculated")
+        calculation_method = payload.get("calculation_method")
 
-        if not report_month:
-            raise ValueError("report_month required")
+        if not fy:
+            raise ValueError("fy required")
 
-        db.save_sail_techno_plan(report_month, data)
-        return {"status": "success", "report_month": report_month}
+        db.save_sail_techno_plan(fy, data, is_user_supplied, calculated, calculation_method)
+        return {"status": "success", "fy": fy, "is_user_supplied": is_user_supplied}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/techno-plan-months")
-async def list_techno_plan_months(plant: str = Query(None)):
+@app.post("/api/techno-calculate-sail-actuals")
+async def calculate_sail_actuals(payload: dict):
     """
-    List available months in techno_plan table, optionally filtered by plant.
-    Response: { months: ["2026-04", "2026-05", ...] }
+    Calculate and store SAIL techno actuals from plant-level data.
+    Called after techno extraction or when plant data changes.
+
+    Payload: { report_month: str }
+    Response: { success: bool, message: str, sail_data: {...}, calc_details: {...} }
     """
     try:
-        months = db.list_techno_plan_months(plant)
-        return {"months": months}
+        report_month = payload.get("report_month")
+        if not report_month:
+            raise ValueError("report_month required")
+
+        from page_techno import calculate_and_store_sail_actuals
+        result = calculate_and_store_sail_actuals(report_month)
+
+        return result
+    except Exception as e:
+        return {"success": False, "message": f"Error: {str(e)}", "sail_data": {}, "calc_details": {}}
+
+
+@app.get("/api/techno-plan-fys")
+async def list_techno_plan_fys(plant: str = Query(None)):
+    """
+    List available FYs in techno_plan table, optionally filtered by plant.
+    Response: { fys: ["2026-27", "2027-28", ...] }
+    """
+    try:
+        fys = db.list_techno_plan_fys(plant)
+        return {"fys": fys}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2287,14 +2320,11 @@ async def get_techno_major_parameters():
 async def get_techno_sail_targets(fy: str = Query("2026-27")):
     """
     Get SAIL techno targets for a given FY.
-    Response: { fy, report_month, targets: {param: value} }
+    Response: { fy, targets: {param: value} }
     """
     try:
-        fy_year = int(fy.split("-")[0])
-        report_month = f"{fy_year}-03"
-
-        targets = db.get_sail_techno_plan(report_month)
-        return {"fy": fy, "report_month": report_month, "targets": targets}
+        targets = db.get_sail_techno_plan(fy)
+        return {"fy": fy, "targets": targets}
     except Exception as e:
         return {"fy": fy, "targets": {}, "error": str(e)}
 
@@ -2302,7 +2332,7 @@ async def get_techno_sail_targets(fy: str = Query("2026-27")):
 @app.post("/api/techno-sail-targets")
 async def save_techno_sail_targets(payload: dict):
     """
-    Save SAIL techno targets.
+    Save SAIL techno targets for a FY.
     Payload: { fy: str, targets: {param: value} }
     """
     try:
@@ -2312,11 +2342,8 @@ async def save_techno_sail_targets(payload: dict):
         if not fy:
             raise ValueError("fy is required")
 
-        fy_year = int(fy.split("-")[0])
-        report_month = f"{fy_year}-03"
-
-        db.save_sail_techno_plan(report_month, targets)
-        return {"status": "success", "fy": fy, "report_month": report_month}
+        db.save_sail_techno_plan(fy, targets)
+        return {"status": "success", "fy": fy}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2325,18 +2352,29 @@ async def save_techno_sail_targets(payload: dict):
 async def recalculate_sail_targets(payload: dict):
     """
     Recalculate SAIL targets from plant-level targets.
-    Payload: { fy: str }
+    Payload: { fy: str } or { report_month: str }
+    Accepts both FY and report_month for backward compatibility.
     """
     try:
         fy = payload.get("fy", "")
+        report_month = payload.get("report_month", "")
+
+        # Convert report_month to FY if fy not provided
+        if not fy and report_month:
+            from db import get_fy_for_month
+            fy_year = get_fy_for_month(report_month)
+            fy = f"{fy_year}-{fy_year + 1}"
+
         if not fy:
-            raise ValueError("fy is required")
+            raise ValueError("fy or report_month is required")
 
         from page_techno import compute_sail_targets
         computed = compute_sail_targets(fy)
 
         return {"status": "success", "fy": fy, "computed": computed}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2346,27 +2384,26 @@ async def get_techno_plant_targets(fy: str = Query("2026-27"), plant: str = Quer
     Get plant-level techno targets for a given FY.
     If plant specified, return targets for that plant only.
     Otherwise return for all 5 plants.
-    Response: { fy, report_month, plants: {plant: {param: value}} }
+    Response: { fy, plants: {plant: {param: value}} }
     """
     try:
-        fy_year = int(fy.split("-")[0])
-        report_month = f"{fy_year}-03"
-
         plants_to_fetch = [plant] if plant else ["BSP", "DSP", "RSP", "BSL", "ISP"]
         result = {}
 
         for p in plants_to_fetch:
-            plant_data = db.get_techno_plant_plan(p, report_month)
+            plan_result = db.get_techno_plant_plan(p, fy)
+            plan_data = plan_result.get('data', {})
             result[p] = {}
-            for param_name, param_info in plant_data.items():
-                if isinstance(param_info, dict):
-                    value = param_info.get('value')
+            for param_name, param_obj in plan_data.items():
+                # Extract value from {value, unit} structure
+                if isinstance(param_obj, dict):
+                    value = param_obj.get('value')
                 else:
-                    value = param_info
+                    value = param_obj
                 if value is not None:
                     result[p][param_name] = value
 
-        return {"fy": fy, "report_month": report_month, "plants": result}
+        return {"fy": fy, "plants": result}
     except Exception as e:
         return {"fy": fy, "plants": {}, "error": str(e)}
 
@@ -2374,8 +2411,8 @@ async def get_techno_plant_targets(fy: str = Query("2026-27"), plant: str = Quer
 @app.post("/api/techno-plant-targets")
 async def save_techno_plant_targets(payload: dict):
     """
-    Save plant-level techno targets.
-    Payload: { fy: str, plants: {plant: {param: value}} }
+    Save plant-level techno targets for a FY.
+    Payload: { fy: str, plants: {plant: {param: {value, unit}}} }
     """
     try:
         fy = payload.get("fy", "")
@@ -2384,16 +2421,22 @@ async def save_techno_plant_targets(payload: dict):
         if not fy:
             raise ValueError("fy is required")
 
-        fy_year = int(fy.split("-")[0])
-        report_month = f"{fy_year}-03"
-
         saved_count = 0
         for plant, params in plants_data.items():
             if params:
-                db.save_techno_plant_plan(plant, report_month, params)
+                # Ensure params are in {param: {value, unit}} format
+                formatted_params = {}
+                for param_name, param_value in params.items():
+                    if isinstance(param_value, dict) and 'value' in param_value:
+                        formatted_params[param_name] = param_value
+                    else:
+                        # If just a value, try to infer unit or leave as is
+                        formatted_params[param_name] = {"value": param_value, "unit": ""}
+
+                db.save_techno_plant_plan(plant, fy, formatted_params, is_user_supplied=True)
                 saved_count += 1
 
-        return {"status": "success", "fy": fy, "report_month": report_month, "plants_saved": saved_count}
+        return {"status": "success", "fy": fy, "plants_saved": saved_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2402,31 +2445,25 @@ async def save_techno_plant_targets(payload: dict):
 async def get_techno_sms_targets(fy: str = Query("2026-27")):
     """
     Get SMS-wise (shop-wise) techno targets for a given FY.
-    Response: { fy, report_month, sms_shops: {shop: {param: value}} }
+    Response: { fy, sms_shops: {shop: {param: {value, unit}}} }
     """
     try:
-        fy_year = int(fy.split("-")[0])
-        report_month = f"{fy_year}-03"
-
         sms_shops = [
             "BSP SMS-2", "BSP SMS-3",
             "DSP SMS",
             "RSP SMS-1", "RSP SMS-2",
             "BSL SMS-1", "BSL SMS-2",
-            "ISP SMS-1",
+            "ISP SMS",
         ]
         result = {}
 
         for shop in sms_shops:
-            shop_data = db.get_techno_plan(shop.split()[0], report_month)
-            if shop_data:
-                result[shop] = {}
-                shop_json = shop_data if isinstance(shop_data, dict) else {}
-                for param_name, param_value in shop_json.items():
-                    if param_value is not None:
-                        result[shop][param_name] = param_value
+            plant = shop.split()[0]
+            shop_result = db.get_techno_plan(plant, fy, shop)
+            if shop_result and shop_result.get('data'):
+                result[shop] = shop_result['data']
 
-        return {"fy": fy, "report_month": report_month, "sms_shops": result}
+        return {"fy": fy, "sms_shops": result}
     except Exception as e:
         return {"fy": fy, "sms_shops": {}, "error": str(e)}
 
@@ -2434,8 +2471,8 @@ async def get_techno_sms_targets(fy: str = Query("2026-27")):
 @app.post("/api/techno-sms-targets")
 async def save_techno_sms_targets(payload: dict):
     """
-    Save SMS-wise (shop-wise) techno targets.
-    Payload: { fy: str, sms_shops: {shop: {param: value}} }
+    Save SMS-wise (shop-wise) techno targets for a FY.
+    Payload: { fy: str, sms_shops: {shop: {param: {value, unit}}} }
     """
     try:
         fy = payload.get("fy", "")
@@ -2444,18 +2481,23 @@ async def save_techno_sms_targets(payload: dict):
         if not fy:
             raise ValueError("fy is required")
 
-        fy_year = int(fy.split("-")[0])
-        report_month = f"{fy_year}-03"
-
         saved_count = 0
         for shop, params in sms_data.items():
             if params:
                 plant = shop.split()[0]  # Extract plant from "BSP SMS-2"
                 unit = shop
-                db.save_techno_plan(plant, report_month, unit, json.dumps(params))
+                # Ensure params are in {param: {value, unit}} format
+                formatted_params = {}
+                for param_name, param_value in params.items():
+                    if isinstance(param_value, dict) and 'value' in param_value:
+                        formatted_params[param_name] = param_value
+                    else:
+                        formatted_params[param_name] = {"value": param_value, "unit": ""}
+
+                db.save_techno_plan(plant, fy, unit, formatted_params, is_user_supplied=True)
                 saved_count += 1
 
-        return {"status": "success", "fy": fy, "report_month": report_month, "shops_saved": saved_count}
+        return {"status": "success", "fy": fy, "shops_saved": saved_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2477,7 +2519,6 @@ async def recalculate_sail_weighted(payload: dict):
             raise ValueError("fy is required")
 
         fy_year = int(fy.split("-")[0])
-        report_month = f"{fy_year}-03"
 
         # Get all months of this FY for production targets
         months = (
@@ -2516,27 +2557,33 @@ async def recalculate_sail_weighted(payload: dict):
             "DSP SMS": "DSP",
             "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
             "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS-1": "ISP",
+            "ISP SMS": "ISP",
         }
 
         # Fetch SMS-wise Crude Steel production for each shop
+        # Query SMS items grouped by plant and SMS identifier
+        # Items are named: "SMS-2 BLOOM", "SMS-2 SLAB", "SMS-3 BILLET105", etc.
+        cur.execute(f"""
+            SELECT plant_name, item_name, SUM(month_actual)
+            FROM production_plan_table
+            WHERE report_month IN ({ph})
+              AND item_name LIKE '%SMS%'
+            GROUP BY plant_name, item_name
+        """, months)
+
+        # Build SMS-wise production totals: {(plant, sms_id): total_cs_production}
+        sms_production = {}
+        for plant_name, item_name, cs_prod in cur.fetchall():
+            # Extract SMS identifier from item_name (e.g., "SMS-2 BLOOM" → "SMS-2")
+            sms_id = item_name.split()[0]  # Get first part
+            key = (plant_name, sms_id)
+            sms_production[key] = sms_production.get(key, 0) + (cs_prod or 0)
+
+        # Map shop names to CS production weights
         shop_cs_weights = {}
         for shop, plant in shop_to_plant.items():
-            # Extract SMS identifier: "BSP SMS-2" → "SMS-2"
-            shop_parts = shop.split()
-            sms_identifier = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
-
-            # Sum all items matching SMS identifier (e.g., "SMS-2", "SMS-2 BLOOM", "SMS-2 CCM-1")
-            cur.execute(f"""
-                SELECT SUM(month_actual)
-                FROM production_plan_table
-                WHERE report_month IN ({ph})
-                  AND (item_name = ? OR item_name LIKE ?)
-                  AND plant_name = ?
-            """, months + [sms_identifier, sms_identifier + " %", plant])
-
-            result = cur.fetchone()
-            shop_cs_weights[shop] = result[0] if result[0] else 0
+            sms_id = shop.split()[-1]  # Get SMS identifier from "BSP SMS-2" → "SMS-2"
+            shop_cs_weights[shop] = sms_production.get((plant, sms_id), 0)
 
         # Store metadata about production targets used
         production_metadata = {
@@ -2555,16 +2602,17 @@ async def recalculate_sail_weighted(payload: dict):
         plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
         bf_targets = {}
         for plant in plants:
-            plant_data = db.get_techno_plant_plan(plant, report_month)
+            plan_result = db.get_techno_plant_plan(plant, fy)
+            plant_data = plan_result.get('data', {}) if plan_result else {}
             if plant_data:
-                for param, value in plant_data.items():
-                    v = value.get('value') if isinstance(value, dict) else value
-                    if v is not None:
+                for param, param_obj in plant_data.items():
+                    value = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
+                    if value is not None:
                         if param not in bf_targets:
                             bf_targets[param] = []
                         weight = hm_weights.get(plant, 0)
                         if weight:
-                            bf_targets[param].append((v, weight))
+                            bf_targets[param].append((value, weight))
 
         # Calculate weighted averages for BF params with calculation details
         sail_bf = {}
@@ -2614,7 +2662,7 @@ async def recalculate_sail_weighted(payload: dict):
             "DSP SMS",
             "RSP SMS-1", "RSP SMS-2",
             "BSL SMS-1", "BSL SMS-2",
-            "ISP SMS-1",
+            "ISP SMS",
         ]
 
         # Get SMS targets and calculate weighted avg by shop-wise CS production
@@ -2623,8 +2671,9 @@ async def recalculate_sail_weighted(payload: dict):
             sms_targets[param] = []
             for shop in sms_shops:
                 plant = shop.split()[0]
-                # Get shop-level data from techno_plan
-                shop_data = db.get_techno_plan(plant, report_month)
+                # Get shop-level data from techno_plan for this FY
+                plan_result = db.get_techno_plant_plan(plant, fy)
+                shop_data = plan_result.get('data', {}) if plan_result else {}
                 weight = shop_cs_weights.get(shop, 0)
 
                 if isinstance(shop_data, dict):
@@ -2640,7 +2689,7 @@ async def recalculate_sail_weighted(payload: dict):
             "DSP SMS": "DSP",
             "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
             "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS-1": "ISP",
+            "ISP SMS": "ISP",
         }
 
         for param, values in sms_targets.items():
@@ -2684,13 +2733,17 @@ async def recalculate_sail_weighted(payload: dict):
 
         conn.close()
 
-        # Save computed SAIL values
-        db.save_sail_techno_plan(report_month, {**sail_bf, **sail_sms})
+        # Save computed SAIL values in {param: {value, unit}} format
+        computed_sail = {}
+        for param, value in {**sail_bf, **sail_sms}.items():
+            computed_sail[param] = {"value": value, "unit": ""}
+
+        db.save_sail_techno_plan(fy, computed_sail, is_user_supplied=False,
+                                calculated_json=computed_sail, calculation_method={})
 
         return {
             "status": "success",
             "fy": fy,
-            "report_month": report_month,
             "sail_bf": sail_bf,
             "sail_sms": sail_sms,
             "bf_calculations": bf_calc_steps,
@@ -2709,7 +2762,6 @@ async def get_techno_summary(fy: str = Query("2026-27")):
     """
     try:
         fy_year = int(fy.split("-")[0])
-        report_month = f"{fy_year}-03"
 
         conn = sqlite3.connect(db.DB_PATH)
         cur = conn.cursor()
@@ -2718,9 +2770,17 @@ async def get_techno_summary(fy: str = Query("2026-27")):
         plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
         bf_data = {}
         for plant in plants:
-            plant_data = db.get_techno_plant_plan(plant, report_month)
-            if plant_data:
-                bf_data[plant] = plant_data
+            plan_result = db.get_techno_plant_plan(plant, fy)
+            plan_data = plan_result.get('data', {}) if plan_result else {}
+            if plan_data:
+                # Extract values from {param: {value, unit}} format
+                formatted_data = {}
+                for param, param_obj in plan_data.items():
+                    if isinstance(param_obj, dict):
+                        formatted_data[param] = param_obj
+                    else:
+                        formatted_data[param] = {"value": param_obj, "unit": ""}
+                bf_data[plant] = formatted_data
 
         # Get all SMS shops and their targets
         sms_shops = [
@@ -2728,17 +2788,19 @@ async def get_techno_summary(fy: str = Query("2026-27")):
             "DSP SMS",
             "RSP SMS-1", "RSP SMS-2",
             "BSL SMS-1", "BSL SMS-2",
-            "ISP SMS-1",
+            "ISP SMS",
         ]
         sms_data = {}
         for shop in sms_shops:
             plant = shop.split()[0]
-            shop_data = db.get_techno_plan(plant, report_month)
+            shop_result = db.get_techno_plan(plant, fy, shop)
+            shop_data = shop_result.get('data', {}) if shop_result else {}
             if shop_data:
                 sms_data[shop] = shop_data
 
         # Get SAIL targets
-        sail_data = db.get_sail_techno_plan(report_month)
+        sail_result = db.get_sail_techno_plan(fy)
+        sail_data = sail_result.get('data', {}) if sail_result else {}
 
         # Get production data for context
         months = (
@@ -2763,7 +2825,7 @@ async def get_techno_summary(fy: str = Query("2026-27")):
             "DSP SMS": "DSP",
             "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
             "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS-1": "ISP",
+            "ISP SMS": "ISP",
         }
         shop_cs_weights = {}
         for shop, plant in shop_to_plant.items():
@@ -2798,7 +2860,7 @@ async def get_techno_summary(fy: str = Query("2026-27")):
 
 
 @app.get("/api/sail-performance-summary")
-async def get_sail_performance_summary(fy: str = Query("2026-27"), report_month: str = Query("")):
+async def get_sail_performance_summary(fy: str = Query("2026-27")):
     """
     Get SAIL performance summary with 5 key parameters:
     - Coke Rate (weighted avg by HM)
@@ -2809,8 +2871,6 @@ async def get_sail_performance_summary(fy: str = Query("2026-27"), report_month:
     """
     try:
         fy_year = int(fy.split("-")[0])
-        if not report_month:
-            report_month = f"{fy_year}-03"
 
         conn = sqlite3.connect(db.DB_PATH)
         cur = conn.cursor()
@@ -2837,7 +2897,7 @@ async def get_sail_performance_summary(fy: str = Query("2026-27"), report_month:
             "DSP SMS": "DSP",
             "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
             "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS-1": "ISP",
+            "ISP SMS": "ISP",
         }
         shop_cs_weights = {}
         for shop, plant in shop_to_plant.items():
@@ -2868,17 +2928,18 @@ async def get_sail_performance_summary(fy: str = Query("2026-27"), report_month:
         # Get BF targets by plant
         bf_data = {}
         for plant in plants:
-            plant_data = db.get_techno_plant_plan(plant, report_month)
-            if plant_data:
-                bf_data[plant] = plant_data
+            plan_result = db.get_techno_plant_plan(plant, fy)
+            plan_data = plan_result.get('data', {}) if plan_result else {}
+            if plan_data:
+                bf_data[plant] = plan_data
 
         # Calculate weighted averages for Coke Rate, CDI, Fuel Rate (by HM)
         for param in ['Coke Rate', 'CDI']:
             values = []
             for plant, data in bf_data.items():
-                val = data.get(param)
+                param_obj = data.get(param)
+                val = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
                 if val is not None:
-                    v = val.get('value') if isinstance(val, dict) else val
                     weight = hm_weights.get(plant, 0)
                     if v is not None and weight:
                         values.append((v, weight))

@@ -53,7 +53,7 @@ _ITEM_MAP_DEFAULT = [
     ("pig iron",           "Pig Iron",             True),
     ("crude steel",        "Total Crude Steel",    True),
     ("bottom pouring",     "BOTTOM_POURING_INGOT", True),
-    ("concast steel",      "Total Caster",         True),
+    ("concast steel",      "SMS Total Caster",     True),
     ("cc billet",          "BILLET Caster",        True),
     ("cc bloom",           "Bloom Caster ",        True),   # trailing space matches DB
     ("brc bloom",          "BRC",                  True),

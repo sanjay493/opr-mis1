@@ -120,6 +120,21 @@ async def extract_techno(
             except Exception as e:
                 print(f"Warning: Could not save {rec['unit']}: {e}")
 
+        # AUTO-TRIGGER: Calculate and store SAIL actuals after extraction completes
+        sail_calc_status = "pending"
+        try:
+            from page_techno import calculate_and_store_sail_actuals
+            sail_result = calculate_and_store_sail_actuals(report_month)
+            if sail_result['success']:
+                sail_calc_status = "completed"
+                print(f"✓ SAIL actuals auto-calculated for {report_month}")
+            else:
+                sail_calc_status = "failed"
+                print(f"⚠ SAIL calculation failed: {sail_result['message']}")
+        except Exception as e:
+            sail_calc_status = "error"
+            print(f"⚠ Error auto-calculating SAIL: {e}")
+
         return {
             "status": "ok",
             "plant": plant,
@@ -128,6 +143,7 @@ async def extract_techno(
             "units_extracted": len(records),
             "units_saved": saved_count,
             "units": [rec['unit'] for rec in records],
+            "sail_actuals": sail_calc_status,
         }
 
     except HTTPException:
