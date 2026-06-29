@@ -1621,16 +1621,16 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         }
 
     def unit_section(param_name, unit_str, src_units, src_key):
-        """One row per plant using BF_Shop data only (shop-level, not furnace-wise)."""
+        """One row per plant. Uses BF_Shop (shop-level) only."""
         if isinstance(src_units, str):
             src_units = [src_units]
         rows = []
         for p in plants_with_data:
             p_data = store.get((p, report_month), {})
-            # Use only BF_Shop, not furnace fallback
+            # Use BF_Shop only (shop-level, no furnace fallback)
             src_unit = "BF_Shop" if p_data.get("BF_Shop") else None
             if not src_unit:
-                continue
+                continue  # Skip if no BF_Shop data available
 
             # Fetch plan data from techno_plan_fy table
             plan_data = db.get_techno_plant_plan(p, target_fy)
