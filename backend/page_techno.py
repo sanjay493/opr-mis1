@@ -1636,8 +1636,12 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             plan_data = db.get_techno_plant_plan(p, target_fy)
             plan_value = None
             if plan_data and 'data' in plan_data and param_name in plan_data['data']:
-                # Plan data is stored in 'data' key
-                plan_value = plan_data['data'][param_name]
+                # Plan data is stored as {"value": X, "unit": ""}
+                val = plan_data['data'][param_name]
+                if isinstance(val, dict) and 'value' in val:
+                    plan_value = val['value']
+                else:
+                    plan_value = val
 
             rows.append(_build_row(
                 p, unit_str,
@@ -1669,7 +1673,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
                 # Fetch plan data from techno_plan table for SMS shops
                 shop_name = f"{p} {su}".replace("SMS", "SMS")  # Normalize shop name
-                plan_data = db.get_techno_plan(p, plan_month)
+                plan_data = db.get_techno_plan(p, target_fy, su)
                 plan_value = None
                 if plan_data and param_name in plan_data:
                     val = plan_data[param_name]
@@ -1707,8 +1711,9 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                     ))
         return {"label": param_name, "rows": rows}
 
-    # Fetch SAIL plan data
-    sail_plan_data = db.get_sail_techno_plan(report_month)
+    # Fetch SAIL plan data from techno_plan_fy (where plant_name='SAIL')
+    sail_plan_fetch = db.get_techno_plant_plan('SAIL', target_fy)
+    sail_plan_data = sail_plan_fetch.get('data', {}) if sail_plan_fetch else {}
 
     raw_sections = [
         unit_section("Coal to Hot Metal",           "kg/kg",      "General",   "coal_to_hm"),
@@ -1736,7 +1741,11 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         sail_plan_value = None
         if sail_plan_data and param_name in sail_plan_data:
             val = sail_plan_data[param_name]
-            sail_plan_value = val if isinstance(val, (int, float)) else None
+            # Handle both direct values and dict with 'value' key
+            if isinstance(val, dict) and 'value' in val:
+                sail_plan_value = val['value']
+            elif isinstance(val, (int, float)):
+                sail_plan_value = val
 
         # Add SAIL row to section
         sail_row = {
