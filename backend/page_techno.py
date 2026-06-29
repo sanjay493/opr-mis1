@@ -1620,15 +1620,14 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         }
 
     def unit_section(param_name, unit_str, src_units, src_key):
-        """One row per plant.  src_units: single unit name OR list tried in order
-        (first unit with data for that plant wins).  Enables ISP BF-5 fallback
-        when no BF_Shop unit exists."""
+        """One row per plant using BF_Shop data only (shop-level, not furnace-wise)."""
         if isinstance(src_units, str):
             src_units = [src_units]
         rows = []
         for p in plants_with_data:
             p_data = store.get((p, report_month), {})
-            src_unit = next((u for u in src_units if p_data.get(u)), None)
+            # Use only BF_Shop, not furnace fallback
+            src_unit = "BF_Shop" if p_data.get("BF_Shop") else None
             if not src_unit:
                 continue
 
@@ -1636,8 +1635,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             plan_data = db.get_techno_plant_plan(p, plan_month)
             plan_value = None
             if plan_data and param_name in plan_data:
-                val = plan_data[param_name]
-                plan_value = val.get('value') if isinstance(val, dict) else val
+                # Plan data is stored directly as number, not in a dict
+                plan_value = plan_data[param_name]
 
             rows.append(_build_row(
                 p, unit_str,
@@ -1652,9 +1651,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             ))
         return {"label": param_name, "rows": rows}
 
-    # BF_Shop is preferred (shop average); fall back to individual furnace units
-    # for plants that publish per-furnace only (e.g. ISP has BF-5, no BF_Shop)
-    _BF_UNITS = ["BF_Shop", "BF-5", "BF-4", "BF-2", "BF-1", "BF-3"]
+    # Use BF_Shop only (shop-level aggregate, not individual furnaces)
+    _BF_UNITS = ["BF_Shop"]
 
     # SMS unit scan order — covers RSP/BSP (SMS-1/2/3), ISP/DSP (SMS), BSL (SMS-I/II)
     _SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS", "SMS-I", "SMS-II"]
