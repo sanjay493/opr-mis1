@@ -1566,8 +1566,9 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     ytd        = db.get_ytd_months(report_month)
     cply_month = db.get_cply_month(report_month)
 
-    # For plan data, use March of target FY (e.g., 2026-03 for FY 2026-27)
-    plan_month = f"{fy}-03"
+    # For plan data, use FY format (e.g., "2026-27" for current FY)
+    # This is used to fetch from techno_plan_fy table
+    target_fy = f"{fy}-{(fy + 1) % 100:02d}"
 
     # March month for past FYs: till_month of March = full-year cumulative
     # FY (fy-1) ends March of year fy; FY (fy-2) ends March of year fy-1; etc.
@@ -1631,12 +1632,12 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             if not src_unit:
                 continue
 
-            # Fetch plan data from techno_plant_plan table
-            plan_data = db.get_techno_plant_plan(p, plan_month)
+            # Fetch plan data from techno_plan_fy table
+            plan_data = db.get_techno_plant_plan(p, target_fy)
             plan_value = None
-            if plan_data and param_name in plan_data:
-                # Plan data is stored directly as number, not in a dict
-                plan_value = plan_data[param_name]
+            if plan_data and 'data' in plan_data and param_name in plan_data['data']:
+                # Plan data is stored in 'data' key
+                plan_value = plan_data['data'][param_name]
 
             rows.append(_build_row(
                 p, unit_str,
