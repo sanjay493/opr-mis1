@@ -1707,6 +1707,9 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                     ))
         return {"label": param_name, "rows": rows}
 
+    # Fetch SAIL plan data
+    sail_plan_data = db.get_sail_techno_plan(report_month)
+
     raw_sections = [
         unit_section("Coal to Hot Metal",           "kg/kg",      "General",   "coal_to_hm"),
         unit_section("Coke Rate",                   "kg/thm",     _BF_UNITS,   "coke_rate"),
@@ -1721,7 +1724,37 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         sms_section ("TMI",                         "kg/tcs",     None,  tmi=True),
         unit_section("Specific Energy Consumption", "Gcal/tcs",   "General",   "specific_energy_consumption"),
     ]
-    sections = [s for s in raw_sections if s["rows"]]
+
+    # Add SAIL row to each section
+    sections_with_sail = []
+    for section in raw_sections:
+        if not section["rows"]:
+            continue
+
+        param_name = section["label"]
+        # Get SAIL plan value
+        sail_plan_value = None
+        if sail_plan_data and param_name in sail_plan_data:
+            val = sail_plan_data[param_name]
+            sail_plan_value = val if isinstance(val, (int, float)) else None
+
+        # Add SAIL row to section
+        sail_row = {
+            "label": "SAIL",
+            "unit": section["rows"][0]["unit"] if section["rows"] else "",
+            "fy3": "",
+            "fy2": "",
+            "fy1": "",
+            "target": _fmt(sail_plan_value) if sail_plan_value else "",
+            "months": [""] * len(section["rows"][0].get("months", [])),
+            "cply": "",
+            "cum": "",
+            "cum_cply": "",
+        }
+        section["rows"].append(sail_row)
+        sections_with_sail.append(section)
+
+    sections = sections_with_sail
 
     return {
         "title":          "MAJOR TECHNO-ECONOMIC PARAMETERS",
