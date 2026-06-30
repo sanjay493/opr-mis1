@@ -86,7 +86,10 @@ export default function GlobalNavbar() {
             marginLeft: '48px'
           }}>
             {navItems.map((item, idx) => (
-              <div key={idx} style={{ position: 'relative' }}>
+              <div key={idx} style={{ position: 'relative', paddingBottom: item.submenu ? '8px' : '0' }}
+                onMouseEnter={() => item.submenu && setOpenDropdown(idx)}
+                onMouseLeave={() => item.submenu && setOpenDropdown(null)}
+              >
                 {item.submenu ? (
                   <div
                     style={{
@@ -100,8 +103,6 @@ export default function GlobalNavbar() {
                       color: openDropdown === idx ? '#38bdf8' : '#cbd5e1',
                       backgroundColor: openDropdown === idx ? 'rgba(2, 132, 199, 0.1)' : 'transparent'
                     }}
-                    onMouseEnter={() => setOpenDropdown(idx)}
-                    onMouseLeave={() => setOpenDropdown(null)}
                   >
                     <span>{item.icon}</span>
                     <span style={{ fontSize: '10pt', fontWeight: '600' }}>{item.label}</span>
@@ -155,7 +156,6 @@ export default function GlobalNavbar() {
                     position: 'absolute',
                     top: '100%',
                     left: '0',
-                    marginTop: '8px',
                     backgroundColor: '#1e293b',
                     border: '1px solid #334155',
                     borderRadius: '8px',
@@ -163,8 +163,6 @@ export default function GlobalNavbar() {
                     minWidth: '220px',
                     boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)'
                   }}
-                  onMouseEnter={() => setOpenDropdown(idx)}
-                  onMouseLeave={() => setOpenDropdown(null)}
                   >
                     {item.submenu.map((subitem, subidx) => (
                       <Link key={subidx} href={subitem.link} style={{ textDecoration: 'none' }}>

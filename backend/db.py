@@ -223,11 +223,11 @@ def get_fy_for_month(report_month: str) -> str:
         y, m = int(report_month[:4]), int(report_month[5:7])
     except (ValueError, IndexError):
         return report_month
-    # FY starts Apr (month 4), so Apr-Dec of year Y → FY Y-Y+1, Jan-Mar of year Y → FY Y-1-Y
+    # FY starts Apr (month 4), so Apr-Dec of year Y → FY Y-(Y+1), Jan-Mar of year Y → FY (Y-1)-Y
     if m >= 4:
-        return f"{y}-{y+1}"
+        return f"{y}-{(y+1) % 100:02d}"
     else:
-        return f"{y-1}-{y}"
+        return f"{y-1}-{y % 100:02d}"
 
 
 def get_cply_month(report_month: str) -> str:

@@ -88,6 +88,7 @@ function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, plant, a
         <input ref={inputRef} type="file" accept={accept}
           onChange={e => { setFile(e.target.files[0]); setStatus(null); }}
           style={{ fontSize: 11, flex: 1 }}
+          suppressHydrationWarning
         />
         <button onClick={handleExtract} disabled={!file || busy}
           style={{

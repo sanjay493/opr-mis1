@@ -2671,8 +2671,7 @@ async def recalculate_sail_targets(payload: dict):
         # Convert report_month to FY if fy not provided
         if not fy and report_month:
             from db import get_fy_for_month
-            fy_year = get_fy_for_month(report_month)
-            fy = f"{fy_year}-{fy_year + 1}"
+            fy = get_fy_for_month(report_month)
 
         if not fy:
             raise ValueError("fy or report_month is required")
