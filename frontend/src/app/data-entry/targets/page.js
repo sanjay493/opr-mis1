@@ -15,6 +15,7 @@ export default function TechnoTargetsPage() {
   const [plantTargets, setPlantTargets] = useState({});
   const [smsTargets, setSmsTargets] = useState({});
   const [sailTargets, setSailTargets] = useState({});
+  const [sailMetadata, setSailMetadata] = useState({});
   const [edits, setEdits] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -50,7 +51,16 @@ export default function TechnoTargetsPage() {
       setSmsShops(paramsData.sms_shops || []);
       setPlantTargets(plantData.plants || {});
       setSmsTargets(smsData.sms_shops || {});
-      setSailTargets(sailData.targets || {});
+
+      // Extract SAIL targets and metadata
+      const sailTargetData = sailData.targets?.data || sailData.targets || {};
+      setSailTargets(sailTargetData);
+      setSailMetadata({
+        is_user_supplied: sailData.is_user_supplied || false,
+        created_by: sailData.created_by || '',
+        calculated: sailData.calculated || {},
+        calculation_method: sailData.calculation_method || {}
+      });
 
       // Initialize edits
       const initialEdits = {};
@@ -64,7 +74,7 @@ export default function TechnoTargetsPage() {
           initialEdits[`sms|${shop}|${param}`] = value?.toString() || '';
         });
       });
-      Object.entries(sailData.targets || {}).forEach(([param, value]) => {
+      Object.entries(sailTargetData || {}).forEach(([param, value]) => {
         initialEdits[`sail|${param}`] = value?.toString() || '';
       });
       setEdits(initialEdits);
@@ -202,7 +212,12 @@ export default function TechnoTargetsPage() {
           fetch(`${API_BASE_URL}/api/techno-sail-targets`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fy, targets: sailData }),
+            body: JSON.stringify({
+              fy,
+              targets: sailData,
+              is_user_supplied: true,
+              created_by: "web-user"
+            }),
           })
         );
       }
@@ -222,6 +237,10 @@ export default function TechnoTargetsPage() {
       setPlantTargets(plantData);
       setSmsTargets(smsData);
       setSailTargets(sailData);
+      // Update metadata to show values are now user-supplied
+      if (Object.keys(sailData).length > 0) {
+        setSailMetadata(prev => ({ ...prev, is_user_supplied: true, created_by: 'web-user' }));
+      }
     } catch (err) {
       setStatus({ type: 'error', text: `Save failed: ${err.message}` });
     } finally {
@@ -368,6 +387,7 @@ export default function TechnoTargetsPage() {
     const value = getValue(type, key1, key2);
     const saved = getSavedValue(type, key1, key2);
     const changed = isChanged(type, key1, key2);
+    const isUserSupplied = type === 'sail' && sailMetadata.is_user_supplied;
 
     return (
       <div style={{ position: 'relative' }}>
@@ -379,17 +399,20 @@ export default function TechnoTargetsPage() {
           readOnly={isDerived}
           style={{
             width: '100%', padding: '6px 8px', fontSize: '12pt', textAlign: 'right',
-            border: `1px solid ${isDerived ? '#cbd5e1' : changed ? '#fbbf24' : '#cbd5e1'}`,
+            border: `1px solid ${isDerived ? '#cbd5e1' : changed ? '#fbbf24' : isUserSupplied ? '#059669' : '#cbd5e1'}`,
             borderRadius: '4px',
-            backgroundColor: isDerived ? '#f5f5f5' : changed ? '#fffbeb' : saved ? '#f0fdf4' : '#fff',
-            color: isDerived ? '#9ca3af' : changed ? '#92400e' : saved ? '#065f46' : '#1e293b',
+            backgroundColor: isDerived ? '#f5f5f5' : changed ? '#fffbeb' : isUserSupplied ? '#d1fae5' : saved ? '#f0fdf4' : '#fff',
+            color: isDerived ? '#9ca3af' : changed ? '#92400e' : isUserSupplied ? '#065f46' : saved ? '#065f46' : '#1e293b',
             cursor: isDerived ? 'not-allowed' : 'text'
           }}
           placeholder="–"
-          title={isDerived ? 'Auto-calculated' : ''}
+          title={isDerived ? 'Auto-calculated' : isUserSupplied ? 'User-supplied (Overrides calculated)' : 'System calculated'}
         />
         {isDerived && (
           <span style={{ position: 'absolute', right: '8px', top: '6px', fontSize: '12pt', color: '#9ca3af', pointerEvents: 'none' }}>🔒</span>
+        )}
+        {isUserSupplied && !isDerived && (
+          <span style={{ position: 'absolute', right: '8px', top: '6px', fontSize: '12pt', pointerEvents: 'none' }}>✏️</span>
         )}
       </div>
     );
@@ -508,6 +531,69 @@ export default function TechnoTargetsPage() {
                 })}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* SAIL Values Metadata Panel */}
+        {sailMetadata && sailMetadata.is_user_supplied && (
+          <div style={{
+            marginBottom: '24px',
+            padding: '16px',
+            borderRadius: '8px',
+            backgroundColor: '#d1fae5',
+            border: '2px solid #10b981',
+            color: '#065f46'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '18pt' }}>✏️</span>
+              <h3 style={{ fontSize: '14pt', fontWeight: '700', margin: '0' }}>
+                SAIL Techno Values (USER-SUPPLIED)
+              </h3>
+            </div>
+            <p style={{ fontSize: '12pt', margin: '0 0 8px 0' }}>
+              These values have been manually entered and will override calculated values across all reports.
+            </p>
+            {sailMetadata.created_by && (
+              <p style={{ fontSize: '11pt', color: '#047857', margin: '4px 0', fontStyle: 'italic' }}>
+                Entered by: {sailMetadata.created_by}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Show calculated values for reference */}
+        {sailMetadata && sailMetadata.calculated && Object.keys(sailMetadata.calculated).length > 0 && (
+          <div style={{
+            marginBottom: '24px',
+            padding: '16px',
+            borderRadius: '8px',
+            backgroundColor: '#f0f9ff',
+            border: '1px solid #0284c7',
+            color: '#0c4a6e'
+          }}>
+            <h3 style={{ fontSize: '14pt', fontWeight: '700', margin: '0 0 12px 0' }}>
+              📊 Previously Calculated Values (Reference)
+            </h3>
+            <table style={{ width: '100%', fontSize: '12pt', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #bfdbfe' }}>
+                  <th style={{ padding: '8px', textAlign: 'left', fontWeight: '600' }}>Parameter</th>
+                  <th style={{ padding: '8px', textAlign: 'right', fontWeight: '600' }}>Calculated Value</th>
+                  <th style={{ padding: '8px', textAlign: 'left', fontWeight: '600' }}>Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(sailMetadata.calculated).map(([param, value]) => (
+                  <tr key={param} style={{ borderBottom: '1px solid #e0f2fe' }}>
+                    <td style={{ padding: '8px' }}>{param}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: '500' }}>{value}</td>
+                    <td style={{ padding: '8px', fontSize: '11pt', color: '#0c4a6e' }}>
+                      {sailMetadata.calculation_method?.[param] || 'weighted average'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 

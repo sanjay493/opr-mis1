@@ -708,29 +708,85 @@ def get_or_create_techno_param(group_code: str, section: str, row_label: str,
     return pid
 
 
+def save_techno_data_from_extraction(plant: str, report_month: str, extracted_rows: List[Dict[str, Any]],
+                                     unit: str = "BF_Shop", source_file: str = ""):
+    """Save extracted techno data to techno_data table.
+
+    Args:
+        plant: Plant name (BSP, DSP, RSP, BSL, ISP)
+        report_month: YYYY-MM format
+        extracted_rows: List of dicts with keys like {'parameter', 'actual', 'cum_actual', 'key', ...}
+        unit: Unit name (default "BF_Shop")
+        source_file: Source file name for audit trail
+    """
+    import json
+    from datetime import datetime
+
+    init_db()
+
+    # Build JSON structure from extracted rows
+    month_data = {}
+    till_month_data = {}
+
+    for row in extracted_rows:
+        if row.get('actual') is not None:
+            key = row.get('key') or row.get('parameter', '').lower().replace(' ', '_')
+            month_data[key] = row['actual']
+        if row.get('cum_actual') is not None:
+            key = row.get('key') or row.get('parameter', '').lower().replace(' ', '_')
+            till_month_data[key] = row['cum_actual']
+
+    techno_json = {
+        "month": month_data,
+        "till_month": till_month_data
+    }
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+
+    cursor.execute("""
+        INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(plant, report_month, unit) DO UPDATE SET
+            techno_json = excluded.techno_json,
+            source_file = excluded.source_file,
+            created_at = excluded.created_at
+    """, (plant, report_month, unit, json.dumps(techno_json), source_file, now))
+
+    conn.commit()
+    conn.close()
+
+
 def save_techno_value(month: str, param_id: int, actual: Optional[float],
                       till_month_actual: Optional[float] = None,
                       source_priority: int = 5):
     """Upsert one monthly techno actual into techno_actuals.
+    DEPRECATED: Use save_techno_data_from_extraction instead for new code.
 
     actual            : monthly value (last write wins).
     till_month_actual : plant-reported Apr→month cumulative; existing value
                         is preserved when None is passed (don't clear stored YTD).
     source_priority   : informational only (5=extractor/manual, 4=computed).
     """
+    # Silently skip if techno_actuals table doesn't exist (new schema uses techno_data)
     source = 'excel' if source_priority >= 5 else 'computed'
     init_db()
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        INSERT INTO techno_actuals (report_month, param_id, actual, till_month_actual, source)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(report_month, param_id) DO UPDATE SET
-            actual            = excluded.actual,
-            till_month_actual = COALESCE(excluded.till_month_actual, till_month_actual),
-            source            = excluded.source
-    """, (month, param_id, actual, till_month_actual, source))
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("""
+            INSERT INTO techno_actuals (report_month, param_id, actual, till_month_actual, source)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, param_id) DO UPDATE SET
+                actual            = excluded.actual,
+                till_month_actual = COALESCE(excluded.till_month_actual, till_month_actual),
+                source            = excluded.source
+        """, (month, param_id, actual, till_month_actual, source))
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError:
+        # techno_actuals table doesn't exist - skip
+        pass
 
 
 def save_techno_monthly(param_id: int, report_month: str, actual: Optional[float],

@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
+import BSLBFTechnoExtractor from '@/components/BSLBFTechnoExtractor';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
 
@@ -222,33 +223,32 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         </div>
       )}
 
-      {/* BSL: two file types — Techno Excel + BF Performance PDF */}
+      {/* BSL: Show ONLY the unified extraction table (no separate data display) */}
       {isBsl && (
-        <div style={{
-          marginBottom: 16, padding: '12px 14px',
-          background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 10 }}>
-            BSL Techno Upload — upload Techno Excel and/or BF Performance PDF (both merged automatically)
+        <div>
+          <div style={{
+            marginBottom: 16, padding: '12px 14px',
+            background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 10 }}>
+              BSL Techno Upload — upload Techno Excel and/or BF Performance PDF (both merged automatically)
+            </div>
+            <ExtractRow
+              label="BSL Techno Excel (.xls/.xlsx)"
+              endpoint="/api/techno/extract"
+              plant="BSL"
+              reportMonth={reportMonth}
+              apiBase={apiBase}
+              onSuccess={loadData}
+              accent="#166534"
+            />
           </div>
-          <ExtractRow
-            label="BSL Techno Excel (.xls/.xlsx)"
-            endpoint="/api/techno/extract"
-            plant="BSL"
+
+          {/* Unified BSL BF Performance Extractor - ONLY TABLE (no separate data display below) */}
+          <BSLBFTechnoExtractor
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#166534"
-          />
-          <ExtractRow
-            label="BSL BF Performance PDF"
-            endpoint="/api/techno/extract"
-            plant="BSL"
-            reportMonth={reportMonth}
-            apiBase={apiBase}
-            onSuccess={loadData}
-            accent="#15803d"
-            accept=".pdf"
           />
         </div>
       )}
@@ -278,7 +278,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         </div>
       )}
 
-      {!loading && units.length > 0 && (
+      {!loading && units.length > 0 && !isBsl && (
         <div style={{ display: 'flex', gap: 0, border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', minHeight: 400 }}>
           {/* Unit list (left) */}
           <div style={{ width: 160, borderRight: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}>

@@ -307,6 +307,11 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
       <div>
         <div style={{ fontWeight: '700', fontSize: '0.95em', marginBottom: '3px' }}>
           SAIL Performance Summary - Key BF Parameters:
+          {data.sail_is_user_supplied && (
+            <span style={{ marginLeft: '12px', fontSize: '0.85em', color: '#059669', fontWeight: '600' }}>
+              ✏️ (User-supplied values)
+            </span>
+          )}
         </div>
         <table className="report-table" style={{ tableLayout: 'fixed', width: '100%' }}>
           <thead>

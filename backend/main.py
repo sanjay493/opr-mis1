@@ -28,7 +28,19 @@ from page_records import generate_records
 
 def _safe_te_table(month):
     try:
-        return generate_summary_te_table(month)
+        result = generate_summary_te_table(month)
+        # Get SAIL plan metadata to check if user-supplied
+        fy = int(month[:4])
+        m = int(month[5:7])
+        fy_year = fy if m >= 4 else fy - 1
+        fy_str = f"{fy_year}-{fy_year + 1}"
+        sail_plan_result = db.get_sail_techno_plan(fy_str)
+        is_user_supplied = sail_plan_result.get('is_user_supplied', False)
+
+        # Return with metadata if it's user-supplied
+        if is_user_supplied:
+            return {'te_table': result, 'sail_is_user_supplied': True}
+        return result
     except Exception:
         return []
 
@@ -169,7 +181,13 @@ def get_data(month: str = "2025-11"):
                 if page.get("page") == 3 or page.get("type") == "summary":
                     for row in page.get("production_table", []):
                         row["values"] = compute_item_row(month, row.get("item"))
-                    page["te_table"] = _safe_te_table(month)
+                    te_result = _safe_te_table(month)
+                    # Handle both dict and list returns (for backwards compatibility)
+                    if isinstance(te_result, dict) and 'te_table' in te_result:
+                        page["te_table"] = te_result['te_table']
+                        page["sail_is_user_supplied"] = te_result.get('sail_is_user_supplied', False)
+                    else:
+                        page["te_table"] = te_result
                     page["chart_data"] = _safe_chart_data(month)
                 if page.get("page") == 4 or page.get("type") == "page4_table":
                     page["rows"] = generate_page4_rows(month)
@@ -930,19 +948,24 @@ async def confirm_extraction(payload: dict):
 
             for r in payload.get("techno_rows", []):
                 # Legacy preview format: (plant_name, parameter_name) → look up param_id
-                cur.execute(
-                    "SELECT param_id FROM techno_param WHERE row_label=? AND param_name=?",
-                    (plant, r.get("parameter", "")),
-                )
-                row = cur.fetchone()
-                if row and r.get("month_actual") is not None:
-                    cur.execute("""
-                        INSERT INTO techno_actuals (report_month, param_id, actual, source)
-                        VALUES (?, ?, ?, 'excel')
-                        ON CONFLICT(report_month, param_id) DO UPDATE SET
-                            actual = excluded.actual, source = excluded.source
-                    """, (month, row[0], r["month_actual"]))
-                    saved_te += 1
+                # Note: techno_actuals table no longer exists - skip legacy extraction
+                try:
+                    cur.execute(
+                        "SELECT param_id FROM techno_param WHERE row_label=? AND param_name=?",
+                        (plant, r.get("parameter", "")),
+                    )
+                    row = cur.fetchone()
+                    if row and r.get("month_actual") is not None:
+                        cur.execute("""
+                            INSERT INTO techno_actuals (report_month, param_id, actual, source)
+                            VALUES (?, ?, ?, 'excel')
+                            ON CONFLICT(report_month, param_id) DO UPDATE SET
+                                actual = excluded.actual, source = excluded.source
+                        """, (month, row[0], r["month_actual"]))
+                        saved_te += 1
+                except sqlite3.OperationalError:
+                    # techno_actuals table doesn't exist - skip
+                    pass
             conn.commit()
         finally:
             conn.close()
@@ -1051,14 +1074,25 @@ async def extract_techno_preview(
     month: str = Form(...),
 ):
     """Extract techno parameters from an uploaded plant report.
-    Returns a preview only — nothing is written to the DB."""
+    Returns a preview only — nothing is written to the DB.
+    Supports: BSL, BSP, DSP, RSP, ISP"""
     import shutil
     import tempfile
     import sys
 
-    if plant_name != "RSP":
+    # Map plant names to extractor modules
+    EXTRACTORS = {
+        "BSL": "excel_extractor_bsl",
+        "BSP": "excel_extractor_bsp",
+        "DSP": "excel_extractor_dsp",
+        "RSP": "excel_extractor_rsp_techno",
+        "ISP": "excel_extractor_isp",
+    }
+
+    if plant_name not in EXTRACTORS:
         raise HTTPException(status_code=400,
-                            detail=f"Techno extraction is currently only supported for RSP, not {plant_name}.")
+                            detail=f"Techno extraction not supported for {plant_name}. "
+                                  f"Supported plants: {', '.join(EXTRACTORS.keys())}")
 
     temp_dir = os.path.join(os.path.dirname(__file__), "temp")
     os.makedirs(temp_dir, exist_ok=True)
@@ -1069,15 +1103,28 @@ async def extract_techno_preview(
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
 
-        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
-        import excel_extractor_rsp_techno
-        result = excel_extractor_rsp_techno.extract_techno(tmp_path, month)
+        # Load the appropriate extractor for the plant
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+        extractor_module = __import__(EXTRACTORS[plant_name])
+
+        # Try extract_preview first (for BSL, other plants), then extract_techno (for RSP)
+        if hasattr(extractor_module, 'extract_preview'):
+            result = extractor_module.extract_preview(tmp_path, month)
+        elif hasattr(extractor_module, 'extract_techno'):
+            result = extractor_module.extract_techno(tmp_path, month)
+        else:
+            raise HTTPException(status_code=400,
+                               detail=f"Extractor for {plant_name} has no extract_preview or extract_techno method")
+
         result["file_name"] = file.filename
+        result["plant"] = plant_name
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Techno extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Techno extraction failed for {plant_name}: {str(e)}")
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:
@@ -1086,41 +1133,268 @@ async def extract_techno_preview(
                 pass
 
 
+@app.post("/api/bsl-bf-techno/preview")
+async def bsl_bf_techno_preview(
+    file: UploadFile = File(...),
+    month: str = Form(...),
+):
+    """Extract BSL BF Performance PDF and return editable data preview.
+
+    Returns cumulative (till-month) values for all parameters and furnaces.
+    """
+    import shutil
+    import tempfile
+    import sys
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename)[1]
+    tmp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        # Read PDF as text - prefer pdfplumber for better table extraction
+        pdf_text = None
+        if suffix.lower() == ".pdf":
+            try:
+                # Try pdfplumber first (better for tables)
+                import pdfplumber
+                with pdfplumber.open(tmp_path) as pdf:
+                    pdf_text = ""
+                    for page in pdf.pages:
+                        text = page.extract_text()
+                        if text:
+                            pdf_text += text + "\n"
+            except:
+                try:
+                    # Fallback to PyPDF2
+                    import PyPDF2
+                    with open(tmp_path, 'rb') as f:
+                        reader = PyPDF2.PdfReader(f)
+                        pdf_text = ""
+                        for page in reader.pages:
+                            text = page.extract_text()
+                            if text:
+                                pdf_text += text + "\n"
+                except:
+                    raise HTTPException(status_code=400, detail="Could not read PDF. Please install pdfplumber: pip install pdfplumber")
+        else:
+            raise HTTPException(status_code=400, detail="Please upload a PDF file for BSL BF Performance Report")
+
+        if not pdf_text or len(pdf_text.strip()) < 50:
+            raise HTTPException(status_code=400, detail="PDF appears to be empty or unreadable. Check file format.")
+
+        # Extract using BSL MER parser
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "techno_project")))
+        from bsl_mer_parser import extract_bsl_mer
+
+        # Extract data
+        records = extract_bsl_mer(pdf_text, report_month=month, filename=file.filename)
+
+        # Convert to editable format (cumulative values only)
+        editable_data = []
+
+        for record in records:
+            unit = record['unit']
+            techno_json = record['techno_json']
+            till_month = techno_json.get('till_month', {})
+
+            # Map to parameter names for UI
+            row = {
+                "id": f"{unit}_{month}",
+                "unit": unit,
+                "production": till_month.get("production"),
+                "bf_productivity": till_month.get("bf_productivity"),
+                "coke_rate": till_month.get("coke_rate"),
+                "cdi": till_month.get("cdi"),
+                "fuel_rate": till_month.get("fuel_rate"),
+                "hot_blast_temp": till_month.get("hot_blast_temp"),
+                "o2_enrichment": till_month.get("o2_enrichment"),
+                "slag_rate": till_month.get("slag_rate"),
+            }
+            editable_data.append(row)
+
+        return {
+            "status": "success",
+            "month": month,
+            "file_name": file.filename,
+            "data": editable_data,
+            "total_records": len(editable_data),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"BSL BF Performance extraction failed: {str(e)}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+@app.post("/api/bsl-bf-techno/debug")
+async def bsl_bf_techno_debug(
+    file: UploadFile = File(...),
+    month: str = Form(...),
+):
+    """Debug endpoint: shows raw PDF content and extraction details."""
+    import shutil
+    import tempfile
+    import sys
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename)[1]
+    tmp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        # Read PDF
+        pdf_text = ""
+        try:
+            import pdfplumber
+            with pdfplumber.open(tmp_path) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        pdf_text += text + "\n"
+        except:
+            try:
+                import PyPDF2
+                with open(tmp_path, 'rb') as f:
+                    reader = PyPDF2.PdfReader(f)
+                    for page in reader.pages:
+                        text = page.extract_text()
+                        if text:
+                            pdf_text += text + "\n"
+            except:
+                raise HTTPException(status_code=400, detail="Could not read PDF")
+
+        # Find production section
+        prod_lines = []
+        prod_idx = pdf_text.find("PRODUCTION PERFORMANCE")
+        if prod_idx > 0:
+            qual_idx = pdf_text.find("QUALITY PARAMETERS", prod_idx)
+            if qual_idx < 0:
+                qual_idx = len(pdf_text)
+            prod_section = pdf_text[prod_idx:qual_idx]
+            prod_lines = prod_section.split("\n")[0:30]  # First 30 lines
+
+        return {
+            "file_name": file.filename,
+            "pdf_text_length": len(pdf_text),
+            "pdf_preview": pdf_text[0:500],  # First 500 chars
+            "production_section_preview": "\n".join(prod_lines),
+            "has_production_section": "PRODUCTION PERFORMANCE" in pdf_text,
+            "has_quality_section": "QUALITY PARAMETERS" in pdf_text,
+            "has_consumption_section": "Consumption" in pdf_text,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+
+
+@app.post("/api/bsl-bf-techno/save")
+async def bsl_bf_techno_save(payload: dict):
+    """Save edited BSL BF Performance techno data to database."""
+    month = payload.get("month")
+    data = payload.get("data", [])
+
+    if not month:
+        raise HTTPException(status_code=400, detail="Month is required")
+
+    if not data:
+        raise HTTPException(status_code=400, detail="No data to save")
+
+    try:
+        # Save each record to techno_data table
+        for row in data:
+            unit = row.get("unit")
+            if not unit:
+                continue
+
+            # Prepare JSON structure
+            techno_json = {
+                "month": {},  # Empty for now, only cumulative
+                "till_month": {
+                    "production": row.get("production"),
+                    "bf_productivity": row.get("bf_productivity"),
+                    "coke_rate": row.get("coke_rate"),
+                    "cdi": row.get("cdi"),
+                    "fuel_rate": row.get("fuel_rate"),
+                    "hot_blast_temp": row.get("hot_blast_temp"),
+                    "o2_enrichment": row.get("o2_enrichment"),
+                    "slag_rate": row.get("slag_rate"),
+                }
+            }
+
+            # Save to database
+            db.save_techno_data_from_extraction(
+                plant="BSL",
+                report_month=month,
+                unit=unit,
+                techno_json=techno_json
+            )
+
+        return {
+            "status": "success",
+            "message": f"Saved {len(data)} records for {month}",
+            "records_saved": len(data)
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to save data: {str(e)}")
+
+
 @app.post("/api/techno-entries")
 async def save_techno_entries(payload: dict):
     """Insert previously previewed techno rows into the DB (user-confirmed)."""
     month = payload.get("month")
     rows = payload.get("rows", [])
+    plant = payload.get("plant", "")
+    file_name = payload.get("file_name", "")
+
     if not month or not rows:
         raise HTTPException(status_code=400, detail="month and rows are required")
 
-    saved = 0
-    for r in rows:
-        if r.get("actual") is None and r.get("cum_actual") is None:
-            continue
-        pid = db.get_or_create_techno_param(
-            r.get("group_code", ""), r.get("section", ""), r.get("parameter", ""),
-            r.get("unit", ""), r.get("sort_order", 0))
-        db.save_techno_value(month, pid, r.get("actual"), r.get("cum_actual"))
-        saved += 1
+    # Filter out rows with no data
+    valid_rows = [r for r in rows if r.get("actual") is not None or r.get("cum_actual") is not None]
+    saved = len(valid_rows)
 
-    plant = payload.get("plant", "")
-    if saved:
-        db.log_extraction(plant, month, payload.get("file_name", ""), "techno",
-                          "techno_params", saved)
-    agg_written = 0
-    if plant in ("BSL", "DSP", "RSP", "BSP"):
-        try:
-            import sqlite3 as _sqlite3
-            from techno_aggregates import compute_bf_shop_averages as _bf_agg
-            _conn = _sqlite3.connect(db.DB_PATH)
-            agg_written = _bf_agg(_conn, month, plants=[plant])
-            _conn.close()
-        except Exception:
-            pass
+    if saved > 0 and plant:
+        # Save all rows to techno_data table in one call
+        db.save_techno_data_from_extraction(
+            plant=plant,
+            report_month=month,
+            extracted_rows=valid_rows,
+            unit="BF_Shop",
+            source_file=file_name
+        )
+        db.log_extraction(plant, month, file_name, "techno", "techno_params", saved)
+
     return {"status": "success", "saved": saved,
-            "message": (f"Inserted {saved} techno parameter values for {plant} {month}."
-                        + (f" Computed {agg_written} BF shop aggregate row(s)." if agg_written else ""))}
+            "message": f"Inserted {saved} techno parameter values for {plant} {month}."}
 
 
 # ---------------------------------------------------------------------------
@@ -1671,19 +1945,25 @@ async def get_techno_groups():
 @app.get("/api/techno-monthly-data")
 async def get_techno_monthly_data(group_code: str = Query(...), month: str = Query(...)):
     """Return all params for a group with their current monthly actual and till_month_actual."""
-    conn = sqlite3.connect(db.DB_PATH)
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT p.param_name, p.row_label, p.unit, p.param_id, g.sort_order,
-               a.actual, a.till_month_actual, a.source
-        FROM techno_param p
-        JOIN techno_param_group g ON p.param_id = g.param_id
-        LEFT JOIN techno_actuals a ON a.param_id = p.param_id AND a.report_month = ?
-        WHERE g.group_code = ?
-        ORDER BY g.sort_order, p.param_id
-    """, (month, group_code))
-    rows = cur.fetchall()
-    conn.close()
+    try:
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT p.param_name, p.row_label, p.unit, p.param_id, g.sort_order,
+                   a.actual, a.till_month_actual, a.source
+            FROM techno_param p
+            JOIN techno_param_group g ON p.param_id = g.param_id
+            LEFT JOIN techno_actuals a ON a.param_id = p.param_id AND a.report_month = ?
+            WHERE g.group_code = ?
+            ORDER BY g.sort_order, p.param_id
+        """, (month, group_code))
+        rows = cur.fetchall()
+        conn.close()
+    except sqlite3.OperationalError:
+        # Legacy schema not available - return empty results
+        rows = []
+        conn = sqlite3.connect(db.DB_PATH)
+        conn.close()
 
     sections_map = {}
     section_order = []
@@ -1727,12 +2007,16 @@ async def save_techno_manual(payload: dict):
         clear = r.get("clear", False)
 
         if clear:
-            conn = sqlite3.connect(db.DB_PATH)
-            conn.execute("DELETE FROM techno_actuals WHERE param_id=? AND report_month=?",
-                         (param_id, month))
-            conn.commit()
-            conn.close()
-            cleared += 1
+            try:
+                conn = sqlite3.connect(db.DB_PATH)
+                conn.execute("DELETE FROM techno_actuals WHERE param_id=? AND report_month=?",
+                             (param_id, month))
+                conn.commit()
+                conn.close()
+                cleared += 1
+            except sqlite3.OperationalError:
+                # techno_actuals table doesn't exist - skip
+                pass
             continue
 
         def _flt(x):
@@ -1793,42 +2077,47 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
 
     SMS_PARAMS = ["Hot Metal Consumption", "Scrap Consumption"]
 
-    conn = sqlite3.connect(db.DB_PATH)
-    cursor = conn.cursor()
-
     result = {"month": month, "sail_params": {}}
-
-    # First check if SAIL values exist in DB
-    cursor.execute(
-        """SELECT p.param_name, a.actual, a.till_month_actual
-           FROM techno_actuals a
-           JOIN techno_param p ON a.param_id = p.param_id
-           WHERE p.row_label = 'SAIL'
-             AND a.report_month = ?
-             AND p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')""",
-        (month,)
-    )
-
     db_values = {}
-    for param_name, actual, till_month in cursor.fetchall():
-        db_values[param_name] = (actual, till_month, "db")
-
-    # Get SMS shop values
-    cursor.execute(
-        """SELECT p.row_label, p.param_name, a.actual, a.till_month_actual
-           FROM techno_actuals a
-           JOIN techno_param p ON a.param_id = p.param_id
-           WHERE p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')
-             AND a.report_month = ?
-             AND p.row_label IN ({})""".format(','.join(['?' for _ in SMS_SHOPS])),
-        [month] + SMS_SHOPS
-    )
-
     sms_values = {}
-    for shop, param_name, actual, till_month in cursor.fetchall():
-        if param_name not in sms_values:
-            sms_values[param_name] = {}
-        sms_values[param_name][shop] = (actual, till_month)
+
+    try:
+        conn = sqlite3.connect(db.DB_PATH)
+        cursor = conn.cursor()
+
+        # First check if SAIL values exist in DB
+        cursor.execute(
+            """SELECT p.param_name, a.actual, a.till_month_actual
+               FROM techno_actuals a
+               JOIN techno_param p ON a.param_id = p.param_id
+               WHERE p.row_label = 'SAIL'
+                 AND a.report_month = ?
+                 AND p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')""",
+            (month,)
+        )
+
+        for param_name, actual, till_month in cursor.fetchall():
+            db_values[param_name] = (actual, till_month, "db")
+
+        # Get SMS shop values
+        cursor.execute(
+            """SELECT p.row_label, p.param_name, a.actual, a.till_month_actual
+               FROM techno_actuals a
+               JOIN techno_param p ON a.param_id = p.param_id
+               WHERE p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')
+                 AND a.report_month = ?
+                 AND p.row_label IN ({})""".format(','.join(['?' for _ in SMS_SHOPS])),
+            [month] + SMS_SHOPS
+        )
+
+        for shop, param_name, actual, till_month in cursor.fetchall():
+            if param_name not in sms_values:
+                sms_values[param_name] = {}
+            sms_values[param_name][shop] = (actual, till_month)
+        conn.close()
+    except sqlite3.OperationalError:
+        # Legacy schema not available - continue with empty values
+        pass
 
     # Get Crude Steel production (monthly and YTD)
     cursor.execute(
@@ -2046,6 +2335,7 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
       - plants: comma-separated plant codes (e.g., "BSP,RSP,DSP")
       - parameters: comma-separated parameter names
     """
+    import json
     try:
         if not plants or not parameters:
             raise HTTPException(status_code=400, detail="plants and parameters parameters required")
@@ -2056,27 +2346,21 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         if not plant_list or not param_list:
             raise HTTPException(status_code=400, detail="At least one plant and parameter required")
 
+        # Normalize parameter names to match database keys (lowercase, with underscores)
+        param_keys = [p.lower().replace(' ', '_') for p in param_list]
+
         conn = sqlite3.connect(db.DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Get techno data for selected plants and parameters
-        placeholders_plants = ','.join('?' * len(plant_list))
-        placeholders_params = ','.join('?' * len(param_list))
-
+        # Get techno data for selected plants from new techno_data table
+        placeholders = ','.join('?' * len(plant_list))
         cursor.execute(f"""
-            SELECT
-                tp.param_name,
-                tp.row_label as plant,
-                ta.report_month,
-                ta.actual,
-                ta.till_month_actual
-            FROM techno_actuals ta
-            JOIN techno_param tp ON ta.param_id = tp.param_id
-            WHERE tp.row_label IN ({placeholders_plants})
-              AND tp.param_name IN ({placeholders_params})
-            ORDER BY tp.param_name, tp.row_label, ta.report_month
-        """, plant_list + param_list)
+            SELECT plant, report_month, techno_json
+            FROM techno_data
+            WHERE plant IN ({placeholders})
+            ORDER BY plant, report_month
+        """, plant_list)
 
         rows = cursor.fetchall()
         conn.close()
@@ -2084,44 +2368,53 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         # Format data by plant and parameter
         data = {}
         for row in rows:
-            param = row['param_name']
             plant = row['plant']
             month = row['report_month']
-            value = row['actual']
+            try:
+                techno_json = json.loads(row['techno_json'])
+                month_data = techno_json.get('month', {})
 
-            if plant not in data:
-                data[plant] = {}
-            if param not in data[plant]:
-                data[plant][param] = {}
+                if plant not in data:
+                    data[plant] = {}
 
-            data[plant][param][month] = value
+                # Extract requested parameters
+                for param_name, param_key in zip(param_list, param_keys):
+                    if param_key in month_data:
+                        if param_name not in data[plant]:
+                            data[plant][param_name] = {}
+                        data[plant][param_name][month] = month_data[param_key]
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-        # For "All" plants, try to get SAIL consolidated values
-        # Also add SAIL data if not already included
-        if 'all' in [p.lower() for p in plant_list]:
-            # Fetch SAIL data
-            cursor.execute(f"""
-                SELECT
-                    tp.param_name,
-                    ta.report_month,
-                    ta.actual
-                FROM techno_actuals ta
-                JOIN techno_param tp ON ta.param_id = tp.param_id
-                WHERE tp.row_label = 'SAIL'
-                  AND tp.param_name IN ({placeholders_params})
-                ORDER BY tp.param_name, ta.report_month
-            """, param_list)
-
+        # For "All" plants or if SAIL not included, fetch SAIL consolidated data
+        if 'all' in [p.lower() for p in plant_list] or 'SAIL' in plant_list:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT report_month, techno_json
+                FROM techno_data
+                WHERE plant = 'SAIL'
+                ORDER BY report_month
+            """)
             sail_rows = cursor.fetchall()
+            conn.close()
+
             if 'SAIL' not in data:
                 data['SAIL'] = {}
+
             for row in sail_rows:
-                param = row['param_name']
                 month = row['report_month']
-                value = row['actual']
-                if param not in data['SAIL']:
-                    data['SAIL'][param] = {}
-                data['SAIL'][param][month] = value
+                try:
+                    techno_json = json.loads(row['techno_json'])
+                    month_data = techno_json.get('month', {})
+
+                    # Extract requested parameters
+                    for param_name, param_key in zip(param_list, param_keys):
+                        if param_key in month_data:
+                            if param_name not in data['SAIL']:
+                                data['SAIL'][param_name] = {}
+                            data['SAIL'][param_name][month] = month_data[param_key]
+                except (json.JSONDecodeError, TypeError):
+                    pass
 
         return {"data": data, "plants": plant_list, "parameters": param_list, "has_sail": 'SAIL' in data}
     except HTTPException:
@@ -2333,17 +2626,33 @@ async def get_techno_sail_targets(fy: str = Query("2026-27")):
 async def save_techno_sail_targets(payload: dict):
     """
     Save SAIL techno targets for a FY.
-    Payload: { fy: str, targets: {param: value} }
+    Payload: {
+      fy: str,
+      targets: {param: value},
+      is_user_supplied: bool (optional, default false),
+      created_by: str (optional, for audit trail)
+    }
     """
     try:
         fy = payload.get("fy", "")
         targets = payload.get("targets", {})
+        is_user_supplied = payload.get("is_user_supplied", False)
+        created_by = payload.get("created_by", "")
 
         if not fy:
             raise ValueError("fy is required")
 
-        db.save_sail_techno_plan(fy, targets)
-        return {"status": "success", "fy": fy}
+        db.save_sail_techno_plan(fy, targets, is_user_supplied=is_user_supplied, created_by=created_by)
+
+        if is_user_supplied and created_by:
+            print(f"[AUDIT] User '{created_by}' supplied SAIL targets for FY {fy}")
+
+        return {
+            "status": "success",
+            "fy": fy,
+            "is_user_supplied": is_user_supplied,
+            "created_by": created_by
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
