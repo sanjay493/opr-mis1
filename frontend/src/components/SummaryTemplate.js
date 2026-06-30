@@ -318,7 +318,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
             <tr>
               <th style={{ width: '20%', textAlign: 'left' }}>Parameter</th>
               <th style={{ width: '8%', textAlign: 'center' }}>Unit</th>
-              <th style={{ width: '11%', textAlign: 'center' }}>Target<br/>26-27</th>
+              <th style={{ width: '11%', textAlign: 'center' }}>{targetHeader}</th>
               <th style={{ width: '11%', textAlign: 'center' }}>{shortMonth}&#39;{shortYear}<br/>(Report)</th>
               <th style={{ width: '11%', textAlign: 'center' }}>{shortMonth}&#39;{shortPrevYear}<br/>(CPLY)</th>
               <th style={{ width: '13%', textAlign: 'center' }}>Apr-{shortMonth}&#39;{shortYear}<br/>(YTD)</th>
