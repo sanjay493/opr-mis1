@@ -672,6 +672,10 @@ def _extract_techno_3page_preview(wb, file_path: str, report_month: str) -> dict
     # Calculate TMI as HM Consumption + Scrap Consumption
     rows_out = calculate_tmi_consumption(rows_out)
 
+    # Calculate Sinter % in Burden and Pellet % in Burden
+    from techno_calc_utils import calculate_burden_percentages
+    calculate_burden_percentages(rows_out, db_month, plant_name="BSP")
+
     ok_count = sum(1 for r in rows_out if r["status"] == "ok")
     logger.info(
         "BSP 3-page-Tech preview: %d/%d rows ok for %s (col %s, cum col %s)",

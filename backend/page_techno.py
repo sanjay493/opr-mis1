@@ -173,6 +173,33 @@ def _fmt(v):
         s = f"{v:.3f}"
     return s.rstrip("0").rstrip(".") if "." in s else s
 
+
+def _fmt_param(v, param_name):
+    """Format value based on parameter type. Hide zero values.
+    - BF Productivity & Specific Energy Consumption: 2 decimal places
+    - Coal to Hot Metal: 3 decimal places
+    - Rest: 0 decimal places
+    """
+    if v is None or v == 0:
+        return ""
+
+    # Determine decimal places based on parameter
+    if param_name in ["BF Productivity", "Specific Energy Consumption"]:
+        decimal_places = 2
+    elif param_name == "Coal to Hot Metal":
+        decimal_places = 3
+    else:
+        decimal_places = 0
+
+    # Format the value
+    formatted = f"{v:.{decimal_places}f}"
+
+    # Remove trailing zeros except for required decimal places
+    if decimal_places > 0:
+        formatted = formatted.rstrip("0").rstrip(".")
+
+    return formatted
+
 # ---------------------------------------------------------------------------
 # Data access — techno_actuals JOIN techno_param
 # ---------------------------------------------------------------------------
@@ -890,7 +917,7 @@ def generate_summary_te_table(report_month: str) -> list:
     ytd        = db.get_ytd_months(report_month)
     cply_month = db.get_cply_month(report_month)
     cply_ytd   = [db.get_cply_month(m) for m in ytd]
-    fy_str = f"{fy}-{fy + 1}"  # e.g., "2026-27"
+    fy_str = f"{fy}-{(fy + 1) % 100:02d}"  # e.g., "2026-27"
 
     try:
         # Fetch SAIL plan data (from techno_plan_fy table)
@@ -1594,8 +1621,17 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         conn.close()
 
     _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+
+    # Include plants with actuals data OR with targets defined (but exclude SAIL - it's handled separately)
+    plants_from_data = {p for (p, rm) in store if rm == report_month and p != "SAIL"}
+    plants_with_targets = set()
+    for p in _PLANT_ORDER:
+        plan_data = db.get_techno_plant_plan(p, target_fy)
+        if plan_data and plan_data.get('data'):
+            plants_with_targets.add(p)
+
     plants_with_data = sorted(
-        {p for (p, rm) in store if rm == report_month},
+        plants_from_data | plants_with_targets,
         key=lambda p: _PLANT_ORDER.index(p) if p in _PLANT_ORDER else 99,
     )
 
@@ -1606,31 +1642,36 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         """Full-year value = till_month of March row for that FY."""
         return _gv(plant, march_rm, src_unit, src_key, "till_month")
 
-    def _build_row(label, unit_str, month_fn, cum_fn, cply_fn, fy1_fn, fy2_fn, fy3_fn, cum_cply_fn=None, target_fn=None):
+    def _build_row(label, unit_str, month_fn, cum_fn, cply_fn, fy1_fn, fy2_fn, fy3_fn, cum_cply_fn=None, target_fn=None, param_name=""):
         return {
             "label":  label,
             "unit":   unit_str,
-            "fy3":    _fmt(fy3_fn()),
-            "fy2":    _fmt(fy2_fn()),
-            "fy1":    _fmt(fy1_fn()),
-            "target": _fmt(target_fn()) if target_fn else "",
-            "months":    [_fmt(month_fn(m)) for m in ytd],
-            "cply":      _fmt(cply_fn()),
-            "cum":       _fmt(cum_fn()),
-            "cum_cply":  _fmt(cum_cply_fn()) if cum_cply_fn else "",
+            "fy3":    _fmt_param(fy3_fn(), param_name),
+            "fy2":    _fmt_param(fy2_fn(), param_name),
+            "fy1":    _fmt_param(fy1_fn(), param_name),
+            "target": _fmt_param(target_fn(), param_name) if target_fn else "",
+            "months":    [_fmt_param(month_fn(m), param_name) for m in ytd],
+            "cply":      _fmt_param(cply_fn(), param_name),
+            "cum":       _fmt_param(cum_fn(), param_name),
+            "cum_cply":  _fmt_param(cum_cply_fn(), param_name) if cum_cply_fn else "",
         }
 
     def unit_section(param_name, unit_str, src_units, src_key):
-        """One row per plant. Uses BF_Shop (shop-level) only."""
+        """One row per plant. Uses BF_Shop or plant-specific shop unit (shop-level) only."""
         if isinstance(src_units, str):
             src_units = [src_units]
         rows = []
         for p in plants_with_data:
             p_data = store.get((p, report_month), {})
-            # Use BF_Shop only (shop-level, no furnace fallback)
-            src_unit = "BF_Shop" if p_data.get("BF_Shop") else None
-            if not src_unit:
-                continue  # Skip if no BF_Shop data available
+            # Try BF_Shop first, then plant-specific unit names
+            src_unit = None
+            if p_data.get("BF_Shop"):
+                src_unit = "BF_Shop"
+            elif p_data.get(p):  # Try plant name as unit (e.g., "DSP", "BSL", "ISP")
+                src_unit = p
+            else:
+                # Plant may not have actuals but may have targets - use BF_Shop as default unit
+                src_unit = "BF_Shop"
 
             # Fetch plan data from techno_plan_fy table
             plan_data = db.get_techno_plant_plan(p, target_fy)
@@ -1653,6 +1694,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 fy3_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy3_march, _u, src_key),
                 cum_cply_fn  = lambda     _p=p, _u=src_unit: _gv(_p, cply_month,    _u, src_key, "till_month"),
                 target_fn    = lambda     _pv=plan_value: _pv,
+                param_name   = param_name,
             ))
         return {"label": param_name, "rows": rows}
 
@@ -1675,8 +1717,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 shop_name = f"{p} {su}".replace("SMS", "SMS")  # Normalize shop name
                 plan_data = db.get_techno_plan(p, target_fy, su)
                 plan_value = None
-                if plan_data and param_name in plan_data:
-                    val = plan_data[param_name]
+                if plan_data and 'data' in plan_data and param_name in plan_data['data']:
+                    val = plan_data['data'][param_name]
                     plan_value = val.get('value') if isinstance(val, dict) else val
 
                 if tmi:
@@ -1696,6 +1738,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                         fy3_fn      = lambda     _p=p: _tmi(_p, fy3_march, "till_month"),
                         cum_cply_fn = lambda     _p=p: _tmi(_p, cply_month,   "till_month"),
                         target_fn   = lambda     _pv=plan_value: _pv,
+                        param_name  = param_name,
                     ))
                 else:
                     rows.append(_build_row(
@@ -1708,12 +1751,15 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                         fy3_fn      = lambda     _p=p, _su=su: _fy_val(_p, fy3_march, _su, src_key),
                         cum_cply_fn = lambda     _p=p, _su=su: _gv(_p, cply_month,   _su, src_key, "till_month"),
                         target_fn   = lambda     _pv=plan_value: _pv,
+                        param_name  = param_name,
                     ))
         return {"label": param_name, "rows": rows}
 
     # Fetch SAIL plan data from techno_plan_fy (where plant_name='SAIL')
-    sail_plan_fetch = db.get_techno_plant_plan('SAIL', target_fy)
+    # Using get_sail_techno_plan to get both data and is_user_supplied flag
+    sail_plan_fetch = db.get_sail_techno_plan(target_fy)
     sail_plan_data = sail_plan_fetch.get('data', {}) if sail_plan_fetch else {}
+    sail_is_user_supplied = sail_plan_fetch.get('is_user_supplied', False) if sail_plan_fetch else False
 
     raw_sections = [
         unit_section("Coal to Hot Metal",           "kg/kg",      "General",   "coal_to_hm"),
@@ -1754,7 +1800,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             "fy3": "",
             "fy2": "",
             "fy1": "",
-            "target": _fmt(sail_plan_value) if sail_plan_value else "",
+            "target": _fmt_param(sail_plan_value, param_name) if sail_plan_value else "",
             "months": [""] * len(section["rows"][0].get("months", [])),
             "cply": "",
             "cum": "",
@@ -1779,6 +1825,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         "cum_label":      _cum_label(ytd),
         "cum_cply_label": _cum_label([db.get_cply_month(m) for m in ytd]),
         "sections":       sections,
+        "sail_is_user_supplied": sail_is_user_supplied,
     }
 
 

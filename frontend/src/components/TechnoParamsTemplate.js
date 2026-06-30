@@ -23,6 +23,7 @@ export default function TechnoParamsTemplate({ data }) {
     title, subtitle = '', sections = [], group = '',
     fy3_label = '', fy2_label = '', fy1_label = '', target_label = '',
     month_labels = [], cply_label = '', cum_label = '', cum_cply_label = '',
+    sail_is_user_supplied = false,
   } = data;
 
   // Mill pages (31-35): sections = mills, rows = params with individual units
@@ -61,6 +62,11 @@ export default function TechnoParamsTemplate({ data }) {
       {/* Page title */}
       <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 1 }}>
         {title}
+        {sail_is_user_supplied && group === 'MAJOR' && (
+          <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: '#059669', fontWeight: '600' }}>
+            ✏️ (SAIL: User-supplied)
+          </span>
+        )}
       </div>
       {subtitle && (
         <div style={{ textAlign: 'center', fontWeight: 600, fontSize: '0.76rem', marginBottom: 4 }}>

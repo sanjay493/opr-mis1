@@ -893,6 +893,17 @@ def _extract_delhi_report_stock(wb, db_month: str) -> list:
     ]
 
 
+def _calculate_burden_percentages(rows_out: list, report_month: str):
+    """
+    Calculate Sinter % in Burden and Pellet % in Burden from consumption values.
+    Delegates to shared utility function.
+    """
+    import sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from techno_calc_utils import calculate_burden_percentages as calc_burden
+    calc_burden(rows_out, report_month, plant_name="BSL")
+
+
 def _extract_dpr_preview(wb, report_month: str) -> dict:
     """Preview BSL DPR Mail report (sheet 'DPR') — no DB writes."""
     ws = wb["DPR"]
@@ -1097,6 +1108,9 @@ def extract_preview(file_path: str, report_month: str) -> dict:
             "No numeric values found at any of the expected cell locations. "
             "Verify this is a BSL TECHNO <MON><YYYY>.XLS file with Sheet1, Sheet2, and SMS-I present."
         )
+
+    # Calculate Sinter % in Burden and Pellet % in Burden from raw material consumption
+    _calculate_burden_percentages(rows_out, db_month)
 
     return {
         "source_type":       "BSL Techno-Economic Parameters",
