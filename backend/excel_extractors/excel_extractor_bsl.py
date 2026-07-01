@@ -664,7 +664,7 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     lines = full_text.splitlines()
 
     def _monthly(cell: str):
-        """Parse 'X / Y' → float Y (monthly value). Returns None if no slash."""
+        """Parse 'X / Y' → float Y (last-day/monthly format: production table). Returns None if no slash."""
         m = _re.search(r'[\d.*]+\s*/\s*([\d.]+)', cell.strip())
         if m:
             try:
@@ -673,9 +673,24 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
                 return None
         return None
 
+    def _first_val(cell: str):
+        """Parse 'X / Y' → float X (month/FY-cumulative format: fuel & raw tables). Parses plain value if no slash."""
+        cell = cell.strip()
+        m = _re.match(r'(-?[\d.]+)\s*/', cell)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                return None
+        try:
+            return float(cell)
+        except ValueError:
+            return None
+
     def _is_repair(line: str) -> bool:
-        lu = line.upper()
-        return 'UNDER' in lu or 'CAPITAL REPAIR' in lu
+        # BSL PDF spells it "U N D E R  C A P I T A L  R E P A I R" with spaces; strip them before matching
+        lu_nospace = line.upper().replace(' ', '')
+        return 'UNDER' in lu_nospace and 'CAPITAL' in lu_nospace
 
     def _parse_row(line: str):
         """Split pipe-delimited line, strip cells, return list."""
@@ -750,19 +765,10 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     rows_out = []
     sort_idx = 0
 
-    # Add per-furnace CDI + monthly HM weight (for YTD weighted avg on page 29)
-    for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'),
-                        ('BF-4', 'BSL BF-4'), ('BF-5', 'BSL BF-5')]:
-        fuel_cols = TABLE_DATA['fuel'].get(fce, [])
-        cdi_val = _monthly(fuel_cols[10]) if len(fuel_cols) > 10 else None
-        rows_out.append({
-            'group_code': 'IRON_MAKING', 'section': 'CDI',
-            'parameter': label, 'unit': 'Kg/THM',
-            'actual': cdi_val, 'cum_actual': None,
-            'sort_order': sort_idx * 10, 'cell': f'PDF fuel-table col-10 {fce}',
-            'file_label': f'CDI Rate ({fce})', 'plant': 'BSL', 'month': report_month,
-            'found_via': f'BSL {fce} CDI Rate', 'status': 'ok' if cdi_val is not None else 'skip',
-        })
+    # Monthly HM production per furnace + BF_Shop (prod col-2: last-day/monthly → _monthly gives monthly)
+    for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'), ('BF-3', 'BSL BF-3'),
+                        ('BF-4', 'BSL BF-4'), ('BF-5', 'BSL BF-5'),
+                        ('BF Shop', 'BSL')]:
         prod_cols = TABLE_DATA['prod'].get(fce, [])
         hm_val = _monthly(prod_cols[2]) if len(prod_cols) > 2 else None
         rows_out.append({
@@ -774,54 +780,57 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
             'found_via': f'BSL {fce} Monthly HM', 'status': 'ok' if hm_val is not None else 'skip',
         })
         sort_idx += 1
-    shop_cdi_cols = TABLE_DATA['fuel'].get('BF Shop', [])
-    shop_cdi_val = _monthly(shop_cdi_cols[10]) if len(shop_cdi_cols) > 10 else None
-    rows_out.append({
-        'group_code': 'IRON_MAKING', 'section': 'CDI',
-        'parameter': 'BSL', 'unit': 'Kg/THM',
-        'actual': shop_cdi_val, 'cum_actual': None,
-        'source_priority': 4,   # Monthly Tech Excel (priority 5) can override this shop avg
-        'sort_order': sort_idx * 10, 'cell': 'PDF fuel-table col-10 BF Shop',
-        'file_label': 'CDI Rate (BF Shop)', 'plant': 'BSL', 'month': report_month,
-        'found_via': 'BSL BF Shop CDI Rate', 'status': 'ok' if shop_cdi_val is not None else 'skip',
-    })
-    sort_idx += 1
 
-    # ── Cross-plant section writes (section-as-section, furnace-as-row_label)
-    # prod: [13]=Hot Blast Temp  [16]=BF Productivity
-    # fuel: [2]=Si%  [3]=S%  [7]=Hot Metal Temp  [8]=Coke Rate  [9]=Nut Coke Rate  [11]=Fuel Rate
-    # raw:  [3]=Iron Ore(T)  [4]=Sinter(T)  [5]=Scrap(T)  [8]=Pellet(T)
-    #       [10]=O2 En(%)  [11]=Slag Rate  [12]=Sinter% in Burden  [13]=Pellet% in Burden
+    # ── Cross-furnace parameter extraction ───────────────────────────────────
+    # Column format by table:
+    #   prod: last-day/monthly   → _monthly() (second value) for monthly averages/totals
+    #   fuel: month/FY-cumul     → _first_val() (first value) for monthly rates
+    #   raw:  month/FY-cumul     → _first_val() (first value) for monthly consumption
+    #
+    # (table, col, section, unit, sort_base, use_first)
     _CROSS = [
-        # (table, col, section, unit, sort_base)
-        ('prod', 16, 'BF Productivity',    'T/m³/day', 76),
-        ('prod', 13, 'HBT',                '°C',      106),
-        ('fuel',  7, 'Hot Metal Temp',     '°C',       95),
-        ('fuel',  8, 'BF Coke Rate',       'Kg/THM',   56),
-        ('fuel',  9, 'Nut Coke Rate',      'Kg/THM',   66),
-        ('fuel', 11, 'Fuel Rate',          'Kg/THM',  110),
-        ('fuel',  2, 'Si in HM',           '%',        86),
-        ('fuel',  3, 'S in HM',            '%',        93),
-        ('raw',   3, 'Iron Ore',           'T',        25),
-        ('raw',   4, 'Sinter Consumption', 'T',        35),
-        ('raw',   5, 'BF Scrap',           'T',        45),
-        ('raw',   8, 'Pellet Consumption', 'T',        55),
-        ('raw',  10, 'O2 Enrichment',      '%',       140),
-        ('raw',  11, 'Slag Rate',          'Kg/THM',  138),
-        ('raw',  12, 'Sinter in Burden',   '%',       120),
-        ('raw',  13, 'Pellet in Burden',   '%',       130),
+        # Production table — monthly avg is the second value
+        ('prod', 16, 'BF Productivity',    'T/m³/day',  76, False),
+        ('prod', 13, 'HBT',                '°C',        106, False),
+        # Fuel/quality table — monthly rate is the first value
+        ('fuel',  2, 'Si in HM',           '%',          86, True),
+        ('fuel',  3, 'S in HM',            '%',          93, True),
+        ('fuel',  4, 'Slag Al2O3',         '%',          97, True),
+        ('fuel',  5, 'Slag MgO',           '%',          98, True),
+        ('fuel',  6, 'Slag Basicity',      '',           99, True),
+        ('fuel',  7, 'Hot Metal Temp',     '°C',         95, True),
+        ('fuel',  8, 'BF Coke Rate',       'Kg/THM',     56, True),
+        ('fuel',  9, 'Nut Coke Rate',      'Kg/THM',     66, True),
+        ('fuel', 10, 'CDI',                'Kg/THM',     46, True),
+        ('fuel', 11, 'Fuel Rate',          'Kg/THM',    110, True),
+        ('fuel', 12, 'Carbon Rate',        'Kg/THM',    111, True),
+        ('fuel', 13, 'F Dust Rate',        'Kg/THM',    112, True),
+        ('fuel', 17, 'CO CO2 Ratio',       '',          113, True),
+        # Raw material table — monthly consumption is the first value
+        ('raw',   2, 'Coke Consumption',   'T',          15, True),
+        ('raw',   3, 'Iron Ore',           'T',          25, True),
+        ('raw',   4, 'Sinter Consumption', 'T',          35, True),
+        ('raw',   5, 'BF Scrap',           'T',          45, True),
+        ('raw',   6, 'Nut Coke',           'T',          64, True),
+        ('raw',   7, 'CDI Total',          'T',          47, True),
+        ('raw',   8, 'Pellet Consumption', 'T',          55, True),
+        ('raw',   9, 'Coke ECY',           'T',          58, True),
+        ('raw',  10, 'O2 Enrichment',      '%',         140, True),
+        ('raw',  11, 'Slag Rate',          'Kg/THM',    138, True),
+        ('raw',  12, 'Sinter in Burden',   '%',         120, True),
+        ('raw',  13, 'Sint Rate',          'Kg/THM',    122, True),
+        ('raw',  14, 'Ore Rate',           'Kg/THM',    125, True),
     ]
-    # All rows (per-furnace and BF Shop) stored at priority 5 — PDF is the authoritative source.
-    # compute_bf_shop_averages() at priority 4 will not overwrite these.
-    for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'),
+    for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'), ('BF-3', 'BSL BF-3'),
                         ('BF-4', 'BSL BF-4'), ('BF-5', 'BSL BF-5'),
                         ('BF Shop', 'BSL')]:
         cols_f = TABLE_DATA['fuel'].get(fce, [])
         cols_p = TABLE_DATA['prod'].get(fce, [])
         cols_r = TABLE_DATA['raw'].get(fce, [])
-        for tbl, ci, section, unit, so_base in _CROSS:
+        for tbl, ci, section, unit, so_base, use_first in _CROSS:
             cols = cols_f if tbl == 'fuel' else (cols_p if tbl == 'prod' else cols_r)
-            val = _monthly(cols[ci]) if ci < len(cols) else None
+            raw_cell = cols[ci] if ci < len(cols) else ''
+            val = _first_val(raw_cell) if use_first else _monthly(raw_cell)
             rows_out.append({
                 'group_code': 'IRON_MAKING', 'section': section,
                 'parameter': label, 'unit': unit,

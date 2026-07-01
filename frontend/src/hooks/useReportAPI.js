@@ -35,6 +35,7 @@ export function useReportData(month) {
       return response.json();
     },
     enabled: !!month,
+    staleTime: 0, // always fetch fresh — techno/MIS data changes via separate save flows
   });
 }
 

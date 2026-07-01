@@ -58,34 +58,122 @@ function sortUnitsInArea(area, units) {
 // ── Parameter templates per area ──────────────────────────────────────────────
 const PARAM_TEMPLATES = {
   'Blast Furnace': [
-    'coke_rate','nut_coke_rate','cdi','fuel_rate','bf_productivity',
+    // Operating rates
+    'coke_rate','nut_coke_rate','cdi','fuel_rate',
+    'bf_productivity','bf_productivity_useful','bf_productivity_working',
+    // HM quality
+    'silicon_in_hm','sulphur_in_hm','avg_hot_metal_temperature',
+    // Blast
     'hot_blast_temp','o2_enrichment','blast_moisture','blast_volume',
-    'slag_rate','sinter_in_burden','pellet_in_burden','lump_in_burden',
-    'tfe_in_sinter','tfe_in_pellet','tfe_in_lump','coal_to_hot_metal',
-    'fe_in_ore',
+    // Burden / slag
+    'slag_rate','slag_offtake',
+    'sinter_in_burden','pellet_in_burden','lump_in_burden',
+    'tfe_in_sinter','tfe_in_pellet','tfe_in_lump','fe_in_ore',
+    'coal_to_hm',
   ],
   'SMS': [
-    'specific_hm_consumption','hot_metal_consumption',
-    'specific_scrap_consumption','scrap_consumption',
+    'specific_hm_consumption',
+    'specific_scrap_consumption',
     'tmi','heat_size','concast_ratio','cc_ratio','yield_sms',
+    'tap_to_tap_time','converter_availability','converter_utilisation',
+    'refractory_consumption_sms','refractory_consumption_red',
+    'bof_gas_yield',
+    'calcined_lime_consumption','limestone_consumption',
+    'silicon_manganese_consumption','ferro_silicon_consumption',
+    'ferro_manganese_consumption','oxygen_converter',
+    'calcined_dolomite_consumption',
   ],
-  'Coke Ovens': ['gross_coke_rate','net_coke_rate','coke_production','coking_time'],
-  'Sinter Plant': ['sinter_production','productivity','basicity','tfe_in_sinter'],
+  'Coke Ovens': [
+    'gross_coke_yield','bf_coke_yield',
+    'gross_coke_rate','net_coke_rate','coke_production','coking_time',
+    'specific_heat_coke_ovens','specific_power_coke_ovens',
+    'coal_tar_yield','crude_benzol','coke_oven_gas_yield','ammonium_sulphate',
+    'dry_coal_charge_oven',
+    'm10','m40',
+    'average_ash_in_coke','average_ash_in_coal_blend',
+    'average_volatile_matter_in_coal_blend',
+  ],
+  'Sinter Plant': [
+    'sinter_production','productivity','basicity','tfe_in_sinter',
+    'dsp_sp_1','dsp_sp_2',
+  ],
   'Rolling Mills': ['rolling_yield','production'],
-  'General': ['specific_energy_consumption'],
+  'General': [
+    'specific_energy_consumption',
+    'bof_slag_utilisation','coke_screen_loss',
+    'coal_to_hm',
+    'specific_water_consumption','water_consumption',
+    'specific_co2_emissions',
+  ],
 };
 
 // ── Known units list for "Add Unit" modal ─────────────────────────────────────
 const KNOWN_UNITS = [
   'BF_Shop','BF-1','BF-2','BF-3','BF-4','BF-5','BF-6','BF-7','BF-8',
   'SMS','SMS-1','SMS-2','SMS-3','SMS-I','SMS-II',
-  'COB','COB-old','COB-new','SP','SP-1','SP-2','SP-3',
-  'General','PM','RSM','MM','URM','WRM','BRM','CRM 1&2','CRM 3',
+  'COB','COB-old','COB-new','Coke Ovens',
+  'SP','SP-1','SP-2','SP-3','Sinter',
+  'General','PM','RSM','MM','URM','WRM','BRM','CRM 1&2','CRM 3','MSM',
   'Merchant Mill','Wheel Plant','Axle Plant',
 ];
 
 // ── Label helpers ─────────────────────────────────────────────────────────────
+const _LABEL_MAP = {
+  // Coal / energy
+  coal_to_hm:                           'Coal to Hot Metal (kg/kg)',
+  specific_water_consumption:           'Specific Water Consumption',
+  water_consumption:                    'Water Consumption',
+  specific_co2_emissions:               'Specific CO₂ Emissions',
+  coke_screen_loss:                     'Coke Screen Loss (%)',
+  specific_energy_consumption:          'Specific Energy Consumption (GCal/TCS)',
+  bof_slag_utilisation:                 'BOF Slag Utilisation (%)',
+  // BF quality & operating
+  silicon_in_hm:                        'Silicon in HM (%)',
+  sulphur_in_hm:                        'Sulphur in HM (%)',
+  avg_hot_metal_temperature:            'Avg. Hot Metal Temperature (°C)',
+  bf_productivity_useful:               'BF Productivity (Useful Vol.) T/m³/day',
+  bf_productivity_working:              'BF Productivity (Working Vol.) T/m³/day',
+  hot_blast_temp:                       'Hot Blast Temperature (°C)',
+  o2_enrichment:                        'O₂ Enrichment (%)',
+  slag_offtake:                         'Slag Offtake (%)',
+  // SMS
+  specific_hm_consumption:             'Specific HM Consumption (kg/TCS)',
+  specific_scrap_consumption:          'Specific Scrap Consumption (kg/TCS)',
+  tap_to_tap_time:                      'Tap-to-Tap Time (min)',
+  converter_availability:               'Converter Availability (%)',
+  converter_utilisation:                'Converter Utilisation (%)',
+  refractory_consumption_sms:           'Refractory Consumption SMS (kg/TCS)',
+  refractory_consumption_red:           'Refractory Consumption RED (kg/TCS)',
+  bof_gas_yield:                        'BOF Gas Yield (Nm³/TCS)',
+  calcined_lime_consumption:            'Calcined Lime Consumption (kg/TCS)',
+  limestone_consumption:                'Limestone Consumption (kg/TCS)',
+  silicon_manganese_consumption:        'Silicon Manganese Consumption (kg/TCS)',
+  ferro_silicon_consumption:            'Ferro Silicon Consumption (kg/TCS)',
+  ferro_manganese_consumption:          'Ferro Manganese Consumption (kg/TCS)',
+  oxygen_converter:                     'Oxygen – Converter (NM³/TCS)',
+  calcined_dolomite_consumption:        'Calcined Dolomite Consumption (kg/TCS)',
+  // Coke Ovens
+  gross_coke_yield:                     'Gross Coke Yield (%)',
+  bf_coke_yield:                        'B.F. Coke Yield (%)',
+  specific_heat_coke_ovens:             'Specific Heat – Coke Ovens (M.Cal/T)',
+  specific_power_coke_ovens:            'Specific Power – Coke Ovens (KWH/T)',
+  coal_tar_yield:                       'Coal Tar Yield (kg/TDC)',
+  crude_benzol:                         'Crude Benzol (Kg/TDC)',
+  coke_oven_gas_yield:                  'Coke Oven Gas Yield (Nm³/T)',
+  ammonium_sulphate:                    'Ammonium Sulphate (Kg/TDC)',
+  dry_coal_charge_oven:                 'Dry Coal Charge / Oven (T)',
+  m10:                                  'M10 (%)',
+  m40:                                  'M40 (%)',
+  average_ash_in_coke:                  'Average Ash in Coke (%)',
+  average_ash_in_coal_blend:            'Average Ash in Coal Blend (%)',
+  average_volatile_matter_in_coal_blend:'Average Volatile Matter in Coal Blend (%)',
+  // Sinter
+  dsp_sp_1:                             'DSP SP-1 Productivity (T/m²/hr)',
+  dsp_sp_2:                             'DSP SP-2 Productivity (T/m²/hr)',
+};
+
 function labelOf(key) {
+  if (_LABEL_MAP[key]) return _LABEL_MAP[key];
   return key
     .replace(/_/g, ' ')
     .replace(/\b\w/g, c => c.toUpperCase())

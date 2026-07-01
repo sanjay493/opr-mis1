@@ -213,3 +213,11 @@ The `/upload` page has a single **Data Upload** section with three modes selecta
 - Font: Arial Narrow on page 7 (trend), standard Arial elsewhere.
 - All tonnage values stored and displayed as `'000 T` unless otherwise noted.
 - Financial year convention: April–March. Format `YYYY-YY` (e.g. `2025-26`). Plan rows show short `YY-YY` format.
+
+
+
+But still not extracting all given some are left such as Nut Coke rake [N/C RT], O2 enrichment, Sinter%, Pellet% (to be calculated from Iron Ore, Sinter, PELLET consumbed). 2) The extracted data for Coke rate, Fuel Rate or incorrect
+
+
+
+Should I go ahead and apply all of these? Changes would touch: bsl_mer_map.json, rsp_technopara_map.json, isp_technopara_map.json, dsp_technopara_map.json, page_techno.py _KEY_ALIASES, and frontend page.js PARAM_TEMPLATES + _LABEL_MAP. Note: existing DB rows with old keys will need a one-time migration after the map changes.

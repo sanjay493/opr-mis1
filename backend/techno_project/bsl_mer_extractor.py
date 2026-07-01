@@ -94,10 +94,10 @@ class BslMerExtractor:
     }
 
     _QUALITY_PARAMS = {
-        "si_in_hm":      0,   # Si<=0.90 (%)
-        "s_in_hm":       1,   # S<=0.045 (%)
+        "silicon_in_hm": 0,   # Si<=0.90 (%)
+        "sulphur_in_hm": 1,   # S<=0.045 (%)
         "slag_rate":     4,   # SLAG RATE
-        "hot_metal_temp": 3,  # HOT MET T
+        "avg_hot_metal_temperature": 3,  # HOT MET T
         "coke_rate":     5,   # COKE RATE
         "nut_coke_rate": 6,   # N/C RT
         "cdi":           7,   # CDI RATE
@@ -299,9 +299,9 @@ class BslMerExtractor:
 
             try:
                 if len(cells) > 1:
-                    units_data[unit]["si_in_hm"] = _extract_monthly_value(cells[1])
+                    units_data[unit]["silicon_in_hm"] = _extract_monthly_value(cells[1])
                 if len(cells) > 2:
-                    units_data[unit]["s_in_hm"] = _extract_monthly_value(cells[2])
+                    units_data[unit]["sulphur_in_hm"] = _extract_monthly_value(cells[2])
                 if len(cells) > 4:
                     units_data[unit]["slag_rate"] = _extract_monthly_value(cells[4])
                 if len(cells) > 5:
@@ -317,7 +317,7 @@ class BslMerExtractor:
                 if len(cells) > 10:
                     units_data[unit]["hot_blast_temp"] = _extract_monthly_value(cells[10])
                 if len(cells) > 11:
-                    units_data[unit]["hot_metal_temp"] = _extract_monthly_value(cells[11])
+                    units_data[unit]["avg_hot_metal_temperature"] = _extract_monthly_value(cells[11])
 
             except (IndexError, ValueError) as e:
                 print(f"[BSL MER] Warning: Could not parse quality row for {unit}: {e}")

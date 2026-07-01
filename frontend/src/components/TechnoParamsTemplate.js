@@ -34,7 +34,7 @@ export default function TechnoParamsTemplate({ data }) {
   const nData = 3 + 1 + nMonths + 1 + 1 + 1;
 
   // Widths: fixed text columns take a fixed share; data columns share the rest equally
-  const fixedPct = isMill ? 27 : 23;   // mill: Mill(8)+Param(14)+Unit(5); param: Param(16)+Shop(7)
+  const fixedPct = isMill ? 27 : 24;   // mill: Mill(8)+Param(14)+Unit(5); param: Param(17)+Shop(7)
   const dataW    = `${(100 - fixedPct) / nData}%`;
 
   const bk = (first, last) => ({
@@ -78,7 +78,7 @@ export default function TechnoParamsTemplate({ data }) {
         width: '100%', borderCollapse: 'collapse', border: B,
         tableLayout: 'fixed', fontSize: 'var(--report-font-size, 6.5pt)', marginTop: 4,
       }}>
-        <colgroup>{isMill ? (<><col style={{ width: '8%' }} /><col style={{ width: '14%' }} /><col style={{ width: '5%' }} /></>) : (<><col style={{ width: '16%' }} /><col style={{ width: '7%' }} /></>)}{[0, 1, 2, 3].map(i => <col key={`f${i}`} style={{ width: dataW }} />)}{month_labels.map((_, i) => <col key={`m${i}`} style={{ width: dataW }} />)}{[0, 1, 2].map(i => <col key={`c${i}`} style={{ width: dataW }} />)}</colgroup>
+        <colgroup>{isMill ? (<><col style={{ width: '8%' }} /><col style={{ width: '14%' }} /><col style={{ width: '5%' }} /></>) : (<><col style={{ width: '17%' }} /><col style={{ width: '7%' }} /></>)}{[0, 1, 2, 3].map(i => <col key={`f${i}`} style={{ width: dataW }} />)}{month_labels.map((_, i) => <col key={`m${i}`} style={{ width: dataW }} />)}{[0, 1, 2].map(i => <col key={`c${i}`} style={{ width: dataW }} />)}</colgroup>
 
         <thead>
           {/* Row 1 — group headers */}
@@ -122,15 +122,17 @@ export default function TechnoParamsTemplate({ data }) {
 
               return (
                 <tr key={`${si}-${ri}`}>
-                  {/* ── Param pages: first col = param name + unit (rowspan) ── */}
+                  {/* ── Param pages: first col = param name + unit on separate line ── */}
                   {!isMill && isFirst && (
                     <td rowSpan={sec.rows.length}
                         style={{ ...LBL, fontWeight: 700, verticalAlign: 'top',
                                  borderTop: B, borderBottom: B }}>
                       {sec.label}
-                      {sec.rows[0]?.unit
-                        ? <span style={{ fontWeight: 400 }}> ({sec.rows[0].unit})</span>
-                        : ''}
+                      {sec.rows[0]?.unit && (
+                        <div style={{ fontWeight: 400, color: '#374151', marginTop: '1px' }}>
+                          ({sec.rows[0].unit})
+                        </div>
+                      )}
                     </td>
                   )}
 

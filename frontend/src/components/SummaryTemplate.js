@@ -185,6 +185,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
   const shortYear     = yearStr.substring(2);
   const shortPrevYear = prevYear.substring(2);
   const monthIndex    = monthsOrder.indexOf(monthName);
+  const isApril       = monthName === 'April';
 
   let targetYearStart = Number(yearStr);
   if (monthIndex >= 0 && monthIndex < 3) targetYearStart -= 1;
@@ -246,37 +247,90 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
         />
       </div>
 
-      {/* ── Production table (compact: 5 columns) ── */}
+      {/* ── Production table ── */}
       <div>
         <div style={{ textAlign: 'right', fontSize: '0.78em', fontStyle: 'italic', marginBottom: '2px' }}>
           Unit: &#39;000 T
         </div>
-        <table className="report-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-          <thead>
-            <tr>
-              <th rowSpan="2" style={{ width: '22%', textAlign: 'left' }}>Item</th>
-              <th colSpan="3" style={{ textAlign: 'center' }}>{monthName} {yearStr}</th>
-              <th rowSpan="2" style={{ textAlign: 'center', whiteSpace: 'normal', lineHeight: 1.2 }}>
-                {shortMonth}&#39;{shortPrevYear}<br/>Act.
-              </th>
-              <th rowSpan="2" style={{ textAlign: 'center', whiteSpace: 'normal', lineHeight: 1.2 }}>
-                % Gr.<br/>w.r.t.<br/>{shortMonth}&#39;{shortPrevYear}
-              </th>
-            </tr>
-            <tr>
-              <th>APP</th>
-              <th>Actual</th>
-              <th>% Ful.</th>
-            </tr>
+        <table className="report-table" style={{ tableLayout: 'fixed', width: '100%', fontSize: '0.82em' }}>
+          {isApril ? (
+            <colgroup>
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+              <col style={{ width: '19%' }} /><col style={{ width: '19%' }} />
+            </colgroup>
+          ) : (
+            <colgroup>
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
+              <col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
+              <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
+              <col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
+              <col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
+              <col style={{ width: '7%' }} /><col style={{ width: '6%' }} />
+            </colgroup>
+          )}
+          <thead style={{ fontSize: '0.78em', lineHeight: 1.1 }}>
+            {isApril ? (
+              <>
+                <tr>
+                  <th rowSpan="2" style={{ textAlign: 'left', verticalAlign: 'middle' }}>Item</th>
+                  <th colSpan="4" style={{ textAlign: 'center' }}>{shortMonth}&#39;{shortYear}</th>
+                  <th rowSpan="2" style={{ textAlign: 'center', whiteSpace: 'normal' }}>
+                    {shortMonth}&#39;{shortPrevYear}<br/>ACT
+                  </th>
+                  <th rowSpan="2" style={{ textAlign: 'center', whiteSpace: 'normal' }}>
+                    %GR.<br/>{shortMonth}&#39;{shortPrevYear}
+                  </th>
+                </tr>
+                <tr>
+                  <th style={{ textAlign: 'center' }}>APP</th>
+                  <th style={{ textAlign: 'center' }}>ACT</th>
+                  <th style={{ textAlign: 'center' }}>VAR</th>
+                  <th style={{ textAlign: 'center' }}>%FUL.</th>
+                </tr>
+              </>
+            ) : (
+              <>
+                <tr>
+                  <th rowSpan="2" style={{ textAlign: 'left', verticalAlign: 'middle' }}>Item</th>
+                  <th colSpan="4" style={{ textAlign: 'center' }}>{shortMonth}&#39;{shortYear}</th>
+                  <th rowSpan="2" style={{ textAlign: 'center', whiteSpace: 'normal' }}>
+                    {shortMonth}&#39;{shortPrevYear}<br/>ACT
+                  </th>
+                  <th rowSpan="2" style={{ textAlign: 'center', whiteSpace: 'normal' }}>
+                    %GR.<br/>{shortMonth}&#39;{shortPrevYear}
+                  </th>
+                  <th colSpan="4" style={{ textAlign: 'center' }}>Apr-{shortMonth}&#39;{shortYear}</th>
+                  <th rowSpan="2" style={{ textAlign: 'center', whiteSpace: 'normal' }}>
+                    Apr-{shortMonth}&#39;{shortPrevYear}<br/>ACT
+                  </th>
+                  <th rowSpan="2" style={{ textAlign: 'center', whiteSpace: 'normal' }}>
+                    %GR.<br/>Apr-{shortMonth}&#39;{shortPrevYear}
+                  </th>
+                </tr>
+                <tr>
+                  <th style={{ textAlign: 'center' }}>APP</th>
+                  <th style={{ textAlign: 'center' }}>ACT</th>
+                  <th style={{ textAlign: 'center' }}>VAR</th>
+                  <th style={{ textAlign: 'center' }}>%FUL.</th>
+                  <th style={{ textAlign: 'center' }}>APP</th>
+                  <th style={{ textAlign: 'center' }}>ACT</th>
+                  <th style={{ textAlign: 'center' }}>VAR</th>
+                  <th style={{ textAlign: 'center' }}>%FUL.</th>
+                </tr>
+              </>
+            )}
           </thead>
           <tbody>
             {production_table.map((row, rIdx) => (
               <tr key={rIdx}>
                 <td className="label-cell">{row.item}</td>
-                {[0, 1, 2, 3, 4].map(vIdx => (
-                  <td key={vIdx}>
+                {(isApril ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]).map(vIdx => (
+                  <td key={vIdx} style={{ textAlign: 'right' }}>
                     <input type="text" className="editor-input"
-                      style={{ color: 'black', textAlign: 'right', fontWeight: vIdx === 1 ? '700' : '400' }}
+                      style={{ color: 'black', textAlign: 'right', fontWeight: (vIdx === 1 || vIdx === 7) ? '700' : '400' }}
                       value={(row.values || [])[vIdx] ?? ''}
                       onChange={e => handleProdChange(rIdx, vIdx, e.target.value)}
                     />
@@ -313,16 +367,16 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
             </span>
           )}
         </div>
-        <table className="report-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-          <thead>
+        <table className="report-table" style={{ tableLayout: 'fixed', width: '100%', fontSize: '0.82em' }}>
+          <thead style={{ fontSize: '0.78em', lineHeight: 1.1 }}>
             <tr>
               <th style={{ width: '20%', textAlign: 'left' }}>Parameter</th>
               <th style={{ width: '8%', textAlign: 'center' }}>Unit</th>
-              <th style={{ width: '11%', textAlign: 'center' }}>{targetHeader}</th>
-              <th style={{ width: '11%', textAlign: 'center' }}>{shortMonth}&#39;{shortYear}<br/>(Report)</th>
-              <th style={{ width: '11%', textAlign: 'center' }}>{shortMonth}&#39;{shortPrevYear}<br/>(CPLY)</th>
-              <th style={{ width: '13%', textAlign: 'center' }}>Apr-{shortMonth}&#39;{shortYear}<br/>(YTD)</th>
-              <th style={{ width: '13%', textAlign: 'center' }}>Apr-{shortMonth}&#39;{shortPrevYear}<br/>(CPLY YTD)</th>
+              <th style={{ width: '11%', textAlign: 'center', whiteSpace: 'normal' }}>{targetHeader}</th>
+              <th style={{ width: '11%', textAlign: 'center', whiteSpace: 'normal' }}>{shortMonth}&#39;{shortYear}<br/>(Report)</th>
+              <th style={{ width: '11%', textAlign: 'center', whiteSpace: 'normal' }}>{shortMonth}&#39;{shortPrevYear}<br/>(CPLY)</th>
+              <th style={{ width: '13%', textAlign: 'center', whiteSpace: 'normal' }}>Apr-{shortMonth}&#39;{shortYear}<br/>(YTD)</th>
+              <th style={{ width: '13%', textAlign: 'center', whiteSpace: 'normal' }}>Apr-{shortMonth}&#39;{shortPrevYear}<br/>(CPLY YTD)</th>
             </tr>
           </thead>
           <tbody>
@@ -346,15 +400,14 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
       </div>
 
       {/* ── SAIL Bar Charts 2×2: Coke Rate, CDI, BF Productivity, S.E.C. ── */}
-      <div style={{ marginTop: '12px' }}>
-        <div style={{ fontWeight: '700', fontSize: '0.95em', marginBottom: '6px' }}>
-          Historical Performance & Trends (Last 3 FY + Plan + Current Month):
+      {chart_data?.params?.length > 0 && (
+        <div style={{ marginTop: '12px' }}>
+          <div style={{ fontWeight: '700', fontSize: '0.95em', marginBottom: '6px' }}>
+            Historical Performance &amp; Trends (Last 3 FY + Plan + Current Month):
+          </div>
+          <ChartGrid chartData={chart_data} />
         </div>
-        {chart_data && <ChartGrid chartData={chart_data} />}
-      </div>
-
-      {/* ── Bar charts 2×2 ── */}
-      {chart_data && <ChartGrid chartData={chart_data} />}
+      )}
 
     </div>
   );
