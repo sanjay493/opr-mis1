@@ -2767,7 +2767,7 @@ async def get_techno_sms_targets(fy: str = Query("2026-27")):
             "DSP SMS",
             "RSP SMS-1", "RSP SMS-2",
             "BSL SMS-1", "BSL SMS-2",
-            "ISP SMS",
+            "ISP SMS-1",
         ]
         result = {}
 
@@ -2880,7 +2880,7 @@ async def recalculate_sail_weighted(payload: dict):
             "DSP SMS": "DSP",
             "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
             "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS": "ISP",
+            "ISP SMS-1": "ISP",
         }
 
         # Fetch SMS-wise Crude Steel production for each shop
@@ -2906,7 +2906,16 @@ async def recalculate_sail_weighted(payload: dict):
         shop_cs_weights = {}
         for shop, plant in shop_to_plant.items():
             sms_id = shop.split()[-1]  # Get SMS identifier from "BSP SMS-2" → "SMS-2"
-            shop_cs_weights[shop] = sms_production.get((plant, sms_id), 0)
+            weight = sms_production.get((plant, sms_id))
+            if weight is None:
+                # ISP's production items are named "SMS CCM-1&2"/"SMS CCM-3" —
+                # the shop number isn't in the item name's first token, so the
+                # exact (plant, sms_id) lookup above misses. When a plant has
+                # only one SMS shop, fall back to its total SMS production.
+                plant_shops = [s for s, p in shop_to_plant.items() if p == plant]
+                if len(plant_shops) == 1:
+                    weight = sum(v for (p, _sid), v in sms_production.items() if p == plant)
+            shop_cs_weights[shop] = weight or 0
 
         # Store metadata about production targets used
         production_metadata = {
@@ -2985,7 +2994,7 @@ async def recalculate_sail_weighted(payload: dict):
             "DSP SMS",
             "RSP SMS-1", "RSP SMS-2",
             "BSL SMS-1", "BSL SMS-2",
-            "ISP SMS",
+            "ISP SMS-1",
         ]
 
         # Get SMS targets and calculate weighted avg by shop-wise CS production
@@ -2994,15 +3003,18 @@ async def recalculate_sail_weighted(payload: dict):
             sms_targets[param] = []
             for shop in sms_shops:
                 plant = shop.split()[0]
-                # Get shop-level data from techno_plan for this FY
-                plan_result = db.get_techno_plant_plan(plant, fy)
+                # Get the shop-level (SMS-wise) data actually entered via
+                # /api/techno-sms-targets — stored under unit=<shop name>,
+                # not the plant-wide unit='Shop' record.
+                plan_result = db.get_techno_plan(plant, fy, shop)
                 shop_data = plan_result.get('data', {}) if plan_result else {}
                 weight = shop_cs_weights.get(shop, 0)
 
                 if isinstance(shop_data, dict):
-                    param_val = shop_data.get(param)
+                    param_obj = shop_data.get(param)
+                    param_val = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
                     if param_val is not None:
-                        sms_targets[param].append((param_val, weight))
+                        sms_targets[param].append((shop, param_val, weight))
 
         # Calculate weighted averages for SMS params using shop CS weights
         sail_sms = {}
@@ -3012,19 +3024,19 @@ async def recalculate_sail_weighted(payload: dict):
             "DSP SMS": "DSP",
             "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
             "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS": "ISP",
+            "ISP SMS-1": "ISP",
         }
 
         for param, values in sms_targets.items():
             if values:
-                total_val = sum(v * w for v, w in values)
-                total_weight = sum(w for v, w in values)
+                total_val = sum(v * w for _, v, w in values)
+                total_weight = sum(w for _, v, w in values)
                 sail_sms[param] = round(total_val / total_weight, 3) if total_weight else None
 
                 # Store calculation details for HM Consumption and Scrap
                 if param in ["Hot Metal Consumption", "Scrap Consumption"]:
                     shop_details = []
-                    for shop, (v, w) in zip(sms_shops, values):
+                    for shop, v, w in values:
                         shop_details.append({
                             "shop": shop,
                             "plant": sms_shop_mapping.get(shop),
@@ -3111,7 +3123,7 @@ async def get_techno_summary(fy: str = Query("2026-27")):
             "DSP SMS",
             "RSP SMS-1", "RSP SMS-2",
             "BSL SMS-1", "BSL SMS-2",
-            "ISP SMS",
+            "ISP SMS-1",
         ]
         sms_data = {}
         for shop in sms_shops:
@@ -3148,7 +3160,7 @@ async def get_techno_summary(fy: str = Query("2026-27")):
             "DSP SMS": "DSP",
             "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
             "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS": "ISP",
+            "ISP SMS-1": "ISP",
         }
         shop_cs_weights = {}
         for shop, plant in shop_to_plant.items():
@@ -3162,14 +3174,30 @@ async def get_techno_summary(fy: str = Query("2026-27")):
                   AND plant_name = ?
             """, months + [sms_identifier, sms_identifier + " %", plant])
             result = cur.fetchone()
-            shop_cs_weights[shop] = result[0] if result[0] else 0
+            weight = result[0] if result and result[0] else None
+            if weight is None:
+                # ISP's production items are named "SMS CCM-1&2"/"SMS CCM-3" —
+                # the shop number isn't in the item name, so the exact/prefix
+                # match above misses. When a plant has only one SMS shop, fall
+                # back to summing all of its "SMS%" production items.
+                plant_shops = [s for s, p in shop_to_plant.items() if p == plant]
+                if len(plant_shops) == 1:
+                    cur.execute(f"""
+                        SELECT SUM(month_actual)
+                        FROM production_plan_table
+                        WHERE report_month IN ({ph})
+                          AND item_name LIKE 'SMS%'
+                          AND plant_name = ?
+                    """, months + [plant])
+                    fallback = cur.fetchone()
+                    weight = fallback[0] if fallback and fallback[0] else 0
+            shop_cs_weights[shop] = weight or 0
 
         conn.close()
 
         return {
             "status": "success",
             "fy": fy,
-            "report_month": report_month,
             "bf_targets": bf_data,
             "sms_targets": sms_data,
             "sail_targets": sail_data,
@@ -3177,142 +3205,6 @@ async def get_techno_summary(fy: str = Query("2026-27")):
                 "hm_weights": hm_weights,
                 "sms_cs_weights": shop_cs_weights
             }
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/sail-performance-summary")
-async def get_sail_performance_summary(fy: str = Query("2026-27")):
-    """
-    Get SAIL performance summary with 5 key parameters:
-    - Coke Rate (weighted avg by HM)
-    - CDI (weighted avg by HM)
-    - Fuel Rate (weighted avg by HM)
-    - BF Productivity (harmonic mean)
-    - S.E.C. (weighted avg by CS)
-    """
-    try:
-        fy_year = int(fy.split("-")[0])
-
-        conn = sqlite3.connect(db.DB_PATH)
-        cur = conn.cursor()
-
-        # Get all FY months for calculations
-        months = (
-            [f"{fy_year}-{m:02d}" for m in range(4, 13)] +
-            [f"{fy_year + 1}-{m:02d}" for m in range(1, 4)]
-        )
-        ph = ",".join("?" * len(months))
-
-        # Get production weights
-        cur.execute(f"""
-            SELECT plant_name, SUM(month_actual)
-            FROM production_plan_table
-            WHERE report_month IN ({ph}) AND item_name = 'Hot Metal'
-            GROUP BY plant_name
-        """, months)
-        hm_weights = {row[0]: row[1] for row in cur.fetchall()}
-
-        # Get CS weights for S.E.C calculation
-        shop_to_plant = {
-            "BSP SMS-2": "BSP", "BSP SMS-3": "BSP",
-            "DSP SMS": "DSP",
-            "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
-            "BSL SMS-1": "BSL", "BSL SMS-2": "BSL",
-            "ISP SMS": "ISP",
-        }
-        shop_cs_weights = {}
-        for shop, plant in shop_to_plant.items():
-            shop_parts = shop.split()
-            sms_identifier = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
-            cur.execute(f"""
-                SELECT SUM(month_actual)
-                FROM production_plan_table
-                WHERE report_month IN ({ph})
-                  AND (item_name = ? OR item_name LIKE ?)
-                  AND plant_name = ?
-            """, months + [sms_identifier, sms_identifier + " %", plant])
-            result = cur.fetchone()
-            shop_cs_weights[shop] = result[0] if result[0] else 0
-
-        # Get plant targets
-        plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
-
-        # Calculate SAIL for current period
-        sail_params = {
-            'Coke Rate': 0,
-            'CDI': 0,
-            'Fuel Rate': 0,
-            'BF Productivity': 0,
-            'S.E.C.': 0
-        }
-
-        # Get BF targets by plant
-        bf_data = {}
-        for plant in plants:
-            plan_result = db.get_techno_plant_plan(plant, fy)
-            plan_data = plan_result.get('data', {}) if plan_result else {}
-            if plan_data:
-                bf_data[plant] = plan_data
-
-        # Calculate weighted averages for Coke Rate, CDI, Fuel Rate (by HM)
-        for param in ['Coke Rate', 'CDI']:
-            values = []
-            for plant, data in bf_data.items():
-                param_obj = data.get(param)
-                val = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
-                if val is not None:
-                    weight = hm_weights.get(plant, 0)
-                    if v is not None and weight:
-                        values.append((v, weight))
-
-            if values:
-                total_val = sum(v * w for v, w in values)
-                total_weight = sum(w for v, w in values)
-                sail_params[param] = round(total_val / total_weight, 3)
-
-        # Calculate Fuel Rate = Coke Rate + CDI
-        if sail_params['Coke Rate'] and sail_params['CDI']:
-            sail_params['Fuel Rate'] = round(sail_params['Coke Rate'] + sail_params['CDI'], 3)
-
-        # Calculate BF Productivity (harmonic mean)
-        productivity_values = []
-        for plant, data in bf_data.items():
-            val = data.get('BF Productivity')
-            if val is not None:
-                v = val.get('value') if isinstance(val, dict) else val
-                if v is not None and v > 0:
-                    productivity_values.append(v)
-
-        if productivity_values:
-            n = len(productivity_values)
-            harmonic_mean = n / sum(1/v for v in productivity_values)
-            sail_params['BF Productivity'] = round(harmonic_mean, 3)
-
-        # Calculate S.E.C. (weighted avg by CS)
-        sms_shops = list(shop_to_plant.keys())
-        sec_values = []
-        for shop in sms_shops:
-            plant = shop_to_plant[shop]
-            shop_data = db.get_techno_plan(plant, report_month)
-            if isinstance(shop_data, dict):
-                # S.E.C. might need to be calculated or fetched
-                # For now, we'll calculate it if components are available
-                weight = shop_cs_weights.get(shop, 0)
-                if weight:
-                    # Placeholder - would need actual S.E.C. data or calculation
-                    sec_values.append((0, weight))
-
-        conn.close()
-
-        return {
-            "status": "success",
-            "fy": fy,
-            "report_month": report_month,
-            "sail_parameters": sail_params,
-            "hm_weights": hm_weights,
-            "cs_weights": shop_cs_weights
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
