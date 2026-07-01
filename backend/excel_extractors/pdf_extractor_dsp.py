@@ -212,7 +212,11 @@ _SECTION_HEADINGS = {
     'sms':      ("STEEL MELTING SHOP", "BOF SHOP"),
     'sms2':     ("STEEL MELTING SHOP", "BOF SHOP CONTD"), # SMS page 2 (raw-material rates)
     'bf_main':  ("BLAST FURNACE", "SILICON IN HM"),        # BF page 1: Si, S, Slag, Productivity
-    'bf_cdi':   ("BLAST FURNACE", "CDI RATE"),             # BF page 2: CDI, Coke Rate, Sinter
+    'bf_cdi':   ("BLAST FURNACE", "NUT COKE RATE"),        # BF page 2: CDI, Coke Rate, Sinter
+    # NOTE: h2 was "CDI RATE" but that also matches the narrative "Highlights"
+    # page's prose ("...achieved best monthly CDI rate..."), which appears
+    # earlier in the document and would win the scan first. "NUT COKE RATE"
+    # only appears on the real BF-CDI data table.
 }
 
 
@@ -296,8 +300,10 @@ def _parse_te_nums(line):
     '--' (furnace-not-operating marker) is returned as None so that column
     alignment is preserved.
     """
-    # Strip best-achieved: number followed by (YY-YY) — allow trailing space before ')'
-    line2 = re.sub(r'\d[\d,.]*\s*\(\d{2}-\d{2}\s*\)', '', line)
+    # Strip best-achieved: number followed by (YY-YY) — allow trailing space
+    # before ')' and a stray leading quote before the year (seen as "('04-05)"
+    # in some rows, e.g. Sinter in Burden: Shop, instead of "(04-05)").
+    line2 = re.sub(r"\d[\d,.]*\s*\(['‘’]?\d{2}-\d{2}\s*\)", '', line)
     # Strip unit labels with embedded digits: NM3/T, NM3/TDC, Nm3, etc.
     line2 = re.sub(r'\b[A-Za-z]+\d+(?:[/][A-Za-z]+)*\b', '', line2)
     result = []
@@ -345,12 +351,53 @@ def _te_values_techno(nums, report_month_num=None):
     - 5 values: [Norm | Current | CurrentCum | Prior | PriorCum]
     - 4 values: [Current | CurrentCum | Prior | PriorCum] (Norm removed by regex)
 
+    March-edition annual layout (18-20 values): the March report shows the
+    full FY breakdown per row instead of a handful of trailing columns —
+    [Norm?, PriorFY_annual, Apr, May, Jun, Q1, Jul, Aug, Sep, Q2, Oct, Nov,
+     Dec, Q3, Jan, Feb, Mar, Q4, CurrentFY_annual, PriorFY_annual]
+    Mar/Q4/CurrentFY_annual/PriorFY_annual are always the last 4 entries
+    regardless of whether the leading Norm/PriorFY_annual columns are both
+    present, so they're addressed by negative index. Verified against real
+    reports: Q4 (nums[-3]) consistently equals avg(Jan, Feb, Mar).
+
     report_month_num: Month number (1-12) to determine if prior_cum should be included.
     - Prior cumulative is only valid for March (month 3) - represents full FY Apr-Mar
     - For other months, prior_cum is set to None (Apr-May is not a complete FY)
 
     Returns: (actual_current, cum_current, actual_prior, cum_prior)
     """
+    if report_month_num == 3 and len(nums) in (19, 20):
+        # March annual-layout row, Major-page shape:
+        # [Norm?, PriorFY_annual, Apr..Feb, Mar, Q4, CurrentFY_annual, PriorFY_annual]
+        # actual_prior isn't broken out separately in this shape — only the
+        # prior FY's annual total is available. Verified: Q4 == avg(Jan,Feb,Mar).
+        actual_current = nums[-4]
+        cum_current    = nums[-2]
+        actual_prior   = None
+        cum_prior      = nums[-1]
+        return actual_current, cum_current, actual_prior, cum_prior
+
+    if len(nums) >= 14:
+        # BF/SMS/Coke/Sinter-page "growing FY table" row: every month, a new
+        # month column is appended, and at quarter-end (Jun/Sep/Dec/Mar) a
+        # quarter-subtotal column is appended too. The row always ends with
+        # [current_month, (current_Q, only at quarter-end), YTD_so_far,
+        #  prior_year_same_month, (prior_Q, only at quarter-end), prior_year_ref].
+        # Verified via quarterly cross-check (Q == avg of its 3 months) for
+        # both a quarter-end month (Mar) and a mid-quarter month (Feb).
+        if report_month_num in (3, 6, 9, 12):
+            actual_current = nums[-6]
+            cum_current    = nums[-4]
+            actual_prior   = nums[-3]
+        else:
+            actual_current = nums[-4]
+            cum_current    = nums[-3]
+            actual_prior   = nums[-2]
+        # Prior-year cumulative only represents a complete FY at March —
+        # any other month's "prior_year_ref" column is a partial-year figure.
+        cum_prior = nums[-1] if report_month_num == 3 else None
+        return actual_current, cum_current, actual_prior, cum_prior
+
     if len(nums) == 7:
         # Volume + Best_Ach (stripped) + Norm + Current + CurrentCum + Prior + PriorCum
         # e.g. BF working productivity: [Vol | Norm | Apr | May | Cum | PriorApr | PriorCum]
