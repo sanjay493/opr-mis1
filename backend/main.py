@@ -1209,11 +1209,14 @@ async def bsl_bf_techno_preview(
                 "production": till_month.get("production"),
                 "bf_productivity": till_month.get("bf_productivity"),
                 "coke_rate": till_month.get("coke_rate"),
+                "nut_coke_rate": till_month.get("nut_coke_rate"),
                 "cdi": till_month.get("cdi"),
                 "fuel_rate": till_month.get("fuel_rate"),
                 "hot_blast_temp": till_month.get("hot_blast_temp"),
                 "o2_enrichment": till_month.get("o2_enrichment"),
                 "slag_rate": till_month.get("slag_rate"),
+                "sinter_in_burden": till_month.get("sinter_in_burden"),
+                "pellet_in_burden": till_month.get("pellet_in_burden"),
             }
             editable_data.append(row)
 
@@ -1340,11 +1343,14 @@ async def bsl_bf_techno_save(payload: dict):
                     "production": row.get("production"),
                     "bf_productivity": row.get("bf_productivity"),
                     "coke_rate": row.get("coke_rate"),
+                    "nut_coke_rate": row.get("nut_coke_rate"),
                     "cdi": row.get("cdi"),
                     "fuel_rate": row.get("fuel_rate"),
                     "hot_blast_temp": row.get("hot_blast_temp"),
                     "o2_enrichment": row.get("o2_enrichment"),
                     "slag_rate": row.get("slag_rate"),
+                    "sinter_in_burden": row.get("sinter_in_burden"),
+                    "pellet_in_burden": row.get("pellet_in_burden"),
                 }
             }
 

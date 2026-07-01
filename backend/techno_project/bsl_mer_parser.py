@@ -7,6 +7,18 @@ Parses raw PDF text and extracts techno parameters for each furnace.
 import re
 from typing import Dict, List, Optional, Tuple
 
+_FURNACE_RE = re.compile(r'^(\d+|SHOP|SH)\b', re.IGNORECASE)
+_FURNACE_MAP = {"1": "BF-1", "2": "BF-2", "4": "BF-4", "5": "BF-5", "SHOP": "BF_Shop", "SH": "BF_Shop"}
+
+
+def _match_unit(furnace_str: str) -> Optional[str]:
+    """Identify the furnace/shop unit from a row's first cell, tolerant of
+    the different shop abbreviations used across tables ("Shop"/"SHOP"/"SH")."""
+    m = _FURNACE_RE.match(furnace_str or "")
+    if not m:
+        return None
+    return _FURNACE_MAP.get(m.group(1).upper())
+
 
 def _extract_both_values(value_str) -> Tuple[Optional[float], Optional[float]]:
     """Extract both monthly and cumulative values from 'monthly/cumulative' format.
@@ -43,32 +55,6 @@ def _extract_both_values(value_str) -> Tuple[Optional[float], Optional[float]]:
     return monthly, cumulative
 
 
-def _extract_monthly_value(value_str) -> Optional[float]:
-    """Extract monthly value from 'monthly/till_month' or single value format."""
-    if not value_str:
-        return None
-
-    s = str(value_str).strip()
-
-    if not s or s in ("NA", "N/A", "-", "--", "", "***", "#DIV/0!"):
-        return None
-
-    try:
-        # Extract before "/" if present
-        if "/" in s:
-            s = s.split("/")[0].strip()
-
-        # Remove non-numeric characters except decimal point and minus
-        s = re.sub(r'[^0-9.\-]', '', s)
-
-        if s and s != "-":
-            return float(s)
-    except (ValueError, TypeError):
-        pass
-
-    return None
-
-
 class BslMerParser:
     """Parse BSL Month-End Report from PDF text."""
 
@@ -92,20 +78,13 @@ class BslMerParser:
         """
         Parse PDF text and extract parameters.
 
-        Returns: {"BF-1": {"production": 3678, ...}, ...}
+        Returns: {"BF-1": {"production_month": 3678, ...}, ...}
         """
         units = {unit: {} for unit in ["BF-1", "BF-2", "BF-4", "BF-5", "BF_Shop"]}
 
-        # Extract production data
         self._extract_production_data(units)
-
-        # Extract quality data
         self._extract_quality_data(units)
-
-        # Extract consumption data
         self._extract_consumption_data(units)
-
-        # Calculate burden percentages
         self._calculate_burden_percentages(units)
 
         return units
@@ -116,64 +95,40 @@ class BslMerParser:
         if prod_idx < 0:
             return
 
-        # Section boundaries
-        coke_idx = self.text.find("COKE RATE", prod_idx)
-        if coke_idx < 0:
-            coke_idx = len(self.text)
+        # Section ends where the Quality Parameters table's header begins
+        section_end = self.text.find("COKE RATE", prod_idx)
+        if section_end < 0:
+            section_end = len(self.text)
 
-        prod_section = self.text[prod_idx:coke_idx]
+        prod_section = self.text[prod_idx:section_end]
         lines = prod_section.split("\n")
 
         for line in lines:
-            # Skip short or non-data lines
-            if not "|" in line or len(line) < 50:
+            if "|" not in line or len(line) < 50:
                 continue
-
-            # Skip header and separator lines
             if any(keyword in line for keyword in ["PRODUCTION", "FCS", "No", "Tonnes", "Rate", "Temp"]):
                 continue
-
-            # Skip lines with many asterisks (under repair - BF-3)
             if line.count("*") > 10:
                 continue
 
             cells = [c.strip() for c in line.split("|")]
-
             if len(cells) < 15:
                 continue
 
-            # Check if this looks like a data row
             has_production = "/" in str(cells[2] if len(cells) > 2 else "")
             if not has_production:
                 continue
 
-            # Extract furnace ID from cells[1] - format is "1.", "2.", "4.", "5.", "SHOP"
-            furnace_str = cells[1] if len(cells) > 1 else ""
-            if not furnace_str:
+            unit_id = _match_unit(cells[1] if len(cells) > 1 else "")
+            if not unit_id:
                 continue
-
-            # Match furnace patterns: "1.", "1 ", "2.", "4.", "5.", "SHOP"
-            fnum_match = re.match(r'^(\d+|SHOP)', furnace_str)
-            if not fnum_match:
-                continue
-
-            fnum = fnum_match.group(1)
-
-            # Map to furnace names - skip BF-3
-            furnace_map = {"1": "BF-1", "2": "BF-2", "4": "BF-4", "5": "BF-5", "SHOP": "BF_Shop"}
-
-            if fnum not in furnace_map:
-                continue
-
-            unit_id = furnace_map[fnum]
 
             # [2] = Production (3203/104510)
-            if len(cells) > 2:
-                m, c = _extract_both_values(cells[2])
-                if m is not None:
-                    units[unit_id]["production_month"] = m
-                if c is not None:
-                    units[unit_id]["production_cumul"] = c
+            m, c = _extract_both_values(cells[2])
+            if m is not None:
+                units[unit_id]["production_month"] = m
+            if c is not None:
+                units[unit_id]["production_cumul"] = c
 
             # [13] = Hot Blast Temp (1100/1093)
             if len(cells) > 13:
@@ -192,14 +147,22 @@ class BslMerParser:
                     units[unit_id]["bf_productivity_cumul"] = c
 
     def _extract_quality_data(self, units: Dict):
-        """Extract from QUALITY PARAMETERS section - look for COKE RATE header."""
-        # Find "COKE RATE" text which marks the quality table section
+        """Extract from QUALITY PARAMETERS section (Coke/Nut Coke/CDI/Fuel Rate).
+
+        Bounded strictly between the "COKE RATE" header and "CAST DETAILS" —
+        the Cast Details table that follows has furnace-ID rows with the same
+        shape ("| 1. | .../... | ...") and was previously being scanned too
+        (section end was found via the next "Consumption" match, which is
+        *after* Cast Details), silently overwriting Coke/Nut Coke/CDI/Fuel
+        Rate with Cast Details columns.
+        """
         coke_idx = self.text.find("COKE RATE")
         if coke_idx < 0:
             return
 
-        # Extract section from COKE RATE onwards
-        section_end = self.text.find("Consumption", coke_idx)
+        section_end = self.text.find("CAST DETAILS", coke_idx)
+        if section_end < 0:
+            section_end = self.text.find("Consumption", coke_idx)
         if section_end < 0:
             section_end = coke_idx + 3000
 
@@ -207,198 +170,142 @@ class BslMerParser:
         lines = qual_section.split("\n")
 
         for line in lines:
-            # Skip short lines and header lines
-            if not "|" in line or len(line) < 40:
+            if "|" not in line or len(line) < 40:
                 continue
-
-            # Skip header/separator lines (they contain text keywords)
             if any(keyword in line for keyword in ["COKE", "CDI", "FUEL", "FCS", "No", "kg/THM", "N/C"]):
                 continue
-
-            # Skip lines with many asterisks (under repair marker - BF-3)
             if line.count("*") > 10:
                 continue
 
             cells = [c.strip() for c in line.split("|")]
-
-            # Need at least columns up to fuel rate [11]
             if len(cells) < 12:
                 continue
 
-            # Check if this looks like a data row (has "/" delimiters in the right columns)
             has_coke = "/" in str(cells[8] if len(cells) > 8 else "")
-            has_cdi = "/" in str(cells[10] if len(cells) > 10 else "")
+            has_cdi  = "/" in str(cells[10] if len(cells) > 10 else "")
             has_fuel = "/" in str(cells[11] if len(cells) > 11 else "")
-
             if not (has_coke and has_cdi and has_fuel):
                 continue
 
-            # Extract furnace ID from cells[1] - format is "1.", "2.", "4.", "5.", "SHOP"
-            furnace_str = cells[1] if len(cells) > 1 else ""
-            if not furnace_str:
+            unit_id = _match_unit(cells[1] if len(cells) > 1 else "")
+            if not unit_id:
                 continue
-
-            # Match furnace patterns
-            fnum_match = re.match(r'^(\d+|SHOP)', furnace_str)
-            if not fnum_match:
-                continue
-
-            fnum = fnum_match.group(1)
-            furnace_map = {"1": "BF-1", "2": "BF-2", "4": "BF-4", "5": "BF-5", "SHOP": "BF_Shop"}
-
-            if fnum not in furnace_map:
-                continue
-
-            unit_id = furnace_map[fnum]
 
             # [8] = Coke Rate (440/439)
-            if len(cells) > 8:
-                m, c = _extract_both_values(cells[8])
-                if m is not None:
-                    units[unit_id]["coke_rate_month"] = m
-                if c is not None:
-                    units[unit_id]["coke_rate_cumul"] = c
+            m, c = _extract_both_values(cells[8])
+            if m is not None:
+                units[unit_id]["coke_rate_month"] = m
+            if c is not None:
+                units[unit_id]["coke_rate_cumul"] = c
 
-            # [9] = N/C Rate / Nut Coke Rate (19/16) - NEW!
-            if len(cells) > 9:
-                m, c = _extract_both_values(cells[9])
-                if m is not None:
-                    units[unit_id]["nut_coke_rate_month"] = m
-                if c is not None:
-                    units[unit_id]["nut_coke_rate_cumul"] = c
+            # [9] = N/C Rate / Nut Coke Rate (19/16)
+            m, c = _extract_both_values(cells[9])
+            if m is not None:
+                units[unit_id]["nut_coke_rate_month"] = m
+            if c is not None:
+                units[unit_id]["nut_coke_rate_cumul"] = c
 
             # [10] = CDI Rate (108/94)
-            if len(cells) > 10:
-                m, c = _extract_both_values(cells[10])
-                if m is not None:
-                    units[unit_id]["cdi_month"] = m
-                if c is not None:
-                    units[unit_id]["cdi_cumul"] = c
+            m, c = _extract_both_values(cells[10])
+            if m is not None:
+                units[unit_id]["cdi_month"] = m
+            if c is not None:
+                units[unit_id]["cdi_cumul"] = c
 
             # [11] = Fuel Rate (568/548)
-            if len(cells) > 11:
-                m, c = _extract_both_values(cells[11])
-                if m is not None:
-                    units[unit_id]["fuel_rate_month"] = m
-                if c is not None:
-                    units[unit_id]["fuel_rate_cumul"] = c
+            m, c = _extract_both_values(cells[11])
+            if m is not None:
+                units[unit_id]["fuel_rate_month"] = m
+            if c is not None:
+                units[unit_id]["fuel_rate_cumul"] = c
 
     def _extract_consumption_data(self, units: Dict):
-        """Extract from CONSUMPTION OF RAW MATERIAL section - match by furnace ID."""
+        """Extract from "Consumption of Raw Material / Consumption Rates" section.
+
+        Column layout (verified against sample reports):
+          [2]=Coke(t) [3]=IronOre(t) [4]=Sinter(t) [5]=Scrap(t) [6]=NutCoke
+          [7]=CDI [8]=Pellet [9]=CokeEco [10]=O2 En(%) [11]=SLG RATE
+        """
         cons_idx = self.text.find("Consumption")
-        if cons_idx < 0:
-            cons_idx = self.text.find("CONSUMPTION")
         if cons_idx < 0:
             return
 
-        cons_section = self.text[cons_idx:cons_idx + 5000]
+        section_end = self.text.find("PCM DETAILS", cons_idx)
+        if section_end < 0:
+            section_end = cons_idx + 5000
+
+        cons_section = self.text[cons_idx:section_end]
         lines = cons_section.split("\n")
 
         for line in lines:
-            if not "|" in line or len(line) < 50:
+            if "|" not in line or len(line) < 50:
                 continue
-
-            # Skip header lines
             if any(keyword in line for keyword in ["O2", "SLAG", "CARBON", "DUST", "Ratio", "kg/", "CONSUMPTION"]):
                 continue
-
-            # Skip lines with many asterisks (BF-3 under repair)
             if line.count("*") > 10:
                 continue
 
             cells = [c.strip() for c in line.split("|")]
-
-            if len(cells) < 10:
+            if len(cells) < 12:
                 continue
 
-            # Extract furnace ID from cells[1] - format is "1.", "2.", "4.", "5.", "SHOP"
-            furnace_str = cells[1] if len(cells) > 1 else ""
-            if not furnace_str:
+            unit_id = _match_unit(cells[1] if len(cells) > 1 else "")
+            if not unit_id:
                 continue
 
-            # Match furnace patterns
-            fnum_match = re.match(r'^(\d+|SHOP)', furnace_str)
-            if not fnum_match:
-                continue
+            # Raw material consumption — all "monthly/till_month" pairs
+            m, c = _extract_both_values(cells[3] if len(cells) > 3 else "")
+            if m is not None:
+                units[unit_id]["iron_ore_consumption_month"] = m
+            if c is not None:
+                units[unit_id]["iron_ore_consumption_cumul"] = c
 
-            fnum = fnum_match.group(1)
-            furnace_map = {"1": "BF-1", "2": "BF-2", "4": "BF-4", "5": "BF-5", "SHOP": "BF_Shop"}
+            m, c = _extract_both_values(cells[4] if len(cells) > 4 else "")
+            if m is not None:
+                units[unit_id]["sinter_consumption_month"] = m
+            if c is not None:
+                units[unit_id]["sinter_consumption_cumul"] = c
 
-            if fnum not in furnace_map:
-                continue
+            m, c = _extract_both_values(cells[5] if len(cells) > 5 else "")
+            if m is not None:
+                units[unit_id]["scrap_consumption_month"] = m
+            if c is not None:
+                units[unit_id]["scrap_consumption_cumul"] = c
 
-            unit_id = furnace_map[fnum]
+            m, c = _extract_both_values(cells[8] if len(cells) > 8 else "")
+            if m is not None:
+                units[unit_id]["pellet_consumption_month"] = m
+            if c is not None:
+                units[unit_id]["pellet_consumption_cumul"] = c
 
-            # Consumption table columns (approx):
-            # [2]=Coke [3]=IronOre [4]=Sinter [5]=Scrap [6]=NutCoke [7]=CDI [8]=Pellet [9]=CokeEco [10]=O2 [11]=Slag [12]=SinterPct
+            # [10] = O2 Enrichment (%)
+            m, c = _extract_both_values(cells[10] if len(cells) > 10 else "")
+            if m is not None:
+                units[unit_id]["o2_enrichment_month"] = m
+            if c is not None:
+                units[unit_id]["o2_enrichment_cumul"] = c
 
-            # Iron Ore (t) - usually column 3
-            if len(cells) > 3:
-                try:
-                    val = float(cells[3])
-                    units[unit_id]["iron_ore_cumul"] = val
-                except:
-                    pass
-
-            # Sinter (t) - usually column 4
-            if len(cells) > 4:
-                try:
-                    val = float(cells[4])
-                    units[unit_id]["sinter_cumul"] = val
-                except:
-                    pass
-
-            # Pellet (t) - usually column 8
-            if len(cells) > 8:
-                try:
-                    val = float(cells[8])
-                    units[unit_id]["pellet_cumul"] = val
-                except:
-                    pass
-
-            # Sinter % in Burden - usually column 12 (may have "/" format)
-            if len(cells) > 12:
-                m, c = _extract_both_values(cells[12])
-                if c is not None:
-                    units[unit_id]["sinter_pct_burden"] = c
-                elif m is not None:
-                    units[unit_id]["sinter_pct_burden"] = m
-
-            # O2 Enrichment (try multiple columns as layout varies)
-            for col_idx in [10, 11, 9, 12]:
-                if len(cells) > col_idx:
-                    m, c = _extract_both_values(cells[col_idx])
-                    if m is not None or c is not None:
-                        if m is not None:
-                            units[unit_id]["o2_enrichment_month"] = m
-                        if c is not None:
-                            units[unit_id]["o2_enrichment_cumul"] = c
-                        break
-
-            # Slag Rate (try multiple columns)
-            for col_idx in [11, 12, 10, 13]:
-                if len(cells) > col_idx:
-                    m, c = _extract_both_values(cells[col_idx])
-                    if m is not None or c is not None:
-                        if m is not None:
-                            units[unit_id]["slag_rate_month"] = m
-                        if c is not None:
-                            units[unit_id]["slag_rate_cumul"] = c
-                        break
+            # [11] = Slag Rate
+            m, c = _extract_both_values(cells[11] if len(cells) > 11 else "")
+            if m is not None:
+                units[unit_id]["slag_rate_month"] = m
+            if c is not None:
+                units[unit_id]["slag_rate_cumul"] = c
 
     def _calculate_burden_percentages(self, units: Dict):
-        """Calculate Sinter % and Pellet % in Burden."""
+        """Calculate Sinter % and Pellet % in Burden from raw material consumption,
+        separately for the month and till_month (cumulative) periods."""
         for unit, params in units.items():
-            iron_ore = params.get("iron_ore_consumption") or 0
-            sinter = params.get("sinter_consumption") or 0
-            pellet = params.get("pellet_consumption") or 0
-            scrap = params.get("scrap_consumption") or 0
+            for suffix in ("month", "cumul"):
+                iron_ore = params.get(f"iron_ore_consumption_{suffix}") or 0
+                sinter   = params.get(f"sinter_consumption_{suffix}") or 0
+                pellet   = params.get(f"pellet_consumption_{suffix}") or 0
+                scrap    = params.get(f"scrap_consumption_{suffix}") or 0
 
-            total = iron_ore + sinter + pellet + scrap
-
-            if total > 0:
-                params["sinter_in_burden"] = round((sinter / total) * 100, 2)
-                params["pellet_in_burden"] = round((pellet / total) * 100, 2)
+                total = iron_ore + sinter + pellet + scrap
+                if total > 0:
+                    params[f"sinter_in_burden_{suffix}"] = round((sinter / total) * 100, 2)
+                    params[f"pellet_in_burden_{suffix}"] = round((pellet / total) * 100, 2)
 
 
 def extract_bsl_mer(pdf_text: str, report_month: str = "", filename: str = "") -> List[Dict]:
@@ -427,36 +334,15 @@ def extract_bsl_mer(pdf_text: str, report_month: str = "", filename: str = "") -
         if not params:
             continue
 
-        # Map extracted parameters to month and till_month fields
         month_params = {}
         till_month_params = {}
 
-        # Map _month and _cumul suffixes to proper fields
-        param_mapping = {
-            "production_month": "production",
-            "production_cumul": "production",
-            "bf_productivity_month": "bf_productivity",
-            "bf_productivity_cumul": "bf_productivity",
-            "coke_rate_month": "coke_rate",
-            "coke_rate_cumul": "coke_rate",
-            "cdi_month": "cdi",
-            "cdi_cumul": "cdi",
-            "fuel_rate_month": "fuel_rate",
-            "fuel_rate_cumul": "fuel_rate",
-            "hot_blast_temp_month": "hot_blast_temp",
-            "hot_blast_temp_cumul": "hot_blast_temp",
-            "o2_enrichment_month": "o2_enrichment",
-            "o2_enrichment_cumul": "o2_enrichment",
-            "slag_rate_month": "slag_rate",
-            "slag_rate_cumul": "slag_rate",
-        }
-
         for key, val in params.items():
             if key.endswith("_month"):
-                param_name = key.replace("_month", "")
+                param_name = key[:-len("_month")]
                 month_params[param_name] = val
             elif key.endswith("_cumul"):
-                param_name = key.replace("_cumul", "")
+                param_name = key[:-len("_cumul")]
                 till_month_params[param_name] = val
 
         records.append({
