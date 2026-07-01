@@ -1730,6 +1730,22 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     finally:
         conn3.close()
 
+    # Fetch Hot Metal production for SAIL BF weighted-average computation
+    _hm_monthly = {}  # {plant: {month: month_actual}}
+    conn4 = sqlite3.connect(db.DB_PATH)
+    cur4 = conn4.cursor()
+    try:
+        ph4 = ",".join("?" * len(all_months))
+        cur4.execute(
+            f"SELECT plant_name, report_month, month_actual FROM production_table "
+            f"WHERE report_month IN ({ph4}) AND item_name='Hot Metal'",
+            all_months,
+        )
+        for _pn, _rm, _val in cur4.fetchall():
+            _hm_monthly.setdefault(_pn, {})[_rm] = _val
+    finally:
+        conn4.close()
+
     # SMS unit mapping and shop counts for SAIL weighting
     _sms_unit_map = {
         "BSP": ["SMS-2", "SMS-3"],
@@ -1841,6 +1857,31 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
     def _fy_val_multi(plant, march_rm, src_units, src_key):
         return _gv_multi(plant, march_rm, src_units, src_key, "till_month")
+
+    def _bf_sail(src_key, src_units, ref_month, period, weight_by="hm", harmonic=False):
+        """Compute SAIL weighted average (or harmonic mean, for BF Productivity)
+        across plants for a BF-level parameter.
+        weight_by="hm" weights by plant Hot Metal production (BF params);
+        weight_by="cs" weights by plant Crude Steel production (Specific
+        Energy Consumption). Returns None if no data available."""
+        weights = _hm_monthly if weight_by == "hm" else _cs_monthly
+        num = den = 0.0
+        for _plant in _BF_PLANTS:
+            w = weights.get(_plant, {}).get(ref_month, 0)
+            if not w or w <= 0:
+                continue
+            v = _gv_multi(_plant, ref_month, src_units, src_key, period)
+            if v is None:
+                continue
+            if harmonic:
+                if v <= 0:
+                    continue
+                num += w
+                den += w / v
+            else:
+                num += v * w
+                den += w
+        return num / den if den > 0 else None
 
     def _build_row(label, unit_str, month_fn, cum_fn, cply_fn, fy1_fn, fy2_fn, fy3_fn, cum_cply_fn=None, target_fn=None, param_name=""):
         return {
@@ -2027,6 +2068,20 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             "Scrap Consumption":     ("specific_scrap_consumption", False),
             "TMI":                   (None, True),
         }
+        # BF-level params: weighted average by plant Hot Metal production;
+        # BF Productivity: harmonic mean by HM; Specific Energy Consumption:
+        # weighted average by plant Crude Steel production.
+        _BF_SAIL_SPECS = {
+            "Coal to Hot Metal":           ("coal_to_hm",                  ["General", "BF_Shop"], "hm", False),
+            "Coke Rate":                   ("coke_rate",                   _BF_UNITS,               "hm", False),
+            "Nut Coke Rate":               ("nut_coke_rate",               _BF_UNITS,               "hm", False),
+            "CDI Rate":                    ("cdi",                         _BF_UNITS,               "hm", False),
+            "Fuel Rate":                   ("fuel_rate",                   _BF_UNITS,               "hm", False),
+            "Sinter in Burden":            ("sinter_in_burden",            _BF_UNITS,               "hm", False),
+            "Pellet in Burden":            ("pellet_in_burden",            _BF_UNITS,               "hm", False),
+            "BF Productivity":             ("bf_productivity",             _BF_UNITS,               "hm", True),
+            "Specific Energy Consumption": ("specific_energy_consumption", ["General"],             "cs", False),
+        }
         if param_name in _SMS_PARAM_KEYS:
             _sk, _is_tmi = _SMS_PARAM_KEYS[param_name]
             sail_row = {
@@ -2040,6 +2095,20 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 "cply":   _fmt_param(_sms_sail(_sk, _is_tmi, cply_month,    "month"),      param_name),
                 "cum":    _fmt_param(_sms_sail(_sk, _is_tmi, report_month,  "till_month"), param_name),
                 "cum_cply": _fmt_param(_sms_sail(_sk, _is_tmi, cply_month,  "till_month"), param_name),
+            }
+        elif param_name in _BF_SAIL_SPECS:
+            _sk, _su, _wb, _harm = _BF_SAIL_SPECS[param_name]
+            sail_row = {
+                "label":  "SAIL",
+                "unit":   section["rows"][0]["unit"] if section["rows"] else "",
+                "fy3":    _fmt_param(_bf_sail(_sk, _su, fy3_march,     "till_month", _wb, _harm), param_name),
+                "fy2":    _fmt_param(_bf_sail(_sk, _su, fy2_march,     "till_month", _wb, _harm), param_name),
+                "fy1":    _fmt_param(_bf_sail(_sk, _su, fy1_march,     "till_month", _wb, _harm), param_name),
+                "target": _fmt_param(sail_plan_value, param_name) if sail_plan_value else "",
+                "months": [_fmt_param(_bf_sail(_sk, _su, m,            "month",      _wb, _harm), param_name) for m in ytd],
+                "cply":   _fmt_param(_bf_sail(_sk, _su, cply_month,    "month",      _wb, _harm), param_name),
+                "cum":    _fmt_param(_bf_sail(_sk, _su, report_month,  "till_month", _wb, _harm), param_name),
+                "cum_cply": _fmt_param(_bf_sail(_sk, _su, cply_month,  "till_month", _wb, _harm), param_name),
             }
         else:
             sail_row = {
