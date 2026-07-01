@@ -35,8 +35,8 @@
     "bf_productivity": 100,
     "nut_coke_rate":112,
     "fuel_rate": 157,
-    "sinter% in burden": 124,
-    "pellet% in burden": 125,
+    "sinter_in_burden": 124,
+    "pellet_in_burden": 125,
     "o2_enrichment": 136,
     "hot_blast_temp": 141,
     "silicon_in_hm": 146
