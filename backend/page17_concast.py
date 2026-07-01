@@ -11,13 +11,16 @@ import db
 # actuals table
 _ACT = {
     "BSP":  ["SMS-2", "SMS-3"],
-    "DSP":  "Total Caster",
+    "DSP":  "SMS Total Caster",
     "RSP":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
     "BSL":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2"],
     "ISP":  ["SMS CCM-1&2", "SMS CCM-3"],
-    "ASP":  "Total Crude Steel",   # ASP is fully CC; no separate Concast in actuals
-    "SSP":  "Total Crude Steel",   # SSP is fully CC
-    "VISL": "Total Crude Steel",
+    "ASP":  "Total Caster",        # DSP & ASP produce crude steel via both
+                                    # Concast and Ingot routes — "Total Caster"
+                                    # is ASP's concast-only actual (its Ingot
+                                    # route is tracked separately as "Ingot Steel")
+    "SSP":  "Total Crude Steel",   # SSP is fully CC; no separate item exists
+    "VISL": "Total Crude Steel",   # actual table has no Concast/Ingot split for VISL
 }
 
 # plan table  (BSP plan stored as sub-items; sum them to get SMS-2/SMS-3 totals)
