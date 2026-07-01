@@ -1799,8 +1799,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     # Alternate key names used by different plants for the same parameter
     # Primary key → [legacy/alternate keys] for backward compat with old DB rows
     _KEY_ALIASES = {
-        "sinter% in burden":          ["sinter_in_burden"],
-        "pellet% in burden":          ["pellet_in_burden"],
+        "sinter_in_burden":           ["sinter% in burden"],
+        "pellet_in_burden":           ["pellet% in burden"],
         "cdi":                        ["cdi_rate"],
         "specific_energy_consumption": ["sp_energy", "specific_energy"],
         # BF quality (old BSL: si_in_hm/s_in_hm/hot_metal_temp; RSP/ISP: si%_in_hm/s%_in_hm)
@@ -1995,8 +1995,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         unit_section("Nut Coke Rate",               "kg/thm",     _BF_UNITS,   "nut_coke_rate"),
         unit_section("CDI Rate",                    "kg/thm",     _BF_UNITS,   "cdi"),
         unit_section("Fuel Rate",                   "kg/thm",     _BF_UNITS,   "fuel_rate"),
-        unit_section("Sinter in Burden",            "%",          _BF_UNITS,   "sinter% in burden"),
-        unit_section("Pellet in Burden",            "%",          _BF_UNITS,   "pellet% in burden"),
+        unit_section("Sinter in Burden",            "%",          _BF_UNITS,   "sinter_in_burden"),
+        unit_section("Pellet in Burden",            "%",          _BF_UNITS,   "pellet_in_burden"),
         unit_section("BF Productivity",             "t/m³/day",   _BF_UNITS,   "bf_productivity"),
         sms_section ("Hot Metal Consumption",       "kg/tcs",     "specific_hm_consumption"),
         sms_section ("Scrap Consumption",           "kg/tcs",     "specific_scrap_consumption"),

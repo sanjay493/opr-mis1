@@ -38,6 +38,17 @@ def _to_snake(text: str) -> str:
     return s.strip('_')
 
 
+# SMS keys where the plain _to_snake() output diverges from the short/hyphenated
+# convention already used by BSL/RSP/ISP and page_techno.py's own schemas.
+_SMS_KEY_NORM = {
+    "ferro_silicon_consumption":   "fe-si",
+    "ferro_manganese_consumption": "fe-mn",
+    "silicon_manganese_consumption": "si-mn",
+    "heat_size":                   "average_heat_weight",
+    "oxygen_converter":            "oxygen_blowing",
+}
+
+
 def _derive_unit_and_key(row: dict, report_yy: str):
     """
     Map a flat techno_param_row to (unit_name, param_key) for JSON grouping.
@@ -80,7 +91,8 @@ def _derive_unit_and_key(row: dict, report_yy: str):
 
     elif parameter == "DSP SMS":
         # SMS shop parameters — section holds the display label
-        unit, key = "SMS", _to_snake(section)
+        raw_key = _to_snake(section)
+        unit, key = "SMS", _SMS_KEY_NORM.get(raw_key, raw_key)
 
     elif section in _MAJOR_PARAM_SECTIONS:
         # Plant-level KPIs → "General" unit, same as RSP/ISP
