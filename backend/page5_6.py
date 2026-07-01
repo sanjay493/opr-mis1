@@ -29,20 +29,26 @@ PAGE5_PLANTS = [
         # ("Ingot Steel") — the other plants cast everything via Concast.
         ("Ingot",               ("AGG",     {"DSP": "Bottom Pouring Ingot", "ASP": "Ingot Steel"},
                                              _5P + ["ASP"]),               False, False),
-        # Each plant stores its Concast production under a different item
-        # name/granularity — SAIL's total sums each plant's own native items.
-        ("Concast",             ("AGG",     {
-                                     "BSP": ["SMS-2", "SMS-3"],
-                                     "DSP": "SMS Total Caster",
-                                     "RSP": ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
-                                     "BSL": ["SMS-1 CCM-1", "SMS-2 CCM-1&2"],
-                                     "ISP": ["SMS CCM-1&2", "SMS CCM-3"],
-                                     "ASP": "Total Caster",
-                                 }, _5P + ["ASP"]),                        False, False),
+        # Concast is derived as Crude Steel(Tot) - Ingot rather than summed
+        # per-plant: Total Crude Steel = Ingot + Concast, and Crude Steel(Tot)
+        # is the authoritative, directly-tracked figure.
+        ("Concast",             ("AGG_DIFF",
+                                     ("AGG", "Total Crude Steel", _ALL),
+                                     ("AGG", {"DSP": "Bottom Pouring Ingot", "ASP": "Ingot Steel"}, _5P + ["ASP"]),
+                                 ),                                        False, False),
         ("Crude Steel(Tot)",    ("AGG",     "Total Crude Steel",    _ALL), True,  False),
         ("Saleable Steel",      ("AGG",     "Saleable Steel",       _ALL), True,  False),
         ("Finished Steel",      ("AGG",     "Finished Steel",       _ALL), True,  False),
-        ("Semi-finished steel", ("AGG",     "Saleable Semis",       _ALL), False, False),
+        # Five main plants' own "Saleable Semis" item, plus ASP's semi-finished
+        # steel (which ASP doesn't track directly — derived as Saleable - Finished).
+        ("Semi-finished steel", ("AGG",     {
+                                     "BSP": "Saleable Semis",
+                                     "DSP": "Saleable Semis",
+                                     "RSP": "Saleable Semis",
+                                     "BSL": "Saleable Semis",
+                                     "ISP": "Saleable Semis",
+                                     "ASP": ("SUB", "Saleable Steel", "Finished Steel"),
+                                 }, _5P + ["ASP"]),                        False, False),
         ("HR Coils rolling(Tot)", ("AGG",     ["HSM-2 Total HR Coil","HSM Total HR Coil"], _ALL), False, False),
         ("Pig Iron",            ("AGG",     "Pig Iron",             _5PV), False, False),
     ]),
@@ -125,6 +131,9 @@ PAGE6_PLANTS = [
         ("Crude Steel(Tot)",    "Total Crude Steel",     True,  False),
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
+        # ASP has no separate "Saleable Semis" item — semi-finished steel is
+        # the portion of Saleable Steel that isn't yet Finished Steel.
+        ("Semi-finished steel", ("SUB", "Saleable Steel", "Finished Steel"), False, False),
     ]),
     ("SSP", [
         ("Crude Steel",         "Total Crude Steel",     True,  False),
@@ -252,16 +261,24 @@ def _get_agg(cur, table, item, plants, month):
     item may be:
       str            – same item name for every plant
       list[str]      – sum of these item names, for every plant
-      dict           – {plant: item_or_list}, a different spec per plant
-                       (used where plants store the same production
-                       metric under different item names/granularity)
+      dict           – {plant: item_or_list_or_sub}, a different spec per
+                       plant (used where plants store the same production
+                       metric under different item names/granularity).
+                       A dict value may itself be a ("SUB", item_a, item_b)
+                       tuple for a plant whose figure is derived as a
+                       difference of two of its own items.
     """
     total, found = 0.0, False
     for p in plants:
         it = item.get(p) if isinstance(item, dict) else item
         if it is None:
             continue
-        if isinstance(it, list):
+        if isinstance(it, tuple) and it[0] == "SUB":
+            _, item_a, item_b = it
+            va = _get_single(cur, table, p, item_a, month)
+            vb = _get_single(cur, table, p, item_b, month)
+            v = (va - vb) if (va is not None and vb is not None) else None
+        elif isinstance(it, list):
             v = _sum_items(cur, table, p, it, month)
         else:
             v = _get_single(cur, table, p, it, month)
@@ -276,7 +293,20 @@ def _get(cur, table, plant, db_spec, month):
     if db_spec is None:
         return None
     if isinstance(db_spec, tuple):
-        kind, item, plants = db_spec
+        kind = db_spec[0]
+        if kind == "SUB":
+            # Single-plant derived difference: (item_a - item_b) for `plant`.
+            _, item_a, item_b = db_spec
+            va = _get_single(cur, table, plant, item_a, month)
+            vb = _get_single(cur, table, plant, item_b, month)
+            return (va - vb) if (va is not None and vb is not None) else None
+        if kind == "AGG_DIFF":
+            # Difference of two other db_specs (each may itself be an AGG).
+            _, spec_a, spec_b = db_spec
+            va = _get(cur, table, plant, spec_a, month)
+            vb = _get(cur, table, plant, spec_b, month)
+            return (va - vb) if (va is not None and vb is not None) else None
+        _, item, plants = db_spec
         return _get_agg(cur, table, item, plants, month)
     if isinstance(db_spec, list):
         return _sum_items(cur, table, plant, db_spec, month)
