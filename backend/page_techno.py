@@ -1181,60 +1181,117 @@ def calculate_and_store_sail_actuals(report_month: str) -> dict:
 # Page 3 bar chart data
 # ---------------------------------------------------------------------------
 
+def _sail_bf_value_from_json(cur, month, json_key, period='month'):
+    """Compute SAIL-level weighted average for a BF param from techno_data BF_Shop.
+    For BF Productivity uses harmonic mean weighted by HM; others use arithmetic weighted avg.
+    period='month' for single month, 'till_month' for annual cumulative (e.g. March = full FY).
+    """
+    import json as _json
+    vals, hms = {}, {}
+    for plant in _BF_PLANTS:
+        cur.execute(
+            "SELECT techno_json FROM techno_data WHERE plant=? AND unit='BF_Shop' AND report_month=?",
+            (plant, month)
+        )
+        row = cur.fetchone()
+        if row:
+            try:
+                d = _json.loads(row[0])
+                period_data = d.get(period) or d.get('month') or {}
+                v = period_data.get(json_key)
+                if v is not None:
+                    vals[plant] = float(v)
+            except Exception:
+                pass
+        cur.execute(
+            "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name='Hot Metal' AND report_month=?",
+            (plant, month)
+        )
+        r = cur.fetchone()
+        if r and r[0] is not None:
+            hms[plant] = float(r[0])
+
+    if not vals:
+        return None
+
+    if json_key == 'bf_productivity':
+        t_hm = t_denom = 0.0
+        plain = []
+        for p, bfp in vals.items():
+            hm = hms.get(p)
+            if hm and bfp > 0:
+                t_hm += hm
+                t_denom += hm / bfp
+            elif bfp > 0:
+                plain.append(bfp)
+        if t_denom > 0:
+            return t_hm / t_denom
+        if plain:
+            d = sum(1.0 / v for v in plain)
+            return len(plain) / d if d else None
+        return None
+    else:
+        num = den = 0.0
+        plain = []
+        for p, v in vals.items():
+            hm = hms.get(p)
+            if hm and hm > 0:
+                num += v * hm
+                den += hm
+            else:
+                plain.append(v)
+        if den > 0:
+            return num / den
+        if plain:
+            return sum(plain) / len(plain)
+        return None
+
+
 def generate_summary_chart_data(report_month: str) -> dict:
-    """Return chart data for page 3 bar charts (Coke Rate, CDI, BF Productivity, S.E.C.)."""
-    fy             = _fy_start(report_month)
-    cur_fy_months  = [m for m in _fy_months(fy) if m <= report_month]
-    past_fys       = [fy - 3, fy - 2, fy - 1]
+    """Return chart data for page 3 bar charts using techno_data BF_Shop JSON."""
+    fy            = _fy_start(report_month)
+    cur_fy_months = [m for m in _fy_months(fy) if m <= report_month]
+    past_fys      = [fy - 3, fy - 2, fy - 1]
+
+    # (chart label, unit, json_key in BF_Shop techno_json, plan param name)
+    param_specs = [
+        ("Coke Rate",       "Kg/THM",    "coke_rate",       "Coke Rate"),
+        ("PCI Rate",        "Kg/THM",    "cdi",             "CDI Rate"),
+        ("BF Productivity", "T/m³/Day",  "bf_productivity", "BF Productivity"),
+        ("Sp. Energy",      "Gcal/TCS",  "sp_energy",       "Specific Energy Consumption"),
+    ]
+
+    def fy_label(yr):
+        return f"FY{(yr + 1) % 100:02d}"
 
     conn = sqlite3.connect(db.DB_PATH)
     cur  = conn.cursor()
     try:
-        # Targets for current FY SAIL row from new techno_plan structure
-        target_month = f"{fy}-04"  # April = first month of the target FY
-        sail_tgt = _get_techno_plan_targets(target_month)
+        sail_tgt    = _get_techno_plan_targets(f"{fy}-04")
         tgt_by_param = {param.split("|")[-1]: val for (_, param), val in sail_tgt.items()}
 
-        # Fetch component data for current FY months
-        fetch_months = cur_fy_months if cur_fy_months else [report_month]
-        plant_params = _all_sail_plant_params()
-        techno_data  = _fetch_techno_data(cur, plant_params, fetch_months)
-        prod_raw     = _fetch_prod_multi(cur, _BF_PLANTS, ["Hot Metal", "Total Crude Steel"], fetch_months)
-        hm = prod_raw["Hot Metal"]
-        cs = prod_raw["Total Crude Steel"]
-
-        # Past FY annual maps (use stored ytd_actual for SAIL)
-        past_fy_maps = {pfy: _annual_map(cur, pfy)[0] for pfy in past_fys}
-
-        param_specs = [
-            ("Coke Rate",       "Kg/THM",    "Coke Rate"),
-            ("PCI Rate",        "Kg/THM",    "CDI Rate"),
-            ("BF Productivity", "T/m³/Day",  "BF Productivity"),
-            ("Sp. Energy",      "Gcal/TCS",  "Specific Energy Consumption"),
-        ]
-
-        def fy_label_short(yr):
-            return f"FY{(yr + 1) % 100:02d}"
-
         result = []
-        for chart_name, unit, param_name in param_specs:
+        for chart_name, unit, json_key, plan_param in param_specs:
+            # Past FY bars — use till_month from March (full-FY cumulative)
             fy_bars = []
             for pfy in past_fys:
-                raw = past_fy_maps[pfy].get(("SAIL", param_name))
+                v = _sail_bf_value_from_json(cur, f"{pfy + 1}-03", json_key, period='till_month')
                 fy_bars.append({
-                    "label": fy_label_short(pfy),
-                    "value": round(float(raw), 3) if raw is not None else None,
+                    "label": fy_label(pfy),
+                    "value": round(float(v), 3) if v is not None else None,
                 })
 
-            tgt_v = tgt_by_param.get(param_name)
+            # Target bar from techno_plan_fy
+            tgt_v = tgt_by_param.get(plan_param)
             target_bar = {
-                "label": f"{fy_label_short(fy)}\nTarget",
+                "label": f"{fy_label(fy)}\nTarget",
                 "value": round(float(tgt_v), 3) if tgt_v is not None else None,
             }
 
+            # Current FY monthly bars — use month value for each month
             monthly_bars = []
             for m in cur_fy_months:
-                v = _compute_sail(techno_data, hm, cs, [m]).get(("SAIL", param_name))
+                v = _sail_bf_value_from_json(cur, m, json_key, period='month')
                 monthly_bars.append({
                     "label": _mlabel(m),
                     "value": round(float(v), 3) if v is not None else None,
@@ -1725,8 +1782,9 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
     _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
-    # Include plants with actuals data OR with targets defined (but exclude SAIL - it's handled separately)
-    plants_from_data = {p for (p, rm) in store if rm == report_month and p != "SAIL"}
+    # Include plants that have data in current month OR any past-FY march month, plus plants with targets
+    _relevant_months = {report_month, fy1_march, fy2_march, fy3_march}
+    plants_from_data = {p for (p, rm) in store if rm in _relevant_months and p != "SAIL"}
     plants_with_targets = set()
     for p in _PLANT_ORDER:
         plan_data = db.get_techno_plant_plan(p, target_fy)
@@ -1738,12 +1796,51 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         key=lambda p: _PLANT_ORDER.index(p) if p in _PLANT_ORDER else 99,
     )
 
+    # Alternate key names used by different plants for the same parameter
+    # Primary key → [legacy/alternate keys] for backward compat with old DB rows
+    _KEY_ALIASES = {
+        "sinter% in burden":          ["sinter_in_burden"],
+        "pellet% in burden":          ["pellet_in_burden"],
+        "cdi":                        ["cdi_rate"],
+        "specific_energy_consumption": ["sp_energy", "specific_energy"],
+        # BF quality (old BSL: si_in_hm/s_in_hm/hot_metal_temp; RSP/ISP: si%_in_hm/s%_in_hm)
+        "silicon_in_hm":              ["si_in_hm", "si%_in_hm"],
+        "sulphur_in_hm":              ["s_in_hm", "s%_in_hm"],
+        "hot_blast_temp":             ["blast_temperature"],
+        "avg_hot_metal_temperature":  ["hot_metal_temp"],
+        "o2_enrichment":              ["oxygen_enrichment"],
+        # SMS (old DSP: hot_metal_consumption/scrap_consumption)
+        "specific_hm_consumption":    ["hot_metal_consumption"],
+        "specific_scrap_consumption": ["scrap_consumption"],
+        # Coke Ovens (old RSP/ISP: cog_yield; old DSP: dry_coal_charge_per_oven/dry_coal_charge)
+        "coke_oven_gas_yield":        ["cog_yield"],
+        "dry_coal_charge_oven":       ["dry_coal_charge", "dry_coal_charge_per_oven"],
+    }
+
     def _gv(plant, rm, unit, key, period="month"):
-        return store.get((plant, rm), {}).get(unit, {}).get(period, {}).get(key)
+        d = store.get((plant, rm), {}).get(unit, {}).get(period, {})
+        v = d.get(key)
+        if v is None:
+            for alt in _KEY_ALIASES.get(key, []):
+                v = d.get(alt)
+                if v is not None:
+                    break
+        return v
+
+    def _gv_multi(plant, rm, units, key, period="month"):
+        """Try each unit in order; return first non-None value."""
+        for u in units:
+            v = _gv(plant, rm, u, key, period)
+            if v is not None:
+                return v
+        return None
 
     def _fy_val(plant, march_rm, src_unit, src_key):
         """Full-year value = till_month of March row for that FY."""
         return _gv(plant, march_rm, src_unit, src_key, "till_month")
+
+    def _fy_val_multi(plant, march_rm, src_units, src_key):
+        return _gv_multi(plant, march_rm, src_units, src_key, "till_month")
 
     def _build_row(label, unit_str, month_fn, cum_fn, cply_fn, fy1_fn, fy2_fn, fy3_fn, cum_cply_fn=None, target_fn=None, param_name=""):
         return {
@@ -1760,27 +1857,15 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         }
 
     def unit_section(param_name, unit_str, src_units, src_key):
-        """One row per plant. Uses BF_Shop or plant-specific shop unit (shop-level) only."""
+        """One row per plant. Searches src_units in order for data."""
         if isinstance(src_units, str):
             src_units = [src_units]
         rows = []
         for p in plants_with_data:
-            p_data = store.get((p, report_month), {})
-            # Try BF_Shop first, then plant-specific unit names
-            src_unit = None
-            if p_data.get("BF_Shop"):
-                src_unit = "BF_Shop"
-            elif p_data.get(p):  # Try plant name as unit (e.g., "DSP", "BSL", "ISP")
-                src_unit = p
-            else:
-                # Plant may not have actuals but may have targets - use BF_Shop as default unit
-                src_unit = "BF_Shop"
-
             # Fetch plan data from techno_plan_fy table
             plan_data = db.get_techno_plant_plan(p, target_fy)
             plan_value = None
             if plan_data and 'data' in plan_data and param_name in plan_data['data']:
-                # Plan data is stored as {"value": X, "unit": ""}
                 val = plan_data['data'][param_name]
                 if isinstance(val, dict) and 'value' in val:
                     plan_value = val['value']
@@ -1789,20 +1874,20 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
             rows.append(_build_row(
                 p, unit_str,
-                month_fn     = lambda m, _p=p, _u=src_unit: _gv(_p, m,             _u, src_key),
-                cum_fn       = lambda     _p=p, _u=src_unit: _gv(_p, report_month,  _u, src_key, "till_month"),
-                cply_fn      = lambda     _p=p, _u=src_unit: _gv(_p, cply_month,    _u, src_key),
-                fy1_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy1_march, _u, src_key),
-                fy2_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy2_march, _u, src_key),
-                fy3_fn       = lambda     _p=p, _u=src_unit: _fy_val(_p, fy3_march, _u, src_key),
-                cum_cply_fn  = lambda     _p=p, _u=src_unit: _gv(_p, cply_month,    _u, src_key, "till_month"),
+                month_fn     = lambda m,  _p=p, _us=src_units: _gv_multi(_p, m,             _us, src_key),
+                cum_fn       = lambda     _p=p, _us=src_units: _gv_multi(_p, report_month,  _us, src_key, "till_month"),
+                cply_fn      = lambda     _p=p, _us=src_units: _gv_multi(_p, cply_month,    _us, src_key),
+                fy1_fn       = lambda     _p=p, _us=src_units: _fy_val_multi(_p, fy1_march, _us, src_key),
+                fy2_fn       = lambda     _p=p, _us=src_units: _fy_val_multi(_p, fy2_march, _us, src_key),
+                fy3_fn       = lambda     _p=p, _us=src_units: _fy_val_multi(_p, fy3_march, _us, src_key),
+                cum_cply_fn  = lambda     _p=p, _us=src_units: _gv_multi(_p, cply_month,    _us, src_key, "till_month"),
                 target_fn    = lambda     _pv=plan_value: _pv,
                 param_name   = param_name,
             ))
         return {"label": param_name, "rows": rows}
 
-    # Use BF_Shop only (shop-level aggregate, not individual furnaces)
-    _BF_UNITS = ["BF_Shop"]
+    # BF shop-level units: BF_Shop (RSP/BSP/BSL/DSP aggregate) or BF-5 (ISP single BF)
+    _BF_UNITS = ["BF_Shop", "BF-5"]
 
     # SMS unit scan order — covers RSP/BSP (SMS-1/2/3), ISP/DSP (SMS), BSL (SMS-I/II)
     _SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS", "SMS-I", "SMS-II"]
@@ -1905,7 +1990,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     sail_is_user_supplied = sail_plan_fetch.get('is_user_supplied', False) if sail_plan_fetch else False
 
     raw_sections = [
-        unit_section("Coal to Hot Metal",           "kg/kg",      "General",   "coal_to_hm"),
+        unit_section("Coal to Hot Metal",           "kg/kg",      ["General", "BF_Shop"],   "coal_to_hm"),
         unit_section("Coke Rate",                   "kg/thm",     _BF_UNITS,   "coke_rate"),
         unit_section("Nut Coke Rate",               "kg/thm",     _BF_UNITS,   "nut_coke_rate"),
         unit_section("CDI Rate",                    "kg/thm",     _BF_UNITS,   "cdi"),

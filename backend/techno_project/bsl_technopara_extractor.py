@@ -21,24 +21,40 @@ from excel_extractor_bsl import extract_preview, extract_preview_bf_pdf
 # Standard BF PDF section → snake_case key (matches ISP/DSP BF param names)
 # ---------------------------------------------------------------------------
 _BF_PDF_KEY = {
+    # Identity params
     "CDI":               "cdi",
     "HM Production":     "hm_production",
     "BF Productivity":   "bf_productivity",
     "HBT":               "hot_blast_temp",
+    # Quality
     "Hot Metal Temp":    "hot_metal_temp",
+    "Si in HM":          "si_in_hm",
+    "S in HM":           "s_in_hm",
+    "Slag Al2O3":        "slag_al2o3",
+    "Slag MgO":          "slag_mgo",
+    "Slag Basicity":     "slag_basicity",
+    # Fuel rates
     "BF Coke Rate":      "coke_rate",
     "Nut Coke Rate":     "nut_coke_rate",
     "Fuel Rate":         "fuel_rate",
-    "Si in HM":          "si_in_hm",
-    "S in HM":           "s_in_hm",
+    "Carbon Rate":       "carbon_rate",
+    "F Dust Rate":       "f_dust_rate",
+    "CO CO2 Ratio":      "co_co2_ratio",
+    # Burden / operating
     "O2 Enrichment":     "o2_enrichment",
     "Slag Rate":         "slag_rate",
     "Sinter in Burden":  "sinter_in_burden",
-    "Pellet in Burden":  "pellet_in_burden",
+    "Sint Rate":         "sint_rate",
+    "Ore Rate":          "ore_rate",
+    # Raw material consumption (T/month)
     "Iron Ore":          "iron_ore",
     "Sinter Consumption":"sinter_consumption",
     "BF Scrap":          "bf_scrap",
     "Pellet Consumption":"pellet_consumption",
+    "Nut Coke":          "nut_coke",
+    "Coke Consumption":  "coke_consumption",
+    "CDI Total":         "cdi_total",
+    "Coke ECY":          "coke_ecy",
 }
 
 # Techno Excel shop-level BF section names → standard key
@@ -68,8 +84,8 @@ _SMS_KEY_NORM = {
     "refractory_cons":                 "refractory_cons",
 }
 
-# BF furnace IDs present in BSL BF PDF (BF-3 is under repair, skipped by extractor)
-_BSL_BF_UNITS = frozenset(["BF-1", "BF-2", "BF-4", "BF-5"])
+# BF furnace IDs in BSL (which are under repair varies by month; repair rows auto-filtered by extractor)
+_BSL_BF_UNITS = frozenset(["BF-1", "BF-2", "BF-3", "BF-4", "BF-5"])
 
 
 def _to_snake(text: str) -> str:

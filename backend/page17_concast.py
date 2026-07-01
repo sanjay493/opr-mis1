@@ -20,9 +20,9 @@ _ACT = {
     "VISL": "Total Crude Steel",
 }
 
-# plan table
+# plan table  (BSP plan stored as sub-items; sum them to get SMS-2/SMS-3 totals)
 _PLAN = {
-    "BSP":  ["SMS-2", "SMS-3"],
+    "BSP":  ["SMS-2 BLOOM", "SMS-2 SLAB", "SMS-3 BILLET105", "SMS-3 BILLET150", "SMS-3 BLOOM(CV1&2)"],
     "DSP":  "SMS Total Caster",
     "RSP":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
     "BSL":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2"],

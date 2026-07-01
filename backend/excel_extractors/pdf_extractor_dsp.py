@@ -202,15 +202,17 @@ def _find_month_column_index(lines, want_mon):
 
 # Each entry: section_key → (heading_keyword, optional_second_keyword)
 _SECTION_HEADINGS = {
-    'prod':   ("PRODUCTION MONTHWISE", None),
-    'ss':     ("SPECIAL STEEL PERFORMANCE", "SECTION"),
-    'mm':     ("MERCHANT MILL & MEDIUM STRUCTURAL MILL", None),
-    'wa':     ("WHEEL & AXLE PLANT", "FORGING AVAIL"),
-    'major':  ("MAJOR TECHNO", "KG/THM"),
-    'coke':   ("COKE OVENS & COAL CHEMICALS", None),
-    'sint':   ("RMHP & SINTER PLANT", None),
-    'sms':    ("STEEL MELTING SHOP", "BOF SHOP"),
-    'bf_cdi': ("BLAST FURNACE", "CDI RATE"),
+    'prod':     ("PRODUCTION MONTHWISE", None),
+    'ss':       ("SPECIAL STEEL PERFORMANCE", "SECTION"),
+    'mm':       ("MERCHANT MILL & MEDIUM STRUCTURAL MILL", None),
+    'wa':       ("WHEEL & AXLE PLANT", "FORGING AVAIL"),
+    'major':    ("MAJOR TECHNO", "KG/THM"),
+    'coke':     ("COKE OVENS & COAL CHEMICALS", None),
+    'sint':     ("RMHP & SINTER PLANT", "OLD MACHINE"),   # OLD MACHINE avoids TOC match
+    'sms':      ("STEEL MELTING SHOP", "BOF SHOP"),
+    'sms2':     ("STEEL MELTING SHOP", "BOF SHOP CONTD"), # SMS page 2 (raw-material rates)
+    'bf_main':  ("BLAST FURNACE", "SILICON IN HM"),        # BF page 1: Si, S, Slag, Productivity
+    'bf_cdi':   ("BLAST FURNACE", "CDI RATE"),             # BF page 2: CDI, Coke Rate, Sinter
 }
 
 
@@ -294,7 +296,10 @@ def _parse_te_nums(line):
     '--' (furnace-not-operating marker) is returned as None so that column
     alignment is preserved.
     """
-    line2 = re.sub(r'\d[\d,.]*\s*\(\d{2}-\d{2}\)', '', line)
+    # Strip best-achieved: number followed by (YY-YY) — allow trailing space before ')'
+    line2 = re.sub(r'\d[\d,.]*\s*\(\d{2}-\d{2}\s*\)', '', line)
+    # Strip unit labels with embedded digits: NM3/T, NM3/TDC, Nm3, etc.
+    line2 = re.sub(r'\b[A-Za-z]+\d+(?:[/][A-Za-z]+)*\b', '', line2)
     result = []
     for tok in re.findall(r'(?<!\d)--(?!\d)|-?\d+(?:,\d+)*(?:\.\d+)?', line2):
         if tok == '--':
@@ -346,7 +351,16 @@ def _te_values_techno(nums, report_month_num=None):
 
     Returns: (actual_current, cum_current, actual_prior, cum_prior)
     """
-    if len(nums) == 6:
+    if len(nums) == 7:
+        # Volume + Best_Ach (stripped) + Norm + Current + CurrentCum + Prior + PriorCum
+        # e.g. BF working productivity: [Vol | Norm | Apr | May | Cum | PriorApr | PriorCum]
+        actual_current = nums[3]
+        cum_current    = nums[4]
+        actual_prior   = nums[5]
+        cum_prior      = nums[6] if report_month_num == 3 else None
+        return actual_current, cum_current, actual_prior, cum_prior
+
+    elif len(nums) == 6:
         # Extra norm column: [Norm_Hist | Norm_Curr | Current | CurrentCum | Prior | PriorCum]
         actual_current = nums[2]  # Current month (e.g., Apr'25)
         cum_current = nums[3]     # Current FY cumulative (e.g., 2025-26)
@@ -482,37 +496,46 @@ _MAJOR_PAGE_DEFS = [
 # - TMI will be computed from Hot Metal + Scrap Consumption instead
 
 _SMS_PAGE_DEFS = [
-    ("gross h.metal",  "MAJOR", "Hot Metal Consumption", "DSP SMS", "Kg/TCS",  92),
-    ("total scrap",    "MAJOR", "Scrap Consumption",     "DSP SMS", "Kg/TCS", 102),
-    ("heat size",    "MAJOR", "Heat Size",     "DSP SMS", "T", 103),
-    ("refractory consumption.*sms",    "MAJOR", "Refractory Consumption(SMS)",     "DSP SMS", "Kg/TCS", 104),
-    ("refractory consumption.*red",    "MAJOR", "Refractory Consumption(RED)",     "DSP SMS", "Kg/TCS", 105),
-    ("tap to tap",    "MAJOR", "Tap to Tap Time",     "DSP SMS", "mins", 106),
-    ("conv.availability",    "MAJOR", "Converter Availability",     "DSP SMS", "%", 107),
-    ("conv.utilisation",    "MAJOR", "Converter Utilisation",     "DSP SMS", "%", 108),
-    ("calcined lime",    "MAJOR", "Calcined Lime Consumption",     "DSP SMS", "Kg/TCS", 109),
-    ("limestone",    "MAJOR", "Limestone Consumption",     "DSP SMS", "Kg/TCS", 110),
-    ("si.mn",    "MAJOR", "Silicon Manganese Consumption",     "DSP SMS", "Kg/TCS", 111),
-    ("fe-si",    "MAJOR", "Ferro Silicon Consumption",     "DSP SMS", "Kg/TCS", 112),
-    ("fe-mn",    "MAJOR", "Ferro Manganese Consumption",     "DSP SMS", "Kg/TCS", 113),
-    ("b.o.f.*gas yield",    "MAJOR", "BOF Gas Yield",     "DSP SMS", "Nm³/TCS", 114),
+    ("gross h\\.metal",              "MAJOR", "Hot Metal Consumption",       "DSP SMS", "Kg/TCS",  92),
+    ("total scrap",                  "MAJOR", "Scrap Consumption",           "DSP SMS", "Kg/TCS", 102),
+    ("heat size",                    "MAJOR", "Heat Size",                   "DSP SMS", "T",       103),
+    ("refractory consumption.*sms",  "MAJOR", "Refractory Consumption(SMS)", "DSP SMS", "Kg/TCS", 104),
+    ("refractory consumption.*red",  "MAJOR", "Refractory Consumption(RED)", "DSP SMS", "Kg/TCS", 105),
+    ("tap to tap",                   "MAJOR", "Tap to Tap Time",             "DSP SMS", "mins",    106),
+    ("conv\\.availability",          "MAJOR", "Converter Availability",      "DSP SMS", "%",       107),
+    ("conv.*utilisation",            "MAJOR", "Converter Utilisation",       "DSP SMS", "%",       108),
+    ("b\\.o\\.f.*gas yield",         "MAJOR", "BOF Gas Yield",               "DSP SMS", "Nm³/TCS", 114),
+]
+
+# SMS page 2 — raw-material consumption rates (BOF SHOP CONTD.)
+_SMS2_PAGE_DEFS = [
+    ("calcined lime",    "MAJOR", "Calcined Lime Consumption",      "DSP SMS", "Kg/TCS", 109),
+    ("limestone",        "MAJOR", "Limestone Consumption",          "DSP SMS", "Kg/TCS", 110),
+    ("si\\.mn",          "MAJOR", "Silicon Manganese Consumption",  "DSP SMS", "Kg/TCS", 111),
+    ("fe-si",            "MAJOR", "Ferro Silicon Consumption",      "DSP SMS", "Kg/TCS", 112),
+    ("fe-mn",            "MAJOR", "Ferro Manganese Consumption",    "DSP SMS", "Kg/TCS", 113),
+    ("oxygen.*conv",     "MAJOR", "Oxygen (Converter)",             "DSP SMS", "NM3/TCS", 115),
+    ("calcined dolo",    "MAJOR", "Calcined Dolomite Consumption",  "DSP SMS", "Kg/TCS", 116),
 ]
 
 _COKE_PAGE_DEFS = [
-    ("b.f. coke yield", "COKE_SINTER", "BF Coke Yield",  "DSP", "%",              2),
-    ("gross coke yield", "COKE_SINTER", "Gross Coke Yield",  "DSP", "%",              3),
-    ("sp. heat cons",       "COKE_SINTER", "Sp. Heat Cons.", "DSP", "000 K.Cal/TDC", 11),
-    ("crude tar",       "COKE_SINTER", "Coal Tar Yield", "DSP", "kg/TDC",        21),
-    ("coal charge \\(dry\\)", "COKE_SINTER", "Dry Coal Charge/Oven", "DSP", "T",        22),
-    ("specific heat.*steam|specific power", "COKE_SINTER", "Specific Heat Power", "DSP", "KWH/T",        23),
-    ("crude benzol",       "COKE_SINTER", "Crude Benzol", "DSP", "kg/TDC",        24),
-    ("c.o.gas yield|c.o gas yield",       "COKE_SINTER", "Coke Oven Gas Yield", "DSP", "Nm³/TDC",        25),
-    ("ammonium sulphate",       "COKE_SINTER", "Ammonium Sulphate", "DSP", "Kg/TDC",        26),
-    ("m10",       "COKE_SINTER", "M10", "DSP", "%",        28),
-    ("m40",       "COKE_SINTER", "M40", "DSP", "%",        29),
-    ("average ash in.*coke",       "COKE_SINTER", "Average Ash in Coke", "DSP", "%",        30),
-    ("average ash in coal blend",       "COKE_SINTER", "Average Ash in Coal Blend", "DSP", "%",        31),
-    ("average.*v.m. in coal blend|volatile matter",       "COKE_SINTER", "Average Volatile Matter in Coal Blend", "DSP", "%",        32),
+    ("b\\.f\\. coke yield",  "COKE_SINTER", "BF Coke Yield",                       "DSP", "%",             2),
+    ("gross coke yield",     "COKE_SINTER", "Gross Coke Yield",                     "DSP", "%",             3),
+    ("sp\\. heat cons",      "COKE_SINTER", "Sp. Heat Cons.",                       "DSP", "000 K.Cal/TDC", 11),
+    ("crude tar",            "COKE_SINTER", "Coal Tar Yield",                       "DSP", "kg/TDC",        21),
+    ("coal charge.*dry",     "COKE_SINTER", "Dry Coal Charge/Oven",                 "DSP", "T",             22),
+    ("specific heat",        "COKE_SINTER", "Specific Heat (Coke Ovens)",           "DSP", "M.Cal/T",       23),
+    ("specific power",       "COKE_SINTER", "Specific Power (Coke Ovens)",          "DSP", "KWH/T",         23),
+    ("crude benzol",         "COKE_SINTER", "Crude Benzol",                         "DSP", "kg/TDC",        24),
+    ("c\\.o\\.gas yield|c\\.o gas yield|c\\.o\\. gas yield",
+                             "COKE_SINTER", "Coke Oven Gas Yield",                  "DSP", "Nm³/TDC",       25),
+    ("ammonium sulphate",    "COKE_SINTER", "Ammonium Sulphate",                    "DSP", "Kg/TDC",        26),
+    (r"m\s*10",              "COKE_SINTER", "M10",                                  "DSP", "%",             28),
+    (r"m\s*40",              "COKE_SINTER", "M40",                                  "DSP", "%",             29),
+    ("average ash in.*coke", "COKE_SINTER", "Average Ash in Coke",                  "DSP", "%",             30),
+    ("average ash in coal",  "COKE_SINTER", "Average Ash in Coal Blend",            "DSP", "%",             31),
+    ("average.*v\\.m\\..*coal|volatile matter",
+                             "COKE_SINTER", "Average Volatile Matter in Coal Blend", "DSP", "%",            32),
 ]
 
 _BF_FURNACE_PARAMS = [
@@ -586,75 +609,70 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
     skip_prior_year = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
     # Parameters with special column handling (different structure in PDF)
     special_params = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
-    # Parameters that require specific unit filtering (skip rows with different units)
-    unit_filtered = {"crude benzol", "crude tar"}  # Only extract rows with matching unit
+    # crude benzol appears on two lines: Lit./TDC (skip) then Kg/TDC (use next line)
+    _crude_benzol_kw = "crude benzol"
+    lines_list = list(lines)
 
     for keyword, group_code, section, row_label, unit, sort in param_defs:
-        for ln in lines:
-            if keyword in ln.lower():
-                # Unit filtering: skip rows with wrong unit (e.g., skip Lit./TDC, keep only Kg/TDC)
-                if keyword in unit_filtered:
-                    # Extract unit from line (should be between param name and first number)
-                    # Look for unit abbreviations like "Lit./TDC", "Kg/TDC", etc.
-                    line_lower = ln.lower()
-                    # Check if unwanted units are in the line before expected unit
-                    if "lit." in line_lower and "kg" not in line_lower:
-                        continue  # Skip Lit./TDC rows, wait for Kg/TDC
+        found = False
+        for li, ln in enumerate(lines_list):
+            # Use re.search so regex-style keywords (.*  |  \(  etc.) work correctly
+            if not re.search(keyword, ln.lower()):
+                continue
 
-                nums = _parse_te_nums(ln)
-                # Skip Norm/Best Achieved lines (too few values)
-                if len(nums) < 4:
-                    continue
-
-                # Special handling for parameters with different column structure
-                if keyword in special_params:
-                    # These have [Norm_Hist, Norm_Curr, Actual, Cum, Prior_Actual, Prior_Cum, ...] structure
-                    # Extract starting from index 2 (skipping both norm values)
-                    if len(nums) >= 4:
-                        actual_curr = nums[2] if len(nums) > 2 else None
-                        cum_curr = nums[3] if len(nums) > 3 else None
-                        actual_prior = None  # Skip prior year for these
-                        cum_prior = None
-                    else:
-                        actual_curr = None
-                        cum_curr = None
-                        actual_prior = None
-                        cum_prior = None
+            # crude benzol: first line is Lit./TDC → use the next line (Kg/TDC)
+            if _crude_benzol_kw in keyword.lower() and "lit." in ln.lower():
+                if li + 1 < len(lines_list):
+                    ln = lines_list[li + 1]
                 else:
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                    break
 
-                if actual_curr is not None:
-                    # Current year row
+            # M10 / M40 rows often start with "M 40" or "M 10" — skip header/label-only lines
+            nums = _parse_te_nums(ln)
+            if len(nums) < 4:
+                continue
+
+            # Special handling for major-page params (two Norm columns before Actual)
+            if keyword in special_params:
+                actual_curr = nums[2] if len(nums) > 2 else None
+                cum_curr    = nums[3] if len(nums) > 3 else None
+                actual_prior = None
+                cum_prior    = None
+            else:
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+
+            if actual_curr is not None:
+                rows.append({
+                    "group_code": group_code,
+                    "section":    section,
+                    "parameter":  row_label,
+                    "unit":       unit,
+                    "sort_order": sort,
+                    "actual":     actual_curr,
+                    "cum_actual": cum_curr,
+                    "month":      f"{want_mon}'{yy}",
+                    "cell":       f"PDF p{page_no} · {want_mon}'{yy}",
+                    "found_via":  f"DSP {section}",
+                    "status":     "ok",
+                })
+                if actual_prior is not None and keyword not in skip_prior_year:
+                    prior_yy = str(int(yy) - 1)
                     rows.append({
                         "group_code": group_code,
                         "section":    section,
                         "parameter":  row_label,
                         "unit":       unit,
-                        "sort_order": sort,
-                        "actual":     actual_curr,
-                        "cum_actual": cum_curr,
-                        "month":      f"{want_mon}'{yy}",
-                        "cell":       f"PDF p{page_no} · {want_mon}'{yy}",
-                        "found_via":  f"DSP {section}",
+                        "sort_order": sort + 0.5,
+                        "actual":     actual_prior,
+                        "cum_actual": cum_prior,
+                        "month":      f"{want_mon}'{prior_yy}",
+                        "cell":       f"PDF p{page_no} · {want_mon}'{prior_yy}",
+                        "found_via":  f"DSP {section} (prior year)",
                         "status":     "ok",
                     })
-                    # Prior year row (if available and keyword not in skip list)
-                    if actual_prior is not None and keyword not in skip_prior_year:
-                        prior_yy = str(int(yy) - 1)
-                        rows.append({
-                            "group_code": group_code,
-                            "section":    section,
-                            "parameter":  row_label,
-                            "unit":       unit,
-                            "sort_order": sort + 0.5,
-                            "actual":     actual_prior,
-                            "cum_actual": cum_prior,
-                            "month":      f"{want_mon}'{prior_yy}",
-                            "cell":       f"PDF p{page_no} · {want_mon}'{prior_yy}",
-                            "found_via":  f"DSP {section} (prior year)",
-                            "status":     "ok",
-                        })
-                break
+            found = True
+            break
+        _ = found  # suppress unused warning
     return rows
 
 
@@ -1052,6 +1070,145 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
 
 
 # ---------------------------------------------------------------------------
+# BF page 1 parser (Silicon, Sulphur, Slag Rate, BF Productivity)
+# ---------------------------------------------------------------------------
+
+def _parse_bf_page1(lines, pno, want_mon, yy, report_month_num):
+    """Parse BF page 1: Silicon/Sulphur in HM, HM Temp, Slag Rate/Offtake, BF Productivity."""
+    rows = []
+
+    # BF page 1 uses two furnace-marker styles:
+    #   "Furnace-II/III/IV" for Silicon, Sulphur, HM Temp (and their shop line)
+    #   "B.F.-II/III/IV"    for Productivity
+    _FF_MARKERS = [("furnace-ii", "BF-2"), ("furnace-iii", "BF-3"), ("furnace-iv", "BF-4")]
+    _BF_MARKERS = [("b.f.-ii",   "BF-2"), ("b.f.-iii",   "BF-3"), ("b.f.-iv",   "BF-4")]
+
+    def _append_row(group_code, section, param_label, param_unit, param_sort, ln):
+        nums = _parse_te_nums(ln)
+        if len(nums) < 3:
+            return
+        actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+        if actual_curr is not None:
+            rows.append({
+                "group_code": group_code, "section": section,
+                "parameter":  param_label, "unit": param_unit,
+                "sort_order": param_sort,
+                "actual":     actual_curr, "cum_actual": cum_curr,
+                "month":      f"{want_mon}'{yy}",
+                "cell":       f"PDF p{pno} · {want_mon}'{yy}",
+                "found_via":  f"DSP BF1 {param_label}", "status": "ok",
+            })
+            if actual_prior is not None:
+                prior_yy = str(int(yy) - 1)
+                rows.append({
+                    "group_code": group_code, "section": section,
+                    "parameter":  param_label, "unit": param_unit,
+                    "sort_order": param_sort + 0.5,
+                    "actual":     actual_prior, "cum_actual": cum_prior,
+                    "month":      f"{want_mon}'{prior_yy}",
+                    "cell":       f"PDF p{pno} · {want_mon}'{prior_yy}",
+                    "found_via":  f"DSP BF1 {param_label} (prior)", "status": "ok",
+                })
+
+    # Markers ordered longest-first: "furnace-ii" is a substring of "furnace-iii",
+    # so checking "furnace-iii" first prevents BF-3 rows from being mislabelled BF-2.
+    _FF_ORDERED = [("furnace-iv", "BF-4"), ("furnace-iii", "BF-3"), ("furnace-ii", "BF-2")]
+
+    def _ff_name(ln_low, after_heading):
+        for marker, fname in _FF_ORDERED:
+            if marker in ln_low:
+                return fname
+        if after_heading and "shop" in ln_low:
+            if not re.search(r"(steel melting|blast furnace|coke oven|sinter)", ln_low):
+                return "BF_Shop"
+        return None
+
+    # ── Furnace-wise params with first furnace inline on the heading line ──
+    bf1_furnace_params = [
+        (r"silicon in hm",          "IRON_MAKING", "Silicon in HM",           "%",    51),
+        (r"sulphur in hm",          "IRON_MAKING", "Sulphur in HM",           "%",    61),
+        (r"avg\.?.*hot metal temp", "IRON_MAKING", "Avg Hot Metal Temperature","°C",  65),
+    ]
+
+    for keyword, group_code, param_label, param_unit, param_sort in bf1_furnace_params:
+        heading_idx = -1
+        for i, ln in enumerate(lines):
+            if re.search(keyword, ln.lower()):
+                heading_idx = i
+                break
+        if heading_idx == -1:
+            continue
+
+        found_fnames = set()
+        for i in range(heading_idx, min(heading_idx + 6, len(lines))):
+            ln     = lines[i]
+            ln_low = ln.lower()
+            # Stop if we've entered the next parameter section (but not on the heading line)
+            if i > heading_idx and re.search(r"in hm|productivity|slag rate|slag offtake", ln_low):
+                break
+            fname = _ff_name(ln_low, after_heading=(i > heading_idx))
+            if fname and fname not in found_fnames:
+                found_fnames.add(fname)
+                _append_row(group_code, fname, param_label, param_unit, param_sort, ln)
+
+    # ── Shop-only: Slag Rate, Slag Offtake ────────────────────────────────
+    for keyword, param_label, param_unit, param_sort in [
+        (r"slag rate",    "Slag Rate",    "kg/THM", 111),
+        (r"slag offtake", "Slag Offtake", "%",       112),
+    ]:
+        for ln in lines:
+            if re.search(keyword, ln.lower()):
+                _append_row("IRON_MAKING", "BF_Shop", param_label, param_unit, param_sort, ln)
+                break
+
+    # ── BF Productivity (B.F.-II/III/IV/Shop format) ──────────────────────
+    for prod_keyword, prod_label, prod_sort in [
+        (r"productivity.*useful",  "BF Productivity (useful)",  1000),
+        (r"productivity.*working", "BF Productivity (working)", 1001),
+    ]:
+        heading_idx = -1
+        for i, ln in enumerate(lines):
+            if re.search(prod_keyword, ln.lower()):
+                heading_idx = i
+                break
+        if heading_idx == -1:
+            continue
+
+        # Also ordered longest-first to avoid "b.f.-ii" matching "b.f.-iii" lines
+        _BF_ORDERED = [("b.f.-iv", "BF-4"), ("b.f.-iii", "BF-3"), ("b.f.-ii", "BF-2")]
+        for i in range(heading_idx + 1, min(heading_idx + 8, len(lines))):
+            ln     = lines[i]
+            ln_low = ln.lower()
+            # Stop at next Productivity section heading
+            if re.search(r"productivity.*on.*(useful|working)", ln_low):
+                break
+            furnace_name = None
+            for marker, fname in _BF_ORDERED:
+                if marker in ln_low:
+                    furnace_name = fname
+                    break
+            if furnace_name is None and "shop" in ln_low:
+                furnace_name = "BF_Shop"
+            if furnace_name:
+                nums = _parse_te_nums(ln)
+                if len(nums) >= 4:
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                    # Skip zero/None (furnace not operating)
+                    if actual_curr is not None and actual_curr > 0:
+                        rows.append({
+                            "group_code": "IRON_MAKING", "section": furnace_name,
+                            "parameter":  prod_label, "unit": "T/m³/day",
+                            "sort_order": prod_sort,
+                            "actual":     actual_curr, "cum_actual": cum_curr,
+                            "month":      f"{want_mon}'{yy}",
+                            "cell":       f"PDF p{pno} · {want_mon}'{yy}",
+                            "found_via":  f"DSP BF1 {prod_label}", "status": "ok",
+                        })
+
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # Block 2: Techno parameters
 # ---------------------------------------------------------------------------
 
@@ -1080,7 +1237,7 @@ def _block_techno(file_path: str, page_index: dict,
 
     print(f"[DSP PDF] Techno: Month {want_mon}'{yy} → FY {fy_label}", flush=True, file=sys.stderr)
 
-    techno_keys = ('major', 'sms', 'coke', 'sint', 'bf_cdi', 'mm', 'wa')
+    techno_keys = ('major', 'sms', 'sms2', 'coke', 'sint', 'bf_main', 'bf_cdi', 'mm', 'wa')
     needed_idxs = {page_index[k] for k in techno_keys if k in page_index}
 
     if not needed_idxs:
@@ -1151,16 +1308,22 @@ def _block_techno(file_path: str, page_index: dict,
     sms_idx = page_index.get('sms')
     if sms_idx is not None:
         lines = page_texts[sms_idx].splitlines()
-        # For techno: use offset=5, month_diff=0
         rows.extend(_parse_general_params(
             lines, _SMS_PAGE_DEFS, sms_idx + 1,
+            want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
+
+    # ── SMS page 2 (Calcined Lime, Limestone, Si.Mn, Fe-Si, Fe-Mn …) ──────
+    sms2_idx = page_index.get('sms2')
+    if sms2_idx is not None:
+        lines = page_texts[sms2_idx].splitlines()
+        rows.extend(_parse_general_params(
+            lines, _SMS2_PAGE_DEFS, sms2_idx + 1,
             want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
 
     # ── Coke & Sinter ────────────────────────────────────────────────────
     coke_idx = page_index.get('coke')
     if coke_idx is not None:
         lines = page_texts[coke_idx].splitlines()
-        # For techno: use offset=5, month_diff=0
         rows.extend(_parse_general_params(
             lines, _COKE_PAGE_DEFS, coke_idx + 1,
             want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
@@ -1169,24 +1332,16 @@ def _block_techno(file_path: str, page_index: dict,
     if sint_idx is not None:
         sint_text = page_texts[sint_idx]
         sint_pno  = sint_idx + 1
-        sint_lines = sint_text.splitlines()
-        sint_month_diff = month_diff
-        sint_month_cols = _month_header(sint_lines)
-        if sint_month_cols and want_mon in sint_month_cols:
-            sint_month_diff = len(sint_month_cols) - 1 - sint_month_cols.index(want_mon)
-            print(f"[DSP PDF] Sinter: detected month_diff={sint_month_diff} (months: {sint_month_cols})",
-                  flush=True, file=sys.stderr)
 
         for label, marker, stop in [("DSP SP-1", "OLD MACHINE", ["NEW MACHINE"]),
                                      ("DSP SP-2", "NEW MACHINE", [])]:
             for ln in _slice_text(sint_text, marker, stop):
                 if "productivity" in ln.lower():
                     nums = _parse_te_nums(ln)
-                    # For techno: use offset=5, month_diff=0
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff=0, offset=5)
+                    # Use _te_values_techno (fixed-column structure, same as all techno pages)
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
                     if actual_curr is not None:
                         sort_base = 31 if label == "DSP SP-1" else 32
-                        # Current year row
                         rows.append({
                             "group_code": "COKE_SINTER",
                             "section":    "Sinter Productivity",
@@ -1200,7 +1355,6 @@ def _block_techno(file_path: str, page_index: dict,
                             "found_via":  f"DSP Sinter {label}",
                             "status":     "ok",
                         })
-                        # Prior year row
                         if actual_prior is not None:
                             prior_yy = str(int(yy) - 1)
                             rows.append({
@@ -1217,6 +1371,13 @@ def _block_techno(file_path: str, page_index: dict,
                                 "status":     "ok",
                             })
                     break
+
+    # ── BF page 1 (Silicon/Sulphur/HM Temp/Slag Rate/BF Productivity) ────
+    bf_main_idx = page_index.get('bf_main')
+    if bf_main_idx is not None:
+        bf_main_lines = page_texts[bf_main_idx].splitlines()
+        rows.extend(_parse_bf_page1(
+            bf_main_lines, bf_main_idx + 1, want_mon, yy, report_month_num))
 
     # ── BF furnace-wise CDI ───────────────────────────────────────────────
     bf_idx = page_index.get('bf_cdi')

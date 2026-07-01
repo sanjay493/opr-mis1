@@ -160,11 +160,11 @@
   "SMS": {
     "plant": "DSP",
     "parameters": {
-      "hot_metal_consumption": {
+      "specific_hm_consumption": {
         "parameter": "Hot Metal Consumption",
         "unit": "Kg/TCS"
       },
-      "scrap_consumption": {
+      "specific_scrap_consumption": {
         "parameter": "Scrap Consumption",
         "unit": "Kg/TCS"
       },
@@ -238,7 +238,7 @@
         "parameter": "Coal Tar Yield",
         "unit": "kg/TDC"
       },
-      "dry_coal_charge_per_oven": {
+      "dry_coal_charge_oven": {
         "parameter": "Dry Coal Charge/Oven",
         "unit": "T"
       },
@@ -296,7 +296,7 @@
         "parameter": "Avg Hot Metal Temperature",
         "unit": "°C"
       },
-      "blast_temperature": {
+      "hot_blast_temp": {
         "parameter": "Blast Temperature",
         "unit": "°C"
       },

@@ -758,6 +758,27 @@ def save_techno_data_from_extraction(plant: str, report_month: str, extracted_ro
     conn.close()
 
 
+def save_techno_json(plant: str, report_month: str, unit: str,
+                     techno_json: dict, source_file: str = ""):
+    """Save a pre-built techno_json dict directly to techno_data table."""
+    import json
+    from datetime import datetime
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+    cursor.execute("""
+        INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(plant, report_month, unit) DO UPDATE SET
+            techno_json = excluded.techno_json,
+            source_file = excluded.source_file,
+            created_at  = excluded.created_at
+    """, (plant, report_month, unit, json.dumps(techno_json), source_file, now))
+    conn.commit()
+    conn.close()
+
+
 def save_techno_value(month: str, param_id: int, actual: Optional[float],
                       till_month_actual: Optional[float] = None,
                       source_priority: int = 5):

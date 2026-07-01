@@ -3,11 +3,27 @@ from typing import List, Dict, Any
 
 
 def compute_item_row(month: str, item_name: str) -> list:
-    """Computes a 10-value list for the SAIL summary page by summing metrics across plants."""
+    """Computes a 12-value list for the SAIL summary production table.
+
+    Index  Column
+    -----  ------
+    0      Monthly APP
+    1      Monthly ACT
+    2      Monthly VAR  (ACT - APP)
+    3      Monthly %FUL
+    4      CPLY Monthly ACT
+    5      %GR vs CPLY month
+    6      YTD APP
+    7      YTD ACT
+    8      YTD VAR  (ACT - APP)
+    9      YTD %FUL
+    10     YTD CPLY ACT
+    11     %GR vs CPLY YTD
+    """
     db_item = item_name
     if item_name == "Crude Steel":
         db_item = "Total Crude Steel"
-    elif item_name == "Finish Steel":
+    elif item_name in ("Finish Steel", "Finished Steel"):
         db_item = "Finished Steel"
 
     month_plan        = db.get_sail_production_plan(month, db_item)
@@ -26,6 +42,11 @@ def compute_item_row(month: str, item_name: str) -> list:
     def fmt(val):
         return "" if val is None else str(round(val))
 
+    def var(a, p):
+        if a is None or p is None:
+            return ""
+        return str(round(a - p))
+
     def pct(num, den):
         if num is None or den is None or den == 0:
             return ""
@@ -36,19 +57,19 @@ def compute_item_row(month: str, item_name: str) -> list:
             return ""
         return str(round(((num - den) / den) * 100))
 
-    # 0: APP, 1: Actual, 2: % Ful, 3: Act (CPLY), 4: % Gr,
-    # 5: APP (YTD), 6: Actual (YTD), 7: % Ful (YTD), 8: Act (YTD CPLY), 9: % Gr (YTD)
     return [
-        fmt(month_plan),
-        fmt(month_actual),
-        pct(month_actual, month_plan),
-        fmt(month_cply_actual),
-        growth(month_actual, month_cply_actual),
-        fmt(ytd_plan),
-        fmt(ytd_actual),
-        pct(ytd_actual, ytd_plan),
-        fmt(ytd_cply_actual),
-        growth(ytd_actual, ytd_cply_actual),
+        fmt(month_plan),                          # 0  Monthly APP
+        fmt(month_actual),                        # 1  Monthly ACT
+        var(month_actual, month_plan),            # 2  Monthly VAR
+        pct(month_actual, month_plan),            # 3  Monthly %FUL
+        fmt(month_cply_actual),                   # 4  CPLY Monthly ACT
+        growth(month_actual, month_cply_actual),  # 5  %GR vs CPLY
+        fmt(ytd_plan),                            # 6  YTD APP
+        fmt(ytd_actual),                          # 7  YTD ACT
+        var(ytd_actual, ytd_plan),                # 8  YTD VAR
+        pct(ytd_actual, ytd_plan),                # 9  YTD %FUL
+        fmt(ytd_cply_actual),                     # 10 YTD CPLY ACT
+        growth(ytd_actual, ytd_cply_actual),      # 11 %GR vs YTD CPLY
     ]
 
 

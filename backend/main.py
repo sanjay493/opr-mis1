@@ -1349,7 +1349,7 @@ async def bsl_bf_techno_save(payload: dict):
             }
 
             # Save to database
-            db.save_techno_data_from_extraction(
+            db.save_techno_json(
                 plant="BSL",
                 report_month=month,
                 unit=unit,
@@ -2769,7 +2769,16 @@ async def get_techno_sms_targets(fy: str = Query("2026-27")):
             plant = shop.split()[0]
             shop_result = db.get_techno_plan(plant, fy, shop)
             if shop_result and shop_result.get('data'):
-                result[shop] = shop_result['data']
+                raw_data = shop_result['data']
+                shop_params = {}
+                for param_name, param_obj in raw_data.items():
+                    if isinstance(param_obj, dict):
+                        value = param_obj.get('value')
+                    else:
+                        value = param_obj
+                    if value is not None:
+                        shop_params[param_name] = value
+                result[shop] = shop_params
 
         return {"fy": fy, "sms_shops": result}
     except Exception as e:

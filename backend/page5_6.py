@@ -163,10 +163,24 @@ def _days(month_str):
 
 _FS_ALIAS = frozenset({"SSP", "VISL"})
 
+# Plan table uses different (more granular) item names for some BSP SMS items.
+# Maps (plant, actual_item_name) -> list of plan item names to sum.
+_PLAN_ALIASES = {
+    ("BSP", "SMS-2"): ["SMS-2 BLOOM", "SMS-2 SLAB"],
+    ("BSP", "SMS-3"): ["SMS-3 BILLET105", "SMS-3 BILLET150", "SMS-3 BLOOM(CV1&2)"],
+}
+
 
 def _get_single(cur, table, plant, item, month):
     """Single plant, single item. SSP/VISL fall back to Saleable Steel for Finished Steel."""
     tbl = "production_table" if table == "act" else "production_plan_table"
+
+    # Plan table may use different item names for certain plant/item combos
+    if table != "act":
+        alias_items = _PLAN_ALIASES.get((plant, item))
+        if alias_items:
+            return _sum_items(cur, table, plant, alias_items, month)
+
     cur.execute(
         f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name=? AND report_month=?",
         (plant, item, month),

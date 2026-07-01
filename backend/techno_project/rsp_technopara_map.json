@@ -5,9 +5,9 @@
     "bf_productivity": 97,
     "nut_coke_rate":109,
     "fuel_rate": 153,
-    "oxygen_enrichment": 133,
+    "o2_enrichment": 133,
     "hot_blast_temp": 138,
-    "si%_in_hm": 143
+    "silicon_in_hm": 143
   },
   "BF-4": {
     "coke_rate": 102,
@@ -15,9 +15,9 @@
     "bf_productivity": 98,
     "nut_coke_rate":110,
     "fuel_rate": 155,
-    "oxygen_enrichment": 134,
+    "o2_enrichment": 134,
     "hot_blast_temp": 139,
-    "si%_in_hm": 144
+    "silicon_in_hm": 144
   },
   "BF-5": {
     "coke_rate": 103,
@@ -25,9 +25,9 @@
     "bf_productivity": 99,
     "nut_coke_rate":111,
     "fuel_rate": 156,
-    "oxygen_enrichment": 135,
+    "o2_enrichment": 135,
     "hot_blast_temp": 140,
-    "si%_in_hm": 145
+    "silicon_in_hm": 145
   },
   "BF_Shop": {
     "coke_rate": 104,
@@ -37,9 +37,9 @@
     "fuel_rate": 157,
     "sinter% in burden": 124,
     "pellet% in burden": 125,
-    "oxygen_enrichment": 136,
+    "o2_enrichment": 136,
     "hot_blast_temp": 141,
-    "si%_in_hm": 146
+    "silicon_in_hm": 146
     
   },
 "SMS-1": {
@@ -77,11 +77,11 @@
 
   "COB-old": {
     "bf_coke_yield": 9,
-    "dry_coal_charge": 11,
-    "cog_yield": 10
+    "dry_coal_charge_oven": 11,
+    "coke_oven_gas_yield": 10
   },
   "COB-new": {
-    "dry_coal_charge": 17,
+    "dry_coal_charge_oven": 17,
     "bf_coke_yield": 21,
     "crude_tar_yield": 27,
     "ammonium_sulphate_yield": 28
