@@ -16,11 +16,14 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
     { key: 'production', label: 'Production (T)', type: 'number' },
     { key: 'bf_productivity', label: 'BF Productivity (t/m³/day)', type: 'number', step: '0.01' },
     { key: 'coke_rate', label: 'Coke Rate (kg/THM)', type: 'number', step: '0.01' },
+    { key: 'nut_coke_rate', label: 'Nut Coke Rate (kg/THM)', type: 'number', step: '0.01' },
     { key: 'cdi', label: 'CDI Rate (kg/THM)', type: 'number', step: '0.01' },
     { key: 'fuel_rate', label: 'Fuel Rate (kg/THM)', type: 'number', step: '0.01' },
     { key: 'hot_blast_temp', label: 'Hot Blast Temp (°C)', type: 'number' },
     { key: 'o2_enrichment', label: 'O2 Enrichment (%)', type: 'number', step: '0.01' },
     { key: 'slag_rate', label: 'Slag Rate (kg/THM)', type: 'number', step: '0.01' },
+    { key: 'sinter_in_burden', label: 'Sinter in Burden (%)', type: 'number', step: '0.01' },
+    { key: 'pellet_in_burden', label: 'Pellet in Burden (%)', type: 'number', step: '0.01' },
   ];
 
   // Handle file selection
