@@ -25,8 +25,20 @@ PAGE5_PLANTS = [
         ("Oven Pushing (nos/day)", ("AGG_NOS", "Oven Pushing (nos/day)", _5P),  False, True),
         ("Sinter",              ("AGG",     "Total Sinter",         _5P),  False, False),
         ("Hot Metal",           ("AGG",     "Hot Metal",            _5PV), True,  False),
-        ("Ingot",               ("AGG",     "Bottom Pouring Ingot", _5P),  False, False),
-        ("Concast",             ("AGG",     "SMS Total Caster",     _5P),  False, False),
+        # Ingot route is only used by DSP ("Bottom Pouring Ingot") and ASP
+        # ("Ingot Steel") — the other plants cast everything via Concast.
+        ("Ingot",               ("AGG",     {"DSP": "Bottom Pouring Ingot", "ASP": "Ingot Steel"},
+                                             _5P + ["ASP"]),               False, False),
+        # Each plant stores its Concast production under a different item
+        # name/granularity — SAIL's total sums each plant's own native items.
+        ("Concast",             ("AGG",     {
+                                     "BSP": ["SMS-2", "SMS-3"],
+                                     "DSP": "SMS Total Caster",
+                                     "RSP": ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
+                                     "BSL": ["SMS-1 CCM-1", "SMS-2 CCM-1&2"],
+                                     "ISP": ["SMS CCM-1&2", "SMS CCM-3"],
+                                     "ASP": "Total Caster",
+                                 }, _5P + ["ASP"]),                        False, False),
         ("Crude Steel(Tot)",    ("AGG",     "Total Crude Steel",    _ALL), True,  False),
         ("Saleable Steel",      ("AGG",     "Saleable Steel",       _ALL), True,  False),
         ("Finished Steel",      ("AGG",     "Finished Steel",       _ALL), True,  False),
@@ -121,7 +133,6 @@ PAGE6_PLANTS = [
     ("VISL", [
         ("Saleable Steel",           "Saleable Steel",           True,  False),
         ("Finished Steel",           "Finished Steel",           False, False),
-        ("Saleable Steel Despatch",  "Saleable Steel Despatch",  False, False),
     ]),
 ]
 
@@ -140,10 +151,16 @@ def _one(cur, table, plant, item, month):
 
 
 def _sum_items(cur, table, plant, items, month):
-    """Sum across multiple item names for one plant/month."""
+    """Sum across multiple item names for one plant/month.
+
+    Uses _get_single (not the plain _one lookup) so that each item name
+    still benefits from alias/derived-value fallback — needed e.g. when a
+    per-plant item list mixes a plant's regular item names with one that
+    has a _PLAN_ALIASES/_ITEM_ALT_NAMES entry (like BSP's "SMS-2"/"SMS-3").
+    """
     total, found = 0.0, False
     for it in items:
-        v = _one(cur, table, plant, it, month)
+        v = _get_single(cur, table, plant, it, month)
         if v is not None:
             total += v
             found = True
@@ -170,6 +187,23 @@ _PLAN_ALIASES = {
     ("BSP", "SMS-3"): ["SMS-3 BILLET105", "SMS-3 BILLET150", "SMS-3 BLOOM(CV1&2)"],
 }
 
+# Some months were entered under a differently-cased/spelled item name.
+# Maps (plant, item) -> alternate names to try (fallback, not summed — only
+# used when the primary name has no data for that month).
+_ITEM_ALT_NAMES = {
+    ("DSP", "Bottom Pouring Ingot"): ["BOTTOM_POURING_INGOT"],
+    ("ASP", "Total Caster"): ["Concast"],
+}
+
+# Some (plant, item) combos aren't tracked directly — derive them as
+# (item_a - item_b) using items that ARE tracked. Used as a last-resort
+# fallback (e.g. ASP's plan table has "Total Crude Steel" and "Concast"
+# but no "Ingot Steel"; Total Crude Steel = Ingot + Concast, so
+# Ingot = Total Crude Steel - Concast).
+_ITEM_DERIVED_DIFF = {
+    ("ASP", "Ingot Steel"): ("Total Crude Steel", "Concast"),
+}
+
 
 def _get_single(cur, table, plant, item, month):
     """Single plant, single item. SSP/VISL fall back to Saleable Steel for Finished Steel."""
@@ -188,6 +222,14 @@ def _get_single(cur, table, plant, item, month):
     r = cur.fetchone()
     if r and r[0] is not None:
         return r[0]
+    for alt in _ITEM_ALT_NAMES.get((plant, item), []):
+        cur.execute(
+            f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name=? AND report_month=?",
+            (plant, alt, month),
+        )
+        r = cur.fetchone()
+        if r and r[0] is not None:
+            return r[0]
     if item == "Finished Steel" and plant in _FS_ALIAS:
         cur.execute(
             f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name='Saleable Steel' AND report_month=?",
@@ -195,17 +237,34 @@ def _get_single(cur, table, plant, item, month):
         )
         r = cur.fetchone()
         return r[0] if r and r[0] is not None else None
+    diff = _ITEM_DERIVED_DIFF.get((plant, item))
+    if diff:
+        item_a, item_b = diff
+        va = _get_single(cur, table, plant, item_a, month)
+        vb = _get_single(cur, table, plant, item_b, month)
+        return (va - vb) if (va is not None and vb is not None) else None
     return None
 
 
 def _get_agg(cur, table, item, plants, month):
-    """Sum across multiple plants. item may be a string or list of strings."""
+    """Sum across multiple plants.
+
+    item may be:
+      str            – same item name for every plant
+      list[str]      – sum of these item names, for every plant
+      dict           – {plant: item_or_list}, a different spec per plant
+                       (used where plants store the same production
+                       metric under different item names/granularity)
+    """
     total, found = 0.0, False
     for p in plants:
-        if isinstance(item, list):
-            v = _sum_items(cur, table, p, item, month)
+        it = item.get(p) if isinstance(item, dict) else item
+        if it is None:
+            continue
+        if isinstance(it, list):
+            v = _sum_items(cur, table, p, it, month)
         else:
-            v = _get_single(cur, table, p, item, month)
+            v = _get_single(cur, table, p, it, month)
         if v is not None:
             total += v
             found = True
@@ -234,11 +293,11 @@ def _ytd_sum(cur, table, plant, db_spec, months):
     return total if found else None
 
 
-def _ytd_nos(cur, plant, db_spec, months):
-    """Weighted average of nos/day over YTD months."""
+def _ytd_nos(cur, table, plant, db_spec, months):
+    """Weighted average of nos/day over the given months, day-weighted."""
     tw, td = 0.0, 0
     for m in months:
-        v = _get(cur, "act", plant, db_spec, m)
+        v = _get(cur, table, plant, db_spec, m)
         if v is not None:
             days = _days(m)
             tw += v * days
@@ -301,27 +360,24 @@ def _compute_row(cur, plant, db_item, is_nos_day, report_month, one_dp: bool = F
     prev_month = db.get_cply_month(report_month)
     prev_ytd_months = db.get_ytd_months(prev_month)
 
-    # Annual plan: sum or weighted-avg of all 12 monthly plans
+    # Annual plan: sum of all 12 monthly plans, or day-weighted average for nos/day items
     if is_nos_day:
-        ann_plan = None  # not meaningful to show annual avg here; leave blank
+        ann_plan = _ytd_nos(cur, "plan", plant, db_item, all_fy)
     else:
         ann_plan = _ytd_sum(cur, "plan", plant, db_item, all_fy)
 
     # Monthly plan & actual
     m_plan = _get(cur, "plan", plant, db_item, report_month)
-    if is_nos_day:
-        m_actual = _get(cur, "act", plant, db_item, report_month)
-    else:
-        m_actual = _get(cur, "act", plant, db_item, report_month)
+    m_actual = _get(cur, "act", plant, db_item, report_month)
 
     # CPLY (previous year same month actual)
     cply = _get(cur, "act", plant, db_item, prev_month)
 
     # YTD plan and actual
     if is_nos_day:
-        ytd_plan   = _ytd_nos(cur, plant, db_item, ytd_months)
-        ytd_actual = _ytd_nos(cur, plant, db_item, ytd_months)
-        ytd_cply   = _ytd_nos(cur, plant, db_item, prev_ytd_months)
+        ytd_plan   = _ytd_nos(cur, "plan", plant, db_item, ytd_months)
+        ytd_actual = _ytd_nos(cur, "act",  plant, db_item, ytd_months)
+        ytd_cply   = _ytd_nos(cur, "act",  plant, db_item, prev_ytd_months)
     else:
         ytd_plan   = _ytd_sum(cur, "plan", plant, db_item, ytd_months)
         ytd_actual = _ytd_sum(cur, "act",  plant, db_item, ytd_months)
