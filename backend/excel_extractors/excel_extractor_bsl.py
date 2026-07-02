@@ -380,6 +380,66 @@ _TECHNO_PARAM_MAP = [
     ("SMS-II", 52,  6,    1.0, "SMS",         "SMS-II",                "FeO in Slag",                       "%"),
 ]
 
+# ---------------------------------------------------------------------------
+# FAX GM OPRN sheet — monthly fax to Corp Office OPRN Directorate. Adds a
+# handful of parameters not present on Sheet1-4/SMS-I/SMS-II: per-furnace BF
+# dimensions (Useful/Working Volume, Not Dry Cast%) and per-furnace CDI, plus
+# Tar Injection, LD Slag, CO Gas Yield, Mn in HM, and SMS Avg Blow/Day, Avg
+# Heat Weight, Gross HM Consumption, Lime/Aluminium Consumption, Caster Yield.
+#
+# Column layout differs from _TECHNO_PARAM_MAP — month/cum columns are not
+# adjacent, so cum_col is given explicitly rather than assumed as mon_col+1:
+#   rows 12-32   (particulars table 1): mon_col=7, cum_col=9
+#   rows 34-42   (per-furnace BF table): mon/cum columns adjacent, per param
+#   rows 48-93   (particulars table 2): mon_col=8, cum_col=10
+#
+# FCE 3 / BF-3 is intentionally excluded: its cells hold obvious placeholder
+# values (e.g. repeated "7") rather than real readings, consistent with BF-3
+# not being an operating furnace in BSL's current PDF-based BF reporting.
+# ---------------------------------------------------------------------------
+_FAX_SHEET = "FAX GM OPRN"
+
+_FAX_SINGLE_PARAM_MAP = [
+    # row, mon_col, cum_col, mult, group_code,   section,                 parameter,                unit
+    (15,  7,  9, 1.0, "COKE_SINTER", "Coke Ovens",            "Coke Oven Gas Yield",    "%"),
+    (22,  7,  9, 1.0, "IRON_MAKING", "Nut Coke",              "BSL",                    "Kg/THM"),
+    (23,  7,  9, 1.0, "IRON_MAKING", "BF-1",                  "CDI",                    "Kg/THM"),
+    (24,  7,  9, 1.0, "IRON_MAKING", "BF-2",                  "CDI",                    "Kg/THM"),
+    (26,  7,  9, 1.0, "IRON_MAKING", "BF-4",                  "CDI",                    "Kg/THM"),
+    (27,  7,  9, 1.0, "IRON_MAKING", "BF-5",                  "CDI",                    "Kg/THM"),
+    (29,  7,  9, 1.0, "IRON_MAKING", "Tar Injection",         "BSL",                    "Kg/THM"),
+    (32,  7,  9, 1.0, "SMS",         "LD Slag Cons",          "BSL",                    "Kg/TGS"),
+    (53,  8, 10, 1.0, "IRON_MAKING", "Blast Furnaces",        "Manganese in HM",        "%"),
+    (57,  8, 10, 1.0, "SMS",         "SMS-I",                 "Average Blows Per Day",  "Nos."),
+    (58,  8, 10, 1.0, "SMS",         "SMS-II",                "Average Blows Per Day",  "Nos."),
+    (59,  8, 10, 1.0, "SMS",         "SMS-I",                 "Average Heat Weight",    "T"),
+    (60,  8, 10, 1.0, "SMS",         "SMS-II",                "Average Heat Weight",    "T"),
+    (63,  8, 10, 1.0, "SMS",         "SMS-I",                 "Gross HM Consumption",   "Kg/TCS"),
+    (64,  8, 10, 1.0, "SMS",         "SMS-II",                "Gross HM Consumption",   "Kg/TCS"),
+    (65,  8, 10, 1.0, "SMS",         "Gross HM Consumption",  "BSL",                    "Kg/TCS"),
+    (83,  8, 10, 1.0, "SMS",         "SMS-I",                 "Lime Consumption",       "Kg/TCS"),
+    (84,  8, 10, 1.0, "SMS",         "SMS-II",                "Lime Consumption",       "Kg/TCS"),
+    (85,  8, 10, 1.0, "SMS",         "Lime Consumption",      "BSL",                    "Kg/TCS"),
+    (86,  8, 10, 1.0, "SMS",         "SMS-I",                 "Aluminium Consumption",  "Kg/TCS"),
+    (87,  8, 10, 1.0, "SMS",         "SMS-II",                "Aluminium Consumption",  "Kg/TCS"),
+    (88,  8, 10, 1.0, "SMS",         "Aluminium Consumption", "BSL",                    "Kg/TCS"),
+    (92,  8, 10, 1.0, "SMS",         "SMS-I",                 "Caster Yield",           "%"),
+    (93,  8, 10, 1.0, "SMS",         "SMS-II",                "Caster Yield",           "%"),
+]
+
+# Per-furnace BF dimension/quality table (rows 37-42); month/cum columns are
+# adjacent pairs here, one pair per parameter. FCE 3 (row 39) excluded — see
+# note above.
+_FAX_BF_FURNACE_ROWS = {37: "BF-1", 38: "BF-2", 40: "BF-4", 41: "BF-5", 42: "BF_Shop"}
+_FAX_BF_FURNACE_PARAMS = [
+    # mon_col, cum_col, parameter,        unit
+    (2,   3,   "Useful Volume",  "m³"),
+    (4,   5,   "Working Volume", "m³"),
+    (6,   7,   "Hot Blast Temp", "°C"),
+    (8,   9,   "Coke Rate",      "Kg/THM"),
+    (10,  11,  "Not Dry Cast",   "%"),
+]
+
 _MONTH_FROM_NAME = {
     "JANUARY": "01", "FEBRUARY": "02", "MARCH": "03", "APRIL": "04",
     "MAY": "05", "JUNE": "06", "JULY": "07", "AUGUST": "08",
@@ -1108,6 +1168,51 @@ def extract_preview(file_path: str, report_month: str) -> dict:
             "found_via":  f"hardcoded {sheet_name} R{row}C{mon_col}",
             "status":     status,
         })
+
+    # ── FAX GM OPRN sheet — extra parameters not in Sheet1-4/SMS-I/SMS-II ──
+    if _FAX_SHEET in wb.sheetnames:
+        fax_ws = wb[_FAX_SHEET]
+        fax_idx = len(rows_out)
+
+        def _fax_row(row, mon_col, cum_col, mult, group, section, param, unit, idx):
+            actual_raw = _cell_float(fax_ws, row, mon_col)
+            cum_raw    = _cell_float(fax_ws, row, cum_col)
+            actual = round(actual_raw * mult, 4) if actual_raw is not None else None
+            cum    = round(cum_raw   * mult, 4) if cum_raw    is not None else None
+            mon_ltr = get_column_letter(mon_col)
+            cum_ltr = get_column_letter(cum_col)
+            cell_ref = f"{mon_ltr}{row}/{cum_ltr}{row}"
+            try:
+                file_label = str(fax_ws.cell(row, 1).value or "").strip()
+            except Exception:
+                file_label = ""
+            status = "ok" if (actual is not None or cum is not None) else "skip"
+            return {
+                "group_code": group,
+                "section":    section,
+                "parameter":  param,
+                "unit":       unit,
+                "actual":     actual,
+                "cum_actual": cum,
+                "sort_order": idx * 10,
+                "cell":       cell_ref,
+                "file_label": file_label,
+                "plant":      "BSL",
+                "month":      db_month,
+                "found_via":  f"hardcoded {_FAX_SHEET} R{row}C{mon_col}",
+                "status":     status,
+            }
+
+        for row, mon_col, cum_col, mult, group, section, param, unit in _FAX_SINGLE_PARAM_MAP:
+            rows_out.append(_fax_row(row, mon_col, cum_col, mult, group, section, param, unit, fax_idx))
+            fax_idx += 1
+
+        for row, unit_name in _FAX_BF_FURNACE_ROWS.items():
+            for mon_col, cum_col, param, unit in _FAX_BF_FURNACE_PARAMS:
+                rows_out.append(_fax_row(row, mon_col, cum_col, 1.0, "IRON_MAKING", unit_name, param, unit, fax_idx))
+                fax_idx += 1
+    else:
+        logger.info("BSL techno: sheet %r not found — skipping FAX GM OPRN extras", _FAX_SHEET)
 
     ok = sum(1 for r in rows_out if r["status"] == "ok")
     logger.info("BSL techno preview: %d/%d rows ok for %s", ok, len(rows_out), db_month)

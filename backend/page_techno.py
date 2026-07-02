@@ -2225,7 +2225,7 @@ _TECHNO_DB_SCHEMA = {
             ("BF Coke Yield",          "%",          [("COB-old", "bf_coke_yield"),       ("COB-new", "bf_coke_yield")]),
             ("Dry Coal Charge/Oven",   "t/oven",     [("COB-old", "dry_coal_charge"),     ("COB-new", "dry_coal_charge")]),
             ("Sp. Heat Consmn./t DC",  "kcal/kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged")]),
-            ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "cog_yield")]),
+            ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "cog_yield"), ("Coke Ovens", "coke_oven_gas_yield")]),
             ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield")]),
             ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield")]),   # add row to hardcoded_map when available
             ("Amm. Sulphate Yield",    "kg/t",       [("COB-new", "ammonium_sulphate_yield")]),
@@ -2237,23 +2237,36 @@ _TECHNO_DB_SCHEMA = {
             # Sinter plants — RSP: SP-1/SP-2/SP-3, ISP: SP
             ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity"), ("SP", "specific_productivity")]),
             ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons")]),
-            # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5 (shared unit name)
-            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF_Shop", "cdi")]),
+            # BSL LD/converter slag from SMS shop (kg/TGS) — distinct from the Sinter Plant
+            # granulated-slag reuse figure above; kept as its own row, not merged with it.
+            ("LD Slag (SMS)",       "kg/tgs",    [("SMS", "ld_slag_cons")]),
+            # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
+            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF_Shop", "cdi")]),
             ("Coke Screen Loss",    "%",         [("General", "coke_screen_loss")]),
+            # BF dimensions/quality — currently BSL-only (from FAX GM OPRN sheet)
+            ("Useful Volume",       "m³",        [("BF-1", "useful_volume"), ("BF-2", "useful_volume"), ("BF-4", "useful_volume"), ("BF-5", "useful_volume"), ("BF_Shop", "useful_volume")]),
+            ("Working Volume",      "m³",        [("BF-1", "working_volume"), ("BF-2", "working_volume"), ("BF-4", "working_volume"), ("BF-5", "working_volume"), ("BF_Shop", "working_volume")]),
+            ("Not Dry Cast",        "%",         [("BF-1", "not_dry_cast"), ("BF-2", "not_dry_cast"), ("BF-4", "not_dry_cast"), ("BF-5", "not_dry_cast"), ("BF_Shop", "not_dry_cast")]),
+            ("Mn in HM",            "%",         [("BF_Shop", "manganese_in_hm")]),
+            ("Tar Injection",       "kg/thm",    [("BF_Shop", "tar_injection")]),
         ],
     },
     30: {
         "type": "param",
         "sections": [
             # SMS shops — RSP: SMS-1/SMS-2, BSP: SMS-2/SMS-3, ISP/DSP: SMS, BSL: SMS-I/SMS-II
-            ("Average Blows/Day",   "Nos",   [("SMS-1", "average_blows_per_day"), ("SMS-2", "average_blows_per_day"), ("SMS-3", "average_blows_per_day"), ("SMS", "average_blows_per_day")]),
-            ("Average Heat Weight", "t",     [("SMS-1", "average_heat_weight"),   ("SMS-2", "average_heat_weight"),   ("SMS-3", "average_heat_weight"),   ("SMS", "average_heat_weight")]),
+            ("Average Blows/Day",   "Nos",   [("SMS-1", "average_blows_per_day"), ("SMS-2", "average_blows_per_day"), ("SMS-3", "average_blows_per_day"), ("SMS", "average_blows_per_day"), ("SMS-I", "average_blows_per_day"), ("SMS-II", "average_blows_per_day")]),
+            ("Average Heat Weight", "t",     [("SMS-1", "average_heat_weight"),   ("SMS-2", "average_heat_weight"),   ("SMS-3", "average_heat_weight"),   ("SMS", "average_heat_weight"), ("SMS-I", "average_heat_weight"), ("SMS-II", "average_heat_weight")]),
             ("Average Lining Life", "heats", [("SMS-1", "average_lining_life"),   ("SMS-2", "average_lining_life"),   ("SMS-3", "average_lining_life"),   ("SMS-I", "average_lining_life"), ("SMS-II", "average_lining_life")]),
             ("Fe-Mn Consumption",   "kg/t",  [("SMS-1", "fe-mn"),  ("SMS-2", "fe-mn"),  ("SMS-3", "fe-mn"),  ("SMS", "fe-mn"),  ("SMS-I", "fe-mn"),  ("SMS-II", "fe-mn")]),
             ("Fe-Si Consumption",   "kg/t",  [("SMS-1", "fe-si"),  ("SMS-2", "fe-si"),  ("SMS-3", "fe-si"),  ("SMS", "fe-si"),  ("SMS-I", "fe-si"),  ("SMS-II", "fe-si")]),
             ("Si-Mn Consumption",   "kg/t",  [("SMS-1", "si-mn"),  ("SMS-2", "si-mn"),  ("SMS-3", "si-mn"),  ("SMS", "si-mn"),  ("SMS-I", "si-mn"),  ("SMS-II", "si-mn")]),
             ("Oxygen Blowing",      "NM3/t", [("SMS-1", "oxygen_blowing"), ("SMS-2", "oxygen_blowing"), ("SMS-3", "oxygen_blowing"), ("SMS", "oxygen_blowing"), ("SMS-I", "oxygen_blowing"), ("SMS-II", "oxygen_blowing")]),
-            ("Caster Yield",        "%",     [("SMS-1", "caster_yield"),   ("SMS-2", "caster_yield"),   ("SMS-3", "caster_yield"),   ("SMS", "caster_yield")]),
+            ("Caster Yield",        "%",     [("SMS-1", "caster_yield"),   ("SMS-2", "caster_yield"),   ("SMS-3", "caster_yield"),   ("SMS", "caster_yield"), ("SMS-I", "caster_yield"), ("SMS-II", "caster_yield")]),
+            # New SMS parameters — currently BSL-only (from FAX GM OPRN sheet)
+            ("Gross HM Consumption", "kg/tcs", [("SMS-I", "gross_hm_consumption"), ("SMS-II", "gross_hm_consumption"), ("SMS", "gross_hm_consumption")]),
+            ("Lime Consumption",     "kg/tcs", [("SMS-I", "lime_consumption"),     ("SMS-II", "lime_consumption"),     ("SMS", "lime_consumption")]),
+            ("Aluminium Consumption","kg/tcs", [("SMS-I", "aluminium_consumption"),("SMS-II", "aluminium_consumption"),("SMS", "aluminium_consumption")]),
         ],
     },
     # Mill pages: sections = mill-unit, rows = params for that plant

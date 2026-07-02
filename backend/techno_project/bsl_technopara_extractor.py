@@ -66,6 +66,8 @@ _BF_SHOP_SECTION_KEY = {
     "Sinter in Burden":"sinter_in_burden",
     "O2 Enrichment":   "o2_enrichment",
     "Coke Screen Loss":"coke_screen_loss",  # goes to General, not BF_Shop
+    "Nut Coke":        "nut_coke_rate",     # FAX GM OPRN sheet
+    "Tar Injection":   "tar_injection",     # FAX GM OPRN sheet
 }
 
 # SMS raw snake_case → normalized key matching RSP/BSP/ISP page-30 convention.
@@ -153,6 +155,10 @@ def _derive_unit_and_key(row: dict):
         key = _BF_SHOP_SECTION_KEY.get(section) or _to_snake(section)
         return "BF_Shop", key
 
+    # ── Per-furnace BF params from FAX GM OPRN (section=furnace unit) ───────
+    if group_code == "IRON_MAKING" and section in _BSL_BF_UNITS:
+        return section, _to_snake(parameter)
+
     # ── BF Shop derived params (Blast Furnaces section) ─────────────────────
     if group_code == "IRON_MAKING" and section == "Blast Furnaces":
         return "BF_Shop", _to_snake(parameter)
@@ -160,6 +166,10 @@ def _derive_unit_and_key(row: dict):
     # ── SMS shop overall refractory (Sheet1 row 55) ─────────────────────────
     if group_code == "SMS" and section == "Refractory":
         return "SMS", "refractory"
+
+    # ── SMS shop overall params from FAX GM OPRN (LD Slag, Gross HM, etc.) ──
+    if group_code == "SMS" and section not in ("SMS-I", "SMS-II"):
+        return "SMS", _to_snake(section)
 
     # ── MAJOR KPIs → General ────────────────────────────────────────────────
     if group_code == "MAJOR":
