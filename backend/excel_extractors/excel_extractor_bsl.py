@@ -292,7 +292,7 @@ def _cell_float(ws, row: int, col: int) -> Optional[float]:
 _TECHNO_PARAM_MAP = [
     # ── Sheet1 ─────────────────────────────────────────────────────────────
     ("Sheet1", 10,  6, 1000.0, "COKE_SINTER", "Energy",                "Sp. Heat Cons.",                    "Kcal/TCO"),
-    ("Sheet1", 26,  6,    1.0, "COKE_SINTER", "Energy",                "Specific Energy Consumption",       "KWH/TCHS"),
+    ("Sheet1", 28,  6,    1.0, "COKE_SINTER", "Energy",                "Specific Energy Consumption",       "G.Cal/TCS"),
     ("Sheet1", 31,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Machine Productivity",              "T/m²/hr"),
     ("Sheet1", 33,  6,    1.0, "IRON_MAKING", "BF Productivity",       "BSL",                               "T/m³/day"),
     ("Sheet1", 35,  6,    1.0, "IRON_MAKING", "BF Coke Rate",          "BSL",                               "Kg/THM"),

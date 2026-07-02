@@ -60,7 +60,7 @@ const PARAM_TEMPLATES = {
   'Blast Furnace': [
     // Operating rates
     'coke_rate','nut_coke_rate','cdi','fuel_rate',
-    'bf_productivity','bf_productivity_useful','bf_productivity_working',
+    'bf_productivity',
     // HM quality
     'silicon_in_hm','sulphur_in_hm','avg_hot_metal_temperature',
     // Blast
@@ -132,8 +132,6 @@ const _LABEL_MAP = {
   silicon_in_hm:                        'Silicon in HM (%)',
   sulphur_in_hm:                        'Sulphur in HM (%)',
   avg_hot_metal_temperature:            'Avg. Hot Metal Temperature (°C)',
-  bf_productivity_useful:               'BF Productivity (Useful Vol.) T/m³/day',
-  bf_productivity_working:              'BF Productivity (Working Vol.) T/m³/day',
   hot_blast_temp:                       'Hot Blast Temperature (°C)',
   o2_enrichment:                        'O₂ Enrichment (%)',
   slag_offtake:                         'Slag Offtake (%)',

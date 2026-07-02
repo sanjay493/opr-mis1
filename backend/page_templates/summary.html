@@ -59,6 +59,7 @@
 
             {# ── TE table: Target | Month | CPLY | Apr-Mon | CPLY Apr-Mon ── #}
             <p class="page3-section-heading" style="margin-top:5px;">TE parameters performance:</p>
+            <div style="--sz-th:7.5pt;">
             <table class="report-table" style="table-layout:fixed;width:100%;">
                 <thead>
                     <tr>
@@ -85,6 +86,7 @@
                     {% endfor %}
                 </tbody>
             </table>
+            </div>
 
             {# ── Bar charts ── #}
             {% if page._chart_html %}{{ page._chart_html | safe }}{% endif %}
