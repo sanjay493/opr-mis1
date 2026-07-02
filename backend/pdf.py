@@ -164,13 +164,14 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
         from layout_loader import load_layout_config
         _layout_cfg = load_layout_config()
         _g = _layout_cfg["global"]
+        _g_table = _g.get("table", {})
 
         vars = _resolve_month_vars(request.month)
 
         _cfg_fc = FontConfig(
             family=       _g.get("font_family",  "IBM Plex Sans"),
-            td_size=      _g.get("td_size",      11.5),  # Increased from 9.5 for better readability
-            th_size=      _g.get("th_size",      11.0),  # Increased from 9.0 for better readability
+            td_size=      _g_table.get("td",      11.5),  # Increased from 9.5 for better readability
+            th_size=      _g_table.get("th",      11.0),  # Increased from 9.0 for better readability
             title_size=   _g.get("title_size",   15.0),  # Increased from 13.0 for better readability
             heading_size= _g.get("heading_size", 12.0),  # Increased from 10.5 for consistency
         )

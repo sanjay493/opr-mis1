@@ -11,7 +11,6 @@
 
             {# ── Production table (12 data cols: monthly APP/ACT/VAR/%FUL + CPLY + YTD) ── #}
             <div style="text-align:right;font-size:7.5pt;font-style:italic;margin-bottom:2px;">Unit: '000 T</div>
-            <div style="--sz-th:7.5pt;--sz-td:7.5pt;">
             <table class="report-table" style="table-layout:fixed;width:100%;">
                 <colgroup>
                     <col style="width:16%"/>
@@ -47,7 +46,6 @@
                     {% endfor %}
                 </tbody>
             </table>
-            </div>
             <p class="page3-footnote">*includes conversion</p>
 
             {# ── Highlights ── #}
@@ -59,7 +57,6 @@
 
             {# ── TE table: Target | Month | CPLY | Apr-Mon | CPLY Apr-Mon ── #}
             <p class="page3-section-heading" style="margin-top:5px;">TE parameters performance:</p>
-            <div style="--sz-th:7.5pt;">
             <table class="report-table" style="table-layout:fixed;width:100%;">
                 <thead>
                     <tr>
@@ -86,7 +83,6 @@
                     {% endfor %}
                 </tbody>
             </table>
-            </div>
 
             {# ── Bar charts ── #}
             {% if page._chart_html %}{{ page._chart_html | safe }}{% endif %}
