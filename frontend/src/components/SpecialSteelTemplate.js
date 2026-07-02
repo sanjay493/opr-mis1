@@ -6,11 +6,11 @@ const CELL = { padding: '1.5px 3px', border: '1px solid #cbd5e1', lineHeight: 1.
 const NUM  = { ...CELL, textAlign: 'right' };
 const LBL  = { ...CELL, textAlign: 'left' };
 const TH_S = {
-  backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
+  backgroundColor: '#fff', color: '#000', padding: '2px 3px',
   textAlign: 'center', verticalAlign: 'middle',
   border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
-const TH_C = { ...TH_S, backgroundColor: '#2d5016' };
+const TH_C = { ...TH_S, backgroundColor: '#fff' };
 
 const ROW_STYLES = {
   grade:           { backgroundColor: '#f8fafc' },
@@ -34,7 +34,7 @@ function DetailRow({ row, hasProd }) {
     return (
       <tr>
         <td colSpan={COLS} style={{
-          ...LBL, backgroundColor: '#1e3a5f', color: '#fff',
+          ...LBL, backgroundColor: '#fff', color: '#000',
           fontWeight: 700, padding: '2px 5px', border: '1px solid #334155',
         }}>
           {row.label}
@@ -50,7 +50,7 @@ function DetailRow({ row, hasProd }) {
     if (row.prod_first) {
       prodCell = (
         <td rowSpan={row.prod_rowspan} style={{
-          ...CELL, backgroundColor: '#1e3a5f', color: '#fff',
+          ...CELL, backgroundColor: '#fff', color: '#000',
           fontWeight: 700, textAlign: 'center', verticalAlign: 'middle',
           border: '1px solid #334155',
         }}>

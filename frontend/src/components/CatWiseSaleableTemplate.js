@@ -9,13 +9,6 @@ const ROW_STYLES = {
   total:          { backgroundColor: '#dcfce7', fontWeight: 700 },
 };
 
-const CAT_BG = {
-  FLAT:  '#bfdbfe',
-  PET:   '#bbf7d0',
-  LONG:  '#fde68a',
-  SEMIS: '#e2e8f0',
-};
-
 const CELL = { padding: '1.5px 4px', border: '1px solid #cbd5e1', lineHeight: 1.2 };
 const NUM  = { ...CELL, textAlign: 'right' };
 const LBL  = { ...CELL, textAlign: 'left' };
@@ -38,7 +31,7 @@ function Row({ row }) {
   if (row.cat_first) {
     catCell = (
       <td rowSpan={row.cat_rowspan}
-          style={{ ...CELL, backgroundColor: CAT_BG[row.category] || '#e2e8f0',
+          style={{ ...CELL, backgroundColor: '#fff', color: '#000',
                    fontWeight: 700, textAlign: 'center', verticalAlign: 'middle',
                    fontSize: 'var(--report-font-size)' }}>
         <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
@@ -47,7 +40,7 @@ function Row({ row }) {
       </td>
     );
   } else if (!row.category) {
-    catCell = <td style={{ ...CELL, backgroundColor: '#f8fafc' }} />;
+    catCell = <td style={{ ...CELL, backgroundColor: '#fff' }} />;
   }
   // rows mid-group (cat set, cat_first false): covered by rowspan — no td
 
@@ -65,7 +58,7 @@ function Row({ row }) {
 function PlantTable({ section, monthLabel, cplyLabel }) {
   const TH = ({ children, rowSpan, colSpan, left }) => (
     <th rowSpan={rowSpan} colSpan={colSpan}
-      style={{ backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
+      style={{ backgroundColor: '#fff', color: '#000', padding: '2px 3px',
                textAlign: left ? 'left' : 'center', verticalAlign: 'middle',
                border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600 }}>
       {children}
