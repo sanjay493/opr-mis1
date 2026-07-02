@@ -21,7 +21,7 @@ from page_segment_wise import generate_segment_wise
 from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, generate_special_steel_isp_sail
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
-from page_techno import (generate_techno, TECHNO_PAGES, generate_summary_te_table,
+from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
                           generate_major_techno_from_db, generate_techno_from_db)
 from page_records import generate_records
@@ -52,18 +52,12 @@ def _safe_chart_data(month):
 
 def _safe_techno(month, pg):
     try:
-        return generate_techno(month, pg)
-    except Exception:
         if pg == 27:
-            try:
-                return generate_major_techno_from_db(month)
-            except Exception:
-                pass
+            return generate_major_techno_from_db(month)
         elif 28 <= pg <= 35:
-            try:
-                return generate_techno_from_db(month, pg)
-            except Exception:
-                pass
+            return generate_techno_from_db(month, pg)
+        return {}
+    except Exception:
         return {}
 from pdf import build_pdf_response
 from layout_loader import load_layout_config
