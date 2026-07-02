@@ -70,6 +70,13 @@ _BF_SHOP_SECTION_KEY = {
     "Tar Injection":   "tar_injection",     # FAX GM OPRN sheet
 }
 
+# MAJOR-group KPI labels → standard key (matches RSP/ISP/BSP convention;
+# plain _to_snake() of BSL's own label text would otherwise give a different
+# key, e.g. "Coal to Hot Metal" -> "coal_to_hot_metal" instead of "coal_to_hm").
+_MAJOR_KEY_NORM = {
+    "Coal to Hot Metal": "coal_to_hm",
+}
+
 # SMS raw snake_case → normalized key matching RSP/BSP/ISP page-30 convention.
 # Keys are the exact _to_snake() output for each BSL SMS parameter label.
 _SMS_KEY_NORM = {
@@ -173,7 +180,7 @@ def _derive_unit_and_key(row: dict):
 
     # ── MAJOR KPIs → General ────────────────────────────────────────────────
     if group_code == "MAJOR":
-        return "General", _to_snake(section)
+        return "General", _MAJOR_KEY_NORM.get(section) or _to_snake(section)
 
     # ── COKE_SINTER Energy rows ─────────────────────────────────────────────
     if group_code == "COKE_SINTER" and section == "Energy":

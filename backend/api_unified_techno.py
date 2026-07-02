@@ -201,11 +201,14 @@ async def preview_techno(
         total_params = sum(
             len(r["techno_json"].get("month", {})) for r in preview_records
         )
+        # Use the extractor's own detected month (authoritative for DSP-style
+        # auto-detect) rather than the raw input, which may be blank.
+        resolved_month = records[0].get("report_month") or report_month
 
         return {
             "status": "preview",
             "plant": plant,
-            "report_month": report_month,
+            "report_month": resolved_month,
             "source_file": file.filename or "",
             "units_extracted": len(preview_records),
             "total_params": total_params,
@@ -221,6 +224,59 @@ async def preview_techno(
             os.unlink(tmp.name)
         except OSError:
             pass
+
+
+@router.post("/insert")
+async def insert_techno(payload: dict):
+    """
+    Save previously-previewed records to the techno_data table.
+
+    Body: { plant, report_month, source_file, records: [{unit, techno_json}] }
+    Use after POST /preview so the user can review extracted values first.
+    """
+    plant        = payload.get("plant", "")
+    report_month = payload.get("report_month", "")
+    source_file  = payload.get("source_file", "")
+    records      = payload.get("records", [])
+
+    _validate_month(report_month)
+    if not records:
+        raise HTTPException(status_code=400, detail="No records to insert")
+
+    init_db()
+    saved_count = 0
+    for rec in records:
+        try:
+            upsert_techno_data(
+                plant=plant,
+                report_month=report_month,
+                unit=rec["unit"],
+                techno_json=rec["techno_json"],
+                source_file=source_file,
+            )
+            saved_count += 1
+        except Exception as e:
+            print(f"Warning: Could not save {rec.get('unit')}: {e}")
+
+    sail_calc_status = "pending"
+    try:
+        from page_techno import calculate_and_store_sail_actuals
+        sail_result = calculate_and_store_sail_actuals(report_month)
+        sail_calc_status = "completed" if sail_result["success"] else "failed"
+    except Exception as e:
+        sail_calc_status = "error"
+        print(f"⚠ Error auto-calculating SAIL: {e}")
+
+    return {
+        "status": "ok",
+        "plant": plant,
+        "report_month": report_month,
+        "source_file": source_file,
+        "units_extracted": len(records),
+        "units_saved": saved_count,
+        "units": [rec["unit"] for rec in records],
+        "sail_actuals": sail_calc_status,
+    }
 
 
 @router.get("/data")
