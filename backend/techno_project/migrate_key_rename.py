@@ -12,6 +12,14 @@ Renames (within the "month" and "till_month" dicts of techno_json):
     "silicon_manganese_consumption" -> "si-mn"
     "heat_size"                   -> "average_heat_weight"
     "oxygen_converter"            -> "oxygen_blowing"
+  BSL rows, any unit:
+    "coal_to_hot_metal"           -> "coal_to_hm"
+
+Also moves "coal_to_hm" into the "General" unit wherever it was stored
+under a per-furnace/BF-shop unit instead (ISP: "BF-5", BSL: "BF_Shop"),
+so the parameter lives under the same unit across all plants — RSP/BSP/
+DSP already store it under "General", which is also where the current
+ISP/BSL extractors write it going forward; this only fixes old rows.
 
 Dry-run by default: prints a summary of rows that would change without
 writing anything. Pass --apply to actually commit the renames.
@@ -41,6 +49,16 @@ _DSP_SMS_RENAMES = {
     "oxygen_converter":              "oxygen_blowing",
 }
 
+_BSL_RENAMES = {
+    "coal_to_hot_metal": "coal_to_hm",
+}
+
+# (plant, wrong unit) -> coal_to_hm should live under "General" instead
+_COAL_TO_HM_WRONG_UNIT = {
+    "ISP": "BF-5",
+    "BSL": "BF_Shop",
+}
+
 
 def _rename_keys(period_dict: dict, renames: dict) -> bool:
     """Rename keys in-place per `renames`. Returns True if anything changed."""
@@ -52,6 +70,62 @@ def _rename_keys(period_dict: dict, renames: dict) -> bool:
     return changed
 
 
+def _move_coal_to_hm(cur, apply: bool) -> int:
+    """Move "coal_to_hm" out of the wrong per-plant unit and into "General",
+    merging into an existing General row if one exists for that month.
+    Returns the number of (plant, month) pairs fixed."""
+    moves = []  # (plant, month, src_unit, src_id, src_tj, gen_id_or_None, gen_tj)
+    for plant, wrong_unit in _COAL_TO_HM_WRONG_UNIT.items():
+        cur.execute(
+            "SELECT id, report_month, techno_json FROM techno_data WHERE plant=? AND unit=?",
+            (plant, wrong_unit),
+        )
+        for src_id, rm, src_json in cur.fetchall():
+            src_tj = json.loads(src_json)
+            if not any("coal_to_hm" in src_tj.get(p, {}) for p in ("month", "till_month")):
+                continue
+            cur.execute(
+                "SELECT id, techno_json FROM techno_data WHERE plant=? AND report_month=? AND unit='General'",
+                (plant, rm),
+            )
+            gen_row = cur.fetchone()
+            gen_id, gen_tj = (gen_row[0], json.loads(gen_row[1])) if gen_row else (None, {"month": {}, "till_month": {}})
+            moves.append((plant, rm, wrong_unit, src_id, src_tj, gen_id, gen_tj))
+
+    print(f"\n{len(moves)} coal_to_hm value(s) stored under the wrong unit:")
+    for plant, rm, wrong_unit, _sid, src_tj, _gid, gen_tj in moves:
+        for period in ("month", "till_month"):
+            v = src_tj.get(period, {}).get("coal_to_hm")
+            if v is None:
+                continue
+            existing = gen_tj.get(period, {}).get("coal_to_hm")
+            note = "" if existing is None or existing == v else f"  [CONFLICT: General already has {existing}, keeping it]"
+            print(f"  [{plant}] {rm} / {wrong_unit} -> General ({period}={v}){note}")
+
+    if not moves:
+        return 0
+    if not apply:
+        return len(moves)
+
+    for plant, rm, wrong_unit, src_id, src_tj, gen_id, gen_tj in moves:
+        for period in ("month", "till_month"):
+            v = src_tj.get(period, {}).pop("coal_to_hm", None)
+            if v is None:
+                continue
+            gen_tj.setdefault(period, {})
+            if "coal_to_hm" not in gen_tj[period]:  # never clobber a differing existing value
+                gen_tj[period]["coal_to_hm"] = v
+        cur.execute("UPDATE techno_data SET techno_json = ? WHERE id = ?", (json.dumps(src_tj), src_id))
+        if gen_id is not None:
+            cur.execute("UPDATE techno_data SET techno_json = ? WHERE id = ?", (json.dumps(gen_tj), gen_id))
+        else:
+            cur.execute(
+                "INSERT INTO techno_data (plant, report_month, unit, techno_json) VALUES (?, ?, 'General', ?)",
+                (plant, rm, json.dumps(gen_tj)),
+            )
+    return len(moves)
+
+
 def main():
     apply = "--apply" in sys.argv
 
@@ -61,7 +135,7 @@ def main():
 
     cur.execute(
         "SELECT id, plant, report_month, unit, techno_json FROM techno_data "
-        "WHERE plant IN ('RSP', 'ISP', 'DSP')"
+        "WHERE plant IN ('RSP', 'ISP', 'DSP', 'BSL')"
     )
     rows = cur.fetchall()
 
@@ -75,6 +149,8 @@ def main():
             renames = _RSP_ISP_RENAMES
         elif plant == "DSP" and unit == "SMS":
             renames = _DSP_SMS_RENAMES
+        elif plant == "BSL":
+            renames = _BSL_RENAMES
         else:
             continue
 
@@ -86,13 +162,15 @@ def main():
         if changed:
             to_update.append((row["id"], json.dumps(tj), plant, row["report_month"], unit))
 
-    print(f"Scanned {len(rows)} RSP/ISP/DSP techno_data rows.")
+    print(f"Scanned {len(rows)} RSP/ISP/DSP/BSL techno_data rows.")
     print(f"{len(to_update)} rows contain a legacy key and would be renamed:")
     for _id, _json_str, plant, rm, unit in to_update:
         print(f"  [{plant}] {rm} / {unit}")
 
-    if not to_update:
-        print("Nothing to do.")
+    move_count = _move_coal_to_hm(cur, apply)
+
+    if not to_update and not move_count:
+        print("\nNothing to do.")
         conn.close()
         return
 
@@ -105,7 +183,7 @@ def main():
         cur.execute("UPDATE techno_data SET techno_json = ? WHERE id = ?", (json_str, _id))
     conn.commit()
     conn.close()
-    print(f"\nCommitted renames for {len(to_update)} rows.")
+    print(f"\nCommitted {len(to_update)} rename(s) and {move_count} unit move(s).")
 
 
 if __name__ == "__main__":

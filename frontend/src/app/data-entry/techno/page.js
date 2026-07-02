@@ -44,38 +44,132 @@ function StatusMsg({ status }) {
   );
 }
 
+// ── Compact review table shown between Preview and Confirm & Save ─────────────
+function PreviewReview({ preview }) {
+  const [activeUnit, setActiveUnit] = React.useState(preview.records[0]?.unit || null);
+  const rec = preview.records.find(r => r.unit === activeUnit) || preview.records[0];
+  const monthParams = rec?.techno_json?.month || {};
+  const tillParams  = rec?.techno_json?.till_month || {};
+  const fmt = v => {
+    if (v == null || v === '') return '—';
+    if (typeof v === 'string' && v.includes(':')) return v;
+    return Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 });
+  };
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #bfdbfe', borderRadius: 7, background: '#eff6ff', overflow: 'hidden' }}>
+      <div style={{ padding: '8px 12px', fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', borderBottom: '1px solid #bfdbfe' }}>
+        Preview — {preview.units_extracted} unit{preview.units_extracted === 1 ? '' : 's'}, {preview.total_params} parameter{preview.total_params === 1 ? '' : 's'} for {preview.report_month}. Nothing saved yet.
+      </div>
+      <div style={{ display: 'flex', maxHeight: 260 }}>
+        <div style={{ width: 140, flexShrink: 0, borderRight: '1px solid #bfdbfe', overflowY: 'auto', background: '#fff' }}>
+          {preview.records.map(r => (
+            <button key={r.unit} onClick={() => setActiveUnit(r.unit)}
+              style={{
+                display: 'block', width: '100%', padding: '6px 10px', textAlign: 'left',
+                background: activeUnit === r.unit ? '#1e3a5f' : 'transparent',
+                color: activeUnit === r.unit ? '#fff' : '#334155',
+                border: 'none', borderBottom: '1px solid #f1f5f9', fontSize: 12,
+                fontWeight: activeUnit === r.unit ? 700 : 400, cursor: 'pointer',
+              }}
+            >
+              {r.unit}
+            </button>
+          ))}
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                <th style={{ padding: '5px 10px', textAlign: 'left', color: '#475569', borderBottom: '1px solid #e2e8f0' }}>Parameter</th>
+                <th style={{ padding: '5px 10px', textAlign: 'right', color: '#1e3a5f', borderBottom: '1px solid #e2e8f0' }}>Month</th>
+                <th style={{ padding: '5px 10px', textAlign: 'right', color: '#475569', borderBottom: '1px solid #e2e8f0' }}>Cum.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.keys(monthParams).map((param, idx) => (
+                <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  <td style={{ padding: '4px 10px', color: '#1e293b' }}>{param}</td>
+                  <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(monthParams[param])}</td>
+                  <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#64748b' }}>{fmt(tillParams[param])}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Single file-upload row used for each file type ────────────────────────────
-function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, plant, accent = '#1e3a5f', accept = '.xlsx,.xls' }) {
+function ExtractRow({ label, previewEndpoint, insertEndpoint, reportMonth, apiBase, onSuccess, plant, accent = '#1e3a5f', accept = '.xlsx,.xls' }) {
   const [file, setFile] = React.useState(null);
   const [busy,  setBusy]  = React.useState(false);
   const [status, setStatus] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
   const inputRef = React.useRef();
 
   React.useEffect(() => {
     setFile(null);
     setStatus(null);
+    setPreview(null);
     if (inputRef.current) inputRef.current.value = '';
   }, [reportMonth]);
 
-  const handleExtract = async () => {
+  const handlePreview = async () => {
     if (!file) return;
     setBusy(true);
     setStatus(null);
+    setPreview(null);
     const form = new FormData();
     form.append('file', file);
     form.append('report_month', reportMonth);
     if (plant) form.append('plant', plant);
     try {
-      const res = await fetch(`${apiBase}${endpoint}`, { method: 'POST', body: form });
+      const res = await fetch(`${apiBase}${previewEndpoint}`, { method: 'POST', body: form });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.detail || 'Extraction failed');
-      setStatus({ type: 'success', text: `Extracted ${json.units_extracted} units for ${reportMonth}` });
+      if (!res.ok) throw new Error(json.detail || 'Preview failed');
+      setPreview(json);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleConfirmSave = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const res = await fetch(`${apiBase}${insertEndpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plant,
+          report_month: preview.report_month,
+          source_file: preview.source_file,
+          records: preview.records,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Save failed');
+      setStatus({ type: 'success', text: `Saved ${json.units_saved} units for ${preview.report_month}` });
+      setPreview(null);
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = '';
       onSuccess();
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleCancelPreview = () => {
+    setPreview(null);
+    setStatus(null);
   };
 
   return (
@@ -86,20 +180,45 @@ function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, plant, a
       }}>
         <span style={{ fontSize: 13, color: '#64748b', minWidth: 180, fontWeight: 600 }}>{label}</span>
         <input ref={inputRef} type="file" accept={accept}
-          onChange={e => { setFile(e.target.files[0]); setStatus(null); }}
+          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
           style={{ fontSize: 13, flex: 1 }}
           suppressHydrationWarning
         />
-        <button onClick={handleExtract} disabled={!file || busy}
-          style={{
-            padding: '7px 18px', background: busy ? '#94a3b8' : accent,
-            color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
-            cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
-          }}
-        >
-          {busy ? 'Extracting…' : 'Extract & Save'}
-        </button>
+        {!preview && (
+          <button onClick={handlePreview} disabled={!file || busy}
+            style={{
+              padding: '7px 18px', background: busy ? '#94a3b8' : accent,
+              color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+              cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
+            }}
+          >
+            {busy ? 'Extracting…' : 'Preview'}
+          </button>
+        )}
+        {preview && (
+          <>
+            <button onClick={handleConfirmSave} disabled={busy}
+              style={{
+                padding: '7px 18px', background: busy ? '#94a3b8' : '#16a34a',
+                color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              {busy ? 'Saving…' : 'Confirm & Save'}
+            </button>
+            <button onClick={handleCancelPreview} disabled={busy}
+              style={{
+                padding: '7px 14px', background: '#fff', color: '#64748b',
+                border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
       </div>
+      {preview && <PreviewReview preview={preview} />}
       <StatusMsg status={status} />
     </div>
   );
@@ -155,7 +274,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         <div style={{ marginBottom: 16 }}>
           <ExtractRow
             label="RSP Technopara Excel (page1-8 sheet)"
-            endpoint="/api/techno/extract"
+            previewEndpoint="/api/techno/preview"
+            insertEndpoint="/api/techno/insert"
             plant="RSP"
             reportMonth={reportMonth}
             apiBase={apiBase}
@@ -176,7 +296,9 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           </div>
           <ExtractRow
             label="BSP-3-page-Tech.xlsx"
-            endpoint="/api/bsp-techno/extract/techno"
+            previewEndpoint="/api/bsp-techno/preview/techno"
+            insertEndpoint="/api/bsp-techno/insert"
+            plant="BSP"
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
@@ -184,7 +306,9 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           />
           <ExtractRow
             label="OISCO Excel"
-            endpoint="/api/bsp-techno/extract/oisco"
+            previewEndpoint="/api/bsp-techno/preview/oisco"
+            insertEndpoint="/api/bsp-techno/insert"
+            plant="BSP"
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
@@ -198,7 +322,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         <div style={{ marginBottom: 16 }}>
           <ExtractRow
             label="ISP Technopara Excel"
-            endpoint="/api/techno/extract"
+            previewEndpoint="/api/techno/preview"
+            insertEndpoint="/api/techno/insert"
             plant="ISP"
             reportMonth={reportMonth}
             apiBase={apiBase}
@@ -213,7 +338,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         <div style={{ marginBottom: 16 }}>
           <ExtractRow
             label="DSP Monthly Report PDF"
-            endpoint="/api/techno/extract"
+            previewEndpoint="/api/techno/preview"
+            insertEndpoint="/api/techno/insert"
             plant="DSP"
             reportMonth={reportMonth}
             apiBase={apiBase}
@@ -236,7 +362,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             </div>
             <ExtractRow
               label="BSL Techno Excel (.xls/.xlsx)"
-              endpoint="/api/techno/extract"
+              previewEndpoint="/api/techno/preview"
+              insertEndpoint="/api/techno/insert"
               plant="BSL"
               reportMonth={reportMonth}
               apiBase={apiBase}
