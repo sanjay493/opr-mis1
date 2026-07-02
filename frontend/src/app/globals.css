@@ -52,7 +52,7 @@ html, body {
 /* Layout */
 .app-container {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 72px); /* 72px = GlobalNavbar height */
   width: 100vw;
   overflow: hidden;
 }

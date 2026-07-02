@@ -71,10 +71,10 @@ export default function GlobalNavbar() {
               📊
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '13pt', fontWeight: '900', letterSpacing: '-0.01em', color: '#f8fafc' }}>
+              <span style={{ fontSize: '15pt', fontWeight: '900', letterSpacing: '-0.01em', color: '#f8fafc' }}>
                 SAIL MIS
               </span>
-              <span style={{ fontSize: '7.5pt', color: '#94a3b8', fontWeight: '600' }}>Portal</span>
+              <span style={{ fontSize: '9pt', color: '#94a3b8', fontWeight: '600' }}>Portal</span>
             </div>
           </Link>
 
@@ -105,7 +105,7 @@ export default function GlobalNavbar() {
                     }}
                   >
                     <span>{item.icon}</span>
-                    <span style={{ fontSize: '10pt', fontWeight: '600' }}>{item.label}</span>
+                    <span style={{ fontSize: '12pt', fontWeight: '600' }}>{item.label}</span>
                     <svg
                       width="14"
                       height="14"
@@ -132,7 +132,7 @@ export default function GlobalNavbar() {
                       alignItems: 'center',
                       gap: '6px',
                       color: '#cbd5e1',
-                      fontSize: '10pt',
+                      fontSize: '12pt',
                       fontWeight: '600'
                     }}
                     onMouseEnter={(e) => {
@@ -160,21 +160,21 @@ export default function GlobalNavbar() {
                     border: '1px solid #334155',
                     borderRadius: '8px',
                     overflow: 'hidden',
-                    minWidth: '220px',
+                    minWidth: '250px',
                     boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)'
                   }}
                   >
                     {item.submenu.map((subitem, subidx) => (
                       <Link key={subidx} href={subitem.link} style={{ textDecoration: 'none' }}>
                         <div style={{
-                          padding: '12px 16px',
+                          padding: '13px 18px',
                           borderBottom: subidx < item.submenu.length - 1 ? '1px solid rgba(51, 65, 85, 0.3)' : 'none',
                           color: '#cbd5e1',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '10px',
-                          fontSize: '9.5pt',
+                          fontSize: '12pt',
                           transition: 'all 0.2s ease'
                         }}
                         onMouseEnter={(e) => {
@@ -206,7 +206,7 @@ export default function GlobalNavbar() {
             backgroundColor: '#1e293b',
             border: '1px solid #334155',
             borderRadius: '20px',
-            fontSize: '8.5pt',
+            fontSize: '10.5pt',
             color: '#10b981',
             fontWeight: '600',
             display: 'flex',

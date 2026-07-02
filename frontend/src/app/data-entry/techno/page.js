@@ -84,16 +84,16 @@ function ExtractRow({ label, endpoint, reportMonth, apiBase, onSuccess, plant, a
         display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 7,
       }}>
-        <span style={{ fontSize: 11, color: '#64748b', minWidth: 160, fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 13, color: '#64748b', minWidth: 180, fontWeight: 600 }}>{label}</span>
         <input ref={inputRef} type="file" accept={accept}
           onChange={e => { setFile(e.target.files[0]); setStatus(null); }}
-          style={{ fontSize: 11, flex: 1 }}
+          style={{ fontSize: 13, flex: 1 }}
           suppressHydrationWarning
         />
         <button onClick={handleExtract} disabled={!file || busy}
           style={{
-            padding: '5px 16px', background: busy ? '#94a3b8' : accent,
-            color: '#fff', border: 'none', borderRadius: 6, fontSize: 12,
+            padding: '7px 18px', background: busy ? '#94a3b8' : accent,
+            color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
             cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
           }}
         >
@@ -171,7 +171,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           marginBottom: 16, padding: '12px 14px',
           background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8,
         }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 10 }}>
             BSP Techno Excel Upload — both files contribute data for the same month (merged automatically)
           </div>
           <ExtractRow
@@ -231,7 +231,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             marginBottom: 16, padding: '12px 14px',
             background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8,
           }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#166534', marginBottom: 10 }}>
               BSL Techno Upload — upload Techno Excel and/or BF Performance PDF (both merged automatically)
             </div>
             <ExtractRow
@@ -267,12 +267,12 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         }}>
           No techno data for <strong>{plant}</strong> — <strong>{reportMonth}</strong>.
           {hasExtraction && (
-            <span style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+            <span style={{ fontSize: 13, marginTop: 8, display: 'block' }}>
               Upload the {isDsp ? 'PDF' : 'Excel'} file above to extract and save data.
             </span>
           )}
           {!hasExtraction && (
-            <span style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+            <span style={{ fontSize: 13, marginTop: 8, display: 'block' }}>
               {plant} extraction support coming soon.
             </span>
           )}
@@ -282,8 +282,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
       {!loading && units.length > 0 && !isBsl && (
         <div style={{ display: 'flex', gap: 0, border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', minHeight: 400 }}>
           {/* Unit list (left) */}
-          <div style={{ width: 160, borderRight: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}>
-            <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{ width: 180, borderRight: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}>
+            <div style={{ padding: '10px 14px', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0' }}>
               Units ({units.length})
             </div>
             {units.map(u => (
@@ -291,11 +291,11 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
                 key={u}
                 onClick={() => setActiveUnit(u)}
                 style={{
-                  display: 'block', width: '100%', padding: '9px 12px', textAlign: 'left',
+                  display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left',
                   background: activeUnit === u ? '#1e3a5f' : 'transparent',
                   color: activeUnit === u ? '#fff' : '#334155',
                   border: 'none', borderBottom: '1px solid #e2e8f0',
-                  fontSize: 12, fontWeight: activeUnit === u ? 700 : 400,
+                  fontSize: 13, fontWeight: activeUnit === u ? 700 : 400,
                   cursor: 'pointer',
                 }}
               >
@@ -307,7 +307,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           {/* Parameter table (right) */}
           <div style={{ flex: 1, overflowX: 'auto' }}>
             {unitData && (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
                     <th style={{ padding: '7px 14px', textAlign: 'left', color: '#475569', fontWeight: 600, borderBottom: '2px solid #e2e8f0', minWidth: 200 }}>
@@ -361,72 +361,59 @@ export default function TechnoDataEntry() {
 
   const reportMonth = useMemo(() => formatMonth(year, month), [year, month]);
 
+  const plantHint = {
+    RSP: 'Extract from Technopara Excel (page1-8 sheet).',
+    BSP: 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel. Both merged automatically.',
+    ISP: 'Extract from multi-sheet ISP Technopara Excel.',
+    DSP: 'Extract from DSP Monthly Report PDF.',
+    BSL: 'Upload Techno Excel and/or BF Performance PDF. Both merged automatically.',
+  }[plant] || `${plant} extraction coming soon.`;
+
   return (
-    <>
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <GlobalNavbar />
-      <main className="app-container">
 
-        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-        <div className="sidebar no-print">
-          <div className="sidebar-header">
-            <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
-              </svg>
-              Techno Data
-            </h1>
-            <p>View &amp; Extract</p>
-          </div>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 20px' }}>
 
-          <div className="control-section">
-            <h2>Report Period</h2>
-            <label className="control-label">Month</label>
-            <select className="control-select" value={month} onChange={e => setMonth(e.target.value)}>
-              {MONTHS.map(m => <option key={m}>{m}</option>)}
-            </select>
-            <label className="control-label">Year</label>
-            <select className="control-select" value={year} onChange={e => setYear(e.target.value)}>
-              {YEARS.map(y => <option key={y}>{y}</option>)}
-            </select>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-              Report month: <strong>{reportMonth}</strong>
-            </div>
-          </div>
-
-          <div className="control-section">
-            <h2>Plant</h2>
-            <select className="control-select" value={plant} onChange={e => setPlant(e.target.value)}>
-              {PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>
-              Data stored in <code>techno_data</code> table.<br />
-              {plant === 'RSP' && 'Extract from Technopara Excel (page1-8 sheet).'}
-              {plant === 'BSP' && 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel. Both merged automatically.'}
-              {plant === 'ISP' && 'Extract from multi-sheet ISP Technopara Excel.'}
-              {plant === 'DSP' && 'Extract from DSP Monthly Report PDF.'}
-              {plant === 'BSL' && 'Upload Techno Excel and/or BF Performance PDF. Both merged automatically.'}
-              {!['RSP', 'BSP', 'ISP', 'DSP', 'BSL'].includes(plant) && `${plant} extraction coming soon.`}
-            </div>
-          </div>
+        {/* ── Page title ── */}
+        <div style={{ marginBottom: 18 }}>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#1e3a5f', margin: '0 0 4px' }}>
+            Techno Data — View &amp; Extract
+          </h2>
+          <span style={{ fontSize: 13, color: '#94a3b8' }}>
+            {reportMonth} · data stored in <code style={{ fontSize: 12 }}>techno_data</code> table
+          </span>
         </div>
 
-        {/* ── Main content ─────────────────────────────────────────────────── */}
-        <div className="main-content" style={{ padding: '20px 24px', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 18, color: '#1e293b', fontWeight: 700 }}>
-                {plant} — Technopara
-              </h2>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
-                {reportMonth} · <code style={{ fontSize: 11 }}>techno_data</code> table
-              </p>
-            </div>
-          </div>
+        {/* ── Controls bar ── */}
+        <div style={{
+          display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+          marginBottom: 18, background: '#fff', border: '1px solid #e2e8f0',
+          borderRadius: 8, padding: '14px 18px',
+        }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Plant</label>
+          <select value={plant} onChange={e => setPlant(e.target.value)}
+                  style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
+            {PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
 
-          <TechnoDataPanel plant={plant} reportMonth={reportMonth} apiBase={API_BASE_URL} />
+          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginLeft: 10 }}>Month</label>
+          <select value={month} onChange={e => setMonth(e.target.value)}
+                  style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
+            {MONTHS.map(m => <option key={m}>{m}</option>)}
+          </select>
+          <select value={year} onChange={e => setYear(e.target.value)}
+                  style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
+            {YEARS.map(y => <option key={y}>{y}</option>)}
+          </select>
+
+          <span style={{ marginLeft: 'auto', fontSize: 13, color: '#64748b', maxWidth: 420, textAlign: 'right' }}>
+            {plantHint}
+          </span>
         </div>
 
-      </main>
-    </>
+        <TechnoDataPanel plant={plant} reportMonth={reportMonth} apiBase={API_BASE_URL} />
+      </div>
+    </div>
   );
 }
