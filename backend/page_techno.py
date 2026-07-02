@@ -1181,6 +1181,60 @@ def calculate_and_store_sail_actuals(report_month: str) -> dict:
 # Page 3 bar chart data
 # ---------------------------------------------------------------------------
 
+def _sail_sec_value_from_json(cur, month, period='month'):
+    """SAIL-level weighted average for Specific Energy Consumption.
+    Reads from techno_data 'General' unit (where page 27 stores it).
+    Weights by plant Crude Steel production, consistent with page 27 SAIL row logic.
+    Tries key aliases: specific_energy_consumption, sp_energy, specific_energy.
+    """
+    import json as _json
+    _SEC_KEYS = ["specific_energy_consumption", "sp_energy", "specific_energy"]
+    vals, css = {}, {}
+    for plant in _BF_PLANTS:
+        cur.execute(
+            "SELECT techno_json FROM techno_data WHERE plant=? AND unit='General' AND report_month=?",
+            (plant, month)
+        )
+        row = cur.fetchone()
+        if row:
+            try:
+                d = _json.loads(row[0])
+                period_data = d.get(period) or d.get('month') or {}
+                for k in _SEC_KEYS:
+                    v = period_data.get(k)
+                    if v is not None:
+                        vals[plant] = float(v)
+                        break
+            except Exception:
+                pass
+        cur.execute(
+            "SELECT month_actual FROM production_table "
+            "WHERE plant_name=? AND item_name='Total Crude Steel' AND report_month=?",
+            (plant, month)
+        )
+        r = cur.fetchone()
+        if r and r[0] is not None:
+            css[plant] = float(r[0])
+
+    if not vals:
+        return None
+
+    num = den = 0.0
+    plain = []
+    for p, v in vals.items():
+        cs = css.get(p)
+        if cs and cs > 0:
+            num += v * cs
+            den += cs
+        else:
+            plain.append(v)
+    if den > 0:
+        return num / den
+    if plain:
+        return sum(plain) / len(plain)
+    return None
+
+
 def _sail_bf_value_from_json(cur, month, json_key, period='month'):
     """Compute SAIL-level weighted average for a BF param from techno_data BF_Shop.
     For BF Productivity uses harmonic mean weighted by HM; others use arithmetic weighted avg.
@@ -1272,10 +1326,15 @@ def generate_summary_chart_data(report_month: str) -> dict:
 
         result = []
         for chart_name, unit, json_key, plan_param in param_specs:
+            is_sec = (json_key == "sp_energy")
+
             # Past FY bars — use till_month from March (full-FY cumulative)
             fy_bars = []
             for pfy in past_fys:
-                v = _sail_bf_value_from_json(cur, f"{pfy + 1}-03", json_key, period='till_month')
+                if is_sec:
+                    v = _sail_sec_value_from_json(cur, f"{pfy + 1}-03", period='till_month')
+                else:
+                    v = _sail_bf_value_from_json(cur, f"{pfy + 1}-03", json_key, period='till_month')
                 fy_bars.append({
                     "label": fy_label(pfy),
                     "value": round(float(v), 3) if v is not None else None,
@@ -1291,7 +1350,10 @@ def generate_summary_chart_data(report_month: str) -> dict:
             # Current FY monthly bars — use month value for each month
             monthly_bars = []
             for m in cur_fy_months:
-                v = _sail_bf_value_from_json(cur, m, json_key, period='month')
+                if is_sec:
+                    v = _sail_sec_value_from_json(cur, m, period='month')
+                else:
+                    v = _sail_bf_value_from_json(cur, m, json_key, period='month')
                 monthly_bars.append({
                     "label": _mlabel(m),
                     "value": round(float(v), 3) if v is not None else None,
