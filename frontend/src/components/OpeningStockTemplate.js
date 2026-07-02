@@ -5,13 +5,13 @@ const CELL = { padding: '1px 4px', border: '1px solid #94a3b8', lineHeight: 1.15
 const NUM  = { ...CELL, textAlign: 'right' };
 const LBL  = { ...CELL, textAlign: 'left' };
 const TH   = {
-  backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
+  backgroundColor: '#fff', color: '#000', padding: '2px 3px',
   textAlign: 'center', verticalAlign: 'middle',
   border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
 const SECTION_CELL = {
   ...CELL, textAlign: 'center', verticalAlign: 'middle',
-  fontWeight: 700, fontSize: 'var(--report-font-size)', backgroundColor: '#e2e8f0',
+  fontWeight: 700, fontSize: 'var(--report-font-size)', backgroundColor: '#fff', color: '#000',
   // vertical text like the printed report
   writingMode: 'vertical-rl', transform: 'rotate(180deg)',
   width: '22px', whiteSpace: 'nowrap', padding: '2px 1px',

@@ -39,7 +39,7 @@ function SWRow({ row }) {
     <tr style={style}>
       {row.show_group && (
         <td rowSpan={row.group_span} style={{
-          ...CTR, backgroundColor: '#1e3a5f', color: '#fff',
+          ...CTR, backgroundColor: '#fff', color: '#000',
           fontWeight: 700, verticalAlign: 'middle', border: '1px solid #334155',
         }}>
           <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
@@ -49,7 +49,7 @@ function SWRow({ row }) {
       )}
       {row.show_plant && (
         <td rowSpan={row.plant_span} style={{
-          ...CTR, backgroundColor: '#dbeafe', fontWeight: 700, verticalAlign: 'middle',
+          ...CTR, backgroundColor: '#fff', color: '#000', fontWeight: 700, verticalAlign: 'middle',
         }}>
           {row.plant}
         </td>
@@ -70,7 +70,7 @@ export default function SegmentWiseTemplate({ data }) {
   const TH = ({ children, rowSpan, colSpan, left }) => (
     <th rowSpan={rowSpan} colSpan={colSpan}
       style={{
-        backgroundColor: '#1e3a5f', color: '#fff', padding: '2px 3px',
+        backgroundColor: '#fff', color: '#000', padding: '2px 3px',
         textAlign: left ? 'left' : 'center', verticalAlign: 'middle',
         border: '1px solid #334155',
         fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,

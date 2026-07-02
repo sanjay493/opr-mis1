@@ -63,22 +63,22 @@ function ProcessTable({ curRows, prevRows, periodCur, periodPrev }) {
         <col style={DATA_COL} /><col style={DATA_COL} /><col style={DATA_COL} />
       </colgroup>
       <thead>
-        <tr style={{ background: '#1e3a5f', color: '#fff' }}>
+        <tr style={{ color: 'black' }}>
           <th rowSpan={2} style={th}>PLANT</th>
           <th colSpan={6} style={th}>{periodCur}</th>
           <th colSpan={6} style={{ ...th, borderLeft: SEP }}>{periodPrev}</th>
         </tr>
-        <tr style={{ background: '#2d4f7f', color: '#fff' }}>
+        <tr style={{ color: 'black' }}>
           <th style={th}>BOF</th>
           <th style={th}>EAF</th>
-          <th style={{ ...th, background: CC_BG, color: '#064e3b' }}>CC</th>
-          <th style={{ ...th, background: CS_BG, color: '#1e40af' }}>CS</th>
+          <th style={{ ...th, color: '#064e3b' }}>CC</th>
+          <th style={{ ...th, color: '#1e40af' }}>CS</th>
           <th style={th}>BOF<br/>%CS</th>
           <th style={th}>CC<br/>%CS</th>
           <th style={{ ...th, borderLeft: SEP }}>BOF</th>
           <th style={th}>EAF</th>
-          <th style={{ ...th, background: CC_BG, color: '#064e3b' }}>CC</th>
-          <th style={{ ...th, background: CS_BG, color: '#1e40af' }}>CS</th>
+          <th style={{ ...th, color: '#064e3b' }}>CC</th>
+          <th style={{ ...th, color: '#1e40af' }}>CS</th>
           <th style={th}>BOF<br/>%CS</th>
           <th style={th}>CC<br/>%CS</th>
         </tr>

@@ -47,16 +47,16 @@ function ConcastTable({ rows, colHeaders, valueKeys, periodLabel, prevLabel, fy 
         <col style={{ width: '11%' }} />
       </colgroup>
       <thead>
-        <tr style={{ background: '#1e3a5f', color: '#fff' }}>
+        <tr style={{ background: '#fff', color: '#000' }}>
           <th rowSpan={2} style={thStyle}>PLANT</th>
           <th rowSpan={2} style={thStyle}>{fy}<br />Plan</th>
           <th colSpan={3} style={thStyle}>{periodLabel}</th>
           <th rowSpan={2} style={thStyle}>{prevLabel}<br />Actual</th>
           <th rowSpan={2} style={thStyle}>% Growth over<br />{prevLabel}</th>
         </tr>
-        <tr style={{ background: '#2d4f7f', color: '#fff' }}>
+        <tr style={{ background: '#fff', color: '#000' }}>
           {colHeaders.map((h) => (
-            <th key={h} style={{ ...thStyle, background: '#2d4f7f' }}>{h}</th>
+            <th key={h} style={{ ...thStyle, background: '#fff' }}>{h}</th>
           ))}
         </tr>
       </thead>

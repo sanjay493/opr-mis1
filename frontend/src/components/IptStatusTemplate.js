@@ -6,7 +6,7 @@ const NUM  = { ...CELL, textAlign: 'right' };
 const CTR  = { ...CELL, textAlign: 'center' };
 const LBL  = { ...CELL, textAlign: 'left' };
 const TH   = {
-  backgroundColor: '#1e3a5f', color: '#fff', padding: '3px 4px',
+  backgroundColor: '#fff', color: '#000', padding: '3px 4px',
   textAlign: 'center', verticalAlign: 'middle',
   border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
