@@ -561,9 +561,20 @@
     {% for page in pages %}
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if _pl %}
-    {% if _pl.get('fontSize') %}
-    .pg-{{ page.page }} th,
-    .pg-{{ page.page }} td { font-size: {{ _pl.get('fontSize') }}pt !important; }
+    {% set _tbl = _pl.get('table', {}) %}
+    {# Row-group sizes (thead/tbody) emitted first so the more specific
+       cell-level sizes (th/td) below win when both are given. #}
+    {% if _tbl.get('thead') %}
+    .pg-{{ page.page }} thead { font-size: {{ _tbl.get('thead') }}pt !important; }
+    {% endif %}
+    {% if _tbl.get('tbody') %}
+    .pg-{{ page.page }} tbody { font-size: {{ _tbl.get('tbody') }}pt !important; }
+    {% endif %}
+    {% if _tbl.get('th') %}
+    .pg-{{ page.page }} th { font-size: {{ _tbl.get('th') }}pt !important; }
+    {% endif %}
+    {% if _tbl.get('td') %}
+    .pg-{{ page.page }} td { font-size: {{ _tbl.get('td') }}pt !important; }
     {% endif %}
     {% if _pl.get('fontFamily') %}
     .pg-{{ page.page }},
@@ -571,14 +582,14 @@
     .pg-{{ page.page }} td { font-family: '{{ _pl.get("fontFamily") }}', Arial, sans-serif !important; }
     {% endif %}
     {% if _pl.get('fitToPage') %}
-    {% if not _pl.get('fontSize') %}
+    {% if not _tbl.get('th') and not _tbl.get('td') %}
     .pg-{{ page.page }} th,
     .pg-{{ page.page }} td { font-size: 7pt !important; }
     {% endif %}
     .pg-{{ page.page }} th,
     .pg-{{ page.page }} td { padding: 1px 2px !important; line-height: 1.0 !important; }
     .pg-{{ page.page }} .report-title-section { margin-bottom: 6px !important; }
-    .pg-{{ page.page }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; {% if not _pl.get('fontSize') %}font-size: 7pt !important;{% endif %} }
+    .pg-{{ page.page }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; {% if not _tbl.get('td') %}font-size: 7pt !important;{% endif %} }
     .pg-{{ page.page }} .highlights-box li { margin-bottom: 1px !important; }
     {% endif %}
     {% endif %}

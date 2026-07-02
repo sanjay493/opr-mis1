@@ -1,27 +1,23 @@
 {
-  "_doc": "SINGLE SOURCE OF TRUTH for page layouts. Edit this file to customize fonts, sizes and margins. Changes apply on the next PDF generation (no restart needed). Do NOT override these values in page templates or frontend CSS. Per-page keys: fontSize (pt), fontFamily (name), marginTop/marginBottom/marginLR (mm).",
+  "_doc": "SINGLE SOURCE OF TRUTH for PDF page layouts. Edit this file to customize fonts, table sizes and margins — changes apply on the next PDF generation, no restart needed. Do NOT override these values in page templates or frontend CSS.",
+
+  "_doc_table": "Each page/group entry may set a 'table' object with independent point sizes for 'thead' (header row group), 'th' (header cell), 'tbody' (body row group) and 'td' (body cell). You usually only need 'th' (header size) and 'td' (body size) — 'thead' mirrors 'th' and 'tbody' mirrors 'td' automatically when not given separately, so most entries can just set {\"th\": X, \"td\": Y}.",
+
+  "_doc_groups": "Page keys under 'pages' may be a single page number (\"9\"), a hyphen range (\"7-13\"), or a comma list (\"5,6,9\") — all are expanded to one entry per page. If a specific page number also has its own key, it overrides the group's values for that page only.",
 
   "global": {
-    "font_family":   "Arial Narrow",
-    "td_size":       11.5,
-    "th_size":       11.0,
-    "title_size":    13.0,
-    "heading_size":  12.0
+    "font_family":  "Arial Narrow",
+    "title_size":   13.0,
+    "heading_size": 12.0,
+    "table": { "th": 11.0, "td": 11.5 }
   },
 
   "pages": {
-    "3":  { "fontSize": 11, "marginTop": 10, "marginBottom": 5, "marginLR": 7 },
-    "4":  { "fontSize": 8.5, "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "5":  { "fontSize": 8.5, "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "6":  { "fontSize": 8.5, "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "7":  { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "8":  { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "9":  { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "10": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "11": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "12": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "13": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-"27": { "fontFamily": "Arial Narrow", "fontSize": 7.6, "fontWeight":300, "marginTop": 3, "marginBottom": 2, "marginLR": 4, "fitToPage": true },
-    "28": { "fontSize": 9, "marginTop": 4, "marginBottom": 3, "marginLR": 4, "fitToPage": true }
+    "3":    { "table": { "th": 7.5, "td": 10 },  "marginTop": 10, "marginBottom": 5, "marginLR": 7 },
+    "4":    { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 7,  "marginBottom": 5, "marginLR": 7 },
+    "5-6":  { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 7,  "marginBottom": 5, "marginLR": 7 },
+    "7-13": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
+    "27":   { "fontFamily": "Arial Narrow", "table": { "th": 7.6, "td": 7.6 }, "fontWeight": 300, "marginTop": 3, "marginBottom": 2, "marginLR": 4, "fitToPage": true },
+    "28":   { "table": { "th": 9, "td": 9 },     "marginTop": 4,  "marginBottom": 3, "marginLR": 4, "fitToPage": true }
   }
 }
