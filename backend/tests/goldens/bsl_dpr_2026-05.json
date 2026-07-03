@@ -1,0 +1,196 @@
+{
+  "month": "2026-05",
+  "plant": "BSL",
+  "production_rows": [
+    {
+      "cell": "DPR!P6",
+      "item_name": "Oven Pushing (nos/day)",
+      "pdf_label": "P6",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 524.193548
+    },
+    {
+      "cell": "DPR!P7",
+      "item_name": "Total Sinter",
+      "pdf_label": "P7",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 575.813
+    },
+    {
+      "cell": "DPR!P8",
+      "item_name": "Hot Metal",
+      "pdf_label": "P8",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 418.322
+    },
+    {
+      "cell": "DPR!E30",
+      "item_name": "Pig Iron",
+      "pdf_label": "E30",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 6.701
+    },
+    {
+      "cell": "DPR!P10",
+      "item_name": "SMS-1 CCM-1",
+      "pdf_label": "P10",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 71.065
+    },
+    {
+      "cell": "DPR!P11",
+      "item_name": "SMS-2 CCM-1&2",
+      "pdf_label": "P11",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 302.497
+    },
+    {
+      "cell": "DPR!P12",
+      "item_name": "Total Crude Steel",
+      "pdf_label": "P12",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 373.562
+    },
+    {
+      "cell": "DPR!P14",
+      "item_name": "HSM Total HR Coil",
+      "pdf_label": "P14",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 263.041
+    },
+    {
+      "cell": "DPR!E7",
+      "item_name": "HSM HR Coil (Sale)",
+      "pdf_label": "E7",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 113.234
+    },
+    {
+      "cell": "DPR!E8",
+      "item_name": "HSM HR Plate",
+      "pdf_label": "E8",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 12.619
+    },
+    {
+      "cell": "DPR!E9",
+      "item_name": "HR Sheet",
+      "pdf_label": "E9",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.353
+    },
+    {
+      "cell": "DPR!E10",
+      "item_name": "CRC&S(1&2)",
+      "pdf_label": "E10",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 21.594
+    },
+    {
+      "cell": "DPR!E11",
+      "item_name": "CRC(3)",
+      "pdf_label": "E11",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 40.444
+    },
+    {
+      "cell": "DPR!E12",
+      "item_name": "GP/GC",
+      "pdf_label": "E12",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.051
+    },
+    {
+      "cell": "DPR!E13",
+      "item_name": "GPC3",
+      "pdf_label": "E13",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 9.826
+    },
+    {
+      "cell": "DPR!E29",
+      "item_name": "CRSALE",
+      "pdf_label": "E29",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 92.925
+    },
+    {
+      "cell": "DPR!P31",
+      "item_name": "Saleable Steel",
+      "pdf_label": "P31",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 320.889
+    },
+    {
+      "cell": "DPR!E32",
+      "item_name": "Saleable Semis",
+      "pdf_label": "E32",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 34.321
+    },
+    {
+      "cell": "DPR!P31-E32 (computed)",
+      "item_name": "Finished Steel",
+      "pdf_label": "P31-E32",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 286.568
+    }
+  ],
+  "source_type": "BSL DPR Mail (Month-End)",
+  "special_steel_rows": [],
+  "stock_rows": [
+    {
+      "formula": "Delhi Report!M67",
+      "item_type": "SLABS",
+      "plant": "BSL",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "INPROCESS",
+      "value": 173.209
+    },
+    {
+      "formula": "Delhi Report!M66",
+      "item_type": "FINISHED STEEL",
+      "plant": "BSL",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "",
+      "value": 82.057
+    },
+    {
+      "formula": "Delhi Report!M69",
+      "item_type": "PIG IRON",
+      "plant": "BSL",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "",
+      "value": 37.142
+    }
+  ],
+  "techno_param_rows": [],
+  "techno_rows": [],
+  "workbook_sheets": [
+    "DPR",
+    "Delhi Report",
+    "BF Parameter"
+  ]
+}

@@ -205,7 +205,26 @@ The `/upload` page has a single **Data Upload** section with three modes selecta
 
 ---
 
-## 6. Report PDF Notes
+## 6. Backend Tests (Golden-File Extraction Tests)
+
+Extraction regressions are guarded by golden-file tests: each plant extractor's
+`extract_preview()` runs against a sample file committed under `Report_format/`
+and its full output is compared to a JSON snapshot in `backend/tests/goldens/`.
+
+```bash
+cd backend
+venv/Scripts/python -m pytest tests -q                    # run tests
+venv/Scripts/python -m pytest tests -q --update-goldens   # regenerate after an intentional change
+```
+
+After `--update-goldens`, review the golden diff in git before committing —
+the diff is the behaviour change. Add a new case in
+`backend/tests/test_extraction_goldens.py` when a new extractor or sample
+file format is introduced.
+
+---
+
+## 7. Report PDF Notes
 
 - Pages 1–6: A4 Portrait with tight margins (10mm sides) for maximum table width.
 - Pages 7–26: A4 Portrait, standard margins.

@@ -1,0 +1,256 @@
+{
+  "month": "2026-05",
+  "month_mismatch": false,
+  "plant": "BSP",
+  "production_rows": [
+    {
+      "cell": "S1!F4",
+      "item_name": "COB#1-8",
+      "pdf_label": "F4",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 372.322581
+    },
+    {
+      "cell": "S1!F6",
+      "item_name": "Oven Pushing (nos/day)",
+      "pdf_label": "F6",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 787.0
+    },
+    {
+      "cell": "S1!F8",
+      "item_name": "SP-2",
+      "pdf_label": "F8",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 255.303
+    },
+    {
+      "cell": "S1!F9",
+      "item_name": "SP-3",
+      "pdf_label": "F9",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 532.338
+    },
+    {
+      "cell": "S1!F10",
+      "item_name": "Total Sinter",
+      "pdf_label": "F10",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 787.641
+    },
+    {
+      "cell": "S1!F11",
+      "item_name": "BF#1-7",
+      "pdf_label": "F11",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 278.203
+    },
+    {
+      "cell": "S1!F12",
+      "item_name": "BF#8",
+      "pdf_label": "F12",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 259.056
+    },
+    {
+      "cell": "S1!F13",
+      "item_name": "Hot Metal",
+      "pdf_label": "F13",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 537.259
+    },
+    {
+      "cell": "S1!F14",
+      "item_name": "SMS-2",
+      "pdf_label": "F14",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 194.58
+    },
+    {
+      "cell": "S1!F16",
+      "item_name": "SMS-3",
+      "pdf_label": "F16",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 319.355
+    },
+    {
+      "cell": "S1!F17",
+      "item_name": "Total Crude Steel",
+      "pdf_label": "F17",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 513.935
+    },
+    {
+      "cell": "S1!F18",
+      "item_name": "RSM_RAIL",
+      "pdf_label": "F18",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 41.359
+    },
+    {
+      "cell": "S1!F22",
+      "item_name": "URM_RAIL",
+      "pdf_label": "F22",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 93.397
+    },
+    {
+      "cell": "S1!F24",
+      "item_name": "MM",
+      "pdf_label": "F24",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 56.531
+    },
+    {
+      "cell": "S1!F25",
+      "item_name": "WIRERODS",
+      "pdf_label": "F25",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 37.523
+    },
+    {
+      "cell": "S1!F26",
+      "item_name": "BARS&RODMILL",
+      "pdf_label": "F26",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 92.61
+    },
+    {
+      "cell": "S1!F27",
+      "item_name": "PLATEMILL",
+      "pdf_label": "F27",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 125.102
+    },
+    {
+      "cell": "S1!F28",
+      "item_name": "Finished Steel",
+      "pdf_label": "F28",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 446.522
+    },
+    {
+      "cell": "S1!F35",
+      "item_name": "Saleable Semis",
+      "pdf_label": "F35",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 39.049
+    },
+    {
+      "cell": "S1!F36",
+      "item_name": "Saleable Steel",
+      "pdf_label": "F36",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 485.571
+    },
+    {
+      "cell": "S1!F39",
+      "item_name": "RSMPRIME",
+      "pdf_label": "F39",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 32.445
+    },
+    {
+      "cell": "S1!J39",
+      "item_name": "URMPRIME",
+      "pdf_label": "J39",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 90.594
+    },
+    {
+      "cell": "S1!N63",
+      "item_name": "Pig Iron",
+      "pdf_label": "N63",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.374
+    }
+  ],
+  "selected_month": "2026-05",
+  "source_type": "BSP PPC MIS Monthly Report",
+  "special_steel_rows": [],
+  "stock_rows": [
+    {
+      "formula": "N47",
+      "item_type": "SLABS",
+      "plant": "BSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "FOR SALE",
+      "value": 4.209
+    },
+    {
+      "formula": "K47-N47",
+      "item_type": "SLABS",
+      "plant": "BSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "INPROCESS",
+      "value": 17.629
+    },
+    {
+      "formula": "N50-N47",
+      "item_type": "BLOOM/BILLETS",
+      "plant": "BSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "FOR SALE",
+      "value": 19.882
+    },
+    {
+      "formula": "K50-N50-K47+N47",
+      "item_type": "BLOOM/BILLETS",
+      "plant": "BSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "INPROCESS",
+      "value": 100.67
+    },
+    {
+      "formula": "N58",
+      "item_type": "FINISHED STEEL",
+      "plant": "BSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "",
+      "value": 134.598
+    },
+    {
+      "formula": "O63",
+      "item_type": "PIG IRON",
+      "plant": "BSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "",
+      "value": 1.629
+    }
+  ],
+  "techno_param_rows": [],
+  "techno_rows": [],
+  "workbook_sheets": [
+    "S1",
+    "S2"
+  ]
+}
