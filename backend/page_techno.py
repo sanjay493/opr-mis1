@@ -1226,13 +1226,35 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     # SMS unit scan order — covers RSP/BSP (SMS-1/2/3), ISP/DSP (SMS), BSL (SMS-I/II)
     _SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS", "SMS-I", "SMS-II"]
 
+    # Alternate key aliases: DSP uses hot_metal_consumption / scrap_consumption
+    _HM_ALIASES    = ["specific_hm_consumption",   "hot_metal_consumption"]
+    _SCRAP_ALIASES = ["specific_scrap_consumption", "scrap_consumption"]
+    _TMI_ALIASES   = ["tmi"]
+
     def sms_section(param_name, unit_str, src_key, tmi=False):
-        """One row per (plant, SMS-unit) pair that has data for the report month."""
+        """One row per (plant, SMS-unit) pair that actually has data for this
+        parameter (not just any data at all) - e.g. BSL's shop-level "SMS"
+        unit only holds LD Slag/Lime/Aluminium Consumption, not Hot Metal/
+        Scrap/TMI, so it must not produce a blank row in those sections."""
         rows = []
+        _check_aliases = (
+            _TMI_ALIASES + _HM_ALIASES + _SCRAP_ALIASES if tmi else
+            _HM_ALIASES    if src_key == "specific_hm_consumption"   else
+            _SCRAP_ALIASES if src_key == "specific_scrap_consumption" else
+            [src_key]
+        )
         for p in plants_with_data:
             p_units = store.get((p, report_month), {})
             for su in _SMS_UNIT_ORDER:
-                if not p_units.get(su):
+                unit_data = p_units.get(su)
+                if not unit_data:
+                    continue
+                has_data = any(
+                    unit_data.get(period, {}).get(k) is not None
+                    for period in ("month", "till_month")
+                    for k in _check_aliases
+                )
+                if not has_data:
                     continue
 
                 # Fetch plan data from techno_plan table for SMS shops
@@ -1256,11 +1278,6 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 if plan_data and 'data' in plan_data and param_name in plan_data['data']:
                     val = plan_data['data'][param_name]
                     plan_value = val.get('value') if isinstance(val, dict) else val
-
-                # Alternate key aliases: DSP uses hot_metal_consumption / scrap_consumption
-                _HM_ALIASES    = ["specific_hm_consumption",   "hot_metal_consumption"]
-                _SCRAP_ALIASES = ["specific_scrap_consumption", "scrap_consumption"]
-                _TMI_ALIASES   = ["tmi"]
 
                 def _pick_key(d, aliases):
                     for k in aliases:
@@ -1810,7 +1827,18 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
             rows = []
             for (src_unit, src_key) in unit_specs:
                 for plant in available_plants:
-                    if store.get((plant, report_month), {}).get(src_unit) is None:
+                    unit_data = store.get((plant, report_month), {}).get(src_unit)
+                    if unit_data is None:
+                        continue
+                    # A unit may exist for this plant/month but not carry this
+                    # specific parameter (e.g. BSL's shop-level "SMS" unit only
+                    # holds LD Slag/Lime/Aluminium Consumption) - skip those
+                    # instead of emitting a blank row.
+                    has_val = any(
+                        unit_data.get(period, {}).get(src_key) is not None
+                        for period in ("month", "till_month")
+                    )
+                    if not has_val:
                         continue
                     label = f"{plant} {src_unit}" if multi_plant else src_unit
                     rows.append(_make_row(label, unit_str, plant, src_unit, src_key))
