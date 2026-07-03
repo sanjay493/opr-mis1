@@ -1,4 +1,5 @@
-        {% set _is_major = page.group == 'MAJOR' %}
+        {% set _is_mill = page.group.startswith('MILL_') %}
+        {% set _is_major = not _is_mill %}
         {% set _tsz = '12pt'  %}
         <div style="padding:4px;font-family:'Roboto',sans-serif;font-size:{{ _tsz }};">
           <div style="text-align:center;font-weight:700;font-size:{{ _tsz }};">{{ page.title }}</div>

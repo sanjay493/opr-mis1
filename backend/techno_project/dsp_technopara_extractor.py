@@ -48,6 +48,14 @@ _SMS_KEY_NORM = {
     "oxygen_converter":            "oxygen_blowing",
 }
 
+# Coke oven labels where DSP's own wording diverges from the canonical key
+# used by RSP/ISP/BSP and page_techno.py's page-28 schema.
+_COKE_KEY_NORM = {
+    "coal_tar_yield":    "crude_tar_yield",
+    "crude_benzol":      "crude_benzol_yield",
+    "ammonium_sulphate": "ammonium_sulphate_yield",
+}
+
 
 def _derive_unit_and_key(row: dict, report_yy: str):
     """
@@ -109,7 +117,8 @@ def _derive_unit_and_key(row: dict, report_yy: str):
 
     elif group_code == "COKE_SINTER":
         # Coke oven parameters — section holds the display label
-        unit, key = "Coke Ovens", _to_snake(section)
+        raw_key = _to_snake(section)
+        unit, key = "Coke Ovens", _COKE_KEY_NORM.get(raw_key, raw_key)
 
     else:
         unit = section or "DSP"

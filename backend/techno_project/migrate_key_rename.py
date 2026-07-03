@@ -12,8 +12,15 @@ Renames (within the "month" and "till_month" dicts of techno_json):
     "silicon_manganese_consumption" -> "si-mn"
     "heat_size"                   -> "average_heat_weight"
     "oxygen_converter"            -> "oxygen_blowing"
+  DSP rows, unit == "Coke Ovens":
+    "coal_tar_yield"              -> "crude_tar_yield"
+    "crude_benzol"                -> "crude_benzol_yield"
+    "ammonium_sulphate"           -> "ammonium_sulphate_yield"
   BSL rows, any unit:
     "coal_to_hot_metal"           -> "coal_to_hm"
+    "crude_tar"                   -> "crude_tar_yield"
+    "crude_benzol"                -> "crude_benzol_yield"
+    "ammonium_sulphate"           -> "ammonium_sulphate_yield"
 
 Also moves "coal_to_hm" into the "General" unit wherever it was stored
 under a per-furnace/BF-shop unit instead (ISP: "BF-5", BSL: "BF_Shop"),
@@ -49,8 +56,17 @@ _DSP_SMS_RENAMES = {
     "oxygen_converter":              "oxygen_blowing",
 }
 
+_DSP_COKE_RENAMES = {
+    "coal_tar_yield":    "crude_tar_yield",
+    "crude_benzol":      "crude_benzol_yield",
+    "ammonium_sulphate": "ammonium_sulphate_yield",
+}
+
 _BSL_RENAMES = {
     "coal_to_hot_metal": "coal_to_hm",
+    "crude_tar":         "crude_tar_yield",
+    "crude_benzol":      "crude_benzol_yield",
+    "ammonium_sulphate": "ammonium_sulphate_yield",
 }
 
 # (plant, wrong unit) -> coal_to_hm should live under "General" instead
@@ -149,6 +165,8 @@ def main():
             renames = _RSP_ISP_RENAMES
         elif plant == "DSP" and unit == "SMS":
             renames = _DSP_SMS_RENAMES
+        elif plant == "DSP" and unit == "Coke Ovens":
+            renames = _DSP_COKE_RENAMES
         elif plant == "BSL":
             renames = _BSL_RENAMES
         else:
