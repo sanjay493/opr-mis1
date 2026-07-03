@@ -2026,6 +2026,19 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                         rows.append(_make_row(f"{plant} SMS-II", unit_str, plant, src_unit, src_key))
                     else:
                         rows.append(_make_row(label, unit_str, plant, src_unit, src_key, bold=bold))
+            # Stored SAIL values (techno_data plant='SAIL', entered via the
+            # techno-manual page) get a bold SAIL row at the end of the
+            # section. Unlike plant rows, checked across ALL displayed months
+            # so an entry for e.g. a past-FY March still shows up.
+            sail_spec = next(
+                ((su, sk) for (su, sk) in unit_specs
+                 if any(_gv("SAIL", rm, su, sk, p) is not None
+                        for rm in all_months for p in ("month", "till_month"))),
+                None,
+            )
+            if sail_spec:
+                rows.append(_make_row("SAIL", unit_str, "SAIL",
+                                      sail_spec[0], sail_spec[1], bold=True))
             if rows:
                 sections.append({"label": sec_label, "rows": rows})
 
