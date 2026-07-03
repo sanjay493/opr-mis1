@@ -1,0 +1,242 @@
+{
+  "month": "2026-05",
+  "plant": "RSP",
+  "production_rows": [
+    {
+      "cell": "F10",
+      "item_name": "COB#1-5",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 355.0
+    },
+    {
+      "cell": "F11",
+      "item_name": "COB#6",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 89.0
+    },
+    {
+      "cell": "F12",
+      "item_name": "Oven Pushing (nos/day)",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 526.0
+    },
+    {
+      "cell": "E41",
+      "item_name": "SP-1",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 128.025
+    },
+    {
+      "cell": "E42",
+      "item_name": "SP-2",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 167.9
+    },
+    {
+      "cell": "E43",
+      "item_name": "SP-3",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 325.81
+    },
+    {
+      "cell": "E44",
+      "item_name": "Total Sinter",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 621.735
+    },
+    {
+      "cell": "K50",
+      "item_name": "BF-1",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 82.176
+    },
+    {
+      "cell": "K52",
+      "item_name": "BF-5",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 277.86
+    },
+    {
+      "cell": "K53",
+      "item_name": "Hot Metal",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 360.036
+    },
+    {
+      "cell": "E296",
+      "item_name": "Pig Iron",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 15.078
+    },
+    {
+      "cell": "E92",
+      "item_name": "SMS-1 CCM-1",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 36.978
+    },
+    {
+      "cell": "X69+X74",
+      "item_name": "SMS-2 CCM-1&2",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 78.444
+    },
+    {
+      "cell": "L99",
+      "item_name": "SMS-2 CCM-3",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 134.493
+    },
+    {
+      "cell": "X79",
+      "item_name": "SMS-2 CCM-4",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 76.794
+    },
+    {
+      "cell": "F94",
+      "item_name": "Total Crude Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 326.708
+    },
+    {
+      "cell": "AB209",
+      "item_name": "HSM-2 Total HR Coil",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 177.446
+    },
+    {
+      "cell": "Z263",
+      "item_name": "HSM-2 HR Coil (Sale)",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 138.726
+    },
+    {
+      "cell": "AB210",
+      "item_name": "HSM-2 HR Plate",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 28.202
+    },
+    {
+      "cell": "F204",
+      "item_name": "OPM Plate",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 49.654
+    },
+    {
+      "cell": "F215",
+      "item_name": "NPM Plate",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 88.832
+    },
+    {
+      "cell": "E267",
+      "item_name": "CRNO Coils",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 6.866
+    },
+    {
+      "cell": "E265",
+      "item_name": "ERW Pipes",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 2.77
+    },
+    {
+      "cell": "E266",
+      "item_name": "SW Pipes",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.265
+    },
+    {
+      "cell": "E268",
+      "item_name": "Saleable Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 318.444
+    },
+    {
+      "cell": "E268",
+      "item_name": "Finished Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 318.444
+    }
+  ],
+  "sheets": "RSP Morning Report Data for- 20",
+  "source_type": "Daily Morning Report",
+  "stock_rows": [
+    {
+      "formula": "C301 (opening this month)",
+      "item_type": "SLABS",
+      "plant": "RSP",
+      "status": "ok",
+      "stock_month": "2026-05",
+      "stock_type": "INPROCESS",
+      "value": 32.929
+    },
+    {
+      "formula": "D301 (opening next month)",
+      "item_type": "SLABS",
+      "plant": "RSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "INPROCESS",
+      "value": 60.942
+    },
+    {
+      "formula": "J268 (opening this month)",
+      "item_type": "FINISHED STEEL",
+      "plant": "RSP",
+      "status": "ok",
+      "stock_month": "2026-05",
+      "stock_type": "",
+      "value": 97.678
+    },
+    {
+      "formula": "K268 (opening next month)",
+      "item_type": "FINISHED STEEL",
+      "plant": "RSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "",
+      "value": 110.356
+    },
+    {
+      "formula": "L296 (opening next month)",
+      "item_type": "PIG IRON",
+      "plant": "RSP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "",
+      "value": 18.564
+    }
+  ],
+  "techno_param_rows": [],
+  "techno_rows": [],
+  "workbook_sheets": [
+    "RSP Morning Report Data for- 20"
+  ]
+}

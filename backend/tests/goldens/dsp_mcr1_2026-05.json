@@ -1,0 +1,182 @@
+{
+  "month": "2026-05",
+  "plant": "DSP",
+  "production_rows": [
+    {
+      "cell": "R5C5",
+      "item_name": "Oven Pushing (nos/day)",
+      "pdf_label": "Oven Pushing (nos/day)",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 282.0
+    },
+    {
+      "cell": "R13C5",
+      "item_name": "SP-1",
+      "pdf_label": "SP-1",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 154.213
+    },
+    {
+      "cell": "R14C5",
+      "item_name": "SP-2",
+      "pdf_label": "SP-2",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 49.376
+    },
+    {
+      "cell": "R15C5",
+      "item_name": "Total Sinter",
+      "pdf_label": "Total Sinter",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 203.589
+    },
+    {
+      "cell": "R16C5",
+      "item_name": "Hot Metal",
+      "pdf_label": "Hot Metal",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 153.453
+    },
+    {
+      "cell": "R17C5",
+      "item_name": "Pig Iron",
+      "pdf_label": "Pig Iron",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.0
+    },
+    {
+      "cell": "R20C5",
+      "item_name": "BILLET Caster",
+      "pdf_label": "BILLET Caster",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 66.395
+    },
+    {
+      "cell": "R21C5",
+      "item_name": "Bloom Caster ",
+      "pdf_label": "Bloom Caster ",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 33.401
+    },
+    {
+      "cell": "R23C4",
+      "item_name": "Round Production",
+      "pdf_label": "Round Production",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.582
+    },
+    {
+      "cell": "R25C5",
+      "item_name": "SMS Total Caster",
+      "pdf_label": "SMS Total Caster",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 140.533
+    },
+    {
+      "cell": "R26C5",
+      "item_name": "BOTTOM_POURING_INGOT",
+      "pdf_label": "BOTTOM_POURING_INGOT",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.384
+    },
+    {
+      "cell": "R27C5",
+      "item_name": "Total Crude Steel",
+      "pdf_label": "Total Crude Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 140.917
+    },
+    {
+      "cell": "R30C5",
+      "item_name": "MSM",
+      "pdf_label": "MSM",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 57.11
+    },
+    {
+      "cell": "R32C5",
+      "item_name": "MM",
+      "pdf_label": "MM",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 31.679
+    },
+    {
+      "cell": "R37C5",
+      "item_name": "WAP",
+      "pdf_label": "WAP",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 2.076
+    },
+    {
+      "cell": "R38C5",
+      "item_name": "Saleable Semis",
+      "pdf_label": "Saleable Semis",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 44.634
+    },
+    {
+      "cell": "R39C5",
+      "item_name": "Finished Steel",
+      "pdf_label": "Finished Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 90.865
+    },
+    {
+      "cell": "R40C5",
+      "item_name": "Saleable Steel",
+      "pdf_label": "Saleable Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 135.499
+    },
+    {
+      "cell": "R43C5",
+      "item_name": "BILLET for Sale",
+      "pdf_label": "BILLET for Sale",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 34.292
+    },
+    {
+      "cell": "R44C5",
+      "item_name": "Blooms for Sale ",
+      "pdf_label": "Blooms for Sale ",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 10.554
+    },
+    {
+      "cell": "R46C5",
+      "item_name": "BRC",
+      "pdf_label": "BRC",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.982
+    }
+  ],
+  "sheets": "MCR-I",
+  "source_type": "DSP MCR-I Report",
+  "special_steel_rows": [],
+  "techno_param_rows": [],
+  "techno_rows": [],
+  "workbook_sheets": [
+    "MCR-I"
+  ]
+}
