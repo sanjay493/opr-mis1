@@ -47,10 +47,11 @@
             {% for sec in page.sections %}
               {% for row in sec.rows %}
               {% set _sail = row.label == 'SAIL' %}
+              {% set _bold_row = _sail or row.bold %}
               {% set _v = 'border-left:1px solid #000;border-right:1px solid #000;' %}
               {% set _bt = 'border-top:1px solid #000;'    if loop.first else '' %}
               {% set _bb = 'border-bottom:1px solid #000;' if loop.last  else '' %}
-              {% set _box = 'border-top:1.5px solid #000;border-bottom:1.5px solid #000;font-weight:700;' if _sail else (_bt ~ _bb) %}
+              {% set _box = 'border-top:1.5px solid #000;border-bottom:1.5px solid #000;font-weight:700;' if _bold_row else (_bt ~ _bb) %}
               {% set _td = _v ~ _box %}
               {% set _row_bg = 'background:#dcfce7;' if _sail else '' %}
               <tr style="{{ _row_bg }}">
@@ -63,7 +64,7 @@
                 <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:700;vertical-align:top;">{{ sec.label }}</td>
                 {% endif %}
                 {% endif %}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;">{{ row.label }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;white-space:nowrap;">{{ row.label }}</td>
                 {% if not _is_major %}
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;font-size:{{ _tsz }};">{{ row.unit }}</td>
                 {% endif %}

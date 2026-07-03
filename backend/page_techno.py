@@ -1485,19 +1485,6 @@ _TECHNO_DB_SCHEMA = {
             ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield"),      ("Coke Ovens", "crude_tar_yield")]),
             ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield"),   ("Coke Ovens", "crude_benzol_yield")]),
             ("Amm. Sulphate Yield",    "kg/t",       [("COB-new", "ammonium_sulphate_yield"), ("Coke Ovens", "ammonium_sulphate_yield")]),
-            ("Ash in Coal Blend",      "%",          [("COB-old", "ash_blend_coal"),       ("COB-new", "ash_blend_coal"),       ("Coke Ovens", "ash_blend_coal")]),
-            ("VM in Coal Blend",       "%",          [("Coke Ovens", "vm_blend_coal")]),
-            ("Ash in Coke",            "%",          [("COB-old", "ash_in_coke"),          ("COB-new", "ash_in_coke"),          ("Coke Ovens", "ash_in_coke")]),
-            ("Gross Coke Yield",       "%",          [("Coke Ovens", "gross_coke_yield")]),
-            ("Coke M-10",              "%",          [("COB-old", "m10_coke"),             ("COB-new", "m10_coke"),             ("Coke Ovens", "m10_coke")]),
-            ("Coke M-40",              "%",          [("COB-old", "m40_coke"),             ("COB-new", "m40_coke"),             ("Coke Ovens", "m40_coke")]),
-            ("Coke CSR",               "%",          [("COB-old", "csr_coke"),             ("COB-new", "csr_coke"),             ("Coke Ovens", "csr_coke")]),
-            ("Coke CRI",               "%",          [("COB-old", "cri_coke"),             ("COB-new", "cri_coke"),             ("Coke Ovens", "cri_coke")]),
-            ("Fixed Carbon in BF Coke","%",          [("Coke Ovens", "fixed_carbon_in_bf_coke")]),
-            ("Average Coking Time",    "Hrs",        [("Coke Ovens", "average_coking_time")]),
-            ("Coke Oven Gas",          "NM3/TCO",    [("Coke Ovens", "coke_oven_gas")]),
-            ("CV of Coke Oven Gas",    "Kcal/NM3",   [("Coke Ovens", "cv_of_coke_oven_gas")]),
-            ("Specific Power",         "kWh/t",      [("Coke Ovens", "specific_power_coke_ovens")]),
         ],
     },
     29: {
@@ -1506,18 +1493,9 @@ _TECHNO_DB_SCHEMA = {
             # Sinter plants — RSP: SP-1/SP-2/SP-3, ISP: SP
             ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity"), ("SP", "specific_productivity")]),
             ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons")]),
-            # BSL LD/converter slag from SMS shop (kg/TGS) — distinct from the Sinter Plant
-            # granulated-slag reuse figure above; kept as its own row, not merged with it.
-            ("LD Slag (SMS)",       "kg/tgs",    [("SMS", "ld_slag_cons")]),
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
-            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF_Shop", "cdi")]),
+            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
             ("Coke Screen Loss",    "%",         [("General", "coke_screen_loss")]),
-            # BF dimensions/quality — currently BSL-only (from FAX GM OPRN sheet)
-            ("Useful Volume",       "m³",        [("BF-1", "useful_volume"), ("BF-2", "useful_volume"), ("BF-4", "useful_volume"), ("BF-5", "useful_volume"), ("BF_Shop", "useful_volume")]),
-            ("Working Volume",      "m³",        [("BF-1", "working_volume"), ("BF-2", "working_volume"), ("BF-4", "working_volume"), ("BF-5", "working_volume"), ("BF_Shop", "working_volume")]),
-            ("Not Dry Cast",        "%",         [("BF-1", "not_dry_cast"), ("BF-2", "not_dry_cast"), ("BF-4", "not_dry_cast"), ("BF-5", "not_dry_cast"), ("BF_Shop", "not_dry_cast")]),
-            ("Mn in HM",            "%",         [("BF_Shop", "manganese_in_hm")]),
-            ("Tar Injection",       "kg/thm",    [("BF_Shop", "tar_injection")]),
         ],
     },
     30: {
@@ -1532,13 +1510,10 @@ _TECHNO_DB_SCHEMA = {
             ("Si-Mn Consumption",   "kg/t",  [("SMS-1", "si-mn"),  ("SMS-2", "si-mn"),  ("SMS-3", "si-mn"),  ("SMS", "si-mn"),  ("SMS-I", "si-mn"),  ("SMS-II", "si-mn")]),
             ("Oxygen Blowing",      "NM3/t", [("SMS-1", "oxygen_blowing"), ("SMS-2", "oxygen_blowing"), ("SMS-3", "oxygen_blowing"), ("SMS", "oxygen_blowing"), ("SMS-I", "oxygen_blowing"), ("SMS-II", "oxygen_blowing")]),
             ("Caster Yield",        "%",     [("SMS-1", "caster_yield"),   ("SMS-2", "caster_yield"),   ("SMS-3", "caster_yield"),   ("SMS", "caster_yield"), ("SMS-I", "caster_yield"), ("SMS-II", "caster_yield")]),
-            # New SMS parameters — currently BSL-only (from FAX GM OPRN sheet)
-            # BSL has only SMS-I/SMS-II (no 3rd "SMS" shop) - and both already
-            # carry their own distinct values for these three, so the
-            # combined "SMS" unit is intentionally excluded here.
-            ("Gross HM Consumption", "kg/tcs", [("SMS-I", "gross_hm_consumption"), ("SMS-II", "gross_hm_consumption")]),
-            ("Lime Consumption",     "kg/tcs", [("SMS-I", "lime_consumption"),     ("SMS-II", "lime_consumption")]),
-            ("Aluminium Consumption","kg/tcs", [("SMS-I", "aluminium_consumption"),("SMS-II", "aluminium_consumption")]),
+            # TMI (Total Metallic Input): uses the raw "tmi" key where a plant
+            # stores it directly, else _gv() computes it as HM + Scrap
+            # Consumption on the fly (same fallback page 27's MAJOR page uses).
+            ("TMI",                 "kg/tcs", [("SMS-1", "tmi"), ("SMS-2", "tmi"), ("SMS-3", "tmi"), ("SMS", "tmi"), ("SMS-I", "tmi"), ("SMS-II", "tmi")]),
         ],
     },
     # Mill pages: sections = mill-unit, rows = params for that plant
@@ -1833,8 +1808,25 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         # incompatible units in one row.
     }
 
+    # TMI (Total Metallic Input) fallback — same aliases/logic page 27's
+    # MAJOR page uses: prefer a stored "tmi" value, else compute HM + Scrap.
+    _TMI_HM_ALIASES    = ["specific_hm_consumption", "hot_metal_consumption"]
+    _TMI_SCRAP_ALIASES = ["specific_scrap_consumption", "scrap_consumption"]
+
+    def _tmi_value(d):
+        v = d.get("tmi")
+        if v is not None:
+            return v
+        hm = next((d.get(k) for k in _TMI_HM_ALIASES if d.get(k) is not None), None)
+        sc = next((d.get(k) for k in _TMI_SCRAP_ALIASES if d.get(k) is not None), None)
+        if hm is not None and sc is not None:
+            return hm + sc
+        return hm if hm is not None else sc
+
     def _gv(plant, rm, unit, key, period="month"):
         d = store.get((plant, rm), {}).get(unit, {}).get(period, {})
+        if key == "tmi":
+            return _tmi_value(d)
         v = d.get(key)
         if v is None:
             for alt in _COKE_OVEN_PARAM_ALIASES.get(key, []):
@@ -1852,11 +1844,12 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
             return param_obj.get('value')
         return param_obj
 
-    def _make_row(label, unit_str, plant, src_unit, src_key):
+    def _make_row(label, unit_str, plant, src_unit, src_key, bold=False):
         target_val = _get_plan_value(plant, src_unit, src_key)
         return {
             "label":    label,
             "unit":     unit_str,
+            "bold":     bold,
             "fy3":      _fmt(_gv(plant, fy3_march,    src_unit, src_key, "till_month")),
             "fy2":      _fmt(_gv(plant, fy2_march,    src_unit, src_key, "till_month")),
             "fy1":      _fmt(_gv(plant, fy1_march,    src_unit, src_key, "till_month")),
@@ -1880,6 +1873,23 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         if unit == "COB-new":
             return f"{plant}-New"
         return plant
+
+    def _row_label_and_bold(page_no, plant, src_unit, multi_plant):
+        """Resolve a (label, bold) pair for a "param" page row.
+        - Page 28: coke-oven naming (see _coke_oven_label).
+        - "BF_Shop" (shop-wide average across furnaces): bare plant name,
+          bold, to stand out from the individual furnace rows above it.
+        - "General" (plant-wide, not furnace/shop specific): bare plant name.
+        - Otherwise: "<plant> <unit>" as before.
+        """
+        if page_no == 28:
+            return _coke_oven_label(plant, src_unit), False
+        if src_unit == "BF_Shop":
+            return plant, True
+        if src_unit == "General":
+            return plant, False
+        label = f"{plant} {src_unit}" if multi_plant else src_unit
+        return label, False
 
     sections = []
 
@@ -1910,17 +1920,20 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                     # specific parameter (e.g. BSL's shop-level "SMS" unit only
                     # holds LD Slag/Lime/Aluminium Consumption) - skip those
                     # instead of emitting a blank row.
-                    has_val = any(
-                        unit_data.get(period, {}).get(k) is not None
-                        for period in ("month", "till_month")
-                        for k in _key_aliases
-                    )
+                    if src_key == "tmi":
+                        has_val = any(
+                            _tmi_value(unit_data.get(period, {})) is not None
+                            for period in ("month", "till_month")
+                        )
+                    else:
+                        has_val = any(
+                            unit_data.get(period, {}).get(k) is not None
+                            for period in ("month", "till_month")
+                            for k in _key_aliases
+                        )
                     if not has_val:
                         continue
-                    if page_no == 28:
-                        label = _coke_oven_label(plant, src_unit)
-                    else:
-                        label = f"{plant} {src_unit}" if multi_plant else src_unit
+                    label, bold = _row_label_and_bold(page_no, plant, src_unit, multi_plant)
                     if plant == "BSL" and src_unit == "SMS":
                         # BSL has only SMS-I/SMS-II, no 3rd "SMS" shop - a
                         # param stored only at the combined-shop level (no
@@ -1930,7 +1943,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                         rows.append(_make_row(f"{plant} SMS-I",  unit_str, plant, src_unit, src_key))
                         rows.append(_make_row(f"{plant} SMS-II", unit_str, plant, src_unit, src_key))
                     else:
-                        rows.append(_make_row(label, unit_str, plant, src_unit, src_key))
+                        rows.append(_make_row(label, unit_str, plant, src_unit, src_key, bold=bold))
             if rows:
                 sections.append({"label": sec_label, "rows": rows})
 
