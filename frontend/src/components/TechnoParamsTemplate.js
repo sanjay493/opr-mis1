@@ -118,7 +118,7 @@ export default function TechnoParamsTemplate({ data }) {
               const isFirst = ri === 0;
               const isLast  = ri === sec.rows.length - 1;
               const bkSt    = bk(isFirst, isLast);
-              const sailSt  = row.label === 'SAIL' ? { fontWeight: 700, borderTop: B } : {};
+              const sailSt  = (row.label === 'SAIL' || row.bold) ? { fontWeight: 700, borderTop: B } : {};
 
               return (
                 <tr key={`${si}-${ri}`}>
@@ -146,7 +146,7 @@ export default function TechnoParamsTemplate({ data }) {
                   )}
 
                   {/* Row label: plant/shop for param pages; param name for mill pages */}
-                  <td style={{ ...LBL, ...bkSt, ...sailSt }}>{row.label}</td>
+                  <td style={{ ...LBL, ...bkSt, ...sailSt, whiteSpace: 'nowrap' }}>{row.label}</td>
 
                   {/* Unit column only on mill pages (per-row unit) */}
                   {isMill && (
