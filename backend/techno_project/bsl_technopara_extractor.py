@@ -93,6 +93,14 @@ _SMS_KEY_NORM = {
     "refractory_cons":                 "refractory_cons",
 }
 
+# Coke oven labels where BSL's own wording diverges from the canonical key
+# used by RSP/ISP/BSP and page_techno.py's page-28 schema.
+_COKE_KEY_NORM = {
+    "crude_tar":         "crude_tar_yield",
+    "crude_benzol":      "crude_benzol_yield",
+    "ammonium_sulphate": "ammonium_sulphate_yield",
+}
+
 # BF furnace IDs in BSL (which are under repair varies by month; repair rows auto-filtered by extractor)
 _BSL_BF_UNITS = frozenset(["BF-1", "BF-2", "BF-3", "BF-4", "BF-5"])
 
@@ -149,7 +157,8 @@ def _derive_unit_and_key(row: dict):
 
     # ── Coke Ovens ──────────────────────────────────────────────────────────
     if section == "Coke Ovens":
-        return "Coke Ovens", _to_snake(parameter)
+        raw_key = _to_snake(parameter)
+        return "Coke Ovens", _COKE_KEY_NORM.get(raw_key, raw_key)
 
     # ── Sinter Plant ────────────────────────────────────────────────────────
     if section == "Sinter Plant":
