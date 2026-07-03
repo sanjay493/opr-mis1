@@ -190,15 +190,24 @@ def generate_summary_te_table(report_month: str) -> list:
         cply_ytd_actual = cply_ytd_data.get('till_month', {})
 
         def entry(param_name, unit):
-            """Create SAIL techno parameter row with plan and actual values."""
+            """Create SAIL techno parameter row with plan and actual values.
+            Manually entered SAIL values (techno_data plant='SAIL') supersede
+            the stored calculated actuals."""
             # Get plan value
             plan_val = _fmt(plan_by_param.get(param_name))
 
-            # Get stored SAIL actual values
-            current_val = sail_current_month.get(param_name, {}).get('value') if isinstance(sail_current_month.get(param_name), dict) else sail_current_month.get(param_name)
-            cply_val = cply_month_actual.get(param_name, {}).get('value') if isinstance(cply_month_actual.get(param_name), dict) else cply_month_actual.get(param_name)
-            ytd_val = sail_ytd.get(param_name, {}).get('value') if isinstance(sail_ytd.get(param_name), dict) else sail_ytd.get(param_name)
-            cply_ytd_val = cply_ytd_actual.get(param_name, {}).get('value') if isinstance(cply_ytd_actual.get(param_name), dict) else cply_ytd_actual.get(param_name)
+            def _stored(d):
+                v = d.get(param_name)
+                return v.get('value') if isinstance(v, dict) else v
+
+            def _pick(month, period, stored_dict):
+                mv = _sail_manual_value(param_name, month, period)
+                return mv if mv is not None else _stored(stored_dict)
+
+            current_val  = _pick(report_month,        'month',      sail_current_month)
+            cply_val     = _pick(cply_month,          'month',      cply_month_actual)
+            ytd_val      = _pick(report_month,        'till_month', sail_ytd)
+            cply_ytd_val = _pick(cply_ytd_last_month, 'till_month', cply_ytd_actual)
 
             # Return row: [plan, current_month_actual, cply_actual, ytd_actual, cply_ytd_actual]
             return {
@@ -412,6 +421,54 @@ def calculate_and_store_sail_actuals(report_month: str) -> dict:
 # Page 3 bar chart data
 # ---------------------------------------------------------------------------
 
+def _sail_stored_json_value(cur, month, unit, keys, period):
+    """Stored SAIL value from techno_data (plant='SAIL', flat snake_case units
+    written by the techno-manual entry page). Returns None when absent so the
+    caller falls back to the calculated weighted average."""
+    import json as _json
+    cur.execute(
+        "SELECT techno_json FROM techno_data WHERE plant='SAIL' AND unit=? AND report_month=?",
+        (unit, month)
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    try:
+        period_data = _json.loads(row[0]).get(period) or {}
+    except Exception:
+        return None
+    for k in keys:
+        v = period_data.get(k)
+        if isinstance(v, (int, float)):
+            return float(v)
+    return None
+
+
+# Display param name → (techno_data unit, candidate snake_case keys) for
+# manually entered SAIL values.
+_SAIL_MANUAL_PARAM_KEYS = {
+    "Coke Rate":                   ("BF_Shop", ["coke_rate"]),
+    "Nut Coke Rate":               ("BF_Shop", ["nut_coke_rate"]),
+    "CDI Rate":                    ("BF_Shop", ["cdi", "cdi_rate"]),
+    "Fuel Rate":                   ("BF_Shop", ["fuel_rate"]),
+    "BF Productivity":             ("BF_Shop", ["bf_productivity"]),
+    "Specific Energy Consumption": ("General", ["specific_energy_consumption", "sp_energy", "specific_energy"]),
+}
+
+
+def _sail_manual_value(param_name, month, period):
+    """Manually entered SAIL value for a display param name, or None."""
+    spec = _SAIL_MANUAL_PARAM_KEYS.get(param_name)
+    if not spec:
+        return None
+    unit, keys = spec
+    conn = sqlite3.connect(db.DB_PATH)
+    try:
+        return _sail_stored_json_value(conn.cursor(), month, unit, keys, period)
+    finally:
+        conn.close()
+
+
 def _sail_sec_value_from_json(cur, month, period='month'):
     """SAIL-level weighted average for Specific Energy Consumption.
     Reads from techno_data 'General' unit (where page 27 stores it).
@@ -420,6 +477,9 @@ def _sail_sec_value_from_json(cur, month, period='month'):
     """
     import json as _json
     _SEC_KEYS = ["specific_energy_consumption", "sp_energy", "specific_energy"]
+    stored = _sail_stored_json_value(cur, month, 'General', _SEC_KEYS, period)
+    if stored is not None:
+        return stored
     vals, css = {}, {}
     for plant in _BF_PLANTS:
         cur.execute(
@@ -472,6 +532,9 @@ def _sail_bf_value_from_json(cur, month, json_key, period='month'):
     period='month' for single month, 'till_month' for annual cumulative (e.g. March = full FY).
     """
     import json as _json
+    stored = _sail_stored_json_value(cur, month, 'BF_Shop', [json_key], period)
+    if stored is not None:
+        return stored
     vals, hms = {}, {}
     for plant in _BF_PLANTS:
         cur.execute(
@@ -1176,6 +1239,25 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 den += w
         return num / den if den > 0 else None
 
+    # Stored SAIL values (techno_data plant='SAIL', written by the techno-manual
+    # entry page and /api/techno/manual/sail/calculate) supersede the on-the-fly
+    # weighted averages; calculation is the fallback when no stored value exists.
+    def _sail_stored(src_key, src_units, ref_month, period):
+        v = _gv_multi("SAIL", ref_month, src_units, src_key, period)
+        return v if isinstance(v, (int, float)) else None
+
+    def _bf_sail_v(src_key, src_units, ref_month, period, weight_by="hm", harmonic=False):
+        v = _sail_stored(src_key, src_units, ref_month, period)
+        if v is not None:
+            return v
+        return _bf_sail(src_key, src_units, ref_month, period, weight_by, harmonic)
+
+    def _sms_sail_v(src_key, is_tmi, ref_month, period):
+        v = _sail_stored("tmi" if is_tmi else src_key, _SMS_UNIT_ORDER, ref_month, period)
+        if v is not None:
+            return v
+        return _sms_sail(src_key, is_tmi, ref_month, period)
+
     def _build_row(label, unit_str, month_fn, cum_fn, cply_fn, fy1_fn, fy2_fn, fy3_fn, cum_cply_fn=None, target_fn=None, param_name=""):
         return {
             "label":  label,
@@ -1397,28 +1479,28 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             sail_row = {
                 "label":  "SAIL",
                 "unit":   section["rows"][0]["unit"] if section["rows"] else "",
-                "fy3":    _fmt_param(_sms_sail(_sk, _is_tmi, fy3_march,     "till_month"), param_name),
-                "fy2":    _fmt_param(_sms_sail(_sk, _is_tmi, fy2_march,     "till_month"), param_name),
-                "fy1":    _fmt_param(_sms_sail(_sk, _is_tmi, fy1_march,     "till_month"), param_name),
+                "fy3":    _fmt_param(_sms_sail_v(_sk, _is_tmi, fy3_march,     "till_month"), param_name),
+                "fy2":    _fmt_param(_sms_sail_v(_sk, _is_tmi, fy2_march,     "till_month"), param_name),
+                "fy1":    _fmt_param(_sms_sail_v(_sk, _is_tmi, fy1_march,     "till_month"), param_name),
                 "target": _fmt_param(sail_plan_value, param_name) if sail_plan_value else "",
-                "months": [_fmt_param(_sms_sail(_sk, _is_tmi, m,            "month"),      param_name) for m in ytd],
-                "cply":   _fmt_param(_sms_sail(_sk, _is_tmi, cply_month,    "month"),      param_name),
-                "cum":    _fmt_param(_sms_sail(_sk, _is_tmi, report_month,  "till_month"), param_name),
-                "cum_cply": _fmt_param(_sms_sail(_sk, _is_tmi, cply_month,  "till_month"), param_name),
+                "months": [_fmt_param(_sms_sail_v(_sk, _is_tmi, m,            "month"),      param_name) for m in ytd],
+                "cply":   _fmt_param(_sms_sail_v(_sk, _is_tmi, cply_month,    "month"),      param_name),
+                "cum":    _fmt_param(_sms_sail_v(_sk, _is_tmi, report_month,  "till_month"), param_name),
+                "cum_cply": _fmt_param(_sms_sail_v(_sk, _is_tmi, cply_month,  "till_month"), param_name),
             }
         elif param_name in _BF_SAIL_SPECS:
             _sk, _su, _wb, _harm = _BF_SAIL_SPECS[param_name]
             sail_row = {
                 "label":  "SAIL",
                 "unit":   section["rows"][0]["unit"] if section["rows"] else "",
-                "fy3":    _fmt_param(_bf_sail(_sk, _su, fy3_march,     "till_month", _wb, _harm), param_name),
-                "fy2":    _fmt_param(_bf_sail(_sk, _su, fy2_march,     "till_month", _wb, _harm), param_name),
-                "fy1":    _fmt_param(_bf_sail(_sk, _su, fy1_march,     "till_month", _wb, _harm), param_name),
+                "fy3":    _fmt_param(_bf_sail_v(_sk, _su, fy3_march,     "till_month", _wb, _harm), param_name),
+                "fy2":    _fmt_param(_bf_sail_v(_sk, _su, fy2_march,     "till_month", _wb, _harm), param_name),
+                "fy1":    _fmt_param(_bf_sail_v(_sk, _su, fy1_march,     "till_month", _wb, _harm), param_name),
                 "target": _fmt_param(sail_plan_value, param_name) if sail_plan_value else "",
-                "months": [_fmt_param(_bf_sail(_sk, _su, m,            "month",      _wb, _harm), param_name) for m in ytd],
-                "cply":   _fmt_param(_bf_sail(_sk, _su, cply_month,    "month",      _wb, _harm), param_name),
-                "cum":    _fmt_param(_bf_sail(_sk, _su, report_month,  "till_month", _wb, _harm), param_name),
-                "cum_cply": _fmt_param(_bf_sail(_sk, _su, cply_month,  "till_month", _wb, _harm), param_name),
+                "months": [_fmt_param(_bf_sail_v(_sk, _su, m,            "month",      _wb, _harm), param_name) for m in ytd],
+                "cply":   _fmt_param(_bf_sail_v(_sk, _su, cply_month,    "month",      _wb, _harm), param_name),
+                "cum":    _fmt_param(_bf_sail_v(_sk, _su, report_month,  "till_month", _wb, _harm), param_name),
+                "cum_cply": _fmt_param(_bf_sail_v(_sk, _su, cply_month,  "till_month", _wb, _harm), param_name),
             }
         else:
             sail_row = {
