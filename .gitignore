@@ -1,6 +1,5 @@
-frontend/node_modules/
+node_modules/
 frontend/.next/
-backend/node_modules/
 *.pdf
 
 archive/
