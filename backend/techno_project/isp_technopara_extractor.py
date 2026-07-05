@@ -159,11 +159,13 @@ class IspTechnoExtractor:
         Used to normalize units across different sheets.
 
         ISP Mills (BM, USM, WRM): specific_heat_consumption needs *1000
+        COKE OVENS: Sp Heat Cons is in 10^6 kcal/t -> *1000 gives kcal/kg DC
         """
         multipliers = {
             "BM": {"specific_heat_consumption": 1000},
             "USM": {"specific_heat_consumption": 1000},
             "WRM": {"specific_heat_consumption": 1000},
+            "COKE OVENS": {"specific_heat_coke_ovens": 1000},
         }
 
         if sheet_name in multipliers and param_key in multipliers[sheet_name]:
