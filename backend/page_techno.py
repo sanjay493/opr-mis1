@@ -1563,7 +1563,9 @@ _TECHNO_DB_SCHEMA = {
         # the canonical one used below.
         "sections": [
             ("BF Coke Yield",          "%",          [("COB-old", "bf_coke_yield"),        ("COB-new", "bf_coke_yield"),        ("Coke Ovens", "bf_coke_yield"),        ("COB", "bf_coke_yield")]),
-            ("Dry Coal Charge/Oven",   "t/oven",     [("COB-old", "dry_coal_charge"),      ("COB-new", "dry_coal_charge"),      ("Coke Ovens", "dry_coal_charge")]),
+            # BSP reports this per battery group only ("3 page Tech" rows
+            # 32/33); the battery keys exist solely for this parameter.
+            ("Dry Coal Charge/Oven",   "t/oven",     [("COB", "dry_coal_charge_batt_1_8"), ("COB", "dry_coal_charge_batt_9_10"), ("COB-old", "dry_coal_charge"), ("COB-new", "dry_coal_charge"), ("Coke Ovens", "dry_coal_charge")]),
             # RSP's "General" key, DSP's and BSP's "specific_heat_coke_ovens"
             # are all per dry-coal-charged (confirmed) - same row. BSL's
             # "sp_heat_cons" is explicitly Kcal/TCO (per tonne coke output)
@@ -1962,6 +1964,13 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     # "CRM 1&2"/"CRM 3", shown here as "CRM"/"CRM-III" per report convention.
     _MILL_UNIT_LABEL = {"CRM 1&2": "CRM", "CRM 3": "CRM-III"}
 
+    # BSP's Dry Coal Charge/Oven comes as two battery groups ("3 page Tech"
+    # rows 32/33) - key-specific row labels, used for no other parameter.
+    _DRY_COAL_BATT_LABEL = {
+        "dry_coal_charge_batt_1_8":  "Batt. 1-8",
+        "dry_coal_charge_batt_9_10": "Batt. 9-10",
+    }
+
     def _coke_oven_label(plant, unit):
         """Page 28 row labels: drop the "COB"/"Coke Ovens" wording entirely -
         "RSP COB-old" -> "RSP-Old", "BSL Coke Ovens" -> "BSL" (single battery,
@@ -2032,6 +2041,8 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                     if not has_val:
                         continue
                     label, bold = _row_label_and_bold(page_no, plant, src_unit, multi_plant)
+                    if src_key in _DRY_COAL_BATT_LABEL:
+                        label = f"{plant} {_DRY_COAL_BATT_LABEL[src_key]}"
                     if plant == "BSL" and src_unit == "SMS":
                         # BSL has only SMS-I/SMS-II, no 3rd "SMS" shop - a
                         # param stored only at the combined-shop level (no
