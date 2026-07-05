@@ -1571,7 +1571,9 @@ _TECHNO_DB_SCHEMA = {
             # "sp_heat_cons" is explicitly Kcal/TCO (per tonne coke output)
             # per its own extractor - a different basis, so intentionally
             # NOT included here.
-            ("Sp. Heat Consmn./t DC",  "kcal/kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged"), ("Coke Ovens", "specific_heat_coke_ovens"), ("COB", "specific_heat_coke_ovens")]),
+            # ISP: "Sp Heat Cons" per battery on the COKE OVENS sheet
+            # (rows 169/195, 10^6 kcal/t — extractor multiplies by 1000).
+            ("Sp. Heat Consmn./t DC",  "kcal/kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged"), ("Coke Ovens", "specific_heat_coke_ovens"), ("COB", "specific_heat_coke_ovens"), ("COB-old", "specific_heat_coke_ovens"), ("COB-new", "specific_heat_coke_ovens")]),
             ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "cog_yield"),            ("COB-new", "cog_yield"),            ("Coke Ovens", "cog_yield")]),
             ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield"),      ("Coke Ovens", "crude_tar_yield")]),
             ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield"),   ("Coke Ovens", "crude_benzol_yield")]),

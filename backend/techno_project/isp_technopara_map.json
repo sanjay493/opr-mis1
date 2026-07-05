@@ -2,18 +2,22 @@
   "B-FCE": {
     "BF-5": {
       "coke_rate": 39,
+      "nut_coke_rate": 40,
       "cdi": 41,
       "fuel_rate": 42,
       "bf_productivity": 49,
-      "nut_coke_rate": 40,
       "sinter_in_burden": 52,
     "pellet_in_burden": 53,
-    "o2_enrichment": 93,
+   
+    
+    "furnace_availability":78,
+    
     "hot_blast_temp": 81,
+    "slag_rate":82,
     "silicon_in_hm": 83,
     "sulphur_in_hm": 84,
-    "furnace_availability":78,
-    "slag_rate":82
+     "o2_enrichment": 93
+    
     
     },
     "SP":{"return_fines":71},
@@ -23,17 +27,22 @@
   },
   "SMS": {
     "SMS": {
+    "average_blows_per_day": "10/days",
+      "average_heat_weight": 52,
+      "caster_yield": 53,
+
+      "fe-mn": "74",
+      
+      "si-mn": 77,
+      "fe-si": 78,
       "specific_hm_consumption": 89,
       "specific_scrap_consumption": 90,
-      "average_blows_per_day": "10/days",
+     "oxygen_blowing": 96,
       "specific_refractory_consumption":104,
       "specific_lpg_consumption":103,
-      "average_heat_weight": 52,
-      "fe-mn": "74",
-      "fe-si": 78,
-      "si-mn": 77,
-      "oxygen_blowing": 96,
-      "caster_yield": 53,
+      
+      
+      
       "converter_utilisation": "(134+135+136)/3"
     }
   },
@@ -85,6 +94,7 @@
   "COKE OVENS": {
     "COB-old": {
       "dry_coal_charge_oven": "17/8",
+      "specific_heat_coke_ovens": 169,
       "coke_oven_gas_yield": 164,
       "ash_blend_coal":153,
       "ash_in_coke":157,
@@ -97,6 +107,7 @@
       "bf_coke_yield": 37,
       "coke_oven_gas_yield": 189,
       "dry_coal_charge_oven": "18/9",
+      "specific_heat_coke_ovens": 195,
       "crude_tar_yield": 81,
       "crude_benzol_yield": 85,
       "ammonium_sulphate_yield": 84,
