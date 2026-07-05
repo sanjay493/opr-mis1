@@ -372,7 +372,10 @@
                 formData.append('report_month', month);
                 formData.append('file', file);
 
-                const response = await fetch('http://127.0.0.1:8082/api/upload', {
+                const apiOrigin = window.location.protocol.startsWith('http')
+                    ? window.location.origin
+                    : 'http://127.0.0.1:8082';
+                const response = await fetch(`${apiOrigin}/api/upload`, {
                     method: 'POST',
                     body: formData
                 });

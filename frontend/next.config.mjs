@@ -13,7 +13,7 @@ const nextConfig = {
     // Must be absolute — Turbopack rejects relative paths.
     root: __dirname,
   },
-  allowedDevOrigins: ['192.168.1.7', 'localhost', '127.0.0.1'],
+  allowedDevOrigins: ['10.135.5.15', '192.168.1.7', 'localhost', '127.0.0.1'],
   async rewrites() {
     return [
       {
