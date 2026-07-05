@@ -12366,30 +12366,30 @@
     "page": 31,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - BSP",
-    "orientation": "portrait"
+    "orientation": "landscape"
   },
   {
     "page": 32,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - DSP",
-    "orientation": "portrait"
+    "orientation": "landscape"
   },
   {
     "page": 33,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - RSP",
-    "orientation": "portrait"
+    "orientation": "landscape"
   },
   {
     "page": 34,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - BSL",
-    "orientation": "portrait"
+    "orientation": "landscape"
   },
   {
     "page": 35,
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - ISP",
-    "orientation": "portrait"
+    "orientation": "landscape"
   }
 ]

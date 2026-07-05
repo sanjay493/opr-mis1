@@ -16,11 +16,16 @@ Renames (within the "month" and "till_month" dicts of techno_json):
     "coal_tar_yield"              -> "crude_tar_yield"
     "crude_benzol"                -> "crude_benzol_yield"
     "ammonium_sulphate"           -> "ammonium_sulphate_yield"
+  DSP rows, unit in ("BF-2", "BF-3", "BF-4", "BF_Shop"):
+    "bf_productivity_working"     -> "bf_productivity"
   BSL rows, any unit:
     "coal_to_hot_metal"           -> "coal_to_hm"
     "crude_tar"                   -> "crude_tar_yield"
     "crude_benzol"                -> "crude_benzol_yield"
     "ammonium_sulphate"           -> "ammonium_sulphate_yield"
+    "working_volume"              -> "bf_productivity"          (was mislabeled;
+                                                                   see excel_extractor_bsl.py)
+    "useful_volume"               -> "bf_productivity_useful"
 
 Also moves "coal_to_hm" into the "General" unit wherever it was stored
 under a per-furnace/BF-shop unit instead (ISP: "BF-5", BSL: "BF_Shop"),
@@ -62,11 +67,22 @@ _DSP_COKE_RENAMES = {
     "ammonium_sulphate": "ammonium_sulphate_yield",
 }
 
+# DSP reports BF Productivity on both a "useful volume" and "working volume"
+# basis; page_techno.py's page-27 BF Productivity row reads the shared
+# "bf_productivity" key that RSP/ISP/BSL/BSP write, so the working-volume
+# figure (SAIL-wide convention) needs to move onto that key.
+_DSP_BF_RENAMES = {
+    "bf_productivity_working": "bf_productivity",
+}
+_DSP_BF_UNITS = ("BF-2", "BF-3", "BF-4", "BF_Shop")
+
 _BSL_RENAMES = {
     "coal_to_hot_metal": "coal_to_hm",
     "crude_tar":         "crude_tar_yield",
     "crude_benzol":      "crude_benzol_yield",
     "ammonium_sulphate": "ammonium_sulphate_yield",
+    "working_volume":    "bf_productivity",
+    "useful_volume":     "bf_productivity_useful",
 }
 
 # (plant, wrong unit) -> coal_to_hm should live under "General" instead
@@ -167,6 +183,8 @@ def main():
             renames = _DSP_SMS_RENAMES
         elif plant == "DSP" and unit == "Coke Ovens":
             renames = _DSP_COKE_RENAMES
+        elif plant == "DSP" and unit in _DSP_BF_UNITS:
+            renames = _DSP_BF_RENAMES
         elif plant == "BSL":
             renames = _BSL_RENAMES
         else:

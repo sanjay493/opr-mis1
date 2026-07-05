@@ -1,20 +1,20 @@
         {% set _is_mill = page.group.startswith('MILL_') %}
         {% set _is_major = not _is_mill %}
-        {% set _tsz = '12pt'  %}
+        {% set _tsz = '10pt' if _is_major else '9pt' %}
         <div style="padding:4px;font-family:'Roboto',sans-serif;font-size:{{ _tsz }};">
           <div style="text-align:center;font-weight:700;font-size:{{ _tsz }};">{{ page.title }}</div>
           {% if page.subtitle %}
           <div style="text-align:center;font-weight:600;font-size:{{ _tsz }};margin-bottom:3px;">{{ page.subtitle }}</div>
           {% endif %}
-          <table style="width:100%;border-collapse:collapse;border:1px solid #000;table-layout:fixed;font-size:{{ _tsz }};margin-top:2px;">
+          <table style="width:100%;border-collapse:collapse;border:1px solid #000;table-layout:{{ 'auto' if _is_mill else 'fixed' }};font-size:{{ _tsz }};margin-top:2px;">
             <colgroup>
               {% if _is_major %}
-              <col style="width:20%"/><col style="width:10%"/>
-              {% else %}
-              <col style="width:13%"/><col style="width:13%"/><col style="width:7%"/>
-              {% endif %}
+              <col style="width:10%"/><col style="width:7%"/>
               {% set ncols = 7 + (page.month_labels | length) %}
               {% for i in range(ncols) %}<col/>{% endfor %}
+              {% else %}
+              <col/><col/>
+              {% endif %}
             </colgroup>
             <thead>
               <tr>
@@ -22,9 +22,8 @@
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #000;text-align:left;">Parameters</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Plants</th>
                 {% else %}
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Mill</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #000;text-align:left;">Parameters</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Shop / Plant</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Unit</th>
                 {% endif %}
                 <th colspan="3" style="padding:2px 3px;border:1px solid #000;">Actual</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #000;background:#fef9c3;">{{ page.target_label }}</th>
@@ -61,13 +60,11 @@
                 {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
                 <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:700;vertical-align:top;">{{ _sec_label }}</td>
                 {% else %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:700;vertical-align:top;">{{ sec.label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:2px 1.5px;border:1px solid #000;text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label }}</td>
                 {% endif %}
                 {% endif %}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;white-space:nowrap;">{{ row.label }}</td>
-                {% if not _is_major %}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;font-size:{{ _tsz }};">{{ row.unit }}</td>
-                {% endif %}
+                {% set _row_label = (row.label ~ ' (' ~ row.unit ~ ')') if (not _is_major and row.unit) else row.label %}
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;white-space:nowrap;">{{ _row_label }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy3 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy2 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy1 }}</td>

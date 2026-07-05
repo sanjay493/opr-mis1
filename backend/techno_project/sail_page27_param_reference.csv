@@ -1,0 +1,13 @@
+parameter_display,unit,key,uom,notes
+Coal to Hot Metal,BF_Shop,coal_to_hm,kg/kg,"weighted avg by HM; unit can also be General"
+Coke Rate,BF_Shop,coke_rate,kg/thm,weighted avg by HM
+Nut Coke Rate,BF_Shop,nut_coke_rate,kg/thm,weighted avg by HM
+CDI Rate,BF_Shop,cdi,kg/thm,weighted avg by HM
+Fuel Rate,BF_Shop,fuel_rate,kg/thm,weighted avg by HM
+Sinter in Burden,BF_Shop,sinter_in_burden,%,weighted avg by HM
+Pellet in Burden,BF_Shop,pellet_in_burden,%,weighted avg by HM
+BF Productivity,BF_Shop,bf_productivity,t/m3/day,harmonic mean weighted by HM
+Hot Metal Consumption,SMS,specific_hm_consumption,kg/tcs,weighted avg by Crude Steel
+Scrap Consumption,SMS,specific_scrap_consumption,kg/tcs,weighted avg by Crude Steel
+TMI,SMS,tmi,kg/tcs,weighted avg by Crude Steel
+Specific Energy Consumption,General,specific_energy_consumption,Gcal/tcs,weighted avg by Crude Steel

@@ -17,7 +17,8 @@
     "4":    { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 7,  "marginBottom": 5, "marginLR": 7 },
     "5-6":  { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 7,  "marginBottom": 5, "marginLR": 7 },
     "7-13": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "27":   { "fontFamily": "Arial Narrow", "table": { "th": 7.6, "td": 7.6 }, "fontWeight": 300, "marginTop": 3, "marginBottom": 2, "marginLR": 4, "fitToPage": true },
-    "28":   { "table": { "th": 9, "td": 9 },     "marginTop": 4,  "marginBottom": 3, "marginLR": 4, "fitToPage": true }
+    "27":   { "fontFamily": "Arial Narrow", "table": { "th": 7.6, "td": 7.6 }, "fontWeight": 300, "marginTop": 3, "marginBottom": 1.5, "marginLR": 4, "fitToPage": true },
+    "28-30": { "table": { "th": 9, "td": 9 },    "marginTop": 4,  "marginBottom": 3, "marginLR": 4, "fitToPage": true },
+    "31-35": { "table": { "th": 8, "td": 8 },    "marginTop": 4,  "marginBottom": 3, "marginLR": 6, "fitToPage": true }
   }
 }

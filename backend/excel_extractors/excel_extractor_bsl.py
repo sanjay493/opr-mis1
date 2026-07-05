@@ -430,15 +430,97 @@ _FAX_SINGLE_PARAM_MAP = [
 # Per-furnace BF dimension/quality table (rows 37-42); month/cum columns are
 # adjacent pairs here, one pair per parameter. FCE 3 (row 39) excluded — see
 # note above.
+#
+# NOTE: columns 2-3 and 4-5 are NOT furnace volume dimensions despite the
+# sheet's original "Useful Volume"/"Working Volume" column headers — their
+# values (~1.6-2.3) are on the T/m³/day scale of BF Productivity, not the
+# thousands-of-m³ scale of an actual furnace volume. They are BF Productivity
+# computed on a useful/working-volume basis, so they're labelled and unit'd
+# accordingly here (see bsl_technopara_extractor.py's _BF_KEY_NORM for how
+# the working-volume figure folds onto the shared "bf_productivity" key).
 _FAX_BF_FURNACE_ROWS = {37: "BF-1", 38: "BF-2", 40: "BF-4", 41: "BF-5", 42: "BF_Shop"}
 _FAX_BF_FURNACE_PARAMS = [
-    # mon_col, cum_col, parameter,        unit
-    (2,   3,   "Useful Volume",  "m³"),
-    (4,   5,   "Working Volume", "m³"),
-    (6,   7,   "Hot Blast Temp", "°C"),
-    (8,   9,   "Coke Rate",      "Kg/THM"),
-    (10,  11,  "Not Dry Cast",   "%"),
+    # mon_col, cum_col, parameter,                    unit
+    (2,   3,   "BF Productivity (Useful Volume)",  "T/m³/day"),
+    (4,   5,   "BF Productivity (Working Volume)", "T/m³/day"),
+    (6,   7,   "Hot Blast Temp",                   "°C"),
+    (8,   9,   "Coke Rate",                        "Kg/THM"),
+    (10,  11,  "Not Dry Cast",                     "%"),
 ]
+
+# ---------------------------------------------------------------------------
+# HSM (Hot Strip Mill) — Sheet8. Unlike _TECHNO_PARAM_MAP (which reads column
+# A purely for a display label and trusts the hardcoded row number for
+# meaning), Sheet8's parameter name lives in column B and is used here as the
+# source of truth for which HSM parameter each row holds: matched by keyword
+# rather than assumed from row position, so if a future month's file reshuffles
+# these rows, extraction logs a warning instead of silently mismapping data
+# into the wrong parameter (e.g. Utilisation's number landing in Availability).
+# Column F = month actual, Column G = till-the-month cumulative.
+# ---------------------------------------------------------------------------
+_HSM_SHEET     = "Sheet8"
+_HSM_ROWS      = [29, 35, 37, 41, 43]
+_HSM_LABEL_COL = 2   # column B
+_HSM_MON_COL   = 6   # column F
+_HSM_CUM_COL   = 7   # column G
+
+# (keyword to match in the column-B label, canonical parameter, unit)
+# Matched in order — first keyword found in the (lowercased) label wins.
+_HSM_KEYWORDS = [
+    ("yield",   "Yield",             "%"),
+    ("availab", "Availability",      "%"),
+    ("utili",   "Utilisation",       "%"),
+    ("rolling", "Rolling Rate",      "t/hr"),
+    ("heat",    "Heat Consumption",  "kcal/t"),
+    ("power",   "Power Consumption", "kWh/t"),
+]
+
+
+def _extract_hsm_rows(wb, db_month: str) -> list:
+    """Extract BSL HSM techno params from Sheet8, self-checking each row's
+    identity against its column-B label rather than trusting row position alone."""
+    if _HSM_SHEET not in wb.sheetnames:
+        logger.info("BSL techno: sheet %r not found — skipping HSM", _HSM_SHEET)
+        return []
+
+    ws = wb[_HSM_SHEET]
+    out = []
+    for row in _HSM_ROWS:
+        label = str(ws.cell(row, _HSM_LABEL_COL).value or "").strip()
+        match = next((m for m in _HSM_KEYWORDS if m[0] in label.lower()), None)
+        if match is None:
+            logger.warning(
+                "BSL techno: HSM %s row %d column B label %r didn't match any "
+                "known HSM parameter (yield/availability/utilisation/rolling/"
+                "heat/power) — verify _HSM_ROWS in excel_extractor_bsl.py "
+                "still points at the right rows.",
+                _HSM_SHEET, row, label,
+            )
+            continue
+        _, param, unit = match
+
+        actual_raw = _cell_float(ws, row, _HSM_MON_COL)
+        cum_raw    = _cell_float(ws, row, _HSM_CUM_COL)
+        actual = round(actual_raw, 4) if actual_raw is not None else None
+        cum    = round(cum_raw,    4) if cum_raw    is not None else None
+
+        out.append({
+            "group_code": "MILL_BSL",
+            "section":    "HSM",
+            "parameter":  param,
+            "unit":       unit,
+            "actual":     actual,
+            "cum_actual": cum,
+            "sort_order": 480 + row,
+            "cell":       f"{_HSM_SHEET}!{get_column_letter(_HSM_MON_COL)}{row}/{get_column_letter(_HSM_CUM_COL)}{row}",
+            "file_label": label,
+            "plant":      "BSL",
+            "month":      db_month,
+            "found_via":  f"hardcoded {_HSM_SHEET} R{row}C{_HSM_MON_COL} (label-matched {label!r} -> {param})",
+            "status":     "ok" if (actual is not None or cum is not None) else "skip",
+        })
+    return out
+
 
 _MONTH_FROM_NAME = {
     "JANUARY": "01", "FEBRUARY": "02", "MARCH": "03", "APRIL": "04",
@@ -1213,6 +1295,9 @@ def extract_preview(file_path: str, report_month: str) -> dict:
                 fax_idx += 1
     else:
         logger.info("BSL techno: sheet %r not found — skipping FAX GM OPRN extras", _FAX_SHEET)
+
+    # ── Sheet8 — HSM (Hot Strip Mill) ──────────────────────────────────────
+    rows_out.extend(_extract_hsm_rows(wb, db_month))
 
     ok = sum(1 for r in rows_out if r["status"] == "ok")
     logger.info("BSL techno preview: %d/%d rows ok for %s", ok, len(rows_out), db_month)
