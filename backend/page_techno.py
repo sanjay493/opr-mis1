@@ -1565,7 +1565,7 @@ _TECHNO_DB_SCHEMA = {
             ("BF Coke Yield",          "%",          [("COB-old", "bf_coke_yield"),        ("COB-new", "bf_coke_yield"),        ("Coke Ovens", "bf_coke_yield"),        ("COB", "bf_coke_yield")]),
             # BSP reports this per battery group only ("3 page Tech" rows
             # 32/33); the battery keys exist solely for this parameter.
-            ("Dry Coal Charge/Oven",   "t/oven",     [("COB", "dry_coal_charge_batt_1_8"), ("COB", "dry_coal_charge_batt_9_10"), ("COB-old", "dry_coal_charge"), ("COB-new", "dry_coal_charge"), ("Coke Ovens", "dry_coal_charge")]),
+            ("Dry Coal Charge/Oven",   "t/oven",     [("COB", "dry_coal_charge_batt_1_8"), ("COB", "dry_coal_charge_batt_9_11"), ("COB-old", "dry_coal_charge"), ("COB-new", "dry_coal_charge"), ("Coke Ovens", "dry_coal_charge")]),
             # RSP's "General" key, DSP's and BSP's "specific_heat_coke_ovens"
             # are all per dry-coal-charged (confirmed) - same row. BSL's
             # "sp_heat_cons" is explicitly Kcal/TCO (per tonne coke output)
@@ -1968,7 +1968,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     # rows 32/33) - key-specific row labels, used for no other parameter.
     _DRY_COAL_BATT_LABEL = {
         "dry_coal_charge_batt_1_8":  "Batt. 1-8",
-        "dry_coal_charge_batt_9_10": "Batt. 9-10",
+        "dry_coal_charge_batt_9_11": "Batt. 9-11",
     }
 
     def _coke_oven_label(plant, unit):
