@@ -96,7 +96,6 @@ const PARAM_TEMPLATES = {
   ],
   'Sinter Plant': [
     'sinter_production','productivity','basicity','tfe_in_sinter',
-    'dsp_sp_1','dsp_sp_2',
   ],
   'Rolling Mills': ['rolling_yield','production'],
   'General': [
@@ -107,6 +106,17 @@ const PARAM_TEMPLATES = {
     'specific_co2_emissions',
   ],
 };
+
+// Plant-specific params appended to an area template only for that plant
+const PLANT_PARAM_EXTRAS = {
+  DSP: { 'Sinter Plant': ['dsp_sp_1','dsp_sp_2'] },
+};
+
+function templateFor(area, plant) {
+  const base   = PARAM_TEMPLATES[area] || [];
+  const extras = (PLANT_PARAM_EXTRAS[plant] || {})[area] || [];
+  return [...base, ...extras];
+}
 
 // ── Known units list for "Add Unit" modal ─────────────────────────────────────
 const KNOWN_UNITS = [
@@ -253,9 +263,9 @@ function NumInput({ value, onChange, disabled, changed }) {
 }
 
 // ── Parameter table for one unit ──────────────────────────────────────────────
-function UnitForm({ unit, data, initialData, onChange, busy }) {
+function UnitForm({ unit, plant, data, initialData, onChange, busy }) {
   const area        = unitArea(unit);
-  const templateKeys = PARAM_TEMPLATES[area] || [];
+  const templateKeys = templateFor(area, plant);
 
   const dbKeys = Array.from(new Set([
     ...Object.keys(data?.month      || {}),
@@ -574,7 +584,7 @@ export default function TechnoManualPage() {
   // ── Add unit (with template params) ────────────────────────────────────────
   function handleAddUnit(unitName) {
     const a      = unitArea(unitName);
-    const tmpl   = PARAM_TEMPLATES[a] || [];
+    const tmpl   = templateFor(a, plant);
     const empty  = Object.fromEntries(tmpl.map(k => [k, null]));
     setUnitData(prev => ({
       ...prev,
@@ -967,6 +977,7 @@ export default function TechnoManualPage() {
                 {/* Parameter table */}
                 <UnitForm
                   unit={selUnit}
+                  plant={plant}
                   data={unitData[selUnit]}
                   initialData={initData[selUnit]}
                   onChange={(period, key, val) => handleChange(selUnit, period, key, val)}
