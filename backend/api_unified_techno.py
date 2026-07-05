@@ -3,6 +3,7 @@ Unified Techno Extractor API - supports RSP, BSP, ISP
 Extracts from mapped Excel files and inserts into common techno_data table (JSON column)
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -42,6 +43,68 @@ def _get_extractor(plant: str):
         raise HTTPException(
             status_code=400,
             detail=f"Plant '{plant}' not supported. Supported: RSP, BSP, ISP, DSP, BSL"
+        )
+
+
+def _map_units(filename: str, nested: bool = False) -> set:
+    """Collect unit names from a technopara map JSON (skipping _comment keys)."""
+    try:
+        with open(Path(_TP_DIR) / filename, encoding="utf-8") as f:
+            m = json.load(f)
+    except Exception:
+        return set()
+    if nested:  # {sheet: {unit: {...}}}
+        return {u for units in m.values() if isinstance(units, dict) for u in units}
+    return {k for k in m if not k.startswith("_")}
+
+
+# DSP/BSL extractors derive unit names from file content rather than a map,
+# so their legitimate units are listed explicitly.
+_CONTENT_DERIVED_UNITS = {
+    "DSP": {
+        "BF-2", "BF-3", "BF-4", "BF_Shop", "SMS", "SMS-2", "Sinter",
+        "Coke Ovens", "General", "MSM", "Merchant Mill",
+        "Wheel Plant", "Axle Plant",
+    },
+    "BSL": {
+        "BF-1", "BF-2", "BF-3", "BF-4", "BF-5", "BF_Shop",
+        "SMS", "SMS-I", "SMS-II", "Sinter", "Coke Ovens",
+        "CRM 1&2", "CRM 3", "HSM", "General",
+    },
+}
+
+
+def allowed_units(plant: str) -> set:
+    """Units the plant's extractor can legitimately produce.
+
+    Guards /insert against saving records extracted for one plant under
+    another (e.g. RSP-shaped SMS-1 data stamped as ISP).
+    """
+    plant = plant.upper()
+    if plant == "RSP":
+        return _map_units("rsp_technopara_map.json")
+    if plant == "ISP":
+        return _map_units("isp_technopara_map.json", nested=True)
+    if plant == "BSP":
+        return _map_units("bsp_techno_map.json") | _map_units("bsp_oisco_map.json")
+    return _CONTENT_DERIVED_UNITS.get(plant, set())
+
+
+def validate_units_for_plant(plant: str, units) -> None:
+    """Raise 422 if any unit is not one the plant's extractor produces."""
+    allowed = allowed_units(plant)
+    if not allowed:
+        return
+    bad = sorted(set(units) - allowed)
+    if bad:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Units {bad} are not valid for {plant.upper()} — the records were "
+                f"likely previewed with a different plant selected. Re-run the "
+                f"preview with the correct plant. Valid {plant.upper()} units: "
+                f"{sorted(allowed)}"
+            ),
         )
 
 
@@ -242,6 +305,7 @@ async def insert_techno(payload: dict):
     _validate_month(report_month)
     if not records:
         raise HTTPException(status_code=400, detail="No records to insert")
+    validate_units_for_plant(plant, (rec.get("unit", "") for rec in records))
 
     init_db()
     saved_count = 0
