@@ -85,6 +85,7 @@ allowed_origins = [
     "http://localhost:3000", "http://127.0.0.1:3000",
     "http://localhost:3001", "http://127.0.0.1:3001",
     "http://localhost:8000", "http://127.0.0.1:8000",  # Dashboard
+    "http://10.135.5.15", "http://10.135.5.15:80",  # LAN frontend on port 80
     "http://10.135.5.15:3000", "http://10.135.5.15:3001",  # LAN access to frontend
     "http://10.135.5.15:8000", "http://10.135.5.15:8082",  # LAN access to dashboard/API
     "file://",  # File protocol for local HTML
@@ -2312,22 +2313,46 @@ async def delete_ipt_entry_api(payload: dict):
     return {"status": "ok", "message": "Deleted."}
 
 
+# Acronym casing for parameter display names derived from techno_json keys.
+_PARAM_ACRONYMS = {
+    "bf", "cdi", "o2", "co2", "ld", "hm", "sms", "lpg", "cog", "bof",
+    "cri", "csr", "cv", "vm", "tmi", "ds", "dsp", "hr", "cbm", "feo",
+}
+
+
 @app.get("/api/techno-parameters")
 async def get_techno_parameters():
-    """Get list of all available techno parameters"""
+    """Get list of all available techno parameters.
+
+    Parameter names live as keys of techno_data.techno_json['month'];
+    display names must round-trip through /api/techno-data's
+    lower().replace(' ', '_') normalization back to the same key.
+    """
+    import json
     try:
         conn = sqlite3.connect(db.DB_PATH)
-        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT DISTINCT param_name FROM techno_param
-            WHERE param_name IS NOT NULL AND param_name != ''
-            ORDER BY param_name
-        """)
-        rows = cursor.fetchall()
+        cursor.execute("SELECT techno_json FROM techno_data")
+        keys = set()
+        for (techno_json,) in cursor.fetchall():
+            try:
+                keys.update(json.loads(techno_json).get('month', {}).keys())
+            except (json.JSONDecodeError, TypeError):
+                pass
         conn.close()
-        parameters = [row['param_name'] for row in rows]
-        return {"parameters": parameters}
+
+        parameters = set()
+        for key in keys:
+            words = [
+                w.upper() if w in _PARAM_ACRONYMS else w.title()
+                for w in key.split('_')
+            ]
+            display = ' '.join(w for w in words if w)
+            # Skip keys (e.g. containing spaces) that would not resolve
+            # back to themselves when the frontend requests them.
+            if display.lower().replace(' ', '_') == key:
+                parameters.add(display)
+        return {"parameters": sorted(parameters)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
