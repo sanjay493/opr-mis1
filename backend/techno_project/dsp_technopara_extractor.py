@@ -56,6 +56,17 @@ _COKE_KEY_NORM = {
     "ammonium_sulphate": "ammonium_sulphate_yield",
 }
 
+# DSP's PDF reports BF Productivity on both a "useful volume" and a "working
+# volume" basis; every other plant (see ISP's "BF Productivity (Working
+# Volume)" and BSL's "Productivity W.V./24h") reports only the working-volume
+# figure under the shared "bf_productivity" key, which is what page_techno.py's
+# page-27 BF Productivity row looks up. Map DSP's working-volume key onto that
+# shared key so it isn't stranded under a DSP-only name; the useful-volume
+# figure keeps its own distinct key.
+_BF_KEY_NORM = {
+    "bf_productivity_working": "bf_productivity",
+}
+
 
 def _derive_unit_and_key(row: dict, report_yy: str):
     """
@@ -124,6 +135,7 @@ def _derive_unit_and_key(row: dict, report_yy: str):
         unit = section or "DSP"
         key  = _to_snake(parameter or section)
 
+    key = _BF_KEY_NORM.get(key, key)
     return unit, key
 
 

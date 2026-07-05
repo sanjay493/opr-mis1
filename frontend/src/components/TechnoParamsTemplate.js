@@ -33,8 +33,10 @@ export default function TechnoParamsTemplate({ data }) {
   // data cols: FY-3, FY-2, FY-1, Target, Apr…Month, CPLY-month, YTD, YTD-CPLY
   const nData = 3 + 1 + nMonths + 1 + 1 + 1;
 
-  // Widths: fixed text columns take a fixed share; data columns share the rest equally
-  const fixedPct = isMill ? 27 : 24;   // mill: Mill(8)+Param(14)+Unit(5); param: Param(17)+Shop(7)
+  // Param pages (27-30): fixed text columns take a fixed share, data columns share the rest.
+  // Mill pages (31-35): table-layout:auto instead, so every column (including
+  // data columns) sizes to its own content rather than a guessed percentage.
+  const fixedPct = 17;   // Param(10)+Shop(7)
   const dataW    = `${(100 - fixedPct) / nData}%`;
 
   const bk = (first, last) => ({
@@ -76,18 +78,17 @@ export default function TechnoParamsTemplate({ data }) {
 
       <table style={{
         width: '100%', borderCollapse: 'collapse', border: B,
-        tableLayout: 'fixed', fontSize: 'var(--report-font-size, 6.5pt)', marginTop: 4,
+        tableLayout: isMill ? 'auto' : 'fixed', fontSize: 'var(--report-font-size, 6.5pt)', marginTop: 4,
       }}>
-        <colgroup>{isMill ? (<><col style={{ width: '8%' }} /><col style={{ width: '14%' }} /><col style={{ width: '5%' }} /></>) : (<><col style={{ width: '17%' }} /><col style={{ width: '7%' }} /></>)}{[0, 1, 2, 3].map(i => <col key={`f${i}`} style={{ width: dataW }} />)}{month_labels.map((_, i) => <col key={`m${i}`} style={{ width: dataW }} />)}{[0, 1, 2].map(i => <col key={`c${i}`} style={{ width: dataW }} />)}</colgroup>
+        <colgroup>{isMill ? (<><col /><col /></>) : (<><col style={{ width: '10%' }} /><col style={{ width: '7%' }} /></>)}{[0, 1, 2, 3].map(i => <col key={`f${i}`} style={isMill ? undefined : { width: dataW }} />)}{month_labels.map((_, i) => <col key={`m${i}`} style={isMill ? undefined : { width: dataW }} />)}{[0, 1, 2].map(i => <col key={`c${i}`} style={isMill ? undefined : { width: dataW }} />)}</colgroup>
 
         <thead>
           {/* Row 1 — group headers */}
           <tr>
             {isMill ? (
               <>
-                <th rowSpan={2} style={th({ textAlign: 'left' })}>Mill</th>
+                <th rowSpan={2} style={th()}>Mill</th>
                 <th rowSpan={2} style={th({ textAlign: 'left' })}>Parameters</th>
-                <th rowSpan={2} style={th()}>Unit</th>
               </>
             ) : (
               <>
@@ -136,24 +137,20 @@ export default function TechnoParamsTemplate({ data }) {
                     </td>
                   )}
 
-                  {/* ── Mill pages: first col = mill name (rowspan) ── */}
+                  {/* ── Mill pages: first col = mill name (rowspan), rotated bottom-to-top ── */}
                   {isMill && isFirst && (
                     <td rowSpan={sec.rows.length}
                         style={{ ...LBL, fontWeight: 700, verticalAlign: 'middle',
-                                 textAlign: 'center', borderTop: B, borderBottom: B }}>
+                                 textAlign: 'center', borderTop: B, borderBottom: B,
+                                 whiteSpace: 'nowrap', writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
                       {sec.label}
                     </td>
                   )}
 
-                  {/* Row label: plant/shop for param pages; param name for mill pages */}
-                  <td style={{ ...LBL, ...bkSt, ...sailSt, whiteSpace: 'nowrap' }}>{row.label}</td>
-
-                  {/* Unit column only on mill pages (per-row unit) */}
-                  {isMill && (
-                    <td style={{ ...cell({ textAlign: 'center', color: '#374151' }), ...bkSt }}>
-                      {row.unit}
-                    </td>
-                  )}
+                  {/* Row label: plant/shop for param pages; param name + unit for mill pages */}
+                  <td style={{ ...LBL, ...bkSt, ...sailSt, whiteSpace: 'nowrap' }}>
+                    {isMill && row.unit ? `${row.label} (${row.unit})` : row.label}
+                  </td>
 
                   {renderDataCells(row, bkSt, sailSt)}
                 </tr>

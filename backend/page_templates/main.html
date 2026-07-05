@@ -97,6 +97,21 @@
             padding-bottom: 0;
         }
 
+        /* Pages 31–35: mill-wise techno-economic parameter pages — landscape */
+        @page techno-mill-layout {
+            size: A4 landscape;
+            margin-top: 5mm;
+            margin-right: 8mm;
+            margin-bottom: 5mm;
+            margin-left: 8mm;
+        }
+
+        .techno-mill-page {
+            page: techno-mill-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
         .page {
             page-break-after: always;
             break-after: page;
@@ -587,7 +602,7 @@
     .pg-{{ page.page }} td { font-size: 7pt !important; }
     {% endif %}
     .pg-{{ page.page }} th,
-    .pg-{{ page.page }} td { padding: 1px 2px !important; line-height: 1.0 !important; }
+    .pg-{{ page.page }} td { padding: 0.5px 1.5px !important; line-height: 1.0 !important; }
     .pg-{{ page.page }} .report-title-section { margin-bottom: 6px !important; }
     .pg-{{ page.page }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; {% if not _tbl.get('td') %}font-size: 7pt !important;{% endif %} }
     .pg-{{ page.page }} .highlights-box li { margin-bottom: 1px !important; }
@@ -603,7 +618,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %}{% if page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'special_steel', 'opening_stock', 'ipt_status') %} content-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'special_steel', 'opening_stock', 'ipt_status') %} content-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
         {% else %}

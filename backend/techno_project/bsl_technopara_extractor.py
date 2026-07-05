@@ -104,6 +104,18 @@ _COKE_KEY_NORM = {
 # BF furnace IDs in BSL (which are under repair varies by month; repair rows auto-filtered by extractor)
 _BSL_BF_UNITS = frozenset(["BF-1", "BF-2", "BF-3", "BF-4", "BF-5"])
 
+# FAX GM OPRN's per-furnace BF Productivity is reported on both a "useful
+# volume" and "working volume" basis (see excel_extractor_bsl.py's
+# _FAX_BF_FURNACE_PARAMS). Every other plant (ISP, RSP, BSP, DSP) reports only
+# the working-volume figure under the shared "bf_productivity" key that
+# page_techno.py's page-27 BF Productivity row reads, so fold BSL's
+# working-volume figure onto that key too instead of leaving it stranded
+# under a separate name. The useful-volume figure keeps its own distinct key.
+_BF_KEY_NORM = {
+    "bf_productivity_working_volume": "bf_productivity",
+    "bf_productivity_useful_volume":  "bf_productivity_useful",
+}
+
 
 def _to_snake(text: str) -> str:
     s = str(text).strip().lower()
@@ -173,7 +185,8 @@ def _derive_unit_and_key(row: dict):
 
     # ── Per-furnace BF params from FAX GM OPRN (section=furnace unit) ───────
     if group_code == "IRON_MAKING" and section in _BSL_BF_UNITS:
-        return section, _to_snake(parameter)
+        raw_key = _to_snake(parameter)
+        return section, _BF_KEY_NORM.get(raw_key, raw_key)
 
     # ── BF Shop derived params (Blast Furnaces section) ─────────────────────
     if group_code == "IRON_MAKING" and section == "Blast Furnaces":
@@ -204,6 +217,7 @@ def _derive_unit_and_key(row: dict):
     # ── Fallback ─────────────────────────────────────────────────────────────
     unit = section or "General"
     key  = _to_snake(parameter or section)
+    key  = _BF_KEY_NORM.get(key, key)
     return unit, key
 
 

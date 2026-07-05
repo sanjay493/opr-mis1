@@ -5,7 +5,8 @@
     "bf_coke_yield":            37,
     "crude_tar_yield":          38,
     "ammonium_sulphate_yield":  39,
-    "crude_benzol_yield":       40
+    "crude_benzol_yield":       40,
+    "specific_heat_coke_ovens": 134
   },
 
   "SP-2": {

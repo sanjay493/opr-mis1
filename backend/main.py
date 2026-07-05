@@ -280,6 +280,7 @@ def get_data(month: str = "2025-11"):
             if pg in TECHNO_PAGES:
                 page.update(_safe_techno(month, pg))
                 page["type"] = "techno_params"
+                page["orientation"] = "landscape" if 31 <= pg <= 35 else "portrait"
 
         return pages_config
     except Exception as e:
@@ -382,6 +383,7 @@ async def generate_pdf(request: PDFRequest):
         if pg in TECHNO_PAGES:
             p.update(_safe_techno(request.month, pg))
             p["type"] = "techno_params"
+            p["orientation"] = "landscape" if 31 <= pg <= 35 else "portrait"
         enriched.append(p)
     # Layout and typography now come from backend layout_config.json only; ignore frontend overrides
     return await build_pdf_response(request, pages_override=enriched, page_layouts=None, font_config=None)

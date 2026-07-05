@@ -90,7 +90,13 @@ def _fy_months(fy):
     return out
 
 def _fy_label(fy):
+    """Full FY key, e.g. "2026-27" — matches the techno_plan_fy.fy DB column
+    format, so this must not be shortened (used as a DB lookup key elsewhere)."""
     return f"{fy}-{(fy + 1) % 100:02d}"
+
+def _fy_label_short(fy):
+    """Display-only short FY label, e.g. "26-27", for report table headers."""
+    return f"{fy % 100:02d}-{(fy + 1) % 100:02d}"
 
 def _mlabel(ym):
     return f"{_MON[int(ym[5:7])]}'{ym[2:4]}"
@@ -1525,10 +1531,10 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         "subtitle":       "",
         "variant":        "techno_params",
         "group":          "MAJOR",
-        "fy3_label":      _fy_label(fy - 3),
-        "fy2_label":      _fy_label(fy - 2),
-        "fy1_label":      _fy_label(fy - 1),
-        "target_label":   f"Target {_fy_label(fy)}",
+        "fy3_label":      _fy_label_short(fy - 3),
+        "fy2_label":      _fy_label_short(fy - 2),
+        "fy1_label":      _fy_label_short(fy - 1),
+        "target_label":   f"Target {_fy_label_short(fy)}",
         "month_labels":   [_mlabel(m) for m in ytd],
         "cply_label":     _mlabel(cply_month),
         "cum_label":      _cum_label(ytd),
@@ -1558,11 +1564,12 @@ _TECHNO_DB_SCHEMA = {
         "sections": [
             ("BF Coke Yield",          "%",          [("COB-old", "bf_coke_yield"),        ("COB-new", "bf_coke_yield"),        ("Coke Ovens", "bf_coke_yield"),        ("COB", "bf_coke_yield")]),
             ("Dry Coal Charge/Oven",   "t/oven",     [("COB-old", "dry_coal_charge"),      ("COB-new", "dry_coal_charge"),      ("Coke Ovens", "dry_coal_charge")]),
-            # RSP's "General" key and DSP's "specific_heat_coke_ovens" are both
-            # per dry-coal-charged (confirmed) - same row. BSL's "sp_heat_cons"
-            # is explicitly Kcal/TCO (per tonne coke output) per its own
-            # extractor - a different basis, so intentionally NOT included here.
-            ("Sp. Heat Consmn./t DC",  "kcal/kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged"), ("Coke Ovens", "specific_heat_coke_ovens")]),
+            # RSP's "General" key, DSP's and BSP's "specific_heat_coke_ovens"
+            # are all per dry-coal-charged (confirmed) - same row. BSL's
+            # "sp_heat_cons" is explicitly Kcal/TCO (per tonne coke output)
+            # per its own extractor - a different basis, so intentionally
+            # NOT included here.
+            ("Sp. Heat Consmn./t DC",  "kcal/kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged"), ("Coke Ovens", "specific_heat_coke_ovens"), ("COB", "specific_heat_coke_ovens")]),
             ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "cog_yield"),            ("COB-new", "cog_yield"),            ("Coke Ovens", "cog_yield")]),
             ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield"),      ("Coke Ovens", "crude_tar_yield")]),
             ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield"),   ("Coke Ovens", "crude_benzol_yield")]),
@@ -1704,6 +1711,7 @@ _TECHNO_DB_SCHEMA = {
                 ("Availability",      "availability",              "%"),
                 ("Utilisation",       "utilisation",               "%"),
                 ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Heat Consmn.",  "specific_heat_consumption", "M.Cal/T"),
                 ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
             ]),
             ("NPM", [
@@ -1713,6 +1721,7 @@ _TECHNO_DB_SCHEMA = {
                 ("Availability",      "availability",              "%"),
                 ("Utilisation",       "utilisation",               "%"),
                 ("Rolling Rate",      "rolling_rate",              "t/hr"),
+                ("Sp. Heat Consmn.",  "specific_heat_consumption", "M.Cal/T"),
                 ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
             ]),
             ("HSM-2", [
@@ -1722,6 +1731,7 @@ _TECHNO_DB_SCHEMA = {
                 ("Utilisation",       "utilisation",                  "%"),
                 ("Rolling Rate",      "rolling_rate",                 "t/hr"),
                 ("RH Fce Avail.",     "average_furnace_availability", "Nos/day"),
+                ("Sp. Heat Consmn.",  "specific_heat_consumption",    "M.Cal/T"),
                 ("Sp. Power Consmn.", "specific_power_consumption",   "kWh/t"),
             ]),
             ("SSM", [
@@ -1789,6 +1799,8 @@ _TECHNO_DB_SCHEMA = {
                 ("Rolling Rate",      "rolling_rate",              "t/hr"),
                 ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
                 ("Sp. Heat Consmn.",  "specific_heat_consumption", "kcal/t"),
+                ("Gas Consumption",   "total_gas_consumption",     "Nm³/t"),
+                ("CBM Gas Consmn.",   "cbm_gas_consumption",       "Nm³/t"),
             ]),
             ("USM", [
                 ("Yield",             "yield_total",               "%"),
@@ -1797,6 +1809,8 @@ _TECHNO_DB_SCHEMA = {
                 ("Rolling Rate",      "rolling_rate",              "t/hr"),
                 ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
                 ("Sp. Heat Consmn.",  "specific_heat_consumption", "kcal/t"),
+                ("Gas Consumption",   "total_gas_consumption",     "Nm³/t"),
+                ("CBM Gas Consmn.",   "cbm_gas_consumption",       "Nm³/t"),
             ]),
             ("WRM", [
                 ("Yield",             "yield_total",               "%"),
@@ -1805,6 +1819,8 @@ _TECHNO_DB_SCHEMA = {
                 ("Rolling Rate",      "rolling_rate",              "t/hr"),
                 ("Sp. Power Consmn.", "specific_power_consumption","kWh/t"),
                 ("Sp. Heat Consmn.",  "specific_heat_consumption", "kcal/t"),
+                ("Gas Consumption",   "total_gas_consumption",     "Nm³/t"),
+                ("CBM Gas Consmn.",   "cbm_gas_consumption",       "Nm³/t"),
             ]),
         ],
     },
@@ -2067,10 +2083,10 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         "subtitle":       subtitle,
         "variant":        "techno_params",
         "group":          group,
-        "fy3_label":      _fy_label(fy - 3),
-        "fy2_label":      _fy_label(fy - 2),
-        "fy1_label":      _fy_label(fy - 1),
-        "target_label":   f"Target {_fy_label(fy)}",
+        "fy3_label":      _fy_label_short(fy - 3),
+        "fy2_label":      _fy_label_short(fy - 2),
+        "fy1_label":      _fy_label_short(fy - 1),
+        "target_label":   f"Target {_fy_label_short(fy)}",
         "month_labels":   [_mlabel(m) for m in ytd],
         "cply_label":     _mlabel(cply_month),
         "cum_label":      _cum_label(ytd),

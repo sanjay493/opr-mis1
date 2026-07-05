@@ -628,16 +628,50 @@ select.form-control {
   --page-margin-bottom: 2mm;
 }
 
-/* ─── Page 27 – MAJOR TECHNO: compact portrait to fit all rows on one page ─── */
-.a4-page.pg-27 {
+/* ─── Pages 27-30 – TECHNO PARAMS: compact portrait to fit all rows on one page ─── */
+.a4-page.pg-27,
+.a4-page.pg-28,
+.a4-page.pg-29,
+.a4-page.pg-30 {
   --page-margin-top: 4mm;
   --page-margin-bottom: 3mm;
   --page-margin-lr: 8mm;
   --report-font-size: 10pt;
   font-family: 'Arial Narrow', Arial, sans-serif !important;
 }
-.pg-27 table td,
-.pg-27 table th {
+
+/* Page 27 has the most rows (12 param sections) — trim slightly further so
+   the last section doesn't spill onto a second page. */
+.a4-page.pg-27 {
+  --page-margin-top: 3mm;
+  --page-margin-bottom: 2mm;
+  --report-font-size: 9.5pt;
+}
+.pg-27 table td, .pg-27 table th,
+.pg-28 table td, .pg-28 table th,
+.pg-29 table td, .pg-29 table th,
+.pg-30 table td, .pg-30 table th {
+  padding: 0.5px 2px !important;
+  font-family: 'Arial Narrow', Arial, sans-serif !important;
+}
+
+/* ─── Pages 31-35 – MILL WISE TECHNO: compact landscape to fit all rows on one page ─── */
+.a4-page.pg-31,
+.a4-page.pg-32,
+.a4-page.pg-33,
+.a4-page.pg-34,
+.a4-page.pg-35 {
+  --page-margin-top: 4mm;
+  --page-margin-bottom: 3mm;
+  --page-margin-lr: 10mm;
+  --report-font-size: 9pt;
+  font-family: 'Arial Narrow', Arial, sans-serif !important;
+}
+.pg-31 table td, .pg-31 table th,
+.pg-32 table td, .pg-32 table th,
+.pg-33 table td, .pg-33 table th,
+.pg-34 table td, .pg-34 table th,
+.pg-35 table td, .pg-35 table th {
   padding: 0.5px 2px !important;
   font-family: 'Arial Narrow', Arial, sans-serif !important;
 }
@@ -699,13 +733,40 @@ select.form-control {
     page: pg21_layout;
   }
 
-  /* Page 27 – portrait with tighter margins so all rows fit on one page */
+  /* Pages 27-30 – portrait with tighter margins so all rows fit on one page */
   @page pg27_layout {
     size: A4 portrait;
     margin: 6mm 8mm 3mm 8mm;
   }
-  .a4-page.pg-27 {
+  .a4-page.pg-27,
+  .a4-page.pg-28,
+  .a4-page.pg-29,
+  .a4-page.pg-30 {
     page: pg27_layout;
     --report-font-size: 10pt;
+  }
+
+  /* Page 27 has the most rows — trim slightly further so it doesn't spill */
+  @page pg27_tight_layout {
+    size: A4 portrait;
+    margin: 5mm 8mm 2mm 8mm;
+  }
+  .a4-page.pg-27 {
+    page: pg27_tight_layout;
+    --report-font-size: 9.5pt;
+  }
+
+  /* Pages 31-35 – landscape with tighter margins so all rows fit on one page */
+  @page pg31_layout {
+    size: A4 landscape;
+    margin: 6mm 10mm 3mm 10mm;
+  }
+  .a4-page.pg-31,
+  .a4-page.pg-32,
+  .a4-page.pg-33,
+  .a4-page.pg-34,
+  .a4-page.pg-35 {
+    page: pg31_layout;
+    --report-font-size: 9pt;
   }
 }
