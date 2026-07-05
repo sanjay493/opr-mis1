@@ -289,7 +289,11 @@
     </div>
 
     <script>
-        const API_BASE = 'http://127.0.0.1:8082/api';
+        // Use the page's own origin so this works from any machine on the network;
+        // fall back to 127.0.0.1 when opened directly as a file.
+        const API_BASE = (window.location.protocol.startsWith('http')
+            ? window.location.origin
+            : 'http://127.0.0.1:8082') + '/api';
         let lastResponse = null;
         let availableData = {};
 
