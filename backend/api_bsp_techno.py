@@ -132,6 +132,8 @@ async def insert_bsp_techno(payload: dict):
     _validate_month(report_month)
     if not records:
         raise HTTPException(status_code=400, detail="No records to insert")
+    from api_unified_techno import validate_units_for_plant
+    validate_units_for_plant("BSP", (rec.get("unit", "") for rec in records))
     try:
         init_db()
         for rec in records:
