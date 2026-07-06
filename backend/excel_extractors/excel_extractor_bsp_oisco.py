@@ -151,8 +151,8 @@ PARAM_MAP: List[tuple] = [
     (47, "SMS", "BSP SMS-3", "Alumina Consumption",        "Kg/TCS"),
     (50, "SMS", "BSP SMS-3", "LD Gas Recovery",            "CuM/T"),
     (51, "SMS", "BSP SMS-3", "DS Heats",                   "Nos"),
-    # ── Utilities (row 54) ───────────────────────────────────────────────
-    (54, "GENERAL",     "Utilities",       "Sp. Water Consumption",       "CuM/TCS"),
+    # ── Utilities (row 55) ───────────────────────────────────────────────
+    (55, "GENERAL",     "Utilities",       "Sp. Water Consumption",       "CuM/TCS"),
 ]
 
 
