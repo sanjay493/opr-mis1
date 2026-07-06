@@ -4,7 +4,7 @@
   "production_rows": [
     {
       "cell": "DPR!P6",
-      "item_name": "Oven Pushing (nos/day)",
+      "item_name": "Oven Pushing(nos/d)",
       "pdf_label": "P6",
       "status": "ok",
       "unit": "nos/d",
@@ -27,12 +27,12 @@
       "value": 418.322
     },
     {
-      "cell": "DPR!E30",
+      "cell": "DPR!Z21",
       "item_name": "Pig Iron",
-      "pdf_label": "E30",
+      "pdf_label": "Z21",
       "status": "ok",
       "unit": "'000T",
-      "value": 6.701
+      "value": 11.667
     },
     {
       "cell": "DPR!P10",

@@ -145,7 +145,7 @@ def _extract_pdf_report_month(file_path: str) -> str:
             # Map month name to number
             month_num = None
             for name, num in _MONTH_NAMES.items():
-                if month_str.upper().startswith(name[:3]):
+                if month_str.upper().startswith(name[:3].upper()):
                     month_num = num
                     break
 
@@ -315,54 +315,41 @@ def _parse_te_nums(line):
     return result
 
 
-def _te_values(nums, month_diff=0, offset=4):
-    """Return (actual, cum) from right-aligned numeric list.
-
-    month_diff = how many months behind the PDF's last month the requested month
-    is (0 = current/last month, 1 = one month back, etc.).
-
-    offset = right-alignment offset for the report-month column:
-      4 for standard pages (COKE, SINTER, BF, SMS, MILL):
-        [...months...] | want_mon | Cum | CPLY_mon | CPLY_FY
-              OR
-        [...months...] | Cum | want_mon | CPLY_mon | CPLY_FY
-      3 for the MAJOR TECHNO page (has an extra FY-prev actual column):
-        [Norm_curr, FY_prev, ...months...] | want_mon | Cum | CPLY_cum
-
-    Cumulative (nums[-(offset-1)]) is only valid when month_diff == 0.
-    """
-    needed = offset + month_diff
-    if len(nums) < needed:
-        return None, None
-
-    # For Merchant Mill and similar pages, the structure is [cum | actual | ...]
-    # So we need to swap the indices
-    actual = nums[-(offset - 1)] if month_diff == 0 else nums[-offset - month_diff]
-    cum = nums[-offset - month_diff] if month_diff == 0 else None
-
-    return actual, cum
-
 
 def _te_values_techno(nums, report_month_num=None):
-    """Extract techno values from techno row (handles variable column count).
+    """Extract techno values from a techno row (handles variable column count).
 
-    Techno structure variants:
-    - 6 values: [Norm_Historical | Norm_Current | Current | CurrentCum | Prior | PriorCum]
-    - 5 values: [Norm | Current | CurrentCum | Prior | PriorCum]
-    - 4 values: [Current | CurrentCum | Prior | PriorCum] (Norm removed by regex)
+    Every DSP techno-page row — whether it's a small fixed page (MAJOR/SMS/
+    Coke/Mill, always ~4-7 columns year-round) or a "growing FY table" row
+    (BF Silicon/Sulphur/HM Temp/CDI/Coke Rate/.../Sinter Productivity, which
+    gains one column per elapsed month plus a quarter-subtotal column at
+    Jun/Sep/Dec/Mar) ends in the same trailing shape once you count from the
+    right:
+        [..., current_month, (current_Q, only at quarter-end), YTD_so_far,
+         prior_year_same_month, (prior_Q, only at quarter-end), prior_year_ref]
+    So a single pair of negative-offset formulas — one for quarter-end
+    months (Jun/Sep/Dec/Mar, which insert the extra current_Q/prior_Q
+    columns) and one for every other month — correctly locates
+    actual/cum/prior regardless of how many leading columns (Norm, elapsed
+    months, elapsed quarters) have accumulated. This replaces what used to
+    be five separate length-keyed branches (4/5/6/7/>=14 columns) that were
+    all — once worked out — the exact same formula in disguise; the old
+    dispatch had a gap for lengths 8-13 (roughly Jun-Oct) that silently
+    dropped every growing-table parameter for those months.
 
-    March-edition annual layout (18-20 values): the March report shows the
-    full FY breakdown per row instead of a handful of trailing columns —
-    [Norm?, PriorFY_annual, Apr, May, Jun, Q1, Jul, Aug, Sep, Q2, Oct, Nov,
-     Dec, Q3, Jan, Feb, Mar, Q4, CurrentFY_annual, PriorFY_annual]
-    Mar/Q4/CurrentFY_annual/PriorFY_annual are always the last 4 entries
-    regardless of whether the leading Norm/PriorFY_annual columns are both
-    present, so they're addressed by negative index. Verified against real
-    reports: Q4 (nums[-3]) consistently equals avg(Jan, Feb, Mar).
+    Verified against real DSP monthly reports: YTD (nums[-3] or nums[-4] at
+    quarter-end) matches the arithmetic average of that FY's elapsed monthly
+    values for Jan/Feb/Mar/Aug reports; quarter subtotals match avg() of
+    their 3 months. Quarter-end handling itself is verified for March only
+    (no Jun/Sep/Dec sample was available) — re-check against a Jun, Sep, or
+    Dec report if one becomes available.
 
-    report_month_num: Month number (1-12) to determine if prior_cum should be included.
-    - Prior cumulative is only valid for March (month 3) - represents full FY Apr-Mar
-    - For other months, prior_cum is set to None (Apr-May is not a complete FY)
+    report_month_num: Month number (1-12).
+    - Quarter-end months (Mar/Jun/Sep/Dec) get an extra current-quarter
+      column right after the current month, shifting actual/cum back by 2.
+    - Prior-year cumulative (cum_prior) is only a complete FY at March —
+      every other month's trailing "prior_year_ref" column is a partial-year
+      figure, so cum_prior is None everywhere except March.
 
     Returns: (actual_current, cum_current, actual_prior, cum_prior)
     """
@@ -377,90 +364,46 @@ def _te_values_techno(nums, report_month_num=None):
         cum_prior      = nums[-1]
         return actual_current, cum_current, actual_prior, cum_prior
 
-    if len(nums) >= 14:
-        # BF/SMS/Coke/Sinter-page "growing FY table" row: every month, a new
-        # month column is appended, and at quarter-end (Jun/Sep/Dec/Mar) a
-        # quarter-subtotal column is appended too. The row always ends with
-        # [current_month, (current_Q, only at quarter-end), YTD_so_far,
-        #  prior_year_same_month, (prior_Q, only at quarter-end), prior_year_ref].
-        # Verified via quarterly cross-check (Q == avg of its 3 months) for
-        # both a quarter-end month (Mar) and a mid-quarter month (Feb).
-        if report_month_num in (3, 6, 9, 12):
-            actual_current = nums[-6]
-            cum_current    = nums[-4]
-            actual_prior   = nums[-3]
-        else:
-            actual_current = nums[-4]
-            cum_current    = nums[-3]
-            actual_prior   = nums[-2]
-        # Prior-year cumulative only represents a complete FY at March —
-        # any other month's "prior_year_ref" column is a partial-year figure.
-        cum_prior = nums[-1] if report_month_num == 3 else None
-        return actual_current, cum_current, actual_prior, cum_prior
-
-    if len(nums) == 7:
-        # Volume + Best_Ach (stripped) + Norm + Current + CurrentCum + Prior + PriorCum
-        # e.g. BF working productivity: [Vol | Norm | Apr | May | Cum | PriorApr | PriorCum]
-        actual_current = nums[3]
-        cum_current    = nums[4]
-        actual_prior   = nums[5]
-        cum_prior      = nums[6] if report_month_num == 3 else None
-        return actual_current, cum_current, actual_prior, cum_prior
-
-    elif len(nums) == 6:
-        # Extra norm column: [Norm_Hist | Norm_Curr | Current | CurrentCum | Prior | PriorCum]
-        actual_current = nums[2]  # Current month (e.g., Apr'25)
-        cum_current = nums[3]     # Current FY cumulative (e.g., 2025-26)
-        actual_prior = nums[4]    # Prior month (e.g., Apr'24)
-        cum_prior = nums[5] if report_month_num == 3 else None
-        return actual_current, cum_current, actual_prior, cum_prior
-
-    elif len(nums) == 5:
-        # Standard structure with Norm: [Norm | Current | CurrentCum | Prior | PriorCum]
-        actual_current = nums[1]  # Current month (e.g., Apr'25)
-        cum_current = nums[2]     # Current FY cumulative (e.g., 2025-26)
-        actual_prior = nums[3]    # Prior month (e.g., Apr'24)
-        cum_prior = nums[4] if report_month_num == 3 else None  # Prior FY cum only for March
-        return actual_current, cum_current, actual_prior, cum_prior
-
-    elif len(nums) == 4:
-        # Norm removed by regex: [Current | CurrentCum | Prior | PriorCum]
-        actual_current = nums[0]  # Current month
-        cum_current = nums[1]     # Current FY cumulative
-        actual_prior = nums[2]    # Prior month
-        cum_prior = nums[3] if report_month_num == 3 else None  # Prior FY cum only for March
-        return actual_current, cum_current, actual_prior, cum_prior
-
-    else:
-        # Not enough data
+    is_quarter_end = report_month_num in (3, 6, 9, 12)
+    min_len = 6 if is_quarter_end else 4
+    if len(nums) < min_len:
         return None, None, None, None
 
-
-def _te_values_with_prior(nums, month_diff=0, offset=4):
-    """Extract both current and prior year values from techno row.
-
-    Returns (actual_current, cum_current, actual_prior, cum_prior) tuple.
-    Prior year data only available when month_diff == 0 (current month).
-
-    For offset=4: [...months...] | want_mon | Cum | CPLY_mon | CPLY_FY
-    For offset=5 (techno): [Norm] | want_mon | Cum | CPLY_mon | CPLY_FY (5 values total)
-    """
-    actual_current, cum_current = _te_values(nums, month_diff, offset)
-
-    actual_prior = None
-    cum_prior = None
-
-    # Extract prior year data if we have enough columns
-    # For offset=4: need at least 4 values; for offset=5: need at least 5 values
-    if month_diff == 0 and len(nums) >= offset:
-        try:
-            # Prior year columns are the last 2: [CPLY_mon | CPLY_FY]
-            actual_prior = nums[-2]  # CPLY_mon (prior month value)
-            cum_prior = nums[-1]     # CPLY_FY (prior FY cumulative)
-        except (IndexError, TypeError):
-            pass
-
+    if is_quarter_end:
+        actual_current = nums[-6]
+        cum_current    = nums[-4]
+        actual_prior   = nums[-3]
+    else:
+        actual_current = nums[-4]
+        cum_current    = nums[-3]
+        actual_prior   = nums[-2]
+    cum_prior = nums[-1] if report_month_num == 3 else None
     return actual_current, cum_current, actual_prior, cum_prior
+
+
+def _te_values_major_page(nums, report_month_num=None):
+    """Extract (actual, cum) from a MAJOR TECHNO ECONOMIC PARAMETERS page row.
+
+    This page's "growing FY table" rows have one fewer trailing column than
+    the BF/SMS/Coke/Sinter pages: there's no prior-year-same-month
+    comparison, just [..., current_month, (current_Q, quarter-end only),
+    YTD_so_far, prior_FY_total_reference]. Verified against real reports via
+    quarterly cross-check (Q1-Q4 all equal avg() of their 3 months) and the
+    FY-end YTD equalling avg() of all 12 monthly values, for both
+    "Gross Energy Consumption" and "BOF Slag Utilisation".
+
+    This replaces a previous hardcoded nums[2]/nums[3] extraction that only
+    ever happened to be correct for the first month or two of the FY, and
+    was wrong (picking up an early elapsed month instead of the current one)
+    for every other month.
+    """
+    is_quarter_end = report_month_num in (3, 6, 9, 12)
+    min_len = 4 if is_quarter_end else 3
+    if len(nums) < min_len:
+        return None, None
+    if is_quarter_end:
+        return nums[-4], nums[-2]
+    return nums[-3], nums[-2]
 
 
 def _find_line_start(text_upper, marker):
@@ -679,10 +622,10 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
             if len(nums) < 4:
                 continue
 
-            # Special handling for major-page params (two Norm columns before Actual)
+            # Special handling for MAJOR-page params (growing FY table, but no
+            # prior-year comparison column — see _te_values_major_page).
             if keyword in special_params:
-                actual_curr = nums[2] if len(nums) > 2 else None
-                cum_curr    = nums[3] if len(nums) > 3 else None
+                actual_curr, cum_curr = _te_values_major_page(nums, report_month_num)
                 actual_prior = None
                 cum_prior    = None
             else:
@@ -1442,8 +1385,7 @@ def _block_techno(file_path: str, page_index: dict,
             for ln in cdi_lines:
                 if furnace_marker in ln.lower():
                     nums = _parse_te_nums(ln)
-                    # For techno: use offset=5, month_diff=0
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff=0, offset=5)
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
                     if actual_curr is not None:
                         # Current year row
                         rows.append({
@@ -1480,8 +1422,7 @@ def _block_techno(file_path: str, page_index: dict,
         for ln in cdi_lines:
             if not any(m in ln.lower() for m in _fce_markers):
                 nums = _parse_te_nums(ln)
-                # For techno: use offset=5, month_diff=0
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_with_prior(nums, month_diff=0, offset=5)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({

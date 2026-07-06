@@ -74,6 +74,47 @@ def extract_and_save_excel(file_path: str, report_month: str = "", source_file_n
 # Extractor 1 — ISP Morning Report (month-end daily, sheet: DAILYREPORT1)
 # ---------------------------------------------------------------------------
 
+def _morning_report_config():
+    """
+    Single source of truth for the ISP Morning Report cell mapping — shared by
+    the DB-writing extractor (_extract_morning_report) and the preview-only
+    extractor (_preview_morning_report_rows) so they can never drift apart.
+
+    Reads excel_cells_config.json (section 'isp_morning'); falls back to these
+    hardcoded defaults only if that config section is missing.
+    """
+    import sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from cells_loader import get_extractor_config
+    cfg = get_extractor_config("isp_morning")
+
+    no_convert = set(cfg.get("no_convert", ["COB#10", "COB#11", "Oven Pushing (nos/day)"]))
+    cells = cfg.get("cells", {
+        "COB#10":               "E9",
+        "COB#11":               "E10",
+        "Oven Pushing (nos/day)":  "E11",
+        "SP-1":                 "E12",
+        "SP-2":                 "E13",
+        "Total Sinter":         "E14",
+        "Hot Metal":            "E16",
+        "SMS CCM-1&2":              "E30",
+        "SMS CCM-3":                "E31",
+        "Total Crude Steel":    "E32",
+        "WRMILL":               "E33",
+        "BARMILL":              "E34",
+        "USMILL":               "E35",
+        "Finished Steel":       "E36",
+        "Saleable 150 Billets": "E37",
+        "200 Blooms":           "E38",
+        "Saleable Steel":       "E39",
+    })
+    derived = cfg.get("derived", [
+        {"item": "Pig Iron",       "op": "add", "cells": ["E18", "E20"]},
+        {"item": "Saleable Semis", "op": "add", "cells": ["E37", "E38"]},
+    ])
+    return cells, no_convert, derived
+
+
 def _extract_morning_report(wb, source_file_name: str) -> bool:
     """
     Extracts cumulative monthly production from ISP Morning Report (sheet 'DAILYREPORT1').
@@ -128,36 +169,7 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
 
     logger.info(f"ISP Morning Report: month auto-detected from K5 → {db_report_month}")
 
-    from cells_loader import get_extractor_config
-    _cfg = get_extractor_config("isp_morning")
-
-    NO_CONVERT = set(_cfg.get("no_convert", ["COB#10", "COB#11", "Oven Pushing (nos/day)"]))
-
-    production_cells = _cfg.get("cells", {
-        "COB#10":               "E9",
-        "COB#11":               "E10",
-        "Oven Pushing (nos/day)":  "E11",
-        "SP-1":                 "E12",
-        "SP-2":                 "E13",
-        "Total Sinter":         "E14",
-        "Hot Metal":            "E16",
-        "SMS CCM-1&2":              "E30",
-        "SMS CCM-3":                "E31",
-        "Total Crude Steel":    "E32",
-        "WRMILL":               "E33",
-        "BARMILL":              "E34",
-        "USMILL":               "E35",
-        "Finished Steel":       "E36",
-        "Saleable 150 Billets": "E37",
-        "200 Blooms":           "E38",
-        "Saleable Steel":       "E39",
-    })
-
-    _default_derived = [
-        {"item": "Pig Iron",       "op": "add", "cells": ["E18", "E20"]},
-        {"item": "Saleable Semis", "op": "add", "cells": ["E37", "E38"]},
-    ]
-    derived_rules = _cfg.get("derived", _default_derived)
+    production_cells, NO_CONVERT, derived_rules = _morning_report_config()
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -335,26 +347,7 @@ def _preview_morning_report_rows(wb):
     else:
         raise ValueError("Cell K5 is empty — cannot determine report month.")
 
-    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
-    production_cells = {
-        "COB#10":               "E9",
-        "COB#11":               "E10",
-        "Oven Pushing (nos/day)":  "E11",
-        "SP-1":                 "E12",
-        "SP-2":                 "E13",
-        "Total Sinter":         "E14",
-        "Hot Metal":            "E16",
-        "SMS CCM-1&2":              "E30",
-        "SMS CCM-3":                "E31",
-        "Total Crude Steel":    "E32",
-        "WRMILL":               "E33",
-        "BARMILL":              "E34",
-        "USMILL":               "E35",
-        "Finished Steel":       "E36",
-        "Saleable 150 Billets": "E37",
-        "200 Blooms":           "E38",
-        "Saleable Steel":       "E39",
-    }
+    production_cells, NO_CONVERT, derived_rules = _morning_report_config()
 
     rows = []
     for item_name, cell in production_cells.items():
@@ -369,23 +362,33 @@ def _preview_morning_report_rows(wb):
             "status":    "ok" if val is not None else "no value",
         })
 
-    # Derived: Pig Iron = E18 + E20
-    pig_e18 = clean_val(ws["E18"].value)
-    pig_e20 = clean_val(ws["E20"].value)
-    if pig_e18 is not None or pig_e20 is not None:
-        pig_val = round(((pig_e18 or 0.0) + (pig_e20 or 0.0)) / 1000.0, 3)
-        rows.append({"item_name": "Pig Iron", "value": pig_val, "cell": "E18+E20", "unit": "'000T", "status": "ok"})
-    else:
-        rows.append({"item_name": "Pig Iron", "value": None, "cell": "E18+E20", "unit": "'000T", "status": "no value"})
-
-    # Derived: Saleable Semis = E37 + E38
-    sem_e37 = clean_val(ws["E37"].value)
-    sem_e38 = clean_val(ws["E38"].value)
-    if sem_e37 is not None or sem_e38 is not None:
-        sem_val = round(((sem_e37 or 0.0) + (sem_e38 or 0.0)) / 1000.0, 3)
-        rows.append({"item_name": "Saleable Semis", "value": sem_val, "cell": "E37+E38", "unit": "'000T", "status": "ok"})
-    else:
-        rows.append({"item_name": "Saleable Semis", "value": None, "cell": "E37+E38", "unit": "'000T", "status": "no value"})
+    # Derived values driven by the same config used by the DB-writing extractor.
+    for d in derived_rules:
+        item = d["item"]
+        if d["op"] == "add":
+            addrs = d.get("cells", [])
+            parts = [clean_val(ws[c].value) for c in addrs]
+            valid = [v for v in parts if v is not None]
+            cell_label = "+".join(addrs)
+            if valid:
+                rows.append({"item_name": item, "value": round(sum(valid) / 1000.0, 3),
+                             "cell": cell_label, "unit": "'000T", "status": "ok"})
+            else:
+                rows.append({"item_name": item, "value": None,
+                             "cell": cell_label, "unit": "'000T", "status": "no value"})
+        elif d["op"] == "subtract":
+            a_val = clean_val(ws[d["a"]].value)
+            b_val = clean_val(ws[d["b"]].value)
+            cell_label = f"{d['a']}-{d['b']}"
+            if a_val is not None and b_val is not None:
+                rows.append({"item_name": item, "value": round((a_val - b_val) / 1000.0, 3),
+                             "cell": cell_label, "unit": "'000T", "status": "ok"})
+            elif a_val is not None:
+                rows.append({"item_name": item, "value": round(a_val / 1000.0, 3),
+                             "cell": cell_label, "unit": "'000T", "status": "ok"})
+            else:
+                rows.append({"item_name": item, "value": None,
+                             "cell": cell_label, "unit": "'000T", "status": "no value"})
 
     return rows, db_report_month
 

@@ -158,10 +158,26 @@ async def get_entry(
     _validate_month(report_month)
     _db.init_db()
     data = _db.get_techno_data(plant.upper(), report_month)
+
+    # FY-to-date history (Apr .. month before report_month) per unit, used by
+    # the frontend to auto-calculate the YTD/cumulative box as the user types
+    # the current month's value.
+    ytd_months   = _db.get_ytd_months(report_month)
+    prior_months = [m for m in ytd_months if m < report_month]
+    history: Dict[str, Dict[str, dict]] = {}
+    for m in prior_months:
+        month_data = _db.get_techno_data(plant.upper(), m)
+        for unit, ud in month_data.items():
+            monthly_vals = ud.get("month", {})
+            if monthly_vals:
+                history.setdefault(unit, {})[m] = monthly_vals
+
     return {
         "plant": plant.upper(),
         "report_month": report_month,
         "units": data,          # {unit: {month: {...}, till_month: {...}}}
+        "ytd_history": history, # {unit: {"2026-04": {param_key: val}, ...}}
+        "ytd_months": prior_months,
         "has_data": bool(data),
     }
 

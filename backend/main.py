@@ -83,10 +83,13 @@ app = FastAPI(
 
 allowed_origins = [
     "http://localhost:3000", "http://127.0.0.1:3000",
+    "http://localhost", "http://127.0.0.1",
     "http://localhost:3001", "http://127.0.0.1:3001",
     "http://localhost:8000", "http://127.0.0.1:8000",  # Dashboard
     "http://10.135.5.15", "http://10.135.5.15:80",  # LAN frontend on port 80
     "http://10.135.5.15:3000", "http://10.135.5.15:3001",  # LAN access to frontend
+    "http://192.168.1.3:3000", "http://192.168.1.3:3001",  # LAN access to frontend
+    "http://192.168.1.3:8000", "http://192.168.1.3:8082",  # LAN access to dashboard/API
     "http://10.135.5.15:8000", "http://10.135.5.15:8082",  # LAN access to dashboard/API
     "file://",  # File protocol for local HTML
 ]
