@@ -1,0 +1,2525 @@
+{
+  "_doc": "Single reference catalog of every cell/row/column reference used by the opr-mis extraction pipeline. Regenerated 2026-07-06 from the extractor sources listed in each entry. Sections keyed by plant. Conventions: A1 refs are 1-based Excel addresses; 'rc' pairs are 0-based [row, col]; 'row_hints' are fallback rows used only when label scanning fails; runtime overrides live in backend/excel_cells_config.json (sections bsl_dpr, isp_morning, bsp_ppc_mis, dsp_pdf) and are editable without code changes.",
+  "generated": "2026-07-06",
+  "runtime_config": "backend/excel_cells_config.json",
+  "row_map_jsons": [
+    "backend/techno_project/bsp_techno_map.json",
+    "backend/techno_project/bsp_oisco_map.json",
+    "backend/techno_project/isp_technopara_map.json",
+    "backend/techno_project/rsp_technopara_map.json"
+  ],
+  "BSP": [
+    {
+      "id": "bsp_ppc_mis_production",
+      "source_code": "backend/excel_extractors/excel_extractor_bsp.py (_ppc_mis_config, extract_and_save_excel, _extract_ppc_mis_preview)",
+      "config_override": "backend/excel_cells_config.json section 'bsp_ppc_mis' (cells_rc) — takes precedence over hardcoded defaults",
+      "workbook": "BSP PPC MIS daily/month-end report (.xls or .xlsx), e.g. Report_format/MONTHEND/BSPMIS30052026.xls",
+      "sheet": "S1",
+      "month_detection": "cell N1 (row 0, col 13, 0-based) — Excel date serial",
+      "addressing": "0-based [row, col]; divide=true means raw Tonnes / 1000 -> '000T",
+      "target_table": "production_table (plant BSP)",
+      "cells": {
+        "COB#1-8": {
+          "rc": [
+            3,
+            5
+          ],
+          "a1": "F4",
+          "divide": false,
+          "unit": "nos/d"
+        },
+        "Oven Pushing (nos/day)": {
+          "rc": [
+            5,
+            5
+          ],
+          "a1": "F6",
+          "divide": false,
+          "unit": "nos/d"
+        },
+        "SP-2": {
+          "rc": [
+            7,
+            5
+          ],
+          "a1": "F8",
+          "divide": true
+        },
+        "SP-3": {
+          "rc": [
+            8,
+            5
+          ],
+          "a1": "F9",
+          "divide": true
+        },
+        "Total Sinter": {
+          "rc": [
+            9,
+            5
+          ],
+          "a1": "F10",
+          "divide": true
+        },
+        "BF#1-7": {
+          "rc": [
+            10,
+            5
+          ],
+          "a1": "F11",
+          "divide": true
+        },
+        "BF#8": {
+          "rc": [
+            11,
+            5
+          ],
+          "a1": "F12",
+          "divide": true
+        },
+        "Hot Metal": {
+          "rc": [
+            12,
+            5
+          ],
+          "a1": "F13",
+          "divide": true
+        },
+        "SMS-2": {
+          "rc": [
+            13,
+            5
+          ],
+          "a1": "F14",
+          "divide": true
+        },
+        "SMS-3": {
+          "rc": [
+            15,
+            5
+          ],
+          "a1": "F16",
+          "divide": true
+        },
+        "Total Crude Steel": {
+          "rc": [
+            16,
+            5
+          ],
+          "a1": "F17",
+          "divide": true
+        },
+        "RSM_RAIL": {
+          "rc": [
+            17,
+            5
+          ],
+          "a1": "F18",
+          "divide": true
+        },
+        "URM_RAIL": {
+          "rc": [
+            21,
+            5
+          ],
+          "a1": "F22",
+          "divide": true
+        },
+        "MM": {
+          "rc": [
+            23,
+            5
+          ],
+          "a1": "F24",
+          "divide": true
+        },
+        "WIRERODS": {
+          "rc": [
+            24,
+            5
+          ],
+          "a1": "F25",
+          "divide": true
+        },
+        "BARS&RODMILL": {
+          "rc": [
+            25,
+            5
+          ],
+          "a1": "F26",
+          "divide": true
+        },
+        "PLATEMILL": {
+          "rc": [
+            26,
+            5
+          ],
+          "a1": "F27",
+          "divide": true
+        },
+        "Finished Steel": {
+          "rc": [
+            27,
+            5
+          ],
+          "a1": "F28",
+          "divide": true
+        },
+        "Saleable Semis": {
+          "rc": [
+            34,
+            5
+          ],
+          "a1": "F35",
+          "divide": true
+        },
+        "Saleable Steel": {
+          "rc": [
+            35,
+            5
+          ],
+          "a1": "F36",
+          "divide": true
+        },
+        "RSMPRIME": {
+          "rc": [
+            38,
+            5
+          ],
+          "a1": "F39",
+          "divide": true
+        },
+        "URMPRIME": {
+          "rc": [
+            38,
+            9
+          ],
+          "a1": "J39",
+          "divide": true
+        },
+        "Pig Iron": {
+          "rc": [
+            62,
+            13
+          ],
+          "a1": "N63",
+          "divide": true
+        }
+      },
+      "opening_stock_cells": {
+        "_note": "stock_month = report month + 1; values /1000",
+        "SLABS FOR SALE": {
+          "formula": "N47"
+        },
+        "SLABS INPROCESS": {
+          "formula": "K47-N47"
+        },
+        "BLOOM/BILLETS FOR SALE": {
+          "formula": "N50-N47"
+        },
+        "BLOOM/BILLETS INPROCESS": {
+          "formula": "K50-N50-K47+N47"
+        },
+        "FINISHED STEEL": {
+          "formula": "N58"
+        },
+        "PIG IRON": {
+          "formula": "O63"
+        }
+      }
+    },
+    {
+      "id": "bsp_3page_techno",
+      "source_code": "backend/excel_extractors/excel_extractor_bsp.py (PARAM_MAP_3PAGE) — duplicated in excel_extractor_bsp_techno.py (PARAM_MAP); row map also in backend/techno_project/bsp_techno_map.json",
+      "workbook": "BSP 3-page Tech .xlsx, e.g. Report_format/Monthly/BSP/3 page Tech for COMay'26.xlsx",
+      "sheet": "Sheet1 (or S2 in PPC MIS workbook)",
+      "month_detection": "A3 = month name; row-4 headers APR..MAR in cols D(4)..O(15)",
+      "addressing": "fixed 1-based row + month-dependent data column (D-O); cumulative column detected by row-4 header in {ACTUAL,CUM,...}, fallback P(16)",
+      "target_table": "techno_param_rows preview -> techno tables",
+      "rows": [
+        {
+          "row": 37,
+          "group": "COKE_SINTER",
+          "section": "Coke Yield",
+          "parameter": "BF Coke",
+          "unit": "%"
+        },
+        {
+          "row": 38,
+          "group": "COKE_SINTER",
+          "section": "Coke Yield",
+          "parameter": "Crude Tar",
+          "unit": "%"
+        },
+        {
+          "row": 39,
+          "group": "COKE_SINTER",
+          "section": "Coke Yield",
+          "parameter": "Ammonium Sulphate",
+          "unit": "%"
+        },
+        {
+          "row": 40,
+          "group": "COKE_SINTER",
+          "section": "Coke Yield",
+          "parameter": "Crude Benzol",
+          "unit": "%"
+        },
+        {
+          "row": 45,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant SP-2",
+          "parameter": "Machine Availability",
+          "unit": "%"
+        },
+        {
+          "row": 46,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant SP-2",
+          "parameter": "Machine Utilisation",
+          "unit": "%"
+        },
+        {
+          "row": 48,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant SP-2",
+          "parameter": "Productivity",
+          "unit": "T/m2/hr"
+        },
+        {
+          "row": 49,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant SP-2",
+          "parameter": "Basicity",
+          "unit": ""
+        },
+        {
+          "row": 51,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant SP-3",
+          "parameter": "Machine Availability",
+          "unit": "%"
+        },
+        {
+          "row": 52,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant SP-3",
+          "parameter": "Machine Utilisation",
+          "unit": "%"
+        },
+        {
+          "row": 54,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant SP-3",
+          "parameter": "Productivity",
+          "unit": "T/m2/hr"
+        },
+        {
+          "row": 55,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant SP-3",
+          "parameter": "Basicity",
+          "unit": ""
+        },
+        {
+          "row": 58,
+          "group": "IRON_MAKING",
+          "section": "Sinter in Burden",
+          "parameter": "BSP",
+          "unit": "%"
+        },
+        {
+          "row": 59,
+          "group": "IRON_MAKING",
+          "section": "BF Coke Rate",
+          "parameter": "BSP",
+          "unit": "Kg/THM"
+        },
+        {
+          "row": 60,
+          "group": "IRON_MAKING",
+          "section": "Coke Screen Loss",
+          "parameter": "BSP",
+          "unit": "25mm%"
+        },
+        {
+          "row": 65,
+          "group": "IRON_MAKING",
+          "section": "BF Productivity",
+          "parameter": "BSP BF-7",
+          "unit": "T/m3/day"
+        },
+        {
+          "row": 66,
+          "group": "IRON_MAKING",
+          "section": "BF Productivity",
+          "parameter": "BSP BF-8",
+          "unit": "T/m3/day"
+        },
+        {
+          "row": 67,
+          "group": "IRON_MAKING",
+          "section": "BF Productivity",
+          "parameter": "BSP",
+          "unit": "T/m3/day"
+        },
+        {
+          "row": 68,
+          "group": "IRON_MAKING",
+          "section": "CDI",
+          "parameter": "BSP",
+          "unit": "Kg/THM"
+        },
+        {
+          "row": 69,
+          "group": "IRON_MAKING",
+          "section": "Slag Rate",
+          "parameter": "BSP",
+          "unit": "Kg/THM"
+        },
+        {
+          "row": 70,
+          "group": "IRON_MAKING",
+          "section": "Nut Coke Rate",
+          "parameter": "BSP",
+          "unit": "Kg/THM"
+        },
+        {
+          "row": 76,
+          "group": "SMS",
+          "section": "SMS-II Consumption",
+          "parameter": "Hot Metal",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 77,
+          "group": "SMS",
+          "section": "SMS-II Consumption",
+          "parameter": "Scrap",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 78,
+          "group": "SMS",
+          "section": "SMS-II Consumption",
+          "parameter": "Total Metallic Charge",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 90,
+          "group": "SMS",
+          "section": "SMS-III Consumption",
+          "parameter": "Hot Metal",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 91,
+          "group": "SMS",
+          "section": "SMS-III Consumption",
+          "parameter": "Scrap",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 92,
+          "group": "SMS",
+          "section": "SMS-III Consumption",
+          "parameter": "Total Metallic Charge",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 97,
+          "group": "MILL_BSP",
+          "section": "Rail & Structural Mill",
+          "parameter": "Yield",
+          "unit": "%"
+        },
+        {
+          "row": 98,
+          "group": "MILL_BSP",
+          "section": "Rail & Structural Mill",
+          "parameter": "Rolling Rate",
+          "unit": "T/Hr"
+        },
+        {
+          "row": 99,
+          "group": "MILL_BSP",
+          "section": "Rail & Structural Mill",
+          "parameter": "Mill Availability",
+          "unit": "%"
+        },
+        {
+          "row": 100,
+          "group": "MILL_BSP",
+          "section": "Rail & Structural Mill",
+          "parameter": "Mill Utilisation",
+          "unit": "%"
+        },
+        {
+          "row": 103,
+          "group": "MILL_BSP",
+          "section": "Universal Rail Mill",
+          "parameter": "Yield",
+          "unit": "%"
+        },
+        {
+          "row": 104,
+          "group": "MILL_BSP",
+          "section": "Universal Rail Mill",
+          "parameter": "Rolling Rate",
+          "unit": "T/Hr"
+        },
+        {
+          "row": 105,
+          "group": "MILL_BSP",
+          "section": "Universal Rail Mill",
+          "parameter": "Mill Availability",
+          "unit": "%"
+        },
+        {
+          "row": 106,
+          "group": "MILL_BSP",
+          "section": "Universal Rail Mill",
+          "parameter": "Mill Utilisation",
+          "unit": "%"
+        },
+        {
+          "row": 109,
+          "group": "MILL_BSP",
+          "section": "Merchant Mill",
+          "parameter": "Yield",
+          "unit": "%"
+        },
+        {
+          "row": 110,
+          "group": "MILL_BSP",
+          "section": "Merchant Mill",
+          "parameter": "Rolling Rate",
+          "unit": "T/Hr"
+        },
+        {
+          "row": 111,
+          "group": "MILL_BSP",
+          "section": "Merchant Mill",
+          "parameter": "Mill Availability",
+          "unit": "%"
+        },
+        {
+          "row": 112,
+          "group": "MILL_BSP",
+          "section": "Merchant Mill",
+          "parameter": "Mill Utilisation",
+          "unit": "%"
+        },
+        {
+          "row": 115,
+          "group": "MILL_BSP",
+          "section": "Wire Rod Mill",
+          "parameter": "Yield",
+          "unit": "%"
+        },
+        {
+          "row": 116,
+          "group": "MILL_BSP",
+          "section": "Wire Rod Mill",
+          "parameter": "Rolling Rate",
+          "unit": "T/Hr"
+        },
+        {
+          "row": 117,
+          "group": "MILL_BSP",
+          "section": "Wire Rod Mill",
+          "parameter": "Mill Availability",
+          "unit": "%"
+        },
+        {
+          "row": 118,
+          "group": "MILL_BSP",
+          "section": "Wire Rod Mill",
+          "parameter": "Mill Utilisation",
+          "unit": "%"
+        },
+        {
+          "row": 121,
+          "group": "MILL_BSP",
+          "section": "Bar & Rod Mill",
+          "parameter": "Yield",
+          "unit": "%"
+        },
+        {
+          "row": 122,
+          "group": "MILL_BSP",
+          "section": "Bar & Rod Mill",
+          "parameter": "Rolling Rate",
+          "unit": "T/Hr"
+        },
+        {
+          "row": 123,
+          "group": "MILL_BSP",
+          "section": "Bar & Rod Mill",
+          "parameter": "Mill Availability",
+          "unit": "%"
+        },
+        {
+          "row": 124,
+          "group": "MILL_BSP",
+          "section": "Bar & Rod Mill",
+          "parameter": "Mill Utilisation",
+          "unit": "%"
+        },
+        {
+          "row": 127,
+          "group": "MILL_BSP",
+          "section": "Plate Mill",
+          "parameter": "Yield",
+          "unit": "%"
+        },
+        {
+          "row": 128,
+          "group": "MILL_BSP",
+          "section": "Plate Mill",
+          "parameter": "Rolling Rate",
+          "unit": "T/Hr"
+        },
+        {
+          "row": 130,
+          "group": "MILL_BSP",
+          "section": "Plate Mill",
+          "parameter": "Mill Availability",
+          "unit": "%"
+        },
+        {
+          "row": 131,
+          "group": "MILL_BSP",
+          "section": "Plate Mill",
+          "parameter": "Mill Utilisation",
+          "unit": "%"
+        },
+        {
+          "row": 137,
+          "group": "MILL_BSP",
+          "section": "Rail & Structural Mill",
+          "parameter": "Heat Consumption",
+          "unit": "103Kcal/T"
+        },
+        {
+          "row": 138,
+          "group": "MILL_BSP",
+          "section": "Universal Rail Mill",
+          "parameter": "Heat Consumption",
+          "unit": "103Kcal/T"
+        },
+        {
+          "row": 139,
+          "group": "MILL_BSP",
+          "section": "Merchant Mill",
+          "parameter": "Heat Consumption",
+          "unit": "103Kcal/T"
+        },
+        {
+          "row": 140,
+          "group": "MILL_BSP",
+          "section": "Wire Rod Mill",
+          "parameter": "Heat Consumption",
+          "unit": "103Kcal/T"
+        },
+        {
+          "row": 141,
+          "group": "MILL_BSP",
+          "section": "Plate Mill",
+          "parameter": "Heat Consumption",
+          "unit": "103Kcal/T"
+        },
+        {
+          "row": 153,
+          "group": "MILL_BSP",
+          "section": "Rail & Structural Mill",
+          "parameter": "Power Consumption",
+          "unit": "Kwh/T"
+        },
+        {
+          "row": 154,
+          "group": "MILL_BSP",
+          "section": "Universal Rail Mill",
+          "parameter": "Power Consumption",
+          "unit": "Kwh/T"
+        },
+        {
+          "row": 155,
+          "group": "MILL_BSP",
+          "section": "Merchant Mill",
+          "parameter": "Power Consumption",
+          "unit": "Kwh/T"
+        },
+        {
+          "row": 156,
+          "group": "MILL_BSP",
+          "section": "Wire Rod Mill",
+          "parameter": "Power Consumption",
+          "unit": "Kwh/T"
+        },
+        {
+          "row": 157,
+          "group": "MILL_BSP",
+          "section": "Plate Mill",
+          "parameter": "Power Consumption",
+          "unit": "Kwh/T"
+        },
+        {
+          "row": 161,
+          "group": "MILL_BSP",
+          "section": "Energy",
+          "parameter": "Sp. Energy Consumption",
+          "unit": "G.Cal/T"
+        }
+      ],
+      "extra_rows_in_map_json_only": {
+        "_note": "present in bsp_techno_map.json but not in PARAM_MAP (used by JSON-map pipeline)",
+        "COB dry_coal_charge_batt_1_8": 32,
+        "COB dry_coal_charge_batt_9_11": 33,
+        "COB specific_heat_coke_ovens": 134
+      },
+      "computed": [
+        "TMI = HM Consumption + Scrap Consumption (calculate_tmi_consumption)",
+        "Sinter %/Pellet % in Burden (techno_calc_utils.calculate_burden_percentages, from consumed quantities)"
+      ]
+    },
+    {
+      "id": "bsp_oisco_techno",
+      "source_code": "backend/excel_extractors/excel_extractor_bsp.py (PARAM_MAP_OISCO) — duplicated in excel_extractor_bsp_oisco.py (PARAM_MAP); row map also in backend/techno_project/bsp_oisco_map.json",
+      "workbook": "OISCO_<Mon>'YY.xlsx (R3C3 title contains TECHNO ECONOMIC PARAMETERS)",
+      "sheet": "Sheet1",
+      "month_detection": "title cell C3 (regex _MMM'YY); data column found by matching month abbr in header row 6; CUM column scanned in row 6 (fallback data_col+1)",
+      "addressing": "fixed 1-based row + month-dependent data column; label col C(3), unit col D(4)",
+      "rows": [
+        {
+          "row": 9,
+          "group": "IRON_MAKING",
+          "section": "CDI",
+          "parameter": "BSP",
+          "unit": "Kg/THM",
+          "source_priority": 4
+        },
+        {
+          "row": 11,
+          "group": "IRON_MAKING",
+          "section": "CDI",
+          "parameter": "BSP BF-4",
+          "unit": "Kg/THM",
+          "source_priority": 5
+        },
+        {
+          "row": 12,
+          "group": "IRON_MAKING",
+          "section": "CDI",
+          "parameter": "BSP BF-5",
+          "unit": "Kg/THM",
+          "source_priority": 5
+        },
+        {
+          "row": 13,
+          "group": "IRON_MAKING",
+          "section": "CDI",
+          "parameter": "BSP BF-6",
+          "unit": "Kg/THM",
+          "source_priority": 5
+        },
+        {
+          "row": 14,
+          "group": "IRON_MAKING",
+          "section": "CDI",
+          "parameter": "BSP BF-7",
+          "unit": "Kg/THM",
+          "source_priority": 5
+        },
+        {
+          "row": 15,
+          "group": "IRON_MAKING",
+          "section": "CDI",
+          "parameter": "BSP BF-8",
+          "unit": "Kg/THM",
+          "source_priority": 5
+        },
+        {
+          "row": 16,
+          "group": "IRON_MAKING",
+          "section": "Fuel Rate",
+          "parameter": "BSP",
+          "unit": "Kg/THM",
+          "source_priority": 4
+        },
+        {
+          "row": 17,
+          "group": "IRON_MAKING",
+          "section": "Pellet in Burden",
+          "parameter": "BSP",
+          "unit": "%",
+          "source_priority": 4
+        },
+        {
+          "row": 18,
+          "group": "IRON_MAKING",
+          "section": "LD Slag Usage",
+          "parameter": "BSP",
+          "unit": "Kg/THM",
+          "source_priority": 4
+        },
+        {
+          "row": 19,
+          "group": "IRON_MAKING",
+          "section": "Not Dry Cast",
+          "parameter": "BSP",
+          "unit": "%",
+          "source_priority": 4
+        },
+        {
+          "row": 20,
+          "group": "MAJOR",
+          "section": "Coal to Hot Metal",
+          "parameter": "BSP",
+          "unit": "Ratio",
+          "source_priority": 4
+        },
+        {
+          "row": 22,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Converter Availability",
+          "unit": "% ICH"
+        },
+        {
+          "row": 23,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Converter Utilisation",
+          "unit": "% Avail hr"
+        },
+        {
+          "row": 24,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Tap to Tap Time",
+          "unit": "Min"
+        },
+        {
+          "row": 25,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Average Blows/Day",
+          "unit": "Heats/Day"
+        },
+        {
+          "row": 26,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Average Heat Weight",
+          "unit": "T"
+        },
+        {
+          "row": 27,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Avg. Lining Life",
+          "unit": "Heats"
+        },
+        {
+          "row": 28,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Fe-Mn Consumption",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 29,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Fe-Si Consumption",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 30,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Si-Mn Consumption",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 31,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Oxygen Consumption",
+          "unit": "Nm3/TCS"
+        },
+        {
+          "row": 32,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "Alumina Consumption",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 35,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "LD Gas Recovery",
+          "unit": "m3/T"
+        },
+        {
+          "row": 36,
+          "group": "SMS",
+          "section": "BSP SMS-2",
+          "parameter": "DS Heats",
+          "unit": "Nos."
+        },
+        {
+          "row": 38,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Converter Availability",
+          "unit": "% ICH"
+        },
+        {
+          "row": 39,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Converter Utilisation",
+          "unit": "% Avail hr"
+        },
+        {
+          "row": 40,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Tap to Tap Time",
+          "unit": "Min"
+        },
+        {
+          "row": 41,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Average Blows/Day",
+          "unit": "Heats/Day"
+        },
+        {
+          "row": 42,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Average Heat Weight",
+          "unit": "T"
+        },
+        {
+          "row": 43,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Fe-Mn Consumption",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 44,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Fe-Si Consumption",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 45,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Si-Mn Consumption",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 46,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Oxygen Consumption",
+          "unit": "Nm3/TCS"
+        },
+        {
+          "row": 47,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "Alumina Consumption",
+          "unit": "Kg/TCS"
+        },
+        {
+          "row": 50,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "LD Gas Recovery",
+          "unit": "m3/T"
+        },
+        {
+          "row": 51,
+          "group": "SMS",
+          "section": "BSP SMS-3",
+          "parameter": "DS Heats",
+          "unit": "Nos."
+        },
+        {
+          "row": 54,
+          "group": "GENERAL",
+          "section": "Utilities",
+          "parameter": "Sp. Water Consumption",
+          "unit": "m3/TCS"
+        }
+      ],
+      "extra_rows_in_map_json_only": {
+        "_note": "in bsp_oisco_map.json but not PARAM_MAP",
+        "SMS-2 lime_consumtion": 33,
+        "SMS-2 pellet_consumption": 34,
+        "SMS-3 lime_consumtion": 48,
+        "SMS-3 pellet_consumption": 49,
+        "General specific_water_consumption": 55,
+        "General specific_co2_emissions": 56
+      }
+    },
+    {
+      "id": "bsp_special_steel",
+      "source_code": "backend/excel_extractors/excel_extractor_bsp.py (_extract_bsp_ss_preview)",
+      "workbook": "BSP Special Steel report .xlsx (sheet CORP, R3C1='BHILAI STEEL PLANT')",
+      "sheet": "CORP",
+      "month_detection": "I2 (R2C9) date string DD.MM.YY",
+      "addressing": "dynamic row scan from row 6; fixed columns",
+      "columns": {
+        "A(1)": "Product group label (SEMIS / WIRE RODS / MERCHANT PRODUCTS / BRM PRODUCT / RAILS / PLATES; TOTAL* = subtotal)",
+        "B(2)": "Quality/Grade",
+        "C(3)": "ABP Annual (not saved)",
+        "D(4)": "ABP Monthly (preview cross-check)",
+        "E(5)": "Orders Available Total (cross-check)",
+        "F(6)": "Orders Available Effective -> order_qty",
+        "G(7)": "Loading Till Date -> actual_despatch",
+        "H(8)": "Loadable in stock (not saved)",
+        "I(9)": "Semis/Fin in process (not saved)"
+      },
+      "stop_condition": "row where col A contains 'TOTAL SPECIAL STEEL' (included as grand total)"
+    },
+    {
+      "id": "bsp_abp_plan",
+      "source_code": "backend/excel_extractors/excel_extractor_bsp_plan.py (extract_and_save_excel_plan)",
+      "workbook": "Report_format/ABP/BSPABP26-27.xlsx",
+      "sheet": "Table 1 (case-insensitive)",
+      "addressing": "fixed 1-based row + month column C(Apr)..N(Mar): 04=C 05=D 06=E 07=F 08=G 09=H 10=I 11=J 12=K 01=L 02=M 03=N",
+      "target_table": "production_plan_table (plant BSP)",
+      "rows": {
+        "COB#1-8": 6,
+        "COB#9-10": 7,
+        "COB#11": 8,
+        "Oven Pushing (nos/day)": 9,
+        "SP-2": 11,
+        "SP-3": 12,
+        "Total Sinter": 13,
+        "BF#1-7": 14,
+        "BF#8": 15,
+        "Hot Metal": 16,
+        "Pig Iron": 17,
+        "SMS-2": 18,
+        "SMS-3": 19,
+        "Total Crude Steel": 20,
+        "SMS-2 BLOOM ": 22,
+        "SMS-2 SLAB ": 23,
+        "SMS-3 BLOOM(CV1&2)": 26,
+        "SMS-3 BILLET105 ": 27,
+        "SMS-3 BILLET150 ": 28,
+        "RSM_RAIL": 31,
+        "URM_RAIL": 32,
+        "MM": 33,
+        "WIRERODS": 34,
+        "BARS&RODMILL": 35,
+        "PLATEMILL": 36,
+        "Finished Steel": 37,
+        "SEMIS SLABS": 39,
+        "SEMIS BLOOM": 40,
+        "SEMIS BILLETS": 41,
+        "Saleable Semis": 42,
+        "Saleable Steel": 43,
+        "RSMPRIME": 45,
+        "URMPRIME": 46
+      },
+      "notes": "values already in '000T (no divide); Oven Pushing and COB rows kept as-is"
+    },
+    {
+      "id": "bsp_furnace_pdf",
+      "source_code": "backend/excel_extractors/pdf_extractor_bsp_furnace.py",
+      "workbook": "flash-<mon>YY.pdf, page 14 (pdf.pages[13]), first extracted table",
+      "addressing": "fully dynamic — header row located by furnace names BF-4/BF-6/BF-7/BF-8; parameter rows matched by fuzzy label against PARAM_UNITS",
+      "parameters": [
+        "Coke Rate",
+        "BF Productivity",
+        "CDI Rate",
+        "Fuel Rate",
+        "O2 Enrichment",
+        "Sinter in Burden",
+        "Pellet in Burden",
+        "BF Coke Rate",
+        "Slag Rate",
+        "Hot Blast Temp",
+        "Coke Breeze Rate",
+        "Silicon Carbide Rate"
+      ],
+      "target_table": "techno_furnace_data"
+    }
+  ],
+  "ISP": [
+    {
+      "id": "isp_morning_report",
+      "source_code": "backend/excel_extractors/excel_extractor_isp.py (_morning_report_config, _extract_morning_report, _preview_morning_report_rows)",
+      "config_override": "backend/excel_cells_config.json section 'isp_morning' (cells, no_convert, derived)",
+      "workbook": "ISP Morning Report .xlsx, e.g. Report_format/MONTHEND/MORNING REPORT.xlsx",
+      "sheet": "DAILYREPORT1",
+      "month_detection": "K5 (datetime or DD.MM.YYYY string); K5 = 1st of month AFTER report period",
+      "target_table": "production_table (plant ISP); raw Tonnes /1000 except no_convert items",
+      "cells": {
+        "COB#10": "E9",
+        "COB#11": "E10",
+        "Oven Pushing (nos/day)": "E11",
+        "SP-1": "E12",
+        "SP-2": "E13",
+        "Total Sinter": "E14",
+        "Hot Metal": "E16",
+        "SMS CCM-1&2": "E30",
+        "SMS CCM-3": "E31",
+        "Total Crude Steel": "E32",
+        "WRMILL": "E33",
+        "BARMILL": "E34",
+        "USMILL": "E35",
+        "Finished Steel": "E36",
+        "Saleable 150 Billets": "E37",
+        "200 Blooms": "E38",
+        "Saleable Steel": "E39"
+      },
+      "derived": {
+        "Pig Iron": "E18+E20",
+        "Saleable Semis": "E37+E38"
+      },
+      "no_convert": [
+        "COB#10",
+        "COB#11",
+        "Oven Pushing (nos/day)"
+      ],
+      "opening_stock_cells": {
+        "_note": "raw Tonnes /1000; next_month = report month + 1",
+        "BLOOM/BILLETS FOR SALE (next month)": "C108",
+        "BLOOM/BILLETS FOR SALE (report month)": "D108",
+        "BLOOM/BILLETS INPROCESS (next month)": "K102-C108",
+        "FINISHED STEEL (next month)": "C105",
+        "FINISHED STEEL (report month)": "D105",
+        "PIG IRON (next month)": "C110",
+        "PIG IRON (report month)": "D110"
+      }
+    },
+    {
+      "id": "isp_final_monthly",
+      "source_code": "backend/excel_extractors/excel_extractor_isp.py (_extract_monthly_report, _preview_monthly_report_rows)",
+      "workbook": "ISP Final Monthly Report .xlsx (also part of Summarized Monthly workbook, e.g. Report_format/MONTHEND/REP010626.xlsx)",
+      "sheet": "Maj Production Summ",
+      "addressing": "fixed 1-based row + month column: 04=F 05=H 06=L 07=P 08=T 09=X 10=AD 11=AH 12=AL 01=AR 02=AV 03=AZ",
+      "target_table": "production_table (plant ISP); /1000 except no_convert",
+      "rows": {
+        "COB#10": 6,
+        "COB#11": 7,
+        "Oven Pushing (nos/day)": 8,
+        "Total Sinter": 16,
+        "Hot Metal": 17,
+        "Total Crude Steel": 18,
+        "SMS CCM-1&2": 19,
+        "SMS CCM-3": 20,
+        "Pig Iron": 26,
+        "WRMILL": 30,
+        "BARMILL": 31,
+        "USMILL": 32,
+        "Finished Steel": 33,
+        "Saleable 150 Billets": 34,
+        "200 Blooms": 35,
+        "Saleable Semis": 36,
+        "Saleable Steel": 37
+      },
+      "no_convert": [
+        "COB#10",
+        "COB#11",
+        "Oven Pushing (nos/day)"
+      ]
+    },
+    {
+      "id": "isp_summarized_monthly_techno",
+      "source_code": "backend/excel_extractors/excel_extractor_isp.py (_preview_summarized_monthly + helpers); row map also in backend/techno_project/isp_technopara_map.json",
+      "workbook": "ISP Summarized Monthly Report .xlsx (sheets B-FCE, SINTER, SMS, WRM, BM, USM, COKE OVENS, Maj Techno Summ, Maj Production Summ)",
+      "column_detection": "ACT column found by scanning header row for \"Mon'YY\" with 'ACT' in sub-header row below/right (_find_act_col). Header/subheader rows: B-FCE=4/5, all others=3/4. Cumulative col = ACT col + offset per month: Apr=0 May-Aug=2 Sep=4 Oct/Nov=2 Dec=4 Jan/Feb=2 Mar=6",
+      "sheets": {
+        "B-FCE": {
+          "fixed_rows": {
+            "Coke Rate (Kg/THM)": 39,
+            "Nut Coke Rate (Kg/THM)": 40,
+            "PCI/CDI Rate (Kg/THM)": 41,
+            "BF Productivity (T/M3/Day)": 49
+          },
+          "label_scanned_rows": {
+            "_note": "row found by scanning col B for label; fallback row in parens",
+            "Sinter% in Burden": "'Sinter in Fe bearing' (51)",
+            "Pellet% in Burden": "'Pellet in Fe bearing' (52)",
+            "Hot Blast Temp": "'Blast Temperature' (80)",
+            "Slag Rate": "'Slag Rate' (81)",
+            "Si in HM": "'Si in HM' (82)",
+            "S in HM": "'S in HM' (83)",
+            "Sp Power Cons": "'Sp Power Cons' (91)",
+            "O2 Enrichment": "'Oxygen enrichment' (92)"
+          },
+          "map_json_extra_rows": {
+            "fuel_rate": 42,
+            "furnace_availability": 78,
+            "return_fines(SP)": 71,
+            "coal_to_hm": "75/1000",
+            "coke_screen_loss": 72
+          }
+        },
+        "SINTER": {
+          "label_scanned_rows": {
+            "Sp Productivity (T/M2/Utlz Hr)": "'Specific Productivity' (81)"
+          },
+          "map_json_extra_rows": {
+            "ld_slag_cons": 95,
+            "basicity": 112,
+            "fe%_in_sinter": 106
+          }
+        },
+        "SMS": {
+          "fixed_rows": {
+            "Blows per Day": "R10 total heats / R2 calendar days",
+            "Avg Cast/Heat Weight (T)": 52,
+            "HM Consumption (Kg/TCS)": 89,
+            "Scrap Consumption (Kg/TCS)": 90,
+            "TMI (Kg/TCS)": 91,
+            "Sp O2 Consumption (Nm3/T)": 96
+          },
+          "map_json_extra_rows": {
+            "caster_yield": 53,
+            "fe-mn": 74,
+            "si-mn": 77,
+            "fe-si": 78,
+            "specific_refractory_consumption": 104,
+            "specific_lpg_consumption": 103,
+            "converter_utilisation": "(134+135+136)/3"
+          }
+        },
+        "WRM": {
+          "anchor": "'WR MILL YIELD' label row (map json: 161)",
+          "offsets": {
+            "Mill Availability": "+5",
+            "Mill Utilisation": "+7",
+            "Sp Power Cons": "+12",
+            "Rolling Rate": "+17"
+          },
+          "map_json_extra_rows": {
+            "specific_heat_consumption": 171,
+            "total_gas_consumption": "174+175+176+177",
+            "cbm_gas_consumption": 177
+          }
+        },
+        "BM": {
+          "anchor": "'BAR MILL YIELD' label row (map json: 58)",
+          "offsets": {
+            "Total Production": "-3",
+            "Mill Availability": "+9",
+            "Mill Utilisation": "+11",
+            "Sp Heat Consumption x1000": "+14",
+            "Sp Power Cons": "+16",
+            "Rolling Rate": "+21"
+          },
+          "map_json_extra_rows": {
+            "total_gas_consumption": "75+76+77+78",
+            "cbm_gas_consumption": 78
+          }
+        },
+        "USM": {
+          "anchor": "'US MILL YIELD' label row (map json: 123)",
+          "offsets": "same as BM",
+          "map_json_extra_rows": {
+            "total_gas_consumption": "140+141+142+143",
+            "cbm_gas_consumption": 143
+          }
+        },
+        "COKE OVENS": {
+          "fixed_rows": {
+            "BF Coke Yield ISP (%)": 37,
+            "Dry Coal Charge/Oven COB#10": "R17 Mt / R8 ovens pushed",
+            "Dry Coal Charge/Oven COB#11": "R18 / R9",
+            "Coal Tar Yield COB#10 (kg/TDC)": 79,
+            "Coal Tar Yield COB#11 (kg/TDC)": 80,
+            "Amm. Sulphate Yld COB#10 (kg/TDC)": 82,
+            "Amm. Sulphate Yld COB#11 (kg/TDC)": 83
+          },
+          "label_scanned_rows": {
+            "Sp. Heat Cons. COB#10 x1000": "1st 'Sp Heat Cons' (fallback 169)",
+            "Sp. Heat Cons. COB#11 x1000": "2nd 'Sp Heat Cons' (fallback 195)",
+            "Coke Oven Gas Yield COB#10 (M3/TDC)": "1st 'C.O.Gas Yield' (fallback 164)",
+            "Coke Oven Gas Yield COB#11 (M3/TDC)": "2nd 'C.O.Gas Yield' (fallback 189)"
+          },
+          "map_json_extra_rows": {
+            "COB-old ash_blend_coal": 153,
+            "ash_in_coke": 157,
+            "m40": 158,
+            "m10": 159,
+            "csr": 160,
+            "cri": 161,
+            "COB-new crude_benzol_yield": 85,
+            "COB-new ash_blend_coal": 178,
+            "COB-new ash_in_coke": 182,
+            "m40n": 183,
+            "m10n": 184,
+            "csrn": 185,
+            "crin": 186
+          }
+        },
+        "Maj Techno Summ": {
+          "label_scanned_rows": {
+            "MAJOR Coke Rate": "'BF Coke Rate'",
+            "MAJOR Nut Coke Consumption": "'Nut Coke rate'",
+            "MAJOR CDI Rate": "'CDI rate'",
+            "MAJOR Fuel Rate": "'Total Fuel'",
+            "MAJOR BF Productivity (Working Volume)": "'BF Productivity'",
+            "MAJOR Coal to Hot Metal": "'Gross Coal to Hot Metal'",
+            "MAJOR Specific Energy Consumption": "'Sp Energy Consumption'"
+          },
+          "map_json_extra_rows": {
+            "specific_energy_consumption": 24,
+            "specific_water_consumption": 27,
+            "specific_co2_emissions": 28
+          }
+        }
+      }
+    },
+    {
+      "id": "isp_abp_plan",
+      "source_code": "backend/excel_extractors/excel_extractor_isp_plan.py",
+      "workbook": "Report_format/ABP/ISPABP26-27.xlsx",
+      "sheet": "SUMM PROD (case-insensitive)",
+      "addressing": "fixed 1-based row + month column D(Apr)..O(Mar): 04=D 05=E 06=F 07=G 08=H 09=I 10=J 11=K 12=L 01=M 02=N 03=O",
+      "target_table": "production_plan_table (plant ISP)",
+      "rows": {
+        "COB#10": 5,
+        "COB#11": 6,
+        "Oven Pushing (nos/day)": 7,
+        "Total Sinter": 8,
+        "Hot Metal": 9,
+        "Pig Iron": 11,
+        "SMS CCM-1&2": 12,
+        "SMS CCM-3": 13,
+        "Total Crude Steel": 14,
+        "WRMILL": 16,
+        "BARMILL": 17,
+        "USMILL": 18,
+        "Finished Steel": 19,
+        "Saleable 150 Billets": 20,
+        "200 Blooms": 21,
+        "Saleable Semis": 22,
+        "Saleable Steel": 23
+      },
+      "notes": "values already in '000T; Oven Pushing/COB rows as-is"
+    }
+  ],
+  "RSP": [
+    {
+      "id": "rsp_final_monthly_production",
+      "source_code": "backend/excel_extractors/excel_extractor_rsp.py (P9_ITEMS, _build_p9_cells)",
+      "workbook": "RSP Final Monthly Report .xlsx, e.g. Report_format/MONTHEND/RSP31052026.xlsx",
+      "sheet": "page-9 (canonical names: page9/pag9/pg9)",
+      "column_map": "04=B 05=C 06=D 07=F 08=G 09=H 10=J 11=K 12=L 01=N 02=O 03=P (COL_MAP_P9)",
+      "row_resolution": "label scan (alias exact -> prefix) with row hint fallback",
+      "target_table": "production_table (plant RSP); /1000 except NO_CONVERT {Oven Pushing, COB#6, COB#1-5}",
+      "rows_with_hints": {
+        "COB#6": 6,
+        "COB#1-5": 7,
+        "Oven Pushing (nos/day)": 8,
+        "SP-1": 9,
+        "SP-2": 10,
+        "SP-3": 11,
+        "Total Sinter": 12,
+        "BF-1": 13,
+        "BF-5": 14,
+        "Hot Metal": 15,
+        "Pig Iron": 16,
+        "SMS-1 CCM-1": 19,
+        "SMS-2 CCM-1&2": 20,
+        "SMS-2 CCM-3": 21,
+        "SMS-2 CCM-4": 22,
+        "Total Crude Steel": 24,
+        "HSM-2 Total HR Coil": 26,
+        "HSM-2 HR Coil (Sale)": 27,
+        "HSM-2 HR Plate": 28,
+        "OPM Plate": 29,
+        "NPM Plate": 30,
+        "CRNO Coils": 31,
+        "ERW Pipes": 32,
+        "SW Pipes": 33,
+        "Saleable Steel": 34,
+        "Finished Steel": 34
+      }
+    },
+    {
+      "id": "rsp_final_monthly_techno",
+      "source_code": "backend/excel_extractors/excel_extractor_rsp.py (P18_TECHNO_ITEMS, _build_p18_cells, _IRON_MAKING_PARAM_MAP); row map also in backend/techno_project/rsp_technopara_map.json",
+      "sheet": "page 1-8 (canonical: page18/pag18/pg18/pages18)",
+      "column_map": "04=W 05=X 06=Y 07=AA 08=AB 09=AC 10=AE 11=AF 12=AG 01=AI 02=AJ 03=AK (COL_MAP_P18); cumulative always col AM (39)",
+      "row_resolution": "label scan with row hint fallback; SMS block params located by offset from O2 anchor rows ('Oxygen Consmn LD' for SMS-1, 'Oxygen Cons BOF II' for SMS-2): -3=Avg heat wt, -1=lining life, 0=O2, +3=Converter Yield, +4=Caster Yield",
+      "target_table": "techno_table + techno_monthly (via _IRON_MAKING_PARAM_MAP)",
+      "rows_with_hints": {
+        "COB#1-5 Hard Coke Yield%": 9,
+        "COB#1-5 Dry Coal Charge": 11,
+        "COB-6 Dry Coal Charge per Oven": 17,
+        "COB#6 Coke yield%": 21,
+        "Coke oven tar yield": 27,
+        "Coke oven Ammonia Sulphate yield": 28,
+        "Coke Screen Loss": 31,
+        "SP-1 Sinter Productivity": 38,
+        "SP-2 Sinter Productivity": 57,
+        "SP-3 Sinter Productivity": 81,
+        "BF Productivity BF-1": 97,
+        "BF Productivity BF-4": 98,
+        "BF Productivity BF-5": 99,
+        "BF Productivity (shop)": 100,
+        "Coke Rate BF-1": 101,
+        "Coke Rate BF-4": 102,
+        "Coke Rate BF-5": 103,
+        "Coke Rate (shop)": 104,
+        "CDI BF-1": 105,
+        "CDI BF-4": 106,
+        "CDI BF-5": 107,
+        "CDI (shop)": 108,
+        "Nut Coke BF-1": 109,
+        "Nut Coke BF-4": 110,
+        "Nut Coke BF-5": 111,
+        "Nut Coke Rate (shop)": 112,
+        "Coal to Hot metal ratio": 113,
+        "Sinter% in Burden": 124,
+        "Pellet% in Burden": 125,
+        "O2 Enrichment BF-1": 133,
+        "O2 Enrichment BF-4": 134,
+        "O2 Enrichment BF-5": 135,
+        "O2 Enrichment (shop)": 136,
+        "Hot Blast Temp BF-1": 138,
+        "Hot Blast Temp BF-4": 139,
+        "Hot Blast Temp BF-5": 140,
+        "Hot Blast Temp (shop)": 141,
+        "Si% in HM BF-1": 143,
+        "Si% in HM BF-4": 144,
+        "Si% in HM BF-5": 145,
+        "Si% in HM (shop)": 146,
+        "Fuel Rate": 157,
+        "SMS-1 TMI consumption": 163,
+        "SMS-1 HM consumption": 164,
+        "SMS-1 Scrap consumption": 165,
+        "SMS-1 Avg heat wt": 173,
+        "SMS-1 lining life": 177,
+        "SMS-1 Avg Blows per day": 182,
+        "SMS-2 TMI consumption": 190,
+        "SMS-2 HM consumption": 191,
+        "SMS-2 Scrap consumption": 192,
+        "SMS-2 Avg heat wt": 204,
+        "SMS-2 lining life": 206,
+        "SMS-2 Avg Blows per day": 214,
+        "Oven heat Consumption per ton Dry coke": 305,
+        "Energy consumption": 340
+      },
+      "sms_anchor_fallbacks": {
+        "SMS-1": {
+          "heat_wt": 174,
+          "lining_life": 176,
+          "o2": 177,
+          "converter_yield": 180,
+          "caster_yield": 181
+        },
+        "SMS-2": {
+          "heat_wt": 203,
+          "lining_life": 205,
+          "o2": 206,
+          "converter_yield": 209,
+          "caster_yield": 210
+        }
+      },
+      "map_json_extra_rows": {
+        "_note": "in rsp_technopara_map.json but not P18_TECHNO_ITEMS",
+        "BF-1 fuel_rate": 153,
+        "BF-4 fuel_rate": 155,
+        "BF-5 fuel_rate": 156,
+        "SMS-1 fe-mn": 169,
+        "SMS-1 fe-si": 170,
+        "SMS-1 si-mn": 171,
+        "SMS-1 oxygen_blowing": 178,
+        "SMS-1 caster_yield": 182,
+        "SMS-1 converter_availability": 161,
+        "SMS-1 converter_utilisation": 162,
+        "SMS-1 tap_to_tap_time": 176,
+        "SMS-1 average_heat_weight": 175,
+        "SMS-1 average_blows_per_day": 184,
+        "SMS-2 fe-mn": 196,
+        "SMS-2 fe-si": 198,
+        "SMS-2 si-mn": 199,
+        "SMS-2 oxygen_blowing": 207,
+        "SMS-2 caster_yield": 211,
+        "SMS-2 converter_availability": 188,
+        "SMS-2 converter_utilisation": 189,
+        "SMS-2 tap_to_tap_time": 205,
+        "COB-old coke_oven_gas_yield": 10,
+        "SP-1 ld_slag_cons": 43,
+        "SP-1 basicity": 37,
+        "SP-1 return_fines": 52,
+        "SP-2 specific_productivity": 58,
+        "SP-2 ld_slag_cons": 67,
+        "SP-2 basicity": 57,
+        "SP-2 return_fines": 73,
+        "SP-3 ld_slag_cons": 90,
+        "SP-3 basicity": 80,
+        "SP-3 return_fines": 93,
+        "HSM-2 average_furnace_availability": 258,
+        "General specific_water_consumption": 343,
+        "General specific_co2_emissions": 346
+      },
+      "notes": "Avg Blows per day workbook value is total blows/month -> divided by days in month (YTD by FY days)"
+    },
+    {
+      "id": "rsp_mill_sinter_techno",
+      "source_code": "backend/excel_extractors/excel_extractor_rsp.py (SHOPS, SINTER_SECTIONS, extract_techno_params)",
+      "workbook": "same Final Monthly workbook or standalone 'technopara *.xlsx' (e.g. h:/opr-mis/technopara APRIL-2026.xlsx)",
+      "sheet": "worksheet with most SHOPS anchors (_pick_mill_sheet)",
+      "column_map": "same COL_MAP_P18 (W..AK) + cum col AM",
+      "row_resolution": "shop anchor row scan then param alias scan within section range; row hints as fallback",
+      "shops_row_hints": {
+        "Plate Mill": {
+          "Yield - Primes": 221,
+          "Yield - Total": 222,
+          "Average Slab Weight": 223,
+          "Mill Availability": 224,
+          "Mill Utilisation": 225,
+          "Rolling Rate": 226,
+          "Specific Heat": 310,
+          "Specific Power": 328
+        },
+        "HSM-II": {
+          "H R Coil Yield": 253,
+          "Average Slab Weight": 254,
+          "Mill Availability": 255,
+          "Mill Utilisation": 256,
+          "Rolling Rate -HR Coils": 257,
+          "Specific Heat": 313,
+          "Specific Power": 331
+        },
+        "New Plate Mill": {
+          "Yield - Primes": 234,
+          "Yield - Total": 235,
+          "Average Slab Weight": 236,
+          "Mill Availability": 237,
+          "Mill Utilisation": 238,
+          "Rolling Rate": 239,
+          "Specific Heat": 311,
+          "Specific Power": 329
+        },
+        "SSM": {
+          "Yield from HRC-CRNO": 286,
+          "Acid Cons. in AP Line": 287,
+          "Mill Availability": 288,
+          "Mill Utilisation": 289,
+          "Rolling Rate": 290
+        },
+        "ERW Pipe Plant": {
+          "Yield from HR Coils": 261,
+          "Mill Availability": 263,
+          "Mill Utilisation": 264,
+          "Rolling Rate": 265
+        },
+        "SW Pipe Plant": {
+          "Yield from HR Coils": 268,
+          "Mill Availability": 270,
+          "Mill Utilisation": 271,
+          "Rolling Rate": 272
+        }
+      },
+      "sinter_row_hints": {
+        "RSP SP-1 Sinter Productivity": 38,
+        "RSP SP-2 Sinter Productivity": 57,
+        "RSP SP-3 Sinter Productivity": 80
+      }
+    },
+    {
+      "id": "rsp_morning_report",
+      "source_code": "backend/excel_extractors/excel_extractor_rsp.py (MORNING_CELLS, _extract_morning_stock)",
+      "workbook": "RSP Daily Morning Report .xlsx (sheet name starts 'RSP Morning Report Data for-'), e.g. Report_format/MONTHEND/mcr1_31052026.xls",
+      "month_detection": "A2 contains DD.MM.YYYY",
+      "target_table": "production_table (plant RSP); /1000 except NO_CONVERT",
+      "cells": {
+        "COB#1-5": "F10",
+        "COB#6": "F11",
+        "Oven Pushing (nos/day)": "F12",
+        "SP-1": "E41",
+        "SP-2": "E42",
+        "SP-3": "E43",
+        "Total Sinter": "E44",
+        "BF-1": "K50",
+        "BF-5": "K52",
+        "Hot Metal": "K53",
+        "Pig Iron": "E296",
+        "SMS-1 CCM-1": "E92",
+        "SMS-2 CCM-1&2": "X69+X74",
+        "SMS-2 CCM-3": "L99",
+        "SMS-2 CCM-4": "X79",
+        "Total Crude Steel": "F94",
+        "HSM-2 Total HR Coil": "AB209",
+        "HSM-2 HR Coil (Sale)": "Z263",
+        "HSM-2 HR Plate": "AB210",
+        "OPM Plate": "F204",
+        "NPM Plate": "F215",
+        "CRNO Coils": "E267",
+        "ERW Pipes": "E265",
+        "SW Pipes": "E266",
+        "Saleable Steel": "E268",
+        "Finished Steel": "E268"
+      },
+      "opening_stock_cells": {
+        "SLABS INPROCESS (this month)": "C301",
+        "SLABS INPROCESS (next month)": "D301",
+        "FINISHED STEEL (this month)": "J268",
+        "FINISHED STEEL (next month)": "K268",
+        "PIG IRON (next month)": "L296"
+      }
+    },
+    {
+      "id": "rsp_special_steel",
+      "source_code": "backend/excel_extractors/excel_extractor_rsp.py (_extract_rsp_ss_preview)",
+      "workbook": "RSP Special Steel .xlsx — single sheet, R1C1 starts 'Special Steel'",
+      "month_detection": "B4 (R4C2) label like \"Jan'26\"",
+      "addressing": "dynamic row scan from row 6; fixed columns",
+      "columns": {
+        "1": "grade/product label (product groups via _RSP_SS_PRODUCT_MAP)",
+        "3": "monthly Orders -> order_qty",
+        "4": "monthly Despatch -> actual_despatch",
+        "7": "YTD Orders (cross-check)",
+        "8": "YTD Despatch (cross-check)",
+        "10": "CPLY YTD Despatch (cross-check)"
+      },
+      "stop_condition": "label starts GRAND TOTAL / Total Saleable / % Special"
+    },
+    {
+      "id": "rsp_abp_plan",
+      "source_code": "backend/excel_extractors/excel_extractor_rsp_plan.py",
+      "workbook": "Report_format/ABP/RSPABP_26-27.xlsx",
+      "sheet": "sheet1 (case-insensitive)",
+      "column_map": "same as page-9: 04=B 05=C 06=D 07=F 08=G 09=H 10=J 11=K 12=L 01=N 02=O 03=P",
+      "target_table": "production_plan_table (plant RSP)",
+      "rows": {
+        "COB#1-5": 5,
+        "COB#6": 6,
+        "Oven Pushing (nos/day)": 7,
+        "SP-1": 8,
+        "SP-2": 9,
+        "SP-3": 10,
+        "Total Sinter": 11,
+        "BF-1": 15,
+        "BF-4": 16,
+        "BF-5": 17,
+        "Hot Metal": 18,
+        "Pig Iron": 20,
+        "SMS-1 CCM-1": 21,
+        "SMS-2 CCM-1&2": 22,
+        "SMS-2 CCM-3": 23,
+        "SMS-2 CCM-4": 24,
+        "Total Crude Steel": 26,
+        "HSM-2 Total HR Coil": 28,
+        "OPM Plate": 41,
+        "NPM Plate": 42,
+        "HSM-2 HR Coil (Sale)": 43,
+        "HSM-2 HR Plate": 44,
+        "ERW Pipes": 45,
+        "SW Pipes": 46,
+        "CRNO Coils": 47,
+        "Saleable Steel": 48,
+        "Finished Steel": 48
+      }
+    }
+  ],
+  "BSL": [
+    {
+      "id": "bsl_dpr_production",
+      "source_code": "backend/excel_extractors/excel_extractor_bsl.py (_dpr_config, _extract_dpr_report, _extract_dpr_preview)",
+      "config_override": "backend/excel_cells_config.json section 'bsl_dpr' (cells, no_convert, derived)",
+      "workbook": "BSL DPR Mail month-end .xlsx, e.g. Report_format/MONTHEND/BSL/BSL-DPR31052026.xlsx",
+      "sheet": "DPR",
+      "month_detection": "O1 (Excel datetime or DD.MM.YYYY); mismatch with selector raises error",
+      "target_table": "production_table (plant BSL); raw Tonnes /1000 except no_convert",
+      "cells": {
+        "Oven Pushing (nos/day)": "P6",
+        "Total Sinter": "P7",
+        "Hot Metal": "P8",
+        "Pig Iron": "Z21",
+        "SMS-1 CCM-1": "P10",
+        "SMS-2 CCM-1&2": "P11",
+        "Total Crude Steel": "P12",
+        "HSM Total HR Coil": "P14",
+        "HSM HR Coil (Sale)": "E7",
+        "HSM HR Plate": "E8",
+        "HR Sheet": "E9",
+        "CRC&S(1&2)": "E10",
+        "CRC(3)": "E11",
+        "GP/GC": "E12",
+        "GPC3": "E13",
+        "CRSALE": "E29",
+        "Saleable Steel": "P31",
+        "Saleable Semis": "E32"
+      },
+      "derived": {
+        "Finished Steel": "P31 - E32"
+      },
+      "no_convert": [
+        "Oven Pushing (nos/day)"
+      ],
+      "opening_stock_cells": {
+        "_note": "sheet 'Delhi Report'; col M = closing stock of report month = opening of next month; /1000",
+        "SLABS INPROCESS (next month)": "Delhi Report!M67",
+        "FINISHED STEEL (next month)": "Delhi Report!M66",
+        "PIG IRON (next month)": "Delhi Report!M69"
+      }
+    },
+    {
+      "id": "bsl_techno_excel",
+      "source_code": "backend/excel_extractors/excel_extractor_bsl.py (_TECHNO_PARAM_MAP); consumed by techno_project/bsl_technopara_extractor.py (key remapping only, no extra cells)",
+      "workbook": "TECHNO <MON><YYYY>.XLS/.XLSX (month from Sheet1 header rows 1-5 or filename)",
+      "addressing": "fixed sheet + 1-based row; month col = F(6), cumulative = G(7) (mon_col+1) unless noted",
+      "rows": [
+        {
+          "sheet": "Sheet1",
+          "row": 10,
+          "multiplier": 1000,
+          "group": "COKE_SINTER",
+          "section": "Energy",
+          "parameter": "Sp. Heat Cons.",
+          "unit": "Kcal/TCO"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 28,
+          "group": "COKE_SINTER",
+          "section": "Energy",
+          "parameter": "Specific Energy Consumption",
+          "unit": "G.Cal/TCS"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 31,
+          "group": "COKE_SINTER",
+          "section": "Sinter Plant",
+          "parameter": "Machine Productivity",
+          "unit": "T/m2/hr"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 33,
+          "group": "IRON_MAKING",
+          "section": "BF Productivity",
+          "parameter": "BSL",
+          "unit": "T/m3/day"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 35,
+          "group": "IRON_MAKING",
+          "section": "BF Coke Rate",
+          "parameter": "BSL",
+          "unit": "Kg/THM"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 37,
+          "group": "IRON_MAKING + MAJOR (dual)",
+          "section": "CDI / CDI Rate",
+          "parameter": "BSL",
+          "unit": "Kg/THM"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 39,
+          "group": "IRON_MAKING",
+          "section": "Fuel Rate",
+          "parameter": "BSL",
+          "unit": "Kg/THM"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 41,
+          "group": "MAJOR",
+          "section": "Coal to Hot Metal",
+          "parameter": "BSL",
+          "unit": "Ratio"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 49,
+          "group": "MILL_BSL",
+          "section": "CRM 1&2",
+          "parameter": "Yield of HR Coil",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 51,
+          "group": "MILL_BSL",
+          "section": "CRM 3",
+          "parameter": "Yield of HR Coil",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 55,
+          "group": "SMS",
+          "section": "Refractory",
+          "parameter": "BSL",
+          "unit": "Kg/TCS"
+        },
+        {
+          "sheet": "Sheet1",
+          "row": 57,
+          "group": "COKE_SINTER",
+          "section": "Water",
+          "parameter": "Water Consumption",
+          "unit": "m3/T"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 11,
+          "section": "Coke Ovens",
+          "parameter": "Dry Coal Charge per Oven",
+          "unit": "T/oven"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 12,
+          "section": "Coke Ovens",
+          "parameter": "Average Coking Time",
+          "unit": "Hrs"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 14,
+          "section": "Coke Ovens",
+          "parameter": "Gross Coke Yield",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 15,
+          "section": "Coke Ovens",
+          "parameter": "BF Coke Yield",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 16,
+          "section": "Coke Ovens",
+          "parameter": "Ammonium Sulphate",
+          "unit": "Kg/TCO"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 17,
+          "section": "Coke Ovens",
+          "parameter": "Crude Tar",
+          "unit": "Kg/TCO"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 18,
+          "section": "Coke Ovens",
+          "parameter": "Crude Benzol",
+          "unit": "Kg/TCO"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 19,
+          "section": "Coke Ovens",
+          "parameter": "Coke Oven Gas",
+          "unit": "Nm3/TCO"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 21,
+          "section": "Coke Ovens",
+          "parameter": "CV of Coke Oven Gas",
+          "unit": "Kcal/Nm3"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 26,
+          "section": "Coke Ovens",
+          "parameter": "Ash in Coal Blend",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 27,
+          "section": "Coke Ovens",
+          "parameter": "VM in Coal Blend",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 28,
+          "section": "Coke Ovens",
+          "parameter": "Coal Crushing Index",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 29,
+          "section": "Coke Ovens",
+          "parameter": "Ash in BF Coke",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 30,
+          "section": "Coke Ovens",
+          "parameter": "Fixed Carbon in BF Coke",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 31,
+          "section": "Coke Ovens",
+          "parameter": "Coke CSR",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 32,
+          "section": "Coke Ovens",
+          "parameter": "Coke CRI",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet2",
+          "row": 33,
+          "section": "Coke Ovens",
+          "parameter": "Coke M-10",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet3",
+          "row": 25,
+          "section": "Sinter Plant",
+          "parameter": "Coke Crushing Index for Sinter",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet3",
+          "row": 27,
+          "section": "Sinter Plant",
+          "parameter": "Flux Crushing Index for Sinter",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet3",
+          "row": 29,
+          "section": "Sinter Plant",
+          "parameter": "Sinter Return",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet3",
+          "row": 31,
+          "section": "Sinter Plant",
+          "parameter": "FeO in Sinter",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet3",
+          "row": 39,
+          "section": "Sinter Plant",
+          "parameter": "Basicity of Sinter",
+          "unit": "ratio"
+        },
+        {
+          "sheet": "Sheet3",
+          "row": 41,
+          "section": "Sinter Plant",
+          "parameter": "Fe% in Sinter",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet3",
+          "row": 43,
+          "section": "Sinter Plant",
+          "parameter": "Sinter M/c Availability",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet3",
+          "row": 46,
+          "section": "Sinter Plant",
+          "parameter": "Sinter M/c Utilization",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet4",
+          "row": 31,
+          "group": "IRON_MAKING",
+          "section": "Sinter in Burden",
+          "parameter": "BSL",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet4",
+          "row": 33,
+          "group": "IRON_MAKING",
+          "section": "O2 Enrichment",
+          "parameter": "BSL",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet4",
+          "row": 35,
+          "group": "IRON_MAKING",
+          "section": "Coke Screen Loss",
+          "parameter": "BSL",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet4",
+          "row": 37,
+          "group": "IRON_MAKING",
+          "section": "Blast Furnaces",
+          "parameter": "Slag Rate",
+          "unit": "Kg/THM"
+        },
+        {
+          "sheet": "Sheet4",
+          "row": 38,
+          "group": "IRON_MAKING",
+          "section": "Blast Furnaces",
+          "parameter": "BF Gas Yield",
+          "unit": "Nm3/THM"
+        },
+        {
+          "sheet": "Sheet4",
+          "row": 39,
+          "group": "IRON_MAKING",
+          "section": "Blast Furnaces",
+          "parameter": "CV of BF Gas",
+          "unit": "Kcal/Nm3"
+        },
+        {
+          "sheet": "Sheet4",
+          "row": 40,
+          "group": "IRON_MAKING",
+          "section": "Blast Furnaces",
+          "parameter": "Furnace Availability",
+          "unit": "%"
+        },
+        {
+          "sheet": "Sheet4",
+          "row": 41,
+          "group": "IRON_MAKING",
+          "section": "Blast Furnaces",
+          "parameter": "Furnace Utilization",
+          "unit": "%"
+        },
+        {
+          "sheet": "SMS-I",
+          "rows": {
+            "Tap to Tap (Avail Hrs)": 12,
+            "Tap to Tap (Working Hrs)": 14,
+            "Avg Lining Life": 16,
+            "Conv Avail (Cal Hr)": 18,
+            "Conv Avail (Avail Hr)": 20,
+            "Sp HM Cons": 23,
+            "Sp Scrap Cons": 25,
+            "Sp Pellet Cons": 26,
+            "Sp Iron Ore Cons": 27,
+            "Fe-Si": 28,
+            "Fe-Mn": 29,
+            "Si-Mn": 30,
+            "Refractory": 33,
+            "O2 Blow/TCS": 34,
+            "Heat Consumed": 40,
+            "Power Consumed": 42,
+            "Reblown Heat": 48,
+            "FeO in Slag": 50
+          }
+        },
+        {
+          "sheet": "SMS-II",
+          "rows": {
+            "Tap to Tap (Avail Hrs)": 12,
+            "Tap to Tap (Working Hrs)": 14,
+            "Avg Lining Life": 16,
+            "Conv Avail (Cal Hr)": 18,
+            "Conv Avail (Avail Hr)": 20,
+            "Sp HM Cons": 23,
+            "Sp Scrap Cons": 25,
+            "Sp Pellet Cons": 26,
+            "Sp Iron Ore Cons": 27,
+            "Fe-Si": 28,
+            "Fe-Mn": 29,
+            "Si-Mn": 30,
+            "Refractory": 35,
+            "O2 Blow/TCS": 36,
+            "Heat Consumed": 42,
+            "Power Consumed": 44,
+            "Reblown Heat": 50,
+            "FeO in Slag": 52
+          }
+        }
+      ],
+      "fax_gm_oprn_sheet": {
+        "sheet": "FAX GM OPRN",
+        "column_layout": "rows 12-32: mon=G(7) cum=I(9); rows 48-93: mon=H(8) cum=J(10); per-furnace table rows 37-42 uses adjacent col pairs per param",
+        "single_params": {
+          "Coke Oven Gas Yield (%)": 15,
+          "Nut Coke BSL (Kg/THM)": 22,
+          "CDI BF-1": 23,
+          "CDI BF-2": 24,
+          "CDI BF-4": 26,
+          "CDI BF-5": 27,
+          "Tar Injection BSL": 29,
+          "LD Slag Cons BSL (Kg/TGS)": 32,
+          "Manganese in HM (%)": 53,
+          "SMS-I Avg Blows/Day": 57,
+          "SMS-II Avg Blows/Day": 58,
+          "SMS-I Avg Heat Weight": 59,
+          "SMS-II Avg Heat Weight": 60,
+          "SMS-I Gross HM Cons": 63,
+          "SMS-II Gross HM Cons": 64,
+          "BSL Gross HM Cons": 65,
+          "SMS-I Lime Cons": 83,
+          "SMS-II Lime Cons": 84,
+          "BSL Lime Cons": 85,
+          "SMS-I Aluminium Cons": 86,
+          "SMS-II Aluminium Cons": 87,
+          "BSL Aluminium Cons": 88,
+          "SMS-I Caster Yield": 92,
+          "SMS-II Caster Yield": 93
+        },
+        "per_furnace_rows": {
+          "BF-1": 37,
+          "BF-2": 38,
+          "BF-4": 40,
+          "BF-5": 41,
+          "BF_Shop": 42,
+          "_excluded": "BF-3 (row 39, placeholder values)"
+        },
+        "per_furnace_col_pairs": {
+          "BF Productivity (Useful Volume)": "B/C (2/3)",
+          "BF Productivity (Working Volume)": "D/E (4/5)",
+          "Hot Blast Temp": "F/G (6/7)",
+          "Coke Rate": "H/I (8/9)",
+          "Not Dry Cast": "J/K (10/11)"
+        }
+      },
+      "hsm_sheet8": {
+        "sheet": "Sheet8",
+        "rows": [
+          29,
+          35,
+          37,
+          41,
+          43
+        ],
+        "label_col": "B (self-checking keyword match: yield/availab/utili/rolling/heat/power)",
+        "mon_col": "F",
+        "cum_col": "G",
+        "group": "MILL_BSL section HSM"
+      },
+      "computed": [
+        "Sinter %/Pellet % in Burden via techno_calc_utils.calculate_burden_percentages"
+      ]
+    },
+    {
+      "id": "bsl_bf_pdf",
+      "source_code": "backend/excel_extractors/excel_extractor_bsl.py (extract_preview_bf_pdf); similar pipe-table parsing in techno_project/bsl_mer_parser.py",
+      "workbook": "BSL BF Performance & Analysis Report PDF (e.g. Report_format/MONTHEND/BSL/BlastFurnace (N).pdf); month from 'For DD/MM/YYYY' header",
+      "addressing": "pipe-delimited text tables; furnace rows BF-1/2/3/4/5 + Shop; 'UNDER CAPITAL REPAIR' rows skipped",
+      "tables": {
+        "production (header 'Productivty'/'W.V. 24h')": {
+          "col_2": "HM Production (monthly = 2nd of X/Y)",
+          "col_13": "HBT (monthly)",
+          "col_16": "BF Productivity W.V./24h (monthly)"
+        },
+        "fuel/quality (header 'COKE RATE'+'CDI RATE')": {
+          "col_2": "Si in HM",
+          "col_3": "S in HM",
+          "col_4": "Slag Al2O3",
+          "col_5": "Slag MgO",
+          "col_6": "Slag Basicity",
+          "col_7": "Hot Metal Temp",
+          "col_8": "BF Coke Rate",
+          "col_9": "Nut Coke Rate",
+          "col_10": "CDI",
+          "col_11": "Fuel Rate",
+          "col_12": "Carbon Rate",
+          "col_13": "F Dust Rate",
+          "col_17": "CO CO2 Ratio",
+          "_value": "monthly = 1st of X/Y"
+        },
+        "raw material (header 'O2 En(%)'+'SLG RATE')": {
+          "col_2": "Coke Consumption",
+          "col_3": "Iron Ore",
+          "col_4": "Sinter Consumption",
+          "col_5": "BF Scrap",
+          "col_6": "Nut Coke",
+          "col_7": "CDI Total",
+          "col_8": "Pellet Consumption",
+          "col_9": "Coke ECY",
+          "col_10": "O2 Enrichment",
+          "col_11": "Slag Rate",
+          "col_12": "Sinter in Burden",
+          "col_13": "Sint Rate",
+          "col_14": "Ore Rate",
+          "_value": "monthly = 1st of X/Y"
+        }
+      }
+    },
+    {
+      "id": "bsl_corp_special_steel",
+      "source_code": "backend/excel_extractors/excel_extractor_bsl.py (_extract_corp_ss_preview)",
+      "workbook": "BSL Corporate Office Special Steel .xlsx (Sheet1, R1C1 contains SPECIAL STEEL)",
+      "month_detection": "I2 (R2C9) date",
+      "addressing": "dynamic row scan from row 7; fixed columns",
+      "columns": {
+        "A(1)": "product group (HR COIL/HR PLATE/HR SHEET/CR COIL//SLAB; GRND/TOT stops scan)",
+        "B(2)": "quality/grade",
+        "D(4)": "Actual Up To Last Month (stored cply_actual, display only)",
+        "F(6)": "APP for the month (not stored)",
+        "G(7)": "ORDER AVAILABLE TOTAL -> order_qty",
+        "I(9)": "Despatch Till Date (monthly) -> actual_despatch"
+      }
+    },
+    {
+      "id": "bsl_abp_plan",
+      "source_code": "backend/excel_extractors/excel_extractor_bsl_plan.py",
+      "workbook": "Report_format/ABP/BSLABP26-27.xlsx",
+      "sheet": "PLAN SUMMARY (fallbacks: Monthwise, Sheet1)",
+      "addressing": "months in ROWS, items in COLUMNS (transposed vs other plants)",
+      "month_rows": {
+        "Apr": 10,
+        "May": 11,
+        "Jun": 12,
+        "Jul": 14,
+        "Aug": 15,
+        "Sep": 16,
+        "Oct": 18,
+        "Nov": 19,
+        "Dec": 20,
+        "Jan": 22,
+        "Feb": 23,
+        "Mar": 24,
+        "_skipped": "13/17/21/25 quarter rows, 26 total"
+      },
+      "item_columns": {
+        "B": "Oven Pushing (nos/day) [as-is]",
+        "C": "Total Sinter",
+        "D": "Hot Metal",
+        "E": "Total Crude Steel",
+        "F": "SMS-1 CCM-1",
+        "G": "SMS-2 CCM-1&2",
+        "H": "HSM Total HR Coil",
+        "J": "CRC&S(1&2)",
+        "K": "CRC(3)",
+        "L": "CR Saleable",
+        "M": "Saleable Steel",
+        "N": "Pig Iron",
+        "O": "Saleable Semis",
+        "P": "HSM HR Coil (Sale)",
+        "Q": "HSM HR Plate",
+        "R": "HR Sheet"
+      },
+      "derived": {
+        "Finished Steel": "M - O (Saleable Steel - Saleable Semis)"
+      },
+      "target_table": "production_plan_table (plant BSL)"
+    }
+  ],
+  "DSP_ASP_SSP_VISL": [
+    {
+      "id": "dsp_mcr1",
+      "plant": "DSP",
+      "source_code": "backend/excel_extractors/excel_extractor_dsp.py (_extract_mcr_report, _mcr_preview)",
+      "workbook": "DSP MCR-I 'mcr1_*.xls' — tab-separated TEXT file despite .xls extension, e.g. Report_format/MONTHEND/mcr1_31052026.xls",
+      "month_detection": "row 1 col C (0-based index 2): DD.MM.YYYY",
+      "addressing": "1-based row + 0-based col; col D(3)=Actual To Date, col E(4)=Monthly Rate; column_shift param (-1 for Sep'25 layout) shifts both",
+      "target_table": "production_table (plant DSP); /1000 except Oven Pushing",
+      "rows": {
+        "_note": "col E (Monthly Rate) unless stated; trailing spaces in 'Bloom Caster ' / 'Blooms for Sale ' are intentional (match DB)",
+        "Oven Pushing (nos/day)": 5,
+        "SP-1": 13,
+        "SP-2": 14,
+        "Total Sinter": 15,
+        "Hot Metal": 16,
+        "Pig Iron": 17,
+        "BILLET Caster": 20,
+        "Bloom Caster ": 21,
+        "Round Production": "23 (col D — col E blank for M/c-4)",
+        "SMS Total Caster": 25,
+        "BOTTOM_POURING_INGOT": 26,
+        "Total Crude Steel": 27,
+        "MSM": 30,
+        "MM": 32,
+        "WAP": 37,
+        "Saleable Semis": 38,
+        "Finished Steel": 39,
+        "Saleable Steel": 40,
+        "BILLET for Sale": 43,
+        "Blooms for Sale ": 44,
+        "BRC": 46
+      }
+    },
+    {
+      "id": "dsp_omi_pdf",
+      "plant": "DSP",
+      "source_code": "backend/excel_extractors/pdf_extractor_dsp.py; key remap only in techno_project/dsp_technopara_extractor.py",
+      "config_override": "backend/excel_cells_config.json section 'dsp_pdf' (item_map, saleable_map) — currently empty, defaults used",
+      "workbook": "DSP OMI monthly PDF (e.g. h:/opr-mis/OMI Mar26.pdf); report month from first-page text 'Month YYYY'",
+      "addressing": "fully label-based: pages located by heading scan (_SECTION_HEADINGS), rows matched by keyword regex, month column matched against header months",
+      "section_headings": {
+        "prod": "PRODUCTION MONTHWISE",
+        "ss": "SPECIAL STEEL PERFORMANCE + SECTION",
+        "mm": "MERCHANT MILL & MEDIUM STRUCTURAL MILL",
+        "wa": "WHEEL & AXLE PLANT + FORGING AVAIL",
+        "major": "MAJOR TECHNO + KG/THM",
+        "coke": "COKE OVENS & COAL CHEMICALS",
+        "sint": "RMHP & SINTER PLANT + OLD MACHINE",
+        "sms": "STEEL MELTING SHOP + BOF SHOP",
+        "sms2": "STEEL MELTING SHOP + BOF SHOP CONTD",
+        "bf_main": "BLAST FURNACE + SILICON IN HM",
+        "bf_cdi": "BLAST FURNACE + NUT COKE RATE"
+      },
+      "production_item_map": {
+        "_note": "(label keyword -> production_table item); divide=/1000 except Oven Pushing",
+        "ii) nos. per day": "Oven Pushing(nos/d)",
+        "sinter": "Total Sinter",
+        "sp 1": "SP-1",
+        "sp 2": "SP-2",
+        "hot metal": "Hot Metal",
+        "bf 2": "BF#2",
+        "bf 3": "BF#3",
+        "bf 4": "BF#4",
+        "hm to asp": "Hot Metal to ASP",
+        "pig iron": "Pig Iron",
+        "crude steel": "Total Crude Steel",
+        "bottom pouring": "BOTTOM_POURING_INGOT",
+        "concast steel": "SMS Total Caster",
+        "cc billet": "BILLET Caster",
+        "cc bloom": "Bloom Caster ",
+        "brc bloom": "BRC",
+        "brc round": "Round Production",
+        "merchant mill": "MM",
+        "msm": "MSM",
+        "wheel axle plant": "WAP",
+        "saleable: finished/semis/total": "Finished Steel / Saleable Semis / Saleable Steel"
+      },
+      "techno_keyword_defs": {
+        "MAJOR page": [
+          "gross energy consumption -> Specific Energy Consumption",
+          "bof slag utilisation",
+          "loss at skip -> Coke Screen Loss"
+        ],
+        "SMS page": [
+          "gross h.metal -> Hot Metal Consumption",
+          "total scrap",
+          "heat size",
+          "refractory (SMS/RED)",
+          "tap to tap",
+          "conv availability/utilisation",
+          "BOF gas yield"
+        ],
+        "SMS page 2": [
+          "calcined lime",
+          "limestone",
+          "si.mn",
+          "fe-si",
+          "fe-mn",
+          "oxygen(converter)",
+          "calcined dolomite"
+        ],
+        "COKE page": [
+          "bf coke yield",
+          "gross coke yield",
+          "sp. heat cons",
+          "crude tar",
+          "dry coal charge",
+          "specific heat/power (coke ovens)",
+          "crude benzol",
+          "c.o. gas yield",
+          "ammonium sulphate",
+          "M10",
+          "M40",
+          "ash in coke/coal",
+          "VM in coal"
+        ],
+        "BF furnace params (per BF-2/3/4 + shop)": [
+          "silicon in hm",
+          "sulphur in hm",
+          "avg hot metal temperature",
+          "blast temp",
+          "sinter in burden",
+          "coke rate",
+          "nut coke rate",
+          "productivity useful/working"
+        ],
+        "BF shop params": [
+          "slag rate",
+          "slag offtake",
+          "fuel rate"
+        ],
+        "MM/MSM page": [
+          "yield",
+          "rolling rate",
+          "mill availability",
+          "on available (utilisation)",
+          "on ich",
+          "specific heat",
+          "specific power"
+        ],
+        "Wheel/Axle page": [
+          "finished wheel / yield over good bloom",
+          "rolling/forging rate",
+          "forging avail/utilisation",
+          "on ich",
+          "specific heat/power"
+        ]
+      }
+    },
+    {
+      "id": "dsp_flash_pdf_stock",
+      "plant": "DSP",
+      "source_code": "backend/excel_extractors/pdf_extractor_dsp.py (_extract_flash_stock, extract_preview_flash)",
+      "workbook": "DSP Flash PDF (e.g. Report_format/flash-may26.pdf), page 1 single table; detected by 'In-process Stock' + 'Sal.Steel Stock' text",
+      "addressing": "table col indices: items col[7]; In-process col[9]; Sal.Steel col[12]; Total col[13]",
+      "values": {
+        "BLOOM/BILLETS INPROCESS": "sum of In-process column values in the 'CC Billet' row block",
+        "BLOOM/BILLETS FOR SALE": "'Saleable Semis' item -> Total col[13]",
+        "FINISHED STEEL": "'Finished' item -> Total col[13]",
+        "PIG IRON": "'Pig Iron*' item -> Sal.Steel col[12]"
+      },
+      "notes": "stock_month = report month + 1; /1000"
+    },
+    {
+      "id": "dsp_abp_plan",
+      "plant": "DSP",
+      "source_code": "backend/excel_extractors/excel_extractor_dsp_plan.py",
+      "workbook": "Report_format/ABP/DSPABP_26-27.xlsx",
+      "sheet": "Monthwise (case-insensitive)",
+      "column_map": "04=D 05=E 06=F 07=H 08=I 09=J 10=M 11=N 12=O 01=Q 02=R 03=S",
+      "target_table": "production_plan_table (plant DSP)",
+      "rows": {
+        "Oven Pushing (nos/day)": 7,
+        "Total Sinter": 10,
+        "SP-1": 11,
+        "SP-2": 12,
+        "Hot Metal": 13,
+        "BF#2": 14,
+        "BF#3": 15,
+        "BF#4": 16,
+        "Hot Metal to ASP": 17,
+        "Hot Metal to PCM": 18,
+        "Pig Iron": 19,
+        "Total Crude Steel": 21,
+        "BOTTOM_POURING_INGOT": 22,
+        "BILLET Caster": 24,
+        "BILLET for Sale": 25,
+        "Bloom Caster ": 26,
+        "BRC": 27,
+        "Round Production": 28,
+        "Blooms for Sale ": 29,
+        "SMS Total Caster": 30,
+        "MM": 32,
+        "MSM": 35,
+        "WAP": 36,
+        "Saleable Steel": 39,
+        "Saleable Semis": 40,
+        "Finished Steel": 41
+      }
+    },
+    {
+      "id": "asp_excel",
+      "plant": "ASP",
+      "source_code": "backend/excel_extractors/excel_extractor_asp.py",
+      "workbook": "ASP Daily Performance Summary (asp.xlsx/.xls), e.g. Report_format/MONTHEND/asp.xlsx",
+      "month_detection": "E3 date (dd/mm/yyyy or datetime)",
+      "addressing": "keyword row scan + fixed columns",
+      "cells": {
+        "Total Crude Steel": "row with 'CRUDE STEEL'/'CRUDE' in col A -> col F",
+        "Ingot Steel": "row with 'INGOT PRODUCTION' in col A -> col F",
+        "Total Caster": "computed: Total Crude Steel - Ingot Steel",
+        "Saleable Steel": "row with 'SALEABLE STEEL' in col A -> col F",
+        "Closing Stock": "row with 'TOTAL PLANT ST.' (any col) -> col L",
+        "BARS": "DAILY FLASH!AN45",
+        "FORGINGS": "DAILY FLASH!AN46",
+        "PLATES": "DAILY FLASH!AN47",
+        "Finished Steel": "computed: AN45+AN46+AN47"
+      },
+      "sheets": {
+        "main": "md cell (fallback: first sheet)",
+        "flash": "DAILY FLASH"
+      }
+    },
+    {
+      "id": "asp_pdf",
+      "plant": "ASP",
+      "source_code": "backend/excel_extractors/pdf_extractor_asp.py",
+      "workbooks": {
+        "REP*.pdf (OMI production report)": {
+          "detection": "filename REP* or text 'CRUDE STEEL'+CONCAST/INGOT",
+          "items": {
+            "Total Crude Steel": "line with 'crude steel' -> largest number >= 50",
+            "Total Caster": "line with 'concast' (alts: cc steel/continuous cast)",
+            "Ingot Steel": "line with 'ingot'",
+            "Saleable Steel": "line with 'saleable steel'",
+            "Closing Stock": "line with 'closing stock' (alts: total stock/stock)"
+          }
+        },
+        "FL*.pdf (finished steel report)": {
+          "detection": "filename FL* or text 'BARS'+'FS PRD'",
+          "items": {
+            "BARS Mill": "'bars' line, month-column-indexed",
+            "FS PRD": "'fs prd' line",
+            "Plate Mill": "'pl mill' line",
+            "Finished Steel": "computed sum of the three"
+          }
+        }
+      }
+    },
+    {
+      "id": "ssp_pdf",
+      "plant": "SSP",
+      "source_code": "backend/excel_extractors/pdf_extractor_ssp.py",
+      "workbook": "SSP-DPR monthly PDF (single page)",
+      "items": {
+        "Crude Steel": "'SMS (SLAB)' row -> 1st number (Cum Actual; On Date col blank)",
+        "Saleable Steel / Finished Steel": "SALEABLE PRODUCTION section 'TOTAL' row -> 2nd number (Cum Actual)"
+      },
+      "notes": "Tonnes /1000"
+    },
+    {
+      "id": "visl_pdf",
+      "plant": "VISL",
+      "source_code": "backend/excel_extractors/pdf_extractor_visl.py",
+      "workbook": "VISLreports<Mon>YY.pdf — two formats",
+      "formats": {
+        "A month-end (On Date|To Date|APP|%)": "target = 2nd number on item line (To Date cumulative)",
+        "B daily production (Day-APP|Day-ACT|Month-APP|Month-ACT|%|Rate)": "target = 4th number (Month ACT); detected by 'daily production' text"
+      },
+      "items": [
+        "Total Saleable Steel",
+        "Sales (AS+MS)"
+      ],
+      "notes": "Tonnes /1000"
+    },
+    {
+      "id": "asp_ssp_visl_abp_plan",
+      "plants": [
+        "ASP",
+        "SSP",
+        "VISL"
+      ],
+      "source_code": "backend/excel_extractors/excel_extractor_asp_ssp_visl_plan.py",
+      "workbook": "Report_format/ABP/ASPSSPVISL.xlsx (sheet containing 'APP' or 'PLAN', fallback first sheet)",
+      "addressing": "row 1 from col C = datetime month headers (Apr-Mar, stops at non-datetime annual col); col A = plant name (carried forward); col B = item name; values already '000T",
+      "derived": "SSP/VISL: Finished Steel mirrored from Saleable Steel",
+      "target_table": "production_plan_table"
+    }
+  ]
+}
