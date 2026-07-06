@@ -146,7 +146,7 @@ P18_TECHNO_ITEMS = [
                                   ["coke oven ammonia sulphate", "ammonia sulphate yield"],  28),
     ("Coke Screen Loss",           ["coke screen loss"],                                      31),
     ("SP-1 Sinter Productivity",   ["sp 1 sinter productivity"],                             38),
-    ("SP-2 Sinter Productivity",   ["sp 2 sinter productivity"],                             57),
+    ("SP-2 Sinter Productivity",   ["sp 2 sinter productivity"],                             58),
     ("SP-3 Sinter Productivity",   ["sp 3 sinter productivity"],                             81),
     # Furnace-wise productivity BEFORE generic so exact-scan claims them first
     ("BF Productivity BF-1",       ["productivity bf 1"],                                     97),
@@ -194,8 +194,8 @@ P18_TECHNO_ITEMS = [
 
     ("SMS-1 TMI consumption per ton of crude steel",
                                   ["sms 1 TMI consumption per ton", "sms 1 TMI cons"],  163),               
-    ("SMS-1 Avg heat wt",          ["sms 1 avg heat wt"],                                   173),
-    ("SMS-1 Avg Blows per day",    ["blow sms1", "blow sms 1", "sms 1 avg blows per day"],  182),
+    ("SMS-1 Avg heat wt",          ["sms 1 avg heat wt"],                                   175),
+    ("SMS-1 Avg Blows per day",    ["blow sms1", "blow sms 1", "sms 1 avg blows per day"],  184),
     ("SMS-2 HM consumption per ton of crude steel",
                                   ["sms 2 hm consumption per ton", "sms 2 hm cons per ton"],191),
     ("SMS-2 Scrap consumption per ton of crude steel",
@@ -440,8 +440,8 @@ def _build_p18_cells(ws, col: str) -> dict:
     #   -3 → Blow Weight (Avg heat wt),  -1 → Avg. Lining Life
     #    0 → O2 consumption,  +3 → Converter Yield,  +4 → Caster Yield
     for sms, o2_anchor, hw_fb, ll_fb, o2_fb, cv_fb, cs_fb in [
-        ("SMS-1", ["oxygen consmn ld"],   174, 176, 177, 180, 181),
-        ("SMS-2", ["oxygen cons bof ii"], 203, 205, 206, 209, 210),
+        ("SMS-1", ["oxygen consmn ld"],   175, 177, 178, 181, 182),
+        ("SMS-2", ["oxygen cons bof ii"], 204, 206, 207, 210, 211),
     ]:
         row_map[sms + " Avg heat wt"]        = _row_near_anchor(ws, o2_anchor, -3, 400, hw_fb)
         row_map[sms + " lining life"]        = _row_near_anchor(ws, o2_anchor, -1, 400, ll_fb)
@@ -591,8 +591,8 @@ SHOPS = [
 
 SINTER_SECTIONS = [
     ("RSP SP-1", ["sinter plant i",   "sinter plant 1"],  "T/m2/hr", 33, 38),
-    ("RSP SP-2", ["sinter plant ii",  "sinter plant 2"],  "T/m2/hr", 34, 57),
-    ("RSP SP-3", ["sinter plant iii", "sinter plant 3"],  "T/m2/hr", 35, 80),
+    ("RSP SP-2", ["sinter plant ii",  "sinter plant 2"],  "T/m2/hr", 34, 58),
+    ("RSP SP-3", ["sinter plant iii", "sinter plant 3"],  "T/m2/hr", 35, 81),
 ]
 _SINTER_GROUP      = "COKE_SINTER"
 _SINTER_PARAM      = "Sinter Productivity"
