@@ -47,13 +47,13 @@ function PreviewTable({ title, headers, rows }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: '9pt', fontWeight: 700, color: '#a5b4fc', margin: '8px 0 6px' }}>{title}</div>
-      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 320, overflowY: 'auto' }}>
+      <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 6, maxHeight: 320, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
           <thead>
-            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0 }}>
+            <tr style={{ backgroundColor: '#ffffff', position: 'sticky', top: 0 }}>
               {headers.map((h) => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
-                                     fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#5f6368',
+                                     fontWeight: 600, borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -63,13 +63,13 @@ function PreviewTable({ title, headers, rows }) {
               const ok = status === 'ok';
               return (
                 <tr key={i} style={{
-                  backgroundColor: ok ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)',
-                  borderBottom: '1px solid #1e293b', opacity: ok ? 1 : 0.6,
+                  backgroundColor: ok ? (i % 2 ? '#f8f9fa' : '#ffffff') : 'rgba(248,113,113,0.07)',
+                  borderBottom: '1px solid #f8f9fa', opacity: ok ? 1 : 0.6,
                 }}>
                   {cells.map((c, j) => (
                     <td key={j} style={{
                       padding: '4px 10px',
-                      color: j === 0 ? '#38bdf8' : (j === cells.length - 1 ? (ok ? '#34d399' : '#f87171') : '#cbd5e1'),
+                      color: j === 0 ? '#1a73e8' : (j === cells.length - 1 ? (ok ? '#34d399' : '#f87171') : '#202124'),
                       fontWeight: j === 0 || j === cells.length - 1 ? 600 : 400,
                       whiteSpace: 'nowrap',
                       fontFamily: String(c).match(/^[A-Z]+\d+/) ? 'monospace' : 'inherit',
@@ -95,13 +95,13 @@ function TechnoCheckTable({ rows }) {
       <div style={{ fontSize: '9pt', fontWeight: 700, color: mismatchCount > 0 ? '#fbbf24' : '#a5b4fc', margin: '8px 0 6px' }}>
         {title}
       </div>
-      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 320, overflowY: 'auto' }}>
+      <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 6, maxHeight: 320, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
           <thead>
-            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0 }}>
+            <tr style={{ backgroundColor: '#ffffff', position: 'sticky', top: 0 }}>
               {['Parameter', 'Unit', 'Month', 'YTD', 'Cell', 'File Label', 'Status'].map((h) => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
-                                     fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#5f6368',
+                                     fontWeight: 600, borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -111,16 +111,16 @@ function TechnoCheckTable({ rows }) {
               const mapOk  = r.mapping_ok !== false;
               const rowBg  = !mapOk
                 ? 'rgba(251,191,36,0.10)'
-                : ok ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)';
+                : ok ? (i % 2 ? '#f8f9fa' : '#ffffff') : 'rgba(248,113,113,0.07)';
               return (
-                <tr key={i} style={{ backgroundColor: rowBg, borderBottom: '1px solid #1e293b' }}>
-                  <td style={{ padding: '4px 10px', color: '#38bdf8', fontWeight: 600, whiteSpace: 'nowrap' }}>{r.parameter}</td>
-                  <td style={{ padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{r.unit}</td>
-                  <td style={{ padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{r.month_actual ?? ''}</td>
-                  <td style={{ padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{r.ytd_actual ?? ''}</td>
-                  <td style={{ padding: '4px 10px', color: '#94a3b8', whiteSpace: 'nowrap',
+                <tr key={i} style={{ backgroundColor: rowBg, borderBottom: '1px solid #f8f9fa' }}>
+                  <td style={{ padding: '4px 10px', color: '#1a73e8', fontWeight: 600, whiteSpace: 'nowrap' }}>{r.parameter}</td>
+                  <td style={{ padding: '4px 10px', color: '#202124', whiteSpace: 'nowrap' }}>{r.unit}</td>
+                  <td style={{ padding: '4px 10px', color: '#202124', whiteSpace: 'nowrap' }}>{r.month_actual ?? ''}</td>
+                  <td style={{ padding: '4px 10px', color: '#202124', whiteSpace: 'nowrap' }}>{r.ytd_actual ?? ''}</td>
+                  <td style={{ padding: '4px 10px', color: '#5f6368', whiteSpace: 'nowrap',
                                fontFamily: 'monospace', fontSize: '8pt' }}>{r.cell}</td>
-                  <td style={{ padding: '4px 10px', color: mapOk ? '#94a3b8' : '#fbbf24',
+                  <td style={{ padding: '4px 10px', color: mapOk ? '#5f6368' : '#fbbf24',
                                fontWeight: mapOk ? 400 : 700, whiteSpace: 'nowrap' }}>
                     {r.row_label || '—'}{!mapOk && ' ⚠'}
                   </td>
@@ -138,19 +138,19 @@ function TechnoCheckTable({ rows }) {
 
 function EditableSpecialSteelTable({ plant, rows, onToggle, onEditGrade, onEditSection }) {
   const selCount = rows.filter((r) => r.selected).length;
-  const cellStyle = { padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' };
+  const cellStyle = { padding: '4px 10px', color: '#202124', whiteSpace: 'nowrap' };
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: '9pt', fontWeight: 700, color: '#fbbf24', margin: '8px 0 6px' }}>
         Special Steel Performance ({selCount} selected) → special_steel_orders
       </div>
-      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 360, overflowY: 'auto' }}>
+      <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 6, maxHeight: 360, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
           <thead>
-            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
+            <tr style={{ backgroundColor: '#ffffff', position: 'sticky', top: 0, zIndex: 1 }}>
               {['Insert', 'Product', 'Quality/Grade (editable)', 'Section (editable)', 'Order Qty', 'ABP Month', 'Desp', 'Unit', 'Cell', 'Status'].map((h) => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
-                                     fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#5f6368',
+                                     fontWeight: 600, borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -162,8 +162,8 @@ function EditableSpecialSteelTable({ plant, rows, onToggle, onEditGrade, onEditS
                 <tr key={i} style={{
                   backgroundColor: isTotal
                     ? 'rgba(251,191,36,0.06)'
-                    : r.selected ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)',
-                  borderBottom: '1px solid #1e293b',
+                    : r.selected ? (i % 2 ? '#f8f9fa' : '#ffffff') : 'rgba(248,113,113,0.07)',
+                  borderBottom: '1px solid #f8f9fa',
                   opacity: isTotal ? 0.7 : r.selected ? 1 : 0.65,
                 }}>
                   <td style={{ ...cellStyle, textAlign: 'center' }}>
@@ -172,15 +172,15 @@ function EditableSpecialSteelTable({ plant, rows, onToggle, onEditGrade, onEditS
                            onChange={(e) => onToggle(i, e.target.checked)}
                            style={{ accentColor: '#10b981', cursor: canInsert ? 'pointer' : 'not-allowed' }} />
                   </td>
-                  <td style={{ ...cellStyle, color: '#38bdf8', fontWeight: 600 }}>{r.product || ''}</td>
+                  <td style={{ ...cellStyle, color: '#1a73e8', fontWeight: 600 }}>{r.product || ''}</td>
                   <td style={cellStyle}>
                     {isTotal ? (
                       <span style={{ color: '#fbbf24', fontStyle: 'italic' }}>{r.quality_grade}</span>
                     ) : (
                       <input type="text" value={r.grade_edit ?? r.quality_grade}
                              onChange={(e) => onEditGrade(i, e.target.value)}
-                             style={{ width: 180, background: '#020617', color: '#e2e8f0',
-                                      border: '1px solid #334155', borderRadius: 4,
+                             style={{ width: 180, background: '#fff', color: '#202124',
+                                      border: '1px solid #dadce0', borderRadius: 4,
                                       padding: '3px 6px', fontSize: '8.5pt' }} />
                     )}
                   </td>
@@ -188,16 +188,16 @@ function EditableSpecialSteelTable({ plant, rows, onToggle, onEditGrade, onEditS
                     {isTotal ? '' : (
                       <input type="text" value={r.section_edit ?? r.section ?? ''}
                              onChange={(e) => onEditSection(i, e.target.value)}
-                             style={{ width: 100, background: '#020617', color: '#e2e8f0',
-                                      border: '1px solid #334155', borderRadius: 4,
+                             style={{ width: 100, background: '#fff', color: '#202124',
+                                      border: '1px solid #dadce0', borderRadius: 4,
                                       padding: '3px 6px', fontSize: '8.5pt' }} />
                     )}
                   </td>
                   <td style={{ ...cellStyle, textAlign: 'right' }}>{r.order_qty ?? ''}</td>
-                  <td style={{ ...cellStyle, textAlign: 'right', color: '#64748b' }}>{r.abp_month ?? r.prodn ?? ''}</td>
+                  <td style={{ ...cellStyle, textAlign: 'right', color: '#5f6368' }}>{r.abp_month ?? r.prodn ?? ''}</td>
                   <td style={{ ...cellStyle, textAlign: 'right' }}>{r.actual_despatch ?? ''}</td>
                   <td style={cellStyle}>{r.unit}</td>
-                  <td style={{ ...cellStyle, color: '#64748b' }}>{r.cell}</td>
+                  <td style={{ ...cellStyle, color: '#5f6368' }}>{r.cell}</td>
                   <td style={{ ...cellStyle,
                                color: isTotal ? '#fbbf24' : '#34d399', fontWeight: 600 }}>
                     {isTotal ? 'total (skip)' : 'ok'}
@@ -227,19 +227,19 @@ function AllMonthsProductionTable({ rows, unit = "'000T" }) {
       <div style={{ fontSize: '9pt', fontWeight: 700, color: '#a5b4fc', margin: '8px 0 6px' }}>
         Production — All Months ({sortedMonths.length} months extracted) → production_table
       </div>
-      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 400, overflowY: 'auto' }}>
+      <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 6, maxHeight: 400, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8pt' }}>
           <thead>
-            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 2 }}>
-              <th style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap', minWidth: 150 }}>
+            <tr style={{ backgroundColor: '#ffffff', position: 'sticky', top: 0, zIndex: 2 }}>
+              <th style={{ padding: '6px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap', minWidth: 150 }}>
                 Item
               </th>
               {sortedMonths.map((month) => (
-                <th key={month} style={{ padding: '6px 8px', textAlign: 'center', color: '#60a5fa', fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap', minWidth: 80 }}>
+                <th key={month} style={{ padding: '6px 8px', textAlign: 'center', color: '#60a5fa', fontWeight: 600, borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap', minWidth: 80 }}>
                   {month}
                 </th>
               ))}
-              <th style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap', minWidth: 60 }}>
+              <th style={{ padding: '6px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap', minWidth: 60 }}>
                 Status
               </th>
             </tr>
@@ -249,14 +249,14 @@ function AllMonthsProductionTable({ rows, unit = "'000T" }) {
               const ok = r.status === 'ok';
               return (
                 <tr key={i} style={{
-                  backgroundColor: ok ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)',
-                  borderBottom: '1px solid #1e293b', opacity: ok ? 1 : 0.6,
+                  backgroundColor: ok ? (i % 2 ? '#f8f9fa' : '#ffffff') : 'rgba(248,113,113,0.07)',
+                  borderBottom: '1px solid #f8f9fa', opacity: ok ? 1 : 0.6,
                 }}>
-                  <td style={{ padding: '4px 10px', color: '#38bdf8', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '4px 10px', color: '#1a73e8', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {r.item_name || r.pdf_label}
                   </td>
                   {sortedMonths.map((month) => (
-                    <td key={month} style={{ padding: '4px 8px', textAlign: 'right', color: '#cbd5e1', fontFamily: 'monospace' }}>
+                    <td key={month} style={{ padding: '4px 8px', textAlign: 'right', color: '#202124', fontFamily: 'monospace' }}>
                       {r.months[month] ?? '—'}
                     </td>
                   ))}
@@ -275,19 +275,19 @@ function AllMonthsProductionTable({ rows, unit = "'000T" }) {
 
 function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
   const selCount = rows.filter((r) => r.selected).length;
-  const cellStyle = { padding: '4px 10px', color: '#cbd5e1', whiteSpace: 'nowrap' };
+  const cellStyle = { padding: '4px 10px', color: '#202124', whiteSpace: 'nowrap' };
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: '9pt', fontWeight: 700, color: '#a5b4fc', margin: '8px 0 6px' }}>
         Production ({selCount} selected) → production_table
       </div>
-      <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: 6, maxHeight: 360, overflowY: 'auto' }}>
+      <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 6, maxHeight: 360, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
           <thead>
-            <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
+            <tr style={{ backgroundColor: '#ffffff', position: 'sticky', top: 0, zIndex: 1 }}>
               {['Insert', 'Plant', 'Item (editable)', 'Value', 'Unit', 'Cell', 'PDF Label', 'Status'].map((h) => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#94a3b8',
-                                     fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#5f6368',
+                                     fontWeight: 600, borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -303,8 +303,8 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
               const statusOk = named;
               return (
                 <tr key={i} style={{
-                  backgroundColor: r.selected ? (i % 2 ? '#16242e' : '#0f172a') : 'rgba(248,113,113,0.07)',
-                  borderBottom: '1px solid #1e293b', opacity: r.selected ? 1 : 0.65,
+                  backgroundColor: r.selected ? (i % 2 ? '#f8f9fa' : '#ffffff') : 'rgba(248,113,113,0.07)',
+                  borderBottom: '1px solid #f8f9fa', opacity: r.selected ? 1 : 0.65,
                 }}>
                   <td style={{ ...cellStyle, textAlign: 'center' }}>
                     <input type="checkbox" checked={r.selected} disabled={!named}
@@ -312,19 +312,19 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
                            onChange={(e) => onToggle(i, e.target.checked)}
                            style={{ accentColor: '#10b981', cursor: named ? 'pointer' : 'not-allowed' }} />
                   </td>
-                  <td style={{ ...cellStyle, color: '#38bdf8', fontWeight: 600 }}>{plant}</td>
+                  <td style={{ ...cellStyle, color: '#1a73e8', fontWeight: 600 }}>{plant}</td>
                   <td style={cellStyle}>
                     <input type="text" value={r.item_edit}
                            placeholder={r.pdf_label || r.item_name}
                            onChange={(e) => onEditName(i, e.target.value)}
-                           style={{ width: 180, background: '#020617', color: edited || !wasOk ? '#fbbf24' : '#e2e8f0',
-                                    border: '1px solid ' + (edited || (!wasOk && named) ? '#fbbf24' : '#334155'),
+                           style={{ width: 180, background: '#fff', color: edited || !wasOk ? '#b45309' : '#202124',
+                                    border: '1px solid ' + (edited || (!wasOk && named) ? '#fbbf24' : '#dadce0'),
                                     borderRadius: 4, padding: '3px 6px', fontSize: '8.5pt' }} />
                   </td>
                   <td style={cellStyle}>{r.value ?? ''}</td>
                   <td style={cellStyle}>{r.unit}</td>
-                  <td style={{ ...cellStyle, color: '#64748b' }}>{r.cell}</td>
-                  <td style={{ ...cellStyle, color: '#94a3b8', fontStyle: 'italic' }}>{r.pdf_label || ''}</td>
+                  <td style={{ ...cellStyle, color: '#5f6368' }}>{r.cell}</td>
+                  <td style={{ ...cellStyle, color: '#5f6368', fontStyle: 'italic' }}>{r.pdf_label || ''}</td>
                   <td style={{ ...cellStyle, color: statusOk ? '#34d399' : '#f87171', fontWeight: 600 }}>{statusText}</td>
                 </tr>
               );
@@ -346,11 +346,11 @@ function RspTechnoPreviewTable({ preview }) {
   );
 
   return (
-    <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #10b981', borderRadius: '8px' }}>
+    <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #10b981', borderRadius: '8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
-        <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+        <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
           RSP Technopara Preview
-          <span style={{ fontSize: '8.5pt', color: '#94a3b8', fontWeight: 400, marginLeft: 10 }}>
+          <span style={{ fontSize: '8.5pt', color: '#5f6368', fontWeight: 400, marginLeft: 10 }}>
             {preview.report_month} · {preview.source_file}
           </span>
         </h3>
@@ -367,17 +367,17 @@ function RspTechnoPreviewTable({ preview }) {
         const nonNullCount = params.filter(p => monthData[p] != null && monthData[p] !== '').length;
 
         return (
-          <div key={rec.unit} style={{ marginBottom: 6, border: '1px solid #334155', borderRadius: 5, overflow: 'hidden' }}>
+          <div key={rec.unit} style={{ marginBottom: 6, border: '1px solid #dadce0', borderRadius: 5, overflow: 'hidden' }}>
             <button
               onClick={() => setOpenUnit(isOpen ? null : rec.unit)}
               style={{
                 width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '7px 12px', background: isOpen ? '#1e3a5f' : '#0f172a',
-                color: '#f1f5f9', border: 'none', cursor: 'pointer', fontSize: '9pt', fontWeight: 600,
+                padding: '7px 12px', background: isOpen ? '#e8f0fe' : '#ffffff',
+                color: '#202124', border: 'none', cursor: 'pointer', fontSize: '9pt', fontWeight: 600,
               }}
             >
               <span>{rec.unit}</span>
-              <span style={{ color: '#94a3b8', fontSize: '8pt', fontWeight: 400 }}>
+              <span style={{ color: '#5f6368', fontSize: '8pt', fontWeight: 400 }}>
                 {nonNullCount}/{params.length} values &nbsp;{isOpen ? '▲' : '▼'}
               </span>
             </button>
@@ -386,10 +386,10 @@ function RspTechnoPreviewTable({ preview }) {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#0f172a' }}>
-                      <th style={{ padding: '5px 12px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', minWidth: 180 }}>Parameter</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', color: '#60a5fa', fontWeight: 600, borderBottom: '1px solid #334155', minWidth: 90 }}>Month</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', minWidth: 90 }}>Cumulative</th>
+                    <tr style={{ backgroundColor: '#ffffff' }}>
+                      <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368', fontWeight: 600, borderBottom: '1px solid #dadce0', minWidth: 180 }}>Parameter</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', color: '#60a5fa', fontWeight: 600, borderBottom: '1px solid #dadce0', minWidth: 90 }}>Month</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, borderBottom: '1px solid #dadce0', minWidth: 90 }}>Cumulative</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -398,10 +398,10 @@ function RspTechnoPreviewTable({ preview }) {
                       const tv = tillData[param];
                       const fmt = v => (v != null && v !== '') ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—';
                       return (
-                        <tr key={param} style={{ backgroundColor: idx % 2 ? '#16242e' : '#0f172a', borderBottom: '1px solid #1e293b' }}>
-                          <td style={{ padding: '4px 12px', color: '#38bdf8', fontWeight: 500 }}>{param}</td>
-                          <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: mv != null ? '#e2e8f0' : '#475569' }}>{fmt(mv)}</td>
-                          <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: tv != null ? '#94a3b8' : '#475569' }}>{fmt(tv)}</td>
+                        <tr key={param} style={{ backgroundColor: idx % 2 ? '#f8f9fa' : '#ffffff', borderBottom: '1px solid #f8f9fa' }}>
+                          <td style={{ padding: '4px 12px', color: '#1a73e8', fontWeight: 500 }}>{param}</td>
+                          <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: mv != null ? '#dadce0' : '#dadce0' }}>{fmt(mv)}</td>
+                          <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: tv != null ? '#5f6368' : '#dadce0' }}>{fmt(tv)}</td>
                         </tr>
                       );
                     })}
@@ -1253,14 +1253,14 @@ export default function UploadPage() {
           <h2>Data Upload</h2>
 
           {/* Mode selector — 2 tabs */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid #334155' }}>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid #dadce0' }}>
             {[['preview', 'Preview & Insert'], ['plan', 'ABP Plan']].map(([mode, label]) => (
               <button key={mode} type="button" onClick={() => setUploadMode(mode)}
                 style={{ flex: 1, padding: '5px 2px', fontSize: '7.5pt', fontWeight: uploadMode === mode ? 700 : 500,
-                         border: `1px solid ${uploadMode === mode ? '#38bdf8' : '#334155'}`,
+                         border: `1px solid ${uploadMode === mode ? '#1a73e8' : '#dadce0'}`,
                          borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap',
                          backgroundColor: uploadMode === mode ? 'rgba(56,189,248,0.12)' : 'transparent',
-                         color: uploadMode === mode ? '#38bdf8' : '#94a3b8' }}>
+                         color: uploadMode === mode ? '#1a73e8' : '#5f6368' }}>
                 {label}
               </button>
             ))}
@@ -1337,7 +1337,7 @@ export default function UploadPage() {
               </div>
               {isDspPdf ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ fontSize: '8pt', color: '#94a3b8', marginBottom: 2 }}>
+                  <div style={{ fontSize: '8pt', color: '#5f6368', marginBottom: 2 }}>
                     DSP PDF — extract each block separately, then insert:
                   </div>
                   {[
@@ -1353,7 +1353,7 @@ export default function UploadPage() {
                       {dspBusy[block] ? 'Extracting...' : label}
                     </button>
                   ))}
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #334155', fontSize: '8pt', color: '#94a3b8' }}>
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #dadce0', fontSize: '8pt', color: '#5f6368' }}>
                     Production — extract all FY months at once:
                   </div>
                   <button type="button" onClick={handleDspExtractAllMonths}
@@ -1419,12 +1419,12 @@ export default function UploadPage() {
             )}
 
             {/* ── Direct Data Extraction (no preview) ─────────────── */}
-            <div style={{ marginTop: 16, borderTop: '1px solid #334155', paddingTop: 12 }}>
+            <div style={{ marginTop: 16, borderTop: '1px solid #dadce0', paddingTop: 12 }}>
               <button type="button" onClick={() => setShowDirectExtract((v) => !v)}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                          background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: showDirectExtract ? 10 : 0 }}>
-                <span style={{ fontSize: '8pt', fontWeight: 600, color: '#64748b' }}>Direct Data Extraction (no preview)</span>
-                <span style={{ fontSize: '9pt', color: '#64748b' }}>{showDirectExtract ? '▲' : '▼'}</span>
+                <span style={{ fontSize: '8pt', fontWeight: 600, color: '#5f6368' }}>Direct Data Extraction (no preview)</span>
+                <span style={{ fontSize: '9pt', color: '#5f6368' }}>{showDirectExtract ? '▲' : '▼'}</span>
               </button>
               {showDirectExtract && (
                 <form onSubmit={handleExcelUpload}>
@@ -1508,7 +1508,7 @@ export default function UploadPage() {
                   {financialYears.map((fy) => <option key={fy} value={fy}>{fy}</option>)}
                 </select>
               </div>
-              <div style={{ fontSize: '7.5pt', color: '#94a3b8', marginBottom: 8 }}>
+              <div style={{ fontSize: '7.5pt', color: '#5f6368', marginBottom: 8 }}>
                 {uploadPlanPlantName === 'ASP'
                   ? 'ASP ABP Plan PDF → extracts BARS, FORGINGS, PLATES for all 12 months; computes Finished Steel per month.'
                   : 'RSP: sheet1 · ISP: SUMM PROD · BSP: Table 1 · DSP: Monthwise · BSL: PLAN SUMMARY · ASP/SSP/VISL: APP 26-27'}
@@ -1533,9 +1533,9 @@ export default function UploadPage() {
           )}
           {uploadMode === 'plan' && planPreview && (
             <div>
-              <div style={{ fontSize: '9pt', color: '#94a3b8', marginBottom: 10 }}>
-                <strong style={{ color: '#f1f5f9' }}>{planPreview.plant}</strong> · FY {planPreview.financial_year}
-                <span style={{ marginLeft: 8, color: '#64748b' }}>({planPreview.plan_rows?.filter(r=>r.status==='ok').length} rows ready)</span>
+              <div style={{ fontSize: '9pt', color: '#5f6368', marginBottom: 10 }}>
+                <strong style={{ color: '#202124' }}>{planPreview.plant}</strong> · FY {planPreview.financial_year}
+                <span style={{ marginLeft: 8, color: '#5f6368' }}>({planPreview.plan_rows?.filter(r=>r.status==='ok').length} rows ready)</span>
               </div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
                 <button onClick={handlePlanInsert} disabled={isPlanBusy}
@@ -1547,7 +1547,7 @@ export default function UploadPage() {
                 <button onClick={() => { setPlanPreview(null); setUploadPlanFile(null); const fi = document.getElementById('plan-file-input'); if (fi) fi.value = ''; }}
                         disabled={isPlanBusy}
                         style={{ padding: '7px 14px', fontSize: '8.5pt', background: 'none',
-                                 border: '1px solid #64748b', color: '#94a3b8', borderRadius: 4, cursor: 'pointer' }}>
+                                 border: '1px solid #5f6368', color: '#5f6368', borderRadius: 4, cursor: 'pointer' }}>
                   Discard
                 </button>
               </div>
@@ -1557,9 +1557,9 @@ export default function UploadPage() {
           {/* RSP Technopara preview summary + insert controls */}
           {rspTechnoPreview && (
             <div>
-              <div style={{ fontSize: '9pt', color: '#94a3b8', marginBottom: 10 }}>
+              <div style={{ fontSize: '9pt', color: '#5f6368', marginBottom: 10 }}>
                 <strong style={{ color: '#10b981' }}>RSP Technopara</strong> · {rspTechnoPreview.report_month}
-                <div style={{ marginTop: 4, color: '#64748b' }}>
+                <div style={{ marginTop: 4, color: '#5f6368' }}>
                   {rspTechnoPreview.units_extracted} units · {rspTechnoPreview.total_params} parameters
                 </div>
               </div>
@@ -1573,7 +1573,7 @@ export default function UploadPage() {
                 <button onClick={() => { setRspTechnoPreview(null); }}
                         disabled={isRspTechnoBusy}
                         style={{ padding: '7px 14px', fontSize: '8.5pt', background: 'none',
-                                 border: '1px solid #64748b', color: '#94a3b8', borderRadius: 4, cursor: 'pointer' }}>
+                                 border: '1px solid #5f6368', color: '#5f6368', borderRadius: 4, cursor: 'pointer' }}>
                   Discard
                 </button>
               </div>
@@ -1581,34 +1581,34 @@ export default function UploadPage() {
           )}
         </div>
 
-        <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#64748b', textAlign: 'center', paddingTop: '15px' }}>
+        <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#5f6368', textAlign: 'center', paddingTop: '15px' }}>
           SAIL Informatics Report Portal • v1.0.0
         </div>
       </div>
 
       {/* Ingestion Console Screen */}
-      <div className="preview-area" style={{ padding: '30px', backgroundColor: '#0f172a', overflowY: 'auto' }}>
+      <div className="preview-area" style={{ padding: '30px', backgroundColor: '#ffffff', overflowY: 'auto' }}>
         <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* Headline */}
           <div>
-            <h1 style={{ fontSize: '20pt', fontWeight: '800', color: '#f8fafc', margin: 0 }}>
+            <h1 style={{ fontSize: '20pt', fontWeight: '800', color: '#202124', margin: 0 }}>
               Excel Data Extraction Control Room
             </h1>
-            <p style={{ fontSize: '10pt', color: '#94a3b8', marginTop: '4px', margin: 0 }}>
+            <p style={{ fontSize: '10pt', color: '#5f6368', marginTop: '4px', margin: 0 }}>
               Ingest plant spreadsheets, populate SQLite production tables, and seed techno-economic metrics dynamically.
             </p>
           </div>
 
           {/* Guidelines info card */}
-          <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}>
-            <h3 style={{ fontSize: '11pt', fontWeight: '700', color: '#f1f5f9', margin: '0 0 12px 0', borderBottom: '1px solid #334155', paddingBottom: '6px' }}>
+          <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #dadce0', borderRadius: '8px' }}>
+            <h3 style={{ fontSize: '11pt', fontWeight: '700', color: '#202124', margin: '0 0 12px 0', borderBottom: '1px solid #dadce0', paddingBottom: '6px' }}>
               Guidelines for Ingestion
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
               <div>
                 <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#10b981', margin: '0 0 6px 0' }}>RSP, ISP, BSP, BSL, DSP & ASP Actuals + Special Steel Ingestion</h4>
-                <ul style={{ fontSize: '8.5pt', color: '#cbd5e1', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
+                <ul style={{ fontSize: '8.5pt', color: '#202124', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
                   <li><strong>RSP — Final Monthly (.xlsx):</strong> Sheets <strong>page-9</strong> + <strong>page 1-8</strong>. Set month manually.</li>
                   <li><strong>RSP — Morning Report (.xlsx):</strong> Sheet starts with <strong>&quot;RSP Morning Report Data for-&quot;</strong>. Month from <strong>A2</strong>. Auto-detected.</li>
                   <li><strong>ISP — Final Monthly (.xlsx):</strong> Sheet <strong>Maj Production Summ</strong>. Set month manually.</li>
@@ -1626,7 +1626,7 @@ export default function UploadPage() {
               </div>
               <div>
                 <h4 style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#3b82f6', margin: '0 0 6px 0' }}>RSP, ISP, BSP, DSP & BSL ABP Targets Ingestion (Annual)</h4>
-                <ul style={{ fontSize: '8.5pt', color: '#cbd5e1', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
+                <ul style={{ fontSize: '8.5pt', color: '#202124', lineHeight: '1.6', margin: 0, paddingLeft: '15px' }}>
                   <li>Spreadsheet files must be in <strong>.xlsx</strong> format.</li>
                   <li><strong>RSP</strong> — sheet <strong>sheet1</strong>; <strong>ISP</strong> — sheet <strong>SUMM PROD</strong>; <strong>BSP</strong> — sheet <strong>Table 1</strong>; <strong>DSP</strong> — sheet <strong>Monthwise</strong>.</li>
                   <li><strong>BSL</strong> — sheet <strong>PLAN SUMMARY</strong>. Months in rows (Apr row 10 → Mar row 24), items in columns B–R. Quarter rows auto-skipped.</li>
@@ -1647,15 +1647,15 @@ export default function UploadPage() {
               const mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
               return `${mn[parseInt(m.slice(5))-1]}'${m.slice(2,4)}`;
             };
-            const TH = { padding:'2px 5px', fontSize:'7.5pt', borderBottom:'1px solid #475569', whiteSpace:'nowrap', color:'#94a3b8', textAlign:'right' };
-            const TD = { padding:'2px 5px', fontSize:'8pt', textAlign:'right', borderBottom:'1px solid #1e293b' };
+            const TH = { padding:'2px 5px', fontSize:'7.5pt', borderBottom:'1px solid #dadce0', whiteSpace:'nowrap', color:'#5f6368', textAlign:'right' };
+            const TD = { padding:'2px 5px', fontSize:'8pt', textAlign:'right', borderBottom:'1px solid #f8f9fa' };
             const okCount = rows.filter(r => r.status === 'ok').length;
             return (
-              <div style={{ padding:'16px', backgroundColor:'#1e293b', border:'1px solid #3b82f6', borderRadius:'8px' }}>
+              <div style={{ padding:'16px', backgroundColor:'#f8f9fa', border:'1px solid #3b82f6', borderRadius:'8px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                  <h3 style={{ fontSize:'11pt', fontWeight:700, color:'#f1f5f9', margin:0 }}>
+                  <h3 style={{ fontSize:'11pt', fontWeight:700, color:'#f8f9fa', margin:0 }}>
                     ABP Plan Preview — {planPreview.plant} FY {planPreview.financial_year}
-                    <span style={{ fontSize:'8pt', color:'#94a3b8', fontWeight:400, marginLeft:8 }}>{okCount} rows</span>
+                    <span style={{ fontSize:'8pt', color:'#5f6368', fontWeight:400, marginLeft:8 }}>{okCount} rows</span>
                   </h3>
                   <div style={{ display:'flex', gap:8 }}>
                     <button onClick={handlePlanInsert} disabled={isPlanBusy}
@@ -1666,7 +1666,7 @@ export default function UploadPage() {
                     <button onClick={() => { setPlanPreview(null); setUploadPlanFile(null); const fi = document.getElementById('plan-file-input'); if (fi) fi.value = ''; }}
                             disabled={isPlanBusy}
                             style={{ padding:'5px 12px', fontSize:'8.5pt', background:'none',
-                                     border:'1px solid #64748b', color:'#94a3b8', borderRadius:4, cursor:'pointer' }}>
+                                     border:'1px solid #5f6368', color:'#5f6368', borderRadius:4, cursor:'pointer' }}>
                       Discard
                     </button>
                   </div>
@@ -1685,7 +1685,7 @@ export default function UploadPage() {
                         <div style={{ fontSize:'8pt', fontWeight:700, color:'#60a5fa', marginBottom:4 }}>{plant}</div>
                       )}
                       <div style={{ overflowX:'auto' }}>
-                        <table style={{ borderCollapse:'collapse', fontSize:'8pt', color:'#e2e8f0', width:'100%' }}>
+                        <table style={{ borderCollapse:'collapse', fontSize:'8pt', color:'#dadce0', width:'100%' }}>
                           <thead>
                             <tr>
                               <th style={{...TH, textAlign:'left', paddingLeft:6}}>Item</th>
@@ -1703,11 +1703,11 @@ export default function UploadPage() {
                               return (
                                 <tr key={item}>
                                   <td style={{...TD, textAlign:'left', paddingLeft:6,
-                                              fontWeight:isFin?700:400, color:isFin?'#34d399':'#e2e8f0'}}>
+                                              fontWeight:isFin?700:400, color:isFin?'#34d399':'#dadce0'}}>
                                     {item}
                                   </td>
                                   {vals.map((v,i) => (
-                                    <td key={i} style={{...TD, fontWeight:isFin?700:400, color:isFin?'#34d399':v===null?'#475569':'#e2e8f0'}}>
+                                    <td key={i} style={{...TD, fontWeight:isFin?700:400, color:isFin?'#34d399':v===null?'#dadce0':'#dadce0'}}>
                                       {fmt(v)}
                                     </td>
                                   ))}
@@ -1718,7 +1718,7 @@ export default function UploadPage() {
                           </tbody>
                         </table>
                       </div>
-                      <div style={{fontSize:'7pt',color:'#64748b',marginTop:3}}>
+                      <div style={{fontSize:'7pt',color:'#5f6368',marginTop:3}}>
                         Values in {(lookup[items[0]]?.[months[0]]?.unit||"'000T") === 'nos/d' ? 'nos/d' : "T (display) — stored as '000T"}
                       </div>
                     </div>
@@ -1730,18 +1730,18 @@ export default function UploadPage() {
 
           {/* RSP extraction preview — verify production + stock + special-steel before insertion */}
           {technoPreview && (
-            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #8b5cf6', borderRadius: '8px' }}>
+            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #8b5cf6', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
                   Extracted Data — {technoPreview.plant} {technoPreview.month}
-                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400, marginLeft: 10 }}>
+                  <span style={{ fontSize: '8pt', color: '#5f6368', fontWeight: 400, marginLeft: 10 }}>
                     {technoPreview.source_type}{technoPreview.sheets ? ` · ${technoPreview.sheets}` : ''}
                   </span>
                 </h3>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => { setTechnoPreview(null); setProdRows([]); setSsRows([]); setStockRows([]); }} disabled={isTechnoBusy}
-                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
-                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                          style={{ background: 'none', border: '1px solid #5f6368', borderRadius: 4,
+                                   color: '#5f6368', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
                     Discard
                   </button>
                   <button onClick={handleTechnoInsert} disabled={isTechnoBusy}
@@ -1800,7 +1800,7 @@ export default function UploadPage() {
                 );
               })()}
 
-              <div style={{ fontSize: '8pt', color: '#94a3b8', marginTop: 8 }}>
+              <div style={{ fontSize: '8pt', color: '#5f6368', marginTop: 8 }}>
                 Production: only <strong style={{ color: '#34d399' }}>ticked</strong> rows are inserted — untick any
                 row to skip it, or type an item name on an <strong style={{ color: '#f87171' }}>unmapped</strong> row
                 to map &amp; include it (raw tonne values are stored as &apos;000T). Renamed / newly mapped labels are
@@ -1812,19 +1812,19 @@ export default function UploadPage() {
 
           {/* DSP PDF — three independent block preview panels */}
           {(dspProdResult || dspProdAllMonths) && (
-            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #10b981', borderRadius: '8px' }}>
+            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #10b981', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
                   Step 1 — Production&nbsp;
-                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                  <span style={{ fontSize: '8pt', color: '#5f6368', fontWeight: 400 }}>
                     DSP {dspProdAllMonths?.month || dspProdResult?.month} · {dspProdAllMonths ? 'ALL MONTHS' : dspProdResult?.source_type}
                   </span>
                 </h3>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => { setDspProdResult(null); setDspProdRows([]); setDspProdAllMonths(null); setDspAllMonthsMode(false); }}
                           disabled={dspBusy.production || dspBusy.production_all}
-                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
-                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                          style={{ background: 'none', border: '1px solid #5f6368', borderRadius: 4,
+                                   color: '#5f6368', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
                     Discard
                   </button>
                   <button onClick={() => handleDspInsert('production')}
@@ -1840,7 +1840,7 @@ export default function UploadPage() {
               {dspAllMonthsMode && dspProdAllMonths ? (
                 <>
                   <AllMonthsProductionTable rows={dspProdAllMonths.grouped_rows} />
-                  <div style={{ fontSize: '8pt', color: '#94a3b8', marginTop: 12, padding: 10, backgroundColor: '#0f172a', borderRadius: 4 }}>
+                  <div style={{ fontSize: '8pt', color: '#5f6368', marginTop: 12, padding: 10, backgroundColor: '#ffffff', borderRadius: 4 }}>
                     <strong>ℹ️ All Months Mode:</strong> Extract production data for all FY months (APR–SEP, APR–DEC, etc.).
                     Each row shows values across all extracted months. Click "Insert Production" to save all months to database.
                   </div>
@@ -1853,19 +1853,19 @@ export default function UploadPage() {
           )}
 
           {dspSsResult && (
-            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #f59e0b', borderRadius: '8px' }}>
+            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #f59e0b', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
                   Step 3 — Special Steel&nbsp;
-                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                  <span style={{ fontSize: '8pt', color: '#5f6368', fontWeight: 400 }}>
                     DSP {dspSsResult.month}
                   </span>
                 </h3>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => { setDspSsResult(null); setDspSsRows([]); }}
                           disabled={dspBusy.special_steel}
-                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
-                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                          style={{ background: 'none', border: '1px solid #5f6368', borderRadius: 4,
+                                   color: '#5f6368', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
                     Discard
                   </button>
                   <button onClick={() => handleDspInsert('special_steel')}
@@ -1888,11 +1888,11 @@ export default function UploadPage() {
 
           {/* DSP Flash Stock preview panel */}
           {dspStockResult && (
-            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #ef4444', borderRadius: '8px' }}>
+            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #ef4444', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
                   Step 4 — Closing Stock (Flash.pdf)&nbsp;
-                  <span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                  <span style={{ fontSize: '8pt', color: '#5f6368', fontWeight: 400 }}>
                     DSP {dspStockResult.month}
                     {dspStockResult.detected_date ? ` · file date ${dspStockResult.detected_date}` : ''}
                   </span>
@@ -1900,8 +1900,8 @@ export default function UploadPage() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setDspStockResult(null)}
                           disabled={dspBusy.stock}
-                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
-                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                          style={{ background: 'none', border: '1px solid #5f6368', borderRadius: 4,
+                                   color: '#5f6368', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
                     Discard
                   </button>
                   <button onClick={() => handleDspInsert('stock')}
@@ -1921,26 +1921,26 @@ export default function UploadPage() {
                 <thead>
                   <tr>
                     {['Item Type', 'Stock Type', "Value ('000T)", 'Formula', 'Status'].map((h) => (
-                      <th key={h} style={{ padding: '4px 8px', backgroundColor: '#334155', color: '#f1f5f9',
-                                           textAlign: 'left', border: '1px solid #475569' }}>{h}</th>
+                      <th key={h} style={{ padding: '4px 8px', backgroundColor: '#f1f3f4', color: '#5f6368',
+                                           textAlign: 'left', border: '1px solid #dadce0' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {(dspStockResult.stock_rows || []).map((r, i) => (
-                    <tr key={i} style={{ backgroundColor: i % 2 ? '#1e293b' : '#263548' }}>
-                      <td style={{ padding: '3px 8px', border: '1px solid #334155', color: '#f1f5f9' }}>{r.item_type}</td>
-                      <td style={{ padding: '3px 8px', border: '1px solid #334155', color: '#f1f5f9' }}>{r.stock_type || '—'}</td>
-                      <td style={{ padding: '3px 8px', border: '1px solid #334155', color: r.status === 'ok' ? '#86efac' : '#f87171',
+                    <tr key={i} style={{ backgroundColor: i % 2 ? '#f8f9fa' : '#263548' }}>
+                      <td style={{ padding: '3px 8px', border: '1px solid #dadce0', color: '#202124' }}>{r.item_type}</td>
+                      <td style={{ padding: '3px 8px', border: '1px solid #dadce0', color: '#202124' }}>{r.stock_type || '—'}</td>
+                      <td style={{ padding: '3px 8px', border: '1px solid #dadce0', color: r.status === 'ok' ? '#86efac' : '#f87171',
                                    textAlign: 'right' }}>{r.value != null ? r.value.toFixed(3) : '—'}</td>
-                      <td style={{ padding: '3px 8px', border: '1px solid #334155', color: '#94a3b8' }}>{r.formula}</td>
-                      <td style={{ padding: '3px 8px', border: '1px solid #334155',
+                      <td style={{ padding: '3px 8px', border: '1px solid #dadce0', color: '#5f6368' }}>{r.formula}</td>
+                      <td style={{ padding: '3px 8px', border: '1px solid #dadce0',
                                    color: r.status === 'ok' ? '#86efac' : '#f87171' }}>{r.status}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div style={{ fontSize: '7.5pt', color: '#64748b', marginTop: 6 }}>
+              <div style={{ fontSize: '7.5pt', color: '#5f6368', marginTop: 6 }}>
                 Stock month (opening of next month): {(dspStockResult.stock_rows || [])[0]?.stock_month || '—'}
               </div>
             </div>
@@ -1948,22 +1948,22 @@ export default function UploadPage() {
 
           {/* ASP PDF — single-step extract & preview panel */}
           {aspResult && (
-            <div style={{ padding: '20px', backgroundColor: '#1e293b', border: '1px solid #0ea5e9', borderRadius: '8px' }}>
+            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #0ea5e9', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
                   ASP —&nbsp;
                   {aspResult.report_type === 'EXCEL' ? 'Crude Steel (Excel)'
                     : aspResult.report_type === 'REP' ? 'Crude Steel (REP PDF)'
                     : 'Finished Steel (FL PDF)'}
-                  &nbsp;<span style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 400 }}>
+                  &nbsp;<span style={{ fontSize: '8pt', color: '#5f6368', fontWeight: 400 }}>
                     ASP {aspResult.month} · {aspResult.source_type}
                   </span>
                 </h3>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => { setAspResult(null); setAspProdRows([]); }}
                           disabled={aspBusy}
-                          style={{ background: 'none', border: '1px solid #64748b', borderRadius: 4,
-                                   color: '#94a3b8', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                          style={{ background: 'none', border: '1px solid #5f6368', borderRadius: 4,
+                                   color: '#5f6368', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
                     Discard
                   </button>
                   <button onClick={handleAspInsert}
@@ -1979,7 +1979,7 @@ export default function UploadPage() {
               <div style={{ marginBottom: 10 }}>
                 {(() => {
                   const rt = aspResult.report_type;
-                  const color = rt === 'EXCEL' ? '#38bdf8' : rt === 'REP' ? '#34d399' : '#fbbf24';
+                  const color = rt === 'EXCEL' ? '#1a73e8' : rt === 'REP' ? '#34d399' : '#fbbf24';
                   const bg    = rt === 'EXCEL' ? 'rgba(56,189,248,0.12)' : rt === 'REP' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)';
                   const label = rt === 'EXCEL'
                     ? `Excel (${aspResult.sheets}) — cells F10/F11/F12/F20/L25 → Crude Steel, Concast, Ingot, Saleable, Stock`
@@ -1999,7 +1999,7 @@ export default function UploadPage() {
               <EditableProductionTable plant="ASP" rows={aspProdRows}
                 onToggle={toggleAspRow} onEditName={editAspRowName} />
 
-              <div style={{ fontSize: '8pt', color: '#94a3b8', marginTop: 8 }}>
+              <div style={{ fontSize: '8pt', color: '#5f6368', marginTop: 8 }}>
                 All values converted from Tonnes → &apos;000T automatically. Tick/untick rows to include or skip.
                 Edit item names to override the DB mapping. For multi-month PDFs, verify the &quot;Value&quot; column
                 matches the expected month-end figure (extractor picks the largest number on each keyword line).
@@ -2012,23 +2012,23 @@ export default function UploadPage() {
             fontFamily: '"JetBrains Mono", monospace',
             fontSize: '9.5pt',
             backgroundColor: '#020617',
-            border: '1px solid #1e293b',
+            border: '1px solid #30363d',
             borderRadius: '6px',
             padding: '20px',
             minHeight: '280px',
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
-            color: '#f8fafc',
+            color: '#e2e8f0',
             boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)'
           }}>
-            <div style={{ color: '#64748b', borderBottom: '1px solid #1e293b', paddingBottom: '6px', marginBottom: '4px', fontSize: '8pt', display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ color: '#8b949e', borderBottom: '1px solid #30363d', paddingBottom: '6px', marginBottom: '4px', fontSize: '8pt', display: 'flex', justifyContent: 'space-between' }}>
               <span>EXTRACTION JOB OUTPUT LOGS</span>
               <span>v1.0.0</span>
             </div>
             
             {logs.map((log, index) => {
-              let color = '#38bdf8';
+              let color = '#1a73e8';
               let prefix = '[INFO]';
               if (log.type === 'success') {
                 color = '#34d399';
@@ -2039,9 +2039,9 @@ export default function UploadPage() {
               }
               return (
                 <div key={index} style={{ display: 'flex', gap: '8px', lineHeight: '1.4' }}>
-                  <span style={{ color: '#64748b' }}>{log.time || '--:--:--'}</span>
+                  <span style={{ color: '#8b949e' }}>{log.time || '--:--:--'}</span>
                   <span style={{ color }}>{prefix}</span>
-                  <span style={{ color: log.type === 'error' ? '#f87171' : '#cbd5e1' }}>{log.text}</span>
+                  <span style={{ color: log.type === 'error' ? '#f87171' : '#e2e8f0' }}>{log.text}</span>
                 </div>
               );
             })}
@@ -2058,37 +2058,37 @@ export default function UploadPage() {
           {/* Extraction Audit Log */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <h2 style={{ fontSize: '12pt', fontWeight: '700', color: '#f1f5f9', margin: 0 }}>
+              <h2 style={{ fontSize: '12pt', fontWeight: '700', color: '#202124', margin: 0 }}>
                 Extraction Audit Log
               </h2>
               <button
                 onClick={fetchExtractionLog}
-                style={{ background: 'none', border: '1px solid #334155', borderRadius: '4px', color: '#94a3b8', fontSize: '8pt', padding: '4px 10px', cursor: 'pointer' }}
+                style={{ background: 'none', border: '1px solid #dadce0', borderRadius: '4px', color: '#5f6368', fontSize: '8pt', padding: '4px 10px', cursor: 'pointer' }}
               >
                 Refresh
               </button>
             </div>
 
             {extractionLog.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#475569', fontSize: '9pt', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '6px' }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: '#5f6368', fontSize: '9pt', backgroundColor: '#f8f9fa', border: '1px solid #dadce0', borderRadius: '6px' }}>
                 No extractions recorded yet.
               </div>
             ) : (
-              <div style={{ overflowX: 'auto', border: '1px solid #334155', borderRadius: '6px', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: '6px', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#1e293b' }}>
+                    <tr style={{ backgroundColor: '#f8f9fa' }}>
                       {['Timestamp', 'Plant', 'Month', 'Source Type', 'File Name', 'Sheet', 'Items'].map(h => (
-                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#94a3b8', fontWeight: '600', borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#5f6368', fontWeight: '600', borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {extractionLog.map((entry, idx) => (
-                      <tr key={entry.id} style={{ backgroundColor: idx % 2 === 0 ? '#0f172a' : '#1e293b', borderBottom: '1px solid #1e293b' }}>
-                        <td style={{ padding: '7px 12px', color: '#64748b', whiteSpace: 'nowrap' }}>{entry.logged_at}</td>
-                        <td style={{ padding: '7px 12px', color: '#38bdf8', fontWeight: '600' }}>{entry.plant_name}</td>
-                        <td style={{ padding: '7px 12px', color: '#f1f5f9', whiteSpace: 'nowrap' }}>{entry.report_month}</td>
+                      <tr key={entry.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #f8f9fa' }}>
+                        <td style={{ padding: '7px 12px', color: '#5f6368', whiteSpace: 'nowrap' }}>{entry.logged_at}</td>
+                        <td style={{ padding: '7px 12px', color: '#1a73e8', fontWeight: '600' }}>{entry.plant_name}</td>
+                        <td style={{ padding: '7px 12px', color: '#202124', whiteSpace: 'nowrap' }}>{entry.report_month}</td>
                         <td style={{ padding: '7px 12px' }}>
                           <span style={{
                             padding: '2px 7px', borderRadius: '4px', fontSize: '7.5pt', fontWeight: '600',
@@ -2098,8 +2098,8 @@ export default function UploadPage() {
                             {entry.source_type}
                           </span>
                         </td>
-                        <td style={{ padding: '7px 12px', color: '#94a3b8', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.file_name}>{entry.file_name}</td>
-                        <td style={{ padding: '7px 12px', color: '#64748b', fontFamily: 'monospace' }}>{entry.sheet_name}</td>
+                        <td style={{ padding: '7px 12px', color: '#5f6368', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.file_name}>{entry.file_name}</td>
+                        <td style={{ padding: '7px 12px', color: '#5f6368', fontFamily: 'monospace' }}>{entry.sheet_name}</td>
                         <td style={{ padding: '7px 12px', color: '#34d399', textAlign: 'right', fontWeight: '700' }}>{entry.items_extracted}</td>
                       </tr>
                     ))}

@@ -11,7 +11,7 @@ export default function DataEntryPage() {
       description: 'Enter actual production values for each item. Plan values come from the uploaded ABP and can also be edited.',
       icon: '📊',
       link: '/data-entry/production',
-      color: '#0284c7',
+      color: '#1a73e8',
       bgColor: 'rgba(2, 132, 199, 0.1)'
     },
     {
@@ -58,10 +58,11 @@ export default function DataEntryPage() {
 
   return (
     <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#f8fafc',
+      height: '100vh',
+      backgroundColor: '#ffffff',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      fontFamily: 'var(--ui-font)'
     }}>
       <GlobalNavbar />
 
@@ -69,10 +70,10 @@ export default function DataEntryPage() {
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           {/* Header */}
           <div style={{ marginBottom: '48px' }}>
-            <h1 style={{ fontSize: '28pt', fontWeight: '900', color: '#0f172a', margin: '0 0 12px 0' }}>
+            <h1 style={{ fontSize: '28pt', fontWeight: '800', color: '#202124', margin: '0 0 12px 0' }}>
               Data Entry Hub
             </h1>
-            <p style={{ fontSize: '11pt', color: '#64748b', margin: '0', lineHeight: '1.6' }}>
+            <p style={{ fontSize: '11pt', color: '#5f6368', margin: '0', lineHeight: '1.6' }}>
               Access all data entry tools for production, inventory, transfers, and techno-economic parameters.
             </p>
           </div>
@@ -88,18 +89,14 @@ export default function DataEntryPage() {
                 <div style={{
                   height: '100%',
                   backgroundColor: '#fff',
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid #dadce0',
                   borderRadius: '12px',
                   padding: '32px',
                   cursor: 'pointer',
                   transition: 'all 0.3s ease',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '16px',
-                  ':hover': {
-                    borderColor: section.color,
-                    boxShadow: `0 4px 12px ${section.bgColor}`
-                  }
+                  gap: '16px'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = section.color;
@@ -107,7 +104,7 @@ export default function DataEntryPage() {
                   e.currentTarget.style.transform = 'translateY(-4px)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#e2e8f0';
+                  e.currentTarget.style.borderColor = '#dadce0';
                   e.currentTarget.style.boxShadow = 'none';
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
@@ -132,13 +129,13 @@ export default function DataEntryPage() {
                       fontSize: '14pt',
                       fontWeight: '800',
                       margin: '0 0 8px 0',
-                      color: '#0f172a'
+                      color: '#202124'
                     }}>
                       {section.title}
                     </h3>
                     <p style={{
                       fontSize: '9.5pt',
-                      color: '#64748b',
+                      color: '#5f6368',
                       margin: '0',
                       lineHeight: '1.5'
                     }}>
@@ -150,7 +147,7 @@ export default function DataEntryPage() {
                   <div style={{
                     marginTop: 'auto',
                     paddingTop: '16px',
-                    borderTop: '1px solid rgba(51, 65, 85, 0.1)',
+                    borderTop: '1px solid #e8eaed',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
@@ -169,14 +166,14 @@ export default function DataEntryPage() {
           <div style={{
             marginTop: '48px',
             padding: '24px',
-            backgroundColor: 'rgba(2, 132, 199, 0.05)',
-            border: '1px solid rgba(2, 132, 199, 0.2)',
+            backgroundColor: '#e8f0fe',
+            border: '1px solid rgba(26, 115, 232, 0.2)',
             borderRadius: '8px'
           }}>
-            <h3 style={{ fontSize: '11pt', fontWeight: '700', color: '#0c4a6e', margin: '0 0 8px 0' }}>
+            <h3 style={{ fontSize: '11pt', fontWeight: '700', color: '#174ea6', margin: '0 0 8px 0' }}>
               💡 Tip
             </h3>
-            <p style={{ fontSize: '9.5pt', color: '#0c4a6e', margin: '0', lineHeight: '1.6' }}>
+            <p style={{ fontSize: '9.5pt', color: '#174ea6', margin: '0', lineHeight: '1.6' }}>
               Data entered in these sections is cached automatically for faster access. Use the Report Engine to view and export compiled reports across all data sources.
             </p>
           </div>

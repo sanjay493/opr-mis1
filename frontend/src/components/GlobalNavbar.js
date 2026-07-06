@@ -41,11 +41,9 @@ export default function GlobalNavbar() {
       position: 'sticky',
       top: 0,
       zIndex: 100,
-      borderBottom: '1px solid rgba(51, 65, 85, 0.3)',
-      backdropFilter: 'blur(10px)',
-      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-      padding: '0',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      borderBottom: '1px solid #dadce0',
+      backgroundColor: '#ffffff',
+      padding: '0'
     }}>
       <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 32px' }}>
         <div style={{
@@ -60,7 +58,7 @@ export default function GlobalNavbar() {
               width: '40px',
               height: '40px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #0284c7 0%, #6366f1 100%)',
+              backgroundColor: '#1a73e8',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -71,10 +69,10 @@ export default function GlobalNavbar() {
               📊
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '15pt', fontWeight: '900', letterSpacing: '-0.01em', color: '#f8fafc' }}>
+              <span style={{ fontSize: '15pt', fontWeight: '900', letterSpacing: '-0.01em', color: '#202124' }}>
                 SAIL MIS
               </span>
-              <span style={{ fontSize: '9pt', color: '#94a3b8', fontWeight: '600' }}>Portal</span>
+              <span style={{ fontSize: '9pt', color: '#5f6368', fontWeight: '600' }}>Portal</span>
             </div>
           </Link>
 
@@ -100,8 +98,8 @@ export default function GlobalNavbar() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      color: openDropdown === idx ? '#38bdf8' : '#cbd5e1',
-                      backgroundColor: openDropdown === idx ? 'rgba(2, 132, 199, 0.1)' : 'transparent'
+                      color: openDropdown === idx ? '#1a73e8' : '#202124',
+                      backgroundColor: openDropdown === idx ? 'rgba(26, 115, 232, 0.08)' : 'transparent'
                     }}
                   >
                     <span>{item.icon}</span>
@@ -131,17 +129,17 @@ export default function GlobalNavbar() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      color: '#cbd5e1',
+                      color: '#202124',
                       fontSize: '12pt',
                       fontWeight: '600'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(2, 132, 199, 0.1)';
-                      e.currentTarget.style.color = '#38bdf8';
+                      e.currentTarget.style.backgroundColor = 'rgba(26, 115, 232, 0.08)';
+                      e.currentTarget.style.color = '#1a73e8';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = '#cbd5e1';
+                      e.currentTarget.style.color = '#202124';
                     }}
                     >
                       <span>{item.icon}</span>
@@ -156,20 +154,20 @@ export default function GlobalNavbar() {
                     position: 'absolute',
                     top: '100%',
                     left: '0',
-                    backgroundColor: '#1e293b',
-                    border: '1px solid #334155',
+                    backgroundColor: '#f8f9fa',
+                    border: '1px solid #dadce0',
                     borderRadius: '8px',
                     overflow: 'hidden',
                     minWidth: '250px',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)'
+                    boxShadow: '0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)'
                   }}
                   >
                     {item.submenu.map((subitem, subidx) => (
                       <Link key={subidx} href={subitem.link} style={{ textDecoration: 'none' }}>
                         <div style={{
                           padding: '13px 18px',
-                          borderBottom: subidx < item.submenu.length - 1 ? '1px solid rgba(51, 65, 85, 0.3)' : 'none',
-                          color: '#cbd5e1',
+                          borderBottom: subidx < item.submenu.length - 1 ? '1px solid #e8eaed' : 'none',
+                          color: '#202124',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -178,13 +176,13 @@ export default function GlobalNavbar() {
                           transition: 'all 0.2s ease'
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'rgba(2, 132, 199, 0.15)';
-                          e.currentTarget.style.color = '#38bdf8';
+                          e.currentTarget.style.backgroundColor = 'rgba(26, 115, 232, 0.1)';
+                          e.currentTarget.style.color = '#1a73e8';
                           e.currentTarget.style.paddingLeft = '20px';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.color = '#cbd5e1';
+                          e.currentTarget.style.color = '#202124';
                           e.currentTarget.style.paddingLeft = '16px';
                         }}
                         >
@@ -203,11 +201,11 @@ export default function GlobalNavbar() {
           <div style={{
             marginLeft: 'auto',
             padding: '6px 14px',
-            backgroundColor: '#1e293b',
-            border: '1px solid #334155',
+            backgroundColor: '#f8f9fa',
+            border: '1px solid #dadce0',
             borderRadius: '20px',
             fontSize: '10.5pt',
-            color: '#10b981',
+            color: '#188038',
             fontWeight: '600',
             display: 'flex',
             alignItems: 'center',
@@ -216,7 +214,7 @@ export default function GlobalNavbar() {
             <div style={{
               width: '6px',
               height: '6px',
-              backgroundColor: '#10b981',
+              backgroundColor: '#188038',
               borderRadius: '50%',
               animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
             }} />

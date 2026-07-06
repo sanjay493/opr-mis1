@@ -219,8 +219,8 @@ function labelOf(key) {
 }
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
-const TH = { padding:'9px 12px', border:'1px solid #e2e8f0', fontWeight:700, fontSize:14 };
-const TD = { padding:'7px 10px', border:'1px solid #e2e8f0', verticalAlign:'middle', fontSize:14 };
+const TH = { padding:'9px 12px', border:'1px solid #dadce0', fontWeight:700, fontSize:14 };
+const TD = { padding:'7px 10px', border:'1px solid #dadce0', verticalAlign:'middle', fontSize:14 };
 
 // ── Change counter ────────────────────────────────────────────────────────────
 function countChanges(current, initial) {
@@ -305,13 +305,13 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy }) {
 
   return (
     <div style={{
-      border:'1px solid #e2e8f0', borderRadius:6, overflow:'hidden',
+      border:'1px solid #dadce0', borderRadius:6, overflow:'hidden',
       maxHeight:'calc(100vh - 380px)', display:'flex', flexDirection:'column',
     }}>
       <div style={{ overflowY:'auto', overflowX:'auto', flex:1 }}>
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
           <thead>
-            <tr style={{ background:'#f1f5f9', position:'sticky', top:0, zIndex:1 }}>
+            <tr style={{ background:'#f8f9fa', position:'sticky', top:0, zIndex:1 }}>
               <th style={{ ...TH, textAlign:'left', width:'44%' }}>Parameter</th>
               <th style={{ ...TH, width:'28%' }}>Month Value</th>
               <th style={{ ...TH, width:'28%' }}>YTD (Cumulative)</th>
@@ -327,10 +327,10 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy }) {
               const tChg    = tv !== initT;
               const isTempl = templateKeys.includes(key);
               return (
-                <tr key={key} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                  <td style={{ ...TD, fontWeight: isTempl ? 500 : 400, color: isTempl ? '#1e293b' : '#64748b' }}>
+                <tr key={key} style={{ background: i % 2 === 0 ? '#fff' : '#f8f9fa' }}>
+                  <td style={{ ...TD, fontWeight: isTempl ? 500 : 400, color: isTempl ? '#202124' : '#5f6368' }}>
                     {labelOf(key)}
-                    <br /><span style={{ fontSize:11, color:'#94a3b8' }}>{key}</span>
+                    <br /><span style={{ fontSize:11, color:'#5f6368' }}>{key}</span>
                   </td>
                   <td style={TD}>
                     <NumInput value={mv} disabled={busy} changed={mChg}
@@ -396,7 +396,7 @@ function AddUnitModal({ existingUnits, onAdd, onClose }) {
         background:'#fff', borderRadius:10, padding:28, width:440,
         boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
       }}>
-        <h3 style={{ margin:'0 0 16px', fontSize:18, color:'#1e3a5f' }}>Add Unit</h3>
+        <h3 style={{ margin:'0 0 16px', fontSize:18, color:'#202124' }}>Add Unit</h3>
 
         <label style={{ fontSize:13, fontWeight:600, color:'#374151', display:'block', marginBottom:6 }}>
           Select from known units
@@ -430,12 +430,12 @@ function AddUnitModal({ existingUnits, onAdd, onClose }) {
 
         <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
           <button onClick={onClose} style={{
-            padding:'7px 18px', fontSize:14, background:'#f1f5f9',
-            border:'1px solid #e2e8f0', borderRadius:4, cursor:'pointer',
+            padding:'7px 18px', fontSize:14, background:'#f8f9fa',
+            border:'1px solid #dadce0', borderRadius:4, cursor:'pointer',
           }}>Cancel</button>
           <button onClick={submit} disabled={!unitName.trim()} style={{
             padding:'7px 18px', fontSize:14, fontWeight:600,
-            background: unitName.trim() ? '#1e3a5f' : '#94a3b8',
+            background: unitName.trim() ? '#1a73e8' : '#5f6368',
             color:'#fff', border:'none', borderRadius:4,
             cursor: unitName.trim() ? 'pointer' : 'not-allowed',
           }}>Add Unit</button>
@@ -505,12 +505,12 @@ function CopyFromPanel({ currentMonth, plant, onCopy }) {
       <div style={{ display:'flex', gap:6 }}>
         <button onClick={doCopy} disabled={loading} style={{
           flex:1, padding:'6px 0', fontSize:12, fontWeight:600,
-          background: loading ? '#94a3b8' : '#1e40af', color:'#fff',
+          background: loading ? '#5f6368' : '#1e40af', color:'#fff',
           border:'none', borderRadius:3, cursor: loading ? 'not-allowed' : 'pointer',
         }}>{loading ? 'Loading…' : `Copy from ${srcMonth}`}</button>
         <button onClick={() => { setOpen(false); setStatus(null); }} style={{
-          padding:'6px 10px', fontSize:12, background:'#f1f5f9',
-          border:'1px solid #e2e8f0', borderRadius:3, cursor:'pointer',
+          padding:'6px 10px', fontSize:12, background:'#f8f9fa',
+          border:'1px solid #dadce0', borderRadius:3, cursor:'pointer',
         }}>×</button>
       </div>
     </div>
@@ -767,7 +767,7 @@ export default function TechnoManualPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight:'100vh', background:'#f8fafc', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ minHeight:'100vh', background:'#ffffff', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
       <GlobalNavbar />
 
       {showAddUnit && (
@@ -782,10 +782,10 @@ export default function TechnoManualPage() {
 
         {/* ── Page title ── */}
         <div style={{ display:'flex', alignItems:'baseline', gap:14, marginBottom:18 }}>
-          <h2 style={{ fontSize:'1.6rem', fontWeight:700, color:'#1e3a5f', margin:0 }}>
+          <h2 style={{ fontSize:'1.6rem', fontWeight:700, color:'#202124', margin:0 }}>
             Techno Parameters — Universal Entry
           </h2>
-          <span style={{ fontSize:13, color:'#94a3b8' }}>
+          <span style={{ fontSize:13, color:'#5f6368' }}>
             Insert legacy data · revise uploaded values · manual corrections
           </span>
         </div>
@@ -793,7 +793,7 @@ export default function TechnoManualPage() {
         {/* ── Controls bar ── */}
         <div style={{
           display:'flex', gap:10, alignItems:'center', flexWrap:'wrap',
-          marginBottom:18, background:'#fff', border:'1px solid #e2e8f0',
+          marginBottom:18, background:'#fff', border:'1px solid #dadce0',
           borderRadius:8, padding:'14px 18px',
         }}>
           <label style={{ fontSize:13, fontWeight:600, color:'#374151' }}>Plant</label>
@@ -814,7 +814,7 @@ export default function TechnoManualPage() {
 
           <button onClick={loadData} disabled={loading} style={{
             padding:'7px 20px', fontSize:14, fontWeight:600,
-            background:'#1e3a5f', color:'#fff', border:'none', borderRadius:4,
+            background:'#1a73e8', color:'#fff', border:'none', borderRadius:4,
             cursor: loading ? 'not-allowed' : 'pointer',
           }}>
             {loading ? 'Loading…' : 'Load'}
@@ -823,14 +823,14 @@ export default function TechnoManualPage() {
           {totalChanges > 0 && (
             <button onClick={saveAll} disabled={saving} style={{
               padding:'7px 20px', fontSize:14, fontWeight:700,
-              background: saving ? '#94a3b8' : '#166534', color:'#fff',
+              background: saving ? '#5f6368' : '#166534', color:'#fff',
               border:'none', borderRadius:4, cursor: saving ? 'not-allowed' : 'pointer',
             }}>
               {saving ? 'Saving…' : `Save All (${totalChanges} changes)`}
             </button>
           )}
 
-          <span style={{ marginLeft:'auto', fontSize:13, color:'#94a3b8' }}>
+          <span style={{ marginLeft:'auto', fontSize:13, color:'#5f6368' }}>
             {reportMonth}{loading && ' ⟳'}
           </span>
         </div>
@@ -910,17 +910,17 @@ export default function TechnoManualPage() {
         )}
 
         {/* ── Area tabs ── */}
-        <div style={{ display:'flex', gap:0, borderBottom:'2px solid #e2e8f0', marginBottom:18 }}>
+        <div style={{ display:'flex', gap:0, borderBottom:'2px solid #dadce0', marginBottom:18 }}>
           {AREA_ORDER.map(a => (
             <button key={a} onClick={() => setArea(a)} style={{
               padding:'8px 18px', fontSize:14, fontWeight: a === area ? 700 : 400,
-              border:'none', borderBottom: a === area ? '3px solid #1e3a5f' : '3px solid transparent',
-              background:'transparent', color: a === area ? '#1e3a5f' : '#6b7280',
+              border:'none', borderBottom: a === area ? '3px solid #1a73e8' : '3px solid transparent',
+              background:'transparent', color: a === area ? '#1a73e8' : '#6b7280',
               cursor:'pointer', marginBottom:-2,
             }}>
               {a}
               {areaUnits[a]?.length > 0 && (
-                <span style={{ marginLeft:6, fontSize:11, background:'#e2e8f0', padding:'2px 7px', borderRadius:9 }}>
+                <span style={{ marginLeft:6, fontSize:11, background:'#dadce0', padding:'2px 7px', borderRadius:9 }}>
                   {areaUnits[a].length}
                 </span>
               )}
@@ -965,9 +965,9 @@ export default function TechnoManualPage() {
                       display:'block', width:'100%', textAlign:'left',
                       padding:'8px 12px', marginBottom:4, fontSize:13,
                       fontWeight: u === selUnit ? 700 : 400,
-                      background: u === selUnit ? '#1e3a5f' : '#fff',
-                      color: u === selUnit ? '#fff' : '#374151',
-                      border:`1px solid ${chg > 0 ? '#f59e0b' : '#e2e8f0'}`,
+                      background: u === selUnit ? '#e8f0fe' : '#fff',
+                      color: u === selUnit ? '#174ea6' : '#374151',
+                      border:`1px solid ${chg > 0 ? '#f59e0b' : '#dadce0'}`,
                       borderRadius:5, cursor:'pointer',
                     }}>
                       {u}
@@ -992,21 +992,21 @@ export default function TechnoManualPage() {
             {!selUnit ? (
               <div style={{
                 color:'#9ca3af', fontSize:14, padding:'50px 0',
-                textAlign:'center', border:'2px dashed #e2e8f0', borderRadius:8,
+                textAlign:'center', border:'2px dashed #dadce0', borderRadius:8,
               }}>
                 {visibleUnits.length === 0
                   ? `No ${area} units for ${plant} ${reportMonth}. Click "+ Add Unit" to begin.`
                   : 'Select a unit from the left to view or edit its parameters.'}
               </div>
             ) : (
-              <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'18px' }}>
+              <div style={{ background:'#fff', border:'1px solid #dadce0', borderRadius:8, padding:'18px' }}>
                 {/* Unit header */}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10 }}>
                   <div>
-                    <span style={{ fontWeight:700, fontSize:17, color:'#1e3a5f' }}>
+                    <span style={{ fontWeight:700, fontSize:17, color:'#202124' }}>
                       {plant} › {selUnit}
                     </span>
-                    <span style={{ fontSize:13, color:'#64748b', marginLeft:12 }}>{reportMonth}</span>
+                    <span style={{ fontSize:13, color:'#5f6368', marginLeft:12 }}>{reportMonth}</span>
                   </div>
                   <div style={{ display:'flex', gap:10, alignItems:'center' }}>
                     {countChanges(unitData[selUnit], initData[selUnit]) > 0 && (
@@ -1026,7 +1026,7 @@ export default function TechnoManualPage() {
                     </button>
                     <button onClick={() => saveUnit(selUnit)} disabled={saving} style={{
                       padding:'7px 22px', fontSize:14, fontWeight:700,
-                      background: saving ? '#94a3b8' : '#166534', color:'#fff',
+                      background: saving ? '#5f6368' : '#166534', color:'#fff',
                       border:'none', borderRadius:5, cursor: saving ? 'not-allowed' : 'pointer',
                     }}>
                       {saving ? 'Saving…' : `Save ${selUnit}`}
