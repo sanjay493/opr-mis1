@@ -172,10 +172,13 @@ def generate_summary_te_table(report_month: str) -> list:
             value = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
             plan_by_param[param_name] = value
 
-        # Auto-calculate SAIL actuals for any month that has no stored data
+        # Auto-calculate SAIL actuals for any month with no stored data, or with
+        # a stale empty snapshot (e.g. cached before plant techno/production data
+        # for that month existed) — recalculate whenever the Shop entry is empty.
         cply_ytd_last_month = cply_ytd[-1] if cply_ytd else cply_month
         for _m in {report_month, cply_month, cply_ytd_last_month}:
-            if not db.get_sail_techno_actuals(_m):
+            _shop = db.get_sail_techno_actuals(_m).get('Shop', {})
+            if not _shop.get('month') and not _shop.get('till_month'):
                 calculate_and_store_sail_actuals(_m)
 
         # Fetch stored SAIL actuals (calculated and stored)

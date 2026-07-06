@@ -1,0 +1,219 @@
+{
+  "month": "2026-05",
+  "plant": "ISP",
+  "production_rows": [
+    {
+      "cell": "E9",
+      "item_name": "COB#10",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 97.096774
+    },
+    {
+      "cell": "E10",
+      "item_name": "COB#11",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 93.677419
+    },
+    {
+      "cell": "E11",
+      "item_name": "Oven Pushing(nos/d)",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 268.901161
+    },
+    {
+      "cell": "E12",
+      "item_name": "SP-1",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 71.2
+    },
+    {
+      "cell": "E13",
+      "item_name": "SP-2",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 83.384
+    },
+    {
+      "cell": "E14",
+      "item_name": "Total Sinter",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 154.584
+    },
+    {
+      "cell": "E16",
+      "item_name": "Hot Metal",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 110.809
+    },
+    {
+      "cell": "E30",
+      "item_name": "SMS CCM-1&2",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 76.604
+    },
+    {
+      "cell": "E31",
+      "item_name": "SMS CCM-3",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 21.374
+    },
+    {
+      "cell": "E32",
+      "item_name": "Total Crude Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 97.978
+    },
+    {
+      "cell": "E33",
+      "item_name": "WRMILL",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 21.527
+    },
+    {
+      "cell": "E34",
+      "item_name": "BARMILL",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 33.353
+    },
+    {
+      "cell": "E35",
+      "item_name": "USMILL",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 10.555
+    },
+    {
+      "cell": "E36",
+      "item_name": "Finished Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 65.435
+    },
+    {
+      "cell": "E37",
+      "item_name": "Saleable 150 Billets",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 19.329
+    },
+    {
+      "cell": "E38",
+      "item_name": "200 Blooms",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.468
+    },
+    {
+      "cell": "E39",
+      "item_name": "Saleable Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 88.232
+    },
+    {
+      "cell": "E18+E20",
+      "item_name": "Pig Iron",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 7.667
+    },
+    {
+      "cell": "E37+E38",
+      "item_name": "Saleable Semis",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 22.797
+    }
+  ],
+  "sheets": "DAILYREPORT1",
+  "source_type": "Daily Morning Report",
+  "stock_rows": [
+    {
+      "formula": "C108",
+      "item_type": "BLOOM/BILLETS",
+      "plant": "ISP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "FOR SALE",
+      "value": 14.9
+    },
+    {
+      "formula": "D108",
+      "item_type": "BLOOM/BILLETS",
+      "plant": "ISP",
+      "status": "ok",
+      "stock_month": "2026-05",
+      "stock_type": "FOR SALE",
+      "value": 18.016
+    },
+    {
+      "formula": "K102-C108",
+      "item_type": "BLOOM/BILLETS",
+      "plant": "ISP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "INPROCESS",
+      "value": 83.251
+    },
+    {
+      "formula": "C105",
+      "item_type": "FINISHED STEEL",
+      "plant": "ISP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "",
+      "value": 17.257
+    },
+    {
+      "formula": "D105",
+      "item_type": "FINISHED STEEL",
+      "plant": "ISP",
+      "status": "ok",
+      "stock_month": "2026-05",
+      "stock_type": "",
+      "value": 45.254
+    },
+    {
+      "formula": "C110",
+      "item_type": "PIG IRON",
+      "plant": "ISP",
+      "status": "ok",
+      "stock_month": "2026-06",
+      "stock_type": "",
+      "value": 2.652
+    },
+    {
+      "formula": "D110",
+      "item_type": "PIG IRON",
+      "plant": "ISP",
+      "status": "ok",
+      "stock_month": "2026-05",
+      "stock_type": "",
+      "value": 0.612
+    }
+  ],
+  "techno_param_rows": [],
+  "techno_rows": [],
+  "workbook_sheets": [
+    "CEOREPORT",
+    "RAWMATERIALS",
+    "DAILYREPORT1",
+    "RAWMATERIAL & CONSTRAINTS",
+    "ECR DELHI",
+    "DIC REPORT-1",
+    "DIC REPORT-2",
+    "PROCESS FLOW",
+    "SEMIS"
+  ]
+}

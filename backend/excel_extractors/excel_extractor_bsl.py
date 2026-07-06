@@ -62,6 +62,46 @@ def extract_and_save_excel(file_path: str, report_month: str = "", source_file_n
 # Extractor 1 — BSL DPR Mail (month-end daily production report, sheet: DPR)
 # ---------------------------------------------------------------------------
 
+def _dpr_config():
+    """
+    Single source of truth for the BSL DPR Mail cell mapping — shared by the
+    DB-writing extractor (_extract_dpr_report) and the preview-only extractor
+    (_extract_dpr_preview) so they can never drift apart (e.g. one pointing
+    at Z21 for Pig Iron while the other still points at the stale E30).
+
+    Reads excel_cells_config.json (section 'bsl_dpr'); falls back to these
+    hardcoded defaults only if that config section is missing.
+    """
+    import sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from cells_loader import get_extractor_config
+    cfg = get_extractor_config("bsl_dpr")
+
+    cells = cfg.get("cells", {
+        "Oven Pushing (nos/day)": "P6",
+        "Total Sinter":        "P7",
+        "Hot Metal":           "P8",
+        "Pig Iron":            "Z21",
+        "SMS-1 CCM-1":         "P10",
+        "SMS-2 CCM-1&2":       "P11",
+        "Total Crude Steel":   "P12",
+        "HSM Total HR Coil":   "P14",
+        "HSM HR Coil (Sale)":  "E7",
+        "HSM HR Plate":        "E8",
+        "HR Sheet":            "E9",
+        "CRC&S(1&2)":          "E10",
+        "CRC(3)":              "E11",
+        "GP/GC":               "E12",
+        "GPC3":                "E13",
+        "CRSALE":              "E29",
+        "Saleable Steel":      "P31",
+        "Saleable Semis":      "E32",
+    })
+    no_convert = set(cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
+    derived = cfg.get("derived", [{"item": "Finished Steel", "op": "subtract", "a": "P31", "b": "E32"}])
+    return cells, no_convert, derived
+
+
 def _extract_dpr_report(wb, source_file_name: str) -> bool:
     """
     Extracts cumulative production data from the BSL DPR Mail report (sheet 'DPR').
@@ -72,7 +112,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       Oven Pushing (nos/day)  P6    — nos/day average, no unit conversion
       Total Sinter         P7    — tonnes → /1000
       Hot Metal            P8
-      Pig Iron             E30
+      Pig Iron             Z21
       SMS-1 CCM-1          P10
       SMS-2 CCM-1&2        P11
       Total Crude Steel    P12
@@ -117,35 +157,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
 
     logger.info(f"BSL DPR: month auto-detected from O1 → {db_report_month}")
 
-    from cells_loader import get_extractor_config
-    _cfg = get_extractor_config("bsl_dpr")
-
-    NO_CONVERT = set(_cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
-
-    # Cell map: item_name → A1-style address. Falls back to hardcoded defaults.
-    production_cells = _cfg.get("cells", {
-        "Oven Pushing (nos/day)": "P6",
-        "Total Sinter":        "P7",
-        "Hot Metal":           "P8",
-        "Pig Iron":            "E30",
-        "SMS-1 CCM-1":         "P10",
-        "SMS-2 CCM-1&2":       "P11",
-        "Total Crude Steel":   "P12",
-        "HSM Total HR Coil":   "P14",
-        "HSM HR Coil (Sale)":  "E7",
-        "HSM HR Plate":        "E8",
-        "HR Sheet":            "E9",
-        "CRC&S(1&2)":          "E10",
-        "CRC(3)":              "E11",
-        "GP/GC":               "E12",
-        "GPC3":                "E13",
-        "CRSALE":              "E29",
-        "Saleable Steel":      "P31",
-        "Saleable Semis":      "E32",
-    })
-
-    _default_derived = [{"item": "Finished Steel", "op": "subtract", "a": "P31", "b": "E32"}]
-    derived_rules = _cfg.get("derived", _default_derived)
+    production_cells, NO_CONVERT, derived_rules = _dpr_config()
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -1082,27 +1094,7 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
 
     logger.info("BSL DPR preview: month from O1 → %s", db_month)
 
-    NO_CONVERT = {"Oven Pushing (nos/day)"}
-    CELL_MAP = {
-        "Oven Pushing (nos/day)": "P6",
-        "Total Sinter":        "P7",
-        "Hot Metal":           "P8",
-        "Pig Iron":            "E30",
-        "SMS-1 CCM-1":         "P10",
-        "SMS-2 CCM-1&2":       "P11",
-        "Total Crude Steel":   "P12",
-        "HSM Total HR Coil":   "P14",
-        "HSM HR Coil (Sale)":  "E7",
-        "HSM HR Plate":        "E8",
-        "HR Sheet":            "E9",
-        "CRC&S(1&2)":          "E10",
-        "CRC(3)":              "E11",
-        "GP/GC":               "E12",
-        "GPC3":                "E13",
-        "CRSALE":              "E29",
-        "Saleable Steel":      "P31",
-        "Saleable Semis":      "E32",
-    }
+    CELL_MAP, NO_CONVERT, derived_rules = _dpr_config()
 
     rows = []
     for item_name, addr in CELL_MAP.items():
@@ -1119,17 +1111,31 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
             rows.append({"item_name": item_name, "value": None, "unit": unit,
                          "cell": f"DPR!{addr}", "pdf_label": addr, "status": "skip"})
 
-    # Derived: Finished Steel = Saleable Steel (P31) − Saleable Semis (E32)
-    sal = clean_val(ws["P31"].value)
-    sem = clean_val(ws["E32"].value)
-    if sal is not None and sem is not None:
-        rows.append({"item_name": "Finished Steel",
-                     "value": round((sal - sem) / 1000.0, 3), "unit": "'000T",
-                     "cell": "DPR!P31-E32 (computed)", "pdf_label": "P31-E32", "status": "ok"})
-    elif sal is not None:
-        rows.append({"item_name": "Finished Steel",
-                     "value": round(sal / 1000.0, 3), "unit": "'000T",
-                     "cell": "DPR!P31 (semis missing)", "pdf_label": "P31", "status": "ok"})
+    # Derived values driven by the same config used by the DB-writing extractor.
+    for d in derived_rules:
+        item = d["item"]
+        if d["op"] == "subtract":
+            a_val = clean_val(ws[d["a"]].value)
+            b_val = clean_val(ws[d["b"]].value)
+            if a_val is not None and b_val is not None:
+                rows.append({"item_name": item,
+                             "value": round((a_val - b_val) / 1000.0, 3), "unit": "'000T",
+                             "cell": f"DPR!{d['a']}-{d['b']} (computed)",
+                             "pdf_label": f"{d['a']}-{d['b']}", "status": "ok"})
+            elif a_val is not None:
+                rows.append({"item_name": item,
+                             "value": round(a_val / 1000.0, 3), "unit": "'000T",
+                             "cell": f"DPR!{d['a']} ({d['b']} missing)",
+                             "pdf_label": d["a"], "status": "ok"})
+        elif d["op"] == "add":
+            addrs = d.get("cells", [])
+            parts = [clean_val(ws[c].value) for c in addrs]
+            parts = [v for v in parts if v is not None]
+            if parts:
+                rows.append({"item_name": item,
+                             "value": round(sum(parts) / 1000.0, 3), "unit": "'000T",
+                             "cell": f"DPR!{'+'.join(addrs)} (computed)",
+                             "pdf_label": "+".join(addrs), "status": "ok"})
 
     ok = sum(1 for r in rows if r["status"] == "ok")
     logger.info("BSL DPR preview: %d/%d ok for %s", ok, len(rows), db_month)

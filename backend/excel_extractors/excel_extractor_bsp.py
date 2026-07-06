@@ -151,6 +151,54 @@ MONTH_NAMES = {
 }
 
 
+def _ppc_mis_config() -> Dict[str, tuple]:
+    """
+    Single source of truth for the BSP PPC MIS cell mapping — shared by the
+    DB-writing extractor (extract_and_save_excel) and the preview-only
+    extractor (_extract_ppc_mis_preview) so they can never drift apart.
+
+    Reads excel_cells_config.json (section 'bsp_ppc_mis'); falls back to these
+    hardcoded (row_0based, col_0based, divide_by_1000) tuples only if that
+    config section is missing.
+    """
+    import sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from cells_loader import get_extractor_config
+    cfg = get_extractor_config("bsp_ppc_mis")
+
+    default_rc = {
+        "COB#1-8":             (3,  5,  False),
+        "Oven Pushing (nos/day)": (5,  5,  False),
+        "SP-2":                (7,  5,  True),
+        "SP-3":                (8,  5,  True),
+        "Total Sinter":        (9,  5,  True),
+        "BF#1-7":              (10, 5,  True),
+        "BF#8":                (11, 5,  True),
+        "Hot Metal":           (12, 5,  True),
+        "SMS-2":               (13, 5,  True),
+        "SMS-3":               (15, 5,  True),
+        "Total Crude Steel":   (16, 5,  True),
+        "RSM_RAIL":            (17, 5,  True),
+        "URM_RAIL":            (21, 5,  True),
+        "MM":                  (23, 5,  True),
+        "WIRERODS":            (24, 5,  True),
+        "BARS&RODMILL":        (25, 5,  True),
+        "PLATEMILL":           (26, 5,  True),
+        "Finished Steel":      (27, 5,  True),
+        "Saleable Semis":      (34, 5,  True),
+        "Saleable Steel":      (35, 5,  True),
+        "RSMPRIME":            (38, 5,  True),
+        "URMPRIME":            (38, 9,  True),
+        "Pig Iron":            (62, 13, True),
+    }
+    # Config stores [row, col, divide] lists; convert to tuples matching code expectation
+    cfg_rc = cfg.get("cells_rc", {})
+    return {
+        k: tuple(v) if isinstance(v, list) else v
+        for k, v in cfg_rc.items()
+    } if cfg_rc else default_rc
+
+
 def extract_and_save_excel(file_path: str, report_month: str = None,
                            source_file_name: str = "") -> bool:
     """Extract BSP production actuals from the daily PPC MIS .xls report (sheet S1).
@@ -182,40 +230,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
                 "no report_month was provided."
             )
 
-        from cells_loader import get_extractor_config
-        _cfg = get_extractor_config("bsp_ppc_mis")
-
-        _default_rc = {
-            "COB#1-8":             (3,  5,  False),
-            "Oven Pushing (nos/day)": (5,  5,  False),
-            "SP-2":                (7,  5,  True),
-            "SP-3":                (8,  5,  True),
-            "Total Sinter":        (9,  5,  True),
-            "BF#1-7":              (10, 5,  True),
-            "BF#8":                (11, 5,  True),
-            "Hot Metal":           (12, 5,  True),
-            "SMS-2":               (13, 5,  True),
-            "SMS-3":               (15, 5,  True),
-            "Total Crude Steel":   (16, 5,  True),
-            "RSM_RAIL":            (17, 5,  True),
-            "URM_RAIL":            (21, 5,  True),
-            "MM":                  (23, 5,  True),
-            "WIRERODS":            (24, 5,  True),
-            "BARS&RODMILL":        (25, 5,  True),
-            "PLATEMILL":           (26, 5,  True),
-            "Finished Steel":      (27, 5,  True),
-            "Saleable Semis":      (34, 5,  True),
-            "Saleable Steel":      (35, 5,  True),
-            "RSMPRIME":            (38, 5,  True),
-            "URMPRIME":            (38, 9,  True),
-            "Pig Iron":            (62, 13, True),
-        }
-        # Config stores [row, col, divide] lists; convert to tuples matching code expectation
-        _cfg_rc = _cfg.get("cells_rc", {})
-        production_cells = {
-            k: tuple(v) if isinstance(v, list) else v
-            for k, v in _cfg_rc.items()
-        } if _cfg_rc else _default_rc
+        production_cells = _ppc_mis_config()
 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -898,40 +913,14 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
     else:
         logger.info("BSP PPC MIS preview: month → %s", db_month)
 
-    COL_F, COL_J, COL_N = 5, 9, 13
-    _PROD_CELLS = [
-        ("COB#1-8",             3,  COL_F, False, "F4"),
-        ("Oven Pushing (nos/day)", 5,  COL_F, False, "F6"),
-        ("SP-2",                7,  COL_F, True,  "F8"),
-        ("SP-3",                8,  COL_F, True,  "F9"),
-        ("Total Sinter",        9,  COL_F, True,  "F10"),
-        ("BF#1-7",              10, COL_F, True,  "F11"),
-        ("BF#8",                11, COL_F, True,  "F12"),
-        ("Hot Metal",           12, COL_F, True,  "F13"),
-        ("SMS-2",               13, COL_F, True,  "F14"),
-        ("SMS-3",               15, COL_F, True,  "F16"),
-        ("Total Crude Steel",   16, COL_F, True,  "F17"),
-        ("RSM_RAIL",            17, COL_F, True,  "F18"),
-        ("URM_RAIL",            21, COL_F, True,  "F22"),
-        ("MM",                  23, COL_F, True,  "F24"),
-        ("WIRERODS",            24, COL_F, True,  "F25"),
-        ("BARS&RODMILL",        25, COL_F, True,  "F26"),
-        ("PLATEMILL",           26, COL_F, True,  "F27"),
-        ("Finished Steel",      27, COL_F, True,  "F28"),
-        ("Saleable Semis",      34, COL_F, True,  "F35"),
-        ("Saleable Steel",      35, COL_F, True,  "F36"),
-        ("RSMPRIME",            38, COL_F, True,  "F39"),
-        ("URMPRIME",            38, COL_J, True,  "J39"),
-        ("Pig Iron",            62, COL_N, True,  "N63"),
-    ]
-
     production_rows = []
-    for item_name, row_0, col_0, do_convert, cell_ref in _PROD_CELLS:
+    for item_name, (row_0, col_0, do_convert) in _ppc_mis_config().items():
         raw = _cv(row_0, col_0)
         val = _clean(raw)
         if val is not None and do_convert:
             val = round(val / 1000.0, 3)
         unit = "nos/d" if not do_convert else "'000T"
+        cell_ref = f"{get_column_letter(col_0 + 1)}{row_0 + 1}"
         production_rows.append({
             "item_name": item_name,
             "value": val,

@@ -112,6 +112,24 @@ const PLANT_PARAM_EXTRAS = {
   DSP: { 'Sinter Plant': ['dsp_sp_1','dsp_sp_2'] },
 };
 
+// Params that are extensive totals — YTD cumulative = sum of monthly values.
+// Everything else (rates, %, temperatures) defaults to arithmetic average.
+const SUM_KEYS = new Set([
+  'coke_production', 'sinter_production', 'production', 'water_consumption',
+]);
+
+// Cumulative = sum (SUM_KEYS) or average of prior FY-to-date monthly values
+// plus the currently-entered month value. Returns null if nothing to base it on.
+function computeCumulative(key, history, currentVal) {
+  const vals = Object.values(history || {})
+    .map(m => m?.[key])
+    .filter(v => v !== null && v !== undefined);
+  if (currentVal !== null && currentVal !== undefined) vals.push(currentVal);
+  if (!vals.length) return null;
+  const sum = vals.reduce((a, b) => a + b, 0);
+  return SUM_KEYS.has(key) ? sum : sum / vals.length;
+}
+
 function templateFor(area, plant) {
   const base   = PARAM_TEMPLATES[area] || [];
   const extras = (PLANT_PARAM_EXTRAS[plant] || {})[area] || [];
@@ -510,6 +528,10 @@ export default function TechnoManualPage() {
   // initData: snapshot from last DB load/save (used for change detection)
   const [unitData,    setUnitData]    = useState({});
   const [initData,    setInitData]    = useState({});
+  // ytdHistory: {unit: {"2026-04": {param_key: val}, ...}} — FY-to-date monthly
+  //   values (excluding the currently-selected month). Only read when the user
+  //   clicks "Calculate Cumulative" — never applied automatically.
+  const [ytdHistory,  setYtdHistory]  = useState({});
   const [loading,     setLoading]     = useState(false);
   const [notice,      setNotice]      = useState(null);
   const [saving,      setSaving]      = useState(false);
@@ -531,11 +553,13 @@ export default function TechnoManualPage() {
       const units = d.units || {};
       setUnitData(units);
       setInitData(JSON.parse(JSON.stringify(units)));
+      setYtdHistory(d.ytd_history || {});
+
       if (!d.has_data)
         setNotice({ type:'info', text:`No data yet for ${plant} ${reportMonth}. Click "+ Add Unit" to begin.` });
     } catch (e) {
       setNotice({ type:'error', text:`Load failed: ${e.message}` });
-      setUnitData({}); setInitData({});
+      setUnitData({}); setInitData({}); setYtdHistory({});
     } finally {
       setLoading(false);
     }
@@ -568,6 +592,35 @@ export default function TechnoManualPage() {
         [period]: { ...(prev[unit]?.[period] || {}), [key]: val },
       },
     }));
+  }
+
+  // ── Calculate Cumulative (button-triggered, current unit only) ─────────────
+  // Fills in ONLY YTD boxes that are currently blank, from Apr→current monthly
+  // history. Never overwrites a value already present — whether it came from
+  // file upload/extraction or a prior manual entry — so that data always
+  // prevails and the user can still edit the result afterwards.
+  function calculateCumulative(unit) {
+    const history = ytdHistory[unit] || {};
+    const monthData = unitData[unit]?.month || {};
+    const tillData  = unitData[unit]?.till_month || {};
+    const keys = new Set([...Object.keys(monthData), ...Object.keys(tillData)]);
+
+    let filled = 0;
+    const nextTill = { ...tillData };
+    for (const key of keys) {
+      if (nextTill[key] !== null && nextTill[key] !== undefined) continue; // prevails — skip
+      const calc = computeCumulative(key, history, monthData[key] ?? null);
+      if (calc !== null) { nextTill[key] = calc; filled++; }
+    }
+
+    setUnitData(prev => ({
+      ...prev,
+      [unit]: { ...prev[unit], till_month: nextTill },
+    }));
+    setSavedUnits(prev => { const s = new Set(prev); s.delete(unit); return s; });
+    setNotice(filled
+      ? { type:'success', text:`Calculated ${filled} blank YTD value(s) for ${unit}. Review and Save.` }
+      : { type:'info', text:`No blank YTD boxes to calculate for ${unit} (or no Month Values entered yet).` });
   }
 
   // ── Add param to unit ───────────────────────────────────────────────────────
@@ -964,6 +1017,13 @@ export default function TechnoManualPage() {
                         {countChanges(unitData[selUnit], initData[selUnit])} unsaved
                       </span>
                     )}
+                    <button onClick={() => calculateCumulative(selUnit)} disabled={saving} style={{
+                      padding:'7px 18px', fontSize:14, fontWeight:600,
+                      background:'#3b82f6', color:'#fff', border:'none',
+                      borderRadius:5, cursor: saving ? 'not-allowed' : 'pointer',
+                    }}>
+                      Calculate Cumulative
+                    </button>
                     <button onClick={() => saveUnit(selUnit)} disabled={saving} style={{
                       padding:'7px 22px', fontSize:14, fontWeight:700,
                       background: saving ? '#94a3b8' : '#166534', color:'#fff',
@@ -993,7 +1053,7 @@ export default function TechnoManualPage() {
 
         {/* ── Footer note ── */}
         <div style={{ marginTop:18, fontSize:12, color:'#9ca3af', display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:6 }}>
-          <span>Amber cells = unsaved changes vs last-loaded DB values.</span>
+          <span>Amber cells = unsaved changes vs last-loaded DB values. Click “Calculate Cumulative” to fill blank YTD boxes from Apr→current monthly history — existing values (file-uploaded or manual) are never overwritten, and results stay editable.</span>
           <span>Null values are not overwritten on save. File-uploaded and manual data coexist — last write wins per parameter.</span>
         </div>
       </div>
