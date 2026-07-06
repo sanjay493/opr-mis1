@@ -357,10 +357,10 @@ export default function ReportPage() {
         {/* Typography and Layout Settings — now configured via backend layout_config.json only */}
         <div className="control-section">
           <h2>Layout & Typography</h2>
-          <p style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: '1.4' }}>
-            Font sizes, margins, and layout settings are now configured in the backend <code style={{ backgroundColor: '#1e293b', padding: '2px 6px', borderRadius: '3px', fontFamily: 'monospace', fontSize: '0.75rem' }}>layout_config.json</code> file.
+          <p style={{ fontSize: '0.8rem', color: '#5f6368', lineHeight: '1.4' }}>
+            Font sizes, margins, and layout settings are now configured in the backend <code style={{ backgroundColor: '#f8f9fa', padding: '2px 6px', borderRadius: '3px', fontFamily: 'monospace', fontSize: '0.75rem' }}>layout_config.json</code> file.
           </p>
-          <p style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: '1.4', marginTop: '8px' }}>
+          <p style={{ fontSize: '0.8rem', color: '#5f6368', lineHeight: '1.4', marginTop: '8px' }}>
             Edit that file to customize per-page layouts and global typography, then regenerate the PDF.
           </p>
         </div>
@@ -390,7 +390,7 @@ export default function ReportPage() {
             className="btn btn-secondary"
             onClick={handleBackendExport}
             disabled={isGeneratingPDF}
-            style={{ borderColor: 'var(--primary)', color: '#38bdf8' }}
+            style={{ borderColor: 'var(--primary)', color: '#1a73e8' }}
           >
             {isGeneratingPDF ? (
               'Compiling PDF Backend...'
@@ -407,7 +407,7 @@ export default function ReportPage() {
           </button>
         </div>
 
-        <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>
+        <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#5f6368', textAlign: 'center' }}>
           SAIL Informatics Report Portal • v1.0.0
         </div>
       </div>
@@ -415,14 +415,14 @@ export default function ReportPage() {
       {/* Main Preview Area */}
       <div className="preview-area">
         {isLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b', fontSize: '1.2rem', fontWeight: '500' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#5f6368', fontSize: '1.2rem', fontWeight: '500' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
               <style>{`
                 @keyframes spin {
                   to { transform: rotate(360deg); }
                 }
               `}</style>
-              <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid #cbd5e1', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid #dadce0', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
               Loading database report data...
             </div>
           </div>

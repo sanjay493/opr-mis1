@@ -33,13 +33,13 @@ export default function TechnoSummaryPage() {
 
   if (!data) {
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc' }}>
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
         <GlobalNavbar />
         <main style={{ flex: 1, overflow: 'auto', padding: '32px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-          <h1 style={{ fontSize: '28pt', fontWeight: '900', color: '#0f172a' }}>📊 Techno Performance Summary</h1>
+          <h1 style={{ fontSize: '28pt', fontWeight: '900', color: '#202124' }}>📊 Techno Performance Summary</h1>
           <div style={{ marginBottom: '24px' }}>
             <label style={{ fontSize: '13pt', fontWeight: '600' }}>Financial Year: </label>
-            <select value={fy} onChange={e => setFy(e.target.value)} style={{ padding: '8px 12px', fontSize: '13pt', borderRadius: '4px', border: '1px solid #cbd5e1', marginLeft: '8px' }}>
+            <select value={fy} onChange={e => setFy(e.target.value)} style={{ padding: '8px 12px', fontSize: '13pt', borderRadius: '4px', border: '1px solid #dadce0', marginLeft: '8px' }}>
               {FY_LIST.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
@@ -89,26 +89,26 @@ export default function TechnoSummaryPage() {
   });
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
       <main style={{ flex: 1, overflow: 'auto', padding: '32px', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
 
         {/* Header */}
         <div style={{ marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '28pt', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>
+          <h1 style={{ fontSize: '28pt', fontWeight: '900', color: '#202124', margin: '0 0 8px 0' }}>
             📊 Techno Performance Summary
           </h1>
-          <p style={{ fontSize: '13pt', color: '#64748b', margin: '0' }}>
+          <p style={{ fontSize: '13pt', color: '#5f6368', margin: '0' }}>
             FY {fy} | Plant-wise and SMS-wise Techno Targets with Production Context
           </p>
         </div>
 
         {/* Controls */}
-        <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
-          <label style={{ fontSize: '13pt', fontWeight: '600', color: '#475569', marginRight: '12px' }}>
+        <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid #dadce0', marginBottom: '24px' }}>
+          <label style={{ fontSize: '13pt', fontWeight: '600', color: '#5f6368', marginRight: '12px' }}>
             Financial Year:
           </label>
-          <select value={fy} onChange={e => setFy(e.target.value)} style={{ padding: '8px 12px', fontSize: '13pt', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+          <select value={fy} onChange={e => setFy(e.target.value)} style={{ padding: '8px 12px', fontSize: '13pt', borderRadius: '4px', border: '1px solid #dadce0' }}>
             {FY_LIST.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
           <button onClick={handleLoad} style={{ marginLeft: '12px', padding: '8px 16px', fontSize: '13pt', fontWeight: '600', borderRadius: '4px', border: 'none', backgroundColor: '#6366f1', color: '#fff', cursor: 'pointer' }}>
@@ -118,8 +118,8 @@ export default function TechnoSummaryPage() {
 
         {/* BF Parameters Chart */}
         {bfChartData.length > 0 && (
-          <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '24px', marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '16pt', fontWeight: '700', color: '#1e293b', marginBottom: '16px' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #dadce0', padding: '24px', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '16pt', fontWeight: '700', color: '#202124', marginBottom: '16px' }}>
               🏭 BF Parameters by Plant
             </h2>
             <ResponsiveContainer width="100%" height={300}>
@@ -139,8 +139,8 @@ export default function TechnoSummaryPage() {
 
         {/* SMS Parameters Chart */}
         {smsChartData.length > 0 && (
-          <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '24px', marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '16pt', fontWeight: '700', color: '#1e293b', marginBottom: '16px' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #dadce0', padding: '24px', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '16pt', fontWeight: '700', color: '#202124', marginBottom: '16px' }}>
               ⚙️ SMS Parameters by Shop
             </h2>
             <ResponsiveContainer width="100%" height={300}>
@@ -179,12 +179,12 @@ export default function TechnoSummaryPage() {
         {/* Production Context */}
         {data.production_context && (
           <div style={{ backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #e0e7ff', padding: '24px' }}>
-            <h2 style={{ fontSize: '16pt', fontWeight: '700', color: '#0c4a6e', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '16pt', fontWeight: '700', color: '#174ea6', marginBottom: '16px' }}>
               📈 Production Context
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px' }}>
               <div>
-                <h3 style={{ fontSize: '13pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '12px' }}>HM Production by Plant</h3>
+                <h3 style={{ fontSize: '13pt', fontWeight: '600', color: '#174ea6', marginBottom: '12px' }}>HM Production by Plant</h3>
                 {Object.entries(data.production_context.hm_weights).map(([plant, weight]) => (
                   <div key={plant} style={{ fontSize: '12pt', padding: '4px 0', color: '#064e3b' }}>
                     {plant}: {weight?.toLocaleString() || '—'}
@@ -192,7 +192,7 @@ export default function TechnoSummaryPage() {
                 ))}
               </div>
               <div>
-                <h3 style={{ fontSize: '13pt', fontWeight: '600', color: '#0c4a6e', marginBottom: '12px' }}>CS Production by SMS Shop</h3>
+                <h3 style={{ fontSize: '13pt', fontWeight: '600', color: '#174ea6', marginBottom: '12px' }}>CS Production by SMS Shop</h3>
                 {Object.entries(data.production_context.sms_cs_weights).slice(0, 8).map(([shop, weight]) => (
                   <div key={shop} style={{ fontSize: '12pt', padding: '4px 0', color: '#064e3b' }}>
                     {shop}: {weight?.toLocaleString() || '—'}
