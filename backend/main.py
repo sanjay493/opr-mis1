@@ -878,6 +878,10 @@ async def extract_preview_endpoint(
                     lambda: excel_extractor_rsp.extract_preview(tmp_path, month)
                 )
         result["file_name"] = file.filename
+        # Attach current DB values to each production row so the UI can show
+        # DB-vs-extracted side by side before the user confirms the insert.
+        _resolved_month = result.get("month") or month
+        db.enrich_rows_with_db_production(result.get("production_rows", []), plant_name, _resolved_month)
         return result
     except HTTPException:
         raise
@@ -1196,30 +1200,32 @@ async def bsl_bf_techno_preview(
         # Extract data
         records = extract_bsl_mer(pdf_text, report_month=month, filename=file.filename)
 
+        # Current DB cumulative values per unit, for DB-vs-extracted comparison
+        # in the UI before the user confirms the save.
+        _existing_bsl = db.get_techno_data("BSL", month)
+
         # Convert to editable format (cumulative values only)
         editable_data = []
 
+        _param_keys = [
+            "production", "bf_productivity", "coke_rate", "nut_coke_rate", "cdi",
+            "fuel_rate", "hot_blast_temp", "o2_enrichment", "slag_rate",
+            "sinter_in_burden", "pellet_in_burden",
+        ]
         for record in records:
             unit = record['unit']
             techno_json = record['techno_json']
             till_month = techno_json.get('till_month', {})
+            db_till_month = _existing_bsl.get(unit, {}).get('till_month', {})
 
             # Map to parameter names for UI
             row = {
                 "id": f"{unit}_{month}",
                 "unit": unit,
-                "production": till_month.get("production"),
-                "bf_productivity": till_month.get("bf_productivity"),
-                "coke_rate": till_month.get("coke_rate"),
-                "nut_coke_rate": till_month.get("nut_coke_rate"),
-                "cdi": till_month.get("cdi"),
-                "fuel_rate": till_month.get("fuel_rate"),
-                "hot_blast_temp": till_month.get("hot_blast_temp"),
-                "o2_enrichment": till_month.get("o2_enrichment"),
-                "slag_rate": till_month.get("slag_rate"),
-                "sinter_in_burden": till_month.get("sinter_in_burden"),
-                "pellet_in_burden": till_month.get("pellet_in_burden"),
+                "db": {k: db_till_month.get(k) for k in _param_keys},
             }
+            for k in _param_keys:
+                row[k] = till_month.get(k)
             editable_data.append(row)
 
         return {

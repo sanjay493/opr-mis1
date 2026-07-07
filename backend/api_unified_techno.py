@@ -17,7 +17,7 @@ _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
-from db import init_db, upsert_techno_data, get_techno_data, get_techno_months
+from db import init_db, upsert_techno_data, get_techno_data, get_techno_months, enrich_techno_records_with_db
 
 router = APIRouter(prefix="/api/techno", tags=["unified-techno"])
 
@@ -267,6 +267,10 @@ async def preview_techno(
         # Use the extractor's own detected month (authoritative for DSP-style
         # auto-detect) rather than the raw input, which may be blank.
         resolved_month = records[0].get("report_month") or report_month
+
+        # Attach current DB values so the UI can show DB-vs-extracted side by
+        # side (month and cumulative) before the user confirms the insert.
+        enrich_techno_records_with_db(preview_records, plant, resolved_month)
 
         return {
             "status": "preview",

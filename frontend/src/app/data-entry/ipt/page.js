@@ -26,8 +26,8 @@ function numOrNull(v) {
 }
 
 const S = {
-  H:  { padding: '10px 10px', textAlign: 'center', fontWeight: 700, color: '#475569',
-        borderBottom: '1px solid #e2e8f0', fontSize: 13, backgroundColor: '#f1f5f9',
+  H:  { padding: '10px 10px', textAlign: 'center', fontWeight: 700, color: '#5f6368',
+        borderBottom: '1px solid #dadce0', fontSize: 13, backgroundColor: '#f8f9fa',
         whiteSpace: 'nowrap' },
   TD: { padding: '7px 8px', borderBottom: '1px solid #f0f4f8', fontSize: 14, verticalAlign: 'middle' },
 };
@@ -50,7 +50,7 @@ function Notice({ type, text }) {
 function Sel({ value, onChange, options, width = 80 }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
-      style={{ width, padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13, backgroundColor: '#fff' }}>
+      style={{ width, padding: '6px 8px', border: '1px solid #dadce0', borderRadius: 4, fontSize: 13, backgroundColor: '#fff' }}>
       {options.map(o => <option key={o} value={o}>{o}</option>)}
       {!options.includes(value) && <option value={value}>{value}</option>}
     </select>
@@ -61,7 +61,7 @@ function Num({ value, onChange, width = 82 }) {
   return (
     <input type="number" step="any" value={value ?? ''}
       onChange={e => onChange(e.target.value)}
-      style={{ width, padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
+      style={{ width, padding: '6px 8px', border: '1px solid #dadce0', borderRadius: 4,
                textAlign: 'right', fontSize: 13, backgroundColor: '#fff' }} />
   );
 }
@@ -129,15 +129,15 @@ function RouteRow({ row, month, onSaved, onDeleted }) {
       <td style={{ ...S.TD, textAlign: 'center' }}><Sel value={r.unit} onChange={v => set('unit', v)} options={UNITS} width={66} /></td>
       <td style={{ ...S.TD, textAlign: 'center' }}>
         <input type="number" step="1" value={r.sort_order ?? 0} onChange={e => set('sort_order', e.target.value)}
-          style={{ width: 52, padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4, textAlign: 'center', fontSize: 13 }} />
+          style={{ width: 52, padding: '6px 8px', border: '1px solid #dadce0', borderRadius: 4, textAlign: 'center', fontSize: 13 }} />
       </td>
       <td style={{ ...S.TD, textAlign: 'right' }}><Num value={r.plan}            onChange={v => set('plan', v)} /></td>
       <td style={{ ...S.TD, textAlign: 'right' }}><Num value={r.actual}          onChange={v => set('actual', v)} /></td>
       <td style={{ ...S.TD, textAlign: 'right' }}>
-        {isRake ? <Num value={r.plan_tonnage}   onChange={v => set('plan_tonnage', v)} /> : <span style={{ color: '#94a3b8' }}>—</span>}
+        {isRake ? <Num value={r.plan_tonnage}   onChange={v => set('plan_tonnage', v)} /> : <span style={{ color: '#5f6368' }}>—</span>}
       </td>
       <td style={{ ...S.TD, textAlign: 'right' }}>
-        {isRake ? <Num value={r.actual_tonnage} onChange={v => set('actual_tonnage', v)} /> : <span style={{ color: '#94a3b8' }}>—</span>}
+        {isRake ? <Num value={r.actual_tonnage} onChange={v => set('actual_tonnage', v)} /> : <span style={{ color: '#5f6368' }}>—</span>}
       </td>
       <td style={{ ...S.TD, textAlign: 'center' }}>
         {msg === 'saved'
@@ -211,15 +211,15 @@ function NewRouteRow({ month, onAdded }) {
         <td style={{ ...S.TD, textAlign: 'center' }}><Sel value={r.unit} onChange={v => set('unit', v)} options={UNITS} width={66} /></td>
         <td style={{ ...S.TD, textAlign: 'center' }}>
           <input type="number" step="1" value={r.sort_order} onChange={e => set('sort_order', e.target.value)}
-            style={{ width: 52, padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4, textAlign: 'center', fontSize: 13 }} />
+            style={{ width: 52, padding: '6px 8px', border: '1px solid #dadce0', borderRadius: 4, textAlign: 'center', fontSize: 13 }} />
         </td>
         <td style={{ ...S.TD, textAlign: 'right' }}><Num value={r.plan}   onChange={v => set('plan', v)} /></td>
         <td style={{ ...S.TD, textAlign: 'right' }}><Num value={r.actual} onChange={v => set('actual', v)} /></td>
         <td style={{ ...S.TD, textAlign: 'right' }}>
-          {isRake ? <Num value={r.plan_tonnage}   onChange={v => set('plan_tonnage', v)} /> : <span style={{ color: '#94a3b8' }}>—</span>}
+          {isRake ? <Num value={r.plan_tonnage}   onChange={v => set('plan_tonnage', v)} /> : <span style={{ color: '#5f6368' }}>—</span>}
         </td>
         <td style={{ ...S.TD, textAlign: 'right' }}>
-          {isRake ? <Num value={r.actual_tonnage} onChange={v => set('actual_tonnage', v)} /> : <span style={{ color: '#94a3b8' }}>—</span>}
+          {isRake ? <Num value={r.actual_tonnage} onChange={v => set('actual_tonnage', v)} /> : <span style={{ color: '#5f6368' }}>—</span>}
         </td>
         <td colSpan={2} style={{ ...S.TD, textAlign: 'center' }}>
           <button onClick={handleAdd} disabled={saving}
@@ -289,17 +289,17 @@ export default function IptDataEntryPage() {
   const monthDisplay = `${MON[parseInt(mo)]}'${y.slice(2)}`;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
       <GlobalNavbar />
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 20px' }}>
+      <div style={{ flex: 1, overflow: 'auto', maxWidth: 1400, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
 
         {/* ── Page title ── */}
         <div style={{ marginBottom: 18 }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#1e3a5f', margin: '0 0 4px' }}>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
             IPT Status — Data Entry
           </h2>
-          <span style={{ fontSize: 13, color: '#94a3b8' }}>
+          <span style={{ fontSize: 13, color: '#5f6368' }}>
             Inter-Plant Transfer routes for page 26. Select month and click Load Records.
           </span>
         </div>
@@ -307,7 +307,7 @@ export default function IptDataEntryPage() {
         {/* ── Controls bar ── */}
         <div style={{
           display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
-          marginBottom: 18, background: '#fff', border: '1px solid #e2e8f0',
+          marginBottom: 18, background: '#fff', border: '1px solid #dadce0',
           borderRadius: 8, padding: '14px 18px',
         }}>
           <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Month</label>
@@ -317,7 +317,7 @@ export default function IptDataEntryPage() {
 
           <button onClick={() => load(month)} disabled={loading} style={{
             padding: '7px 20px', fontSize: 14, fontWeight: 600,
-            background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: 4,
+            background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 4,
             cursor: loading ? 'not-allowed' : 'pointer',
           }}>
             {loading ? 'Loading…' : 'Load Records'}
@@ -326,14 +326,14 @@ export default function IptDataEntryPage() {
           {loaded && (
             <button onClick={() => setShowNew(v => !v)} style={{
               padding: '7px 20px', fontSize: 14, fontWeight: 600,
-              background: showNew ? '#f1f5f9' : '#6366f1', color: showNew ? '#374151' : '#fff',
-              border: `1px solid ${showNew ? '#e2e8f0' : '#6366f1'}`, borderRadius: 4, cursor: 'pointer',
+              background: showNew ? '#f8f9fa' : '#6366f1', color: showNew ? '#374151' : '#fff',
+              border: `1px solid ${showNew ? '#dadce0' : '#6366f1'}`, borderRadius: 4, cursor: 'pointer',
             }}>
               {showNew ? 'Cancel New Route' : '+ Add New Route'}
             </button>
           )}
 
-          <span style={{ marginLeft: 'auto', fontSize: 13, color: '#94a3b8' }}>
+          <span style={{ marginLeft: 'auto', fontSize: 13, color: '#5f6368' }}>
             {monthDisplay}{loading && ' ⟳'}
           </span>
         </div>
@@ -344,7 +344,7 @@ export default function IptDataEntryPage() {
         {!loaded && !loading && (
           <div style={{
             padding: 48, textAlign: 'center', backgroundColor: '#fff',
-            border: '2px dashed #e2e8f0', borderRadius: 8, color: '#94a3b8',
+            border: '2px dashed #dadce0', borderRadius: 8, color: '#5f6368',
           }}>
             <p style={{ margin: 0, fontSize: 14 }}>
               Select a month and click <strong>Load Records</strong>.
@@ -353,22 +353,22 @@ export default function IptDataEntryPage() {
         )}
 
         {loading && (
-          <div style={{ padding: 48, textAlign: 'center', color: '#64748b', fontSize: 14 }}>
+          <div style={{ padding: 48, textAlign: 'center', color: '#5f6368', fontSize: 14 }}>
             Loading…
           </div>
         )}
 
         {loaded && (
-          <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ backgroundColor: '#fff', border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
             {/* Table header */}
             <div style={{
-              padding: '14px 18px', backgroundColor: '#1e293b', color: '#f1f5f9',
+              padding: '14px 18px', backgroundColor: '#f8f9fa', color: '#202124',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span style={{ fontWeight: 700, fontSize: 14 }}>
                 IPT Status — {monthDisplay}
               </span>
-              <span style={{ fontSize: 13, color: '#94a3b8' }}>
+              <span style={{ fontSize: 13, color: '#5f6368' }}>
                 {rows.length} route{rows.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -392,7 +392,7 @@ export default function IptDataEntryPage() {
                 <tbody>
                   {rows.length === 0 && !showNew && (
                     <tr>
-                      <td colSpan={11} style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+                      <td colSpan={11} style={{ padding: 24, textAlign: 'center', color: '#5f6368', fontSize: 14 }}>
                         No routes for {monthDisplay}. Click <strong>+ Add New Route</strong> to create one.
                       </td>
                     </tr>
@@ -414,16 +414,16 @@ export default function IptDataEntryPage() {
             </div>
 
             <div style={{
-              padding: '12px 18px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0',
+              padding: '12px 18px', backgroundColor: '#f8f9fa', borderTop: '1px solid #dadce0',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
-              <span style={{ fontSize: 13, color: '#64748b' }}>
+              <span style={{ fontSize: 13, color: '#5f6368' }}>
                 Save each row individually. Plan (T) and Actual (T) apply only to Rake unit routes.
               </span>
               <button onClick={() => setShowNew(v => !v)}
                 style={{
                   padding: '7px 18px', border: '1px solid #6366f1', borderRadius: 4,
-                  backgroundColor: showNew ? '#f1f5f9' : '#6366f1',
+                  backgroundColor: showNew ? '#f8f9fa' : '#6366f1',
                   color: showNew ? '#6366f1' : '#fff', fontSize: 14, cursor: 'pointer',
                 }}>
                 {showNew ? 'Cancel' : '+ Add Route'}

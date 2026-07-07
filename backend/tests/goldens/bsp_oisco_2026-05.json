@@ -586,11 +586,11 @@
       "unit": "Nos"
     },
     {
-      "actual": 236.663224,
-      "cell": "F54/G54",
-      "cum_actual": 234.75898,
-      "file_label": "Labour productivity (with Work+Non Work+Contract Worker Manpower)",
-      "found_via": "hardcoded R54",
+      "actual": 2.739084,
+      "cell": "F55/G55",
+      "cum_actual": 2.738449,
+      "file_label": "Sp.Water consmpn(Excl. power plants)",
+      "found_via": "hardcoded R55",
       "group_code": "GENERAL",
       "month": "2026-05",
       "parameter": "Sp. Water Consumption",
