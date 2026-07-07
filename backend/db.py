@@ -288,6 +288,19 @@ def _fs_alias_sum(cursor, tbl: str, month: str, plants: list) -> Optional[float]
     return total if found else None
 
 
+def _sail_conversion_actual(cursor, month: str) -> Optional[float]:
+    """SAIL-level 'Conversion' actual for a month (entered via /data-entry/conversion),
+    stored as plant_name='SAIL' in production_table. Represents material converted
+    outside the plants' own reported Finished Steel and must be added to the SAIL
+    Finished Steel total, not just relied on as a plant-sum fallback."""
+    cursor.execute(
+        "SELECT month_actual FROM production_table WHERE report_month=? AND plant_name='SAIL' AND item_name='Conversion'",
+        (month,),
+    )
+    row = cursor.fetchone()
+    return row[0] if row and row[0] is not None else None
+
+
 def get_sail_production_actual(month: str, item: str) -> Optional[float]:
     """Calculates the sum of actuals across active plants. Falls back to explicit 'SAIL' record if none found."""
     init_db()
@@ -296,9 +309,10 @@ def get_sail_production_actual(month: str, item: str) -> Optional[float]:
 
     if item == "Finished Steel":
         result = _fs_alias_sum(cursor, "production_table", month, PLANTS)
-        if result is not None:
+        conversion = _sail_conversion_actual(cursor, month)
+        if result is not None or conversion is not None:
             conn.close()
-            return result
+            return (result or 0.0) + (conversion or 0.0)
         # Fallback to direct SAIL record
         cursor.execute(
             "SELECT month_actual FROM production_table WHERE report_month=? AND plant_name='SAIL' AND item_name='Finished Steel'",
@@ -387,8 +401,9 @@ def get_sail_production_ytd_actual(months: List[str], item: str) -> Optional[flo
         total, found = 0.0, False
         for m in months:
             v = _fs_alias_sum(cursor, "production_table", m, PLANTS)
-            if v is not None:
-                total += v
+            c = _sail_conversion_actual(cursor, m)
+            if v is not None or c is not None:
+                total += (v or 0.0) + (c or 0.0)
                 found = True
         conn.close()
         return total if found else None
@@ -1114,6 +1129,57 @@ def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techn
         merged = new_techno_json
 
     upsert_techno_data(plant, report_month, unit, merged, source_file)
+
+
+def get_production_actual_value(plant: str, item_name: str, report_month: str) -> Optional[float]:
+    """Single plant/item/month lookup from production_table (no cross-plant
+    aggregation) - used to show 'current DB value' next to a freshly-extracted
+    figure during upload preview, so the user can compare before confirming."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name=? AND report_month=?",
+        (plant, item_name, report_month),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row and row[0] is not None else None
+
+
+def enrich_rows_with_db_production(rows: List[Dict[str, Any]], plant: str, report_month: str) -> List[Dict[str, Any]]:
+    """Attach 'db_value' (current production_table value, or None) to each
+    preview row in-place, keyed by its item_name. Used by upload preview
+    endpoints so the UI can show DB-vs-extracted side by side before insert."""
+    if not rows:
+        return rows
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT item_name, month_actual FROM production_table WHERE plant_name=? AND report_month=?",
+        (plant, report_month),
+    )
+    current = {item: val for item, val in cursor.fetchall()}
+    conn.close()
+    for r in rows:
+        item = r.get("item_name") or r.get("pdf_label")
+        r["db_value"] = current.get(item) if item else None
+    return rows
+
+
+def enrich_techno_records_with_db(records: List[Dict[str, Any]], plant: str, report_month: str) -> List[Dict[str, Any]]:
+    """Attach 'db_json' (current techno_data {month:{}, till_month:{}} for the
+    same plant/unit/report_month, or empty dicts if none exists yet) to each
+    preview record in-place. Used by techno upload preview endpoints so the UI
+    can show DB-vs-extracted side by side, for both month and cumulative
+    values, before the user confirms the insert."""
+    if not records:
+        return records
+    existing = get_techno_data(plant, report_month)
+    for r in records:
+        r["db_json"] = existing.get(r.get("unit"), {"month": {}, "till_month": {}})
+    return records
 
 
 def get_techno_data(plant: str, report_month: str, unit: str = None) -> Dict:
