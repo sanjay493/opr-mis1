@@ -28,42 +28,19 @@ export default function HomePage() {
       description: 'Review compiled pages, edit cells directly, and generate publication-ready PDF reports',
       icon: '📄',
       link: '/report',
-      color: '#0284c7',
+      color: '#1a73e8',
       bgColor: 'rgba(2, 132, 199, 0.1)'
     }
   ];
 
   return (
     <main style={{
-      minHeight: '100vh',
-      backgroundColor: '#0f172a',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      color: '#f8fafc'
+      height: '100vh',
+      overflowY: 'auto',
+      backgroundColor: '#ffffff',
+      fontFamily: 'var(--ui-font)',
+      color: '#202124'
     }}>
-      {/* Animated background */}
-      <div style={{
-        position: 'fixed',
-        width: '800px',
-        height: '800px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(2, 132, 199, 0.12) 0%, rgba(0,0,0,0) 70%)',
-        top: '-15%',
-        left: '-10%',
-        zIndex: 0,
-        pointerEvents: 'none'
-      }} />
-      <div style={{
-        position: 'fixed',
-        width: '600px',
-        height: '600px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, rgba(0,0,0,0) 70%)',
-        bottom: '-10%',
-        right: '-5%',
-        zIndex: 0,
-        pointerEvents: 'none'
-      }} />
-
       {/* Global Navbar */}
       <GlobalNavbar />
 
@@ -79,19 +56,17 @@ export default function HomePage() {
           <div style={{ marginBottom: '32px' }}>
             <h1 style={{
               fontSize: '42pt',
-              fontWeight: '900',
+              fontWeight: '800',
               letterSpacing: '-0.02em',
               margin: '0 0 16px 0',
-              background: 'linear-gradient(to right, #f8fafc, #94a3b8)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#202124',
               lineHeight: '1.1'
             }}>
               SAIL Operations Monthly Informatics
             </h1>
             <p style={{
               fontSize: '13pt',
-              color: '#94a3b8',
+              color: '#5f6368',
               maxWidth: '700px',
               margin: '0 auto',
               lineHeight: '1.6'
@@ -112,23 +87,22 @@ export default function HomePage() {
                 padding: '12px 28px',
                 borderRadius: '8px',
                 border: 'none',
-                backgroundColor: '#0284c7',
-                color: '#f8fafc',
+                backgroundColor: '#1a73e8',
+                color: '#ffffff',
                 fontWeight: '700',
                 fontSize: '10pt',
                 cursor: 'pointer',
-                transition: 'all 0.3s ease',
+                transition: 'all 0.15s ease',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#0369a1';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 10px 20px rgba(2, 132, 199, 0.3)';
+                e.currentTarget.style.backgroundColor = '#1765cc';
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#0284c7';
+                e.currentTarget.style.backgroundColor = '#1a73e8';
                 e.currentTarget.style.transform = 'translateY(0)';
                 e.currentTarget.style.boxShadow = 'none';
               }}
@@ -141,9 +115,9 @@ export default function HomePage() {
               <button style={{
                 padding: '12px 28px',
                 borderRadius: '8px',
-                border: '1px solid #334155',
+                border: '1px solid #dadce0',
                 backgroundColor: 'transparent',
-                color: '#cbd5e1',
+                color: '#202124',
                 fontWeight: '700',
                 fontSize: '10pt',
                 cursor: 'pointer',
@@ -153,15 +127,14 @@ export default function HomePage() {
                 gap: '8px'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(2, 132, 199, 0.1)';
-                e.currentTarget.style.borderColor = '#0284c7';
-                e.currentTarget.style.color = '#38bdf8';
-                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.backgroundColor = 'rgba(26, 115, 232, 0.08)';
+                e.currentTarget.style.borderColor = '#1a73e8';
+                e.currentTarget.style.color = '#1a73e8';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.borderColor = '#334155';
-                e.currentTarget.style.color = '#cbd5e1';
+                e.currentTarget.style.borderColor = '#dadce0';
+                e.currentTarget.style.color = '#202124';
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
               >
@@ -188,7 +161,7 @@ export default function HomePage() {
             </h2>
             <p style={{
               fontSize: '11pt',
-              color: '#94a3b8',
+              color: '#5f6368',
               margin: 0
             }}>
               Everything you need for comprehensive operations management
@@ -204,8 +177,8 @@ export default function HomePage() {
               <Link key={idx} href={feature.link} style={{ textDecoration: 'none' }}>
                 <div style={{
                   height: '100%',
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
+                  backgroundColor: '#f8f9fa',
+                  border: '1px solid #dadce0',
                   borderRadius: '12px',
                   padding: '32px',
                   cursor: 'pointer',
@@ -215,13 +188,13 @@ export default function HomePage() {
                   gap: '16px'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-6px)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
                   e.currentTarget.style.borderColor = feature.color;
-                  e.currentTarget.style.boxShadow = `0 16px 32px rgba(0, 0, 0, 0.3)`;
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.borderColor = '#334155';
+                  e.currentTarget.style.borderColor = '#dadce0';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
                 >
@@ -242,13 +215,13 @@ export default function HomePage() {
                       fontSize: '14pt',
                       fontWeight: '800',
                       margin: '0 0 8px 0',
-                      color: '#f1f5f9'
+                      color: '#202124'
                     }}>
                       {feature.title}
                     </h3>
                     <p style={{
                       fontSize: '9.5pt',
-                      color: '#94a3b8',
+                      color: '#5f6368',
                       margin: 0,
                       lineHeight: '1.5'
                     }}>
@@ -258,7 +231,7 @@ export default function HomePage() {
                   <div style={{
                     marginTop: 'auto',
                     paddingTop: '16px',
-                    borderTop: '1px solid rgba(51, 65, 85, 0.3)',
+                    borderTop: '1px solid #e8eaed',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
@@ -290,19 +263,19 @@ export default function HomePage() {
               border: '1px solid rgba(2, 132, 199, 0.3)',
               borderRadius: '12px',
               padding: '24px',
-              borderLeft: '4px solid #0284c7'
+              borderLeft: '4px solid #1a73e8'
             }}>
               <h4 style={{
                 fontSize: '11pt',
                 fontWeight: '800',
                 margin: '0 0 8px 0',
-                color: '#38bdf8'
+                color: '#1a73e8'
               }}>
                 🚀 Quick Start
               </h4>
               <p style={{
                 fontSize: '9pt',
-                color: '#94a3b8',
+                color: '#5f6368',
                 margin: 0,
                 lineHeight: '1.6'
               }}>
@@ -327,7 +300,7 @@ export default function HomePage() {
               </h4>
               <p style={{
                 fontSize: '9pt',
-                color: '#94a3b8',
+                color: '#5f6368',
                 margin: 0,
                 lineHeight: '1.6'
               }}>
@@ -352,7 +325,7 @@ export default function HomePage() {
               </h4>
               <p style={{
                 fontSize: '9pt',
-                color: '#94a3b8',
+                color: '#5f6368',
                 margin: 0,
                 lineHeight: '1.6'
               }}>
@@ -364,14 +337,14 @@ export default function HomePage() {
 
         {/* Footer */}
         <footer style={{
-          borderTop: '1px solid rgba(51, 65, 85, 0.3)',
+          borderTop: '1px solid #e8eaed',
           padding: '40px 32px',
           textAlign: 'center'
         }}>
-          <p style={{ fontSize: '9pt', color: '#64748b', margin: '0 0 8px 0' }}>
+          <p style={{ fontSize: '9pt', color: '#5f6368', margin: '0 0 8px 0' }}>
             SAIL Operations Directorate • MIS Group • Steel Authority of India Limited
           </p>
-          <p style={{ fontSize: '8.5pt', color: '#475569', margin: 0 }}>
+          <p style={{ fontSize: '8.5pt', color: '#9aa0a6', margin: 0 }}>
             Version 1.0.0 • Production Ready
           </p>
         </footer>
@@ -390,7 +363,7 @@ export default function HomePage() {
 
         * {
           scrollbar-width: thin;
-          scrollbar-color: #334155 #0f172a;
+          scrollbar-color: #dadce0 #ffffff;
         }
 
         ::-webkit-scrollbar {
@@ -399,16 +372,16 @@ export default function HomePage() {
         }
 
         ::-webkit-scrollbar-track {
-          background: #0f172a;
+          background: #ffffff;
         }
 
         ::-webkit-scrollbar-thumb {
-          background: #334155;
+          background: #dadce0;
           border-radius: 3px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-          background: #475569;
+          background: #dadce0;
         }
 
         @media (max-width: 1024px) {

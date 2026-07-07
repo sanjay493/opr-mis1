@@ -27,7 +27,7 @@ if _TP_DIR not in sys.path:
 
 from bsp_extractor import BspTechnoExtractor            # noqa: E402
 from bsp_oisco_extractor import BspOiscoExtractor       # noqa: E402
-from db import init_db, merge_upsert_techno_data        # noqa: E402
+from db import init_db, merge_upsert_techno_data, enrich_techno_records_with_db  # noqa: E402
 
 router = APIRouter(prefix="/api/bsp-techno", tags=["bsp-techno"])
 
@@ -53,6 +53,10 @@ def _save_temp(file: UploadFile, content: bytes) -> Path:
 
 def _preview_response(records, report_month, source_file, source_type):
     total_params = sum(len(r["techno_json"].get("month", {})) for r in records)
+    preview_records = [{"unit": r["unit"], "techno_json": r["techno_json"]} for r in records]
+    # Attach current DB values so the UI can show DB-vs-extracted side by side
+    # (month and cumulative) before the user confirms the insert.
+    enrich_techno_records_with_db(preview_records, "BSP", report_month)
     return {
         "status":          "preview",
         "source_type":     source_type,
@@ -60,7 +64,7 @@ def _preview_response(records, report_month, source_file, source_type):
         "source_file":     source_file,
         "units_extracted": len(records),
         "total_params":    total_params,
-        "records": [{"unit": r["unit"], "techno_json": r["techno_json"]} for r in records],
+        "records": preview_records,
     }
 
 

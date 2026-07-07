@@ -93,24 +93,27 @@ function TechnoDashboard() {
   const displayMonths = getLastMonths(12).slice(monthRange.from, monthRange.to + 1);
 
   return (
-    <>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
       <main style={{
+        flex: 1,
+        overflow: 'auto',
         padding: '32px 32px',
         maxWidth: '1600px',
         margin: '0 auto',
         width: '100%',
+        boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column'
       }}>
-        <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#0f172a', marginBottom: '20px' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#202124', marginBottom: '20px' }}>
           📊 Techno Parameters Dashboard
         </h1>
 
         {/* Controls Section */}
         <div style={{
           backgroundColor: '#fff',
-          border: '1px solid #e2e8f0',
+          border: '1px solid #dadce0',
           borderRadius: '12px',
           padding: '16px',
           marginBottom: '16px',
@@ -119,7 +122,7 @@ function TechnoDashboard() {
         }}>
           {/* Plant Selection */}
           <div style={{ marginBottom: '12px' }}>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#5f6368', marginBottom: '6px', textTransform: 'uppercase' }}>
               🏭 Plant Selection
             </label>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -128,9 +131,9 @@ function TechnoDashboard() {
                 style={{
                   padding: '5px 10px',
                   borderRadius: '4px',
-                  border: `2px solid ${selectedPlant === 'all' ? '#0284c7' : '#e2e8f0'}`,
+                  border: `2px solid ${selectedPlant === 'all' ? '#1a73e8' : '#dadce0'}`,
                   background: selectedPlant === 'all' ? '#f0f9ff' : '#fff',
-                  color: selectedPlant === 'all' ? '#0284c7' : '#475569',
+                  color: selectedPlant === 'all' ? '#1a73e8' : '#5f6368',
                   fontSize: '9px',
                   fontWeight: selectedPlant === 'all' ? '700' : '600',
                   cursor: 'pointer'
@@ -145,9 +148,9 @@ function TechnoDashboard() {
                   style={{
                     padding: '5px 10px',
                     borderRadius: '4px',
-                    border: `2px solid ${selectedPlant === plant ? '#0284c7' : '#e2e8f0'}`,
+                    border: `2px solid ${selectedPlant === plant ? '#1a73e8' : '#dadce0'}`,
                     background: selectedPlant === plant ? '#f0f9ff' : '#fff',
-                    color: selectedPlant === plant ? '#0284c7' : '#475569',
+                    color: selectedPlant === plant ? '#1a73e8' : '#5f6368',
                     fontSize: '9px',
                     fontWeight: selectedPlant === plant ? '700' : '600',
                     cursor: 'pointer'
@@ -160,8 +163,8 @@ function TechnoDashboard() {
           </div>
 
           {/* Parameter Selection */}
-          <div style={{ marginBottom: '12px', maxHeight: '120px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '8px' }}>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }}>
+          <div style={{ marginBottom: '12px', maxHeight: '120px', overflowY: 'auto', border: '1px solid #dadce0', borderRadius: '4px', padding: '8px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#5f6368', marginBottom: '6px', textTransform: 'uppercase' }}>
               📈 Parameters ({selectedParams.length} selected)
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px' }}>
@@ -174,18 +177,18 @@ function TechnoDashboard() {
                       onChange={() => handleParamToggle(param)}
                       style={{ width: '12px', height: '12px', cursor: 'pointer' }}
                     />
-                    <span style={{ color: '#475569' }}>{param}</span>
+                    <span style={{ color: '#202124' }}>{param}</span>
                   </label>
                 ))
               ) : (
-                <div style={{ fontSize: '9px', color: '#94a3b8', gridColumn: '1 / -1' }}>Loading parameters...</div>
+                <div style={{ fontSize: '9px', color: '#5f6368', gridColumn: '1 / -1' }}>Loading parameters...</div>
               )}
             </div>
           </div>
 
           {/* Month Range Selection */}
           <div style={{ marginBottom: '0' }}>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#5f6368', marginBottom: '8px', textTransform: 'uppercase' }}>
               📅 Month Range (Drag Slider)
             </label>
             <div style={{ display: 'block' }}>
@@ -197,7 +200,7 @@ function TechnoDashboard() {
                 onChange={(e) => setMonthRange(prev => ({ ...prev, from: Math.min(parseInt(e.target.value), prev.to) }))}
                 style={{ width: '100%', height: '6px' }}
               />
-              <div style={{ fontSize: '9px', color: '#64748b', marginTop: '6px', textAlign: 'center' }}>
+              <div style={{ fontSize: '9px', color: '#5f6368', marginTop: '6px', textAlign: 'center' }}>
                 {displayMonths[0]?.label || 'Loading...'} to {displayMonths[displayMonths.length - 1]?.label || 'Loading...'}
               </div>
             </div>
@@ -217,9 +220,9 @@ function TechnoDashboard() {
               style={{
                 padding: '6px 12px',
                 borderRadius: '6px',
-                border: `2px solid ${viewMode === mode ? '#10b981' : '#e2e8f0'}`,
+                border: `2px solid ${viewMode === mode ? '#10b981' : '#dadce0'}`,
                 background: viewMode === mode ? '#f0fdf4' : '#fff',
-                color: viewMode === mode ? '#10b981' : '#475569',
+                color: viewMode === mode ? '#10b981' : '#5f6368',
                 fontSize: '10px',
                 fontWeight: viewMode === mode ? '700' : '600',
                 cursor: 'pointer'
@@ -232,7 +235,7 @@ function TechnoDashboard() {
 
         {/* Loading & Error States */}
         {loading && (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '12px' }}>
+          <div style={{ textAlign: 'center', padding: '20px', color: '#5f6368', fontSize: '12px' }}>
             ⏳ Loading data...
           </div>
         )}
@@ -272,7 +275,7 @@ function TechnoDashboard() {
         {!loading && viewMode === 'table' && selectedParams.length > 0 && (
           <div style={{
             backgroundColor: '#fff',
-            border: '1px solid #e2e8f0',
+            border: '1px solid #dadce0',
             borderRadius: '8px',
             overflow: 'hidden',
             boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
@@ -280,8 +283,8 @@ function TechnoDashboard() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
                 <thead>
-                  <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0 }}>
-                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: '700', color: '#475569', minWidth: '120px' }}>
+                  <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '1px solid #dadce0', position: 'sticky', top: 0 }}>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: '700', color: '#5f6368', minWidth: '120px' }}>
                       Parameter
                     </th>
                     {displayMonths.map(month => (
@@ -291,8 +294,8 @@ function TechnoDashboard() {
                           padding: '6px 6px',
                           textAlign: 'center',
                           fontWeight: '700',
-                          color: '#475569',
-                          borderRight: '1px solid #e2e8f0',
+                          color: '#5f6368',
+                          borderRight: '1px solid #dadce0',
                           whiteSpace: 'nowrap',
                           minWidth: '60px'
                         }}
@@ -304,8 +307,8 @@ function TechnoDashboard() {
                 </thead>
                 <tbody>
                   {selectedParams.map((param, idx) => (
-                    <tr key={param} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                      <td style={{ padding: '6px 10px', fontWeight: '600', color: '#1e293b' }}>
+                    <tr key={param} style={{ borderBottom: '1px solid #f8f9fa', backgroundColor: idx % 2 === 0 ? '#fff' : '#f8f9fa' }}>
+                      <td style={{ padding: '6px 10px', fontWeight: '600', color: '#202124' }}>
                         {param}
                       </td>
                       {displayMonths.map(month => {
@@ -350,8 +353,8 @@ function TechnoDashboard() {
                             style={{
                               padding: '6px 6px',
                               textAlign: 'right',
-                              color: value ? '#0284c7' : '#94a3b8',
-                              borderRight: '1px solid #e2e8f0',
+                              color: value ? '#1a73e8' : '#5f6368',
+                              borderRight: '1px solid #dadce0',
                               fontSize: '9px',
                               fontWeight: value ? '600' : '400',
                               title: dataSource
@@ -373,7 +376,7 @@ function TechnoDashboard() {
         {!loading && viewMode === 'chart' && selectedParams.length > 0 && (
           <div style={{
             backgroundColor: '#fff',
-            border: '1px solid #e2e8f0',
+            border: '1px solid #dadce0',
             borderRadius: '8px',
             padding: '20px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
@@ -382,7 +385,7 @@ function TechnoDashboard() {
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <div style={{ textAlign: 'center', color: '#94a3b8' }}>
+            <div style={{ textAlign: 'center', color: '#5f6368' }}>
               📈 Chart visualization coming soon...
             </div>
           </div>
@@ -392,7 +395,7 @@ function TechnoDashboard() {
         {!loading && viewMode === 'comparison' && selectedParams.length > 0 && (
           <div style={{
             backgroundColor: '#fff',
-            border: '1px solid #e2e8f0',
+            border: '1px solid #dadce0',
             borderRadius: '8px',
             padding: '16px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
@@ -401,26 +404,26 @@ function TechnoDashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', width: '100%' }}>
               {selectedParams.map(param => (
                 <div key={param} style={{
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid #dadce0',
                   borderRadius: '6px',
                   padding: '12px',
-                  backgroundColor: '#f8fafc'
+                  backgroundColor: '#f8f9fa'
                 }}>
-                  <h3 style={{ fontSize: '10px', fontWeight: '700', color: '#1e293b', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '10px', fontWeight: '700', color: '#202124', marginBottom: '8px' }}>
                     {param}
                   </h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
                     {PLANTS.map(plant => (
                       <div key={plant} style={{
                         backgroundColor: '#fff',
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid #dadce0',
                         borderRadius: '4px',
                         padding: '6px',
                         textAlign: 'center',
                         fontSize: '9px'
                       }}>
-                        <div style={{ fontWeight: '600', color: '#475569', marginBottom: '2px' }}>{plant}</div>
-                        <div style={{ fontSize: '12px', fontWeight: '700', color: '#0284c7' }}>—</div>
+                        <div style={{ fontWeight: '600', color: '#5f6368', marginBottom: '2px' }}>{plant}</div>
+                        <div style={{ fontSize: '12px', fontWeight: '700', color: '#1a73e8' }}>—</div>
                       </div>
                     ))}
                   </div>
@@ -430,7 +433,7 @@ function TechnoDashboard() {
           </div>
         )}
       </main>
-    </>
+    </div>
   );
 }
 

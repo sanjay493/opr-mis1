@@ -16,20 +16,20 @@ const SECTIONS    = ['Calendar Month','FY Quarter','FY Half','Top 5 Years'];
 
 // ── Colours ────────────────────────────────────────────────────────────────
 const C = {
-  hdr:     '#1e3a5f',
-  hdrText: '#f1f5f9',
+  hdr:     '#e8f0fe',
+  hdrText: '#f8f9fa',
   gold:    '#b45309',
   goldBg:  '#fffbeb',
   goldBorder:'#fde68a',
-  silver:  '#475569',
-  silverBg:'#f8fafc',
+  silver:  '#dadce0',
+  silverBg:'#202124',
   best:    '#065f46',
   bestBg:  '#d1fae5',
   bestBorder:'#6ee7b7',
   rank1:   '#92400e',
   rank1Bg: '#fef3c7',
-  tblBorder:'#e2e8f0',
-  subHdr:  '#334155',
+  tblBorder:'#dadce0',
+  subHdr:  '#dadce0',
   accent:  '#3b82f6',
 };
 
@@ -42,7 +42,7 @@ function fmt(v) {
 function RankBadge({ rank }) {
   const s = rank === 1
     ? { background: C.rank1Bg, color: C.rank1, border: `1px solid #fcd34d` }
-    : { background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' };
+    : { background: '#f8f9fa', color: '#5f6368', border: '1px solid #dadce0' };
   return (
     <span style={{ ...s, borderRadius: 10, padding: '1px 7px', fontSize: '7.5pt', fontWeight: 700, marginRight: 4 }}>
       #{rank}
@@ -53,7 +53,7 @@ function RankBadge({ rank }) {
 // ── Vertical Bar Chart Component ───────────────────────────────────────────
 function VerticalBarChart({ data, item, title, isMonthChart = false }) {
   if (!data || data.length === 0) {
-    return <div style={{ padding: '20px', color: '#94a3b8', textAlign: 'center' }}>No data available</div>;
+    return <div style={{ padding: '20px', color: '#5f6368', textAlign: 'center' }}>No data available</div>;
   }
 
   // For month chart, maintain April-to-March order; otherwise sort by value descending
@@ -73,7 +73,7 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
     if (rank === 1) return { bar: '#d97706', label: 'gold' };              // Golden
     if (rank === 2) return { bar: '#a8adb5', label: 'silver' };            // Silver
     if (rank === 3) return { bar: '#a85a36', label: 'bronze' };            // Bronze
-    return { bar: '#86efac', label: 'green' };                              // Light Pellet Green
+    return { bar: '#16a34a', label: 'green' };                              // Light Pellet Green
   };
 
   return (
@@ -220,7 +220,7 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
 // ── Horizontal Bar Chart Component (for Quarter/Half/Top5) ─────────────────
 function BarChart({ data, item, title }) {
   if (!data || data.length === 0) {
-    return <div style={{ padding: '20px', color: '#94a3b8', textAlign: 'center' }}>No data available</div>;
+    return <div style={{ padding: '20px', color: '#5f6368', textAlign: 'center' }}>No data available</div>;
   }
 
   // Sort by value descending
@@ -265,7 +265,7 @@ function BarChart({ data, item, title }) {
             <div style={{
               fontSize: '12px',
               fontWeight: '700',
-              color: '#1e293b',
+              color: '#202124',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap'
@@ -364,12 +364,12 @@ function BestBadge() {
 
 // ── Two-row record cell ────────────────────────────────────────────────────
 function RecordPair({ rows, bestPeriod, bestMonth, isCal }) {
-  if (!rows || rows.length === 0) return <td colSpan={2} style={{ padding: '6px 10px', color: '#94a3b8', fontSize: '8.5pt' }}>—</td>;
+  if (!rows || rows.length === 0) return <td colSpan={2} style={{ padding: '6px 10px', color: '#5f6368', fontSize: '8.5pt' }}>—</td>;
   return (
     <>
       {[0, 1].map(i => {
         const r = rows[i];
-        if (!r) return <td key={i} style={{ padding: '6px 10px', color: '#94a3b8', textAlign: 'center', fontSize: '8.5pt', borderRight: i === 0 ? `1px solid ${C.tblBorder}` : '' }}>—</td>;
+        if (!r) return <td key={i} style={{ padding: '6px 10px', color: '#5f6368', textAlign: 'center', fontSize: '8.5pt', borderRight: i === 0 ? `1px solid ${C.tblBorder}` : '' }}>—</td>;
         const isBest = isCal ? r.month === bestMonth : r.period === bestPeriod;
         return (
           <td key={i} style={{
@@ -500,7 +500,7 @@ function Top5Table({ data, item }) {
           <h3 style={{
             fontSize: '12px',
             fontWeight: '800',
-            color: '#0f172a',
+            color: '#202124',
             marginBottom: '10px',
             textTransform: 'uppercase',
             letterSpacing: '0.05em'
@@ -578,15 +578,15 @@ export default function RecordsPage() {
   const tabBtn = (active) => ({
     padding: '6px 14px', borderRadius: 4, border: 'none', cursor: 'pointer',
     fontSize: '9pt', fontWeight: active ? 700 : 400,
-    background: active ? C.hdr : '#e2e8f0',
-    color: active ? '#fff' : '#475569',
+    background: active ? C.hdr : '#dadce0',
+    color: active ? '#fff' : '#dadce0',
     transition: 'all .15s',
   });
 
   const toggleBtn = (active) => ({
-    padding: '5px 18px', borderRadius: 4, border: `1.5px solid ${active ? C.hdr : '#cbd5e1'}`,
+    padding: '5px 18px', borderRadius: 4, border: `1.5px solid ${active ? C.hdr : '#202124'}`,
     cursor: 'pointer', fontSize: '9pt', fontWeight: active ? 700 : 400,
-    background: active ? C.hdr : '#fff', color: active ? '#fff' : '#475569',
+    background: active ? C.hdr : '#fff', color: active ? '#fff' : '#dadce0',
   });
 
   return (
@@ -595,7 +595,7 @@ export default function RecordsPage() {
       <GlobalNavbar />
 
       <main style={{
-        backgroundColor: '#f0f4f8',
+        backgroundColor: '#ffffff',
         padding: '40px 32px',
         width: '100%',
         minHeight: 'calc(100vh - 70px)'
@@ -605,7 +605,7 @@ export default function RecordsPage() {
           <h1 style={{
             fontSize: '32px',
             fontWeight: '900',
-            color: '#0f172a',
+            color: '#202124',
             margin: '0 0 8px 0',
             letterSpacing: '-0.02em'
           }}>
@@ -613,7 +613,7 @@ export default function RecordsPage() {
           </h1>
           <p style={{
             fontSize: '13px',
-            color: '#64748b',
+            color: '#5f6368',
             margin: '0',
             lineHeight: '1.6'
           }}>
@@ -641,12 +641,12 @@ export default function RecordsPage() {
           <div style={{
             padding: '80px 40px',
             textAlign: 'center',
-            color: '#94a3b8',
+            color: '#5f6368',
             fontSize: '14px'
           }}>
             <div style={{ marginBottom: '16px' }}>
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
-                   style={{ margin: '0 auto', color: '#cbd5e1', animation: 'spin 2s linear infinite' }}>
+                   style={{ margin: '0 auto', color: '#202124', animation: 'spin 2s linear infinite' }}>
                 <circle cx="12" cy="12" r="10" />
                 <path d="M12 6v6l4 2" />
               </svg>
@@ -728,13 +728,13 @@ export default function RecordsPage() {
                     borderRadius: '10px',
                     padding: '14px',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                    border: '1px solid #e2e8f0'
+                    border: '1px solid #dadce0'
                   }}>
                     <label style={{
                       display: 'block',
                       fontSize: '10px',
                       fontWeight: '800',
-                      color: '#1e293b',
+                      color: '#202124',
                       marginBottom: '8px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em'
@@ -752,9 +752,9 @@ export default function RecordsPage() {
                           style={{
                             padding: '8px 10px',
                             borderRadius: '6px',
-                            border: `2px solid ${group === key ? '#0284c7' : '#e2e8f0'}`,
+                            border: `2px solid ${group === key ? '#1a73e8' : '#dadce0'}`,
                             background: group === key ? '#f0f9ff' : '#fff',
-                            color: group === key ? '#0284c7' : '#475569',
+                            color: group === key ? '#1a73e8' : '#dadce0',
                             fontSize: '11px',
                             fontWeight: group === key ? '700' : '600',
                             cursor: 'pointer',
@@ -773,14 +773,14 @@ export default function RecordsPage() {
                     borderRadius: '10px',
                     padding: '14px',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid #dadce0',
                     flex: 1
                   }}>
                     <label style={{
                       display: 'block',
                       fontSize: '10px',
                       fontWeight: '800',
-                      color: '#1e293b',
+                      color: '#202124',
                       marginBottom: '8px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em'
@@ -795,9 +795,9 @@ export default function RecordsPage() {
                           style={{
                             padding: '7px 10px',
                             borderRadius: '6px',
-                            border: `2px solid ${item === it ? '#0284c7' : '#e2e8f0'}`,
+                            border: `2px solid ${item === it ? '#1a73e8' : '#dadce0'}`,
                             background: item === it ? '#f0f9ff' : '#fff',
-                            color: item === it ? '#0284c7' : '#475569',
+                            color: item === it ? '#1a73e8' : '#dadce0',
                             fontSize: '10px',
                             fontWeight: item === it ? '700' : '600',
                             cursor: 'pointer',
@@ -818,7 +818,7 @@ export default function RecordsPage() {
                   borderRadius: '10px',
                   padding: '14px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid #dadce0',
                   display: 'flex',
                   flexDirection: 'column'
                 }}>
@@ -826,7 +826,7 @@ export default function RecordsPage() {
                     display: 'block',
                     fontSize: '10px',
                     fontWeight: '800',
-                    color: '#1e293b',
+                    color: '#202124',
                     marginBottom: '8px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em'
@@ -844,9 +844,9 @@ export default function RecordsPage() {
                         style={{
                           padding: '7px 10px',
                           borderRadius: '6px',
-                          border: `2px solid ${section === s ? '#10b981' : '#e2e8f0'}`,
+                          border: `2px solid ${section === s ? '#10b981' : '#dadce0'}`,
                           background: section === s ? '#f0fdf4' : '#fff',
-                          color: section === s ? '#10b981' : '#475569',
+                          color: section === s ? '#10b981' : '#dadce0',
                           fontSize: '10px',
                           fontWeight: section === s ? '700' : '600',
                           cursor: 'pointer',
@@ -861,9 +861,9 @@ export default function RecordsPage() {
                   <div style={{
                     marginTop: 'auto',
                     paddingTop: '8px',
-                    borderTop: '1px solid #e2e8f0',
+                    borderTop: '1px solid #dadce0',
                     fontSize: '9px',
-                    color: '#64748b',
+                    color: '#5f6368',
                     textAlign: 'center'
                   }}>
                     {autoRotate ? '🔄 Auto' : '⏸️ Manual'}
@@ -881,7 +881,7 @@ export default function RecordsPage() {
             borderRadius: '12px',
             padding: '24px',
             boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
-            border: '1px solid #e2e8f0',
+            border: '1px solid #dadce0',
             minHeight: '350px',
             display: 'flex',
             flexDirection: 'column'
@@ -890,19 +890,19 @@ export default function RecordsPage() {
             <div style={{
               marginBottom: '20px',
               paddingBottom: '16px',
-              borderBottom: '2px solid #e2e8f0'
+              borderBottom: '2px solid #dadce0'
             }}>
               <h2 style={{
                 fontSize: '18px',
                 fontWeight: '800',
-                color: '#0f172a',
+                color: '#202124',
                 margin: '0 0 4px 0'
               }}>
                 {section} — {ITEM_SHORT[item]}
               </h2>
               <p style={{
                 fontSize: '11px',
-                color: '#64748b',
+                color: '#5f6368',
                 margin: '0',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em'
@@ -935,9 +935,9 @@ export default function RecordsPage() {
             <div style={{
               marginTop: '20px',
               paddingTop: '16px',
-              borderTop: '1px solid #e2e8f0',
+              borderTop: '1px solid #dadce0',
               fontSize: '11px',
-              color: '#64748b'
+              color: '#5f6368'
             }}>
               <div style={{ fontWeight: '700', marginBottom: '8px', textTransform: 'uppercase' }}>Color Legend:</div>
               <div style={{
@@ -958,7 +958,7 @@ export default function RecordsPage() {
                   <span>🥉 Rank 3</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '14px', height: '14px', borderRadius: '2px', background: '#86efac' }}/>
+                  <span style={{ width: '14px', height: '14px', borderRadius: '2px', background: '#16a34a' }}/>
                   <span>🌿 Others</span>
                 </div>
               </div>

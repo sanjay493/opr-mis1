@@ -1,8 +1,31 @@
+import calendar
 import json
 from datetime import datetime, time
 from pathlib import Path
 from openpyxl import load_workbook
 from typing import Dict, List
+
+# Params that the source sheet reports as a TOTAL for the period (total blows
+# in the month / FY-to-date), not a daily average - must be divided by the
+# number of days before being displayed/stored, to match "Average Blows/Day"
+# as actually labelled.
+_DAILY_AVG_PARAMS = {"average_blows_per_day"}
+
+
+def _ytd_days(year_i: int, month_i: int) -> int:
+    """Total calendar days from April 1 of the financial year to end of report
+    month (RSP's FY starts in April). Mirrors excel_extractor_rsp.py's helper
+    of the same name, kept local here to avoid cross-package import."""
+    fy_year = year_i if month_i >= 4 else year_i - 1
+    total, y, m = 0, fy_year, 4
+    while True:
+        total += calendar.monthrange(y, m)[1]
+        if y == year_i and m == month_i:
+            break
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+    return total
 
 _MONTH_ABBRS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
 _MONTH_NUM_TO_ABBR = {
@@ -135,6 +158,10 @@ class TechnoExtractor:
         if not self.report_month:
             self.detect_report_month()
 
+        year_i, month_i = map(int, self.report_month.split('-'))
+        days_in_month = calendar.monthrange(year_i, month_i)[1]
+        ytd_days = _ytd_days(year_i, month_i)
+
         records = []
         print("\n--- Starting Hardcoded Extraction ---\n")
 
@@ -156,6 +183,15 @@ class TechnoExtractor:
 
                     month_val = self._clean_value(month_val)
                     till_val = self._clean_value(till_val)
+
+                    if param_key in _DAILY_AVG_PARAMS:
+                        # Sheet reports the TOTAL number of blows for the
+                        # period, not a per-day average - convert here so the
+                        # stored value actually matches "Average Blows/Day".
+                        if isinstance(month_val, (int, float)):
+                            month_val = round(month_val / days_in_month, 1)
+                        if isinstance(till_val, (int, float)):
+                            till_val = round(till_val / ytd_days, 1)
 
                     techno["month"][param_key] = month_val
                     techno["till_month"][param_key] = till_val

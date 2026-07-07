@@ -95,35 +95,35 @@ function StockEntryCard({ apiBase }) {
     return cur !== saved && cur !== '';
   });
 
-  const H = { padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0', fontSize: '9pt', backgroundColor: '#f1f5f9' };
-  const TD = { padding: '7px 14px', borderBottom: '1px solid #f1f5f9', fontSize: '9.5pt' };
+  const H = { padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: '#5f6368', borderBottom: '1px solid #dadce0', fontSize: '9pt', backgroundColor: '#f8f9fa' };
+  const TD = { padding: '7px 14px', borderBottom: '1px solid #f1f3f4', fontSize: '9.5pt' };
 
   return (
-    <>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
-      <main style={{ padding: '40px 32px', maxWidth: '1200px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#0f172a', marginBottom: '24px' }}>📦 Opening Stock</h1>
+      <main style={{ flex: 1, overflow: 'auto', padding: '40px 32px', maxWidth: '1200px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#202124', marginBottom: '24px' }}>📦 Opening Stock</h1>
 
-        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ backgroundColor: '#fff', border: '1px solid #dadce0', borderRadius: '8px', overflow: 'hidden' }}>
           {/* Header */}
-          <div style={{ padding: '14px 20px', backgroundColor: '#1e3a5f', color: '#f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: '14px 20px', backgroundColor: '#e8f0fe', color: '#174ea6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 700, fontSize: '10pt' }}>Opening Stock — Manual Entry</span>
-            <span style={{ fontSize: '8.5pt', color: '#94a3b8' }}>Values in '000T · upserts stock_table</span>
+            <span style={{ fontSize: '8.5pt', color: '#174ea6' }}>Values in '000T · upserts stock_table</span>
           </div>
 
           {/* Controls */}
-          <div style={{ padding: '14px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ padding: '14px 20px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #dadce0', display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontSize: '8pt', color: '#64748b', marginBottom: 4 }}>Plant</div>
+              <div style={{ fontSize: '8pt', color: '#5f6368', marginBottom: 4 }}>Plant</div>
               <select value={plant} onChange={e => { setPlant(e.target.value); setValues({}); setSavedValues({}); setShouldLoad(false); }}
-                style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid #cbd5e1', fontSize: '9pt', backgroundColor: '#fff' }}>
+                style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid #dadce0', fontSize: '9pt', backgroundColor: '#fff', color: '#202124' }}>
                 {STOCK_PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize: '8pt', color: '#64748b', marginBottom: 4 }}>Stock as on 1st of</div>
+              <div style={{ fontSize: '8pt', color: '#5f6368', marginBottom: 4 }}>Stock as on 1st of</div>
               <input type="month" value={stockMonth} onChange={e => { setStockMonth(e.target.value); setValues({}); setSavedValues({}); setShouldLoad(false); }}
-                style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid #cbd5e1', fontSize: '9pt', backgroundColor: '#fff' }} />
+                style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid #dadce0', fontSize: '9pt', backgroundColor: '#fff', color: '#202124' }} />
             </div>
             <button onClick={handleLoad} disabled={loading}
               style={{ padding: '6px 16px', borderRadius: 4, border: 'none', backgroundColor: '#6366f1', color: '#fff', fontWeight: 600, fontSize: '9pt', cursor: 'pointer' }}>
@@ -150,12 +150,12 @@ function StockEntryCard({ apiBase }) {
                     const changed = cur !== saved && cur !== '';
                     const hasVal = saved !== '';
                     return (
-                      <tr key={k} style={{ backgroundColor: changed ? '#fffbeb' : i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                        <td style={{ ...TD, fontWeight: 500, color: '#1e293b' }}>{it.label}</td>
+                      <tr key={k} style={{ backgroundColor: changed ? '#fef7e0' : i % 2 === 0 ? '#fff' : '#f8f9fa' }}>
+                        <td style={{ ...TD, fontWeight: 500, color: '#202124' }}>{it.label}</td>
                         <td style={{ ...TD, textAlign: 'right' }}>
                           <input type="number" step="0.001" value={cur} placeholder={hasVal ? saved : 'Enter value'}
                             onChange={e => setValues(prev => ({ ...prev, [k]: e.target.value }))}
-                            style={{ width: 120, padding: '4px 8px', border: `1px solid ${changed ? '#fbbf24' : cur ? '#6ee7b7' : '#cbd5e1'}`,
+                            style={{ width: 120, padding: '4px 8px', border: `1px solid ${changed ? '#fbbf24' : cur ? '#a8dab5' : '#dadce0'}`,
                                      borderRadius: 4, textAlign: 'right', fontSize: '9pt',
                                      color: '#065f46', backgroundColor: changed ? '#fffbeb' : cur ? '#f0fdf4' : '#fff' }} />
                         </td>
@@ -164,7 +164,7 @@ function StockEntryCard({ apiBase }) {
                             ? <span style={{ color: '#d97706', fontWeight: 600 }}>edited</span>
                             : hasVal
                             ? <span style={{ color: '#059669' }}>{parseFloat(saved).toFixed(3)}</span>
-                            : <span style={{ color: '#94a3b8' }}>—</span>}
+                            : <span style={{ color: '#5f6368' }}>—</span>}
                         </td>
                       </tr>
                     );
@@ -175,29 +175,29 @@ function StockEntryCard({ apiBase }) {
           )}
 
           {!stockData && !loading && (
-            <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '9.5pt' }}>
+            <div style={{ padding: '32px', textAlign: 'center', color: '#5f6368', fontSize: '9.5pt' }}>
               Select plant and month, then click <strong>Load</strong> to view / edit stock values.
             </div>
           )}
 
           {status && (
             <div style={{ margin: '0 16px 12px', padding: '8px 12px', borderRadius: 6, fontSize: '8.5pt',
-                          backgroundColor: status.type === 'success' ? '#064e3b' : '#7f1d1d',
-                          color: status.type === 'success' ? '#6ee7b7' : '#fca5a5' }}>
+                          backgroundColor: status.type === 'success' ? '#e6f4ea' : '#fce8e6',
+                          color: status.type === 'success' ? '#188038' : '#d93025' }}>
               {status.text}
             </div>
           )}
 
           {stockData && (
-            <div style={{ padding: '12px 20px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <div style={{ padding: '12px 20px', backgroundColor: '#f8f9fa', borderTop: '1px solid #dadce0', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button onClick={() => { setValues(Object.fromEntries(STOCK_ITEMS.map(it => [key(it.item_type, it.stock_type), savedValues[key(it.item_type, it.stock_type)] ?? '']))); setStatus(null); }}
                 disabled={!hasChanges}
-                style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#475569', fontSize: '9pt', cursor: hasChanges ? 'pointer' : 'default' }}>
+                style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid #dadce0', backgroundColor: '#fff', color: '#5f6368', fontSize: '9pt', cursor: hasChanges ? 'pointer' : 'default' }}>
                 Reset
               </button>
               <button onClick={handleSave} disabled={saving || !hasChanges}
                 style={{ padding: '6px 16px', borderRadius: 4, border: 'none',
-                         backgroundColor: hasChanges ? '#10b981' : '#94a3b8', color: '#fff',
+                         backgroundColor: hasChanges ? '#10b981' : '#5f6368', color: '#fff',
                          fontWeight: 600, fontSize: '9pt', cursor: hasChanges ? 'pointer' : 'default' }}>
                 {saving ? 'Saving...' : 'Save to DB'}
               </button>
@@ -205,7 +205,7 @@ function StockEntryCard({ apiBase }) {
           )}
         </div>
       </main>
-    </>
+    </div>
   );
 }
 
