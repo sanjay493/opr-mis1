@@ -191,7 +191,7 @@ const _LABEL_MAP = {
   // Coke Ovens
   gross_coke_yield:                     'Gross Coke Yield (%)',
   bf_coke_yield:                        'B.F. Coke Yield (%)',
-  specific_heat_coke_ovens:             'Specific Heat – Coke Ovens (M.Cal/T)',
+  specific_heat_coke_ovens:             'Specific Heat – Coke Ovens (1000 Kcal/Kg DC)',
   specific_power_coke_ovens:            'Specific Power – Coke Ovens (KWH/T)',
   crude_tar_yield:                       'Crude Tar Yield (kg/TDC)',
   crude_benzol_yield:                    'Crude Benzol Yield (Kg/TDC)',

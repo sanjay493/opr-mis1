@@ -1611,7 +1611,7 @@ _TECHNO_DB_SCHEMA = {
             # NOT included here.
             # ISP: "Sp Heat Cons" per battery on the COKE OVENS sheet
             # (rows 169/195, 10^6 kcal/t — extractor multiplies by 1000).
-            ("Sp. Heat Consmn./t DC",  "kcal/kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged"), ("Coke Ovens", "specific_heat_coke_ovens"), ("COB", "specific_heat_coke_ovens"), ("COB-old", "specific_heat_coke_ovens"), ("COB-new", "specific_heat_coke_ovens")]),
+            ("Sp. Heat Consmn./t DC",  "1000 Kcal/Kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged"), ("Coke Ovens", "specific_heat_coke_ovens"), ("COB", "specific_heat_coke_ovens"), ("COB-old", "specific_heat_coke_ovens"), ("COB-new", "specific_heat_coke_ovens")]),
             ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "cog_yield"),            ("COB-new", "cog_yield"),            ("Coke Ovens", "cog_yield")]),
             ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield"),      ("Coke Ovens", "crude_tar_yield")]),
             ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield"),   ("Coke Ovens", "crude_benzol_yield")]),
@@ -1942,10 +1942,11 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         "csr_coke":                  ["coke_csr"],
         "cri_coke":                  ["coke_cri"],
         "vm_blend_coal":             ["average_volatile_matter_in_coal_blend", "vm_in_coal_blend"],
-        # Note: BSL's "sp_heat_cons" is explicitly Kcal/TCO (per tonne coke
-        # output) per its own extractor, a different basis than DSP's
-        # "specific_heat_coke_ovens" - not aliased together to avoid mixing
-        # incompatible units in one row.
+        # BSL's own extractor stores this under "sp_heat_cons" (Sheet1 F10/G10,
+        # "HEAT CONSUMPN. IN G.CAL/T OF DRY COAL CHARGED", x1000 to kcal/kg DC
+        # - same basis and scale as DSP's "specific_heat_coke_ovens", confirmed
+        # against real data: BSL ~660-685 vs DSP ~668 for the same months).
+        "specific_heat_coke_ovens":  ["sp_heat_cons"],
     }
 
     # TMI (Total Metallic Input) fallback — same aliases/logic page 27's
@@ -2050,15 +2051,6 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
             # together in plant position rather than all "-Old" units first.
             for plant in available_plants:
                 for (src_unit, src_key) in unit_specs:
-                    # "specific_heat_coke_ovens" is a generic manual-entry field
-                    # available to any plant, but only DSP's extractor actually
-                    # produces it (confirmed per-dry-coal-charged, same basis
-                    # as RSP). BSL has a stray value under this exact key from
-                    # manual entry - exclude it here regardless, since BSL's
-                    # own extractor only ever writes "sp_heat_cons" (Kcal/TCO,
-                    # a different basis) for this concept.
-                    if src_key == "specific_heat_coke_ovens" and plant == "BSL":
-                        continue
                     _key_aliases = [src_key] + _COKE_OVEN_PARAM_ALIASES.get(src_key, [])
                     unit_data = store.get((plant, report_month), {}).get(src_unit)
                     if unit_data is None:
