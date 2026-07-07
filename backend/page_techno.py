@@ -1052,6 +1052,17 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
     all_months = sorted(set(ytd) | {cply_month, fy1_march, fy2_march, fy3_march})
 
+    # Production weight lookups (_hm_monthly/_cs_monthly below) must cover every
+    # month from April of each relevant FY through its cutoff, not just
+    # all_months - a "till_month" (cumulative) SAIL figure has to be weighted
+    # by the plant's own cumulative production over the same span (e.g. Apr+May
+    # HM for an Apr-May YTD ratio), not just the production of the cutoff month
+    # alone.
+    _weight_months = sorted(set().union(
+        db.get_ytd_months(report_month), db.get_ytd_months(cply_month),
+        db.get_ytd_months(fy1_march), db.get_ytd_months(fy2_march), db.get_ytd_months(fy3_march),
+    ))
+
     # store[(plant, month)][unit] = {"month": {...}, "till_month": {...}}
     store = {}
     conn = sqlite3.connect(db.DB_PATH)
@@ -1084,11 +1095,11 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     conn3 = sqlite3.connect(db.DB_PATH)
     cur3 = conn3.cursor()
     try:
-        ph3 = ",".join("?" * len(all_months))
+        ph3 = ",".join("?" * len(_weight_months))
         cur3.execute(
             f"SELECT plant_name, report_month, month_actual FROM production_table "
             f"WHERE report_month IN ({ph3}) AND item_name='Total Crude Steel'",
-            all_months,
+            _weight_months,
         )
         for _pn, _rm, _val in cur3.fetchall():
             _cs_monthly.setdefault(_pn, {})[_rm] = _val
@@ -1100,16 +1111,25 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     conn4 = sqlite3.connect(db.DB_PATH)
     cur4 = conn4.cursor()
     try:
-        ph4 = ",".join("?" * len(all_months))
+        ph4 = ",".join("?" * len(_weight_months))
         cur4.execute(
             f"SELECT plant_name, report_month, month_actual FROM production_table "
             f"WHERE report_month IN ({ph4}) AND item_name='Hot Metal'",
-            all_months,
+            _weight_months,
         )
         for _pn, _rm, _val in cur4.fetchall():
             _hm_monthly.setdefault(_pn, {})[_rm] = _val
     finally:
         conn4.close()
+
+    def _cum_weight(monthly_dict, plant, ref_month):
+        """Sum a plant's monthly production (HM or CS) from April of ref_month's
+        FY through ref_month itself - the correct weight for a 'till_month'
+        (cumulative) SAIL figure, as opposed to a single month's production."""
+        return sum(
+            monthly_dict.get(plant, {}).get(m, 0) or 0
+            for m in db.get_ytd_months(ref_month)
+        )
 
     # SMS unit mapping and shop counts for SAIL weighting
     _sms_unit_map = {
@@ -1140,7 +1160,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         num = den = 0.0
         for _plant, _shops in _sms_unit_map.items():
             _n  = _sms_n_shops[_plant]
-            _cs = _cs_monthly.get(_plant, {}).get(ref_month, 0)
+            _cs = (_cum_weight(_cs_monthly, _plant, ref_month) if period == "till_month"
+                   else _cs_monthly.get(_plant, {}).get(ref_month, 0))
             _w  = _cs / _n if _cs > 0 else 0
             if _w <= 0:
                 continue
@@ -1232,7 +1253,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         weights = _hm_monthly if weight_by == "hm" else _cs_monthly
         num = den = 0.0
         for _plant in _BF_PLANTS:
-            w = weights.get(_plant, {}).get(ref_month, 0)
+            w = (_cum_weight(weights, _plant, ref_month) if period == "till_month"
+                 else weights.get(_plant, {}).get(ref_month, 0))
             if not w or w <= 0:
                 continue
             v = _gv_multi(_plant, ref_month, src_units, src_key, period)
@@ -1323,10 +1345,17 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     _TMI_ALIASES   = ["tmi"]
 
     def sms_section(param_name, unit_str, src_key, tmi=False):
-        """One row per (plant, SMS-unit) pair that actually has data for this
-        parameter (not just any data at all) - e.g. BSL's shop-level "SMS"
-        unit only holds LD Slag/Lime/Aluminium Consumption, not Hot Metal/
-        Scrap/TMI, so it must not produce a blank row in those sections."""
+        """One row per (plant, SMS-unit) pair that ever reports this parameter
+        (not just any data at all) - e.g. BSL's shop-level "SMS" unit only
+        holds LD Slag/Lime/Aluminium Consumption, not Hot Metal/Scrap/TMI, so
+        it must not produce a blank row in those sections.
+
+        Existence/relevance is checked across all_months (current month, YTD,
+        CPLY, and past-FY March cumulatives) rather than report_month alone,
+        so a unit that simply hasn't submitted this month's figure yet still
+        shows its row (with FY/YTD/target columns populated) instead of
+        vanishing from the page - and the whole section disappearing if every
+        plant happens to be blank for the current month."""
         rows = []
         _check_aliases = (
             _TMI_ALIASES + _HM_ALIASES + _SCRAP_ALIASES if tmi else
@@ -1335,26 +1364,32 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             [src_key]
         )
         for p in plants_with_data:
-            p_units = store.get((p, report_month), {})
+            plant_units = set()
+            for _rm in all_months:
+                plant_units |= set(store.get((p, _rm), {}).keys())
             for su in _SMS_UNIT_ORDER:
-                unit_data = p_units.get(su)
-                if not unit_data:
+                if su not in plant_units:
                     continue
                 has_data = any(
-                    unit_data.get(period, {}).get(k) is not None
+                    store.get((p, _rm), {}).get(su, {}).get(period, {}).get(k) is not None
+                    for _rm in all_months
                     for period in ("month", "till_month")
                     for k in _check_aliases
                 )
                 if not has_data:
                     continue
 
-                # Fetch plan data from techno_plan table for SMS shops
-                shop_name = f"{p} {su}".replace("SMS", "SMS")  # Normalize shop name
+                # Fetch plan data from techno_plan table for SMS shops.
                 # Plan units in techno_plan_fy may differ from techno_data unit names
-                # e.g. ISP stores "ISP SMS-1" in plan but "SMS" in actuals
+                # e.g. ISP stores "ISP SMS-1" in plan but "SMS" in actuals; BSL stores
+                # "BSL SMS-1"/"BSL SMS-2" in plan but "SMS-I"/"SMS-II" in actuals.
+                # (Roman-numeral map, not chained .replace() - "SMS-II".replace('-I','-1')
+                # already consumes the "-I" substring before a second .replace('-II','-2')
+                # can ever match, producing the nonsense "SMS-1I" instead of "SMS-2".)
+                _ROMAN_TO_ARABIC_SU = {"SMS-I": "SMS-1", "SMS-II": "SMS-2", "SMS-III": "SMS-3"}
                 _plan_unit_candidates = [
                     f"{p} {su}",
-                    f"{p} {su.replace('-I', '-1').replace('-II', '-2')}",
+                    f"{p} {_ROMAN_TO_ARABIC_SU[su]}" if su in _ROMAN_TO_ARABIC_SU else None,
                     f"{p} SMS-1" if su == "SMS" else None,
                 ]
                 plan_data = {}
