@@ -50,11 +50,15 @@ function PreviewReview({ preview }) {
   const rec = preview.records.find(r => r.unit === activeUnit) || preview.records[0];
   const monthParams = rec?.techno_json?.month || {};
   const tillParams  = rec?.techno_json?.till_month || {};
+  const dbMonthParams = rec?.db_json?.month || {};
+  const dbTillParams  = rec?.db_json?.till_month || {};
+  const allParams = Array.from(new Set([...Object.keys(monthParams), ...Object.keys(dbMonthParams), ...Object.keys(dbTillParams)]));
   const fmt = v => {
     if (v == null || v === '') return '—';
     if (typeof v === 'string' && v.includes(':')) return v;
     return Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 });
   };
+  const changed = (a, b) => a != null && b != null && Number(a) !== Number(b);
 
   return (
     <div style={{ marginTop: 8, border: '1px solid #bfdbfe', borderRadius: 7, background: '#eff6ff', overflow: 'hidden' }}>
@@ -81,22 +85,37 @@ function PreviewReview({ preview }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr style={{ background: '#f8f9fa' }}>
-                <th style={{ padding: '5px 10px', textAlign: 'left', color: '#5f6368', borderBottom: '1px solid #dadce0' }}>Parameter</th>
-                <th style={{ padding: '5px 10px', textAlign: 'right', color: '#1a73e8', borderBottom: '1px solid #dadce0' }}>Month</th>
-                <th style={{ padding: '5px 10px', textAlign: 'right', color: '#5f6368', borderBottom: '1px solid #dadce0' }}>Cum.</th>
+                <th rowSpan={2} style={{ padding: '5px 10px', textAlign: 'left', color: '#5f6368', borderBottom: '1px solid #dadce0', verticalAlign: 'bottom' }}>Parameter</th>
+                <th colSpan={2} style={{ padding: '4px 10px', textAlign: 'center', color: '#5f6368', borderBottom: '1px solid #f1f3f4', fontWeight: 600 }}>Month</th>
+                <th colSpan={2} style={{ padding: '4px 10px', textAlign: 'center', color: '#5f6368', borderBottom: '1px solid #f1f3f4', fontWeight: 600 }}>Cumulative</th>
+              </tr>
+              <tr style={{ background: '#f8f9fa' }}>
+                <th style={{ padding: '4px 10px', textAlign: 'right', color: '#5f6368', borderBottom: '1px solid #dadce0', fontWeight: 500 }}>In DB</th>
+                <th style={{ padding: '4px 10px', textAlign: 'right', color: '#1a73e8', borderBottom: '1px solid #dadce0', fontWeight: 600 }}>Extracted</th>
+                <th style={{ padding: '4px 10px', textAlign: 'right', color: '#5f6368', borderBottom: '1px solid #dadce0', fontWeight: 500 }}>In DB</th>
+                <th style={{ padding: '4px 10px', textAlign: 'right', color: '#1a73e8', borderBottom: '1px solid #dadce0', fontWeight: 600 }}>Extracted</th>
               </tr>
             </thead>
             <tbody>
-              {Object.keys(monthParams).map((param, idx) => (
-                <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f9fa' }}>
-                  <td style={{ padding: '4px 10px', color: '#202124' }}>{param}</td>
-                  <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(monthParams[param])}</td>
-                  <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(tillParams[param])}</td>
-                </tr>
-              ))}
+              {allParams.map((param, idx) => {
+                const dbM = dbMonthParams[param], newM = monthParams[param];
+                const dbT = dbTillParams[param],  newT = tillParams[param];
+                return (
+                  <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f9fa' }}>
+                    <td style={{ padding: '4px 10px', color: '#202124' }}>{param}</td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(dbM)}</td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: changed(dbM, newM) ? '#b06000' : '#1a73e8', fontWeight: changed(dbM, newM) ? 700 : 400 }}>{fmt(newM)}</td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(dbT)}</td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: changed(dbT, newT) ? '#b06000' : '#1a73e8', fontWeight: changed(dbT, newT) ? 700 : 400 }}>{fmt(newT)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
+      </div>
+      <div style={{ padding: '6px 12px', fontSize: 11, color: '#5f6368', borderTop: '1px solid #bfdbfe' }}>
+        <span style={{ color: '#b06000', fontWeight: 700 }}>Amber</span> = extracted value differs from what's currently in the DB.
       </div>
     </div>
   );
@@ -497,10 +516,10 @@ export default function TechnoDataEntry() {
   }[plant] || `${plant} extraction coming soon.`;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
       <GlobalNavbar />
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 20px' }}>
+      <div style={{ flex: 1, overflow: 'auto', maxWidth: 1400, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
 
         {/* ── Page title ── */}
         <div style={{ marginBottom: 18 }}>

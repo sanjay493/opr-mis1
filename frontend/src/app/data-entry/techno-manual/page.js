@@ -69,7 +69,7 @@ const PARAM_TEMPLATES = {
     'slag_rate','slag_offtake',
     'sinter_in_burden','pellet_in_burden','lump_in_burden',
     'tfe_in_sinter','tfe_in_pellet','tfe_in_lump','fe_in_ore',
-    'coal_to_hm','furnace_availability',
+    'furnace_availability',
   ],
   'SMS': [
     'specific_hm_consumption',
@@ -767,7 +767,7 @@ export default function TechnoManualPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight:'100vh', background:'#ffffff', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ height:'100vh', display:'flex', flexDirection:'column', background:'#ffffff', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
       <GlobalNavbar />
 
       {showAddUnit && (
@@ -778,7 +778,7 @@ export default function TechnoManualPage() {
         />
       )}
 
-      <div style={{ maxWidth:1500, margin:'0 auto', padding:'22px 20px' }}>
+      <div style={{ flex: 1, overflow: 'auto', maxWidth:1500, margin:'0 auto', padding:'22px 20px', width: '100%', boxSizing: 'border-box' }}>
 
         {/* ── Page title ── */}
         <div style={{ display:'flex', alignItems:'baseline', gap:14, marginBottom:18 }}>

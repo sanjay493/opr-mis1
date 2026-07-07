@@ -370,18 +370,30 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
                         placeholder="e.g., BF-1"
                       />
                     </td>
-                    {parameters.map(param => (
-                      <td key={param.key} style={{ ...styles.td, minWidth: '120px' }}>
-                        <input
-                          type={param.type}
-                          step={param.step}
-                          value={row[param.key] ?? ''}
-                          onChange={(e) => handleCellChange(idx, param.key, e.target.value)}
-                          style={styles.input}
-                          placeholder="-"
-                        />
-                      </td>
-                    ))}
+                    {parameters.map(param => {
+                      const dbVal = row.db?.[param.key];
+                      const extracted = row[param.key];
+                      const changedFromDb = dbVal != null && extracted != null && Number(dbVal) !== Number(extracted);
+                      return (
+                        <td key={param.key} style={{ ...styles.td, minWidth: '120px' }}>
+                          <input
+                            type={param.type}
+                            step={param.step}
+                            value={extracted ?? ''}
+                            onChange={(e) => handleCellChange(idx, param.key, e.target.value)}
+                            style={{
+                              ...styles.input,
+                              borderColor: changedFromDb ? '#f59e0b' : '#cbd5e1',
+                              backgroundColor: changedFromDb ? '#fffbeb' : '#fff',
+                            }}
+                            placeholder="-"
+                          />
+                          <div style={{ fontSize: '10.5px', color: changedFromDb ? '#b45309' : '#94a3b8', marginTop: '2px', fontWeight: changedFromDb ? 600 : 400 }}>
+                            In DB (Cum.): {dbVal != null ? Number(dbVal).toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—'}
+                          </div>
+                        </td>
+                      );
+                    })}
                     <td style={{ ...styles.td, minWidth: '80px' }}>
                       <button
                         onClick={() => handleRemoveRow(idx)}

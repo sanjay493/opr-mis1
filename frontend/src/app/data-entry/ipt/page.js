@@ -289,10 +289,10 @@ export default function IptDataEntryPage() {
   const monthDisplay = `${MON[parseInt(mo)]}'${y.slice(2)}`;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
       <GlobalNavbar />
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 20px' }}>
+      <div style={{ flex: 1, overflow: 'auto', maxWidth: 1400, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
 
         {/* ── Page title ── */}
         <div style={{ marginBottom: 18 }}>
