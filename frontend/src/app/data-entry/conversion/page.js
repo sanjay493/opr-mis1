@@ -69,9 +69,9 @@ function ConversionCard({ apiBase }) {
   };
 
   return (
-    <>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
-      <main style={{ padding: '40px 32px', maxWidth: '1200px', margin: '0 auto' }}>
+      <main style={{ flex: 1, overflow: 'auto', padding: '40px 32px', maxWidth: '1200px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
         <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#202124', marginBottom: '24px' }}>⚡ Conversion Data</h1>
 
         <div style={{ backgroundColor: '#fff', border: '1px solid #dadce0', borderRadius: '8px', overflow: 'hidden' }}>
@@ -137,7 +137,7 @@ function ConversionCard({ apiBase }) {
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }
 

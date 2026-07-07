@@ -285,7 +285,7 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
           <thead>
             <tr style={{ backgroundColor: '#ffffff', position: 'sticky', top: 0, zIndex: 1 }}>
-              {['Insert', 'Plant', 'Item (editable)', 'Value', 'Unit', 'Cell', 'PDF Label', 'Status'].map((h) => (
+              {['Insert', 'Plant', 'Item (editable)', 'In DB', 'Extracted', 'Unit', 'Cell', 'PDF Label', 'Status'].map((h) => (
                 <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#5f6368',
                                      fontWeight: 600, borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
@@ -301,6 +301,8 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
                 : wasOk ? 'ok'
                 : 'ok (mapped here)';
               const statusOk = named;
+              const dbVal = r.db_value;
+              const changedFromDb = dbVal != null && r.value != null && Number(dbVal) !== Number(r.value);
               return (
                 <tr key={i} style={{
                   backgroundColor: r.selected ? (i % 2 ? '#f8f9fa' : '#ffffff') : 'rgba(248,113,113,0.07)',
@@ -321,7 +323,10 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
                                     border: '1px solid ' + (edited || (!wasOk && named) ? '#fbbf24' : '#dadce0'),
                                     borderRadius: 4, padding: '3px 6px', fontSize: '8.5pt' }} />
                   </td>
-                  <td style={cellStyle}>{r.value ?? ''}</td>
+                  <td style={{ ...cellStyle, color: '#5f6368' }} title="Current value in production_table for this item/month">
+                    {dbVal != null ? dbVal : '—'}
+                  </td>
+                  <td style={{ ...cellStyle, color: changedFromDb ? '#b06000' : '#202124', fontWeight: changedFromDb ? 700 : 400 }}>{r.value ?? ''}</td>
                   <td style={cellStyle}>{r.unit}</td>
                   <td style={{ ...cellStyle, color: '#5f6368' }}>{r.cell}</td>
                   <td style={{ ...cellStyle, color: '#5f6368', fontStyle: 'italic' }}>{r.pdf_label || ''}</td>
@@ -331,6 +336,9 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
             })}
           </tbody>
         </table>
+      </div>
+      <div style={{ fontSize: '8pt', color: '#5f6368', marginTop: 4 }}>
+        <span style={{ color: '#b06000', fontWeight: 700 }}>Amber</span> = extracted value differs from what's currently in the DB for that item/month.
       </div>
     </div>
   );

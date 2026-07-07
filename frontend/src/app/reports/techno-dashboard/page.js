@@ -93,13 +93,16 @@ function TechnoDashboard() {
   const displayMonths = getLastMonths(12).slice(monthRange.from, monthRange.to + 1);
 
   return (
-    <>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
       <main style={{
+        flex: 1,
+        overflow: 'auto',
         padding: '32px 32px',
         maxWidth: '1600px',
         margin: '0 auto',
         width: '100%',
+        boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column'
       }}>
@@ -430,7 +433,7 @@ function TechnoDashboard() {
           </div>
         )}
       </main>
-    </>
+    </div>
   );
 }
 
