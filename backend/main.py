@@ -1384,6 +1384,22 @@ async def bsl_bf_techno_save(payload: dict):
                 source_file="bsl_bf_pdf",
             )
 
+            # Furnace-wise production also goes to production_table ('000 t,
+            # item = unit name) — the cumulative rules use it as the weight
+            # source for furnace-level parameters, same as RSP/DSP/BSP.
+            prod = row.get("production")
+            if unit.startswith("BF-") and isinstance(prod, (int, float)) and prod > 0:
+                conn = sqlite3.connect(db.DB_PATH)
+                conn.execute(
+                    """INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
+                       VALUES (?, 'BSL', ?, ?)
+                       ON CONFLICT(report_month, plant_name, item_name)
+                       DO UPDATE SET month_actual = excluded.month_actual""",
+                    (month, unit, round(prod / 1000.0, 3)),
+                )
+                conn.commit()
+                conn.close()
+
         return {
             "status": "success",
             "message": f"Saved {len(data)} records for {month}",
