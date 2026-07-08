@@ -872,6 +872,11 @@ def get_pdf_item_aliases(plant: str) -> Dict[str, Any]:
 
 def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: int = 1):
     """Upsert a PDF label → item_name correction so future extractions map it automatically."""
+    # Count-type items (e.g. "Oven Pushing(nos/d)") are plain numbers, never
+    # tonnes — force convert_t=0 so no caller (stale UI tab, mapping
+    # suggestions, re-confirm) can re-poison the alias with a ÷1000 flag.
+    if "(nos" in (item_name or "").lower():
+        convert_t = 0
     init_db()
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""

@@ -351,11 +351,25 @@ def generate_page4_rows(month: str) -> list:
         })
 
         sail_fs_vals = _p4_row_values(cur, month, "SAIL", "Finished Steel", False, _5P, fs_sail_set)
+        # Add conversion to the UNROUNDED FS actuals — adding to the already
+        # rounded row strings can shift the displayed total by 1 vs page 3
+        # (e.g. 3967.24+100.33=4067.57 → 4068, but 3967+100.33 → 4067).
+        prev_m    = db.get_cply_month(month)
+        ytd_ms    = db.get_ytd_months(month)
+        ytd_prevs = db.get_ytd_months(prev_m)
+        fs_m        = _p4_get(cur, "act", month,  "SAIL", "Finished Steel", _5P, fs_sail_set)
+        fs_cply     = _p4_get(cur, "act", prev_m, "SAIL", "Finished Steel", _5P, fs_sail_set)
+        fs_ytd      = _p4_ytd_sum(cur, "act", ytd_ms,    "SAIL", "Finished Steel", _5P, fs_sail_set)
+        fs_ytd_cply = _p4_ytd_sum(cur, "act", ytd_prevs, "SAIL", "Finished Steel", _5P, fs_sail_set)
+
+        def _sum2(a, b):
+            return "" if (a is None and b is None) else str((a or 0.0) + (b or 0.0))
+
         iv = list(sail_fs_vals)
-        iv[2]  = _safe_add(iv[2],  conv_m)
-        iv[5]  = _safe_add(iv[5],  conv_cply)
-        iv[8]  = _safe_add(iv[8],  conv_ytd)
-        iv[11] = _safe_add(iv[11], conv_ytd_cply)
+        iv[2]  = _sum2(fs_m,        conv_m)
+        iv[5]  = _sum2(fs_cply,     conv_cply)
+        iv[8]  = _sum2(fs_ytd,      conv_ytd)
+        iv[11] = _sum2(fs_ytd_cply, conv_ytd_cply)
         iv[3]  = _safe_var(iv[2],  iv[1])
         iv[4]  = _safe_pct(iv[2],  iv[1])
         iv[6]  = _safe_gr(iv[2],   iv[5])
