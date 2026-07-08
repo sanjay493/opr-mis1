@@ -20,10 +20,14 @@ def _match_unit(furnace_str: str) -> Optional[str]:
     return _FURNACE_MAP.get(m.group(1).upper())
 
 
-def _extract_both_values(value_str) -> Tuple[Optional[float], Optional[float]]:
-    """Extract both monthly and cumulative values from 'monthly/cumulative' format.
+def _extract_pair(value_str) -> Tuple[Optional[float], Optional[float]]:
+    """Extract an 'x/y' value pair from a BSL MER cell.
 
-    Returns: (monthly_value, cumulative_value)
+    In this report the pairs are 'FOR THE DAY / PROGRESSIVE FOR THE MONTH'
+    (verified against the table headers: Daily Rate / Monthly Rate columns
+    match the pair parts) — NOT month/cumulative.
+
+    Returns: (first_value, second_value) = (day_value, month_value)
     """
     if not value_str:
         return None, None
@@ -33,26 +37,38 @@ def _extract_both_values(value_str) -> Tuple[Optional[float], Optional[float]]:
     if not s or s in ("NA", "N/A", "-", "--", "", "***", "#DIV/0!"):
         return None, None
 
-    # Split by "/" to get monthly and cumulative
     parts = s.split("/")
 
-    monthly = None
-    cumulative = None
+    first = None
+    second = None
 
     try:
         if len(parts) >= 1:
-            monthly_str = parts[0].strip()
-            if monthly_str and monthly_str not in ("NA", "N/A", "-", "--", "", "***"):
-                monthly = float(monthly_str)
+            first_str = parts[0].strip()
+            if first_str and first_str not in ("NA", "N/A", "-", "--", "", "***"):
+                first = float(first_str)
 
         if len(parts) >= 2:
-            cumul_str = parts[1].strip()
-            if cumul_str and cumul_str not in ("NA", "N/A", "-", "--", "", "***"):
-                cumulative = float(cumul_str)
+            second_str = parts[1].strip()
+            if second_str and second_str not in ("NA", "N/A", "-", "--", "", "***"):
+                second = float(second_str)
     except (ValueError, IndexError):
         pass
 
-    return monthly, cumulative
+    return first, second
+
+
+def _extract_single(value_str) -> Optional[float]:
+    """Parse a single-number cell (e.g. the 'Cum.Prd Fin.Yr' column)."""
+    if not value_str:
+        return None
+    s = str(value_str).replace(",", "").strip()
+    if not s or s in ("NA", "N/A", "-", "--", "***", "#DIV/0!"):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
 
 
 class BslMerParser:
@@ -123,28 +139,23 @@ class BslMerParser:
             if not unit_id:
                 continue
 
-            # [2] = Production (3203/104510)
-            m, c = _extract_both_values(cells[2])
+            # All pairs in this table are day/month — keep the MONTH part only.
+            # [2] = Production (3318/103077 = day/month)
+            _d, m = _extract_pair(cells[2])
             if m is not None:
                 units[unit_id]["production_month"] = m
-            if c is not None:
-                units[unit_id]["production_cumul"] = c
 
-            # [13] = Hot Blast Temp (1100/1093)
+            # [13] = Hot Blast Temp (1100/1101 = day/month)
             if len(cells) > 13:
-                m, c = _extract_both_values(cells[13])
+                _d, m = _extract_pair(cells[13])
                 if m is not None:
                     units[unit_id]["hot_blast_temp_month"] = m
-                if c is not None:
-                    units[unit_id]["hot_blast_temp_cumul"] = c
 
-            # [16] = BF Productivity (1.82/2.00)
+            # [16] = BF Productivity (1.89/2.01 = day/month)
             if len(cells) > 16:
-                m, c = _extract_both_values(cells[16])
+                _d, m = _extract_pair(cells[16])
                 if m is not None:
                     units[unit_id]["bf_productivity_month"] = m
-                if c is not None:
-                    units[unit_id]["bf_productivity_cumul"] = c
 
     def _extract_quality_data(self, units: Dict):
         """Extract from QUALITY PARAMETERS section (Coke/Nut Coke/CDI/Fuel Rate).
@@ -191,33 +202,39 @@ class BslMerParser:
             if not unit_id:
                 continue
 
-            # [8] = Coke Rate (440/439)
-            m, c = _extract_both_values(cells[8])
+            # Pairs are day/month — keep the MONTH part only.
+            # [8] = Coke Rate (435/436 = day/month)
+            _d, m = _extract_pair(cells[8])
             if m is not None:
                 units[unit_id]["coke_rate_month"] = m
-            if c is not None:
-                units[unit_id]["coke_rate_cumul"] = c
 
-            # [9] = N/C Rate / Nut Coke Rate (19/16)
-            m, c = _extract_both_values(cells[9])
+            # [9] = N/C Rate / Nut Coke Rate (10/14 = day/month)
+            _d, m = _extract_pair(cells[9])
             if m is not None:
                 units[unit_id]["nut_coke_rate_month"] = m
-            if c is not None:
-                units[unit_id]["nut_coke_rate_cumul"] = c
 
-            # [10] = CDI Rate (108/94)
-            m, c = _extract_both_values(cells[10])
+            # [10] = CDI Rate (113/102 = day/month)
+            _d, m = _extract_pair(cells[10])
             if m is not None:
                 units[unit_id]["cdi_month"] = m
-            if c is not None:
-                units[unit_id]["cdi_cumul"] = c
 
-            # [11] = Fuel Rate (568/548)
-            m, c = _extract_both_values(cells[11])
+            # [11] = Fuel Rate (559/551 = day/month)
+            _d, m = _extract_pair(cells[11])
             if m is not None:
                 units[unit_id]["fuel_rate_month"] = m
-            if c is not None:
-                units[unit_id]["fuel_rate_cumul"] = c
+
+            # Genuine financial-year cumulatives (the only YTD columns in the PDF):
+            # [14] = Cum.Prd Fin.Yr (single number, e.g. 203133)
+            if len(cells) > 14:
+                v = _extract_single(cells[14])
+                if v is not None:
+                    units[unit_id]["production_cumul"] = v
+
+            # [16] = 'Coke/C Rt Fin.Year' (437/455 = coke rate / carbon rate, FY)
+            if len(cells) > 16:
+                cr, _carbon = _extract_pair(cells[16])
+                if cr is not None:
+                    units[unit_id]["coke_rate_cumul"] = cr
 
     def _extract_consumption_data(self, units: Dict):
         """Extract from "Consumption of Raw Material / Consumption Rates" section.
@@ -253,50 +270,39 @@ class BslMerParser:
             if not unit_id:
                 continue
 
-            # Raw material consumption — all "monthly/till_month" pairs
-            m, c = _extract_both_values(cells[3] if len(cells) > 3 else "")
+            # Raw material consumption — all pairs are day/month tonnages;
+            # keep the MONTH part only (e.g. Coke '1445/44921' = day/month t).
+            _d, m = _extract_pair(cells[3] if len(cells) > 3 else "")
             if m is not None:
                 units[unit_id]["iron_ore_consumption_month"] = m
-            if c is not None:
-                units[unit_id]["iron_ore_consumption_cumul"] = c
 
-            m, c = _extract_both_values(cells[4] if len(cells) > 4 else "")
+            _d, m = _extract_pair(cells[4] if len(cells) > 4 else "")
             if m is not None:
                 units[unit_id]["sinter_consumption_month"] = m
-            if c is not None:
-                units[unit_id]["sinter_consumption_cumul"] = c
 
-            m, c = _extract_both_values(cells[5] if len(cells) > 5 else "")
+            _d, m = _extract_pair(cells[5] if len(cells) > 5 else "")
             if m is not None:
                 units[unit_id]["scrap_consumption_month"] = m
-            if c is not None:
-                units[unit_id]["scrap_consumption_cumul"] = c
 
-            m, c = _extract_both_values(cells[8] if len(cells) > 8 else "")
+            _d, m = _extract_pair(cells[8] if len(cells) > 8 else "")
             if m is not None:
                 units[unit_id]["pellet_consumption_month"] = m
-            if c is not None:
-                units[unit_id]["pellet_consumption_cumul"] = c
 
-            # [10] = O2 Enrichment (%)
-            m, c = _extract_both_values(cells[10] if len(cells) > 10 else "")
+            # [10] = O2 Enrichment (%) (3.59/2.78 = day/month)
+            _d, m = _extract_pair(cells[10] if len(cells) > 10 else "")
             if m is not None:
                 units[unit_id]["o2_enrichment_month"] = m
-            if c is not None:
-                units[unit_id]["o2_enrichment_cumul"] = c
 
-            # [11] = Slag Rate
-            m, c = _extract_both_values(cells[11] if len(cells) > 11 else "")
+            # [11] = Slag Rate (411/428 = day/month)
+            _d, m = _extract_pair(cells[11] if len(cells) > 11 else "")
             if m is not None:
                 units[unit_id]["slag_rate_month"] = m
-            if c is not None:
-                units[unit_id]["slag_rate_cumul"] = c
 
     def _calculate_burden_percentages(self, units: Dict):
-        """Calculate Sinter % and Pellet % in Burden from raw material consumption,
-        separately for the month and till_month (cumulative) periods."""
+        """Calculate Sinter % and Pellet % in Burden from raw material consumption.
+        Month period only — the PDF carries no cumulative consumption tonnages."""
         for unit, params in units.items():
-            for suffix in ("month", "cumul"):
+            for suffix in ("month",):
                 iron_ore = params.get(f"iron_ore_consumption_{suffix}") or 0
                 sinter   = params.get(f"sinter_consumption_{suffix}") or 0
                 pellet   = params.get(f"pellet_consumption_{suffix}") or 0

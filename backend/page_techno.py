@@ -24,6 +24,7 @@ SAIL row computation (MAJOR page + Summary page te_table):
       weighted average of plant values, weight = plant Crude Steel production
 """
 import sqlite3
+from decimal import Decimal, ROUND_HALF_UP
 import db
 
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -121,31 +122,39 @@ def _fmt(v):
     return s.rstrip("0").rstrip(".") if "." in s else s
 
 
+def _round_half_up(v, decimal_places):
+    """Round v to decimal_places using standard round-half-up on its DECIMAL
+    representation, not its binary float bits.
+
+    Values like 1.825 cannot be represented exactly in binary floating point
+    - it's actually stored as 1.82499999999999995559..., so Python's default
+    round()/f"{v:.2f}" rounds it DOWN to 1.82 (correct for the binary value,
+    wrong for the decimal figure a human entered/expects). Reconstructing a
+    Decimal from str(v) recovers the intended decimal digits first, then
+    ROUND_HALF_UP rounds .5 the way report readers expect."""
+    quantum = Decimal(1).scaleb(-decimal_places)   # e.g. Decimal('0.01') for 2 places
+    return Decimal(str(v)).quantize(quantum, rounding=ROUND_HALF_UP)
+
+
 def _fmt_param(v, param_name):
     """Format value based on parameter type. Hide zero values.
     - BF Productivity & Specific Energy Consumption: 2 decimal places
     - Coal to Hot Metal: 3 decimal places
     - Rest: 0 decimal places
+    Always shows the fixed decimal-place count (no trailing-zero stripping).
     """
     if v is None or v == 0:
         return ""
 
     # Determine decimal places based on parameter
-    if param_name in ["BF Productivity", "Specific Energy Consumption"]:
+    if param_name in ("BF Productivity", "Specific Energy Consumption"):
         decimal_places = 2
     elif param_name == "Coal to Hot Metal":
         decimal_places = 3
     else:
         decimal_places = 0
 
-    # Format the value
-    formatted = f"{v:.{decimal_places}f}"
-
-    # Remove trailing zeros except for required decimal places
-    if decimal_places > 0:
-        formatted = formatted.rstrip("0").rstrip(".")
-
-    return formatted
+    return str(_round_half_up(v, decimal_places))
 
 # ---------------------------------------------------------------------------
 # Page 3 summary TE table
@@ -153,87 +162,43 @@ def _fmt_param(v, param_name):
 
 def generate_summary_te_table(report_month: str) -> list:
     """Generate the te_table for the SAIL Performance Summary page (page 3).
-    Shows ONLY SAIL techno parameters from stored SAIL actuals and plan data.
+
+    Values are taken from the page-27 MAJOR TECHNO table's SAIL rows so that
+    page 3 always matches page 27 by construction. Columns per row:
+    [Target FY, report-month actual, CPLY month, YTD cum, CPLY YTD cum].
     """
-    fy         = _fy_start(report_month)
-    ytd        = db.get_ytd_months(report_month)
-    cply_month = db.get_cply_month(report_month)
-    cply_ytd   = [db.get_cply_month(m) for m in ytd]
-    fy_str = f"{fy}-{(fy + 1) % 100:02d}"  # e.g., "2026-27"
-
+    # (page-27 section label, display unit on page 3)
+    wanted = [
+        ("Coke Rate",                   "kg/thm"),
+        ("CDI Rate",                    "kg/thm"),
+        ("Fuel Rate",                   "kg/thm"),
+        ("BF Productivity",             "t/m3/day"),
+        ("Specific Energy Consumption", "Gcal/tcs"),
+    ]
     try:
-        # Fetch SAIL plan data (from techno_plan_fy table)
-        sail_plan_result = db.get_sail_techno_plan(fy_str)
-        sail_plan_data = sail_plan_result.get('data', {})
+        major = generate_major_techno_from_db(report_month)
 
-        # Extract plan values for each parameter
-        plan_by_param = {}
-        for param_name, param_obj in sail_plan_data.items():
-            value = param_obj.get('value') if isinstance(param_obj, dict) else param_obj
-            plan_by_param[param_name] = value
+        sail_by_section = {}
+        for sec in major.get("sections", []):
+            row = next((r for r in sec.get("rows", []) if r.get("label") == "SAIL"), None)
+            if row:
+                sail_by_section[sec.get("label")] = row
 
-        # Auto-calculate SAIL actuals for any month with no stored data, or with
-        # a stale empty snapshot (e.g. cached before plant techno/production data
-        # for that month existed) — recalculate whenever the Shop entry is empty.
-        cply_ytd_last_month = cply_ytd[-1] if cply_ytd else cply_month
-        for _m in {report_month, cply_month, cply_ytd_last_month}:
-            _shop = db.get_sail_techno_actuals(_m).get('Shop', {})
-            if not _shop.get('month') and not _shop.get('till_month'):
-                calculate_and_store_sail_actuals(_m)
-
-        # Fetch stored SAIL actuals (calculated and stored)
-        # Current month actual
-        sail_current = db.get_sail_techno_actuals(report_month).get('Shop', {})
-        sail_current_month = sail_current.get('month', {})
-
-        # CPLY month actual
-        cply_month_actual_data = db.get_sail_techno_actuals(cply_month).get('Shop', {})
-        cply_month_actual = cply_month_actual_data.get('month', {})
-
-        # YTD (till_month) actual
-        sail_ytd_data = db.get_sail_techno_actuals(report_month).get('Shop', {})
-        sail_ytd = sail_ytd_data.get('till_month', {})
-
-        # CPLY YTD actual
-        cply_ytd_data = db.get_sail_techno_actuals(cply_ytd_last_month).get('Shop', {})
-        cply_ytd_actual = cply_ytd_data.get('till_month', {})
-
-        def entry(param_name, unit):
-            """Create SAIL techno parameter row with plan and actual values.
-            Manually entered SAIL values (techno_data plant='SAIL') supersede
-            the stored calculated actuals."""
-            # Get plan value
-            plan_val = _fmt(plan_by_param.get(param_name))
-
-            def _stored(d):
-                v = d.get(param_name)
-                return v.get('value') if isinstance(v, dict) else v
-
-            def _pick(month, period, stored_dict):
-                mv = _sail_manual_value(param_name, month, period)
-                return mv if mv is not None else _stored(stored_dict)
-
-            current_val  = _pick(report_month,        'month',      sail_current_month)
-            cply_val     = _pick(cply_month,          'month',      cply_month_actual)
-            ytd_val      = _pick(report_month,        'till_month', sail_ytd)
-            cply_ytd_val = _pick(cply_ytd_last_month, 'till_month', cply_ytd_actual)
-
-            # Return row: [plan, current_month_actual, cply_actual, ytd_actual, cply_ytd_actual]
-            return {
-                "parameter": param_name,
+        result = []
+        for name, unit in wanted:
+            row    = sail_by_section.get(name, {})
+            months = row.get("months") or []
+            result.append({
+                "parameter": name,
                 "unit": unit,
-                "values": [plan_val, _fmt(current_val), _fmt(cply_val), _fmt(ytd_val), _fmt(cply_ytd_val)]
-            }
-
-        # Only SAIL techno parameters
-        result = [
-            entry("Coke Rate",                  "kg/thm"),
-            entry("CDI Rate",                   "kg/thm"),
-            entry("Fuel Rate",                  "kg/thm"),
-            entry("BF Productivity",            "t/m3/day"),
-            entry("Specific Energy Consumption","Gcal/tcs"),
-        ]
-
+                "values": [
+                    row.get("target", ""),
+                    months[-1] if months else "",   # last month column = report month
+                    row.get("cply", ""),
+                    row.get("cum", ""),
+                    row.get("cum_cply", ""),
+                ],
+            })
         return result
 
     except Exception as e:
@@ -1244,12 +1209,24 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     def _fy_val_multi(plant, march_rm, src_units, src_key):
         return _gv_multi(plant, march_rm, src_units, src_key, "till_month")
 
-    def _bf_sail(src_key, src_units, ref_month, period, weight_by="hm", harmonic=False):
+    def _bf_sail(src_key, src_units, ref_month, period, weight_by="hm", harmonic=False,
+                 zero_fill_plants=None):
         """Compute SAIL weighted average (or harmonic mean, for BF Productivity)
         across plants for a BF-level parameter.
         weight_by="hm" weights by plant Hot Metal production (BF params);
         weight_by="cs" weights by plant Crude Steel production (Specific
-        Energy Consumption). Returns None if no data available."""
+        Energy Consumption). Returns None if no data available.
+
+        zero_fill_plants: plant codes that structurally report NO value for
+        this parameter (not a temporary reporting gap) because they don't do
+        the thing being measured at all — e.g. DSP for Pellet in Burden: its
+        PDF report never carries a pellet figure because its burden mix is
+        sinter + iron ore only. For these plants a missing value is treated
+        as an actual 0, so their HM weight is still included in the SAIL
+        average (weighting it out would inflate the SAIL figure to reflect
+        only the pellet-using plants). Plants NOT in this set keep the
+        default behavior: a missing value means "not yet reported this
+        period" and both the plant and its weight are excluded."""
         weights = _hm_monthly if weight_by == "hm" else _cs_monthly
         num = den = 0.0
         for _plant in _BF_PLANTS:
@@ -1259,7 +1236,10 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 continue
             v = _gv_multi(_plant, ref_month, src_units, src_key, period)
             if v is None:
-                continue
+                if zero_fill_plants and _plant in zero_fill_plants:
+                    v = 0.0
+                else:
+                    continue
             if harmonic:
                 if v <= 0:
                     continue
@@ -1277,11 +1257,12 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         v = _gv_multi("SAIL", ref_month, src_units, src_key, period)
         return v if isinstance(v, (int, float)) else None
 
-    def _bf_sail_v(src_key, src_units, ref_month, period, weight_by="hm", harmonic=False):
+    def _bf_sail_v(src_key, src_units, ref_month, period, weight_by="hm", harmonic=False,
+                   zero_fill_plants=None):
         v = _sail_stored(src_key, src_units, ref_month, period)
         if v is not None:
             return v
-        return _bf_sail(src_key, src_units, ref_month, period, weight_by, harmonic)
+        return _bf_sail(src_key, src_units, ref_month, period, weight_by, harmonic, zero_fill_plants)
 
     def _sms_sail_v(src_key, is_tmi, ref_month, period):
         v = _sail_stored("tmi" if is_tmi else src_key, _SMS_UNIT_ORDER, ref_month, period)
@@ -1507,16 +1488,21 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         # BF-level params: weighted average by plant Hot Metal production;
         # BF Productivity: harmonic mean by HM; Specific Energy Consumption:
         # weighted average by plant Crude Steel production.
+        # 5th tuple element = zero_fill_plants: plants whose missing value for
+        # this parameter reflects "doesn't apply" rather than "not yet
+        # reported" (see _bf_sail docstring). Only Pellet in Burden has one
+        # today — DSP's burden mix is sinter + iron ore, no pellets, and its
+        # PDF report never carries a pellet figure at all.
         _BF_SAIL_SPECS = {
-            "Coal to Hot Metal":           ("coal_to_hm",                  ["General", "BF_Shop"], "hm", False),
-            "Coke Rate":                   ("coke_rate",                   _BF_UNITS,               "hm", False),
-            "Nut Coke Rate":               ("nut_coke_rate",               _BF_UNITS,               "hm", False),
-            "CDI Rate":                    ("cdi",                         _BF_UNITS,               "hm", False),
-            "Fuel Rate":                   ("fuel_rate",                   _BF_UNITS,               "hm", False),
-            "Sinter in Burden":            ("sinter_in_burden",            _BF_UNITS,               "hm", False),
-            "Pellet in Burden":            ("pellet_in_burden",            _BF_UNITS,               "hm", False),
-            "BF Productivity":             ("bf_productivity",             _BF_UNITS,               "hm", True),
-            "Specific Energy Consumption": ("specific_energy_consumption", ["General"],             "cs", False),
+            "Coal to Hot Metal":           ("coal_to_hm",                  ["General", "BF_Shop"], "hm", False, None),
+            "Coke Rate":                   ("coke_rate",                   _BF_UNITS,               "hm", False, None),
+            "Nut Coke Rate":               ("nut_coke_rate",               _BF_UNITS,               "hm", False, None),
+            "CDI Rate":                    ("cdi",                         _BF_UNITS,               "hm", False, None),
+            "Fuel Rate":                   ("fuel_rate",                   _BF_UNITS,               "hm", False, None),
+            "Sinter in Burden":            ("sinter_in_burden",            _BF_UNITS,               "hm", False, None),
+            "Pellet in Burden":            ("pellet_in_burden",            _BF_UNITS,               "hm", False, {"DSP"}),
+            "BF Productivity":             ("bf_productivity",             _BF_UNITS,               "hm", True,  None),
+            "Specific Energy Consumption": ("specific_energy_consumption", ["General"],             "cs", False, None),
         }
         if param_name in _SMS_PARAM_KEYS:
             _sk, _is_tmi = _SMS_PARAM_KEYS[param_name]
@@ -1533,18 +1519,18 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 "cum_cply": _fmt_param(_sms_sail_v(_sk, _is_tmi, cply_month,  "till_month"), param_name),
             }
         elif param_name in _BF_SAIL_SPECS:
-            _sk, _su, _wb, _harm = _BF_SAIL_SPECS[param_name]
+            _sk, _su, _wb, _harm, _zfp = _BF_SAIL_SPECS[param_name]
             sail_row = {
                 "label":  "SAIL",
                 "unit":   section["rows"][0]["unit"] if section["rows"] else "",
-                "fy3":    _fmt_param(_bf_sail_v(_sk, _su, fy3_march,     "till_month", _wb, _harm), param_name),
-                "fy2":    _fmt_param(_bf_sail_v(_sk, _su, fy2_march,     "till_month", _wb, _harm), param_name),
-                "fy1":    _fmt_param(_bf_sail_v(_sk, _su, fy1_march,     "till_month", _wb, _harm), param_name),
+                "fy3":    _fmt_param(_bf_sail_v(_sk, _su, fy3_march,     "till_month", _wb, _harm, _zfp), param_name),
+                "fy2":    _fmt_param(_bf_sail_v(_sk, _su, fy2_march,     "till_month", _wb, _harm, _zfp), param_name),
+                "fy1":    _fmt_param(_bf_sail_v(_sk, _su, fy1_march,     "till_month", _wb, _harm, _zfp), param_name),
                 "target": _fmt_param(sail_plan_value, param_name) if sail_plan_value else "",
-                "months": [_fmt_param(_bf_sail_v(_sk, _su, m,            "month",      _wb, _harm), param_name) for m in ytd],
-                "cply":   _fmt_param(_bf_sail_v(_sk, _su, cply_month,    "month",      _wb, _harm), param_name),
-                "cum":    _fmt_param(_bf_sail_v(_sk, _su, report_month,  "till_month", _wb, _harm), param_name),
-                "cum_cply": _fmt_param(_bf_sail_v(_sk, _su, cply_month,  "till_month", _wb, _harm), param_name),
+                "months": [_fmt_param(_bf_sail_v(_sk, _su, m,            "month",      _wb, _harm, _zfp), param_name) for m in ytd],
+                "cply":   _fmt_param(_bf_sail_v(_sk, _su, cply_month,    "month",      _wb, _harm, _zfp), param_name),
+                "cum":    _fmt_param(_bf_sail_v(_sk, _su, report_month,  "till_month", _wb, _harm, _zfp), param_name),
+                "cum_cply": _fmt_param(_bf_sail_v(_sk, _su, cply_month,  "till_month", _wb, _harm, _zfp), param_name),
             }
         else:
             sail_row = {

@@ -25,7 +25,9 @@ export default function GlobalNavbar() {
       icon: '📄',
       submenu: [
         { label: 'OMI Generate', link: '/report', icon: '📈' },
+        { label: 'Month-wise Production', link: '/reports/production-fy', icon: '📅' },
         { label: 'Production Records', link: '/records', icon: '📊' },
+        { label: 'Plant-wise Techno', link: '/reports/techno-monthly', icon: '⚙️' },
         { label: 'Techno Dashboard', link: '/reports/techno-dashboard', icon: '🔬' }
       ]
     },

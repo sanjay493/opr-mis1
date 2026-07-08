@@ -937,7 +937,7 @@ async def confirm_extraction(payload: dict):
                     VALUES (?, ?, ?, ?)
                     ON CONFLICT(report_month, plant_name, item_name)
                     DO UPDATE SET month_actual = excluded.month_actual
-                """, (month, plant, r.get("item_name"), r.get("value")))
+                """, (month, plant, normalize_item_name(r.get("item_name")), r.get("value")))
                 if r.get("value") is not None:
                     saved_prod += 1
 
@@ -1146,7 +1146,9 @@ async def bsl_bf_techno_preview(
 ):
     """Extract BSL BF Performance PDF and return editable data preview.
 
-    Returns cumulative (till-month) values for all parameters and furnaces.
+    Returns for-the-MONTH values for all parameters and furnaces, plus the
+    financial-year cumulative production and coke rate (the only YTD figures
+    the PDF contains).
     """
     import shutil
     import tempfile
@@ -1200,11 +1202,14 @@ async def bsl_bf_techno_preview(
         # Extract data
         records = extract_bsl_mer(pdf_text, report_month=month, filename=file.filename)
 
-        # Current DB cumulative values per unit, for DB-vs-extracted comparison
+        # Current DB values per unit, for DB-vs-extracted comparison
         # in the UI before the user confirms the save.
         _existing_bsl = db.get_techno_data("BSL", month)
 
-        # Convert to editable format (cumulative values only)
+        # Convert to editable format. The PDF's value pairs are day/month, so
+        # the editable grid carries MONTH values; the only genuine FY
+        # cumulatives in the report (production, coke rate) ride along as
+        # *_ytd fields and are saved into till_month.
         editable_data = []
 
         _param_keys = [
@@ -1215,17 +1220,25 @@ async def bsl_bf_techno_preview(
         for record in records:
             unit = record['unit']
             techno_json = record['techno_json']
-            till_month = techno_json.get('till_month', {})
-            db_till_month = _existing_bsl.get(unit, {}).get('till_month', {})
+            month_vals = techno_json.get('month', {})
+            till_vals  = techno_json.get('till_month', {})
+            db_month = _existing_bsl.get(unit, {}).get('month', {})
+            db_till  = _existing_bsl.get(unit, {}).get('till_month', {})
 
             # Map to parameter names for UI
             row = {
                 "id": f"{unit}_{month}",
                 "unit": unit,
-                "db": {k: db_till_month.get(k) for k in _param_keys},
+                "db": {
+                    **{k: db_month.get(k) for k in _param_keys},
+                    "production_ytd": db_till.get("production"),
+                    "coke_rate_ytd":  db_till.get("coke_rate"),
+                },
             }
             for k in _param_keys:
-                row[k] = till_month.get(k)
+                row[k] = month_vals.get(k)
+            row["production_ytd"] = till_vals.get("production")
+            row["coke_rate_ytd"]  = till_vals.get("coke_rate")
             editable_data.append(row)
 
         return {
@@ -1339,35 +1352,34 @@ async def bsl_bf_techno_save(payload: dict):
 
     try:
         # Save each record to techno_data table
+        _month_keys = [
+            "production", "bf_productivity", "coke_rate", "nut_coke_rate", "cdi",
+            "fuel_rate", "hot_blast_temp", "o2_enrichment", "slag_rate",
+            "sinter_in_burden", "pellet_in_burden",
+        ]
         for row in data:
             unit = row.get("unit")
             if not unit:
                 continue
 
-            # Prepare JSON structure
+            # The PDF grid holds for-the-MONTH values; the only genuine
+            # cumulatives (FY production / coke rate) come in as *_ytd.
             techno_json = {
-                "month": {},  # Empty for now, only cumulative
+                "month": {k: row.get(k) for k in _month_keys},
                 "till_month": {
-                    "production": row.get("production"),
-                    "bf_productivity": row.get("bf_productivity"),
-                    "coke_rate": row.get("coke_rate"),
-                    "nut_coke_rate": row.get("nut_coke_rate"),
-                    "cdi": row.get("cdi"),
-                    "fuel_rate": row.get("fuel_rate"),
-                    "hot_blast_temp": row.get("hot_blast_temp"),
-                    "o2_enrichment": row.get("o2_enrichment"),
-                    "slag_rate": row.get("slag_rate"),
-                    "sinter_in_burden": row.get("sinter_in_burden"),
-                    "pellet_in_burden": row.get("pellet_in_burden"),
-                }
+                    "production": row.get("production_ytd"),
+                    "coke_rate":  row.get("coke_rate_ytd"),
+                },
             }
 
-            # Save to database
-            db.save_techno_json(
+            # Merge-save: non-null values win, params from other sources
+            # (Excel techno upload, manual entry) are preserved.
+            db.merge_upsert_techno_data(
                 plant="BSL",
                 report_month=month,
                 unit=unit,
-                techno_json=techno_json
+                new_techno_json=techno_json,
+                source_file="bsl_bf_pdf",
             )
 
         return {
@@ -1799,6 +1811,124 @@ async def save_conversion_entry(payload: dict):
         db.save_production_actual(month, "SAIL", "Conversion", float(value))
         saved += 1
     return {"status": "success", "saved": saved}
+
+
+PRODUCTION_FY_PLANT_ORDER = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'VISL', 'SAIL']
+
+
+@app.get("/api/techno-major-monthly")
+async def techno_major_monthly(month: str = Query(...)):
+    """Plant-wise MAJOR techno parameters for one month — the same values and
+    definitions as page 27 of the PDF report, reshaped to
+    (parameter → plant rows with for-the-month / till-the-month values)."""
+    data = generate_major_techno_from_db(month)
+    month_labels = data.get("month_labels") or []
+    sections = []
+    for sec in data.get("sections", []):
+        rows = []
+        for r in sec.get("rows", []):
+            months = r.get("months") or []
+            rows.append({
+                "plant":      r.get("label"),
+                "unit":       r.get("unit"),
+                "target":     r.get("target"),
+                "month":      months[-1] if months else "",
+                "till_month": r.get("cum"),
+                "cply":       r.get("cply"),
+                "cum_cply":   r.get("cum_cply"),
+            })
+        sections.append({"parameter": sec.get("label"), "rows": rows})
+    return {
+        "month": month,
+        "month_label":    month_labels[-1] if month_labels else month,
+        "cum_label":      data.get("cum_label", ""),
+        "cply_label":     data.get("cply_label", ""),
+        "cum_cply_label": data.get("cum_cply_label", ""),
+        "target_label":   data.get("target_label", ""),
+        "sections": sections,
+    }
+
+
+@app.get("/api/production-fys")
+async def list_production_fys():
+    """List financial years that have actual or plan production data.
+    Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT report_month FROM production_table
+        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        UNION
+        SELECT DISTINCT report_month FROM production_plan_table
+        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+    """)
+    fy_starts = set()
+    for (m,) in cur.fetchall():
+        year, month = int(m[:4]), int(m[5:7])
+        fy_starts.add(year if month >= 4 else year - 1)
+    conn.close()
+    return {
+        "fys": [
+            {"fy_start": y, "label": f"{y}-{str(y + 1)[2:]}"}
+            for y in sorted(fy_starts, reverse=True)
+        ]
+    }
+
+
+@app.get("/api/production-fy")
+async def get_production_fy(fy_start: int = Query(...)):
+    """Month-wise production for a financial year: all plants, all items,
+    actual and plan side by side."""
+    months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
+             [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
+    phs = ",".join("?" for _ in months)
+
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    # data[plant][item] = {"actual": {month: val}, "plan": {month: val}}
+    data = {}
+    for table, key in (("production_table", "actual"), ("production_plan_table", "plan")):
+        cur.execute(
+            f"SELECT plant_name, item_name, report_month, month_actual FROM {table} "
+            f"WHERE report_month IN ({phs}) AND plant_name != 'plant_name'",
+            months,
+        )
+        for plant, item, month, value in cur.fetchall():
+            item = normalize_item_name(item)
+            entry = data.setdefault(plant, {}).setdefault(item, {"actual": {}, "plan": {}})
+            entry[key][month] = value
+    conn.close()
+
+    def plant_key(p):
+        try:
+            return (PRODUCTION_FY_PLANT_ORDER.index(p), p)
+        except ValueError:
+            return (len(PRODUCTION_FY_PLANT_ORDER), p)
+
+    def item_key(i):
+        try:
+            return (PRODUCTION_ITEM_ORDER.index(i), i)
+        except ValueError:
+            return (len(PRODUCTION_ITEM_ORDER), i)
+
+    plants = []
+    for plant in sorted(data.keys(), key=plant_key):
+        items = []
+        for item in sorted(data[plant].keys(), key=item_key):
+            entry = data[plant][item]
+            items.append({
+                "item_name": item,
+                "actual": {m: entry["actual"].get(m) for m in months},
+                "plan": {m: entry["plan"].get(m) for m in months},
+            })
+        plants.append({"plant": plant, "items": items})
+
+    return {
+        "fy_start": fy_start,
+        "fy_label": f"{fy_start}-{str(fy_start + 1)[2:]}",
+        "months": months,
+        "plants": plants,
+    }
 
 
 @app.get("/api/stock-data")
