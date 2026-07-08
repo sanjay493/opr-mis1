@@ -692,10 +692,16 @@ export default function UploadPage() {
     // Only rows the user kept ticked (and named) are inserted. Raw-tonne values
     // of newly mapped rows are converted to '000T to match DB conventions.
     const chosen = prodRows.filter((r) => r.selected && (r.item_edit || '').trim());
+    // Count-type items (e.g. "Oven Pushing(nos/d)") are plain numbers, not
+    // tonnes — never ÷1000, and remembered with convert_t=0.
+    const isNosItem = (r) =>
+      /\(nos/i.test(r.item_edit || '') || /^nos/i.test(r.unit || '');
     const production_rows = chosen.map((r) => {
       let value = r.value;
       let unit = r.unit;
-      if (r.status !== 'ok' && unit === 'T' && typeof value === 'number') {
+      if (isNosItem(r)) {
+        unit = 'nos/day';
+      } else if (r.status !== 'ok' && unit === 'T' && typeof value === 'number') {
         value = Math.round(value) / 1000;
         unit = "'000T";
       }
@@ -707,7 +713,7 @@ export default function UploadPage() {
       .map((r) => ({
         pdf_label: r.pdf_label,
         item_name: r.item_edit.trim(),
-        convert_t: r.unit === 'nos/d' ? 0 : 1,
+        convert_t: isNosItem(r) ? 0 : 1,
       }));
     // Techno rows intentionally excluded — use Techno Manual Entry page instead
     const techno_rows = [];
