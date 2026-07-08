@@ -122,7 +122,7 @@ function PreviewReview({ preview }) {
 }
 
 // ── Single file-upload row used for each file type ────────────────────────────
-function ExtractRow({ label, previewEndpoint, insertEndpoint, reportMonth, apiBase, onSuccess, plant, accent = '#e8f0fe', accept = '.xlsx,.xls' }) {
+function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint, reportMonth, apiBase, onSuccess, plant, accent = '#e8f0fe', accept = '.xlsx,.xls' }) {
   const [file, setFile] = React.useState(null);
   const [busy,  setBusy]  = React.useState(false);
   const [status, setStatus] = React.useState(null);
@@ -157,12 +157,42 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, reportMonth, apiBa
     }
   };
 
+  const handleCalcCumulative = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const res = await fetch(`${apiBase}${cumulativeEndpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plant,
+          report_month: preview.report_month,
+          records: preview.records,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Cumulative calculation failed');
+      setPreview(prev => ({ ...prev, records: json.records }));
+      const warn = (json.warnings || []).length;
+      setStatus({
+        type: 'success',
+        text: `Cumulative calculated for ${json.computed} parameter${json.computed === 1 ? '' : 's'}`
+          + (warn ? ` — ${warn} skipped (e.g. ${json.warnings[0]})` : ''),
+      });
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleConfirmSave = async () => {
     if (!preview) return;
     setBusy(true);
     setStatus(null);
     try {
-      const res = await fetch(`${apiBase}${insertEndpoint}`, {
+      const doInsert = confirmReplace => fetch(`${apiBase}${insertEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -170,9 +200,20 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, reportMonth, apiBa
           report_month: preview.report_month,
           source_file: preview.source_file,
           records: preview.records,
+          ...(confirmReplace ? { confirm_replace: true } : {}),
         }),
       });
-      const json = await res.json();
+      let res = await doInsert(false);
+      let json = await res.json();
+      if (res.status === 409) {
+        // Existing data would be replaced — ask for user consent, then retry
+        if (!window.confirm(`${json.detail}\n\nReplace the existing values?`)) {
+          setBusy(false);
+          return;
+        }
+        res = await doInsert(true);
+        json = await res.json();
+      }
       if (!res.ok) throw new Error(json.detail || 'Save failed');
       setStatus({ type: 'success', text: `Saved ${json.units_saved} units for ${preview.report_month}` });
       setPreview(null);
@@ -216,6 +257,17 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, reportMonth, apiBa
         )}
         {preview && (
           <>
+            {cumulativeEndpoint && (
+              <button onClick={handleCalcCumulative} disabled={busy}
+                style={{
+                  padding: '7px 14px', background: busy ? '#5f6368' : '#1a73e8',
+                  color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+                  cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+                }}
+              >
+                {busy ? 'Working…' : 'Calc Cumulative'}
+              </button>
+            )}
             <button onClick={handleConfirmSave} disabled={busy}
               style={{
                 padding: '7px 18px', background: busy ? '#5f6368' : '#16a34a',
@@ -237,6 +289,14 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, reportMonth, apiBa
           </>
         )}
       </div>
+      {preview && (preview.warnings || []).length > 0 && (
+        <div style={{
+          marginTop: 6, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+          background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+        }}>
+          {preview.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+        </div>
+      )}
       {preview && <PreviewReview preview={preview} />}
       <StatusMsg status={status} />
     </div>
@@ -248,6 +308,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
   const [data, setData] = React.useState({});
   const [activeUnit, setActiveUnit] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
+  const [cumBusy, setCumBusy] = React.useState(false);
+  const [cumStatus, setCumStatus] = React.useState(null);
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -275,6 +337,41 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Bulk cumulative — same rules engine as techno-manual's per-field
+  // "Calculate Cumulative", applied to every saved parameter of every unit.
+  const handleCumulativeAll = async () => {
+    if (!window.confirm(
+      `Calculate the April→${reportMonth} cumulative for ALL ${plant} techno parameters ` +
+      `and overwrite the stored Cumulative values?`
+    )) return;
+    setCumBusy(true);
+    setCumStatus(null);
+    try {
+      const res = await fetch(`${apiBase}/api/mcr-techno/cumulative-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plant, report_month: reportMonth, overwrite: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Cumulative calculation failed');
+      const warn = (json.warnings || []).length;
+      setCumStatus({
+        type: 'success', plant, reportMonth,
+        text: `Cumulative calculated for ${json.computed} parameter${json.computed === 1 ? '' : 's'} `
+          + `across ${json.units.length} unit${json.units.length === 1 ? '' : 's'}`
+          + (warn ? ` — ${warn} skipped (e.g. ${json.warnings[0]})` : ''),
+      });
+      loadData();
+    } catch (err) {
+      setCumStatus({ type: 'error', plant, reportMonth, text: err.message });
+    } finally {
+      setCumBusy(false);
+    }
+  };
+  // Only show the status for the plant/month it was produced for
+  const cumStatusShown = cumStatus && cumStatus.plant === plant && cumStatus.reportMonth === reportMonth
+    ? cumStatus : null;
+
   const units = Object.keys(data);
   const unitData = activeUnit ? data[activeUnit] : null;
   const monthParams = unitData?.month || {};
@@ -288,9 +385,15 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
 
   return (
     <div>
-      {/* RSP: single file extract bar */}
+      {/* RSP: Technopara Excel (final) + month-end Morning Report (tentative) */}
       {isRsp && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{
+          marginBottom: 16, padding: '12px 14px',
+          background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#174ea6', marginBottom: 10 }}>
+            RSP Techno Upload — Technopara Excel (final) and/or Month-End Morning Report (tentative, merged into the same table)
+          </div>
           <ExtractRow
             label="RSP Technopara Excel (page1-8 sheet)"
             previewEndpoint="/api/techno/preview"
@@ -299,7 +402,18 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#e8f0fe"
+            accent="#1a73e8"
+          />
+          <ExtractRow
+            label="RSP Morning Report — month-end (tentative)"
+            previewEndpoint="/api/mcr-techno/preview"
+            insertEndpoint="/api/mcr-techno/insert"
+            cumulativeEndpoint="/api/mcr-techno/cumulative"
+            plant="RSP"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#174ea6"
           />
         </div>
       )}
@@ -311,7 +425,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8,
         }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 10 }}>
-            BSP Techno Excel Upload — both files contribute data for the same month (merged automatically)
+            BSP Techno Excel Upload — all files contribute data for the same month (merged automatically). The month-end row accepts MIS-2 or PPC MIS (auto-detected, tentative data).
           </div>
           <ExtractRow
             label="BSP-3-page-Tech.xlsx"
@@ -333,6 +447,17 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             onSuccess={loadData}
             accent="#b45309"
           />
+          <ExtractRow
+            label="Month-End Excel — MIS-2 or PPC MIS (tentative)"
+            previewEndpoint="/api/mcr-techno/preview"
+            insertEndpoint="/api/mcr-techno/insert"
+            cumulativeEndpoint="/api/mcr-techno/cumulative"
+            plant="BSP"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#c2410c"
+          />
         </div>
       )}
 
@@ -352,9 +477,15 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         </div>
       )}
 
-      {/* DSP: single file extract bar (PDF) */}
+      {/* DSP: monthly PDF + month-end MCR techno page (both merged) */}
       {plant === 'DSP' && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{
+          marginBottom: 16, padding: '12px 14px',
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#991b1b', marginBottom: 10 }}>
+            DSP Techno Upload — Monthly PDF (final) and/or Month-End MCR Excel (tentative, merged into the same table)
+          </div>
           <ExtractRow
             label="DSP Monthly Report PDF"
             previewEndpoint="/api/techno/preview"
@@ -365,6 +496,18 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             onSuccess={loadData}
             accent="#dc2626"
             accept=".pdf"
+          />
+          <ExtractRow
+            label="DSP MCR Month-End Excel (mcr1_*.xlsx)"
+            previewEndpoint="/api/mcr-techno/preview"
+            insertEndpoint="/api/mcr-techno/insert"
+            cumulativeEndpoint="/api/mcr-techno/cumulative"
+            plant="DSP"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#b91c1c"
+            accept=".xlsx,.xls"
           />
         </div>
       )}
@@ -399,6 +542,29 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           />
         </div>
       )}
+
+      {!loading && units.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          marginBottom: 10, padding: '8px 12px',
+          background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7,
+        }}>
+          <button onClick={handleCumulativeAll} disabled={cumBusy}
+            style={{
+              padding: '7px 16px', background: cumBusy ? '#5f6368' : '#16a34a',
+              color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+              cursor: cumBusy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+            }}
+          >
+            {cumBusy ? 'Calculating…' : 'Calculate Cumulative — all techno'}
+          </button>
+          <span style={{ fontSize: 12, color: '#166534' }}>
+            Recomputes the Cumulative (Apr→{reportMonth}) column for every saved parameter of every {plant} unit,
+            using the same rules as the manual-entry page (production-weighted where configured).
+          </span>
+        </div>
+      )}
+      <StatusMsg status={cumStatusShown} />
 
       {loading && (
         <div style={{ textAlign: 'center', padding: 40, color: '#5f6368', fontSize: 14 }}>
@@ -508,10 +674,10 @@ export default function TechnoDataEntry() {
   const reportMonth = useMemo(() => formatMonth(year, month), [year, month]);
 
   const plantHint = {
-    RSP: 'Extract from Technopara Excel (page1-8 sheet).',
-    BSP: 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel. Both merged automatically.',
+    RSP: 'Upload the Technopara Excel (final), or the month-end Daily Morning Report (tentative furnace/SMS data; month verified against the report date in A2).',
+    BSP: 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel (final), or the month-end MIS-2 / PPC MIS Excel (tentative furnace & SMS data; month verified against the report date). All merged automatically.',
     ISP: 'Extract from multi-sheet ISP Technopara Excel.',
-    DSP: 'Extract from DSP Monthly Report PDF.',
+    DSP: 'Upload the Monthly Report PDF (final) and/or the month-end MCR Excel (tentative for-the-month values; month is verified against the report date in C1).',
     BSL: 'Upload Techno Excel and/or BF Performance PDF. Both merged automatically.',
   }[plant] || `${plant} extraction coming soon.`;
 
