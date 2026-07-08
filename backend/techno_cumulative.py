@@ -18,9 +18,14 @@ Weight basis:
 Weight source per month:
   Shop-level units (SHOP_UNITS) — total PLANT production from production_table
   ('Hot Metal' / 'Total Crude Steel' item).
-  Any other unit — that unit's own monthly 'production' parameter from techno
-  data (furnace-wise production; being added plant by plant). Months without a
-  weight are EXCLUDED from the calculation and reported as warnings.
+  Any other unit — furnace-wise production from production_table (item_name =
+  unit name, 'BF-1' or 'BF#8' spelling), falling back to the unit's own
+  monthly 'production' techno parameter for months not covered there.
+
+  The cumulative must always cover EVERY month (Apr→report_month) that has a
+  value: if any valued month lacks a weight, the calculation falls back to the
+  simple average of all monthly values (reported in warnings) rather than
+  weighting a subset of months.
 """
 
 import sqlite3
@@ -86,16 +91,39 @@ def _plant_production(plant: str, item: str, months) -> Dict[str, float]:
 def _unit_production(plant: str, unit: str, months,
                      current_production: Optional[float] = None,
                      report_month: str = "") -> Dict[str, float]:
-    """{month: production} from the unit's own techno 'production' param.
-    current_production (unsaved form value) takes precedence for report_month."""
-    weights: Dict[str, float] = {}
+    """{month: production ('000 t)} for a unit.
+
+    Primary source: furnace-wise rows in production_table (item_name equal to
+    the unit name — 'BF-1' or the 'BF#8' spelling), which the monthly
+    production uploads populate for the whole FY. Months not covered there
+    fall back to the unit's own techno 'production' parameter (tonnes,
+    converted to '000 t so both sources weigh consistently).
+    current_production (unsaved form value, tonnes) takes precedence for
+    report_month."""
+    candidates = [unit]
+    if unit.startswith("BF-"):
+        candidates.append("BF#" + unit[3:])
+
+    conn = sqlite3.connect(_db.DB_PATH)
+    cur = conn.cursor()
+    ph_m = ",".join("?" * len(months))
+    ph_i = ",".join("?" * len(candidates))
+    cur.execute(
+        f"SELECT report_month, month_actual FROM production_table "
+        f"WHERE plant_name=? AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
+        [plant, *candidates, *months])
+    weights = {m: v for m, v in cur.fetchall() if v is not None and v > 0}
+    conn.close()
+
     for m in months:
+        if m in weights:
+            continue
         ud = _db.get_techno_data(plant, m, unit).get(unit, {})
         v = ud.get("month", {}).get("production")
         if v is not None and v > 0:
-            weights[m] = v
+            weights[m] = v / 1000.0   # techno production is t; table is '000 t
     if current_production is not None and current_production > 0 and report_month:
-        weights[report_month] = current_production
+        weights[report_month] = current_production / 1000.0
     return weights
 
 
@@ -162,12 +190,35 @@ def compute_cumulative_preview(
         else:
             weights = _unit_production(plant, unit, months,
                                        current_production, report_month)
-            weight_desc = f"{unit}'s own monthly 'production' (t, techno data)"
+            weight_desc = (f"{unit} monthly production ('000 t — production "
+                           f"data, else the unit's techno 'production' param)")
 
     rows, steps = [], []
     result = None
+    method_used = method
 
     if method in ("weighted", "harmonic") and basis:
+        # A weighted result must cover EVERY month that has a value — a
+        # weighted subset silently drops months and misrepresents the YTD.
+        # If any valued month lacks a production weight (or is unusable for
+        # the harmonic mean), fall back to the simple average of ALL monthly
+        # values so the cumulative always spans April→report_month.
+        unusable = [
+            m for m in months
+            if values.get(m) is not None
+            and (weights.get(m) is None
+                 or (method == "harmonic" and values[m] <= 0))
+        ]
+        if unusable:
+            label = ("production-weighted average" if method == "weighted"
+                     else "production-weighted harmonic mean")
+            warnings.append(
+                f"Production weight missing/unusable ({weight_desc}) for: "
+                f"{', '.join(unusable)} — used the simple average of all "
+                f"monthly values instead of the {label}.")
+            method_used = "average"
+
+    if method_used in ("weighted", "harmonic") and basis:
         label = ("production-weighted average" if method == "weighted"
                  else "production-weighted harmonic mean")
         formula = ("Σ(month value × production) ÷ Σ(production)" if method == "weighted"
@@ -179,24 +230,13 @@ def compute_cumulative_preview(
             v = values.get(m)
             if v is None:
                 continue
-            w = weights.get(m)
-            if w is None or (method == "harmonic" and v <= 0):
-                reason = ("production weight missing" if w is None
-                          else "non-positive value (harmonic mean undefined)")
-                warnings.append(f"{m}: value {v} present but {reason} — month excluded.")
-                rows.append({"month": m, "value": v, "weight": None, "product": None})
-                continue
+            w = weights[m]
             usable.append((m, v, w))
             term = round(v * w, 4) if method == "weighted" else round(w / v, 4)
             rows.append({"month": m, "value": v, "weight": w, "product": term})
             op = "×" if method == "weighted" else "÷"
             steps.append(f"{m}: {w} {op} {v} = {term}" if method == "harmonic"
                          else f"{m}: {v} × {w} = {term}")
-        if not usable:
-            raise ValueError(
-                f"No months have both a value and a production weight "
-                f"({weight_desc}) — cannot compute {label}. "
-                f"Enter the monthly production first, or exclude weighting.")
         sum_w = sum(w for _, _, w in usable)
         if method == "weighted":
             sum_p = sum(v * w for _, v, w in usable)
@@ -220,10 +260,12 @@ def compute_cumulative_preview(
         steps.append(
             f"Cumulative = {' + '.join(str(values[m]) for m in months if m in values)} = {result}")
 
-    else:  # simple average (parameter not configured in CUMULATIVE_RULES)
+    else:  # simple average (unconfigured param, or weighted fallback)
         steps.append(
             "Method: simple average of monthly values "
-            "(parameter not configured for production weighting in CUMULATIVE_RULES).")
+            + ("(fallback — production weights incomplete for the valued months)."
+               if method != method_used else
+               "(parameter not configured for production weighting in CUMULATIVE_RULES)."))
         for m in months:
             if m in values:
                 rows.append({"month": m, "value": values[m], "weight": None, "product": None})
@@ -236,7 +278,7 @@ def compute_cumulative_preview(
         "plant": plant, "unit": unit, "param_key": param_key,
         "report_month": report_month, "fy_months": months,
         "method": {"weighted": "weighted_average", "harmonic": "harmonic_mean",
-                   "sum": "sum"}.get(method, "simple_average"),
+                   "sum": "sum"}.get(method_used, "simple_average"),
         "weight_basis": basis,
         "weight_item": weight_desc,
         "rows": rows, "result": result,
