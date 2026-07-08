@@ -12,6 +12,8 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
   const [saving, setSaving] = useState(false);
   const inputRef = React.useRef();
 
+  // Month values (the PDF's day/month pairs → month part), followed by the
+  // two genuine financial-year cumulatives the PDF carries (saved to till_month).
   const parameters = [
     { key: 'production', label: 'Production (T)', type: 'number' },
     { key: 'bf_productivity', label: 'BF Productivity (t/m³/day)', type: 'number', step: '0.01' },
@@ -24,6 +26,8 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
     { key: 'slag_rate', label: 'Slag Rate (kg/THM)', type: 'number', step: '0.01' },
     { key: 'sinter_in_burden', label: 'Sinter in Burden (%)', type: 'number', step: '0.01' },
     { key: 'pellet_in_burden', label: 'Pellet in Burden (%)', type: 'number', step: '0.01' },
+    { key: 'production_ytd', label: 'Production YTD Fin.Yr (T)', type: 'number', ytd: true },
+    { key: 'coke_rate_ytd', label: 'Coke Rate YTD Fin.Yr (kg/THM)', type: 'number', step: '0.01', ytd: true },
   ];
 
   // Handle file selection
@@ -334,7 +338,7 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
           {/* Header Section */}
           <div style={{ marginBottom: '16px' }}>
             <div style={styles.infoLabel}>
-              📊 Cumulative (Till-Month) Values - Editable Data Table
+              📊 For-the-Month Values (+ Fin.Yr YTD Production & Coke Rate) - Editable Data Table
             </div>
             <div style={styles.helperText}>
               ✏️ Click any cell to edit values  |  ➕ Add rows for missing furnaces  |  ❌ Remove rows as needed
@@ -389,7 +393,7 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
                             placeholder="-"
                           />
                           <div style={{ fontSize: '10.5px', color: changedFromDb ? '#b45309' : '#94a3b8', marginTop: '2px', fontWeight: changedFromDb ? 600 : 400 }}>
-                            In DB (Cum.): {dbVal != null ? Number(dbVal).toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—'}
+                            In DB{param.ytd ? ' (YTD)' : ''}: {dbVal != null ? Number(dbVal).toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—'}
                           </div>
                         </td>
                       );

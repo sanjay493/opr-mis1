@@ -112,24 +112,6 @@ const PLANT_PARAM_EXTRAS = {
   DSP: { 'Sinter Plant': ['dsp_sp_1','dsp_sp_2'] },
 };
 
-// Params that are extensive totals — YTD cumulative = sum of monthly values.
-// Everything else (rates, %, temperatures) defaults to arithmetic average.
-const SUM_KEYS = new Set([
-  'coke_production', 'sinter_production', 'production', 'water_consumption',
-]);
-
-// Cumulative = sum (SUM_KEYS) or average of prior FY-to-date monthly values
-// plus the currently-entered month value. Returns null if nothing to base it on.
-function computeCumulative(key, history, currentVal) {
-  const vals = Object.values(history || {})
-    .map(m => m?.[key])
-    .filter(v => v !== null && v !== undefined);
-  if (currentVal !== null && currentVal !== undefined) vals.push(currentVal);
-  if (!vals.length) return null;
-  const sum = vals.reduce((a, b) => a + b, 0);
-  return SUM_KEYS.has(key) ? sum : sum / vals.length;
-}
-
 function templateFor(area, plant) {
   const base   = PARAM_TEMPLATES[area] || [];
   const extras = (PLANT_PARAM_EXTRAS[plant] || {})[area] || [];
@@ -281,7 +263,7 @@ function NumInput({ value, onChange, disabled, changed }) {
 }
 
 // ── Parameter table for one unit ──────────────────────────────────────────────
-function UnitForm({ unit, plant, data, initialData, onChange, busy }) {
+function UnitForm({ unit, plant, data, initialData, onChange, busy, selParam, onSelectParam }) {
   const area        = unitArea(unit);
   const templateKeys = templateFor(area, plant);
 
@@ -312,7 +294,7 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy }) {
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
           <thead>
             <tr style={{ background:'#f8f9fa', position:'sticky', top:0, zIndex:1 }}>
-              <th style={{ ...TH, textAlign:'left', width:'44%' }}>Parameter</th>
+              <th style={{ ...TH, textAlign:'left', width:'44%' }}>Parameter (click to select)</th>
               <th style={{ ...TH, width:'28%' }}>Month Value</th>
               <th style={{ ...TH, width:'28%' }}>YTD (Cumulative)</th>
             </tr>
@@ -326,11 +308,27 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy }) {
               const mChg    = mv !== initM;
               const tChg    = tv !== initT;
               const isTempl = templateKeys.includes(key);
+              const isSel   = key === selParam;
               return (
-                <tr key={key} style={{ background: i % 2 === 0 ? '#fff' : '#f8f9fa' }}>
-                  <td style={{ ...TD, fontWeight: isTempl ? 500 : 400, color: isTempl ? '#202124' : '#5f6368' }}>
+                <tr key={key} style={{ background: isSel ? '#e8f0fe' : i % 2 === 0 ? '#fff' : '#f8f9fa' }}>
+                  <td
+                    onClick={() => onSelectParam(isSel ? null : key)}
+                    title="Click to select this field for Calculate Cumulative"
+                    style={{
+                      ...TD, cursor:'pointer',
+                      fontWeight: isTempl ? 500 : 400,
+                      color: isSel ? '#174ea6' : isTempl ? '#202124' : '#5f6368',
+                      borderLeft: isSel ? '4px solid #1a73e8' : '4px solid transparent',
+                    }}
+                  >
+                    <span style={{
+                      display:'inline-block', width:12, height:12, borderRadius:'50%',
+                      border:`2px solid ${isSel ? '#1a73e8' : '#9ca3af'}`,
+                      background: isSel ? '#1a73e8' : '#fff',
+                      marginRight:8, verticalAlign:'middle',
+                    }} />
                     {labelOf(key)}
-                    <br /><span style={{ fontSize:11, color:'#5f6368' }}>{key}</span>
+                    <br /><span style={{ fontSize:11, color:'#5f6368', marginLeft:22 }}>{key}</span>
                   </td>
                   <td style={TD}>
                     <NumInput value={mv} disabled={busy} changed={mChg}
@@ -517,6 +515,103 @@ function CopyFromPanel({ currentMonth, plant, onCopy }) {
   );
 }
 
+// ── Cumulative calculation preview modal ──────────────────────────────────────
+function CumulativeModal({ preview, onApply, onClose }) {
+  if (!preview) return null;
+  const hasWeights = preview.method === 'weighted_average' || preview.method === 'harmonic_mean';
+  const methodLabel = {
+    weighted_average: 'Production-weighted average',
+    harmonic_mean:    'Production-weighted harmonic mean',
+    simple_average:   'Simple average of monthly values',
+    sum:              'Sum of monthly values',
+  }[preview.method] || preview.method;
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:200,
+      display:'flex', alignItems:'center', justifyContent:'center',
+    }}>
+      <div style={{
+        background:'#fff', borderRadius:10, padding:26, width:620, maxWidth:'92vw',
+        maxHeight:'86vh', overflowY:'auto', boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
+      }}>
+        <h3 style={{ margin:'0 0 4px', fontSize:18, color:'#202124' }}>
+          Cumulative Calculation — {labelOf(preview.param_key)}
+        </h3>
+        <div style={{ fontSize:13, color:'#5f6368', marginBottom:14 }}>
+          {preview.plant} › {preview.unit} · April → {preview.report_month} · {methodLabel}
+          {hasWeights && preview.weight_item && (
+            <><br />Weights: {preview.weight_item}</>
+          )}
+        </div>
+
+        {(preview.warnings || []).map((w, i) => (
+          <Notice key={i} type="info" text={w} />
+        ))}
+
+        {/* Month-by-month table */}
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, marginBottom:14 }}>
+          <thead>
+            <tr style={{ background:'#e8f0fe' }}>
+              <th style={{ ...TH, textAlign:'left' }}>Month</th>
+              <th style={TH}>Monthly Value</th>
+              {hasWeights && <th style={TH}>Production (weight)</th>}
+              {hasWeights && (
+                <th style={TH}>
+                  {preview.method === 'harmonic_mean' ? 'Production ÷ Value' : 'Value × Production'}
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {(preview.rows || []).map((r, i) => (
+              <tr key={r.month} style={{ background: i % 2 === 0 ? '#fff' : '#f8f9fa' }}>
+                <td style={TD}>{r.month}</td>
+                <td style={{ ...TD, textAlign:'right' }}>{r.value ?? '—'}</td>
+                {hasWeights && (
+                  <td style={{ ...TD, textAlign:'right', color: r.weight == null ? '#dc2626' : '#202124' }}>
+                    {r.weight ?? 'missing'}
+                  </td>
+                )}
+                {hasWeights && <td style={{ ...TD, textAlign:'right' }}>{r.product ?? '—'}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Step-by-step working */}
+        <div style={{ background:'#f8f9fa', border:'1px solid #dadce0', borderRadius:6, padding:'12px 14px', marginBottom:14 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'#5f6368', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>
+            Calculation steps
+          </div>
+          {(preview.steps || []).map((s, i) => (
+            <div key={i} style={{ fontSize:13, color:'#202124', fontFamily:'Consolas, monospace', padding:'2px 0' }}>
+              {i + 1}. {s}
+            </div>
+          ))}
+        </div>
+
+        {/* Result + actions */}
+        <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+          <div style={{ fontSize:15, fontWeight:700, color:'#166534' }}>
+            Cumulative = {preview.result}
+          </div>
+          <div style={{ marginLeft:'auto', display:'flex', gap:10 }}>
+            <button onClick={onClose} style={{
+              padding:'7px 18px', fontSize:14, background:'#f8f9fa',
+              border:'1px solid #dadce0', borderRadius:4, cursor:'pointer',
+            }}>Close</button>
+            <button onClick={() => onApply(preview.param_key, preview.result)} style={{
+              padding:'7px 18px', fontSize:14, fontWeight:700,
+              background:'#166534', color:'#fff', border:'none', borderRadius:4, cursor:'pointer',
+            }}>Apply to YTD box</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TechnoManualPage() {
   const def = getDefaultPeriod();
@@ -528,10 +623,6 @@ export default function TechnoManualPage() {
   // initData: snapshot from last DB load/save (used for change detection)
   const [unitData,    setUnitData]    = useState({});
   const [initData,    setInitData]    = useState({});
-  // ytdHistory: {unit: {"2026-04": {param_key: val}, ...}} — FY-to-date monthly
-  //   values (excluding the currently-selected month). Only read when the user
-  //   clicks "Calculate Cumulative" — never applied automatically.
-  const [ytdHistory,  setYtdHistory]  = useState({});
   const [loading,     setLoading]     = useState(false);
   const [notice,      setNotice]      = useState(null);
   const [saving,      setSaving]      = useState(false);
@@ -540,6 +631,11 @@ export default function TechnoManualPage() {
   const [area,        setArea]        = useState('Blast Furnace');
   const [selUnit,     setSelUnit]     = useState(null);
   const [showAddUnit, setShowAddUnit] = useState(false);
+
+  // Selected parameter row — "Calculate Cumulative" acts on this field only
+  const [selParam,    setSelParam]    = useState(null);
+  const [cumBusy,     setCumBusy]     = useState(false);
+  const [cumPreview,  setCumPreview]  = useState(null);
 
   const reportMonth = `${year}-${MONTH_NUM[monthName]}`;
 
@@ -553,13 +649,12 @@ export default function TechnoManualPage() {
       const units = d.units || {};
       setUnitData(units);
       setInitData(JSON.parse(JSON.stringify(units)));
-      setYtdHistory(d.ytd_history || {});
 
       if (!d.has_data)
         setNotice({ type:'info', text:`No data yet for ${plant} ${reportMonth}. Click "+ Add Unit" to begin.` });
     } catch (e) {
       setNotice({ type:'error', text:`Load failed: ${e.message}` });
-      setUnitData({}); setInitData({}); setYtdHistory({});
+      setUnitData({}); setInitData({});
     } finally {
       setLoading(false);
     }
@@ -582,6 +677,9 @@ export default function TechnoManualPage() {
     if (!visibleUnits.includes(selUnit)) setSelUnit(visibleUnits[0] || null);
   }, [area, visibleUnits.join(',')]);
 
+  // Clear field selection when switching unit / plant / month
+  useEffect(() => { setSelParam(null); setCumPreview(null); }, [selUnit, plant, reportMonth]);
+
   // ── Edit value ──────────────────────────────────────────────────────────────
   function handleChange(unit, period, key, val) {
     setSavedUnits(prev => { const s = new Set(prev); s.delete(unit); return s; });
@@ -594,33 +692,41 @@ export default function TechnoManualPage() {
     }));
   }
 
-  // ── Calculate Cumulative (button-triggered, current unit only) ─────────────
-  // Fills in ONLY YTD boxes that are currently blank, from Apr→current monthly
-  // history. Never overwrites a value already present — whether it came from
-  // file upload/extraction or a prior manual entry — so that data always
-  // prevails and the user can still edit the result afterwards.
-  function calculateCumulative(unit) {
-    const history = ytdHistory[unit] || {};
-    const monthData = unitData[unit]?.month || {};
-    const tillData  = unitData[unit]?.till_month || {};
-    const keys = new Set([...Object.keys(monthData), ...Object.keys(tillData)]);
-
-    let filled = 0;
-    const nextTill = { ...tillData };
-    for (const key of keys) {
-      if (nextTill[key] !== null && nextTill[key] !== undefined) continue; // prevails — skip
-      const calc = computeCumulative(key, history, monthData[key] ?? null);
-      if (calc !== null) { nextTill[key] = calc; filled++; }
+  // ── Calculate Cumulative (button-triggered, SELECTED FIELD only) ────────────
+  // Asks the backend to compute the YTD for the selected parameter from
+  // Apr→current monthly values (weighted by monthly crude steel production for
+  // per-TCS params) and shows the full working in a modal. Nothing is written
+  // until the user clicks "Apply to YTD box" — and the box stays editable.
+  async function calculateCumulative(unit) {
+    if (!selParam) {
+      setNotice({ type:'info', text:'Select a parameter row first (click its name) — the button calculates that field only.' });
+      return;
     }
+    setCumBusy(true); setNotice(null);
+    try {
+      const currentVal  = unitData[unit]?.month?.[selParam];
+      const currentProd = unitData[unit]?.month?.production;
+      const qs = new URLSearchParams({
+        plant, unit, param_key: selParam, report_month: reportMonth,
+        ...(currentVal !== null && currentVal !== undefined ? { current_value: currentVal } : {}),
+        ...(currentProd !== null && currentProd !== undefined ? { current_production: currentProd } : {}),
+      });
+      const r = await fetch(`${API}/api/techno/manual/cumulative-preview?${qs}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'calculation failed');
+      setCumPreview(d);
+    } catch (e) {
+      setNotice({ type:'error', text:`Cumulative calculation: ${e.message}` });
+    } finally {
+      setCumBusy(false);
+    }
+  }
 
-    setUnitData(prev => ({
-      ...prev,
-      [unit]: { ...prev[unit], till_month: nextTill },
-    }));
-    setSavedUnits(prev => { const s = new Set(prev); s.delete(unit); return s; });
-    setNotice(filled
-      ? { type:'success', text:`Calculated ${filled} blank YTD value(s) for ${unit}. Review and Save.` }
-      : { type:'info', text:`No blank YTD boxes to calculate for ${unit} (or no Month Values entered yet).` });
+  // Write the previewed result into the selected field's YTD box (still editable)
+  function applyCumulative(key, result) {
+    if (selUnit) handleChange(selUnit, 'till_month', key, result);
+    setCumPreview(null);
+    setNotice({ type:'success', text:`YTD (Cumulative) for ${labelOf(key)} set to ${result}. Review and Save.` });
   }
 
   // ── Add param to unit ───────────────────────────────────────────────────────
@@ -775,6 +881,14 @@ export default function TechnoManualPage() {
           existingUnits={Object.keys(unitData)}
           onAdd={handleAddUnit}
           onClose={() => setShowAddUnit(false)}
+        />
+      )}
+
+      {cumPreview && (
+        <CumulativeModal
+          preview={cumPreview}
+          onApply={applyCumulative}
+          onClose={() => setCumPreview(null)}
         />
       )}
 
@@ -1017,12 +1131,19 @@ export default function TechnoManualPage() {
                         {countChanges(unitData[selUnit], initData[selUnit])} unsaved
                       </span>
                     )}
-                    <button onClick={() => calculateCumulative(selUnit)} disabled={saving} style={{
-                      padding:'7px 18px', fontSize:14, fontWeight:600,
-                      background:'#3b82f6', color:'#fff', border:'none',
-                      borderRadius:5, cursor: saving ? 'not-allowed' : 'pointer',
-                    }}>
-                      Calculate Cumulative
+                    <button
+                      onClick={() => calculateCumulative(selUnit)}
+                      disabled={saving || cumBusy || !selParam}
+                      title={selParam ? `Calculate YTD for ${labelOf(selParam)}` : 'Click a parameter row to select the field first'}
+                      style={{
+                        padding:'7px 18px', fontSize:14, fontWeight:600,
+                        background: selParam ? '#3b82f6' : '#9ca3af', color:'#fff', border:'none',
+                        borderRadius:5, cursor: (saving || cumBusy || !selParam) ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {cumBusy ? 'Calculating…'
+                        : selParam ? `Calculate Cumulative — ${labelOf(selParam)}`
+                        : 'Calculate Cumulative (select a field)'}
                     </button>
                     <button onClick={() => saveUnit(selUnit)} disabled={saving} style={{
                       padding:'7px 22px', fontSize:14, fontWeight:700,
@@ -1042,6 +1163,8 @@ export default function TechnoManualPage() {
                   initialData={initData[selUnit]}
                   onChange={(period, key, val) => handleChange(selUnit, period, key, val)}
                   busy={saving}
+                  selParam={selParam}
+                  onSelectParam={setSelParam}
                 />
 
                 {/* Add custom param */}
@@ -1053,7 +1176,7 @@ export default function TechnoManualPage() {
 
         {/* ── Footer note ── */}
         <div style={{ marginTop:18, fontSize:12, color:'#9ca3af', display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:6 }}>
-          <span>Amber cells = unsaved changes vs last-loaded DB values. Click “Calculate Cumulative” to fill blank YTD boxes from Apr→current monthly history — existing values (file-uploaded or manual) are never overwritten, and results stay editable.</span>
+          <span>Amber cells = unsaved changes vs last-loaded DB values. Click a parameter name to select it, then “Calculate Cumulative” computes that field's YTD from Apr→current monthly values — BF rates are HM-production weighted (BF productivity: harmonic mean), per-TCS params are crude-steel weighted; shop units (BF_Shop/SMS) weight by plant production, other units by their own monthly production. Every step is shown before you apply; applied values stay editable.</span>
           <span>Null values are not overwritten on save. File-uploaded and manual data coexist — last write wins per parameter.</span>
         </div>
       </div>

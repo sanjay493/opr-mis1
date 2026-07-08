@@ -28,6 +28,10 @@ _HARMONIC_KEYS = {"bf_productivity"}
 # BF params that use simple arithmetic mean (not HM-weighted)
 _ARITHMETIC_KEYS = {"hot_blast_temp", "blast_temperature", "hbt"}
 
+# YTD cumulative rules live in techno_cumulative.CUMULATIVE_RULES (global,
+# shared). Add new parameters there.
+from techno_cumulative import compute_cumulative_preview
+
 
 # ── Pydantic request bodies ──────────────────────────────────────────────────
 class SaveRequest(BaseModel):
@@ -270,6 +274,45 @@ async def calculate_sail(body: SailCalcRequest):
         "sail_bf_till":  calc_till,
         "params_calculated": len(calc_month),
     }
+
+
+@router.get("/cumulative-preview")
+async def cumulative_preview(
+    plant: str = Query(..., description="Plant code"),
+    unit: str = Query(..., description="Unit, e.g. BF-1, BF_Shop, SMS"),
+    param_key: str = Query(..., description="Parameter key, e.g. coke_rate"),
+    report_month: str = Query(..., description="YYYY-MM"),
+    current_value: Optional[float] = Query(
+        None, description="Month value currently typed in the form for report_month "
+                          "(overrides the DB value, may be unsaved)"),
+    current_production: Optional[float] = Query(
+        None, description="Unsaved form 'production' Month Value — used as the "
+                          "report_month weight for unit-wise weighting"),
+):
+    """
+    Compute the YTD cumulative for ONE parameter with a step-by-step breakdown
+    so the user can verify the calculation before applying it.
+
+    Methods and weights come from the global techno_cumulative.CUMULATIVE_RULES:
+    HM-weighted average (coke rate, slag rate, nut coke, CDI, fuel rate,
+    coal-to-HM, O2 enrichment, sinter/pellet % in burden), HM-weighted harmonic
+    mean (BF productivity), crude-steel-weighted average (specific HM/scrap
+    consumption, TMI, specific energy consumption), sum for extensive totals,
+    simple average otherwise. Shop-level units (BF_Shop, SMS) weight by total
+    PLANT production; any other unit weights by its own monthly 'production'
+    techno parameter — months without a weight are excluded, with a warning.
+    """
+    _validate_month(report_month)
+    _db.init_db()
+    try:
+        return compute_cumulative_preview(
+            plant=plant, unit=unit, param_key=param_key,
+            report_month=report_month,
+            current_value=current_value,
+            current_production=current_production,
+        )
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
 
 @router.get("/months")

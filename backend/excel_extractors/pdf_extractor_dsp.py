@@ -876,11 +876,16 @@ def _block_production(file_path: str, prod_page_idx: int,
                     item, convert = name, conv
                     break
 
+        # Count-type items (nos/day) are never tonnes — override any stale
+        # alias/config convert flag so they are never divided by 1000.
+        if item and "(nos" in item.lower():
+            convert = False
+
         stored = round(val / 1000.0, 3) if (convert and item) else val
         rows.append({
             "item_name": item if item else f"(unmapped) {label}",
             "value":     stored if item else val,
-            "unit":      "nos/d" if (item and not convert) else "'000T" if item else "T",
+            "unit":      "nos/day" if (item and not convert) else "'000T" if item else "T",
             "cell":      f"PDF p{page_no} · {want_mon}'{yy} col",
             "pdf_label": " ".join(label_toks),
             "status":    "ok" if item else "unmapped",
@@ -1035,6 +1040,10 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
 
             if item is None:
                 item = label
+
+            # Count-type items (nos/day) are never tonnes — never ÷1000
+            if "(nos" in item.lower():
+                convert = False
 
             # Convert units if needed
             if convert and isinstance(val, (int, float)):
