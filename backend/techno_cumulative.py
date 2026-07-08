@@ -38,6 +38,7 @@ CUMULATIVE_RULES = {
     "fuel_rate":        ("weighted", "hm"),
     "coal_to_hm":       ("weighted", "hm"),
     "o2_enrichment":    ("weighted", "hm"),
+    "oxygen_enrichment": ("weighted", "hm"),   # RSP key for the same parameter
     "sinter_in_burden": ("weighted", "hm"),
     "pellet_in_burden": ("weighted", "hm"),
     # HM-weighted harmonic mean
@@ -57,8 +58,10 @@ CUMULATIVE_RULES = {
 # production_table item used when the weight comes from PLANT production
 PLANT_WEIGHT_ITEMS = {"hm": "Hot Metal", "crude_steel": "Total Crude Steel"}
 
-# Shop-level aggregate units — cumulative uses total plant production
-SHOP_UNITS = {"BF_Shop", "SMS"}
+# Shop/plant-level aggregate units — cumulative uses total plant production
+# (individual furnaces still weight by their own monthly 'production' param)
+SHOP_UNITS = {"BF_Shop", "SMS", "SMS-1", "SMS-2", "SMS-3", "SMS-I", "SMS-II",
+              "General"}
 
 
 def get_rule(param_key: str):
@@ -122,12 +125,17 @@ def compute_cumulative_preview(
     values: Dict[str, float] = {}
     for m in months:
         if m == report_month and current_value is not None:
-            values[m] = current_value
+            v = current_value
+        else:
+            ud = _db.get_techno_data(plant, m, unit).get(unit, {})
+            v = ud.get("month", {}).get(param_key)
+        if v is None:
             continue
-        ud = _db.get_techno_data(plant, m, unit).get(unit, {})
-        v = ud.get("month", {}).get(param_key)
-        if v is not None:
-            values[m] = v
+        try:
+            values[m] = float(v)
+        except (TypeError, ValueError):
+            # Non-numeric stored value (e.g. a 'HH:MM' time) — cannot average
+            warnings.append(f"{m}: non-numeric value {v!r} — excluded.")
 
     if report_month not in values:
         warnings.append(

@@ -68,6 +68,7 @@ from api_isp_techno import router as isp_techno_router
 from api_dsp_techno import router as dsp_techno_router
 from api_unified_techno import router as unified_techno_router
 from api_techno_manual import router as techno_manual_router
+from api_mcr_techno import router as mcr_techno_router
 
 db.init_db()
 
@@ -122,6 +123,7 @@ app.include_router(isp_techno_router)
 app.include_router(dsp_techno_router)
 app.include_router(unified_techno_router)
 app.include_router(techno_manual_router)
+app.include_router(mcr_techno_router)
 
 # Serve dashboard
 @app.get("/dashboard")
