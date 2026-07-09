@@ -826,8 +826,14 @@ async def extract_preview_endpoint(
                     lambda: excel_extractor_isp.extract_preview(tmp_path, month)
                 )
         elif plant_name == "BSP":
-            # Unified BSP extractor — auto-detects: Special Steel / OISCO / 3-page-Tech
-            import excel_extractor_bsp as _bsp_mod
+            _ext = os.path.splitext(file.filename or "")[1].lower()
+            if _ext == ".pdf":
+                # BSP flash monthly PDF — production + techno + closing stock
+                import pdf_extractor_bsp_flash as _bsp_mod
+            else:
+                # Unified BSP Excel extractor — auto-detects:
+                # PPC MIS / MIS-2 / Special Steel / OISCO / 3-page-Tech
+                import excel_extractor_bsp as _bsp_mod
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 result = await loop.run_in_executor(
                     pool,
