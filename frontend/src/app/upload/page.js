@@ -1291,7 +1291,7 @@ export default function UploadPage() {
                   <option value="RSP">RSP (Excel — production / general)</option>
                   <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
                   <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
-                  <option value="BSP">BSP (PPC MIS Month-End .xls / Special Steel .xlsx)</option>
+                  <option value="BSP">BSP (Flash PDF / PPC MIS Month-End .xls / Special Steel .xlsx)</option>
                   <option value="BSL">BSL (DPR .xlsx / Corporate SS .xlsx)</option>
                   <option value="ASP">ASP (xlsx or PDF — REP / FL actuals)</option>
                   <option value="SSP">SSP (PDF — Monthly DPR)</option>
@@ -1316,7 +1316,7 @@ export default function UploadPage() {
                   {technoPlant === 'RSP_TECHNO' ? 'RSP Technopara Excel (.xlsx — sheet: page1-8)'
                     : technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
                     : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
-                    : technoPlant === 'BSP' ? 'BSP File (.xls Month-End PPC MIS or .xlsx Techno/OISCO/SS)'
+                    : technoPlant === 'BSP' ? 'BSP File (flash-*.pdf Monthly / .xls Month-End PPC MIS / .xlsx Techno/OISCO/SS)'
                     : technoPlant === 'BSL' ? 'BSL — DPR Mail (.xlsx) or Techno (.xls) or Corporate SS (.xlsx) or BF Performance PDF (.pdf)'
                     : technoPlant === 'ASP' ? 'ASP file — asp.xlsx  or  REP*.pdf / FL*.pdf'
                     : technoPlant === 'SSP' ? 'SSP DPR PDF (e.g. SSP-DPR-DD.MM.YY.pdf)'
@@ -1324,7 +1324,7 @@ export default function UploadPage() {
                     : 'RSP Excel File (.xlsx)'}
                 </label>
                 <input id="techno-file-input" type="file" className="form-control"
-                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : '.xlsx'}
+                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx,.pdf' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : '.xlsx'}
                        style={{ padding: '4px', fontSize: '0.8rem' }}
                        suppressHydrationWarning
                        onChange={(e) => setTechnoFile(e.target.files[0])} />
@@ -1336,7 +1336,7 @@ export default function UploadPage() {
                     : technoPlant === 'ISP'
                     ? 'Morning Report (DAILYREPORT1): ~19 items, month from K5. Final Monthly: ~17 items, set month above. Summarized Monthly (B-FCE): ~37 techno params.'
                     : technoPlant === 'BSP'
-                    ? "File type auto-detected from content: BSPMIS*.xls → PPC MIS Month-End (sheet S1) — production + opening stock (closing stock saved as next month). BSP MIS 2_coff_print*.xls/.xlsx → furnace-wise Hot Metal production (tentative; BF-1/4/5/6/7/8, column D CUM, month from row 2). BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → techno params (Sheet1, month from A3). OISCO_<Mon>'YY.xlsx → OISCO techno params (month from C3)."
+                    ? "File type auto-detected from content: flash-<mon>YY.pdf → BSP Flash Monthly PDF — full production (incl. furnace-wise BF#1/4/5/6/7), ~80 techno params (coke yield, sinter, BF, SMS-2/3, all mills, energy) + closing stock, month auto-detected from cover. BSPMIS*.xls → PPC MIS Month-End (sheet S1) — production + opening stock (closing stock saved as next month). BSP MIS 2_coff_print*.xls/.xlsx → furnace-wise Hot Metal production (tentative; BF-1/4/5/6/7/8, column D CUM, month from row 2). BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → techno params (Sheet1, month from A3). OISCO_<Mon>'YY.xlsx → OISCO techno params (month from C3)."
                     : technoPlant === 'BSL'
                     ? 'DPR XLSX: BSL_DPR_DDMMYYYY.xlsx (sheet DPR) — 19 production items, month auto-detected from O1. | Techno XLS: TECHNO <MON><YYYY>.XLS — 14+ techno params, set month above. | Corp SS XLSX: grade-wise Order Qty & Despatch, month auto-detected. | BF PDF: BSL_BlastFurnace_DDMMYYYY.pdf — BF-wise 14 params per furnace.'
                     : technoPlant === 'ASP'
@@ -1627,6 +1627,7 @@ export default function UploadPage() {
                   <li><strong>RSP — Morning Report (.xlsx):</strong> Sheet starts with <strong>&quot;RSP Morning Report Data for-&quot;</strong>. Month from <strong>A2</strong>. Auto-detected.</li>
                   <li><strong>ISP — Final Monthly (.xlsx):</strong> Sheet <strong>Maj Production Summ</strong>. Set month manually.</li>
                   <li><strong>ISP — Morning Report (.xlsx):</strong> Sheet <strong>DAILYREPORT1</strong>. Month from <strong>K5</strong>. Auto-detected. 19 items extracted.</li>
+                  <li><strong>BSP — Flash Monthly (.pdf):</strong> One file replaces the PPC MIS / MIS-2 / Techno / OISCO uploads: full production (23 items + furnace-wise BF#1/4/5/6/7), ~80 techno params (coke yield, SP-2/3, blast furnaces incl. per-furnace CDI &amp; productivity, SMS-2/3, all six mills, energy rate) and closing stock (saved as next month&apos;s opening). Pages found by heading, month auto-detected from the cover.</li>
                   <li><strong>BSP — PPC MIS (.xls):</strong> Sheet <strong>S1</strong>. Month from <strong>N1</strong>. Auto-detected.</li>
                   <li><strong>BSP — MIS-2 Month-End (.xls/.xlsx):</strong> Furnace-wise Hot Metal production (tentative). Auto-detected by row 2 = "BSP MIS-2"; month from the "Date:" cell on row 2. Column D ("CUM") for furnace rows BF-1/4/5/6/7/8 → items <strong>BF#1</strong>/<strong>BF#4</strong>/<strong>BF#5</strong>/<strong>BF#6</strong>/<strong>BF#7</strong>/<strong>BF#8</strong>. BF#8 shares the existing item with the PPC MIS upload (preview shows current DB value for comparison) — the shop total is not extracted since it duplicates the existing <strong>Hot Metal</strong> item.</li>
                   <li><strong>BSL — DPR Mail (.xlsx):</strong> Sheet <strong>DPR</strong>. Month from <strong>O1</strong>. Auto-detected.</li>

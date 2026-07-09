@@ -1,17 +1,19 @@
 """
-API endpoints for BSP Techno data (BSP-3-page-Tech.xlsx and OISCO Excel).
+API endpoints for BSP Techno data (BSP-3-page-Tech.xlsx, OISCO Excel and the
+BSP Flash monthly PDF).
 
-Both file types extract data into the same techno_data table with plant='BSP'.
+All file types extract data into the same techno_data table with plant='BSP'.
 Multiple files can be uploaded for the same month — parameters are merged
 (merge_upsert_techno_data) so one file doesn't wipe the other's data.
 
 Endpoints (prefix /api/bsp-techno):
-  POST /preview/techno   — preview from BSP-3-page-Tech.xlsx (no DB write)
-  POST /preview/oisco    — preview from OISCO Excel (no DB write)
-  POST /insert           — save previewed records to DB
-  POST /extract/techno   — extract + save in one step (BSP-3-page-Tech.xlsx)
-  POST /extract/oisco    — extract + save in one step (OISCO Excel)
-  POST /inspect          — inspect file structure (sheet names, header rows)
+  POST /preview/techno    — preview from BSP-3-page-Tech.xlsx (no DB write)
+  POST /preview/oisco     — preview from OISCO Excel (no DB write)
+  POST /preview/flash-pdf — preview from BSP flash-<mon>YY.pdf (no DB write)
+  POST /insert            — save previewed records to DB
+  POST /extract/techno    — extract + save in one step (BSP-3-page-Tech.xlsx)
+  POST /extract/oisco     — extract + save in one step (OISCO Excel)
+  POST /inspect           — inspect file structure (sheet names, header rows)
 """
 
 import sys
@@ -24,6 +26,9 @@ from openpyxl import load_workbook
 _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
+_EX_DIR = str(Path(__file__).parent / "excel_extractors")
+if _EX_DIR not in sys.path:
+    sys.path.insert(0, _EX_DIR)
 
 from bsp_extractor import BspTechnoExtractor            # noqa: E402
 from bsp_oisco_extractor import BspOiscoExtractor       # noqa: E402
@@ -117,6 +122,37 @@ async def preview_bsp_oisco(
         return _preview_response(records, report_month, file.filename or "", "BSP-OISCO-Techno.xlsx")
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        _unlink(tmp)
+
+
+@router.post("/preview/flash-pdf")
+async def preview_bsp_flash_pdf(
+    file: UploadFile = File(...),
+    report_month: str = Form(...),
+):
+    """Preview techno params from the BSP flash monthly PDF — does NOT write
+    to DB.  The month printed in the PDF wins over the selected month (the
+    response's report_month is the one /insert will save under)."""
+    _validate_month(report_month)
+    tmp = _save_temp(file, await file.read())
+    try:
+        from pdf_extractor_bsp_flash import extract_techno_records
+        records = extract_techno_records(str(tmp), report_month=report_month)
+        if not records:
+            raise HTTPException(status_code=422,
+                detail="No techno data extracted — is this a BSP flash monthly "
+                       "PDF (flash-<mon>YY.pdf)?")
+        # extract_techno_records resolves the month from the PDF cover
+        resolved_month = records[0]["report_month"]
+        return _preview_response(records, resolved_month, file.filename or "",
+                                 "BSP Flash Monthly PDF")
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=422, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

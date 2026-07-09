@@ -641,8 +641,19 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8,
         }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 10 }}>
-            BSP Techno Excel Upload — all files contribute data for the same month (merged automatically). The month-end row accepts MIS-2 or PPC MIS (auto-detected, tentative data).
+            BSP Techno Upload — all files contribute data for the same month (merged automatically). The month-end row accepts MIS-2 or PPC MIS (auto-detected, tentative data).
           </div>
+          <ExtractRow
+            label="BSP Flash Monthly PDF (flash-<mon>YY.pdf)"
+            previewEndpoint="/api/bsp-techno/preview/flash-pdf"
+            insertEndpoint="/api/bsp-techno/insert"
+            plant="BSP"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#7c2d12"
+            accept=".pdf"
+          />
           <ExtractRow
             label="BSP-3-page-Tech.xlsx"
             previewEndpoint="/api/bsp-techno/preview/techno"
@@ -916,7 +927,7 @@ export default function TechnoDataEntry() {
 
   const plantHint = {
     RSP: 'Upload the Technopara Excel (final), or the month-end Daily Morning Report (tentative furnace/SMS data; month verified against the report date in A2).',
-    BSP: 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel (final), or the month-end MIS-2 / PPC MIS Excel (tentative furnace & SMS data; month verified against the report date). All merged automatically.',
+    BSP: 'Upload the BSP Flash Monthly PDF (one file: coke yield, SP-2/3, BF shop + per-furnace CDI/productivity, SMS-2/3, all mills, energy — month auto-detected from the cover), BSP-3-page-Tech.xlsx and/or OISCO Excel (final), or the month-end MIS-2 / PPC MIS Excel (tentative furnace & SMS data). All merged automatically.',
     ISP: 'Upload the multi-sheet ISP Technopara Excel (final), or the month-end Morning Report (tentative furnace/SMS/energy data; month verified against the report date in J5/K5). Both merged automatically.',
     DSP: 'Upload the Monthly Report PDF (final) and/or the month-end MCR Excel (tentative for-the-month values; month is verified against the report date in C1).',
     BSL: 'Upload Techno Excel and/or BF Performance PDF. Both merged automatically.',
