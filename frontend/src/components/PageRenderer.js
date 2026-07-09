@@ -140,11 +140,16 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
   };
 
   const isLandscape = pageData.orientation === 'landscape';
+  // Header/footer only appear from page 3 onward (cover + index are front
+  // matter); numbering restarts at 1 there, matching the generated PDF.
+  const showHeaderFooter = (pageData.page || 0) > 2;
+  const displayPageNumber = (pageData.page || 0) - 2;
+  const displayTotalPages = (totalPages || 48) - 2;
 
   return (
     <div className={`a4-page${isLandscape ? ' landscape' : ''}${pageData.page ? ` pg-${pageData.page}` : ''}`}>
-      {/* Header (hidden on Cover page for cleaner design) */}
-      {pageData.type !== 'cover' && (
+      {/* Header (hidden on cover/index pages for cleaner design) */}
+      {showHeaderFooter && (
         <div className="report-header">
           Steel Authority of India Limited - Operations Monthly Informatics
         </div>
@@ -161,11 +166,11 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         {renderContent()}
       </div>
 
-      {/* Footer (hidden on Cover page) */}
-      {pageData.type !== 'cover' && (
+      {/* Footer (hidden on cover/index pages) */}
+      {showHeaderFooter && (
         <div className="report-footer">
           <div>Prepared by: MIS Group</div>
-          <div>Page {pageData.page} of {totalPages || 48}</div>
+          <div>Page {displayPageNumber} of {displayTotalPages}</div>
         </div>
       )}
     </div>

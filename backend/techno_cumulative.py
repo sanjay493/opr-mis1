@@ -20,7 +20,10 @@ Weight source per month:
   ('Hot Metal' / 'Total Crude Steel' item).
   Any other unit — furnace-wise production from production_table (item_name =
   unit name, 'BF-1' or 'BF#8' spelling), falling back to the unit's own
-  monthly 'production' techno parameter for months not covered there.
+  monthly 'production' techno parameter for months not covered there, and —
+  for a single-furnace plant (SINGLE_BF_PLANTS, e.g. ISP's BF-5, where the
+  furnace IS the whole BF shop) — falling back once more to the plant's own
+  'Hot Metal' item, since it's identical to that one furnace's production.
 
   The cumulative must always cover EVERY month (Apr→report_month) that has a
   value: if any valued month lacks a weight, the calculation falls back to the
@@ -32,6 +35,7 @@ import sqlite3
 from typing import Dict, Optional
 
 import db as _db
+from plant_registry import PLANT_UNITS
 
 # param_key -> (method, weight_basis). Add new parameters here.
 CUMULATIVE_RULES = {
@@ -68,6 +72,22 @@ PLANT_WEIGHT_ITEMS = {"hm": "Hot Metal", "crude_steel": "Total Crude Steel"}
 SHOP_UNITS = {"BF_Shop", "SMS", "SMS-1", "SMS-2", "SMS-3", "SMS-I", "SMS-II",
               "General"}
 
+# Plants whose single registered BF *is* the whole shop (plant_registry.py:
+# "single BF: furnace == shop" — currently just ISP's BF-5). Their furnace's
+# production_table row is never populated separately from the plant-level
+# 'Hot Metal' item, since there is nothing to distinguish it from — the two
+# are the same number. Derived from PLANT_UNITS so a newly single-furnace
+# plant is picked up automatically.
+def _single_bf_plants() -> set:
+    counts: Dict[str, int] = {}
+    for plant, unit_type, _unit_name, is_shop, *_ in PLANT_UNITS:
+        if unit_type == "BF" and not is_shop:
+            counts[plant] = counts.get(plant, 0) + 1
+    return {p for p, c in counts.items() if c == 1}
+
+
+SINGLE_BF_PLANTS = _single_bf_plants()
+
 
 def get_rule(param_key: str):
     """Return (method, weight_basis); default is simple average, no weight."""
@@ -97,7 +117,12 @@ def _unit_production(plant: str, unit: str, months,
     the unit name — 'BF-1' or the 'BF#8' spelling), which the monthly
     production uploads populate for the whole FY. Months not covered there
     fall back to the unit's own techno 'production' parameter (tonnes,
-    converted to '000 t so both sources weigh consistently).
+    converted to '000 t so both sources weigh consistently). For a
+    single-furnace plant (SINGLE_BF_PLANTS — e.g. ISP's BF-5), the furnace IS
+    the whole BF shop, so any month still missing a weight after those two
+    falls back once more to the plant's own 'Hot Metal' production_table
+    item — the same source SHOP_UNITS already use, and identical to the
+    furnace's own production since there is only one furnace.
     current_production (unsaved form value, tonnes) takes precedence for
     report_month."""
     candidates = [unit]
@@ -122,6 +147,12 @@ def _unit_production(plant: str, unit: str, months,
         v = ud.get("month", {}).get("production")
         if v is not None and v > 0:
             weights[m] = v / 1000.0   # techno production is t; table is '000 t
+
+    if unit.startswith("BF-") and plant in SINGLE_BF_PLANTS:
+        missing = [m for m in months if m not in weights]
+        if missing:
+            weights.update(_plant_production(plant, "Hot Metal", missing))
+
     if current_production is not None and current_production > 0 and report_month:
         weights[report_month] = current_production / 1000.0
     return weights
@@ -192,6 +223,11 @@ def compute_cumulative_preview(
                                        current_production, report_month)
             weight_desc = (f"{unit} monthly production ('000 t — production "
                            f"data, else the unit's techno 'production' param)")
+            if unit.startswith("BF-") and plant in SINGLE_BF_PLANTS:
+                weight_desc += (
+                    f", else {plant}'s plant-level 'Hot Metal' (its only "
+                    "furnace, so the two are identical)"
+                )
 
     rows, steps = [], []
     result = None

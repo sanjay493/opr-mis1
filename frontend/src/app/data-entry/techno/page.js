@@ -32,14 +32,177 @@ function formatMonth(year, month) {
 // ── Shared styled status message ──────────────────────────────────────────────
 function StatusMsg({ status }) {
   if (!status) return null;
+  const palette = {
+    success: { bg: '#f0fdf4', fg: '#166534', border: '#86efac' },
+    info:    { bg: '#eff6ff', fg: '#174ea6', border: '#bfdbfe' },
+    error:   { bg: '#fef2f2', fg: '#991b1b', border: '#fca5a5' },
+  }[status.type] || { bg: '#fef2f2', fg: '#991b1b', border: '#fca5a5' };
   return (
     <div style={{
       padding: '8px 14px', borderRadius: 6, marginBottom: 14, fontSize: 13,
-      background: status.type === 'success' ? '#f0fdf4' : '#fef2f2',
-      color:      status.type === 'success' ? '#166534'  : '#991b1b',
-      border: `1px solid ${status.type === 'success' ? '#86efac' : '#fca5a5'}`,
+      background: palette.bg, color: palette.fg, border: `1px solid ${palette.border}`,
     }}>
       {status.text}
+    </div>
+  );
+}
+
+// ── Bulk "Calculate Cumulative" step window — shows the full working (method,
+// production weights from production_table, month-by-month rows, formula)
+// for every parameter of every unit BEFORE anything is written to the DB. ────
+function BulkCumulativeModal({ preview, onConfirm, onClose, busy, confirmLabel, noteText }) {
+  const [expanded, setExpanded] = React.useState(null);
+  if (!preview) return null;
+
+  const methodLabel = {
+    weighted_average: 'Production-weighted average',
+    harmonic_mean:    'Production-weighted harmonic mean',
+    simple_average:   'Simple average',
+    sum:              'Sum of monthly values',
+  };
+  const fmt = v => (v == null ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 4 }));
+  const changed = (a, b) => a != null && b != null && Number(a) !== Number(b);
+
+  const byUnit = {};
+  for (const d of preview.details) (byUnit[d.unit] = byUnit[d.unit] || []).push(d);
+  const units = Object.keys(byUnit);
+
+  const th = { padding: '5px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, fontSize: 12, borderBottom: '1px solid #dadce0' };
+  const thR = { ...th, textAlign: 'right' };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: 10, padding: 24, width: 780, maxWidth: '94vw',
+        maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+      }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 18, color: '#202124' }}>
+          Cumulative Calculation — {preview.plant} · April → {preview.report_month}
+        </h3>
+        <div style={{ fontSize: 13, color: '#5f6368', marginBottom: 14 }}>
+          {preview.details.length} parameter{preview.details.length === 1 ? '' : 's'} across {units.length} unit{units.length === 1 ? '' : 's'}.
+          Furnace-wise and BF_Shop production, and SMS-wise crude steel, are read from production_table for the weighting shown below.
+          {' '}{noteText || 'Nothing is saved yet — review each calculation, then confirm.'}
+        </div>
+
+        {(preview.warnings || []).map((w, i) => (
+          <div key={i} style={{ fontSize: 12.5, color: '#991b1b', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 5, padding: '5px 10px', marginBottom: 6 }}>
+            {w}
+          </div>
+        ))}
+
+        {units.map(u => (
+          <div key={u} style={{ marginBottom: 14, border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ padding: '8px 12px', background: '#f8f9fa', fontWeight: 700, fontSize: 13, color: '#174ea6', borderBottom: '1px solid #dadce0' }}>
+              {u}
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead>
+                <tr>
+                  <th style={th}>Parameter</th>
+                  <th style={th}>Method</th>
+                  <th style={thR}>Previous Cumulative</th>
+                  <th style={thR}>New Cumulative</th>
+                  <th style={th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {byUnit[u].map(d => {
+                  const key = `${d.unit}::${d.param_key}`;
+                  const isOpen = expanded === key;
+                  const isChanged = changed(d.previous_till_month, d.result);
+                  return (
+                    <React.Fragment key={key}>
+                      <tr style={{ borderTop: '1px solid #f1f3f4' }}>
+                        <td style={{ padding: '5px 10px', color: '#202124' }}>
+                          {d.param_key}
+                          {d.warnings.length > 0 && (
+                            <span title={d.warnings.join(' ')} style={{ color: '#b45309', marginLeft: 5, cursor: 'help' }}>⚠</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '5px 10px', color: '#5f6368' }}>{methodLabel[d.method] || d.method}</td>
+                        <td style={{ padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(d.previous_till_month)}</td>
+                        <td style={{
+                          padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace',
+                          fontWeight: isChanged ? 700 : 400, color: isChanged ? '#b06000' : '#166534',
+                        }}>
+                          {fmt(d.result)}
+                        </td>
+                        <td style={{ padding: '5px 10px', textAlign: 'right' }}>
+                          <button onClick={() => setExpanded(isOpen ? null : key)} style={{
+                            fontSize: 11, padding: '2px 9px', border: '1px solid #dadce0',
+                            borderRadius: 4, background: '#fff', cursor: 'pointer', color: '#5f6368',
+                          }}>
+                            {isOpen ? 'Hide' : 'Steps'}
+                          </button>
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={5} style={{ padding: '10px 14px', background: '#f8f9fa', borderTop: '1px solid #f1f3f4' }}>
+                            {d.weight_item && (
+                              <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 8 }}>Weights: {d.weight_item}</div>
+                            )}
+                            {d.rows.length > 0 && (
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 8, background: '#fff' }}>
+                                <thead>
+                                  <tr>
+                                    <th style={th}>Month</th>
+                                    <th style={thR}>Value</th>
+                                    <th style={thR}>Weight (production)</th>
+                                    <th style={thR}>Product</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {d.rows.map(r => (
+                                    <tr key={r.month}>
+                                      <td style={{ padding: '3px 10px' }}>{r.month}</td>
+                                      <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(r.value)}</td>
+                                      <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace', color: r.weight == null ? '#dc2626' : '#202124' }}>
+                                        {r.weight == null ? 'missing' : fmt(r.weight)}
+                                      </td>
+                                      <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{r.product != null ? fmt(r.product) : '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                            <div style={{ fontFamily: 'Consolas, monospace', fontSize: 12, color: '#202124' }}>
+                              {d.steps.map((s, i) => <div key={i} style={{ padding: '1px 0' }}>{i + 1}. {s}</div>)}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+        <div style={{
+          display: 'flex', gap: 10, marginTop: 8, position: 'sticky', bottom: -24,
+          background: '#fff', padding: '10px 0 0', borderTop: '1px solid #dadce0',
+        }}>
+          <button onClick={onClose} disabled={busy} style={{
+            padding: '8px 18px', fontSize: 14, background: '#f8f9fa',
+            border: '1px solid #dadce0', borderRadius: 5, cursor: busy ? 'not-allowed' : 'pointer',
+          }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={busy} style={{
+            marginLeft: 'auto', padding: '8px 18px', fontSize: 14, fontWeight: 700,
+            background: busy ? '#5f6368' : '#16a34a', color: '#fff', border: 'none',
+            borderRadius: 5, cursor: busy ? 'not-allowed' : 'pointer',
+          }}>
+            {busy ? 'Working…' : (confirmLabel || `Confirm & Save (${preview.details.length} parameters)`)}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -127,6 +290,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
   const [busy,  setBusy]  = React.useState(false);
   const [status, setStatus] = React.useState(null);
   const [preview, setPreview] = React.useState(null);
+  const [cumPreview, setCumPreview] = React.useState(null);
   const inputRef = React.useRef();
 
   React.useEffect(() => {
@@ -157,6 +321,9 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
     }
   };
 
+  // Computes the Cumulative for every parameter and opens the calculation-
+  // step window (method, production weights, month-by-month working) —
+  // nothing is applied to the preview below until the user confirms.
   const handleCalcCumulative = async () => {
     if (!preview) return;
     setBusy(true);
@@ -173,18 +340,30 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Cumulative calculation failed');
-      setPreview(prev => ({ ...prev, records: json.records }));
-      const warn = (json.warnings || []).length;
-      setStatus({
-        type: 'success',
-        text: `Cumulative calculated for ${json.computed} parameter${json.computed === 1 ? '' : 's'}`
-          + (warn ? ` — ${warn} skipped (e.g. ${json.warnings[0]})` : ''),
-      });
+      if (!json.details || json.details.length === 0) {
+        setStatus({ type: 'info', text: 'Nothing to calculate — no monthly values to compute a cumulative from.' });
+        return;
+      }
+      setCumPreview({ ...json, plant, report_month: preview.report_month });
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
     } finally {
       setBusy(false);
     }
+  };
+
+  // Applies the reviewed Cumulative values into the preview's records
+  // (still not saved to the DB — that only happens via Confirm & Save below).
+  const handleApplyCumulative = () => {
+    if (!cumPreview) return;
+    setPreview(prev => ({ ...prev, records: cumPreview.records }));
+    const warn = (cumPreview.warnings || []).length;
+    setStatus({
+      type: 'success',
+      text: `Cumulative applied for ${cumPreview.computed} parameter${cumPreview.computed === 1 ? '' : 's'}`
+        + (warn ? ` — ${warn} skipped (e.g. ${cumPreview.warnings[0]})` : ''),
+    });
+    setCumPreview(null);
   };
 
   const handleConfirmSave = async () => {
@@ -299,6 +478,15 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
       )}
       {preview && <PreviewReview preview={preview} />}
       <StatusMsg status={status} />
+
+      <BulkCumulativeModal
+        preview={cumPreview}
+        busy={false}
+        onConfirm={handleApplyCumulative}
+        onClose={() => setCumPreview(null)}
+        confirmLabel={cumPreview ? `Apply to preview (${cumPreview.details.length} parameters)` : ''}
+        noteText="Nothing is saved to the database yet — this only fills the Cumulative column in the preview below; you still need to review and click Confirm & Save to write it."
+      />
     </div>
   );
 }
@@ -310,6 +498,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
   const [loading, setLoading] = React.useState(false);
   const [cumBusy, setCumBusy] = React.useState(false);
   const [cumStatus, setCumStatus] = React.useState(null);
+  const [cumPreviewAll, setCumPreviewAll] = React.useState(null);
+  const [cumConfirmBusy, setCumConfirmBusy] = React.useState(false);
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -339,33 +529,59 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
 
   // Bulk cumulative — same rules engine as techno-manual's per-field
   // "Calculate Cumulative", applied to every saved parameter of every unit.
+  // Step 1: compute-only (preview=true, nothing written) and show the full
+  // calculation-step window; Step 2: user reviews and clicks "Confirm & Save"
+  // (handleConfirmCumulativeAll) before anything is written to the DB.
   const handleCumulativeAll = async () => {
-    if (!window.confirm(
-      `Calculate the April→${reportMonth} cumulative for ALL ${plant} techno parameters ` +
-      `and overwrite the stored Cumulative values?`
-    )) return;
     setCumBusy(true);
     setCumStatus(null);
     try {
       const res = await fetch(`${apiBase}/api/mcr-techno/cumulative-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plant, report_month: reportMonth, overwrite: true }),
+        body: JSON.stringify({ plant, report_month: reportMonth, overwrite: true, preview: true }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Cumulative calculation failed');
-      const warn = (json.warnings || []).length;
-      setCumStatus({
-        type: 'success', plant, reportMonth,
-        text: `Cumulative calculated for ${json.computed} parameter${json.computed === 1 ? '' : 's'} `
-          + `across ${json.units.length} unit${json.units.length === 1 ? '' : 's'}`
-          + (warn ? ` — ${warn} skipped (e.g. ${json.warnings[0]})` : ''),
-      });
-      loadData();
+      if (!json.details || json.details.length === 0) {
+        setCumStatus({
+          type: 'info', plant, reportMonth,
+          text: 'Nothing to calculate — no monthly values found for this plant/month.',
+        });
+        return;
+      }
+      setCumPreviewAll({ ...json, plant, report_month: reportMonth });
     } catch (err) {
       setCumStatus({ type: 'error', plant, reportMonth, text: err.message });
     } finally {
       setCumBusy(false);
+    }
+  };
+
+  const handleConfirmCumulativeAll = async () => {
+    if (!cumPreviewAll) return;
+    setCumConfirmBusy(true);
+    try {
+      const res = await fetch(`${apiBase}/api/mcr-techno/cumulative-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plant, report_month: reportMonth, overwrite: true, preview: false }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Cumulative save failed');
+      const warn = (json.warnings || []).length;
+      setCumStatus({
+        type: 'success', plant, reportMonth,
+        text: `Cumulative saved for ${json.computed} parameter${json.computed === 1 ? '' : 's'} `
+          + `across ${json.units.length} unit${json.units.length === 1 ? '' : 's'}`
+          + (warn ? ` — ${warn} skipped (e.g. ${json.warnings[0]})` : ''),
+      });
+      setCumPreviewAll(null);
+      loadData();
+    } catch (err) {
+      setCumStatus({ type: 'error', plant, reportMonth, text: err.message });
+    } finally {
+      setCumConfirmBusy(false);
     }
   };
   // Only show the status for the plant/month it was produced for
@@ -461,9 +677,15 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         </div>
       )}
 
-      {/* ISP: single file extract bar */}
-      {plant === 'ISP' && (
-        <div style={{ marginBottom: 16 }}>
+      {/* ISP: Technopara Excel (final) + month-end Morning Report (tentative) */}
+      {isIsp && (
+        <div style={{
+          marginBottom: 16, padding: '12px 14px',
+          background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#5b21b6', marginBottom: 10 }}>
+            ISP Techno Upload — Technopara Excel (final) and/or Month-End Morning Report (tentative, merged into the same table)
+          </div>
           <ExtractRow
             label="ISP Technopara Excel"
             previewEndpoint="/api/techno/preview"
@@ -473,6 +695,17 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             apiBase={apiBase}
             onSuccess={loadData}
             accent="#7c3aed"
+          />
+          <ExtractRow
+            label="ISP Morning Report — month-end (tentative)"
+            previewEndpoint="/api/mcr-techno/preview"
+            insertEndpoint="/api/mcr-techno/insert"
+            cumulativeEndpoint="/api/mcr-techno/cumulative"
+            plant="ISP"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#5b21b6"
           />
         </div>
       )}
@@ -559,8 +792,9 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             {cumBusy ? 'Calculating…' : 'Calculate Cumulative — all techno'}
           </button>
           <span style={{ fontSize: 12, color: '#166534' }}>
-            Recomputes the Cumulative (Apr→{reportMonth}) column for every saved parameter of every {plant} unit,
-            using the same rules as the manual-entry page (production-weighted where configured).
+            Computes the Cumulative (Apr→{reportMonth}) for every saved parameter of every {plant} unit and opens a
+            step-by-step review window (method, production weights, month-by-month working) — nothing is saved
+            until you confirm.
           </span>
         </div>
       )}
@@ -660,6 +894,13 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           </div>
         </div>
       )}
+
+      <BulkCumulativeModal
+        preview={cumPreviewAll}
+        busy={cumConfirmBusy}
+        onConfirm={handleConfirmCumulativeAll}
+        onClose={() => setCumPreviewAll(null)}
+      />
     </div>
   );
 }
@@ -676,7 +917,7 @@ export default function TechnoDataEntry() {
   const plantHint = {
     RSP: 'Upload the Technopara Excel (final), or the month-end Daily Morning Report (tentative furnace/SMS data; month verified against the report date in A2).',
     BSP: 'Upload BSP-3-page-Tech.xlsx and/or OISCO Excel (final), or the month-end MIS-2 / PPC MIS Excel (tentative furnace & SMS data; month verified against the report date). All merged automatically.',
-    ISP: 'Extract from multi-sheet ISP Technopara Excel.',
+    ISP: 'Upload the multi-sheet ISP Technopara Excel (final), or the month-end Morning Report (tentative furnace/SMS/energy data; month verified against the report date in J5/K5). Both merged automatically.',
     DSP: 'Upload the Monthly Report PDF (final) and/or the month-end MCR Excel (tentative for-the-month values; month is verified against the report date in C1).',
     BSL: 'Upload Techno Excel and/or BF Performance PDF. Both merged automatically.',
   }[plant] || `${plant} extraction coming soon.`;

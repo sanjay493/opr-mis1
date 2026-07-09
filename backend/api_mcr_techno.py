@@ -5,6 +5,7 @@ Supported plants (see _EXTRACTORS):
   DSP — MCR techno page (Report_format/MONTHEND/mcr1_*.xlsx)
   BSP — MIS-2 and PPC MIS workbooks (auto-detected from file content)
   RSP — Daily Morning Report generated on the month-end date
+  ISP — MORNING REPORT workbook generated on the month-end date
 
 Flow (mirrors /api/techno but with two extra safeguards):
   1. POST /preview     — extract + verify C1 report date against the selected
@@ -33,6 +34,7 @@ if _TP_DIR not in sys.path:
 from dsp_mcr_techno_extractor import DspMcrTechnoExtractor, McrMonthMismatch  # noqa: E402
 from bsp_monthend_techno_extractor import BspMonthendTechnoExtractor  # noqa: E402
 from rsp_monthend_techno_extractor import RspMonthendTechnoExtractor  # noqa: E402
+from isp_monthend_techno_extractor import IspMonthendTechnoExtractor  # noqa: E402
 from db import (  # noqa: E402
     init_db, merge_upsert_techno_data, get_techno_data,
     enrich_techno_records_with_db,
@@ -46,6 +48,7 @@ _EXTRACTORS = {
     "DSP": DspMcrTechnoExtractor,
     "BSP": BspMonthendTechnoExtractor,  # auto-detects MIS-2 vs PPC MIS
     "RSP": RspMonthendTechnoExtractor,  # Daily Morning Report (month-end)
+    "ISP": IspMonthendTechnoExtractor,  # MORNING REPORT (month-end)
 }
 
 
@@ -142,10 +145,18 @@ async def calc_cumulative(payload: dict):
     """
     Fill till_month for previewed records using the shared cumulative rules
     (April → report_month, techno_cumulative.compute_cumulative_preview).
+    Nothing is written to the DB here — records are the in-memory preview
+    rows from a prior /preview call; the DB write only happens later, via
+    /insert, when the user confirms.
 
     Body:    { plant, report_month, records: [{unit, techno_json}] }
-    Returns: { records, computed, warnings } — records have till_month filled
-             where a cumulative could be computed; warnings explain the rest.
+    Returns: { records, computed, warnings, details } — records have
+             till_month filled where a cumulative could be computed;
+             warnings explain the rest. details = the same per-parameter
+             calculation breakdown as /cumulative-all (method, production
+             weights, month-by-month rows, formula steps) so the UI can show
+             a "calculation step window" instead of silently filling the
+             Cumulative column.
     """
     plant = (payload.get("plant") or "").upper()
     report_month = payload.get("report_month", "")
@@ -158,6 +169,7 @@ async def calc_cumulative(payload: dict):
     init_db()
     computed = 0
     warnings = []
+    details = []
     for rec in records:
         unit = rec.get("unit", "")
         tj = rec.get("techno_json", {})
@@ -174,6 +186,17 @@ async def calc_cumulative(payload: dict):
                     plant, unit, key, report_month, current_value=val,
                     current_production=current_production,
                 )
+                details.append({
+                    "unit": unit,
+                    "param_key": key,
+                    "method": result["method"],
+                    "weight_item": result["weight_item"],
+                    "rows": result["rows"],
+                    "steps": result["steps"],
+                    "warnings": result["warnings"],
+                    "result": result["result"],
+                    "previous_till_month": till.get(key),
+                })
                 till[key] = result["result"]
                 computed += 1
             except ValueError as e:
@@ -186,24 +209,35 @@ async def calc_cumulative(payload: dict):
         "records": records,
         "computed": computed,
         "warnings": warnings,
+        "details": details,
     }
 
 
 @router.post("/cumulative-all")
 async def calc_cumulative_all(payload: dict):
     """
-    Compute and SAVE the April→month cumulative for every parameter of every
-    unit already stored in techno_data for a plant+month — the bulk version
-    of the techno-manual page's per-field "Calculate Cumulative" (same rules
-    engine: techno_cumulative.compute_cumulative_preview).
+    Compute the April→month cumulative for every parameter of every unit
+    already stored in techno_data for a plant+month — the bulk version of the
+    techno-manual page's per-field "Calculate Cumulative" (same rules engine:
+    techno_cumulative.compute_cumulative_preview). SAVES unless preview=true.
 
-    Body:    { plant, report_month, overwrite: bool (default true) }
+    Body:    { plant, report_month, overwrite: bool (default true),
+               preview: bool (default false) }
              overwrite=false only fills till_month values that are empty.
-    Returns: { units, computed, skipped, warnings }
+             preview=true computes and returns the full per-parameter
+             breakdown (method, production weights used, month-by-month
+             rows, formula steps) WITHOUT writing anything to the DB, so the
+             UI can show a "calculation step window" for the user to review
+             before confirming the write (re-call with preview=false, or
+             omitted, to actually save).
+    Returns: { units, computed, skipped, warnings, details, preview }
+             details = [{unit, param_key, method, weight_item, rows, steps,
+                         warnings, result, previous_till_month}, ...]
     """
     plant = (payload.get("plant") or "").upper()
     report_month = payload.get("report_month", "")
     overwrite = payload.get("overwrite", True)
+    preview = bool(payload.get("preview", False))
 
     _validate_month(report_month)
     if not plant:
@@ -222,6 +256,7 @@ async def calc_cumulative_all(payload: dict):
     skipped = 0
     warnings = []
     units_updated = []
+    details = []
     for unit, tj in existing.items():
         month_vals = tj.get("month", {})
         till = dict(tj.get("till_month", {}))
@@ -240,6 +275,17 @@ async def calc_cumulative_all(payload: dict):
                     plant, unit, key, report_month, current_value=val,
                     current_production=current_production,
                 )
+                details.append({
+                    "unit": unit,
+                    "param_key": key,
+                    "method": result["method"],
+                    "weight_item": result["weight_item"],
+                    "rows": result["rows"],
+                    "steps": result["steps"],
+                    "warnings": result["warnings"],
+                    "result": result["result"],
+                    "previous_till_month": tj.get("till_month", {}).get(key),
+                })
                 if result["result"] is not None:
                     till[key] = result["result"]
                     computed += 1
@@ -247,15 +293,18 @@ async def calc_cumulative_all(payload: dict):
             except ValueError as e:
                 warnings.append(f"{unit} · {key}: {e}")
         if changed:
-            merge_upsert_techno_data(
-                plant=plant, report_month=report_month, unit=unit,
-                new_techno_json={"month": {}, "till_month": till},
-                source_file="cumulative_calc",
-            )
             units_updated.append(unit)
+            if not preview:
+                merge_upsert_techno_data(
+                    plant=plant, report_month=report_month, unit=unit,
+                    new_techno_json={"month": {}, "till_month": till},
+                    source_file="cumulative_calc",
+                )
 
     return {
         "status": "ok",
+        "preview": preview,
+        "details": details,
         "plant": plant,
         "report_month": report_month,
         "units": units_updated,

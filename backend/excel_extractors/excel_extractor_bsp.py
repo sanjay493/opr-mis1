@@ -1,19 +1,23 @@
 """BSP (Bhilai Steel Plant) Excel extractor — unified module.
 
-Handles four distinct BSP file types, auto-detected:
+Handles five distinct BSP file types, auto-detected:
 
   1. BSP PPC MIS daily report (.xls, sheet "S1")
        → extract_and_save_excel() — direct DB write, no preview
-  2. BSP 3-page Techno parameters (.xlsx, sheet "Sheet1", month in R3C1)
+  2. BSP MIS-2 month-end report (.xls/.xlsx, row 2 = "BSP MIS-2") — furnace-
+     wise Hot Metal production (tentative), column D "CUM" on a month-end-
+     dated report is the for-the-month figure
+       → _extract_mis2_furnace_preview()
+  3. BSP 3-page Techno parameters (.xlsx, sheet "Sheet1", month in R3C1)
        → _extract_techno_3page_preview()
-  3. BSP OISCO Techno parameters (.xlsx, R3C3 contains "TECHNO ECONOMIC PARAMETERS")
+  4. BSP OISCO Techno parameters (.xlsx, R3C3 contains "TECHNO ECONOMIC PARAMETERS")
        → _extract_oisco_preview()
-  4. BSP Special Steel report (.xlsx, sheet "CORP", R3C1 = "BHILAI STEEL PLANT")
+  5. BSP Special Steel report (.xlsx, sheet "CORP", R3C1 = "BHILAI STEEL PLANT")
        → _extract_bsp_ss_preview()
 
 Public API:
   extract_and_save_excel(file_path, report_month, source_file_name)
-  extract_preview(file_path, report_month)  ← unified, auto-detects type (2/3/4)
+  extract_preview(file_path, report_month)  ← unified, auto-detects type (2-5)
 """
 
 import logging
@@ -982,6 +986,118 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Section 5 — BSP MIS-2 month-end report: furnace-wise Hot Metal production
+# (tentative). On a month-end-dated report the column-D "CUM" figure is the
+# for-the-month production. Feeds production_table item_names "BF-1".."BF-8"
+# (via the shared /api/confirm-extraction normalize_item_name step, which
+# rewrites "BF-" → "BF#") so techno_cumulative's per-furnace weighting can
+# read real furnace-wise weights instead of falling back to the techno page's
+# own 'production' field. BF-8 intentionally targets the SAME item_name
+# ("BF#8") already written by the PPC MIS upload — the preview screen shows
+# the current DB value alongside this tentative one so the user can decide
+# whether to let it stand until the PPC MIS upload replaces it. The shop
+# total ('BF 1-8(TOTAL)') is NOT extracted here: BF_Shop's own weighting
+# already reads the existing 'Hot Metal' production_table item.
+# ---------------------------------------------------------------------------
+
+_MIS2_FURNACE_LABELS = ["BF-1", "BF-4", "BF-5", "BF-6", "BF-7", "BF-8"]
+_MIS2_PRODUCTION_COL = 4   # column D — CUM
+
+
+def _is_mis2_file(wb) -> bool:
+    """True if row 2 (any of the first few cells) reads 'BSP MIS-2'."""
+    ws = wb.worksheets[0]
+    for c in range(1, 8):
+        v = ws.cell(2, c).value
+        if isinstance(v, str) and v.strip().upper() == "BSP MIS-2":
+            return True
+    return False
+
+
+def _parse_mis2_date(ws) -> Optional[tuple]:
+    """Row 2: 'Date:' | day | MONTH | year (e.g. 'Date:' 31 'MAY' 2026) → (y, m, d)."""
+    for c in range(1, 10):
+        v = ws.cell(2, c).value
+        if isinstance(v, str) and v.strip().rstrip(":").upper() == "DATE":
+            rest = [ws.cell(2, c2).value for c2 in range(c + 1, c + 5)]
+            rest = [x for x in rest if x not in ("", None)][:3]
+            try:
+                day = int(float(rest[0]))
+                mon = _MONTH_NAME_TO_NUM[str(rest[1]).strip().upper()[:3]]
+                year = int(float(rest[2]))
+                return year, int(mon), day
+            except (IndexError, KeyError, ValueError, TypeError):
+                return None
+    return None
+
+
+def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
+    """Preview BSP MIS-2 furnace-wise Hot Metal production (column D, CUM)."""
+    ws = wb.worksheets[0]
+
+    parsed = _parse_mis2_date(ws)
+    if not parsed:
+        raise ValueError(
+            "Cannot read the report date from the MIS-2 header (row 2 should "
+            "contain 'Date:' day MONTH year, e.g. Date: 31 MAY 2026)."
+        )
+    y, m, d = parsed
+    db_month = f"{y}-{m:02d}"
+    month_mismatch = bool(report_month and db_month != report_month)
+    if month_mismatch:
+        logger.warning(
+            "BSP MIS-2: file month %s != selected month %s — file month will be used",
+            db_month, report_month,
+        )
+
+    # item_name uses the "BF#N" spelling (not "BF-N") to match the existing
+    # BSP production_table convention directly — main.py's normalize_item_name
+    # only runs at confirm/insert time, not during preview, so emitting "BF-8"
+    # here would fail to match the existing "BF#8" row's db_value on the
+    # preview screen even though it would merge correctly on confirm.
+    production_rows: List[Dict[str, Any]] = []
+    found = set()
+    for r in range(1, ws.max_row + 1):
+        label = str(ws.cell(r, 2).value or "").strip().upper()   # column B
+        if label in _MIS2_FURNACE_LABELS and label not in found:
+            found.add(label)
+            val = _clean(ws.cell(r, _MIS2_PRODUCTION_COL).value)
+            val_000t = round(val / 1000.0, 3) if val is not None else None
+            production_rows.append({
+                "item_name": label.replace("BF-", "BF#"),
+                "value":     val_000t,
+                "unit":      "'000T",
+                "cell":      f"{ws.title}!D{r}",
+                "pdf_label": label,
+                "status":    "ok" if val_000t is not None else "skip",
+            })
+    for label in _MIS2_FURNACE_LABELS:
+        if label not in found:
+            production_rows.append({
+                "item_name": label.replace("BF-", "BF#"), "value": None, "unit": "'000T",
+                "cell": "", "pdf_label": label, "status": "skip",
+            })
+
+    ok = sum(1 for r in production_rows if r["status"] == "ok")
+    logger.info("BSP MIS-2 furnace preview: %d/%d furnace rows ok for %s",
+                ok, len(production_rows), db_month)
+
+    return {
+        "source_type":        "BSP MIS-2 Month-End (Furnace-wise Hot Metal, tentative)",
+        "month":              db_month,
+        "plant":              "BSP",
+        "workbook_sheets":    wb.sheetnames,
+        "month_mismatch":     month_mismatch,
+        "selected_month":     report_month or "",
+        "production_rows":    production_rows,
+        "techno_rows":        [],
+        "techno_param_rows":  [],
+        "special_steel_rows": [],
+        "stock_rows":         [],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Unified preview entry point (auto-detects file type)
 # ---------------------------------------------------------------------------
 
@@ -990,15 +1106,20 @@ def extract_preview(file_path: str, report_month: str) -> dict:
 
     Detection priority:
       1. BSP PPC MIS       → sheet 'S1' present (.xls monthly report)
-      2. BSP Special Steel → sheet 'CORP' with 'BHILAI STEEL PLANT' in R3C1
-      3. OISCO Techno      → R3C3 contains 'TECHNO ECONOMIC PARAMETERS'
-      4. BSP 3-page-Tech   → default (Sheet1 with month name in R3C1)
+      2. BSP MIS-2         → row 2 reads 'BSP MIS-2' (furnace-wise Hot Metal, tentative)
+      3. BSP Special Steel → sheet 'CORP' with 'BHILAI STEEL PLANT' in R3C1
+      4. OISCO Techno      → R3C3 contains 'TECHNO ECONOMIC PARAMETERS'
+      5. BSP 3-page-Tech   → default (Sheet1 with month name in R3C1)
     """
     wb = _open_workbook(file_path)
 
     if "S1" in wb.sheetnames:
         logger.info("BSP: detected PPC MIS file (sheet S1) — production + stock")
         return _extract_ppc_mis_preview(file_path, report_month)
+
+    if _is_mis2_file(wb):
+        logger.info("BSP: detected MIS-2 file — furnace-wise Hot Metal production (tentative)")
+        return _extract_mis2_furnace_preview(wb, report_month)
 
     if _is_bsp_ss_file(wb):
         logger.info("BSP: detected Special Steel file (sheet CORP)")

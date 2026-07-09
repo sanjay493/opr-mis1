@@ -114,45 +114,77 @@ def _group_page4_rows(rows: list) -> list:
     return grouped
 
 
-def _render_pdf_sync(html: str, font_family: str = _DEFAULT_FONT) -> bytes:
-    """Run Playwright synchronously (called from a thread to avoid event-loop conflicts)."""
+def _render_pdf_sync(front_html: str, main_html: str, font_family: str = _DEFAULT_FONT, report_month: str = "") -> bytes:
+    """Run Playwright synchronously (called from a thread to avoid event-loop conflicts).
+
+    Rendered as two separate PDF documents so the header/footer (with page
+    numbering) only appears from page 3 onward: `front_html` (cover + index,
+    pages 1-2) is rendered without header/footer, and `main_html` (page 3+) is
+    rendered with header/footer, which makes Chromium's own pageNumber/totalPages
+    counters naturally read "Page 1 of N" for the first page of the main content.
+    The two PDFs are then merged into one.
+    """
     from playwright.sync_api import sync_playwright
+    from pypdf import PdfReader, PdfWriter
     hdr_font = f"'{font_family}',Arial,sans-serif"
+    margin = {"top": "12mm", "right": "15mm", "bottom": "12mm", "left": "15mm"}
+
+    writer = PdfWriter()
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        page = browser.new_page()
-        page.set_content(html, wait_until="domcontentloaded")
-        pdf_bytes = page.pdf(
-            format="A4",
-            print_background=True,
-            display_header_footer=True,
-            header_template=(
-                f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
-                f'font-family:{hdr_font};font-size:7.5pt;font-weight:500;'
-                f'color:#64748b;text-align:center;border-bottom:0.5px solid #e2e8f0;'
-                f'padding-bottom:3px;">'
-                f'Steel Authority of India Limited – Operations Monthly Informatics'
-                f'</div>'
-            ),
-            footer_template=(
-                f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
-                f'font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
-                f'display:flex;justify-content:space-between;'
-                f'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
-                f'<span>Prepared by: MIS Group</span>'
-                f'<span>Page <span class="pageNumber"></span>'
-                f' of <span class="totalPages"></span></span>'
-                f'</div>'
-            ),
-            margin={
-                "top": "12mm",
-                "right": "15mm",
-                "bottom": "12mm",
-                "left": "15mm",
-            },
-        )
+
+        if front_html:
+            page = browser.new_page()
+            page.set_content(front_html, wait_until="domcontentloaded")
+            front_bytes = page.pdf(
+                format="A4",
+                print_background=True,
+                display_header_footer=False,
+                margin=margin,
+            )
+            page.close()
+            for p in PdfReader(io.BytesIO(front_bytes)).pages:
+                writer.add_page(p)
+
+        if main_html:
+            page = browser.new_page()
+            page.set_content(main_html, wait_until="domcontentloaded")
+            main_bytes = page.pdf(
+                format="A4",
+                print_background=True,
+                display_header_footer=True,
+                header_template=(
+                    f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
+                    f'font-family:{hdr_font};font-size:7.5pt;font-weight:500;'
+                    f'color:#64748b;text-align:center;border-bottom:0.5px solid #e2e8f0;'
+                    f'padding-bottom:3px;">'
+                    f'OMI - {report_month}'
+                    f'</div>'
+                ),
+                footer_template=(
+                    f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
+                    f'font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
+                    f'display:flex;justify-content:space-between;'
+                    f'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
+                    f'<span>figures are provision</span>'
+                    f'<span>MIS Operations</span>'
+                    f'<span>OMI - {report_month}</span>'
+                    f'<span>for internal circulation only</span>'
+                    f'<span>Page <span class="pageNumber"></span>'
+                    f' of <span class="totalPages"></span></span>'
+                    f'</div>'
+                ),
+                margin=margin,
+            )
+            page.close()
+            for p in PdfReader(io.BytesIO(main_bytes)).pages:
+                writer.add_page(p)
+
         browser.close()
-    return pdf_bytes
+
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
 
 
 async def build_pdf_response(request: PDFRequest, pages_override: list = None, page_layouts: dict = None, font_config=None) -> StreamingResponse:
@@ -227,9 +259,15 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
             **(request.page_layouts or {}),
         }
 
-        rendered_html = _jinja_env.get_template('main.html').render(
+        # Cover (page 1) + index (page 2) are rendered as a separate document
+        # without header/footer; page 3 onward gets the header/footer, so
+        # Chromium's own page-numbering naturally starts at "Page 1 of N" there.
+        front_pages = [p for p in pages_to_render if p.get("page", 0) <= 2]
+        main_pages = [p for p in pages_to_render if p.get("page", 0) > 2]
+
+        _template = _jinja_env.get_template('main.html')
+        _render_kwargs = dict(
             month=request.month,
-            pages=pages_to_render,
             total_report_pages=total_report_pages,
             page_layouts=_merged_page_layouts,
             # Typography variables
@@ -242,10 +280,13 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
             heading_size=fc.heading_size,
             **vars,
         )
+        front_html = _template.render(pages=front_pages, **_render_kwargs) if front_pages else ""
+        main_html = _template.render(pages=main_pages, **_render_kwargs) if main_pages else ""
 
         # Run sync Playwright in a thread so it doesn't fight the asyncio event loop
         loop = asyncio.get_event_loop()
-        pdf_bytes = await loop.run_in_executor(None, _render_pdf_sync, rendered_html, fc.family)
+        report_month_display = f"{vars['m_name']} {vars['y_str']}"
+        pdf_bytes = await loop.run_in_executor(None, _render_pdf_sync, front_html, main_html, fc.family, report_month_display)
 
         return StreamingResponse(
             io.BytesIO(pdf_bytes),

@@ -18,6 +18,8 @@ uploaded through the same row on the techno data-entry page:
      MAHAMAYA = BF-8 / 'BF-1 to 8' = shop), month value in column U ("cum")
    - S2 SMS blocks: 'STEEL MELTING SHOP-2' / 'SHOP-3' sections, rows labelled
      Hot Metal / Scrap / Total in column D, month value in column G ("Cum")
+   - S2!L67 — 'Energy Rate (Gcal/TCS) … ondt/cuml' row, column L is the
+     for-the-month value → specific_energy_consumption, unit 'General'
 
 Rows are located by label, not fixed row numbers, so shifts between report
 versions don't break extraction. Values go into techno_json["month"] only —
@@ -80,6 +82,12 @@ _PPC_SMS_LABEL_COL = 4   # column D
 _PPC_SMS_VALUE_COL = 7   # column G — "Cum"
 _PPC_SMS_ANCHORS = [("STEEL MELTING SHOP-2", "SMS-2"),
                     ("STEEL MELTING SHOP-3", "SMS-3")]
+
+# ── PPC MIS S2 specific energy consumption (fixed cell) ──────────────────────
+_PPC_SEC_ROW = 67
+_PPC_SEC_LABEL_COL = 5    # column E — 'Energy Rate (Gcal/TCS) ... ondt/cuml'
+_PPC_SEC_LABEL_TEXT = "ENERGY RATE"
+_PPC_SEC_VALUE_COL = 12   # column L — "cuml"
 
 
 def _cell(grid, row_1b, col_1b):
@@ -268,6 +276,20 @@ class BspMonthendTechnoExtractor:
             for label in remaining:
                 self.warnings.append(
                     f"PPC S2 {unit}: row '{label.title()}' not found — skipped.")
+
+        # Specific energy consumption — fixed cell S2!L67 ('Energy Rate' row)
+        sec_label = str(_cell(s2, _PPC_SEC_ROW, _PPC_SEC_LABEL_COL) or "").strip().upper()
+        if _PPC_SEC_LABEL_TEXT in sec_label:
+            sec = _clean_val(_cell(s2, _PPC_SEC_ROW, _PPC_SEC_VALUE_COL))
+            if sec is not None:
+                put("General", "specific_energy_consumption", sec)
+            else:
+                self.warnings.append(
+                    "PPC S2: specific energy consumption (cell L67) is blank — skipped.")
+        else:
+            self.warnings.append(
+                f"PPC S2: expected 'Energy Rate' label in E{_PPC_SEC_ROW} — "
+                f"found {sec_label!r}; specific energy consumption skipped.")
         return units
 
     # -- main ------------------------------------------------------------------
