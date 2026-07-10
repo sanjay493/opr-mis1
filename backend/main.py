@@ -70,6 +70,7 @@ from api_unified_techno import router as unified_techno_router
 from api_techno_manual import router as techno_manual_router
 from api_mcr_techno import router as mcr_techno_router
 from api_todo import router as todo_router
+from api_worklog import router as worklog_router
 
 db.init_db()
 
@@ -126,6 +127,7 @@ app.include_router(unified_techno_router)
 app.include_router(techno_manual_router)
 app.include_router(mcr_techno_router)
 app.include_router(todo_router)
+app.include_router(worklog_router)
 
 # Serve dashboard
 @app.get("/dashboard")
@@ -1630,10 +1632,15 @@ async def get_item_mapping_suggestions(plant: str):
 
     # Get all unique item names for this plant
     cursor.execute(
-        "SELECT DISTINCT item_name FROM production_table WHERE plant_name = ? ORDER BY item_name",
+        "SELECT DISTINCT item_name FROM production_table WHERE plant_name = ?",
         (plant,)
     )
-    items = [row[0] for row in cursor.fetchall()]
+    # Process-order the dropdown; sort on the normalized form but keep the
+    # raw DB name, since aliases must map to what's actually stored.
+    items = sorted(
+        (row[0] for row in cursor.fetchall()),
+        key=lambda n: production_item_sort_key(normalize_item_name(n)),
+    )
 
     conn.close()
 
@@ -1688,39 +1695,129 @@ def normalize_item_name(name):
     name = name.replace('Semis Steel', 'Saleable Semis')
     return name.strip()
 
-# Custom sort order for production items
+# Custom sort order for production items — process sequence:
+# coke oven pushing → sinter → hot metal → crude steel → pig iron → mills
+# → secondary mills → finished steel → saleable semis → saleable steel.
+# Names must be the post-normalize_item_name() form (BF#x, Billet, etc.).
 PRODUCTION_ITEM_ORDER = [
+    # 1. Coke oven pushing
     'Oven Pushing (nos/day)',
+    'COB#1-5',
+    'COB#1-8',
+    'COB#6',
+    'COB#9-10',
+    'COB#10',
+    'COB#11',
+    # 2. Sinter
     'SP-1',
     'SP-2',
+    'SP-3',
     'Total Sinter',
+    # 3. Hot metal
+    'BF#1',
     'BF#2',
     'BF#3',
     'BF#4',
+    'BF#5',
+    'BF#6',
+    'BF#7',
+    'BF#8',
+    'BF#1-7',
     'Hot Metal',
     'Hot Metal to ASP',
     'Hot Metal to PCM',
+    # 4. Crude steel (SMS / casters / ingot)
+    'SMS-1 CCM-1',
+    'SMS-2',
+    'SMS-2 CCM-1&2',
+    'SMS-2 CCM-3',
+    'SMS-2 CCM-4',
+    'SMS-2 BLOOM',
+    'SMS-2 SLAB',
+    'SMS-3',
+    'SMS-3 Billet105',
+    'SMS-3 Billet150',
+    'SMS-3 BLOOM(CV1&2)',
+    'SMS CCM-1&2',
+    'SMS CCM-3',
+    'SMS Total Caster',
     'Billet Caster',
     'Bloom Caster',
     'BRC Bloom',
     'BRC Round',
     'Round Production',
     'BRC',
-    'SMS Total Caster',
+    '200 Blooms',
+    'Concast',
+    'Total Caster',
     'Bottom Pouring Ingot',
+    'Ingot Steel',
     'Total Crude Steel',
+    # 5. Pig iron
     'Pig Iron',
+    # 6. Mills (primary / rolling)
+    'MM',
+    'MSM',
+    'SM',
+    'USMILL',
+    'BARMILL',
+    'BARS',
+    'BARS&RODMILL',
+    'WRMILL',
+    'WIRERODS',
+    'PLATEMILL',
+    'PLATES',
+    'NPM Plate',
+    'OPM Plate',
+    'HRM',
+    'HSM Total HR Coil',
+    'HSM HR Coil (Sale)',
+    'HSM HR Plate',
+    'HSM-2 Total HR Coil',
+    'HSM-2 HR Coil (Sale)',
+    'HSM-2 HR Plate',
+    'HR Sheet',
+    'URM_RAIL',
+    'URMPRIME',
+    'RSM_RAIL',
+    'RSMPRIME',
+    # 7. Secondary mills
+    'CRC&S(1&2)',
+    'CRC(3)',
+    'CRSALE',
+    'CR Saleable',
+    'CRNO Coils',
+    'GP/GC',
+    'GPC3',
+    'ERW Pipes',
+    'SW Pipes',
     'WAP',
     'wheel plant',
     'Axle plant',
-    'MM',
-    'MSM',
+    'FORGINGS',
+    # 8. Finished steel
     'Finished Steel',
+    # 9. Semis saleable
     'Billet for Sale',
     'Blooms for Sale',
+    'Saleable 150 Billets',
+    'SEMIS BilletS',
+    'SEMIS BLOOM',
+    'SEMIS SLABS',
     'Saleable Semis',
+    # 10. Saleable steel
     'Saleable Steel',
+    'Saleable Despatch',
+    'Saleable Steel Despatch',
 ]
+
+def production_item_sort_key(item):
+    """Process-order sort key; items not in the list go last, alphabetically.
+    Expects a normalized item name (see normalize_item_name)."""
+    try:
+        return (PRODUCTION_ITEM_ORDER.index(item), item)
+    except ValueError:
+        return (len(PRODUCTION_ITEM_ORDER), item)
 
 @app.get("/api/production-items")
 async def get_production_items(plant: str, month: str):
@@ -1748,15 +1845,8 @@ async def get_production_items(plant: str, month: str):
 
     all_items = set(plan_rows.keys()) | set(actual_rows.keys())
 
-    # Sort items using custom order, with remaining items at the end
-    def sort_key(item):
-        try:
-            return PRODUCTION_ITEM_ORDER.index(item)
-        except ValueError:
-            # Items not in the custom order appear at the end, sorted alphabetically
-            return len(PRODUCTION_ITEM_ORDER) + hash(item)
-
-    sorted_items = sorted(all_items, key=sort_key)
+    # Sort items in process order, with remaining items at the end
+    sorted_items = sorted(all_items, key=production_item_sort_key)
 
     return {
         "items": [
@@ -1931,16 +2021,10 @@ async def get_production_fy(fy_start: int = Query(...)):
         except ValueError:
             return (len(PRODUCTION_FY_PLANT_ORDER), p)
 
-    def item_key(i):
-        try:
-            return (PRODUCTION_ITEM_ORDER.index(i), i)
-        except ValueError:
-            return (len(PRODUCTION_ITEM_ORDER), i)
-
     plants = []
     for plant in sorted(data.keys(), key=plant_key):
         items = []
-        for item in sorted(data[plant].keys(), key=item_key):
+        for item in sorted(data[plant].keys(), key=production_item_sort_key):
             entry = data[plant][item]
             items.append({
                 "item_name": item,

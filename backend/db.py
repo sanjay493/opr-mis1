@@ -178,6 +178,17 @@ def init_db():
         )
     """)
 
+    # 11b. Daily work log — free-text record of work completed each day
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS daily_work_log (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_date    TEXT NOT NULL,          -- YYYY-MM-DD (the day the work was done)
+            description  TEXT NOT NULL,          -- what was done
+            remarks      TEXT DEFAULT '',        -- optional extra notes
+            created_at   TEXT NOT NULL
+        )
+    """)
+
     # 12. Technopara data — all plants (BSP, DSP, RSP, BSL, ISP), unit-wise JSON
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS techno_data (
