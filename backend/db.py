@@ -163,6 +163,21 @@ def init_db():
         )
     """)
 
+    # 11a. To-Do / upcoming jobs — subject, recipient, due date, priority
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS todo_jobs (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject      TEXT NOT NULL,
+            details      TEXT DEFAULT '',
+            recipient    TEXT DEFAULT '',        -- "where to send it" (free text)
+            due_date     TEXT NOT NULL,          -- YYYY-MM-DD
+            priority     TEXT NOT NULL DEFAULT 'medium',  -- 'high' | 'medium' | 'low'
+            status       TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'done'
+            created_at   TEXT NOT NULL,
+            completed_at TEXT
+        )
+    """)
+
     # 12. Technopara data — all plants (BSP, DSP, RSP, BSL, ISP), unit-wise JSON
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS techno_data (

@@ -131,7 +131,7 @@ const KNOWN_UNITS = [
 // ── Label helpers ─────────────────────────────────────────────────────────────
 const _LABEL_MAP = {
   // Coal / energy
-  coal_to_hm:                           'Coal to Hot Metal (kg/kg)',
+  coal_to_hm:                           'Coal to Hot Metal',
   specific_water_consumption:           'Specific Water Consumption',
   water_consumption:                    'Water Consumption',
   specific_co2_emissions:               'Specific CO₂ Emissions',

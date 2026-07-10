@@ -1448,7 +1448,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     sail_is_user_supplied = sail_plan_fetch.get('is_user_supplied', False) if sail_plan_fetch else False
 
     raw_sections = [
-        unit_section("Coal to Hot Metal",           "kg/kg",      ["General", "BF_Shop"],   "coal_to_hm"),
+        unit_section("Coal to Hot Metal",           "",           ["General", "BF_Shop"],   "coal_to_hm"),
         unit_section("Coke Rate",                   "kg/thm",     _BF_UNITS,   "coke_rate"),
         unit_section("Nut Coke Rate",               "kg/thm",     _BF_UNITS,   "nut_coke_rate"),
         unit_section("CDI Rate",                    "kg/thm",     _BF_UNITS,   "cdi"),

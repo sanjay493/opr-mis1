@@ -12,6 +12,7 @@ export default function GlobalNavbar() {
       icon: '📋',
       submenu: [
         { label: 'Production Entry', link: '/data-entry', icon: '📊' },
+        { label: 'Production, Stock & Special Steel Upload', link: '/upload', icon: '📤' },
         { label: 'Opening Stock', link: '/data-entry/opening-stock', icon: '📦' },
         { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
         { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },
@@ -32,9 +33,9 @@ export default function GlobalNavbar() {
       ]
     },
     {
-      label: 'Data Upload',
-      icon: '📤',
-      link: '/upload'
+      label: 'To-Do',
+      icon: '✅',
+      link: '/todo'
     }
   ];
 

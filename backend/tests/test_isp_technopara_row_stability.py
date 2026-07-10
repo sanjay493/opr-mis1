@@ -53,18 +53,26 @@ REAL_MONTHLY_FILES = [
     ("Summarized Monthly Report May'26.xlsx", "2026-05"),
 ]
 
-# Expected unit count (B-FCE: BF-5 [absorbs the former stray SP/General
-# sub-groups — see below], SMS, SINTER: SP, WRM, BM, USM,
-# COKE OVENS: COB-old/COB-new, Maj Techno Summ: General = 9) — a change here
-# signals a sheet/unit went from "some data" to "no data" (or vice versa)
-# somewhere.
+# Expected record count (extract() emits one record per (sheet, unit)
+# pair, so a unit name reused by multiple sheets — e.g. "General" from
+# B-FCE, "Coal to Hot Metal", and Maj Techno Summ — legitimately produces
+# multiple records that get merged into the same techno_data row on save):
+#   B-FCE: BF-5, General [coke_screen_loss only] (2)
+#   + Coal to Hot Metal: General [coal_to_hm] (1)
+#   + SMS: SMS (1) + SINTER: SP (1) + WRM (1) + BM (1) + USM (1)
+#   + COKE OVENS: COB-old/COB-new (2) + Maj Techno Summ: General (1) = 11
 #
-# B-FCE used to also define its own "SP" (return_fines) and "General"
-# (coal_to_hm, coke_screen_loss) sub-groups, which collided with SINTER's
-# "SP" and Maj Techno Summ's "General" on the same techno_data row key
-# (plant, report_month, unit) — two unrelated parameter sets silently
-# sharing one DB row. Those three params were folded into "BF-5" instead.
-EXPECTED_UNIT_COUNT = 9
+# B-FCE's stray "SP" sub-group (just "return_fines", no other consumer
+# expects a specific unit for it) was folded into "BF-5" to remove that
+# particular collision. coal_to_hm moved out to its own "Coal to Hot Metal"
+# sheet entry (see isp_technopara_map.json) since B-FCE row 75 — the old
+# source — doesn't reliably hold this parameter across files (confirmed
+# absent in some), while the dedicated "Coal to Hot Metal" sheet's row 20
+# is stable everywhere; coke_screen_loss stays under "General" because
+# page_techno.py's report reads it from units ["General", "BF_Shop"]
+# specifically. merge_upsert_techno_data (not the old clobbering upsert)
+# makes sharing the "General" unit name across three sheets safe.
+EXPECTED_UNIT_COUNT = 11
 MIN_NONNULL_VALUES = 30  # out of 81 mapped params total, a generous floor
 
 

@@ -219,8 +219,13 @@ function computeParamDefaults(records) {
     const monthData = rec.techno_json?.month || {};
     const dbMonth = rec.db_json?.month || {};
     const allParams = new Set([...Object.keys(monthData), ...Object.keys(dbMonth)]);
-    const checkedUnit = {};
-    const autoUnit = {};
+    // Two sheets can legitimately share a unit name (e.g. ISP's B-FCE and
+    // Maj Techno Summ both write "General" for different, non-overlapping
+    // parameters) — start from whatever's already accumulated for this unit
+    // instead of a fresh object, so a second record for the same unit adds
+    // to it rather than wiping out the first one's params.
+    const checkedUnit = checked[rec.unit] || {};
+    const autoUnit = autoProtected[rec.unit] || {};
     allParams.forEach((p) => {
       const extracted = monthData[p];
       const dbVal = dbMonth[p];
@@ -238,15 +243,26 @@ function computeParamDefaults(records) {
 
 // ── Compact review table shown between Preview and Confirm & Save ─────────────
 function PreviewReview({ preview, paramChecked, autoProtected, onToggleParam }) {
-  const [activeUnit, setActiveUnit] = React.useState(preview.records[0]?.unit || null);
-  const rec = preview.records.find(r => r.unit === activeUnit) || preview.records[0];
-  const monthParams = rec?.techno_json?.month || {};
-  const tillParams  = rec?.techno_json?.till_month || {};
-  const dbMonthParams = rec?.db_json?.month || {};
-  const dbTillParams  = rec?.db_json?.till_month || {};
+  // Two sheets can legitimately share a unit name (e.g. ISP's B-FCE and Maj
+  // Techno Summ both write "General" for different, non-overlapping
+  // parameters) — the sidebar tab list must be de-duplicated by unit (React
+  // needs unique keys, and each unit should appear once), and every record
+  // sharing the active unit gets merged together so the preview shows the
+  // union of both sources' parameters, matching what the merge-safe save
+  // will actually store.
+  const uniqueUnits = Array.from(new Set(preview.records.map(r => r.unit)));
+  const [activeUnit, setActiveUnit] = React.useState(uniqueUnits[0] || null);
+  const activeRecords = preview.records.filter(r => r.unit === activeUnit);
+  const mergeOf = (source, period) => Object.assign(
+    {}, ...activeRecords.map(r => (source === 'db' ? r.db_json : r.techno_json)?.[period] || {})
+  );
+  const monthParams = mergeOf('techno', 'month');
+  const tillParams  = mergeOf('techno', 'till_month');
+  const dbMonthParams = mergeOf('db', 'month');
+  const dbTillParams  = mergeOf('db', 'till_month');
   const allParams = Array.from(new Set([...Object.keys(monthParams), ...Object.keys(dbMonthParams), ...Object.keys(dbTillParams)]));
-  const unitChecked = (rec && paramChecked[rec.unit]) || {};
-  const unitAutoProtected = (rec && autoProtected[rec.unit]) || {};
+  const unitChecked = paramChecked[activeUnit] || {};
+  const unitAutoProtected = autoProtected[activeUnit] || {};
   const fmt = v => {
     if (v == null || v === '') return '—';
     if (typeof v === 'string' && v.includes(':')) return v;
@@ -261,17 +277,17 @@ function PreviewReview({ preview, paramChecked, autoProtected, onToggleParam }) 
       </div>
       <div style={{ display: 'flex', maxHeight: 260 }}>
         <div style={{ width: 140, flexShrink: 0, borderRight: '1px solid #bfdbfe', overflowY: 'auto', background: '#fff' }}>
-          {preview.records.map(r => (
-            <button key={r.unit} onClick={() => setActiveUnit(r.unit)}
+          {uniqueUnits.map(unit => (
+            <button key={unit} onClick={() => setActiveUnit(unit)}
               style={{
                 display: 'block', width: '100%', padding: '6px 10px', textAlign: 'left',
-                background: activeUnit === r.unit ? '#e8f0fe' : 'transparent',
-                color: activeUnit === r.unit ? '#174ea6' : '#5f6368',
+                background: activeUnit === unit ? '#e8f0fe' : 'transparent',
+                color: activeUnit === unit ? '#174ea6' : '#5f6368',
                 border: 'none', borderBottom: '1px solid #f8f9fa', fontSize: 12,
-                fontWeight: activeUnit === r.unit ? 700 : 400, cursor: 'pointer',
+                fontWeight: activeUnit === unit ? 700 : 400, cursor: 'pointer',
               }}
             >
-              {r.unit}
+              {unit}
             </button>
           ))}
         </div>
@@ -301,7 +317,7 @@ function PreviewReview({ preview, paramChecked, autoProtected, onToggleParam }) 
                   <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f9fa', opacity: isChecked ? 1 : 0.6 }}>
                     <td style={{ padding: '4px 8px', textAlign: 'center' }}>
                       <input type="checkbox" checked={isChecked}
-                             onChange={(e) => onToggleParam(rec.unit, param, e.target.checked)}
+                             onChange={(e) => onToggleParam(activeUnit, param, e.target.checked)}
                              title={isAutoProtected ? 'Extracted value was blank — unchecked to keep the existing DB value' : 'Include this parameter in the save'}
                              style={{ accentColor: '#10b981', cursor: 'pointer' }} />
                     </td>

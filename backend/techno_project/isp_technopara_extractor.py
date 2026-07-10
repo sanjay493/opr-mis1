@@ -109,7 +109,7 @@ class IspTechnoExtractor:
             return val.time().strftime("%H:%M:%S")
         if isinstance(val, str) and not val.strip():
             return None
-        _bad = {"#DIV/0!", "#VALUE!", "-", "--", None, ""}
+        _bad = {"#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#N/A", "#NULL!", "#NUM!", "-", "--", None, ""}
         if val in _bad:
             return None
         return val
@@ -226,6 +226,21 @@ class IspTechnoExtractor:
             "USM": {"specific_heat_consumption": 1000},
             "WRM": {"specific_heat_consumption": 1000},
             "COKE OVENS": {"specific_heat_coke_ovens": 1000},
+            # "Coal to HM" (row 20 of the dedicated "Coal to Hot Metal" sheet)
+            # is reported in Kg/THM; SAIL's convention for this parameter is
+            # a small ~0.8-1.0 ratio (raw Kg/THM ÷ 1000), matching the
+            # historical stored values. The map used to read this via a
+            # "75/1000" string expression against row 75 of B-FCE, but that
+            # row is absent in some files (verified: present in the Mar'26
+            # reference file, missing in May'26, where row 75 is "Calendar
+            # Hours" instead) — and even where present, the generic
+            # row-expression evaluator has no way to tell "1000" is a
+            # literal constant apart from a (non-existent) row 1000, so it
+            # always silently evaluated to a division-by-zero. The dedicated
+            # "Coal to Hot Metal" sheet's row 20 is stable across every
+            # sample file checked; the /1000 now happens here instead of in
+            # a row-expression string.
+            "Coal to Hot Metal": {"coal_to_hm": 0.001},
         }
 
         if sheet_name in multipliers and param_key in multipliers[sheet_name]:
@@ -294,7 +309,25 @@ class IspTechnoExtractor:
         for param_key, row_spec in unit_params.items():
             try:
                 # Determine row number(s) to read
-                if isinstance(row_spec, str):
+                if isinstance(row_spec, list):
+                    # Average of several rows (e.g. 3 converters' utilisation
+                    # figures) — a plain list of row numbers, not a string
+                    # expression, so there's no ambiguity between "this digit
+                    # sequence is a row number" and "this one is a literal
+                    # divisor" (see _evaluate_row_expression's docstring).
+                    def _avg_rows(col):
+                        if col is None:
+                            return None
+                        vals = []
+                        for r in row_spec:
+                            row = list(ws.iter_rows(min_row=r, max_row=r, values_only=True))[0]
+                            v = self._clean_value(row[col]) if col < len(row) else None
+                            if v is not None:
+                                vals.append(float(v))
+                        return sum(vals) / len(vals) if vals else None
+                    month_val = _avg_rows(month_col)
+                    till_val = _avg_rows(cum_col)
+                elif isinstance(row_spec, str):
                     if any(op in row_spec for op in ['+', '-', '/', '*', '(', ')']):
                         # Expression - evaluate for both columns
                         month_val = self._evaluate_row_expression(ws, row_spec, month_col)

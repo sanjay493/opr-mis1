@@ -69,6 +69,7 @@ from api_dsp_techno import router as dsp_techno_router
 from api_unified_techno import router as unified_techno_router
 from api_techno_manual import router as techno_manual_router
 from api_mcr_techno import router as mcr_techno_router
+from api_todo import router as todo_router
 
 db.init_db()
 
@@ -124,6 +125,7 @@ app.include_router(dsp_techno_router)
 app.include_router(unified_techno_router)
 app.include_router(techno_manual_router)
 app.include_router(mcr_techno_router)
+app.include_router(todo_router)
 
 # Serve dashboard
 @app.get("/dashboard")
@@ -2482,6 +2484,43 @@ _PARAM_ACRONYMS = {
     "cri", "csr", "cv", "vm", "tmi", "ds", "dsp", "hr", "cbm", "feo",
 }
 
+# Different plant extractors settled on different snake_case spellings for
+# the same parameter over time (e.g. BSP/RSP write "cdi", an older path wrote
+# "cdi_rate"; BSP/DSP/RSP write "o2_enrichment", ISP writes
+# "oxygen_enrichment") — /api/techno-data's normalized-key lookup below tries
+# every alias in order so a plant/month using the "other" spelling isn't
+# silently reported as missing.
+_PARAM_KEY_ALIASES = {
+    "cdi_rate": ["cdi_rate", "cdi", "CDI Rate"],
+    "o2_enrichment": ["o2_enrichment", "oxygen_enrichment"],
+    "coke_rate": ["coke_rate", "Coke Rate"],
+    "fuel_rate": ["fuel_rate", "Fuel Rate"],
+    "bf_productivity": ["bf_productivity", "BF Productivity"],
+    "specific_energy_consumption": ["specific_energy_consumption", "Specific Energy Consumption"],
+    # Same ISP/RSP/BSL key-spelling drift already worked around in
+    # page_techno.py's _KEY_ALIASES (generate_major_techno_from_db) — mirrored
+    # here so the techno-dashboard's parameter picker doesn't show gaps for
+    # months that happen to use the "other" historical spelling.
+    "silicon_in_hm": ["silicon_in_hm", "si_in_hm", "si%_in_hm"],
+    "sulphur_in_hm": ["sulphur_in_hm", "s_in_hm", "s%_in_hm"],
+    "sinter_in_burden": ["sinter_in_burden", "sinter% in burden"],
+    "pellet_in_burden": ["pellet_in_burden", "pellet% in burden"],
+}
+
+
+def _extract_param_value(month_data: dict, param_key: str):
+    """Look up param_key (plus any known aliases) in a techno_json
+    month/till_month dict. Also unwraps the legacy SAIL {"value": x, "unit":
+    y} shape (from calculate_and_store_sail_actuals) down to a plain number,
+    since most callers store a bare number instead."""
+    for key in _PARAM_KEY_ALIASES.get(param_key, [param_key]):
+        if key in month_data:
+            v = month_data[key]
+            if isinstance(v, dict):
+                v = v.get("value")
+            return v
+    return None
+
 
 @app.get("/api/techno-parameters")
 async def get_techno_parameters():
@@ -2571,10 +2610,11 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
 
                 # Extract requested parameters
                 for param_name, param_key in zip(param_list, param_keys):
-                    if param_key in month_data:
+                    value = _extract_param_value(month_data, param_key)
+                    if value is not None:
                         if param_name not in data[plant]:
                             data[plant][param_name] = {}
-                        data[plant][param_name][month] = month_data[param_key]
+                        data[plant][param_name][month] = value
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -2601,10 +2641,11 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
 
                     # Extract requested parameters
                     for param_name, param_key in zip(param_list, param_keys):
-                        if param_key in month_data:
+                        value = _extract_param_value(month_data, param_key)
+                        if value is not None:
                             if param_name not in data['SAIL']:
                                 data['SAIL'][param_name] = {}
-                            data['SAIL'][param_name][month] = month_data[param_key]
+                            data['SAIL'][param_name][month] = value
                 except (json.JSONDecodeError, TypeError):
                     pass
 
@@ -2772,7 +2813,7 @@ async def get_techno_major_parameters():
     Response: { bf_params: [...], sms_params: [...] }
     """
     bf_params = [
-        {"name": "Coal to Hot Metal", "unit": "kg/kg"},
+        {"name": "Coal to Hot Metal", "unit": ""},
         {"name": "Coke Rate", "unit": "kg/thm"},
         {"name": "Nut Coke Rate", "unit": "kg/thm"},
         {"name": "CDI Rate", "unit": "kg/thm"},

@@ -17,11 +17,15 @@
     "silicon_in_hm": 83,
     "sulphur_in_hm": 84,
      "o2_enrichment": 93,
-      "return_fines": 71,
-      "coal_to_hm": "75/1000",
+      "return_fines": 71
+    },
+    "General": {
       "coke_screen_loss": 72
-    
-    
+    }
+  },
+  "Coal to Hot Metal": {
+    "General": {
+      "coal_to_hm": 20
     }
   },
   "SMS": {
@@ -42,7 +46,7 @@
       
       
       
-      "converter_utilisation": "(134+135+136)/3"
+      "converter_utilisation": [134, 135, 136]
     }
   },
   "SINTER": {

@@ -42,7 +42,10 @@ function TechnoDashboard() {
       setLoading(true);
       setError(null);
       try {
-        const plants = selectedPlant === 'all' ? PLANTS : [selectedPlant];
+        // The Compare view is a cross-plant view by definition — fetch all
+        // plants for it even if the Plant Selection filter (used by the
+        // Table/Chart views) is narrowed to one plant.
+        const plants = (selectedPlant === 'all' || viewMode === 'comparison') ? PLANTS : [selectedPlant];
         const params = selectedParams.join(',');
         const url = `${API_BASE}/api/techno-data?plants=${encodeURIComponent(plants.join(','))}&parameters=${encodeURIComponent(params)}`;
 
@@ -67,7 +70,7 @@ function TechnoDashboard() {
     if (selectedParams.length > 0) {
       loadData();
     }
-  }, [selectedPlant, selectedParams]);
+  }, [selectedPlant, selectedParams, viewMode]);
 
   const handleParamToggle = (param) => {
     setSelectedParams(prev =>
@@ -91,6 +94,21 @@ function TechnoDashboard() {
   };
 
   const displayMonths = getLastMonths(12).slice(monthRange.from, monthRange.to + 1);
+
+  // Most recent month (within the selected range) that has a value for this
+  // plant/parameter — used by the Compare view so each card shows a real,
+  // current-ish snapshot per plant instead of always the very latest month
+  // (which may still be blank for plants that haven't reported yet).
+  const getLatestValue = (plant, param) => {
+    for (let i = displayMonths.length - 1; i >= 0; i--) {
+      const month = displayMonths[i];
+      const raw = data[plant]?.[param]?.[month.key];
+      if (raw != null && raw !== '') {
+        return { value: parseFloat(raw).toFixed(2), monthLabel: month.label };
+      }
+    }
+    return null;
+  };
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
@@ -413,19 +431,27 @@ function TechnoDashboard() {
                     {param}
                   </h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-                    {PLANTS.map(plant => (
-                      <div key={plant} style={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #dadce0',
-                        borderRadius: '4px',
-                        padding: '6px',
-                        textAlign: 'center',
-                        fontSize: '9px'
-                      }}>
-                        <div style={{ fontWeight: '600', color: '#5f6368', marginBottom: '2px' }}>{plant}</div>
-                        <div style={{ fontSize: '12px', fontWeight: '700', color: '#1a73e8' }}>—</div>
-                      </div>
-                    ))}
+                    {PLANTS.map(plant => {
+                      const latest = getLatestValue(plant, param);
+                      return (
+                        <div key={plant} title={latest ? `As of ${latest.monthLabel}` : 'No data in the selected month range'} style={{
+                          backgroundColor: '#fff',
+                          border: '1px solid #dadce0',
+                          borderRadius: '4px',
+                          padding: '6px',
+                          textAlign: 'center',
+                          fontSize: '9px'
+                        }}>
+                          <div style={{ fontWeight: '600', color: '#5f6368', marginBottom: '2px' }}>{plant}</div>
+                          <div style={{ fontSize: '12px', fontWeight: '700', color: latest ? '#1a73e8' : '#bdc1c6' }}>
+                            {latest ? latest.value : '—'}
+                          </div>
+                          {latest && (
+                            <div style={{ fontSize: '7.5px', color: '#9aa0a6', marginTop: '1px' }}>{latest.monthLabel}</div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
