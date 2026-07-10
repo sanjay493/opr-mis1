@@ -1,4 +1,5 @@
 ﻿import re
+import calendar
 import openpyxl
 from openpyxl.utils import get_column_letter
 import logging
@@ -138,6 +139,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     # Auto-detect month from O1 (Excel stores it as a Python datetime object)
     o1_raw = ws["O1"].value
     if isinstance(o1_raw, datetime):
+        day   = o1_raw.day
         m_num = str(o1_raw.month).zfill(2)
         year  = str(o1_raw.year)
         db_report_month = f"{year}-{m_num}"
@@ -145,7 +147,8 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
         # Fallback: try to parse date string formats DD.MM.YYYY or YYYY-MM-DD
         date_match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", str(o1_raw))
         if date_match:
-            _d, m_num, year = date_match.groups()
+            d, m_num, year = date_match.groups()
+            day = int(d)
             db_report_month = f"{year}-{m_num}"
         else:
             raise ValueError(
@@ -154,6 +157,18 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
             )
     else:
         raise ValueError("Cell O1 is empty — cannot determine report month.")
+
+    # BSL DPR cells hold cumulative-to-date figures, which are only correct as
+    # the monthly total when this is genuinely the last day's report. Reject
+    # mid-month uploads rather than silently storing a partial month as final.
+    last_day = calendar.monthrange(int(year), int(m_num))[1]
+    if day != last_day:
+        raise ValueError(
+            f"Cell O1 date ({day:02d}.{m_num}.{year}) is not the last day of "
+            f"{MONTH_NAMES[m_num]} {year} (last day is {last_day:02d}.{m_num}.{year}). "
+            "The BSL DPR Mail report must be the month-end file — this looks like "
+            "a mid-month DPR upload."
+        )
 
     logger.info(f"BSL DPR: month auto-detected from O1 → {db_report_month}")
 
