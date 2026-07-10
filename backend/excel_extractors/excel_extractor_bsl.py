@@ -1,4 +1,5 @@
 ﻿import re
+import calendar
 import openpyxl
 from openpyxl.utils import get_column_letter
 import logging
@@ -66,8 +67,10 @@ def _dpr_config():
     """
     Single source of truth for the BSL DPR Mail cell mapping — shared by the
     DB-writing extractor (_extract_dpr_report) and the preview-only extractor
-    (_extract_dpr_preview) so they can never drift apart (e.g. one pointing
-    at Z21 for Pig Iron while the other still points at the stale E30).
+    (_extract_dpr_preview) so they can never drift apart. Pig Iron is Z21,
+    the CUM column under the "PRODUCTION (SALEABLE STEEL)" section (W3) —
+    E30 is a different figure under the "DESPATCH" section (B19) and must
+    not be used here.
 
     Reads excel_cells_config.json (section 'bsl_dpr'); falls back to these
     hardcoded defaults only if that config section is missing.
@@ -86,19 +89,21 @@ def _dpr_config():
         "SMS-2 CCM-1&2":       "P11",
         "Total Crude Steel":   "P12",
         "HSM Total HR Coil":   "P14",
-        "HSM HR Coil (Sale)":  "E7",
-        "HSM HR Plate":        "E8",
-        "HR Sheet":            "E9",
-        "CRC&S(1&2)":          "E10",
-        "CRC(3)":              "E11",
-        "GP/GC":               "E12",
-        "GPC3":                "E13",
-        "CRSALE":              "E29",
-        "Saleable Steel":      "P31",
-        "Saleable Semis":      "E32",
+        "HSM HR Coil (Sale)":  "Z6",
+        "HSM HR Plate":        "Z7",
+        "HR Sheet":            "Z8",
+        "CRC(3)":              "Z15",
+        "GPC3":                "Z16",
+        "CRSALE":              "Z18",
+        "Saleable Steel":      "O31",
+        "Saleable Semis":      "Z19",
     })
     no_convert = set(cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
-    derived = cfg.get("derived", [{"item": "Finished Steel", "op": "subtract", "a": "P31", "b": "E32"}])
+    derived = cfg.get("derived", [
+        {"item": "Finished Steel", "op": "subtract", "a": "O31", "b": "Z19"},
+        {"item": "CRC&S(1&2)", "op": "add", "cells": ["Z9", "Z10"]},
+        {"item": "GP/GC", "op": "add", "cells": ["Z11", "Z12", "Z13"]},
+    ])
     return cells, no_convert, derived
 
 
@@ -117,17 +122,17 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       SMS-2 CCM-1&2        P11
       Total Crude Steel    P12
       HSM Total HR Coil    P14
-      HSM HR Coil (Sale)   E7
-      HSM HR Plate         E8
-      HR Sheet             E9
-      CRC&S(1&2)           E10
-      CRC(3)               E11
-      GP/GC                E12
-      GPC3                 E13
-      CRSALE               E29
-      Saleable Steel       P31
-      Saleable Semis       E32
-      Finished Steel       P31 − E32  (derived: saleable steel minus semis)
+      HSM HR Coil (Sale)   Z6
+      HSM HR Plate         Z7
+      HR Sheet             Z8
+      CRC(3)               Z15
+      GPC3                 Z16
+      CRSALE               Z18
+      Saleable Steel       O31  (CUM column, "PRODUCTION:-(MAIN UNITS)" table)
+      Saleable Semis       Z19  (CUM column, "PRODUCTION (SALEABLE STEEL)" table)
+      Finished Steel       O31 − Z19  (derived: saleable steel minus semis, both production-side)
+      CRC&S(1&2)           Z9 + Z10  (derived: sum)
+      GP/GC                Z11 + Z12 + Z13  (derived: sum)
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
@@ -138,6 +143,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     # Auto-detect month from O1 (Excel stores it as a Python datetime object)
     o1_raw = ws["O1"].value
     if isinstance(o1_raw, datetime):
+        day   = o1_raw.day
         m_num = str(o1_raw.month).zfill(2)
         year  = str(o1_raw.year)
         db_report_month = f"{year}-{m_num}"
@@ -145,7 +151,8 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
         # Fallback: try to parse date string formats DD.MM.YYYY or YYYY-MM-DD
         date_match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", str(o1_raw))
         if date_match:
-            _d, m_num, year = date_match.groups()
+            d, m_num, year = date_match.groups()
+            day = int(d)
             db_report_month = f"{year}-{m_num}"
         else:
             raise ValueError(
@@ -154,6 +161,18 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
             )
     else:
         raise ValueError("Cell O1 is empty — cannot determine report month.")
+
+    # BSL DPR cells hold cumulative-to-date figures, which are only correct as
+    # the monthly total when this is genuinely the last day's report. Reject
+    # mid-month uploads rather than silently storing a partial month as final.
+    last_day = calendar.monthrange(int(year), int(m_num))[1]
+    if day != last_day:
+        raise ValueError(
+            f"Cell O1 date ({day:02d}.{m_num}.{year}) is not the last day of "
+            f"{MONTH_NAMES[m_num]} {year} (last day is {last_day:02d}.{m_num}.{year}). "
+            "The BSL DPR Mail report must be the month-end file — this looks like "
+            "a mid-month DPR upload."
+        )
 
     logger.info(f"BSL DPR: month auto-detected from O1 → {db_report_month}")
 

@@ -67,92 +67,92 @@
       "value": 263.041
     },
     {
-      "cell": "DPR!E7",
+      "cell": "DPR!Z6",
       "item_name": "HSM HR Coil (Sale)",
-      "pdf_label": "E7",
+      "pdf_label": "Z6",
       "status": "ok",
       "unit": "'000T",
-      "value": 113.234
+      "value": 157.625
     },
     {
-      "cell": "DPR!E8",
+      "cell": "DPR!Z7",
       "item_name": "HSM HR Plate",
-      "pdf_label": "E8",
+      "pdf_label": "Z7",
       "status": "ok",
       "unit": "'000T",
-      "value": 12.619
+      "value": 29.756
     },
     {
-      "cell": "DPR!E9",
+      "cell": "DPR!Z8",
       "item_name": "HR Sheet",
-      "pdf_label": "E9",
+      "pdf_label": "Z8",
       "status": "ok",
       "unit": "'000T",
-      "value": 3.353
+      "value": 3.872
     },
     {
-      "cell": "DPR!E10",
-      "item_name": "CRC&S(1&2)",
-      "pdf_label": "E10",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 21.594
-    },
-    {
-      "cell": "DPR!E11",
+      "cell": "DPR!Z15",
       "item_name": "CRC(3)",
-      "pdf_label": "E11",
+      "pdf_label": "Z15",
       "status": "ok",
       "unit": "'000T",
-      "value": 40.444
+      "value": 53.482
     },
     {
-      "cell": "DPR!E12",
-      "item_name": "GP/GC",
-      "pdf_label": "E12",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 0.051
-    },
-    {
-      "cell": "DPR!E13",
+      "cell": "DPR!Z16",
       "item_name": "GPC3",
-      "pdf_label": "E13",
+      "pdf_label": "Z16",
       "status": "ok",
       "unit": "'000T",
-      "value": 9.826
+      "value": 13.106
     },
     {
-      "cell": "DPR!E29",
+      "cell": "DPR!Z18",
       "item_name": "CRSALE",
-      "pdf_label": "E29",
+      "pdf_label": "Z18",
       "status": "ok",
       "unit": "'000T",
-      "value": 92.925
+      "value": 91.016
     },
     {
-      "cell": "DPR!P31",
+      "cell": "DPR!O31",
       "item_name": "Saleable Steel",
-      "pdf_label": "P31",
+      "pdf_label": "O31",
       "status": "ok",
       "unit": "'000T",
       "value": 320.889
     },
     {
-      "cell": "DPR!E32",
+      "cell": "DPR!Z19",
       "item_name": "Saleable Semis",
-      "pdf_label": "E32",
+      "pdf_label": "Z19",
       "status": "ok",
       "unit": "'000T",
       "value": 34.321
     },
     {
-      "cell": "DPR!P31-E32 (computed)",
+      "cell": "DPR!O31-Z19 (computed)",
       "item_name": "Finished Steel",
-      "pdf_label": "P31-E32",
+      "pdf_label": "O31-Z19",
       "status": "ok",
       "unit": "'000T",
       "value": 286.568
+    },
+    {
+      "cell": "DPR!Z9+Z10 (computed)",
+      "item_name": "CRC&S(1&2)",
+      "pdf_label": "Z9+Z10",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 24.096
+    },
+    {
+      "cell": "DPR!Z11+Z12+Z13 (computed)",
+      "item_name": "GP/GC",
+      "pdf_label": "Z11+Z12+Z13",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.148
     }
   ],
   "source_type": "BSL DPR Mail (Month-End)",
