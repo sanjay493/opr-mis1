@@ -17,23 +17,31 @@
       "SMS-2 CCM-1&2": "P11",
       "Total Crude Steel": "P12",
       "HSM Total HR Coil": "P14",
-      "HSM HR Coil (Sale)": "E7",
-      "HSM HR Plate": "E8",
-      "HR Sheet": "E9",
-      "CRC&S(1&2)": "E10",
-      "CRC(3)": "E11",
-      "GP/GC": "E12",
-      "GPC3": "E13",
-      "CRSALE": "E29",
-      "Saleable Steel": "P31",
-      "Saleable Semis": "E32"
+      "HSM HR Coil (Sale)": "Z6",
+      "HSM HR Plate": "Z7",
+      "HR Sheet": "Z8",
+      "CRC(3)": "Z15",
+      "GPC3": "Z16",
+      "CRSALE": "Z18",
+      "Saleable Steel": "O31",
+      "Saleable Semis": "Z19"
     },
     "derived": [
       {
         "item": "Finished Steel",
         "op": "subtract",
-        "a": "P31",
-        "b": "E32"
+        "a": "O31",
+        "b": "Z19"
+      },
+      {
+        "item": "CRC&S(1&2)",
+        "op": "add",
+        "cells": ["Z9", "Z10"]
+      },
+      {
+        "item": "GP/GC",
+        "op": "add",
+        "cells": ["Z11", "Z12", "Z13"]
       }
     ]
   },

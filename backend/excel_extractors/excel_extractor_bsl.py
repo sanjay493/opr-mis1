@@ -67,8 +67,10 @@ def _dpr_config():
     """
     Single source of truth for the BSL DPR Mail cell mapping — shared by the
     DB-writing extractor (_extract_dpr_report) and the preview-only extractor
-    (_extract_dpr_preview) so they can never drift apart (e.g. one pointing
-    at Z21 for Pig Iron while the other still points at the stale E30).
+    (_extract_dpr_preview) so they can never drift apart. Pig Iron is Z21,
+    the CUM column under the "PRODUCTION (SALEABLE STEEL)" section (W3) —
+    E30 is a different figure under the "DESPATCH" section (B19) and must
+    not be used here.
 
     Reads excel_cells_config.json (section 'bsl_dpr'); falls back to these
     hardcoded defaults only if that config section is missing.
@@ -87,19 +89,21 @@ def _dpr_config():
         "SMS-2 CCM-1&2":       "P11",
         "Total Crude Steel":   "P12",
         "HSM Total HR Coil":   "P14",
-        "HSM HR Coil (Sale)":  "E7",
-        "HSM HR Plate":        "E8",
-        "HR Sheet":            "E9",
-        "CRC&S(1&2)":          "E10",
-        "CRC(3)":              "E11",
-        "GP/GC":               "E12",
-        "GPC3":                "E13",
-        "CRSALE":              "E29",
-        "Saleable Steel":      "P31",
-        "Saleable Semis":      "E32",
+        "HSM HR Coil (Sale)":  "Z6",
+        "HSM HR Plate":        "Z7",
+        "HR Sheet":            "Z8",
+        "CRC(3)":              "Z15",
+        "GPC3":                "Z16",
+        "CRSALE":              "Z18",
+        "Saleable Steel":      "O31",
+        "Saleable Semis":      "Z19",
     })
     no_convert = set(cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
-    derived = cfg.get("derived", [{"item": "Finished Steel", "op": "subtract", "a": "P31", "b": "E32"}])
+    derived = cfg.get("derived", [
+        {"item": "Finished Steel", "op": "subtract", "a": "O31", "b": "Z19"},
+        {"item": "CRC&S(1&2)", "op": "add", "cells": ["Z9", "Z10"]},
+        {"item": "GP/GC", "op": "add", "cells": ["Z11", "Z12", "Z13"]},
+    ])
     return cells, no_convert, derived
 
 
@@ -118,17 +122,17 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       SMS-2 CCM-1&2        P11
       Total Crude Steel    P12
       HSM Total HR Coil    P14
-      HSM HR Coil (Sale)   E7
-      HSM HR Plate         E8
-      HR Sheet             E9
-      CRC&S(1&2)           E10
-      CRC(3)               E11
-      GP/GC                E12
-      GPC3                 E13
-      CRSALE               E29
-      Saleable Steel       P31
-      Saleable Semis       E32
-      Finished Steel       P31 − E32  (derived: saleable steel minus semis)
+      HSM HR Coil (Sale)   Z6
+      HSM HR Plate         Z7
+      HR Sheet             Z8
+      CRC(3)               Z15
+      GPC3                 Z16
+      CRSALE               Z18
+      Saleable Steel       O31  (CUM column, "PRODUCTION:-(MAIN UNITS)" table)
+      Saleable Semis       Z19  (CUM column, "PRODUCTION (SALEABLE STEEL)" table)
+      Finished Steel       O31 − Z19  (derived: saleable steel minus semis, both production-side)
+      CRC&S(1&2)           Z9 + Z10  (derived: sum)
+      GP/GC                Z11 + Z12 + Z13  (derived: sum)
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
