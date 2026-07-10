@@ -85,10 +85,18 @@ export default function ProductionFYPage() {
     .filter((p) => p.items.length > 0);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
 
-      <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '32px' }}>
+      <main style={{
+        flex: 1,
+        overflow: 'auto',
+        maxWidth: '1600px',
+        margin: '0 auto',
+        padding: '32px',
+        width: '100%',
+        boxSizing: 'border-box',
+      }}>
         {/* Header */}
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
@@ -190,8 +198,6 @@ export default function ProductionFYPage() {
             border: '1px solid #dadce0',
             borderRadius: '8px',
             overflowX: 'auto',
-            maxHeight: 'calc(100vh - 260px)',
-            overflowY: 'auto',
           }}>
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
               <thead>
@@ -309,7 +315,7 @@ export default function ProductionFYPage() {
             </table>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

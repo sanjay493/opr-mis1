@@ -14,8 +14,15 @@
       "silicon_in_hm": "Wtd. Avg. Si in HM",
       "sulphur_in_hm": "Wtd. Avg. S in HM",
       "o2_enrichment": "Oxygen enrichment %",
-      "return_fines": "BF Return Sinter fines (dry) to BMP wrt Gross Sinter Supply (Skip BF+SMS Cons+Return fines+Diverter loss) (%)",
+      "return_fines": "BF Return Sinter fines (dry) to BMP wrt Gross Sinter Supply (Skip BF+SMS Cons+Return fines+Diverter loss) (%)"
+    },
+    "General": {
       "coke_screen_loss": "Return Coke fines (dry) to BMP"
+    }
+  },
+  "Coal to Hot Metal": {
+    "General": {
+      "coal_to_hm": "Coal to HM"
     }
   },
   "SMS": {
