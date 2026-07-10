@@ -17,7 +17,7 @@ _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
-from db import init_db, upsert_techno_data, get_techno_data, get_techno_months, enrich_techno_records_with_db
+from db import init_db, merge_upsert_techno_data, get_techno_data, get_techno_months, enrich_techno_records_with_db
 
 router = APIRouter(prefix="/api/techno", tags=["unified-techno"])
 
@@ -172,11 +172,11 @@ async def extract_techno(
 
         for rec in records:
             try:
-                upsert_techno_data(
+                merge_upsert_techno_data(
                     plant=rec["plant"],
                     report_month=rec["report_month"],
                     unit=rec["unit"],
-                    techno_json=rec["techno_json"],
+                    new_techno_json=rec["techno_json"],
                     source_file=file.filename or "",
                 )
                 saved_count += 1
@@ -190,13 +190,13 @@ async def extract_techno(
             sail_result = calculate_and_store_sail_actuals(report_month)
             if sail_result['success']:
                 sail_calc_status = "completed"
-                print(f"✓ SAIL actuals auto-calculated for {report_month}")
+                print(f"SAIL actuals auto-calculated for {report_month}")
             else:
                 sail_calc_status = "failed"
-                print(f"⚠ SAIL calculation failed: {sail_result['message']}")
+                print(f"Warning: SAIL calculation failed: {sail_result['message']}")
         except Exception as e:
             sail_calc_status = "error"
-            print(f"⚠ Error auto-calculating SAIL: {e}")
+            print(f"Warning: Error auto-calculating SAIL: {e}")
 
         return {
             "status": "ok",
@@ -315,11 +315,11 @@ async def insert_techno(payload: dict):
     saved_count = 0
     for rec in records:
         try:
-            upsert_techno_data(
+            merge_upsert_techno_data(
                 plant=plant,
                 report_month=report_month,
                 unit=rec["unit"],
-                techno_json=rec["techno_json"],
+                new_techno_json=rec["techno_json"],
                 source_file=source_file,
             )
             saved_count += 1
@@ -333,7 +333,7 @@ async def insert_techno(payload: dict):
         sail_calc_status = "completed" if sail_result["success"] else "failed"
     except Exception as e:
         sail_calc_status = "error"
-        print(f"⚠ Error auto-calculating SAIL: {e}")
+        print(f"Warning: Error auto-calculating SAIL: {e}")
 
     return {
         "status": "ok",

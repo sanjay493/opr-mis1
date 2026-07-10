@@ -1,0 +1,109 @@
+{
+  "B-FCE": {
+    "BF-5": {
+      "coke_rate": "Coke",
+      "nut_coke_rate": "Nut Coke",
+      "cdi": "CDI",
+      "fuel_rate": "Total Fuel",
+      "bf_productivity": "BF Productivity",
+      "sinter_in_burden": "Sinter in Fe bearing Load",
+      "pellet_in_burden": "Pellet in Fe bearing Load",
+      "furnace_availability": "Furnace Availability",
+      "hot_blast_temp": "Blast Temperature",
+      "slag_rate": "Slag Rate",
+      "silicon_in_hm": "Wtd. Avg. Si in HM",
+      "sulphur_in_hm": "Wtd. Avg. S in HM",
+      "o2_enrichment": "Oxygen enrichment %",
+      "return_fines": "BF Return Sinter fines (dry) to BMP wrt Gross Sinter Supply (Skip BF+SMS Cons+Return fines+Diverter loss) (%)",
+      "coke_screen_loss": "Return Coke fines (dry) to BMP"
+    }
+  },
+  "SMS": {
+    "SMS": {
+      "average_heat_weight": "Avg. Cast Weight",
+      "caster_yield": "CCP Yield",
+      "fe-mn": "Total Fe-Mn",
+      "si-mn": "Total Si-Mn",
+      "fe-si": "Fe-Si",
+      "specific_hm_consumption": "Hot Metal Consumption rate",
+      "specific_scrap_consumption": "Scrap Consumption rate",
+      "oxygen_blowing": "Sp Oxygen Consumption",
+      "specific_refractory_consumption": "Sp Ref Consumption",
+      "specific_lpg_consumption": "LPG Consumption (CCP)"
+    }
+  },
+  "SINTER": {
+    "SP": {
+      "specific_productivity": "Specific Productivity",
+      "ld_slag_cons": "BOF Slag",
+      "basicity": "Basicity",
+      "fe%_in_sinter": "Fe"
+    }
+  },
+  "WRM": {
+    "WRM": {
+      "yield_total": "WR MILL YIELD",
+      "availability": "% Mill Availability",
+      "utilisation": "% Mill Utilisation",
+      "rolling_rate": "Rolling Rate on yield Wt",
+      "specific_power_consumption": "Sp Power Consumption",
+      "specific_heat_consumption": "Gross Heat Consumption",
+      "cbm_gas_consumption": "CBM consumption"
+    }
+  },
+  "BM": {
+    "BM": {
+      "yield_total": "BAR MILL YIELD",
+      "availability": "% Mill Availability",
+      "utilisation": "% Mill Utilisation",
+      "rolling_rate": "Rolling Rate on yield Wt",
+      "specific_power_consumption": "Sp Power Consumption",
+      "specific_heat_consumption": "Gross Heat Consumption",
+      "cbm_gas_consumption": "CBM consumption"
+    }
+  },
+  "USM": {
+    "USM": {
+      "yield_total": "US MILL YIELD",
+      "availability": "% Mill Availability",
+      "utilisation": "% Mill Utilisation",
+      "rolling_rate": "Rolling Rate on yield Wt",
+      "specific_power_consumption": "Sp Power Consumption",
+      "specific_heat_consumption": "Gross Heat Consumption",
+      "cbm_gas_consumption": "CBM consumption"
+    }
+  },
+  "COKE OVENS": {
+    "COB-old": {
+      "specific_heat_coke_ovens": "Sp Heat Cons",
+      "coke_oven_gas_yield": "C.O.Gas Yield",
+      "ash_blend_coal": "Ash in blend coal",
+      "ash_in_coke": "Ash",
+      "m40_coke": "M40",
+      "m10_coke": "M10",
+      "csr_coke": "CSR",
+      "cri_coke": "CRI"
+    },
+    "COB-new": {
+      "bf_coke_yield": "BF Coke",
+      "coke_oven_gas_yield": "C.O.Gas Yield",
+      "specific_heat_coke_ovens": "Sp Heat Cons",
+      "crude_tar_yield": "Total Coal Tar",
+      "crude_benzol_yield": "Crude Benzol",
+      "ammonium_sulphate_yield": "Total (NH4)₂SO4",
+      "ash_blend_coal": "Ash in blend coal",
+      "ash_in_coke": "Ash",
+      "m40_coke": "M40",
+      "m10_coke": "M10",
+      "csr_coke": "CSR",
+      "cri_coke": "CRI"
+    }
+  },
+  "Maj Techno Summ": {
+    "General": {
+      "specific_energy_consumption": "Sp Energy Consumption",
+      "specific_water_consumption": "Sp Water Consumption",
+      "specific_co2_emissions": "Sp. CO2 emission"
+    }
+  }
+}

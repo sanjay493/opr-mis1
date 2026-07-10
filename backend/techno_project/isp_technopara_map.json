@@ -16,14 +16,13 @@
     "slag_rate":82,
     "silicon_in_hm": 83,
     "sulphur_in_hm": 84,
-     "o2_enrichment": 93
+     "o2_enrichment": 93,
+      "return_fines": 71,
+      "coal_to_hm": "75/1000",
+      "coke_screen_loss": 72
     
     
-    },
-    "SP":{"return_fines":71},
-    "General":{"coal_to_hm": "75/1000",
-  "coke_screen_loss":72}
-
+    }
   },
   "SMS": {
     "SMS": {

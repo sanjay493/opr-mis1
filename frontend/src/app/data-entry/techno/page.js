@@ -207,8 +207,37 @@ function BulkCumulativeModal({ preview, onConfirm, onClose, busy, confirmLabel, 
   );
 }
 
+// Default checked = true, EXCEPT auto-unchecked ("kept existing — extracted
+// was blank") when the extracted month value is null/blank and the DB
+// already has a non-null value for that parameter — the auto-protect
+// default agreed for this feature. One checkbox per parameter governs both
+// its month and till_month (cumulative) value together.
+function computeParamDefaults(records) {
+  const checked = {};
+  const autoProtected = {};
+  for (const rec of records || []) {
+    const monthData = rec.techno_json?.month || {};
+    const dbMonth = rec.db_json?.month || {};
+    const allParams = new Set([...Object.keys(monthData), ...Object.keys(dbMonth)]);
+    const checkedUnit = {};
+    const autoUnit = {};
+    allParams.forEach((p) => {
+      const extracted = monthData[p];
+      const dbVal = dbMonth[p];
+      const blank = extracted == null || extracted === '';
+      const dbHasValue = dbVal != null && dbVal !== '';
+      const protect = blank && dbHasValue;
+      checkedUnit[p] = !protect;
+      autoUnit[p] = protect;
+    });
+    checked[rec.unit] = checkedUnit;
+    autoProtected[rec.unit] = autoUnit;
+  }
+  return { checked, autoProtected };
+}
+
 // ── Compact review table shown between Preview and Confirm & Save ─────────────
-function PreviewReview({ preview }) {
+function PreviewReview({ preview, paramChecked, autoProtected, onToggleParam }) {
   const [activeUnit, setActiveUnit] = React.useState(preview.records[0]?.unit || null);
   const rec = preview.records.find(r => r.unit === activeUnit) || preview.records[0];
   const monthParams = rec?.techno_json?.month || {};
@@ -216,6 +245,8 @@ function PreviewReview({ preview }) {
   const dbMonthParams = rec?.db_json?.month || {};
   const dbTillParams  = rec?.db_json?.till_month || {};
   const allParams = Array.from(new Set([...Object.keys(monthParams), ...Object.keys(dbMonthParams), ...Object.keys(dbTillParams)]));
+  const unitChecked = (rec && paramChecked[rec.unit]) || {};
+  const unitAutoProtected = (rec && autoProtected[rec.unit]) || {};
   const fmt = v => {
     if (v == null || v === '') return '—';
     if (typeof v === 'string' && v.includes(':')) return v;
@@ -248,6 +279,7 @@ function PreviewReview({ preview }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr style={{ background: '#f8f9fa' }}>
+                <th rowSpan={2} style={{ padding: '5px 8px', textAlign: 'center', color: '#5f6368', borderBottom: '1px solid #dadce0', verticalAlign: 'bottom' }}>Insert</th>
                 <th rowSpan={2} style={{ padding: '5px 10px', textAlign: 'left', color: '#5f6368', borderBottom: '1px solid #dadce0', verticalAlign: 'bottom' }}>Parameter</th>
                 <th colSpan={2} style={{ padding: '4px 10px', textAlign: 'center', color: '#5f6368', borderBottom: '1px solid #f1f3f4', fontWeight: 600 }}>Month</th>
                 <th colSpan={2} style={{ padding: '4px 10px', textAlign: 'center', color: '#5f6368', borderBottom: '1px solid #f1f3f4', fontWeight: 600 }}>Cumulative</th>
@@ -263,9 +295,22 @@ function PreviewReview({ preview }) {
               {allParams.map((param, idx) => {
                 const dbM = dbMonthParams[param], newM = monthParams[param];
                 const dbT = dbTillParams[param],  newT = tillParams[param];
+                const isChecked = unitChecked[param] !== false;
+                const isAutoProtected = !!unitAutoProtected[param];
                 return (
-                  <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f9fa' }}>
-                    <td style={{ padding: '4px 10px', color: '#202124' }}>{param}</td>
+                  <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f9fa', opacity: isChecked ? 1 : 0.6 }}>
+                    <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                      <input type="checkbox" checked={isChecked}
+                             onChange={(e) => onToggleParam(rec.unit, param, e.target.checked)}
+                             title={isAutoProtected ? 'Extracted value was blank — unchecked to keep the existing DB value' : 'Include this parameter in the save'}
+                             style={{ accentColor: '#10b981', cursor: 'pointer' }} />
+                    </td>
+                    <td style={{ padding: '4px 10px', color: '#202124' }}>
+                      {param}
+                      {isAutoProtected && (
+                        <div style={{ fontSize: 10, color: '#92400e', fontStyle: 'italic' }}>kept existing — extracted was blank</div>
+                      )}
+                    </td>
                     <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(dbM)}</td>
                     <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: changed(dbM, newM) ? '#b06000' : '#1a73e8', fontWeight: changed(dbM, newM) ? 700 : 400 }}>{fmt(newM)}</td>
                     <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(dbT)}</td>
@@ -279,6 +324,8 @@ function PreviewReview({ preview }) {
       </div>
       <div style={{ padding: '6px 12px', fontSize: 11, color: '#5f6368', borderTop: '1px solid #bfdbfe' }}>
         <span style={{ color: '#b06000', fontWeight: 700 }}>Amber</span> = extracted value differs from what's currently in the DB.
+        Unchecked rows are skipped on save and keep their current DB value — rows where the
+        extraction came back blank are unchecked automatically so a bad file can't wipe out a good value; uncheck any other row yourself to keep the DB value instead.
       </div>
     </div>
   );
@@ -291,6 +338,8 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
   const [status, setStatus] = React.useState(null);
   const [preview, setPreview] = React.useState(null);
   const [cumPreview, setCumPreview] = React.useState(null);
+  const [paramChecked, setParamChecked] = React.useState({});
+  const [autoProtected, setAutoProtected] = React.useState({});
   const inputRef = React.useRef();
 
   React.useEffect(() => {
@@ -299,6 +348,10 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
     setPreview(null);
     if (inputRef.current) inputRef.current.value = '';
   }, [reportMonth]);
+
+  const toggleParam = (unit, param, checked) => {
+    setParamChecked(prev => ({ ...prev, [unit]: { ...(prev[unit] || {}), [param]: checked } }));
+  };
 
   const handlePreview = async () => {
     if (!file) return;
@@ -314,6 +367,9 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Preview failed');
       setPreview(json);
+      const { checked, autoProtected: auto } = computeParamDefaults(json.records || []);
+      setParamChecked(checked);
+      setAutoProtected(auto);
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
     } finally {
@@ -357,6 +413,9 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
   const handleApplyCumulative = () => {
     if (!cumPreview) return;
     setPreview(prev => ({ ...prev, records: cumPreview.records }));
+    const { checked, autoProtected: auto } = computeParamDefaults(cumPreview.records || []);
+    setParamChecked(checked);
+    setAutoProtected(auto);
     const warn = (cumPreview.warnings || []).length;
     setStatus({
       type: 'success',
@@ -371,6 +430,23 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
     setBusy(true);
     setStatus(null);
     try {
+      // Drop unchecked params from each record before saving — the backend's
+      // merge-safe upsert (merge_upsert_techno_data) keeps the existing DB
+      // value for any parameter omitted here, so unchecking a row never
+      // clobbers a good stored value with a blank/unwanted extracted one.
+      const recordsToSave = preview.records.map(rec => {
+        const unitChecked = paramChecked[rec.unit] || {};
+        const keep = (obj) => Object.fromEntries(
+          Object.entries(obj || {}).filter(([p]) => unitChecked[p] !== false)
+        );
+        return {
+          unit: rec.unit,
+          techno_json: {
+            month: keep(rec.techno_json?.month),
+            till_month: keep(rec.techno_json?.till_month),
+          },
+        };
+      });
       const doInsert = confirmReplace => fetch(`${apiBase}${insertEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -378,7 +454,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
           plant,
           report_month: preview.report_month,
           source_file: preview.source_file,
-          records: preview.records,
+          records: recordsToSave,
           ...(confirmReplace ? { confirm_replace: true } : {}),
         }),
       });
@@ -476,7 +552,10 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
           {preview.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
         </div>
       )}
-      {preview && <PreviewReview preview={preview} />}
+      {preview && (
+        <PreviewReview preview={preview} paramChecked={paramChecked}
+                       autoProtected={autoProtected} onToggleParam={toggleParam} />
+      )}
       <StatusMsg status={status} />
 
       <BulkCumulativeModal
