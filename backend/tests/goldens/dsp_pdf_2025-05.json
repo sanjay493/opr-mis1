@@ -6,10 +6,10 @@
   "production_rows": [
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "Oven Pushing(nos/d)",
+      "item_name": "(unmapped) 1 nos total",
       "pdf_label": "i) Nos.(Total)",
-      "status": "ok",
-      "unit": "nos/d",
+      "status": "unmapped",
+      "unit": "T",
       "value": 9751.0
     },
     {
@@ -17,7 +17,7 @@
       "item_name": "Oven Pushing(nos/d)",
       "pdf_label": "ii) Nos. Per Day",
       "status": "ok",
-      "unit": "nos/d",
+      "unit": "nos/day",
       "value": 315.0
     },
     {

@@ -68,9 +68,18 @@ CASES = [
     Case("bsp_oisco_2026-05",
          "excel_extractors.excel_extractor_bsp_oisco",
          "Monthly/BSP/OISCO_MAY26.xlsx", "2026-05"),
+    Case("bsp_flash_pdf_2026-03",
+         "excel_extractors.pdf_extractor_bsp_flash",
+         "Monthly/BSP/flash-mar26.pdf", "2026-03"),
+    Case("bsp_flash_pdf_2026-04",
+         "excel_extractors.pdf_extractor_bsp_flash",
+         "Monthly/BSP/flash-apr26.pdf", "2026-04"),
+    Case("bsp_flash_pdf_2026-05",
+         "excel_extractors.pdf_extractor_bsp_flash",
+         "Monthly/BSP/flash-may26.pdf", "2026-05"),
     Case("bsp_flash_pdf_2026-06",
          "excel_extractors.pdf_extractor_bsp_flash",
-         "Monthly/BSP flash-jun26.pdf", "2026-06"),
+         "Monthly/BSP/flash-jun26.pdf", "2026-06"),
 ]
 
 
