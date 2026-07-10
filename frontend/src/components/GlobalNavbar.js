@@ -35,7 +35,10 @@ export default function GlobalNavbar() {
     {
       label: 'To-Do',
       icon: '✅',
-      link: '/todo'
+      submenu: [
+        { label: 'Upcoming Jobs', link: '/todo', icon: '✅' },
+        { label: 'Daily Work Log', link: '/worklog', icon: '📝' }
+      ]
     }
   ];
 
