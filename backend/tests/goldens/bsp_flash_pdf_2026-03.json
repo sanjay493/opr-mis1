@@ -1,6 +1,6 @@
 {
-  "file_month": "June",
-  "month": "2026-06",
+  "file_month": "March",
+  "month": "2026-03",
   "month_mismatch": false,
   "plant": "BSP",
   "production_rows": [
@@ -10,7 +10,7 @@
       "pdf_label": "COKE OVENS Bat.1-8",
       "status": "ok",
       "unit": "nos/d",
-      "value": 376.0
+      "value": 382.0
     },
     {
       "cell": "PDF p4",
@@ -18,7 +18,7 @@
       "pdf_label": "Eq. Ovens",
       "status": "ok",
       "unit": "nos/d",
-      "value": 786.0
+      "value": 804.0
     },
     {
       "cell": "PDF p4",
@@ -26,7 +26,7 @@
       "pdf_label": "SINTER SP - 2",
       "status": "ok",
       "unit": "'000T",
-      "value": 246.276
+      "value": 267.089
     },
     {
       "cell": "PDF p4",
@@ -34,7 +34,7 @@
       "pdf_label": "Total SP-3",
       "status": "ok",
       "unit": "'000T",
-      "value": 528.324
+      "value": 567.567
     },
     {
       "cell": "PDF p4",
@@ -42,7 +42,7 @@
       "pdf_label": "Total Sinter",
       "status": "ok",
       "unit": "'000T",
-      "value": 774.6
+      "value": 834.656
     },
     {
       "cell": "PDF p4",
@@ -50,7 +50,7 @@
       "pdf_label": "BLAST FURNACE Hot Metal BF: 1-7",
       "status": "ok",
       "unit": "'000T",
-      "value": 270.175
+      "value": 291.415
     },
     {
       "cell": "PDF p4",
@@ -58,7 +58,7 @@
       "pdf_label": "BF: 8",
       "status": "ok",
       "unit": "'000T",
-      "value": 256.264
+      "value": 268.355
     },
     {
       "cell": "PDF p4",
@@ -66,7 +66,7 @@
       "pdf_label": "Total",
       "status": "ok",
       "unit": "'000T",
-      "value": 526.439
+      "value": 559.77
     },
     {
       "cell": "PDF p4",
@@ -74,7 +74,7 @@
       "pdf_label": "Pig Iron",
       "status": "ok",
       "unit": "'000T",
-      "value": 4.655
+      "value": 0.105
     },
     {
       "cell": "PDF p4",
@@ -82,7 +82,7 @@
       "pdf_label": "Total Cast Steel",
       "status": "ok",
       "unit": "'000T",
-      "value": 183.1
+      "value": 208.7
     },
     {
       "cell": "PDF p4",
@@ -90,7 +90,7 @@
       "pdf_label": "Cast Steel Prodn",
       "status": "ok",
       "unit": "'000T",
-      "value": 322.415
+      "value": 327.936
     },
     {
       "cell": "PDF p4",
@@ -98,7 +98,7 @@
       "pdf_label": "Total Crude Steel Production",
       "status": "ok",
       "unit": "'000T",
-      "value": 505.515
+      "value": 536.636
     },
     {
       "cell": "PDF p4",
@@ -106,7 +106,7 @@
       "pdf_label": "Total(Rails &Structurals)",
       "status": "ok",
       "unit": "'000T",
-      "value": 37.309
+      "value": 45.444
     },
     {
       "cell": "PDF p4",
@@ -114,7 +114,7 @@
       "pdf_label": "URM FINISHED Rails",
       "status": "ok",
       "unit": "'000T",
-      "value": 94.788
+      "value": 79.84
     },
     {
       "cell": "PDF p4",
@@ -122,7 +122,7 @@
       "pdf_label": "PRIME RAIL PRODN. RSM",
       "status": "ok",
       "unit": "'000T",
-      "value": 30.16
+      "value": 37.075
     },
     {
       "cell": "PDF p4",
@@ -130,7 +130,7 @@
       "pdf_label": "URM",
       "status": "ok",
       "unit": "'000T",
-      "value": 92.073
+      "value": 77.061
     },
     {
       "cell": "PDF p4",
@@ -138,7 +138,7 @@
       "pdf_label": "MERCHANT MILL PRODN",
       "status": "ok",
       "unit": "'000T",
-      "value": 47.371
+      "value": 57.443
     },
     {
       "cell": "PDF p4",
@@ -146,7 +146,7 @@
       "pdf_label": "WIRE RODS MILL PRODN",
       "status": "ok",
       "unit": "'000T",
-      "value": 36.307
+      "value": 38.445
     },
     {
       "cell": "PDF p4",
@@ -154,7 +154,7 @@
       "pdf_label": "BRM",
       "status": "ok",
       "unit": "'000T",
-      "value": 84.995
+      "value": 95.01
     },
     {
       "cell": "PDF p4",
@@ -162,7 +162,7 @@
       "pdf_label": "Finished Plates",
       "status": "ok",
       "unit": "'000T",
-      "value": 68.816
+      "value": 134.042
     },
     {
       "cell": "PDF p4",
@@ -170,7 +170,7 @@
       "pdf_label": "TOTAL FINISHED STEEL PRODN.",
       "status": "ok",
       "unit": "'000T",
-      "value": 369.586
+      "value": 450.224
     },
     {
       "cell": "PDF p4",
@@ -178,7 +178,7 @@
       "pdf_label": "Total SEMIS",
       "status": "ok",
       "unit": "'000T",
-      "value": 65.825
+      "value": 29.596
     },
     {
       "cell": "PDF p4",
@@ -186,7 +186,7 @@
       "pdf_label": "TOTAL SALEABLE STEEL PRODN.",
       "status": "ok",
       "unit": "'000T",
-      "value": 435.411
+      "value": 479.82
     },
     {
       "cell": "PDF p16",
@@ -202,7 +202,7 @@
       "pdf_label": "BF-4",
       "status": "ok",
       "unit": "'000T",
-      "value": 74.498
+      "value": 79.351
     },
     {
       "cell": "PDF p16",
@@ -218,7 +218,7 @@
       "pdf_label": "BF-6",
       "status": "ok",
       "unit": "'000T",
-      "value": 75.883
+      "value": 88.61
     },
     {
       "cell": "PDF p16",
@@ -226,79 +226,79 @@
       "pdf_label": "BF-7",
       "status": "ok",
       "unit": "'000T",
-      "value": 119.794
+      "value": 123.454
     }
   ],
-  "selected_month": "2026-06",
+  "selected_month": "2026-03",
   "source_type": "BSP Flash Monthly PDF",
   "special_steel_rows": [],
   "stock_rows": [
     {
-      "cell": "PDF p30",
+      "cell": "PDF p29",
       "formula": "Saleable CCS Slabs",
       "item_type": "SLABS",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-07",
+      "stock_month": "2026-04",
       "stock_type": "FOR SALE",
-      "value": 21.584
+      "value": 2.795
     },
     {
-      "cell": "PDF p30",
+      "cell": "PDF p29",
       "formula": "In-Process CCS Slabs",
       "item_type": "SLABS",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-07",
+      "stock_month": "2026-04",
       "stock_type": "INPROCESS",
-      "value": 40.287
+      "value": 12.745
     },
     {
-      "cell": "PDF p30",
+      "cell": "PDF p29",
       "formula": "Saleable Semis - CCS Slabs",
       "item_type": "BLOOM/BILLETS",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-07",
+      "stock_month": "2026-04",
       "stock_type": "FOR SALE",
-      "value": 13.393
+      "value": 13.331
     },
     {
-      "cell": "PDF p30",
+      "cell": "PDF p29",
       "formula": "In-Process Semis - CCS Slabs",
       "item_type": "BLOOM/BILLETS",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-07",
+      "stock_month": "2026-04",
       "stock_type": "INPROCESS",
-      "value": 115.686
+      "value": 102.274
     },
     {
-      "cell": "PDF p30",
+      "cell": "PDF p29",
       "formula": "Total Finished Steel",
       "item_type": "FINISHED STEEL",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-07",
+      "stock_month": "2026-04",
       "stock_type": "",
-      "value": 107.903
+      "value": 82.66
     },
     {
-      "cell": "PDF p30",
+      "cell": "PDF p29",
       "formula": "Pig Iron",
       "item_type": "PIG IRON",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-07",
+      "stock_month": "2026-04",
       "stock_type": "",
-      "value": 5.713
+      "value": 2.725
     }
   ],
   "techno_param_rows": [
     {
-      "actual": 424.3,
+      "actual": 412.0,
       "cell": "PDF p8",
-      "cum_actual": 428.6,
+      "cum_actual": 421.8,
       "file_label": "Coke rate",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -312,9 +312,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 20.2,
+      "actual": 18.0,
       "cell": "PDF p8",
-      "cum_actual": 21.0,
+      "cum_actual": 21.1,
       "file_label": "Nut Coke rate",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -328,9 +328,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 564.4,
+      "actual": 562.6,
       "cell": "PDF p8",
-      "cum_actual": 566.7,
+      "cum_actual": 565.9,
       "file_label": "Total Fuel rate",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -344,9 +344,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 65.8,
+      "actual": 64.0,
       "cell": "PDF p8",
-      "cum_actual": 65.4,
+      "cum_actual": 65.0,
       "file_label": "Sinter in burden",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -360,9 +360,9 @@
       "unit": "%"
     },
     {
-      "actual": 1030.45,
+      "actual": 1025.0,
       "cell": "PDF p8",
-      "cum_actual": 1031.44,
+      "cum_actual": 1029.96,
       "file_label": "SMS - 2 : Hot metal cons",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -376,9 +376,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 75.2,
+      "actual": 80.0,
       "cell": "PDF p8",
-      "cum_actual": 73.61,
+      "cum_actual": 74.87,
       "file_label": "Steel scrap cons",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -392,9 +392,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 1105.65,
+      "actual": 1105.0,
       "cell": "PDF p8",
-      "cum_actual": 1105.05,
+      "cum_actual": 1104.83,
       "file_label": "Total Metallic Input",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -408,9 +408,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 1014.84,
+      "actual": 1030.0,
       "cell": "PDF p8",
-      "cum_actual": 1015.75,
+      "cum_actual": 1012.5,
       "file_label": "SMS - 3 : Hot metal cons",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -424,9 +424,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 83.23,
+      "actual": 68.0,
       "cell": "PDF p8",
-      "cum_actual": 82.33,
+      "cum_actual": 86.0,
       "file_label": "Steel scrap cons",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -440,9 +440,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 1098.07,
+      "actual": 1098.0,
       "cell": "PDF p8",
-      "cum_actual": 1098.09,
+      "cum_actual": 1098.6,
       "file_label": "Total metallic input",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -456,9 +456,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 6.031,
+      "actual": 5.86,
       "cell": "PDF p8",
-      "cum_actual": 6.034,
+      "cum_actual": 6.003,
       "file_label": "Overall energy rate",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -472,9 +472,9 @@
       "unit": "G.Cal/T"
     },
     {
-      "actual": 66.8,
+      "actual": 90.3,
       "cell": "PDF p8",
-      "cum_actual": 71.4,
+      "cum_actual": 83.1,
       "file_label": "- SMS-2 %",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -490,7 +490,7 @@
     {
       "actual": 83.9,
       "cell": "PDF p8",
-      "cum_actual": 81.8,
+      "cum_actual": 82.5,
       "file_label": "- SMS-3 %",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -506,7 +506,7 @@
     {
       "actual": 69.0,
       "cell": "PDF p14",
-      "cum_actual": 69.0,
+      "cum_actual": 68.88,
       "file_label": "BF Coke (dry)",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -522,7 +522,7 @@
     {
       "actual": 2.8,
       "cell": "PDF p14",
-      "cum_actual": 2.8,
+      "cum_actual": 2.92,
       "file_label": "Crude Tar",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -568,25 +568,25 @@
       "unit": "%"
     },
     {
+      "actual": 1.59,
+      "cell": "PDF p15",
+      "cum_actual": 1.74,
+      "file_label": "Basicity",
+      "found_via": "flash-pdf",
+      "group_code": "COKE_SINTER",
+      "parameter": "Basicity",
+      "plant": "BSP",
+      "section": "Sinter Plant SP-2",
+      "sort_order": 0,
+      "status": "ok",
+      "t_key": "basicity",
+      "t_unit": "SP-2",
+      "unit": ""
+    },
+    {
       "actual": 1.85,
       "cell": "PDF p15",
-      "cum_actual": 1.83,
-      "file_label": "Basicity",
-      "found_via": "flash-pdf",
-      "group_code": "COKE_SINTER",
-      "parameter": "Basicity",
-      "plant": "BSP",
-      "section": "Sinter Plant SP-2",
-      "sort_order": 0,
-      "status": "ok",
-      "t_key": "basicity",
-      "t_unit": "SP-2",
-      "unit": ""
-    },
-    {
-      "actual": 1.97,
-      "cell": "PDF p15",
-      "cum_actual": 1.92,
+      "cum_actual": 1.88,
       "file_label": "Basicity",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -600,9 +600,9 @@
       "unit": ""
     },
     {
-      "actual": 1.235,
+      "actual": 1.233,
       "cell": "PDF p15",
-      "cum_actual": 1.225,
+      "cum_actual": 1.192,
       "file_label": "Productivity",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -616,9 +616,9 @@
       "unit": "T/m²/hr"
     },
     {
-      "actual": 1.159,
+      "actual": 1.16,
       "cell": "PDF p15",
-      "cum_actual": 1.157,
+      "cum_actual": 1.131,
       "file_label": "Productivity",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -632,9 +632,9 @@
       "unit": "T/m²/hr"
     },
     {
-      "actual": 98.2,
+      "actual": 96.7,
       "cell": "PDF p15",
-      "cum_actual": 97.8,
+      "cum_actual": 96.5,
       "file_label": "Machine Availaiblity",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -648,9 +648,9 @@
       "unit": "%"
     },
     {
-      "actual": 97.7,
+      "actual": 98.1,
       "cell": "PDF p15",
-      "cum_actual": 96.6,
+      "cum_actual": 95.6,
       "file_label": "Machine Availaiblity",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -664,9 +664,9 @@
       "unit": "%"
     },
     {
-      "actual": 92.5,
+      "actual": 98.7,
       "cell": "PDF p15",
-      "cum_actual": 95.5,
+      "cum_actual": 93.0,
       "file_label": "Machine Utilisation",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -680,9 +680,9 @@
       "unit": "%"
     },
     {
-      "actual": 95.3,
+      "actual": 98.5,
       "cell": "PDF p15",
-      "cum_actual": 94.8,
+      "cum_actual": 93.5,
       "file_label": "Machine Utilisation",
       "found_via": "flash-pdf",
       "group_code": "COKE_SINTER",
@@ -696,9 +696,9 @@
       "unit": "%"
     },
     {
-      "actual": 2.03,
+      "actual": 1.92,
       "cell": "PDF p16",
-      "cum_actual": 1.99,
+      "cum_actual": null,
       "file_label": "Productivity BF-7",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -712,9 +712,9 @@
       "unit": "T/m³/day"
     },
     {
-      "actual": 2.48,
+      "actual": 2.51,
       "cell": "PDF p16",
-      "cum_actual": 2.44,
+      "cum_actual": null,
       "file_label": "Productivity BF-8",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -728,9 +728,9 @@
       "unit": "T/m³/day"
     },
     {
-      "actual": 2.11,
+      "actual": 2.13,
       "cell": "PDF p16",
-      "cum_actual": 2.1,
+      "cum_actual": null,
       "file_label": "Productivity BF-1-8",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -744,9 +744,9 @@
       "unit": "T/m³/day"
     },
     {
-      "actual": 95.6,
+      "actual": 108.1,
       "cell": "PDF p16",
-      "cum_actual": 95.9,
+      "cum_actual": null,
       "file_label": "Cdi BF-4",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -776,9 +776,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 99.8,
+      "actual": 108.3,
       "cell": "PDF p16",
-      "cum_actual": 97.0,
+      "cum_actual": null,
       "file_label": "Cdi BF-6",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -792,9 +792,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 104.7,
+      "actual": 110.1,
       "cell": "PDF p16",
-      "cum_actual": 104.4,
+      "cum_actual": null,
       "file_label": "Cdi BF-7",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -808,9 +808,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 139.9,
+      "actual": 131.3,
       "cell": "PDF p16",
-      "cum_actual": 136.4,
+      "cum_actual": null,
       "file_label": "Cdi BF-8",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -824,9 +824,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 119.8,
+      "actual": 119.7,
       "cell": "PDF p16",
-      "cum_actual": 117.1,
+      "cum_actual": null,
       "file_label": "Cdi BF-1-8",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -840,9 +840,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 541.0,
+      "actual": 540.0,
       "cell": "PDF p16",
-      "cum_actual": 542.0,
+      "cum_actual": null,
       "file_label": "Slag Rate BF-1-8",
       "found_via": "flash-pdf",
       "group_code": "IRON_MAKING",
@@ -856,9 +856,9 @@
       "unit": "Kg/THM"
     },
     {
-      "actual": 94.8,
+      "actual": 80.8,
       "cell": "PDF p17",
-      "cum_actual": 92.5,
+      "cum_actual": 76.3,
       "file_label": "Converter Utilisation (%of Avl Hrs)",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -872,9 +872,9 @@
       "unit": "% Avail hr"
     },
     {
-      "actual": 19.2,
+      "actual": 18.5,
       "cell": "PDF p17",
-      "cum_actual": 18.3,
+      "cum_actual": 18.1,
       "file_label": "Si Mn",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -888,9 +888,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 1.5,
+      "actual": 1.7,
       "cell": "PDF p17",
-      "cum_actual": 1.4,
+      "cum_actual": 1.6,
       "file_label": "Fe Si",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -904,9 +904,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 52.7,
+      "actual": 54.82,
       "cell": "PDF p17",
-      "cum_actual": 53.19,
+      "cum_actual": 54.8,
       "file_label": "TAP TO TAP TIME",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -920,10 +920,10 @@
       "unit": "Min"
     },
     {
-      "actual": 118.1,
+      "actual": 117.8,
       "cell": "PDF p17",
-      "cum_actual": 117.9,
-      "file_label": "AV. WT./BLOW (T)(Excl. RET. \\LOSS ) 118.1 117.9 120.4",
+      "cum_actual": 119.1,
+      "file_label": "AV. WT./BLOW (T)(Excl. RET. \\LOSS ) 117.8 119.1 118.5",
       "found_via": "flash-pdf",
       "group_code": "SMS",
       "parameter": "Average Heat Weight",
@@ -936,9 +936,9 @@
       "unit": "T"
     },
     {
-      "actual": 89.7,
+      "actual": 87.6,
       "cell": "PDF p18",
-      "cum_actual": 88.1,
+      "cum_actual": 85.1,
       "file_label": "Converter Utilisation (%of Avl Hrs)",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -952,9 +952,9 @@
       "unit": "% Avail hr"
     },
     {
-      "actual": 15.5,
+      "actual": 15.7,
       "cell": "PDF p18",
-      "cum_actual": 15.9,
+      "cum_actual": 14.7,
       "file_label": "Si Mn",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -968,9 +968,9 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 2.1,
+      "actual": 2.4,
       "cell": "PDF p18",
-      "cum_actual": 2.3,
+      "cum_actual": 2.5,
       "file_label": "Fe Si",
       "found_via": "flash-pdf",
       "group_code": "SMS",
@@ -984,10 +984,10 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 0.2,
+      "actual": 0.4,
       "cell": "PDF p18",
-      "cum_actual": 0.2,
-      "file_label": "Fe Mn",
+      "cum_actual": 0.1,
+      "file_label": "Fe Mn(HC)",
       "found_via": "flash-pdf",
       "group_code": "SMS",
       "parameter": "Fe-Mn Consumption",
@@ -1000,10 +1000,10 @@
       "unit": "Kg/TCS"
     },
     {
-      "actual": 49.6,
+      "actual": 50.4,
       "cell": "PDF p18",
-      "cum_actual": 50.0,
-      "file_label": "Tap to Tap time (Min.) 49.6 50.0 52.7",
+      "cum_actual": 51.5,
+      "file_label": "Tap to Tap time (Min.) 50.4 51.5 51.6",
       "found_via": "flash-pdf",
       "group_code": "SMS",
       "parameter": "Tap to Tap Time",
@@ -1016,10 +1016,10 @@
       "unit": "Min"
     },
     {
-      "actual": 168.1,
+      "actual": 168.3,
       "cell": "PDF p18",
-      "cum_actual": 168.1,
-      "file_label": "Avg. heat wt./Blows (T) 168.1 168.1 167.8",
+      "cum_actual": 167.9,
+      "file_label": "Avg. heat wt./Blows (T) 168.3 167.9 166.6",
       "found_via": "flash-pdf",
       "group_code": "SMS",
       "parameter": "Average Heat Weight",
@@ -1032,10 +1032,10 @@
       "unit": "T"
     },
     {
-      "actual": 297.0,
+      "actual": 296.0,
       "cell": "PDF p18",
-      "cum_actual": 959.0,
-      "file_label": "Heats thro' Desulphurisation unit (Nos) 297 959",
+      "cum_actual": 3204.0,
+      "file_label": "Heats thro' Desulphurisation unit (Nos) 296 3204",
       "found_via": "flash-pdf",
       "group_code": "SMS",
       "parameter": "DS Heats",
@@ -1048,7 +1048,7 @@
       "unit": "Nos."
     },
     {
-      "actual": 87.8,
+      "actual": 86.0,
       "cell": "PDF p19",
       "cum_actual": 87.4,
       "file_label": "Yield (As Finished)",
@@ -1064,9 +1064,9 @@
       "unit": "%"
     },
     {
-      "actual": 97.2,
+      "actual": 96.9,
       "cell": "PDF p19",
-      "cum_actual": 98.8,
+      "cum_actual": 95.8,
       "file_label": "Mill Availability",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1080,9 +1080,9 @@
       "unit": "%"
     },
     {
-      "actual": 70.3,
+      "actual": 75.3,
       "cell": "PDF p19",
-      "cum_actual": 71.6,
+      "cum_actual": 74.6,
       "file_label": "Mill Utilisation (as % of avail. Hrs)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1096,9 +1096,9 @@
       "unit": "%"
     },
     {
-      "actual": 79.6,
+      "actual": 87.3,
       "cell": "PDF p19",
-      "cum_actual": 82.8,
+      "cum_actual": 82.5,
       "file_label": "Rolling Rate (w.r.t. Hot-Saw Production)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1112,9 +1112,9 @@
       "unit": "T/Hr"
     },
     {
-      "actual": 807.0,
+      "actual": 842.0,
       "cell": "PDF p19",
-      "cum_actual": 777.9,
+      "cum_actual": 789.3,
       "file_label": "Heat Consump./ T of Blooms Rolled",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1128,9 +1128,9 @@
       "unit": "103Kcal/T"
     },
     {
-      "actual": 83.2,
+      "actual": 73.1,
       "cell": "PDF p19",
-      "cum_actual": 79.2,
+      "cum_actual": 77.3,
       "file_label": "Power Consump./ T of Hot - Saw",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1144,9 +1144,9 @@
       "unit": "Kwh/T"
     },
     {
-      "actual": 93.3,
+      "actual": 93.4,
       "cell": "PDF p20",
-      "cum_actual": 93.0,
+      "cum_actual": 92.3,
       "file_label": "Yield (As Finished)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1160,9 +1160,9 @@
       "unit": "%"
     },
     {
-      "actual": 98.3,
+      "actual": 98.4,
       "cell": "PDF p20",
-      "cum_actual": 89.6,
+      "cum_actual": 95.6,
       "file_label": "Mill Availability",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1176,9 +1176,9 @@
       "unit": "%"
     },
     {
-      "actual": 81.2,
+      "actual": 66.4,
       "cell": "PDF p20",
-      "cum_actual": 78.3,
+      "cum_actual": 70.9,
       "file_label": "Mill Utilisation (% of avail. Hrs)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1192,9 +1192,9 @@
       "unit": "%"
     },
     {
-      "actual": 168.6,
+      "actual": 168.4,
       "cell": "PDF p20",
-      "cum_actual": 168.7,
+      "cum_actual": 164.2,
       "file_label": "Rolling Rate (w.r.t.Hot-Saw 3)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1208,9 +1208,9 @@
       "unit": "T/Hr"
     },
     {
-      "actual": 299.0,
+      "actual": 337.0,
       "cell": "PDF p20",
-      "cum_actual": 310.0,
+      "cum_actual": 323.9,
       "file_label": "Heat Consump / Blooms Rolled",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1224,9 +1224,9 @@
       "unit": "103Kcal/T"
     },
     {
-      "actual": 75.9,
+      "actual": 83.6,
       "cell": "PDF p20",
-      "cum_actual": 80.3,
+      "cum_actual": 82.0,
       "file_label": "Power Consump. / T Hot-Saw3 Prodn",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1240,7 +1240,7 @@
       "unit": "Kwh/T"
     },
     {
-      "actual": 98.174,
+      "actual": 98.164,
       "cell": "PDF p21",
       "cum_actual": 98.2,
       "file_label": "Yield",
@@ -1256,9 +1256,9 @@
       "unit": "%"
     },
     {
-      "actual": 91.9,
+      "actual": 92.7,
       "cell": "PDF p21",
-      "cum_actual": 91.4,
+      "cum_actual": 92.8,
       "file_label": "Mill Availability",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1272,9 +1272,9 @@
       "unit": "%"
     },
     {
-      "actual": 84.9,
+      "actual": 88.7,
       "cell": "PDF p21",
-      "cum_actual": 86.3,
+      "cum_actual": 86.5,
       "file_label": "Mill Utilisation (as % of avail. Hrs)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1288,9 +1288,9 @@
       "unit": "%"
     },
     {
-      "actual": 84.3,
+      "actual": 93.8,
       "cell": "PDF p21",
-      "cum_actual": 91.6,
+      "cum_actual": 91.2,
       "file_label": "Rolling Rate (w.r.t. Finished)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1304,9 +1304,9 @@
       "unit": "T/Hr"
     },
     {
-      "actual": 643.0,
+      "actual": 618.0,
       "cell": "PDF p21",
-      "cum_actual": 633.0,
+      "cum_actual": 686.0,
       "file_label": "Heat Consump./ T of Billet rolled",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1320,9 +1320,9 @@
       "unit": "103Kcal/T"
     },
     {
-      "actual": 54.2,
+      "actual": 51.6,
       "cell": "PDF p21",
-      "cum_actual": 53.9,
+      "cum_actual": 52.7,
       "file_label": "Power Consump./ T of Finished",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1336,9 +1336,9 @@
       "unit": "Kwh/T"
     },
     {
-      "actual": 96.85,
+      "actual": 95.8,
       "cell": "PDF p22",
-      "cum_actual": 96.73,
+      "cum_actual": 95.25,
       "file_label": "Yield",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1352,9 +1352,9 @@
       "unit": "%"
     },
     {
-      "actual": 96.67,
+      "actual": 97.31,
       "cell": "PDF p22",
-      "cum_actual": 82.51,
+      "cum_actual": 96.47,
       "file_label": "Mill Availability",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1368,9 +1368,9 @@
       "unit": "%"
     },
     {
-      "actual": 78.57,
+      "actual": 79.67,
       "cell": "PDF p22",
-      "cum_actual": 76.55,
+      "cum_actual": 81.5,
       "file_label": "Mill Utilisation (as % of avail. Hrs)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1384,9 +1384,9 @@
       "unit": "%"
     },
     {
-      "actual": 66.4,
+      "actual": 66.65,
       "cell": "PDF p22",
-      "cum_actual": 66.58,
+      "cum_actual": 63.82,
       "file_label": "Rolling Rate (w.r.t. Finished)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1400,9 +1400,9 @@
       "unit": "T/Hr"
     },
     {
-      "actual": 507.01,
+      "actual": 494.0,
       "cell": "PDF p22",
-      "cum_actual": 501.56,
+      "cum_actual": 510.65,
       "file_label": "Heat Consump./ T of Billet Rolled",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1416,9 +1416,9 @@
       "unit": "103Kcal/T"
     },
     {
-      "actual": 102.96,
+      "actual": 104.0,
       "cell": "PDF p22",
-      "cum_actual": 107.46,
+      "cum_actual": 107.09,
       "file_label": "Power Consump./ T of Finished",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1448,9 +1448,9 @@
       "unit": "%"
     },
     {
-      "actual": 89.5,
+      "actual": 94.1,
       "cell": "PDF p23",
-      "cum_actual": 92.5,
+      "cum_actual": 91.7,
       "file_label": "Mill Availability",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1464,9 +1464,9 @@
       "unit": "%"
     },
     {
-      "actual": 84.6,
+      "actual": 85.7,
       "cell": "PDF p23",
-      "cum_actual": 82.1,
+      "cum_actual": 83.1,
       "file_label": "Mill Utilisation (as % of avail. Hrs)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1480,9 +1480,9 @@
       "unit": "%"
     },
     {
-      "actual": 155.8,
+      "actual": 158.4,
       "cell": "PDF p23",
-      "cum_actual": 156.5,
+      "cum_actual": 158.2,
       "file_label": "Rolling Rate (w.r.t. Finished)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1496,9 +1496,9 @@
       "unit": "T/Hr"
     },
     {
-      "actual": 92.2,
+      "actual": 91.1,
       "cell": "PDF p24",
-      "cum_actual": 92.1,
+      "cum_actual": 90.1,
       "file_label": "Yield",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1512,9 +1512,9 @@
       "unit": "%"
     },
     {
-      "actual": 73.5,
+      "actual": 96.9,
       "cell": "PDF p24",
-      "cum_actual": 87.7,
+      "cum_actual": 91.9,
       "file_label": "Mill Availability",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1528,9 +1528,9 @@
       "unit": "%"
     },
     {
-      "actual": 65.6,
+      "actual": 88.8,
       "cell": "PDF p24",
-      "cum_actual": 82.1,
+      "cum_actual": 82.8,
       "file_label": "Mill Utilisation (as % of avail. Hrs)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1544,9 +1544,9 @@
       "unit": "%"
     },
     {
-      "actual": 215.1,
+      "actual": 229.7,
       "cell": "PDF p24",
-      "cum_actual": 217.0,
+      "cum_actual": 208.2,
       "file_label": "Rolling Rate (w.r.t. slab rolled)",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1560,9 +1560,9 @@
       "unit": "T/Hr"
     },
     {
-      "actual": 459.0,
+      "actual": 395.5,
       "cell": "PDF p24",
-      "cum_actual": 434.9,
+      "cum_actual": 429.4,
       "file_label": "Heat Consump./ T of slab rolled",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",
@@ -1576,9 +1576,9 @@
       "unit": "103Kcal/T"
     },
     {
-      "actual": 108.2,
+      "actual": 71.3,
       "cell": "PDF p24",
-      "cum_actual": 83.7,
+      "cum_actual": 83.0,
       "file_label": "Power Consump./ T of Finished",
       "found_via": "flash-pdf",
       "group_code": "MILL_BSP",

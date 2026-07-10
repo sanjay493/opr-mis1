@@ -72,6 +72,9 @@ _SALEABLE_MAP_DEFAULT = [
 def _load_maps():
     """Load item maps from config; fall back to defaults if config absent."""
     try:
+        import os
+        import sys
+        sys.path.insert(0, os.path.dirname(__file__))
         from cells_loader import get_extractor_config
         cfg = get_extractor_config("dsp_pdf")
         raw_item = cfg.get("item_map")

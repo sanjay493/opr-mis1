@@ -144,7 +144,8 @@ _PAGE_ANCHORS = {
     # 2nd anchor keeps the CONTENTS page (which lists the same headings)
     # from being mistaken for the data page.
     "production": (["PRODUCTION PERFORMANCE SUMMARY"],
-                   ["TOTAL SALEABLE STEEL PRODN"]),
+                   ["TOTAL SALEABLE STEEL PRODN",
+                    "TOTAL SALEABLE STEEL PRODUCTION"]),
     "key_techno": (["KEY TECHNO-ECONOMIC INDICES"], ["IMPORT COAL IN BLEND"]),
     "coke":       (["COKE OVENS"], ["YIELD FROM DRY CHARGE"]),
     "sinter":     (["SINTERING PLANTS"], ["OPERATIONAL CHARACTERISTICS"]),
@@ -166,6 +167,13 @@ def _build_page_index(pages_text: List[str]) -> Dict[str, int]:
     idx: Dict[str, int] = {}
     for pno, text in enumerate(pages_text):
         up = (text or "").upper()
+        # Some months insert an extra "BEST EVER / ACHIEVED FOR A YEAR"
+        # techno-economic appendix ahead of the real per-department pages.
+        # It repeats every section heading (BLAST FURNACES, MERCHANT MILL,
+        # MILL AVAILABILITY, ...) as plain prose, so it must never be
+        # mistaken for the actual data page.
+        if "ACHIEVED" in up and "FOR A YEAR" in up:
+            continue
         for key, (need_all, need_any) in _PAGE_ANCHORS.items():
             if key in idx:
                 continue
@@ -203,9 +211,9 @@ _PROD_MAP: List[Tuple[str, str, bool]] = [
     (r"WIRE\s+RODS?\s+MILL\s+PRODN",           "WIRERODS",               True),
     (r"^BRM\b",                                "BARS&RODMILL",           True),
     (r"Finished\s+Plates",                     "PLATEMILL",              True),
-    (r"TOTAL\s+FINISHED\s+STEEL\s+PRODN",      "Finished Steel",         True),
+    (r"TOTAL\s+FINISHED\s+(?:STEEL\s+)?PROD(?:N\.?|UCTION)", "Finished Steel", True),
     (r"Total\s+SEMIS",                         "Saleable Semis",         True),
-    (r"TOTAL\s+SALEABLE\s+STEEL\s+PRODN",      "Saleable Steel",         True),
+    (r"TOTAL\s+SALEABLE\s+STEEL\s+PROD(?:N\.?|UCTION)", "Saleable Steel", True),
 ]
 
 
@@ -659,7 +667,13 @@ def _parse_sms_page(tables, text: str, page_no: int, shop: str,
             nums = _nums(ln[m.end():])
             if not nums and li + 1 < len(lines):     # values on the next line
                 nums = _nums(lines[li + 1])
-            if len(nums) > max(n_month, n_cum):
+            if len(nums) == 1:
+                # April (FY month 1): month == cum, some rows print it once.
+                rows.append(_techno_row("SMS", shop, param, unit,
+                                        nums[0], nums[0],
+                                        f"PDF p{page_no + 1}", ln[:60],
+                                        t_unit, t_key))
+            elif len(nums) > max(n_month, n_cum):
                 rows.append(_techno_row("SMS", shop, param, unit,
                                         nums[n_month], nums[n_cum],
                                         f"PDF p{page_no + 1}", ln[:60],
@@ -781,7 +795,7 @@ def _parse_stock(text: str, page_no: int, report_month: str) -> List[Dict[str, A
     # second ':CCS Slabs' occurrence = the In-Process section
     slabs_wip, _ = _last_num(r":?\s*CCS\s+Slabs", occurrence=2)
     semis_wip, _ = _last_num(r"Total\s+In-Process\s+Semis")
-    pig_iron, _ = _last_num(r"^\d*\s*Pig\s+Iron")
+    pig_iron, _ = _last_num(r"^\d*\.?\s*Pig\s+Iron")
 
     def _t(v):
         return round(v / 1000.0, 3) if v is not None else None
