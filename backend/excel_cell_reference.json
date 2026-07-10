@@ -10671,13 +10671,13 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "CRC&S(1&2)",
-    "cell_ref": "E10",
+    "cell_ref": "Z9 + Z10",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
     "configurable": true,
     "config_key": "bsl_dpr",
-    "notes": "Single shared helper _dpr_config() used by both save and preview paths (fixed after a prior bug where preview drifted from a config fix — see excel_cells_config.json section bsl_dpr)."
+    "notes": "Derived via config 'derived' rules, op=add, summing Z9 and Z10."
   },
   {
     "plant": "BSL",
@@ -10686,7 +10686,7 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "CRC(3)",
-    "cell_ref": "E11",
+    "cell_ref": "Z15",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
@@ -10701,7 +10701,7 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "CRSALE",
-    "cell_ref": "E29",
+    "cell_ref": "Z18",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
@@ -10716,7 +10716,7 @@
     "function": "_dpr_config derived rule",
     "sheet": "DPR",
     "item_name": "Finished Steel",
-    "cell_ref": "P31 - E32",
+    "cell_ref": "O31 - Z19",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
@@ -10731,13 +10731,13 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "GP/GC",
-    "cell_ref": "E12",
+    "cell_ref": "Z11 + Z12 + Z13",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
     "configurable": true,
     "config_key": "bsl_dpr",
-    "notes": "Single shared helper _dpr_config() used by both save and preview paths (fixed after a prior bug where preview drifted from a config fix — see excel_cells_config.json section bsl_dpr)."
+    "notes": "Derived via config 'derived' rules, op=add, summing Z11, Z12 and Z13."
   },
   {
     "plant": "BSL",
@@ -10746,7 +10746,7 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "GPC3",
-    "cell_ref": "E13",
+    "cell_ref": "Z16",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
@@ -10761,7 +10761,7 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "HR Sheet",
-    "cell_ref": "E9",
+    "cell_ref": "Z8",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
@@ -10776,7 +10776,7 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "HSM HR Coil (Sale)",
-    "cell_ref": "E7",
+    "cell_ref": "Z6",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
@@ -10791,7 +10791,7 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "HSM HR Plate",
-    "cell_ref": "E8",
+    "cell_ref": "Z7",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
@@ -10857,7 +10857,7 @@
     "conversion": "/1000",
     "configurable": true,
     "config_key": "bsl_dpr",
-    "notes": "Single shared helper _dpr_config() used by both save and preview paths (fixed after a prior bug where preview drifted from a config fix — see excel_cells_config.json section bsl_dpr)."
+    "notes": "Single shared helper _dpr_config() used by both save and preview paths. Z21 is the CUM column under the PRODUCTION (SALEABLE STEEL) section (W3); E30 is a different figure under the DESPATCH section (B19) and must not be used."
   },
   {
     "plant": "BSL",
@@ -10926,13 +10926,13 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "Saleable Semis",
-    "cell_ref": "E32",
+    "cell_ref": "Z19",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
     "configurable": true,
     "config_key": "bsl_dpr",
-    "notes": "Single shared helper _dpr_config() used by both save and preview paths (fixed after a prior bug where preview drifted from a config fix — see excel_cells_config.json section bsl_dpr)."
+    "notes": "Z19 is the CUM column under the PRODUCTION (SALEABLE STEEL) section (W3), row labeled SLAB — same production block Pig Iron (Z21) comes from. E32 was the despatch-side SLAB figure (DESPATCH section, B19) and must not be used."
   },
   {
     "plant": "BSL",
@@ -10941,13 +10941,13 @@
     "function": "_dpr_config (shared by _extract_dpr_report & _extract_dpr_preview)",
     "sheet": "DPR",
     "item_name": "Saleable Steel",
-    "cell_ref": "P31",
+    "cell_ref": "O31",
     "ref_type": "a1",
     "unit": "'000T",
     "conversion": "/1000",
     "configurable": true,
     "config_key": "bsl_dpr",
-    "notes": "Single shared helper _dpr_config() used by both save and preview paths (fixed after a prior bug where preview drifted from a config fix — see excel_cells_config.json section bsl_dpr)."
+    "notes": "O31 is the CUM column (not the P31 M.RATE column) in the PRODUCTION:-(MAIN UNITS) table, row SAL.STEEL(P). CUM and M.RATE usually match but can diverge (see e.g. row 6 Ovens Pushed, row 14 HSM H.R.Coil), so CUM is the safer canonical figure."
   },
   {
     "plant": "BSL",
