@@ -1,8 +1,9 @@
 import json
+import re
 from datetime import datetime, time
 from pathlib import Path
 from openpyxl import load_workbook
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 _MONTH_ABBRS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
 _MONTH_NUM_TO_ABBR = {
@@ -27,6 +28,7 @@ class IspTechnoExtractor:
         self.report_month = report_month
         self.workbook = None
         self.hardcoded_map = self._load_hardcoded_map()
+        self.row_labels = self._load_row_labels()
         self.month_col = None
         self.header_row = None
 
@@ -39,6 +41,64 @@ class IspTechnoExtractor:
         except FileNotFoundError:
             print(f"Error: isp_technopara_map.json not found at {map_path}!")
             return {}
+
+    def _load_row_labels(self) -> Dict:
+        """Load the companion {sheet: {unit: {param_key: expected column-B
+        label}}} file used to verify/self-heal isp_technopara_map.json's
+        hardcoded row numbers against future report-template row shifts.
+        Covers only the simple (non-expression) row specs — see
+        _verified_row(). Missing file/entries just disable verification,
+        never break extraction."""
+        labels_path = Path(__file__).parent / "isp_technopara_row_labels.json"
+        try:
+            with open(labels_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return {}
+
+    @staticmethod
+    def _norm_label(s) -> str:
+        return re.sub(r"\s+", " ", str(s or "")).strip().lower()
+
+    def _find_label_row(self, ws, label: str, near_row: int, window: int = 20) -> Optional[int]:
+        """Scan column B for `label` (case-insensitive substring), searching
+        outward from `near_row` first within +/-`window` rows (bounded to the
+        sheet), so a shift is found nearby rather than matching a same-named
+        parameter in a distant, unrelated section (e.g. COB-old vs COB-new
+        both have a 'BF Coke'/'Sp Heat Cons' row)."""
+        lc = self._norm_label(label)
+        if not lc:
+            return None
+        lo = max(1, near_row - window)
+        hi = min(ws.max_row, near_row + window)
+        for offset in range(0, window + 1):
+            for r in ({near_row - offset, near_row + offset} if offset else {near_row}):
+                if lo <= r <= hi and lc in self._norm_label(ws.cell(row=r, column=2).value):
+                    return r
+        return None
+
+    def _verified_row(self, ws, sheet_name: str, unit_name: str, param_key: str, configured_row: int) -> int:
+        """Return the row to actually read for (sheet, unit, param_key):
+        the configured row if its column-B label still matches, the nearby
+        row the label moved to if not, or the configured row unchanged (with
+        a warning) if the label can't be found anywhere nearby. Only called
+        for simple int/numeric-string row specs — expression-based specs
+        (e.g. '17/8', '(134+135+136)/3') are left untouched."""
+        expected = (self.row_labels.get(sheet_name, {}).get(unit_name, {}).get(param_key))
+        if not expected:
+            return configured_row
+        actual_label = ws.cell(row=configured_row, column=2).value
+        if self._norm_label(expected) in self._norm_label(actual_label):
+            return configured_row
+        found = self._find_label_row(ws, expected, configured_row)
+        if found:
+            print(f"Warning: '{sheet_name}/{unit_name}/{param_key}' row shifted "
+                  f"{configured_row} -> {found} (label '{expected}')")
+            return found
+        print(f"Warning: '{sheet_name}/{unit_name}/{param_key}' expected label "
+              f"'{expected}' not found near row {configured_row} — using "
+              f"configured row unverified (got {actual_label!r})")
+        return configured_row
 
     @staticmethod
     def _clean_value(val):
@@ -172,7 +232,7 @@ class IspTechnoExtractor:
             return multipliers[sheet_name][param_key]
         return 1.0
 
-    def _extract_from_sheet(self, sheet_name: str, unit_params: Dict) -> Dict:
+    def _extract_from_sheet(self, sheet_name: str, unit_name: str, unit_params: Dict) -> Dict:
         """Extract techno data from a single sheet for both month and till_month."""
         if sheet_name not in self.workbook.sheetnames:
             print(f"Sheet '{sheet_name}' not found")
@@ -241,7 +301,7 @@ class IspTechnoExtractor:
                         till_val = self._evaluate_row_expression(ws, row_spec, cum_col) if cum_col else None
                     else:
                         # Simple row number as string
-                        row_num = int(row_spec)
+                        row_num = self._verified_row(ws, sheet_name, unit_name, param_key, int(row_spec))
                         row = list(ws.iter_rows(
                             min_row=row_num, max_row=row_num, values_only=True
                         ))[0]
@@ -249,7 +309,7 @@ class IspTechnoExtractor:
                         till_val = row[cum_col] if cum_col and cum_col < len(row) else None
                 else:
                     # Integer row number
-                    row_num = row_spec
+                    row_num = self._verified_row(ws, sheet_name, unit_name, param_key, row_spec)
                     row = list(ws.iter_rows(
                         min_row=row_num, max_row=row_num, values_only=True
                     ))[0]
@@ -320,7 +380,7 @@ class IspTechnoExtractor:
             print(f"\nProcessing sheet: '{sheet_name}'")
 
             for unit_name, unit_params in sheet_units.items():
-                data = self._extract_from_sheet(sheet_name, unit_params)
+                data = self._extract_from_sheet(sheet_name, unit_name, unit_params)
 
                 if data and any(v is not None for v in data["month"].values()):
                     records.append({
@@ -329,9 +389,9 @@ class IspTechnoExtractor:
                         "unit": unit_name,
                         "techno_json": data,
                     })
-                    print(f"  ✓ Extracted: {unit_name}")
+                    print(f"  OK Extracted: {unit_name}")
                 else:
-                    print(f"  ✗ No data for: {unit_name}")
+                    print(f"  -- No data for: {unit_name}")
 
         print(f"\nExtraction Completed. Total Records: {len(records)}")
         return records
