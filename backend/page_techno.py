@@ -1805,14 +1805,13 @@ _TECHNO_DB_SCHEMA = {
         # SMS-II used to be listed here by mistake; those are Iron Making/
         # SMS shops, not mills, and already have their own pages: 29 and 30.)
         #
-        # "CRM 1&2" and "CRM 3" are each actually a complex of independently
-        # -operated sub-machines (Pickling Line, Tandem Mill, Skin Pass Mill,
-        # CRCF, HDGL, DCR, Slitting Line for 1&2; PLTCM, SPM, TLIL, HDGL for
-        # 3) — confirmed against the source, no complex-wide Availability/
-        # Utilisation/Rolling Rate figure exists at all, only the overall
-        # "Yield of HR Coil" summary kept below. Each sub-machine gets its
-        # own section below, matching only the parameters it actually
-        # reports (see excel_extractors/excel_extractor_bsl.py's _CRM_ROWS).
+        # CRM 1&2 and CRM 3 are each a complex of several independently
+        # -operated sub-machines with no complex-wide Availability/
+        # Utilisation/Rolling Rate figure of their own — per direct user
+        # instruction, only these specific named figures are surfaced, all
+        # under the CRM 1&2 / CRM 3 row itself (not as separate per-sub-
+        # machine rows). See excel_extractors/excel_extractor_bsl.py's
+        # _CRM_ROWS for the extraction side.
         "type": "mill",
         "plant": "BSL",
         "sections": [
@@ -1826,100 +1825,18 @@ _TECHNO_DB_SCHEMA = {
             ]),
             ("CRM 1&2", [
                 ("Yield of HR Coil",  "yield_of_hr_coil",  "%"),
-            ]),
-            ("Pickling Line-I", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Acid Consumption",  "acid_consumption",  "kg/t"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("Pickling Line-II", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Acid Consumption",  "acid_consumption",  "kg/t"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("Tandem Mill-I", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("Tandem Mill-II", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("Annealing Furnace", [
-                ("Rolling Rate",      "rolling_rate",      "t/hr/base"),
-            ]),
-            ("Skin Pass Mill-I", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("Skin Pass Mill-II", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("CRCF", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("HDGL-1&2", [
-                ("Yield",             "yield",             "%"),
-                ("Zinc Consumption",  "zinc_consumption",  "kg/t"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("DCR", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("Slitting Line-II", [
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
+                ("TM-1 Utilisation",  "tm_1_utilisation",  "%"),
+                ("TM-2 Utilisation",  "tm_2_utilisation",  "%"),
             ]),
             ("CRM 3", [
-                ("Yield of HR Coil",     "yield_of_hr_coil",         "%"),
-                ("Sp. Heat Consmn.",     "sp_heat_consumption",      "M.Cal/T"),
-                ("Sp. Power Consmn.",    "sp_power_consumption",     "kWh/t"),
-            ]),
-            ("PLTCM", [
-                ("Yield",             "yield",             "%"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Acid Consumption",  "acid_consumption",  "kg/t"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
-            ]),
-            ("SPM", [
-                ("Yield",                        "yield",                        "%"),
-                ("Yield of CR Coil from HR Coil", "yield_of_cr_coil_from_hr_coil", "%"),
-                ("Rolling Rate",                  "rolling_rate",                 "t/hr"),
-                ("Availability",                  "availability",                "%"),
-                ("Utilisation",                   "utilisation",                 "%"),
-            ]),
-            ("TLIL", [
-                ("Yield",             "yield",             "%"),
-            ]),
-            ("HDGL-3", [
-                ("Yield",             "yield",             "%"),
-                ("Zinc Consumption",  "zinc_consumption",  "kg/t"),
-                ("Rolling Rate",      "rolling_rate",      "t/hr"),
-                ("Availability",      "availability",      "%"),
-                ("Utilisation",       "utilisation",       "%"),
+                ("Yield of HR Coil",             "yield_of_hr_coil",           "%"),
+                ("PLTCM Yield",                  "pltcm_yield",                "%"),
+                ("PLTCM Availability",           "pltcm_availability",         "%"),
+                ("PLTCM Utilisation",            "pltcm_utilisation",          "%"),
+                ("SPM Yield of CR Coil",         "spm_yield_of_cr_coil",       "%"),
+                ("SPM Availability",             "spm_availability",           "%"),
+                ("SPM Utilisation",              "spm_utilisation",            "%"),
+                ("Specific Power Consumption",   "specific_power_consumption", "kWh/t"),
             ]),
         ],
     },
