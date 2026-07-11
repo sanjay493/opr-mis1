@@ -214,6 +214,7 @@ _SECTION_HEADINGS = {
     'sint':     ("RMHP & SINTER PLANT", "OLD MACHINE"),   # OLD MACHINE avoids TOC match
     'sms':      ("STEEL MELTING SHOP", "BOF SHOP"),
     'sms2':     ("STEEL MELTING SHOP", "BOF SHOP CONTD"), # SMS page 2 (raw-material rates)
+    'ccp':      ("CONTINUOUS CASTING PLANT", "TE PARAMETERS"), # Billet/Bloom/BRC Caster Yield
     'bf_main':  ("BLAST FURNACE", "SILICON IN HM"),        # BF page 1: Si, S, Slag, Productivity
     'bf_cdi':   ("BLAST FURNACE", "NUT COKE RATE"),        # BF page 2: CDI, Coke Rate, Sinter
     # NOTE: h2 was "CDI RATE" but that also matches the narrative "Highlights"
@@ -1239,7 +1240,7 @@ def _block_techno(file_path: str, page_index: dict,
 
     print(f"[DSP PDF] Techno: Month {want_mon}'{yy} → FY {fy_label}", flush=True, file=sys.stderr)
 
-    techno_keys = ('major', 'sms', 'sms2', 'coke', 'sint', 'bf_main', 'bf_cdi', 'mm', 'wa')
+    techno_keys = ('major', 'sms', 'sms2', 'ccp', 'coke', 'sint', 'bf_main', 'bf_cdi', 'mm', 'wa')
     needed_idxs = {page_index[k] for k in techno_keys if k in page_index}
 
     if not needed_idxs:
@@ -1321,6 +1322,44 @@ def _block_techno(file_path: str, page_index: dict,
         rows.extend(_parse_general_params(
             lines, _SMS2_PAGE_DEFS, sms2_idx + 1,
             want_mon, yy, month_diff=0, offset=5, report_month_num=report_month_num))
+
+    # ── Continuous Casting Plant (Billet/Bloom/BRC Caster Yield) ──────────
+    # TE PARAMETERS section repeats "Yield" under three sub-headers (Billet
+    # Caster / Bloom Caster / Bloom cum Round Caster); the PRODUCTION section
+    # higher on the same page also starts lines with these same names, so we
+    # slice from "TE PARAMETERS" first to avoid matching the production rows.
+    ccp_idx = page_index.get('ccp')
+    if ccp_idx is not None:
+        text = page_texts[ccp_idx]
+        pno  = ccp_idx + 1
+        te_text = "\n".join(_slice_text(text, "TE PARAMETERS", []))
+        for block_marker, next_marker, sort in (
+            ("Billet Caster",         "Bloom Caster",           117),
+            ("Bloom Caster",          "Bloom cum Round Caster", 118),
+            ("Bloom cum Round Caster", None,                    119),
+        ):
+            block_lines = _slice_text(
+                te_text, block_marker, [next_marker] if next_marker else [])
+            for ln in block_lines[1:]:
+                if "yield" in ln.lower():
+                    nums = _parse_te_nums(ln)
+                    actual_curr, cum_curr, _, _ = _te_values_techno(
+                        nums, report_month_num)
+                    if actual_curr is not None:
+                        rows.append({
+                            "group_code": "MAJOR",
+                            "section":    f"{block_marker} Yield",
+                            "parameter":  "DSP SMS",
+                            "unit":       "%",
+                            "sort_order": sort,
+                            "actual":     actual_curr,
+                            "cum_actual": cum_curr,
+                            "month":      f"{want_mon}'{yy}",
+                            "cell":       f"PDF p{pno} · {want_mon}'{yy}",
+                            "found_via":  f"DSP CCP {block_marker} Yield",
+                            "status":     "ok",
+                        })
+                    break
 
     # ── Coke & Sinter ────────────────────────────────────────────────────
     coke_idx = page_index.get('coke')
