@@ -47,7 +47,9 @@
   "SMS-2": {
     "specific_hm_consumption":       76,
     "specific_scrap_consumption":    77,
-    "tmi":                           78
+    "tmi":                           78,
+    "conditioned_slab_caster_yield": 86,
+    "conditioned_bloom_caster_yield": 87
   },
 
   "SMS-3": {
