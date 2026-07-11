@@ -1175,7 +1175,6 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         "sulphur_in_hm":              ["s_in_hm", "s%_in_hm"],
         "hot_blast_temp":             ["blast_temperature"],
         "avg_hot_metal_temperature":  ["hot_metal_temp"],
-        "o2_enrichment":              ["oxygen_enrichment"],
         # SMS (old DSP: hot_metal_consumption/scrap_consumption)
         "specific_hm_consumption":    ["hot_metal_consumption"],
         "specific_scrap_consumption": ["scrap_consumption"],
@@ -1589,7 +1588,7 @@ _TECHNO_DB_SCHEMA = {
             ("BF Coke Yield",          "%",          [("COB-old", "bf_coke_yield"),        ("COB-new", "bf_coke_yield"),        ("Coke Ovens", "bf_coke_yield"),        ("COB", "bf_coke_yield")]),
             # BSP reports this per battery group only ("3 page Tech" rows
             # 32/33); the battery keys exist solely for this parameter.
-            ("Dry Coal Charge/Oven",   "t/oven",     [("COB", "dry_coal_charge_batt_1_8"), ("COB", "dry_coal_charge_batt_9_11"), ("COB-old", "dry_coal_charge"), ("COB-new", "dry_coal_charge"), ("Coke Ovens", "dry_coal_charge")]),
+            ("Dry Coal Charge/Oven",   "t/oven",     [("COB", "dry_coal_charge_batt_1_8"), ("COB", "dry_coal_charge_batt_9_11"), ("COB-old", "dry_coal_charge_oven"), ("COB-new", "dry_coal_charge_oven"), ("Coke Ovens", "dry_coal_charge_oven")]),
             # RSP's "General" key, DSP's and BSP's "specific_heat_coke_ovens"
             # are all per dry-coal-charged (confirmed) - same row. BSL's
             # "sp_heat_cons" is explicitly Kcal/TCO (per tonne coke output)
@@ -1597,8 +1596,8 @@ _TECHNO_DB_SCHEMA = {
             # NOT included here.
             # ISP: "Sp Heat Cons" per battery on the COKE OVENS sheet
             # (rows 169/195, 10^6 kcal/t — extractor multiplies by 1000).
-            ("Sp. Heat Consmn./t DC",  "1000 Kcal/Kg DC", [("General", "Specific_heat_consumption_per_ton_dry_coal_charged"), ("Coke Ovens", "specific_heat_coke_ovens"), ("COB", "specific_heat_coke_ovens"), ("COB-old", "specific_heat_coke_ovens"), ("COB-new", "specific_heat_coke_ovens")]),
-            ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "cog_yield"),            ("COB-new", "cog_yield"),            ("Coke Ovens", "cog_yield")]),
+            ("Sp. Heat Consmn./t DC",  "1000 Kcal/Kg DC", [("General", "specific_heat_coke_ovens"), ("Coke Ovens", "specific_heat_coke_ovens"), ("COB", "specific_heat_coke_ovens"), ("COB-old", "specific_heat_coke_ovens"), ("COB-new", "specific_heat_coke_ovens")]),
+            ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "coke_oven_gas_yield"),  ("COB-new", "coke_oven_gas_yield"),  ("Coke Ovens", "coke_oven_gas_yield")]),
             ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield"),      ("Coke Ovens", "crude_tar_yield")]),
             ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield"),   ("Coke Ovens", "crude_benzol_yield")]),
             ("Amm. Sulphate Yield",    "kg/t",       [("COB-new", "ammonium_sulphate_yield"), ("Coke Ovens", "ammonium_sulphate_yield")]),
@@ -1913,11 +1912,12 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     )
 
     # Coke Ovens parameters: different plants store the same concept under
-    # different snake_case keys (e.g. RSP/ISP "cog_yield" vs BSL/DSP
-    # "coke_oven_gas_yield"). Canonical key -> alternate keys to also check.
+    # different snake_case keys (e.g. RSP/ISP historically also wrote
+    # "cog_yield"/"dry_coal_charge" alongside the canonical long-form keys
+    # below). Canonical key -> alternate keys to also check.
     _COKE_OVEN_PARAM_ALIASES = {
-        "dry_coal_charge":           ["dry_coal_charge_per_oven", "dry_coal_charge_oven"],
-        "cog_yield":                 ["coke_oven_gas_yield"],
+        "dry_coal_charge_oven":      ["dry_coal_charge", "dry_coal_charge_per_oven"],
+        "coke_oven_gas_yield":       ["cog_yield"],
         "crude_tar_yield":           ["coal_tar_yield", "crude_tar"],
         "crude_benzol_yield":        ["crude_benzol"],
         "ammonium_sulphate_yield":   ["ammonium_sulphate"],

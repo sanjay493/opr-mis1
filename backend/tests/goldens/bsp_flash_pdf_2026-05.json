@@ -355,7 +355,7 @@
       "section": "Sinter in Burden",
       "sort_order": 0,
       "status": "ok",
-      "t_key": "sinter% in burden",
+      "t_key": "sinter_in_burden",
       "t_unit": "BF_Shop",
       "unit": "%"
     },
