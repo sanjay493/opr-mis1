@@ -1949,8 +1949,14 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         conn.close()
 
     _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+    # A plant qualifies if it has data for ANY period this page displays
+    # (current month, current-FY months so far, CPLY, or any of the last 3
+    # FY-end Marches) - not just the exact report_month. A plant that hasn't
+    # uploaded report_month's file yet shouldn't have its other-period data
+    # hidden entirely. `store` is already scoped to `all_months` by the SQL
+    # fetch above, so every key already qualifies.
     available_plants = sorted(
-        {p for (p, rm) in store if rm == report_month},
+        {p for (p, rm) in store},
         key=lambda p: _PLANT_ORDER.index(p) if p in _PLANT_ORDER else 99,
     )
 
@@ -2102,21 +2108,23 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
             for plant in available_plants:
                 for (src_unit, src_key) in unit_specs:
                     _key_aliases = [src_key] + _COKE_OVEN_PARAM_ALIASES.get(src_key, [])
-                    unit_data = store.get((plant, report_month), {}).get(src_unit)
-                    if unit_data is None:
-                        continue
-                    # A unit may exist for this plant/month but not carry this
-                    # specific parameter (e.g. BSL's shop-level "SMS" unit only
-                    # holds LD Slag/Lime/Aluminium Consumption) - skip those
-                    # instead of emitting a blank row.
+                    # Include the row if ANY period this page displays has a
+                    # value - current month, current-FY months so far, CPLY,
+                    # or any of the last 3 FY-end Marches - not just
+                    # report_month specifically (a plant/unit that only
+                    # reports at FY-end, or hasn't uploaded report_month's
+                    # file yet, should still show its other-period data
+                    # rather than being omitted entirely).
                     if src_key == "tmi":
                         has_val = any(
-                            _tmi_value(unit_data.get(period, {})) is not None
+                            _tmi_value(store.get((plant, rm), {}).get(src_unit, {}).get(period, {})) is not None
+                            for rm in all_months
                             for period in ("month", "till_month")
                         )
                     else:
                         has_val = any(
-                            unit_data.get(period, {}).get(k) is not None
+                            store.get((plant, rm), {}).get(src_unit, {}).get(period, {}).get(k) is not None
+                            for rm in all_months
                             for period in ("month", "till_month")
                             for k in _key_aliases
                         )
@@ -2159,14 +2167,16 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         # sections = mill units, rows = params for that fixed plant
         plant = cfg.get("plant", "RSP")
         for (src_unit, param_specs) in cfg.get("sections", []):
-            if store.get((plant, report_month), {}).get(src_unit) is None:
-                continue
             rows = []
             for (param_label, src_key, unit_str) in param_specs:
-                # include row if current month or any FY has a value
+                # Include the row if ANY period this page displays has a
+                # value - current-FY months so far (incl. report_month), or
+                # any of the last 3 FY-end Marches - not just report_month
+                # specifically. `all_months` already covers ytd + cply_month
+                # + fy1/fy2/fy3 marches.
                 has_val = any(
                     _gv(plant, rm, src_unit, src_key, p) is not None
-                    for rm in [report_month, fy1_march, fy2_march, fy3_march]
+                    for rm in all_months
                     for p in ["month", "till_month"]
                 )
                 if has_val:
