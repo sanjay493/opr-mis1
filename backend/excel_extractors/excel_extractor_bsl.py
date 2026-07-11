@@ -496,16 +496,19 @@ _SHEET4_MON_COL   = 6   # column F
 _SHEET4_CUM_COL   = 7   # column G
 _SHEET4_WINDOW    = (28, 48)  # covers both the old and new row positions
 
-# (keyword to match in the column-B label, section, parameter, unit)
+# (keyword to match in the column-B label, section, parameter, unit, optional)
+# optional=True means the row is genuinely expected to be missing on some
+# files (not a sign of a reshuffle) — logged at info level, not a warning.
 _SHEET4_KEYWORDS = [
-    ("sinter in burden",         "Sinter in Burden", "BSL",                  "%"),
-    ("oxygen enrichment",        "O2 Enrichment",     "BSL",                  "%"),
-    ("coke screening loss",      "Coke Screen Loss",  "BSL",                  "%"),
-    ("slag rate",                "Blast Furnaces",    "Slag Rate",            "Kg/THM"),
-    ("bf gas yield",             "Blast Furnaces",    "BF Gas Yield",         "Nm³/THM"),
-    ("cv of bf gas",             "Blast Furnaces",    "CV of BF Gas",         "Kcal/Nm³"),
-    ("availability against cal", "Blast Furnaces",    "Furnace Availability", "%"),
-    ("utilin. against avl",      "Blast Furnaces",    "Furnace Utilization",  "%"),
+    ("sinter in burden",         "Sinter in Burden", "BSL",                  "%",       False),
+    ("pellet in burden",         "Pellet in Burden",  "BSL",                  "%",       True),
+    ("oxygen enrichment",        "O2 Enrichment",     "BSL",                  "%",       False),
+    ("coke screening loss",      "Coke Screen Loss",  "BSL",                  "%",       False),
+    ("slag rate",                "Blast Furnaces",    "Slag Rate",            "Kg/THM",  False),
+    ("bf gas yield",             "Blast Furnaces",    "BF Gas Yield",         "Nm³/THM", False),
+    ("cv of bf gas",             "Blast Furnaces",    "CV of BF Gas",         "Kcal/Nm³",False),
+    ("availability against cal", "Blast Furnaces",    "Furnace Availability", "%",       False),
+    ("utilin. against avl",      "Blast Furnaces",    "Furnace Utilization",  "%",       False),
 ]
 
 
@@ -514,7 +517,8 @@ def _extract_sheet4_iron_making_rows(wb, db_month: str) -> list:
     window for each label's keyword, rather than trusting fixed row numbers —
     row positions shift whenever SAIL inserts a new line item (e.g. "PELLET
     IN BURDEN", added from Jun'26 onward, which pushed every row below it
-    down by 2)."""
+    down by 2). "Pellet in Burden" itself is only present from Jun'26 onward
+    — its absence on older files is expected, not a reshuffle."""
     if _SHEET4_SHEET not in wb.sheetnames:
         logger.info("BSL techno: sheet %r not found — skipping Sheet4 iron-making block", _SHEET4_SHEET)
         return []
@@ -527,15 +531,22 @@ def _extract_sheet4_iron_making_rows(wb, db_month: str) -> list:
     }
 
     out = []
-    for i, (keyword, section, param, unit) in enumerate(_SHEET4_KEYWORDS):
+    for i, (keyword, section, param, unit, optional) in enumerate(_SHEET4_KEYWORDS):
         match_row = next((r for r in range(lo, hi + 1) if keyword in labels[r]), None)
         if match_row is None:
-            logger.warning(
-                "BSL techno: Sheet4 label containing %r not found in rows "
-                "%d-%d — verify _SHEET4_KEYWORDS in excel_extractor_bsl.py "
-                "still matches the report's wording.",
-                keyword, lo, hi,
-            )
+            if optional:
+                logger.info(
+                    "BSL techno: Sheet4 label containing %r not found in "
+                    "rows %d-%d — expected on reports before Jun'26.",
+                    keyword, lo, hi,
+                )
+            else:
+                logger.warning(
+                    "BSL techno: Sheet4 label containing %r not found in rows "
+                    "%d-%d — verify _SHEET4_KEYWORDS in excel_extractor_bsl.py "
+                    "still matches the report's wording.",
+                    keyword, lo, hi,
+                )
             continue
 
         actual_raw = _cell_float(ws, match_row, _SHEET4_MON_COL)
