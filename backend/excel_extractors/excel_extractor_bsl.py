@@ -490,7 +490,13 @@ _FAX_BF_FURNACE_PARAMS = [
 # Column F = month actual, Column G = till-the-month cumulative.
 # ---------------------------------------------------------------------------
 _HSM_SHEET     = "Sheet8"
-_HSM_ROWS      = [29, 35, 37, 41, 43]
+# Row 35 ("ROLLING HOURS/DAY") was previously registered here too, but it
+# isn't one of the 6 tracked HSM parameters at all, and it also matches the
+# "rolling" keyword — so it silently raced with row 29 ("SLAB ROLLING RATE",
+# the real Rolling Rate figure) for the same param, overwriting whichever one
+# got processed last. Removed. Rows 17/18 (Heat/Power Consumption) were
+# missing entirely — added.
+_HSM_ROWS      = [17, 18, 29, 37, 41, 43]
 _HSM_LABEL_COL = 2   # column B
 _HSM_MON_COL   = 6   # column F
 _HSM_CUM_COL   = 7   # column G
