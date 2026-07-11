@@ -161,7 +161,7 @@ PARAM_ALIASES = {
     "**Energy consumption. ":         "specific_energy_consumption",
     "Make-Up Water Cons.":            "specific_water_consumption",
     "Sp. CO2 Emmission ":             "specific_co2_emissions",
-    "Dry Coal input":                 ("General", "Specific_heat_consumption_per_ton_dry_coal_charged"),
+    "Dry Coal input":                 ("General", "specific_heat_coke_ovens"),
 }
 
 # Per-furnace blocks where all four furnaces (BF-1/BF-4/BF-5/BF_Shop) sit in
