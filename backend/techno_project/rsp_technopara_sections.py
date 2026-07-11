@@ -59,10 +59,12 @@ SECTION_UNITS = {
     "STEEL MELTING SHOP-II":  "SMS-2",
     "PLATE MILL":             "PM",
     "NEW PLATE MILL":         "NPM",
+    "HOT STRIP MILL":         "HSM-1",
     "HOT STRIP MILL-2":       "HSM-2",
     "SILICON STEEL MILL":     "SSM",
     "ERW PIPE PLANT":         "ERW",
     "SW PIPE PLANT":          "SWP",
+    "COLD ROLLING MILL":      "CRM",
     "HEAT CONS.PER T OF":     "General",   # per-ton-of-X heat table — default
                                             # unit General, individual mill
                                             # rows override below
@@ -144,12 +146,20 @@ PARAM_ALIASES = {
     "Slabs Rolled- PM":                ("PM", "specific_heat_consumption"),
     "Slabs Rolled- NPM":               ("NPM", "specific_heat_consumption"),
 
-    # ---- Hot Strip Mill-2 -------------------------------------------------------
+    # ---- Hot Strip Mill / Hot Strip Mill-2 (same aliases per-section) -----------
+    # HSM-1's own header is "HOT STRIP MILL" and it shares most row labels with
+    # HSM-2 verbatim (H R Coil Yield, Rolling Rate -HR Coils, R.H.Fce
+    # Avail-Average, and "Mill Availability" which reuses PM/NPM's alias
+    # above) — only its Availability/Utilisation-on-Availability label wording
+    # differs from HSM-2's, so that one needs its own entry.
     "H R Coil Yield":                  "yield_total",
-    "Mill Availability on Cal Hrs":    "availability",
-    "Utilisation on Avail. Hrs":       "utilisation",
+    "Mill Availability on Cal Hrs":    "availability",       # HSM-2 spelling
+    "Utilisation on Avail. Hrs":       "utilisation",        # HSM-2 spelling
+    "Utilis. on Avail. Time":          "utilisation",        # HSM-1 spelling
     "Rolling Rate -HR Coils":          "rolling_rate",
     "R.H.Fce Avail-Average":          "average_furnace_availability",
+    "H.R.Coil Production":            ("HSM-1", "specific_power_consumption"),
+    "Slabs Rolled -  HSM":            ("HSM-1", "specific_heat_consumption"),
     "H.R.Coil-2 Production":          ("HSM-2", "specific_power_consumption"),
     "Slabs Rolled -  HSM2":           ("HSM-2", "specific_heat_consumption"),
 
@@ -161,10 +171,26 @@ PARAM_ALIASES = {
     "Rolling Rate(Rev Mill)":         "rolling_rate",
 
     # ---- ERW / SW Pipe Plant (same aliases per-section) --------------------------
+    # "Yield from HR Coils" is restricted to rows with a "%" unit-of-measure
+    # via PARAM_UNIT_FILTERS below — the Cold Rolling Mill section further
+    # down has a bare "YIELD FROM HR COILS" sub-header (no unit, no data) with
+    # the exact same normalized text, which would otherwise get misread as
+    # this alias and silently reassign every following ERW/SWP row to CRM.
     "Yield from HR Coils":            "yield",
     "Utili.on Available Time":        "utilisation",   # ERW spelling
     "Utili. on Avail. Time":          "utilisation",   # SWP spelling
     "Rolling Rate ":                  "rolling_rate",
+
+    # ---- Cold Rolling Mill ---------------------------------------------------------
+    # The section's own "YIELD FROM HR COILS" sub-header is deliberately NOT
+    # registered as a section (see note above) — Pickled Coils/Galvanised
+    # Sheet still resolve to unit "CRM" via the current_unit set by "COLD
+    # ROLLING MILL" itself, since the sub-header carries no unit change.
+    "Acid Cons.in Pick Input":        "acid_consumption",
+    "Zinc cons. Excl.Dross":          "zinc_cons_excl_dross",   # filtered to the Kg/T row (see PARAM_UNIT_FILTERS)
+    "Zinc cons. Incl.Dross":          "zinc_cons_incl_dross",   # filtered to the Kg/T row (see PARAM_UNIT_FILTERS)
+    "Pickled Coils":                  "pickled_coils_yield",
+    "Galvanised Sheet":               "galvanised_sheet_yield",
 
     # ---- General -------------------------------------------------------------------
     "Coke Screen Loss":               ("General", "coke_screen_loss"),
@@ -198,6 +224,14 @@ DAILY_AVG_PARAMS = {"average_blows_per_day"}
 # that's actually wanted, instead of matching whichever copy comes first.
 PARAM_UNIT_FILTERS = {
     "H/Coke Yield(+25mm)": "dry coal",
+    # Restricts the ERW/SWP data alias to its real "%" rows, so it can't match
+    # Cold Rolling Mill's unit-less "YIELD FROM HR COILS" sub-header instead.
+    "Yield from HR Coils": "%",
+    # Zinc consumption is reported twice per row-pair (Gms/M2, then Kg/T) —
+    # keep the Kg/T figure, consistent with every other per-tonne param on
+    # this sheet.
+    "Zinc cons. Excl.Dross": "kg",
+    "Zinc cons. Incl.Dross": "kg",
 }
 
 # Every DB unit name this registry can ever produce — derived here (not
