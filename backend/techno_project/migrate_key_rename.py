@@ -1,23 +1,36 @@
 """
 One-time script: rename legacy techno_data parameter keys to the canonical
-short-form convention used across BSL/RSP/ISP and page_techno.py's schemas.
+short-form convention used across BSL/BSP/RSP/ISP and page_techno.py's schemas.
 
 Renames (within the "month" and "till_month" dicts of techno_json):
-  RSP/ISP rows, any unit:
+  RSP/ISP/BSP rows, any unit:
     "sinter% in burden"  -> "sinter_in_burden"
     "pellet% in burden"  -> "pellet_in_burden"
+    (BSP's own bsp_techno_map.json/bsp_oisco_map.json wrote these spellings
+    directly too — fixed there, so this only cleans up rows written before
+    that fix)
+  BSP rows, any unit:
+    "coal_to_hot_metal"           -> "coal_to_hm"
+  RSP rows, unit == "General":
+    "Specific_heat_consumption_per_ton_dry_coal_charged" -> "specific_heat_coke_ovens"
+    (RSP's own spelling for the same "per dry-coal-charged" heat consumption
+    figure DSP/BSP/ISP already store as "specific_heat_coke_ovens" — see
+    page_techno.py's page-28 schema comment)
   DSP rows, unit == "SMS":
     "ferro_silicon_consumption"   -> "fe-si"
     "ferro_manganese_consumption" -> "fe-mn"
     "silicon_manganese_consumption" -> "si-mn"
     "heat_size"                   -> "average_heat_weight"
     "oxygen_converter"            -> "oxygen_blowing"
+    "hot_metal_consumption"       -> "specific_hm_consumption"
   DSP rows, unit == "Coke Ovens":
     "coal_tar_yield"              -> "crude_tar_yield"
     "crude_benzol"                -> "crude_benzol_yield"
     "ammonium_sulphate"           -> "ammonium_sulphate_yield"
+    "average_ash_in_coke"         -> "ash_in_coke"
   DSP rows, unit in ("BF-2", "BF-3", "BF-4", "BF_Shop"):
     "bf_productivity_working"     -> "bf_productivity"
+    "blast_temperature"           -> "hot_blast_temp"
   BSL rows, any unit:
     "coal_to_hot_metal"           -> "coal_to_hm"
     "crude_tar"                   -> "crude_tar_yield"
@@ -26,12 +39,24 @@ Renames (within the "month" and "till_month" dicts of techno_json):
     "working_volume"              -> "bf_productivity"          (was mislabeled;
                                                                    see excel_extractor_bsl.py)
     "useful_volume"               -> "bf_productivity_useful"
+    "ash_in_bf_coke"              -> "ash_in_coke"
+    "cdi_rate"                    -> "cdi"
+    "gross_hm_consumption"        -> "specific_hm_consumption"  (legacy/orphaned
+                                       key with no current writer; where it
+                                       coexists with "specific_hm_consumption"
+                                       in the same period, the canonical value
+                                       wins and the legacy one is just dropped
+                                       — see _rename_keys)
 
 Also moves "coal_to_hm" into the "General" unit wherever it was stored
-under a per-furnace/BF-shop unit instead (ISP: "BF-5", BSL: "BF_Shop"),
-so the parameter lives under the same unit across all plants — RSP/BSP/
-DSP already store it under "General", which is also where the current
-ISP/BSL extractors write it going forward; this only fixes old rows.
+under a per-furnace/BF-shop unit instead (ISP: "BF-5", BSL: "BF_Shop",
+BSP: "BF_Shop"), so the parameter lives under the same unit across all
+plants — RSP/DSP already store it under "General", which is also where
+the current ISP/BSL/BSP extractors write it going forward; this only
+fixes old rows. Note: since this move only recognizes the *renamed* key
+("coal_to_hm"), run this script twice when a plant needs both the rename
+and the move — the first --apply commits the rename, the second then
+sees "coal_to_hm" already present under the wrong unit and moves it.
 
 Dry-run by default: prints a summary of rows that would change without
 writing anything. Pass --apply to actually commit the renames.
@@ -48,9 +73,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import db
 
-_RSP_ISP_RENAMES = {
+_BURDEN_RENAMES = {
     "sinter% in burden": "sinter_in_burden",
     "pellet% in burden": "pellet_in_burden",
+}
+
+_BSP_RENAMES = {
+    "coal_to_hot_metal": "coal_to_hm",
+}
+
+_RSP_GENERAL_RENAMES = {
+    "Specific_heat_consumption_per_ton_dry_coal_charged": "specific_heat_coke_ovens",
 }
 
 _DSP_SMS_RENAMES = {
@@ -59,12 +92,14 @@ _DSP_SMS_RENAMES = {
     "silicon_manganese_consumption": "si-mn",
     "heat_size":                     "average_heat_weight",
     "oxygen_converter":              "oxygen_blowing",
+    "hot_metal_consumption":         "specific_hm_consumption",
 }
 
 _DSP_COKE_RENAMES = {
-    "coal_tar_yield":    "crude_tar_yield",
-    "crude_benzol":      "crude_benzol_yield",
-    "ammonium_sulphate": "ammonium_sulphate_yield",
+    "coal_tar_yield":      "crude_tar_yield",
+    "crude_benzol":        "crude_benzol_yield",
+    "ammonium_sulphate":   "ammonium_sulphate_yield",
+    "average_ash_in_coke": "ash_in_coke",
 }
 
 # DSP reports BF Productivity on both a "useful volume" and "working volume"
@@ -73,6 +108,7 @@ _DSP_COKE_RENAMES = {
 # figure (SAIL-wide convention) needs to move onto that key.
 _DSP_BF_RENAMES = {
     "bf_productivity_working": "bf_productivity",
+    "blast_temperature":       "hot_blast_temp",
 }
 _DSP_BF_UNITS = ("BF-2", "BF-3", "BF-4", "BF_Shop")
 
@@ -83,21 +119,31 @@ _BSL_RENAMES = {
     "ammonium_sulphate": "ammonium_sulphate_yield",
     "working_volume":    "bf_productivity",
     "useful_volume":     "bf_productivity_useful",
+    "ash_in_bf_coke":    "ash_in_coke",
+    "cdi_rate":          "cdi",
+    "gross_hm_consumption": "specific_hm_consumption",
 }
 
 # (plant, wrong unit) -> coal_to_hm should live under "General" instead
 _COAL_TO_HM_WRONG_UNIT = {
     "ISP": "BF-5",
     "BSL": "BF_Shop",
+    "BSP": "BF_Shop",
 }
 
 
 def _rename_keys(period_dict: dict, renames: dict) -> bool:
-    """Rename keys in-place per `renames`. Returns True if anything changed."""
+    """Rename keys in-place per `renames`. Returns True if anything changed.
+
+    If the target key already holds a value (i.e. the canonical spelling was
+    already written by the live extractor for that same period), the legacy
+    key is dropped instead of overwriting it — the canonical value wins."""
     changed = False
     for old_key, new_key in renames.items():
         if old_key in period_dict:
-            period_dict[new_key] = period_dict.pop(old_key)
+            old_val = period_dict.pop(old_key)
+            if new_key not in period_dict:
+                period_dict[new_key] = old_val
             changed = True
     return changed
 
@@ -167,7 +213,7 @@ def main():
 
     cur.execute(
         "SELECT id, plant, report_month, unit, techno_json FROM techno_data "
-        "WHERE plant IN ('RSP', 'ISP', 'DSP', 'BSL')"
+        "WHERE plant IN ('RSP', 'ISP', 'BSP', 'DSP', 'BSL')"
     )
     rows = cur.fetchall()
 
@@ -177,8 +223,12 @@ def main():
         unit = row["unit"]
         tj = json.loads(row["techno_json"])
 
-        if plant in ("RSP", "ISP"):
-            renames = _RSP_ISP_RENAMES
+        if plant == "BSP":
+            renames = {**_BURDEN_RENAMES, **_BSP_RENAMES}
+        elif plant == "RSP" and unit == "General":
+            renames = {**_BURDEN_RENAMES, **_RSP_GENERAL_RENAMES}
+        elif plant in ("RSP", "ISP"):
+            renames = _BURDEN_RENAMES
         elif plant == "DSP" and unit == "SMS":
             renames = _DSP_SMS_RENAMES
         elif plant == "DSP" and unit == "Coke Ovens":
@@ -198,7 +248,7 @@ def main():
         if changed:
             to_update.append((row["id"], json.dumps(tj), plant, row["report_month"], unit))
 
-    print(f"Scanned {len(rows)} RSP/ISP/DSP/BSL techno_data rows.")
+    print(f"Scanned {len(rows)} RSP/ISP/BSP/DSP/BSL techno_data rows.")
     print(f"{len(to_update)} rows contain a legacy key and would be renamed:")
     for _id, _json_str, plant, rm, unit in to_update:
         print(f"  [{plant}] {rm} / {unit}")

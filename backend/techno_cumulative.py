@@ -47,7 +47,6 @@ CUMULATIVE_RULES = {
     "fuel_rate":        ("weighted", "hm"),
     "coal_to_hm":       ("weighted", "hm"),
     "o2_enrichment":    ("weighted", "hm"),
-    "oxygen_enrichment": ("weighted", "hm"),   # RSP key for the same parameter
     "sinter_in_burden": ("weighted", "hm"),
     "pellet_in_burden": ("weighted", "hm"),
     # HM-weighted harmonic mean

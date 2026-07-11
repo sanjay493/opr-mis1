@@ -46,6 +46,7 @@ _SMS_KEY_NORM = {
     "silicon_manganese_consumption": "si-mn",
     "heat_size":                   "average_heat_weight",
     "oxygen_converter":            "oxygen_blowing",
+    "hot_metal_consumption":       "specific_hm_consumption",
 }
 
 # Coke oven labels where DSP's own wording diverges from the canonical key
@@ -65,6 +66,7 @@ _COKE_KEY_NORM = {
 # figure keeps its own distinct key.
 _BF_KEY_NORM = {
     "bf_productivity_working": "bf_productivity",
+    "blast_temperature":       "hot_blast_temp",
 }
 
 

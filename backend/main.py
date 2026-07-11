@@ -2570,13 +2570,11 @@ _PARAM_ACRONYMS = {
 
 # Different plant extractors settled on different snake_case spellings for
 # the same parameter over time (e.g. BSP/RSP write "cdi", an older path wrote
-# "cdi_rate"; BSP/DSP/RSP write "o2_enrichment", ISP writes
-# "oxygen_enrichment") — /api/techno-data's normalized-key lookup below tries
-# every alias in order so a plant/month using the "other" spelling isn't
-# silently reported as missing.
+# "cdi_rate") — /api/techno-data's normalized-key lookup below tries every
+# alias in order so a plant/month using the "other" spelling isn't silently
+# reported as missing.
 _PARAM_KEY_ALIASES = {
-    "cdi_rate": ["cdi_rate", "cdi", "CDI Rate"],
-    "o2_enrichment": ["o2_enrichment", "oxygen_enrichment"],
+    "cdi": ["cdi", "cdi_rate", "CDI Rate"],
     "coke_rate": ["coke_rate", "Coke Rate"],
     "fuel_rate": ["fuel_rate", "Fuel Rate"],
     "bf_productivity": ["bf_productivity", "BF Productivity"],
@@ -2589,6 +2587,9 @@ _PARAM_KEY_ALIASES = {
     "sulphur_in_hm": ["sulphur_in_hm", "s_in_hm", "s%_in_hm"],
     "sinter_in_burden": ["sinter_in_burden", "sinter% in burden"],
     "pellet_in_burden": ["pellet_in_burden", "pellet% in burden"],
+    "coke_oven_gas_yield": ["coke_oven_gas_yield", "cog_yield"],
+    "dry_coal_charge_oven": ["dry_coal_charge_oven", "dry_coal_charge", "dry_coal_charge_per_oven"],
+    "ash_in_coke": ["ash_in_coke", "average_ash_in_coke", "ash_in_bf_coke"],
 }
 
 

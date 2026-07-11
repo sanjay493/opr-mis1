@@ -265,7 +265,7 @@ _KEY_TECHNO_MAP: List[Tuple[str, Tuple[str, str, str, str], Tuple[str, str]]] = 
     (r"^Total\s+Fuel\s+rate",   ("IRON_MAKING", "Fuel Rate",     "BSP", "Kg/THM"),
      ("BF_Shop", "fuel_rate")),
     (r"^Sinter\s+in\s+burden",  ("IRON_MAKING", "Sinter in Burden", "BSP", "%"),
-     ("BF_Shop", "sinter% in burden")),
+     ("BF_Shop", "sinter_in_burden")),
     (r"^SMS\s*-?\s*2\s*:?\s*Hot\s*metal\s+cons",
      ("SMS", "SMS-II Consumption",  "Hot Metal",              "Kg/TCS"),
      ("SMS-2", "specific_hm_consumption")),

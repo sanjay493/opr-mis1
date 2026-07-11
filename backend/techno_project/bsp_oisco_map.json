@@ -4,7 +4,7 @@
   "BF_Shop": {
     "cdi":              9,
     "fuel_rate":        16,
-    "pellet% in burden": 17,
+    "pellet_in_burden": 17,
     "ld_slag_cons":    18,
     "not_dry_cast":     19
   },
