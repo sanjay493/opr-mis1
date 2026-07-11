@@ -1175,7 +1175,6 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         "sulphur_in_hm":              ["s_in_hm", "s%_in_hm"],
         "hot_blast_temp":             ["blast_temperature"],
         "avg_hot_metal_temperature":  ["hot_metal_temp"],
-        "o2_enrichment":              ["oxygen_enrichment"],
         # SMS (old DSP: hot_metal_consumption/scrap_consumption)
         "specific_hm_consumption":    ["hot_metal_consumption"],
         "specific_scrap_consumption": ["scrap_consumption"],
