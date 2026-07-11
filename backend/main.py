@@ -2570,13 +2570,11 @@ _PARAM_ACRONYMS = {
 
 # Different plant extractors settled on different snake_case spellings for
 # the same parameter over time (e.g. BSP/RSP write "cdi", an older path wrote
-# "cdi_rate"; BSP/DSP/RSP write "o2_enrichment", ISP writes
-# "oxygen_enrichment") — /api/techno-data's normalized-key lookup below tries
-# every alias in order so a plant/month using the "other" spelling isn't
-# silently reported as missing.
+# "cdi_rate") — /api/techno-data's normalized-key lookup below tries every
+# alias in order so a plant/month using the "other" spelling isn't silently
+# reported as missing.
 _PARAM_KEY_ALIASES = {
     "cdi_rate": ["cdi_rate", "cdi", "CDI Rate"],
-    "o2_enrichment": ["o2_enrichment", "oxygen_enrichment"],
     "coke_rate": ["coke_rate", "Coke Rate"],
     "fuel_rate": ["fuel_rate", "Fuel Rate"],
     "bf_productivity": ["bf_productivity", "BF Productivity"],
