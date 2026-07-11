@@ -13,9 +13,12 @@ Records are stored in techno_data with plant='BSP'.
 
 import json
 import re
+import sys
 from pathlib import Path
-from openpyxl import load_workbook
 from typing import Dict, List, Optional, Tuple
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "excel_extractors"))
+from excel_extractor_bsp_oisco import _open_workbook  # noqa: E402 — handles legacy .xls via xlrd
 
 _MONTH_ABBR_TO_NUM: Dict[str, int] = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
@@ -96,7 +99,7 @@ class BspOiscoExtractor:
         self._map = _load_map()
 
     def extract(self) -> List[Dict]:
-        wb = load_workbook(self.excel_file, data_only=True)
+        wb = _open_workbook(str(self.excel_file))
 
         ws = None
         for name in wb.sheetnames:
