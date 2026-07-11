@@ -1350,6 +1350,17 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             for su in _SMS_UNIT_ORDER:
                 if su not in plant_units:
                     continue
+                if p == "BSL" and su == "SMS":
+                    # BSL has only SMS-I/SMS-II, no 3rd "SMS" shop — its
+                    # shop-level "SMS" unit is a separate overall figure, not
+                    # a per-converter one, and duplicates SMS-I/SMS-II's own
+                    # specific_hm_consumption instead of filling a gap (unlike
+                    # LD Slag/Lime/Aluminium Consumption, which only exist at
+                    # this shop level — those are handled by the "duplicate
+                    # onto both real shops" logic in generate_techno_from_db,
+                    # not this function). Skip it here to avoid a redundant
+                    # third row.
+                    continue
                 has_data = any(
                     store.get((p, _rm), {}).get(su, {}).get(period, {}).get(k) is not None
                     for _rm in all_months
