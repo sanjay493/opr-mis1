@@ -1645,9 +1645,10 @@ _TECHNO_DB_SCHEMA = {
             ("Si-Mn Consumption",   "kg/t",  [("SMS-1", "si-mn"),  ("SMS-2", "si-mn"),  ("SMS-3", "si-mn"),  ("SMS", "si-mn"),  ("SMS-I", "si-mn"),  ("SMS-II", "si-mn")]),
             ("Oxygen Blowing",      "NM3/t", [("SMS-1", "oxygen_blowing"), ("SMS-2", "oxygen_blowing"), ("SMS-3", "oxygen_blowing"), ("SMS", "oxygen_blowing"), ("SMS-I", "oxygen_blowing"), ("SMS-II", "oxygen_blowing")]),
             # BSP reports Caster Yield per product under SMS-2 (Conditioned
-            # Slabs, Conditioned Blooms) rather than one overall figure —
-            # see _CASTER_YIELD_LABEL for the distinct row labels.
-            ("Caster Yield",        "%",     [("SMS-1", "caster_yield"),   ("SMS-2", "caster_yield"),   ("SMS-3", "caster_yield"),   ("SMS", "caster_yield"), ("SMS-I", "caster_yield"), ("SMS-II", "caster_yield"), ("SMS-2", "conditioned_slab_caster_yield"), ("SMS-2", "conditioned_bloom_caster_yield")]),
+            # Slabs, Conditioned Blooms); DSP reports it per caster under SMS
+            # (Billet/Bloom/BRC) — rather than one overall figure in either
+            # case. See _CASTER_YIELD_LABEL for the distinct row labels.
+            ("Caster Yield",        "%",     [("SMS-1", "caster_yield"),   ("SMS-2", "caster_yield"),   ("SMS-3", "caster_yield"),   ("SMS", "caster_yield"), ("SMS-I", "caster_yield"), ("SMS-II", "caster_yield"), ("SMS-2", "conditioned_slab_caster_yield"), ("SMS-2", "conditioned_bloom_caster_yield"), ("SMS", "billet_caster_yield"), ("SMS", "bloom_caster_yield"), ("SMS", "brc_caster_yield")]),
         ],
     },
     # Mill pages: sections = mill-unit, rows = params for that plant
@@ -2033,10 +2034,15 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     }
 
     # BSP's Caster Yield is reported per product under one SMS-2 unit
-    # (Conditioned Slab / Conditioned Blooms) rather than one overall figure.
+    # (Conditioned Slab / Conditioned Blooms); DSP's is reported per caster
+    # under one SMS unit (Billet / Bloom / BRC) — rather than one overall
+    # figure in either case.
     _CASTER_YIELD_LABEL = {
         "conditioned_slab_caster_yield":  "Conditioned Slabs",
         "conditioned_bloom_caster_yield": "Conditioned Blooms",
+        "billet_caster_yield":            "Billet Caster",
+        "bloom_caster_yield":             "Bloom Caster",
+        "brc_caster_yield":               "Bloom cum Round Caster",
     }
 
     def _coke_oven_label(plant, unit):
