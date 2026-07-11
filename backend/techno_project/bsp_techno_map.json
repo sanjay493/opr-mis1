@@ -26,7 +26,7 @@
   },
 
   "BF_Shop": {
-    "sinter% in burden":        58,
+    "sinter_in_burden":         58,
     "coke_rate":                59,
     "coke_screen_loss":         60,
     "cdi":                      68,

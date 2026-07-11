@@ -1,11 +1,14 @@
 """
 One-time script: rename legacy techno_data parameter keys to the canonical
-short-form convention used across BSL/RSP/ISP and page_techno.py's schemas.
+short-form convention used across BSL/BSP/RSP/ISP and page_techno.py's schemas.
 
 Renames (within the "month" and "till_month" dicts of techno_json):
-  RSP/ISP rows, any unit:
+  RSP/ISP/BSP rows, any unit:
     "sinter% in burden"  -> "sinter_in_burden"
     "pellet% in burden"  -> "pellet_in_burden"
+    (BSP's own bsp_techno_map.json/bsp_oisco_map.json wrote these spellings
+    directly too — fixed there, so this only cleans up rows written before
+    that fix)
   DSP rows, unit == "SMS":
     "ferro_silicon_consumption"   -> "fe-si"
     "ferro_manganese_consumption" -> "fe-mn"
@@ -48,7 +51,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import db
 
-_RSP_ISP_RENAMES = {
+_BURDEN_RENAMES = {
     "sinter% in burden": "sinter_in_burden",
     "pellet% in burden": "pellet_in_burden",
 }
@@ -167,7 +170,7 @@ def main():
 
     cur.execute(
         "SELECT id, plant, report_month, unit, techno_json FROM techno_data "
-        "WHERE plant IN ('RSP', 'ISP', 'DSP', 'BSL')"
+        "WHERE plant IN ('RSP', 'ISP', 'BSP', 'DSP', 'BSL')"
     )
     rows = cur.fetchall()
 
@@ -177,8 +180,8 @@ def main():
         unit = row["unit"]
         tj = json.loads(row["techno_json"])
 
-        if plant in ("RSP", "ISP"):
-            renames = _RSP_ISP_RENAMES
+        if plant in ("RSP", "ISP", "BSP"):
+            renames = _BURDEN_RENAMES
         elif plant == "DSP" and unit == "SMS":
             renames = _DSP_SMS_RENAMES
         elif plant == "DSP" and unit == "Coke Ovens":
@@ -198,7 +201,7 @@ def main():
         if changed:
             to_update.append((row["id"], json.dumps(tj), plant, row["report_month"], unit))
 
-    print(f"Scanned {len(rows)} RSP/ISP/DSP/BSL techno_data rows.")
+    print(f"Scanned {len(rows)} RSP/ISP/BSP/DSP/BSL techno_data rows.")
     print(f"{len(to_update)} rows contain a legacy key and would be renamed:")
     for _id, _json_str, plant, rm, unit in to_update:
         print(f"  [{plant}] {rm} / {unit}")
