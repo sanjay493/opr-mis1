@@ -1,15 +1,32 @@
 import calendar
 import json
+import sys
 from datetime import datetime, time
 from pathlib import Path
 from openpyxl import load_workbook
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+sys.path.insert(0, str(Path(__file__).parent))
+from rsp_row_scan import (  # noqa: E402  (path set above)
+    find_month_cum_columns, find_p18_sheet, verified_row, detect_label_column,
+)
 
 # Params that the source sheet reports as a TOTAL for the period (total blows
 # in the month / FY-to-date), not a daily average - must be divided by the
 # number of days before being displayed/stored, to match "Average Blows/Day"
 # as actually labelled.
 _DAILY_AVG_PARAMS = {"average_blows_per_day"}
+
+# BF-4's row is unlabeled in column A/B for these three params (confirmed
+# across every sample file checked) — the O2-Enrichment/Hot-Blast-Temp/
+# Si-in-HM block lists BF-1/BF-5/Shop by label but leaves BF-4's row blank,
+# always the row immediately after BF-1's verified row for the same param
+# (BF-1/BF-4/BF-5/Shop are laid out as four consecutive rows in that block in
+# every sample file checked). Resolved by anchoring off BF-1's own
+# (label-verified) row rather than by label match.
+_BF4_BLANK_ANCHOR_OFFSET = {
+    "o2_enrichment": 1, "hot_blast_temp": 1, "silicon_in_hm": 1,
+}
 
 
 def _ytd_days(year_i: int, month_i: int) -> int:
@@ -27,17 +44,6 @@ def _ytd_days(year_i: int, month_i: int) -> int:
             m, y = 1, y + 1
     return total
 
-_MONTH_ABBRS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
-_MONTH_NUM_TO_ABBR = {
-    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
-    7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'
-}
-_MONTH_ABBR_TO_NUM = {
-    'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-    'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
-}
-_NEXT_YEAR_MONTHS = {'Jan', 'Feb', 'Mar'}
-
 
 class TechnoExtractor:
     def __init__(self, excel_file: str, report_month: str = None):
@@ -52,9 +58,11 @@ class TechnoExtractor:
         self.report_month = report_month  # YYYY-MM or None
         self.workbook = None
         self.ws = None
-        self.month_col = None
-        self.cum_col = None
+        self.month_col = None   # 0-based, for values_only row tuples
+        self.cum_col = None     # 0-based
+        self.label_col = 1      # 1-based (openpyxl convention); detected per sheet
         self.hardcoded_map = self._load_hardcoded_map()
+        self.row_labels = self._load_row_labels()
 
     def _load_hardcoded_map(self) -> Dict:
         map_path = Path(__file__).parent / "rsp_technopara_map.json"
@@ -63,6 +71,19 @@ class TechnoExtractor:
                 return json.load(f)
         except FileNotFoundError:
             print(f"Error: rsp_technopara_map.json not found at {map_path}!")
+            return {}
+
+    def _load_row_labels(self) -> Dict:
+        """Load the companion {unit: {param_key: expected column label}} file
+        used to self-heal rsp_technopara_map.json's hardcoded row numbers
+        against report-template row shifts (mirrors isp_technopara_extractor.py's
+        isp_technopara_row_labels.json). Missing file/entries just disable
+        verification for that row, never break extraction."""
+        labels_path = Path(__file__).parent / "rsp_technopara_row_labels.json"
+        try:
+            with open(labels_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
             return {}
 
     @staticmethod
@@ -84,76 +105,91 @@ class TechnoExtractor:
     def load_sheet(self):
         if self.workbook is None:
             self.open_workbook()
-        for sheet in self.workbook.sheetnames:
-            norm = sheet.lower().replace(" ", "").replace("-", "")
-            if norm in ["page18", "page1-8", "page-1-8"]:
-                self.ws = self.workbook[sheet]
-                print(f"Loaded sheet: {sheet}")
-                return
-        raise Exception("Sheet 'page1-8' (or 'page18') not found in workbook.")
+        sheet = find_p18_sheet(self.workbook.sheetnames)
+        if sheet is None:
+            raise Exception(
+                "No page-1-8-style sheet found in workbook (expected a sheet name "
+                "starting with 'page1-8'/'page-1-9', e.g. 'page-1-8', "
+                "'PAGE-1-8 & 11,12', 'PAGE-1-9')."
+            )
+        self.ws = self.workbook[sheet]
+        print(f"Loaded sheet: {sheet}")
 
     def detect_month_column(self):
-        """Find the month column and cumulative column in row 3.
-
-        If report_month was provided, seeks that specific month's column.
-        Otherwise falls back to the last month column that has valid numeric data.
-        """
-        header = [str(c.value).strip() if c.value else "" for c in self.ws[3]]
-
+        """Find the month column and cumulative column by scanning the sheet's
+        own header rows (see rsp_row_scan.find_month_cum_columns) instead of
+        assuming a fixed row/column — the sheet prepends one more legacy
+        fiscal-year column every year, shifting every month's column annually,
+        and the header row itself has been seen at row 1 as well as row 3."""
+        month_num = None
         if self.report_month:
             try:
-                month_num = int(self.report_month.split('-')[1])
-                target_abbr = _MONTH_NUM_TO_ABBR.get(month_num)
-                if target_abbr and target_abbr in header:
-                    self.month_col = header.index(target_abbr)
-            except (ValueError, IndexError, AttributeError):
+                month_num = f"{int(self.report_month.split('-')[1]):02d}"
+            except (ValueError, IndexError):
                 pass
 
-        if self.month_col is None:
-            # Scan in reverse order (Mar -> Apr) to find the last filled month
-            for abbr in reversed(_MONTH_ABBRS):
-                if abbr not in header:
+        month_col_1based = cum_col_1based = None
+        if month_num:
+            month_col_1based, cum_col_1based = find_month_cum_columns(self.ws, month_num)
+
+        if month_col_1based is None:
+            # No report_month given (or its column wasn't found) — fall back to
+            # the last month with valid numeric data, scanning back from March.
+            for mnum in ["03", "02", "01", "12", "11", "10", "09", "08", "07", "06", "05", "04"]:
+                mc, cc = find_month_cum_columns(self.ws, mnum)
+                if mc is None:
                     continue
-                col = header.index(abbr)
                 valid = sum(
                     1 for r in range(5, 40)
-                    if isinstance(self.ws.cell(r + 1, col + 1).value, (int, float))
+                    if isinstance(self.ws.cell(r, mc).value, (int, float))
                 )
                 if valid > 5:
-                    self.month_col = col
+                    month_col_1based, cum_col_1based, month_num = mc, cc, mnum
                     break
 
-        if self.month_col is None:
-            raise Exception("Cannot detect report month column in row 3")
+        if month_col_1based is None:
+            raise Exception("Cannot detect report month column on the techno sheet")
+        if cum_col_1based is None:
+            raise Exception("Cannot find 'Cum.' column on the techno sheet")
 
-        if "Cum." not in header:
-            raise Exception("Cannot find 'Cum.' column in row 3")
-        self.cum_col = header.index("Cum.")
+        self.month_col = month_col_1based - 1
+        self.cum_col = cum_col_1based - 1
+        self._detected_month_num = int(month_num)
 
     def detect_report_month(self):
-        """Auto-detect report month from FY cell + detected column.
-        Only used when report_month was not provided externally.
-        """
+        """Auto-detect report month from the FY cell + detected column.
+        Only used when report_month was not provided externally."""
         if self.report_month:
             return
 
+        start_year = 2026
         try:
-            fy = str(self.ws["AM2"].value)
+            # The FY label ("2025-26") sits directly above the 'Cum.' column
+            # in every sample file checked, regardless of how many legacy-year
+            # columns precede it.
+            fy = str(self.ws.cell(2, self.cum_col + 1).value)
             start_year = int(fy.split("-")[0])
         except Exception:
-            start_year = 2026
+            pass
 
-        header = [str(c.value).strip() if c.value else "" for c in self.ws[3]]
-        detected_abbr = _MONTH_ABBRS[0]  # Apr default
-        if self.month_col is not None and self.month_col < len(header):
-            detected_abbr = header[self.month_col]
-
-        month_num = _MONTH_ABBR_TO_NUM.get(detected_abbr, 4)
-        year = start_year + (1 if detected_abbr in _NEXT_YEAR_MONTHS else 0)
+        month_num = getattr(self, "_detected_month_num", 4)
+        year = start_year + (1 if month_num in (1, 2, 3) else 0)
         self.report_month = f"{year}-{month_num:02d}"
 
     def extract(self) -> List[Dict]:
         self.load_sheet()
+
+        probe_labels = [
+            lbl for unit in self.row_labels.values() for lbl in unit.values() if lbl
+        ]
+        # Probe near a representative early row (BF-1's bf_productivity, row 97
+        # in the reference file) to detect whether this file's labels live in
+        # column A or column B — some sheet variants insert an extra leading
+        # serial-number column before the label.
+        probe_row = next(
+            (r for r in self.hardcoded_map.get("BF-1", {}).values()), 5)
+        self.label_col = detect_label_column(self.ws, probe_row, probe_labels)
+
         self.detect_month_column()
         if not self.report_month:
             self.detect_report_month()
@@ -163,13 +199,34 @@ class TechnoExtractor:
         ytd_days = _ytd_days(year_i, month_i)
 
         records = []
-        print("\n--- Starting Hardcoded Extraction ---\n")
+        print("\n--- Starting RSP Techno Extraction ---\n")
 
         for unit_name, params in self.hardcoded_map.items():
             techno = {"month": {}, "till_month": {}}
 
-            for param_key, row_num in params.items():
+            for param_key, configured_row in params.items():
                 try:
+                    expected_label = self.row_labels.get(unit_name, {}).get(param_key)
+                    if expected_label:
+                        row_num = verified_row(
+                            self.ws, self.label_col, configured_row, expected_label,
+                            window=20, context=f"{unit_name}/{param_key}")
+                    elif unit_name == "BF-4" and param_key in _BF4_BLANK_ANCHOR_OFFSET:
+                        # BF-4's row is unlabeled here — anchor off BF-1's
+                        # verified row for the same param (see
+                        # _BF4_BLANK_ANCHOR_OFFSET docstring above).
+                        bf1_configured = self.hardcoded_map.get("BF-1", {}).get(param_key)
+                        bf1_label = self.row_labels.get("BF-1", {}).get(param_key)
+                        if bf1_configured and bf1_label:
+                            bf1_row = verified_row(
+                                self.ws, self.label_col, bf1_configured, bf1_label,
+                                window=20, context=f"BF-1/{param_key}")
+                            row_num = bf1_row + _BF4_BLANK_ANCHOR_OFFSET[param_key]
+                        else:
+                            row_num = configured_row
+                    else:
+                        row_num = configured_row
+
                     row = list(self.ws.iter_rows(
                         min_row=row_num, max_row=row_num, values_only=True
                     ))[0]
@@ -196,7 +253,8 @@ class TechnoExtractor:
                     techno["month"][param_key] = month_val
                     techno["till_month"][param_key] = till_val
                 except Exception as e:
-                    print(f"Warning: Could not read row {row_num} for {param_key}: {e}")
+                    print(f"Warning: Could not read row {configured_row} for "
+                          f"{unit_name}/{param_key}: {e}")
 
             if any(v is not None for v in techno["month"].values()):
                 records.append({
