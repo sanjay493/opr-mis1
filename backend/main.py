@@ -2587,6 +2587,8 @@ _PARAM_KEY_ALIASES = {
     "sulphur_in_hm": ["sulphur_in_hm", "s_in_hm", "s%_in_hm"],
     "sinter_in_burden": ["sinter_in_burden", "sinter% in burden"],
     "pellet_in_burden": ["pellet_in_burden", "pellet% in burden"],
+    "coke_oven_gas_yield": ["coke_oven_gas_yield", "cog_yield"],
+    "dry_coal_charge_oven": ["dry_coal_charge_oven", "dry_coal_charge", "dry_coal_charge_per_oven"],
 }
 
 
