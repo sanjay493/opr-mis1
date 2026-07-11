@@ -144,3 +144,27 @@ def test_real_files_extract_without_crashing(fname, report_month):
                     f"{fname}: {unit} {pct_param}={v} outside plausible range "
                     "0-50 — likely misattributed to a neighboring block's row"
                 )
+
+    # Regression check for a confirmed real bug: some file editions wrap the
+    # Battery 1-5 / Battery 6 coke-oven section headers in a "COKE OVENS (...)"
+    # prefix not present in older editions. Since SECTION_UNITS matching is
+    # exact (never substring), an unrecognized header variant leaves
+    # current_unit unset for the whole section, silently dropping every row
+    # under it — the unit itself may still appear (via a later, recognized
+    # header like "COAL CHEMICALS") but missing its Battery-section-only
+    # parameters. If COB-old/COB-new are present at all, require their full
+    # expected key set rather than just "some" data.
+    _COB_OLD_KEYS = {"bf_coke_yield", "coke_oven_gas_yield", "dry_coal_charge_oven"}
+    _COB_NEW_KEYS = {"bf_coke_yield", "crude_tar_yield", "ammonium_sulphate_yield", "dry_coal_charge_oven"}
+    if "COB-old" in by_unit:
+        present = _COB_OLD_KEYS & by_unit["COB-old"].keys()
+        assert present == _COB_OLD_KEYS, (
+            f"{fname}: COB-old missing {_COB_OLD_KEYS - present} — likely an "
+            "unrecognized section-header variant leaving current_unit unset"
+        )
+    if "COB-new" in by_unit:
+        present = _COB_NEW_KEYS & by_unit["COB-new"].keys()
+        assert present == _COB_NEW_KEYS, (
+            f"{fname}: COB-new missing {_COB_NEW_KEYS - present} — likely an "
+            "unrecognized section-header variant leaving current_unit unset"
+        )
