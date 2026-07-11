@@ -9,6 +9,8 @@ Renames (within the "month" and "till_month" dicts of techno_json):
     (BSP's own bsp_techno_map.json/bsp_oisco_map.json wrote these spellings
     directly too — fixed there, so this only cleans up rows written before
     that fix)
+  BSP rows, any unit:
+    "coal_to_hot_metal"           -> "coal_to_hm"
   DSP rows, unit == "SMS":
     "ferro_silicon_consumption"   -> "fe-si"
     "ferro_manganese_consumption" -> "fe-mn"
@@ -19,6 +21,7 @@ Renames (within the "month" and "till_month" dicts of techno_json):
     "coal_tar_yield"              -> "crude_tar_yield"
     "crude_benzol"                -> "crude_benzol_yield"
     "ammonium_sulphate"           -> "ammonium_sulphate_yield"
+    "average_ash_in_coke"         -> "ash_in_coke"
   DSP rows, unit in ("BF-2", "BF-3", "BF-4", "BF_Shop"):
     "bf_productivity_working"     -> "bf_productivity"
   BSL rows, any unit:
@@ -29,12 +32,18 @@ Renames (within the "month" and "till_month" dicts of techno_json):
     "working_volume"              -> "bf_productivity"          (was mislabeled;
                                                                    see excel_extractor_bsl.py)
     "useful_volume"               -> "bf_productivity_useful"
+    "ash_in_bf_coke"              -> "ash_in_coke"
+    "cdi_rate"                    -> "cdi"
 
 Also moves "coal_to_hm" into the "General" unit wherever it was stored
-under a per-furnace/BF-shop unit instead (ISP: "BF-5", BSL: "BF_Shop"),
-so the parameter lives under the same unit across all plants — RSP/BSP/
-DSP already store it under "General", which is also where the current
-ISP/BSL extractors write it going forward; this only fixes old rows.
+under a per-furnace/BF-shop unit instead (ISP: "BF-5", BSL: "BF_Shop",
+BSP: "BF_Shop"), so the parameter lives under the same unit across all
+plants — RSP/DSP already store it under "General", which is also where
+the current ISP/BSL/BSP extractors write it going forward; this only
+fixes old rows. Note: since this move only recognizes the *renamed* key
+("coal_to_hm"), run this script twice when a plant needs both the rename
+and the move — the first --apply commits the rename, the second then
+sees "coal_to_hm" already present under the wrong unit and moves it.
 
 Dry-run by default: prints a summary of rows that would change without
 writing anything. Pass --apply to actually commit the renames.
@@ -56,6 +65,10 @@ _BURDEN_RENAMES = {
     "pellet% in burden": "pellet_in_burden",
 }
 
+_BSP_RENAMES = {
+    "coal_to_hot_metal": "coal_to_hm",
+}
+
 _DSP_SMS_RENAMES = {
     "ferro_silicon_consumption":     "fe-si",
     "ferro_manganese_consumption":   "fe-mn",
@@ -65,9 +78,10 @@ _DSP_SMS_RENAMES = {
 }
 
 _DSP_COKE_RENAMES = {
-    "coal_tar_yield":    "crude_tar_yield",
-    "crude_benzol":      "crude_benzol_yield",
-    "ammonium_sulphate": "ammonium_sulphate_yield",
+    "coal_tar_yield":      "crude_tar_yield",
+    "crude_benzol":        "crude_benzol_yield",
+    "ammonium_sulphate":   "ammonium_sulphate_yield",
+    "average_ash_in_coke": "ash_in_coke",
 }
 
 # DSP reports BF Productivity on both a "useful volume" and "working volume"
@@ -86,12 +100,15 @@ _BSL_RENAMES = {
     "ammonium_sulphate": "ammonium_sulphate_yield",
     "working_volume":    "bf_productivity",
     "useful_volume":     "bf_productivity_useful",
+    "ash_in_bf_coke":    "ash_in_coke",
+    "cdi_rate":          "cdi",
 }
 
 # (plant, wrong unit) -> coal_to_hm should live under "General" instead
 _COAL_TO_HM_WRONG_UNIT = {
     "ISP": "BF-5",
     "BSL": "BF_Shop",
+    "BSP": "BF_Shop",
 }
 
 
@@ -180,7 +197,9 @@ def main():
         unit = row["unit"]
         tj = json.loads(row["techno_json"])
 
-        if plant in ("RSP", "ISP", "BSP"):
+        if plant == "BSP":
+            renames = {**_BURDEN_RENAMES, **_BSP_RENAMES}
+        elif plant in ("RSP", "ISP"):
             renames = _BURDEN_RENAMES
         elif plant == "DSP" and unit == "SMS":
             renames = _DSP_SMS_RENAMES
