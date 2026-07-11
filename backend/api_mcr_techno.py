@@ -44,6 +44,16 @@ from techno_cumulative import compute_cumulative_preview  # noqa: E402
 
 router = APIRouter(prefix="/api/mcr-techno", tags=["mcr-techno"])
 
+# "production" only ever exists in techno_data as a fallback weighting input
+# for OTHER parameters' weighted-average cumulative (techno_cumulative.py
+# reads its *month* value, never till_month) — production_table, fed by the
+# dedicated production upload page, is the authoritative source for actual
+# production figures and cumulative. Computing/saving a till_month for
+# "production" here would just be a redundant, unused number that could
+# visually conflict with production_table's own totals, so it's excluded
+# from both the preview breakdown and the write.
+_SKIP_CUMULATIVE_KEYS = {"production"}
+
 _EXTRACTORS = {
     "DSP": DspMcrTechnoExtractor,
     "BSP": BspMonthendTechnoExtractor,  # auto-detects MIS-2 vs PPC MIS
@@ -179,7 +189,7 @@ async def calc_cumulative(payload: dict):
         # weight for the unit-wise weighted rules (e.g. furnace coke rate).
         current_production = month_vals.get("production")
         for key, val in month_vals.items():
-            if val is None:
+            if val is None or key in _SKIP_CUMULATIVE_KEYS:
                 continue
             try:
                 result = compute_cumulative_preview(
@@ -267,6 +277,8 @@ async def calc_cumulative_all(payload: dict):
         for key, val in month_vals.items():
             if not isinstance(val, (int, float)):
                 continue   # null or non-numeric (e.g. 'HH:MM' times)
+            if key in _SKIP_CUMULATIVE_KEYS:
+                continue
             if not overwrite and till.get(key) is not None:
                 skipped += 1
                 continue
