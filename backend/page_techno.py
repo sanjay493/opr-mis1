@@ -1597,10 +1597,10 @@ _TECHNO_DB_SCHEMA = {
             # ISP: "Sp Heat Cons" per battery on the COKE OVENS sheet
             # (rows 169/195, 10^6 kcal/t — extractor multiplies by 1000).
             ("Sp. Heat Consmn./t DC",  "1000 Kcal/Kg DC", [("General", "specific_heat_coke_ovens"), ("Coke Ovens", "specific_heat_coke_ovens"), ("COB", "specific_heat_coke_ovens"), ("COB-old", "specific_heat_coke_ovens"), ("COB-new", "specific_heat_coke_ovens")]),
-            ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "coke_oven_gas_yield"),  ("COB-new", "coke_oven_gas_yield"),  ("Coke Ovens", "coke_oven_gas_yield")]),
-            ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield"),      ("Coke Ovens", "crude_tar_yield")]),
-            ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield"),   ("Coke Ovens", "crude_benzol_yield")]),
-            ("Amm. Sulphate Yield",    "kg/t",       [("COB-new", "ammonium_sulphate_yield"), ("Coke Ovens", "ammonium_sulphate_yield")]),
+            ("Coke Oven Gas Yield",    "NM3/t",      [("COB-old", "coke_oven_gas_yield"),  ("COB-new", "coke_oven_gas_yield"),  ("Coke Ovens", "coke_oven_gas_yield"),  ("COB", "coke_oven_gas_yield")]),
+            ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield"),      ("Coke Ovens", "crude_tar_yield"),      ("COB", "crude_tar_yield")]),
+            ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield"),   ("Coke Ovens", "crude_benzol_yield"),   ("COB", "crude_benzol_yield")]),
+            ("Amm. Sulphate Yield",    "kg/t",       [("COB-new", "ammonium_sulphate_yield"), ("Coke Ovens", "ammonium_sulphate_yield"), ("COB", "ammonium_sulphate_yield")]),
         ],
     },
     29: {
