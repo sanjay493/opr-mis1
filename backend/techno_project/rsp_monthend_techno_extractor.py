@@ -27,7 +27,7 @@ columns hold the for-the-month values. Layout (single sheet):
   row below it carries the month rate in column P → General unit.
 
 Param keys match what the RSP technopara upload already stores (cdi,
-oxygen_enrichment, hot_blast_temp, …) so the final technopara extraction
+o2_enrichment, hot_blast_temp, …) so the final technopara extraction
 cleanly replaces these tentative values later.
 """
 
@@ -54,7 +54,11 @@ _TECHNO_COLS = [
     (12, "sinter_in_burden"),   # L
     (14, "nut_coke_rate"),      # N
     (18, "pellet_in_burden"),   # R
-    (22, "oxygen_enrichment"),  # V
+    (22, "o2_enrichment"),      # V (matches rsp_technopara_sections.py's key
+                                #    name, so the final technopara upload's
+                                #    merge_upsert_techno_data call replaces this
+                                #    tentative value instead of leaving both
+                                #    keys side by side)
     (24, "hot_blast_temp"),     # X
 ]
 _TECHNO_LABEL_COL = 2   # column B

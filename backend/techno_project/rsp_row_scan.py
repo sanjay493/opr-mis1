@@ -84,48 +84,12 @@ def find_month_cum_columns(ws, month_num: str, max_header_row: int = 6,
     return None, None
 
 
-def _norm_label(s) -> str:
+def norm_label(s) -> str:
+    """Lowercase + collapse whitespace (punctuation kept as-is). Shared by
+    detect_label_column here and by the section-aware techno-sheet parser
+    (rsp_technopara_parser.py / rsp_technopara_extractor.py) so a raw label
+    copy-pasted from the sheet always matches consistently."""
     return re.sub(r"\s+", " ", str(s or "")).strip().lower()
-
-
-def find_label_row(ws, label_col: int, label: str, near_row: int,
-                    window: int = 20) -> Optional[int]:
-    """Scan `label_col` for `label` (case-insensitive substring), searching
-    outward from `near_row` first within +/-`window` rows, so a shift is found
-    nearby rather than matching a same-named parameter in a distant, unrelated
-    section (mirrors isp_technopara_extractor.py's _find_label_row)."""
-    lc = _norm_label(label)
-    if not lc:
-        return None
-    lo, hi = max(1, near_row - window), near_row + window
-    for offset in range(0, window + 1):
-        for r in ({near_row - offset, near_row + offset} if offset else {near_row}):
-            if lo <= r <= hi and lc in _norm_label(ws.cell(row=r, column=label_col).value):
-                return r
-    return None
-
-
-def verified_row(ws, label_col: int, configured_row: int, expected_label: str,
-                  window: int = 20, context: str = "") -> int:
-    """Return the row to actually read: the configured row if its label still
-    matches, the nearby row the label moved to if not, or the configured row
-    unchanged (with a printed warning) if the label can't be found nearby at
-    all. Mirrors isp_technopara_extractor.py's _verified_row. `context` is only
-    used to identify which (unit/param) drifted in the warning message."""
-    if not expected_label:
-        return configured_row
-    actual_label = ws.cell(row=configured_row, column=label_col).value
-    if _norm_label(expected_label) in _norm_label(actual_label):
-        return configured_row
-    found = find_label_row(ws, label_col, expected_label, configured_row, window)
-    if found:
-        print(f"Warning: {context or 'row'} shifted {configured_row} -> {found} "
-              f"(label '{expected_label}')")
-        return found
-    print(f"Warning: {context or 'row'} expected label '{expected_label}' not found "
-          f"near row {configured_row} — using configured row unverified "
-          f"(got {actual_label!r})")
-    return configured_row
 
 
 def detect_label_column(ws, near_row: int, probe_labels, max_col: int = 2) -> int:
@@ -135,12 +99,12 @@ def detect_label_column(ws, near_row: int, probe_labels, max_col: int = 2) -> in
     `probe_labels` (known label text expected somewhere nearby) and returns
     whichever column is the better match; defaults to column 1 if neither
     matches anything."""
-    probes = [_norm_label(p) for p in probe_labels if p]
+    probes = [norm_label(p) for p in probe_labels if p]
     best_col, best_hits = 1, -1
     for col in range(1, max_col + 1):
         hits = 0
         for r in range(max(1, near_row - 5), near_row + 6):
-            cell_val = _norm_label(ws.cell(row=r, column=col).value)
+            cell_val = norm_label(ws.cell(row=r, column=col).value)
             if cell_val and any(p in cell_val for p in probes):
                 hits += 1
         if hits > best_hits:

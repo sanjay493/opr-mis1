@@ -82,7 +82,8 @@ def allowed_units(plant: str) -> set:
     """
     plant = plant.upper()
     if plant == "RSP":
-        return _map_units("rsp_technopara_map.json")
+        from rsp_technopara_sections import ALL_UNITS
+        return set(ALL_UNITS)
     if plant == "ISP":
         return _map_units("isp_technopara_map.json", nested=True)
     if plant == "BSP":
