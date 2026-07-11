@@ -560,110 +560,39 @@ def _extract_hsm_rows(wb, db_month: str) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Cold Rolling Mill complex — "CRM 1&2" (Sheet9/Sheet10) and "CRM 3" (Sheet11)
-# are each actually a group of independently-operated sub-machines with their
-# own Yield/Rate-of-Production/Availability/Utilisation, not one figure for
-# the whole complex (confirmed against the source: no complex-wide summary
-# row exists for any of these). One mill-unit row per sub-machine, same
-# convention as HSM/PM/RSM/etc. elsewhere on this page.
+# Cold Rolling Mill complex — CRM 1&2 (Tandem Mill figures, Sheet9) and CRM 3
+# (PLTCM/SPM figures, Sheet11; Specific Power Consumption, Sheet1) each report
+# a handful of specific named figures directly under the CRM 1&2 / CRM 3 unit
+# itself (not as separate per-sub-machine units/rows) — confirmed by direct
+# user instruction. Parameter names are prefixed with the sub-machine they
+# come from (TM-1, PLTCM, SPM, ...) since several sub-machines' figures now
+# share one unit and need distinct keys.
 #
 # (sheet, row, mon_col, cum_col, unit_name, parameter, unit_str, label_keyword)
 # label_keyword is checked against column B for the same self-verification
 # HSM uses above — logs a warning (never crashes) if a future file reshuffles
 # rows, rather than silently mismapping data into the wrong parameter.
 # ---------------------------------------------------------------------------
-_CRM_LABEL_COL = 2   # column B, same as HSM
-# Per-sheet override — the "CM Review" summary sheet puts its label in
-# column A instead (everything else uses column B).
-_CRM_LABEL_COL_BY_SHEET = {"CM Review": 1}
+_CRM_LABEL_COL = 2   # column B — Sheet9/Sheet11/Sheet1 all agree on this
 
 _CRM_ROWS = [
-    # Pickling Line - I (Sheet9)
-    ("Sheet9", 11, 6, 7, "Pickling Line-I",  "Yield",             "%",    "yield"),
-    ("Sheet9", 13, 6, 7, "Pickling Line-I",  "Rolling Rate",      "t/hr", "pickled"),
-    ("Sheet9", 15, 6, 7, "Pickling Line-I",  "Acid Consumption",  "kg/t", "acid"),
-    ("Sheet9", 17, 6, 7, "Pickling Line-I",  "Availability",      "%",    "availab"),
-    ("Sheet9", 19, 6, 7, "Pickling Line-I",  "Utilisation",       "%",    "utilis"),
-    # Pickling Line - II (Sheet9)
-    ("Sheet9", 23, 6, 7, "Pickling Line-II", "Yield",             "%",    "yield"),
-    ("Sheet9", 25, 6, 7, "Pickling Line-II", "Rolling Rate",      "t/hr", "pickled"),
-    ("Sheet9", 27, 6, 7, "Pickling Line-II", "Acid Consumption",  "kg/t", "acid"),
-    ("Sheet9", 29, 6, 7, "Pickling Line-II", "Availability",      "%",    "availab"),
-    ("Sheet9", 31, 6, 7, "Pickling Line-II", "Utilisation",       "%",    "utilis"),
-    # Tandem Mill - I (Sheet9)
-    ("Sheet9", 35, 6, 7, "Tandem Mill-I",    "Yield",             "%",    "yield"),
-    ("Sheet9", 37, 6, 7, "Tandem Mill-I",    "Rolling Rate",      "t/hr", "prod"),
-    ("Sheet9", 39, 6, 7, "Tandem Mill-I",    "Availability",      "%",    "availab"),
-    ("Sheet9", 41, 6, 7, "Tandem Mill-I",    "Utilisation",       "%",    "utilis"),
-    # Tandem Mill - II (Sheet9)
-    ("Sheet9", 45, 6, 7, "Tandem Mill-II",   "Yield",             "%",    "yield"),
-    ("Sheet9", 47, 6, 7, "Tandem Mill-II",   "Rolling Rate",      "t/hr", "prod"),
-    ("Sheet9", 49, 6, 7, "Tandem Mill-II",   "Availability",      "%",    "availab"),
-    ("Sheet9", 51, 6, 7, "Tandem Mill-II",   "Utilisation",       "%",    "utilis"),
-    # Annealing Furnace (Sheet9) — only reports a rate figure
-    ("Sheet9", 55, 6, 7, "Annealing Furnace","Rolling Rate",      "t/hr/base", "annealing"),
-    # Skin Pass Mill - I (Sheet10)
-    ("Sheet10", 12, 6, 7, "Skin Pass Mill-I",  "Yield",           "%",    "yield"),
-    ("Sheet10", 16, 6, 7, "Skin Pass Mill-I",  "Rolling Rate",    "t/hr", "prod"),
-    ("Sheet10", 18, 6, 7, "Skin Pass Mill-I",  "Availability",    "%",    "availab"),
-    ("Sheet10", 20, 6, 7, "Skin Pass Mill-I",  "Utilisation",     "%",    "utilis"),
-    # Skin Pass Mill - II (Sheet10)
-    ("Sheet10", 24, 6, 7, "Skin Pass Mill-II", "Yield",           "%",    "yield"),
-    ("Sheet10", 28, 6, 7, "Skin Pass Mill-II", "Rolling Rate",    "t/hr", "prod"),
-    ("Sheet10", 30, 6, 7, "Skin Pass Mill-II", "Availability",    "%",    "availab"),
-    ("Sheet10", 32, 6, 7, "Skin Pass Mill-II", "Utilisation",     "%",    "utilis"),
-    # CRCF (Sheet10)
-    ("Sheet10", 40, 6, 7, "CRCF", "Yield",        "%",    "yield"),
-    ("Sheet10", 42, 6, 7, "CRCF", "Rolling Rate", "t/hr", "prod"),
-    ("Sheet10", 44, 6, 7, "CRCF", "Availability", "%",    "availab"),
-    ("Sheet10", 46, 6, 7, "CRCF", "Utilisation",  "%",    "utilis"),
-    # HDGL — CRM 1&2's own Hot Dip Galvanizing Line (Sheet10; CRM 3 has a
-    # separate, distinctly-named one below — "HDGL-3")
-    ("Sheet10", 50, 6, 7, "HDGL-1&2", "Yield",             "%",    "yield"),
-    ("Sheet10", 52, 6, 7, "HDGL-1&2", "Zinc Consumption",  "kg/t", "zinc"),
-    ("Sheet10", 54, 6, 7, "HDGL-1&2", "Rolling Rate",      "t/hr", "prod"),
-    ("Sheet10", 56, 6, 7, "HDGL-1&2", "Availability",      "%",    "availab"),
-    ("Sheet10", 58, 6, 7, "HDGL-1&2", "Utilisation",       "%",    "utilis"),
-    # DCR (Sheet10)
-    ("Sheet10", 62, 6, 7, "DCR", "Yield",        "%",    "yield"),
-    ("Sheet10", 64, 6, 7, "DCR", "Rolling Rate", "t/hr", "prod"),
-    ("Sheet10", 66, 6, 7, "DCR", "Availability", "%",    "availab"),
-    ("Sheet10", 68, 6, 7, "DCR", "Utilisation",  "%",    "utilis"),
-    # Slitting Line - II (Sheet11, different month/cum columns — no
-    # "budgeted norms" column on this sheet). "Slitting Line (Overall)"'s
-    # only figure (Yield) was blank in the sample and isn't specific to
-    # either individual line, so it's not extracted here.
-    ("Sheet11", 15, 5, 6, "Slitting Line-II", "Rolling Rate", "t/hr", "prod"),
-    ("Sheet11", 17, 5, 6, "Slitting Line-II", "Availability", "%",    "availab"),
-    ("Sheet11", 19, 5, 6, "Slitting Line-II", "Utilisation",  "%",    "utilis"),
-    # PLTCM — CRM 3 (Sheet11)
-    ("Sheet11", 30, 5, 6, "PLTCM", "Yield",            "%",    "yield"),
-    ("Sheet11", 32, 5, 6, "PLTCM", "Rolling Rate",     "t/hr", "prod"),
-    ("Sheet11", 34, 5, 6, "PLTCM", "Acid Consumption", "kg/t", "acid"),
-    ("Sheet11", 36, 5, 6, "PLTCM", "Availability",     "%",    "availab"),
-    ("Sheet11", 38, 5, 6, "PLTCM", "Utilisation",      "%",    "utilis"),
-    # SPM — CRM 3 (Sheet11). Reports two distinct yield figures — from
-    # annealed coil (the mill's own process yield) and of CR coil from HR
-    # coil (the overall material-in/material-out yield) — both kept, under
-    # distinct keys.
-    ("Sheet11", 42, 5, 6, "SPM", "Yield",                       "%",    "yield"),
-    ("Sheet11", 44, 5, 6, "SPM", "Yield of CR Coil from HR Coil","%",    "yield of cr coil"),
-    ("Sheet11", 46, 5, 6, "SPM", "Rolling Rate",                "t/hr", "prod"),
-    ("Sheet11", 48, 5, 6, "SPM", "Availability",                "%",    "availab"),
-    ("Sheet11", 50, 5, 6, "SPM", "Utilisation",  "%",    "utilis"),
-    # TLIL — CRM 3 (Sheet11) — yield only
-    ("Sheet11", 54, 5, 6, "TLIL", "Yield", "%", "yield"),
-    # HDGL — CRM 3's own Hot Dip Galvanizing Line (Sheet11)
-    ("Sheet11", 58, 5, 6, "HDGL-3", "Yield",            "%",    "yield"),
-    ("Sheet11", 60, 5, 6, "HDGL-3", "Zinc Consumption", "kg/t", "zinc"),
-    ("Sheet11", 64, 5, 6, "HDGL-3", "Rolling Rate",     "t/hr", "prod"),
-    ("Sheet11", 66, 5, 6, "HDGL-3", "Availability",     "%",    "availab"),
-    ("Sheet11", 68, 5, 6, "HDGL-3", "Utilisation",      "%",    "utilis"),
-    # CRM 3 overall — Sp. Heat/Power Consumption live only on the "CM Review"
-    # summary sheet (col B = month, col C = cum), not attributable to any one
-    # CRM 3 sub-machine — confirmed complex-wide, not SPM-specific.
-    ("CM Review", 47, 2, 3, "CRM 3", "Sp. Heat Consumption",  "M.Cal/T", "heat"),
-    ("CM Review", 48, 2, 3, "CRM 3", "Sp. Power Consumption", "kWh/t",   "power"),
+    # CRM 1&2 (Sheet9) — Tandem Mill-I / Tandem Mill-II Utilisation only.
+    ("Sheet9", 41, 6, 7, "CRM 1&2", "TM-1 Utilisation", "%", "utilis"),
+    ("Sheet9", 51, 6, 7, "CRM 1&2", "TM-2 Utilisation", "%", "utilis"),
+    # CRM 3 (Sheet11) — PLTCM Yield/Availability/Utilisation, SPM's "Yield
+    # of CR Coil from HR Coil" (the material-in/material-out yield, not its
+    # "Yield from Annealed Coil" process yield)/Availability/Utilisation.
+    ("Sheet11", 30, 5, 6, "CRM 3", "PLTCM Yield",             "%", "yield"),
+    ("Sheet11", 36, 5, 6, "CRM 3", "PLTCM Availability",      "%", "availab"),
+    ("Sheet11", 38, 5, 6, "CRM 3", "PLTCM Utilisation",       "%", "utilis"),
+    ("Sheet11", 44, 5, 6, "CRM 3", "SPM Yield of CR Coil",    "%", "yield of cr coil"),
+    ("Sheet11", 48, 5, 6, "CRM 3", "SPM Availability",        "%", "availab"),
+    ("Sheet11", 50, 5, 6, "CRM 3", "SPM Utilisation",         "%", "utilis"),
+    # CRM 3 — Specific Power Consumption. Sourced from Sheet1 (row 26,
+    # "POWER CONSUMPN/T OF SAL.STEEL") rather than the "CM Review" summary
+    # sheet — same underlying figure (CM Review's cell references this one),
+    # Sheet1 is the primary source.
+    ("Sheet1", 26, 6, 7, "CRM 3", "Specific Power Consumption", "kWh/t", "power consumpn"),
 ]
 
 
@@ -678,14 +607,13 @@ def _extract_crm_rows(wb, db_month: str) -> list:
             logger.info("BSL techno: sheet %r not found — skipping %s/%s", sheet, unit, param)
             continue
         ws = wb[sheet]
-        label_col = _CRM_LABEL_COL_BY_SHEET.get(sheet, _CRM_LABEL_COL)
-        label = str(ws.cell(row, label_col).value or "").strip()
+        label = str(ws.cell(row, _CRM_LABEL_COL).value or "").strip()
         if keyword not in label.lower():
             logger.warning(
-                "BSL techno: CRM %s row %d column %d label %r didn't contain "
+                "BSL techno: CRM %s row %d column B label %r didn't contain "
                 "expected keyword %r for %s/%s — verify _CRM_ROWS in "
                 "excel_extractor_bsl.py still points at the right rows.",
-                sheet, row, label_col, label, keyword, unit, param,
+                sheet, row, label, keyword, unit, param,
             )
             continue
 
