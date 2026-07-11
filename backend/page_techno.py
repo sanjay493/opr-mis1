@@ -1601,6 +1601,11 @@ _TECHNO_DB_SCHEMA = {
             ("Coal Tar Yield",         "kg/t",       [("COB-new", "crude_tar_yield"),      ("Coke Ovens", "crude_tar_yield"),      ("COB", "crude_tar_yield")]),
             ("Crude Benzol Yield",     "kg/t",       [("COB-new", "crude_benzol_yield"),   ("Coke Ovens", "crude_benzol_yield"),   ("COB", "crude_benzol_yield")]),
             ("Amm. Sulphate Yield",    "kg/t",       [("COB-new", "ammonium_sulphate_yield"), ("Coke Ovens", "ammonium_sulphate_yield"), ("COB", "ammonium_sulphate_yield")]),
+            # Also shown on page 29 (Iron Making) — coke_screen_loss is a
+            # plant/shop-level figure, not per-coke-oven-unit, so (unlike the
+            # rows above) it's stored under "General" (BSL/DSP/ISP/RSP) or
+            # BSP's "BF_Shop", never COB/Coke Ovens/COB-old/COB-new.
+            ("Coke Screen Loss",       "%",          [("General", "coke_screen_loss"), ("BF_Shop", "coke_screen_loss")]),
         ],
     },
     29: {
@@ -1611,7 +1616,7 @@ _TECHNO_DB_SCHEMA = {
             ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons")]),
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
             ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
-            ("Coke Screen Loss",    "%",         [("General", "coke_screen_loss")]),
+            ("Coke Screen Loss",    "%",         [("General", "coke_screen_loss"), ("BF_Shop", "coke_screen_loss")]),
         ],
     },
     30: {
