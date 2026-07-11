@@ -115,3 +115,32 @@ def test_real_files_extract_without_crashing(fname, report_month):
         f"{fname}: only {total_nonnull} non-null month values across "
         f"{len(records)} units (floor {MIN_NONNULL_VALUES})"
     )
+
+    # Regression check for a confirmed real bug: O2 Enrichment / Hot Blast Temp /
+    # Si-in-HM per-BF-furnace rows sit only ~5 rows apart with identical
+    # per-furnace labels repeating across all three blocks, so a mis-resolved
+    # row can silently return a value from the WRONG block/unit (e.g. BF-5's
+    # o2_enrichment landing on BF-4's hot_blast_temp row). Each parameter has a
+    # distinct physical range, so a cross-block mixup shows up as an
+    # out-of-range value.
+    by_unit = {rec["unit"]: rec["techno_json"]["month"] for rec in records}
+    for unit in ("BF-1", "BF-4", "BF-5", "BF_Shop"):
+        m = by_unit.get(unit, {})
+        hbt = m.get("hot_blast_temp")
+        # 0 is a legitimate "furnace not running this month" sentinel some
+        # files use instead of leaving the cell blank — only flag values that
+        # are neither 0 nor in a physically plausible hot-blast-temperature
+        # range (a cross-block mixup lands on a %/ratio-scale value instead).
+        if hbt is not None and hbt != 0:
+            assert 500 < hbt < 1500, (
+                f"{fname}: {unit} hot_blast_temp={hbt} outside plausible range "
+                "500-1500°C (or 0 for not-running) — likely misattributed to "
+                "a neighboring block's row"
+            )
+        for pct_param in ("o2_enrichment", "silicon_in_hm"):
+            v = m.get(pct_param)
+            if v is not None:
+                assert 0 <= v < 50, (
+                    f"{fname}: {unit} {pct_param}={v} outside plausible range "
+                    "0-50 — likely misattributed to a neighboring block's row"
+                )

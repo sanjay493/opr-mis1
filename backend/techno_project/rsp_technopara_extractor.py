@@ -8,7 +8,8 @@ from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 from rsp_row_scan import (  # noqa: E402  (path set above)
-    find_month_cum_columns, find_p18_sheet, verified_row, detect_label_column,
+    find_month_cum_columns, find_p18_sheet, verified_row, find_label_row,
+    detect_label_column,
 )
 
 # Params that the source sheet reports as a TOTAL for the period (total blows
@@ -17,16 +18,25 @@ from rsp_row_scan import (  # noqa: E402  (path set above)
 # as actually labelled.
 _DAILY_AVG_PARAMS = {"average_blows_per_day"}
 
-# BF-4's row is unlabeled in column A/B for these three params (confirmed
-# across every sample file checked) — the O2-Enrichment/Hot-Blast-Temp/
-# Si-in-HM block lists BF-1/BF-5/Shop by label but leaves BF-4's row blank,
-# always the row immediately after BF-1's verified row for the same param
-# (BF-1/BF-4/BF-5/Shop are laid out as four consecutive rows in that block in
-# every sample file checked). Resolved by anchoring off BF-1's own
-# (label-verified) row rather than by label match.
-_BF4_BLANK_ANCHOR_OFFSET = {
-    "o2_enrichment": 1, "hot_blast_temp": 1, "silicon_in_hm": 1,
+# O2 Enrichment / Hot Blast Temp / Si-in-HM are laid out as one per-furnace
+# row each for BF-1/BF-4/BF-5/BF_Shop immediately below a section-title row —
+# but the per-furnace labels themselves ("BF-I"/"BF-V"/"Shop") are IDENTICAL
+# across all three blocks, only ~5 rows apart, and BF-4's row additionally has
+# no label at all. Verifying each unit/param independently by that repeated
+# label is ambiguous: confirmed on a real file that a window search for
+# BF-5's o2_enrichment landed on BF-4's hot_blast_temp row instead. Anchored
+# off each block's section-title text instead (unique within the sheet) with
+# a fixed per-unit row offset — robust because the anchor text never repeats.
+# Confirmed present (with these row offsets) in every 2025/2026-era sample
+# file checked; the per-furnace breakdown does not exist at all in 2023/2024-
+# era files (a later template addition), so those correctly yield "not found"
+# rather than a misattributed value.
+_BF_BLOCK_ANCHORS = {
+    "o2_enrichment":  "oxygen enrchiment",
+    "hot_blast_temp": "hot blast tempeture",
+    "silicon_in_hm":  "si % in hotmetal",
 }
+_BF_BLOCK_UNIT_OFFSET = {"BF-1": 1, "BF-4": 2, "BF-5": 3, "BF_Shop": 4}
 
 
 def _ytd_days(year_i: int, month_i: int) -> int:
@@ -201,31 +211,38 @@ class TechnoExtractor:
         records = []
         print("\n--- Starting RSP Techno Extraction ---\n")
 
+        # Resolve each BF-block anchor once (not once per unit) — see
+        # _BF_BLOCK_ANCHORS docstring. None means "not found" (e.g. an
+        # older-era file that doesn't have this breakdown at all), and every
+        # unit's row for that param is then skipped rather than guessed.
+        bf_block_anchor_row: Dict[str, Optional[int]] = {}
+        for param_key, anchor_text in _BF_BLOCK_ANCHORS.items():
+            near = self.hardcoded_map.get("BF-1", {}).get(param_key, 1) - 1
+            bf_block_anchor_row[param_key] = find_label_row(
+                self.ws, self.label_col, anchor_text, near, window=40)
+
         for unit_name, params in self.hardcoded_map.items():
             techno = {"month": {}, "till_month": {}}
 
             for param_key, configured_row in params.items():
                 try:
-                    expected_label = self.row_labels.get(unit_name, {}).get(param_key)
-                    if expected_label:
-                        row_num = verified_row(
-                            self.ws, self.label_col, configured_row, expected_label,
-                            window=20, context=f"{unit_name}/{param_key}")
-                    elif unit_name == "BF-4" and param_key in _BF4_BLANK_ANCHOR_OFFSET:
-                        # BF-4's row is unlabeled here — anchor off BF-1's
-                        # verified row for the same param (see
-                        # _BF4_BLANK_ANCHOR_OFFSET docstring above).
-                        bf1_configured = self.hardcoded_map.get("BF-1", {}).get(param_key)
-                        bf1_label = self.row_labels.get("BF-1", {}).get(param_key)
-                        if bf1_configured and bf1_label:
-                            bf1_row = verified_row(
-                                self.ws, self.label_col, bf1_configured, bf1_label,
-                                window=20, context=f"BF-1/{param_key}")
-                            row_num = bf1_row + _BF4_BLANK_ANCHOR_OFFSET[param_key]
+                    if param_key in _BF_BLOCK_ANCHORS and unit_name in _BF_BLOCK_UNIT_OFFSET:
+                        anchor_row = bf_block_anchor_row.get(param_key)
+                        row_num = (anchor_row + _BF_BLOCK_UNIT_OFFSET[unit_name]
+                                   if anchor_row is not None else None)
+                    else:
+                        expected_label = self.row_labels.get(unit_name, {}).get(param_key)
+                        if expected_label:
+                            row_num = verified_row(
+                                self.ws, self.label_col, configured_row, expected_label,
+                                window=20, context=f"{unit_name}/{param_key}")
                         else:
                             row_num = configured_row
-                    else:
-                        row_num = configured_row
+
+                    if row_num is None:
+                        techno["month"][param_key] = None
+                        techno["till_month"][param_key] = None
+                        continue
 
                     row = list(self.ws.iter_rows(
                         min_row=row_num, max_row=row_num, values_only=True
