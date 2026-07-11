@@ -16,10 +16,11 @@ a future report-template tweak could silently break:
      filename (catches the header-column scan silently landing on the wrong
      month).
 
-This does NOT assert exact values per parameter — the row-shift
-self-healing (verified_row/find_label_row) trades exactness for resilience,
-so the real safety net is "did it still find data," matching the label
-verification's own warning-not-exception design.
+The extractor itself no longer depends on row numbers at all (see
+techno_project/rsp_technopara_sections.py) — it walks the sheet top to
+bottom, tracking the current unit section and resolving each row via a
+declarative label/section registry, so row-shift between file editions
+can't misattribute a value the way a stored-row-number approach could.
 """
 from pathlib import Path
 
@@ -69,14 +70,13 @@ REAL_TECHNOPARA_FILES = [
     ("technopara may-2024.xlsx", "2024-05"),
 ]
 
-# rsp_technopara_map.json has 18 top-level units (BF-1/4/5/Shop, SMS-1/2,
+# rsp_technopara_sections.py's ALL_UNITS has 18 units (BF-1/4/5/Shop, SMS-1/2,
 # COB-old/new, General, SP-1/2/3, PM, NPM, HSM-2, SSM, SWP, ERW) — a file
 # should extract data for nearly all of them; a handful of samples are down
 # one unit some months (e.g. a mill with no data that period), so allow a
 # little slack rather than requiring an exact match.
 MIN_UNIT_COUNT = 15
-# Out of 122 total mapped parameters, a generous floor (observed range on
-# the real corpus is ~90-114).
+# Generous floor well below the observed range on the real corpus (~90-112).
 MIN_NONNULL_VALUES = 60
 
 
@@ -115,3 +115,32 @@ def test_real_files_extract_without_crashing(fname, report_month):
         f"{fname}: only {total_nonnull} non-null month values across "
         f"{len(records)} units (floor {MIN_NONNULL_VALUES})"
     )
+
+    # Regression check for a confirmed real bug: O2 Enrichment / Hot Blast Temp /
+    # Si-in-HM per-BF-furnace rows sit only ~5 rows apart with identical
+    # per-furnace labels repeating across all three blocks, so a mis-resolved
+    # row can silently return a value from the WRONG block/unit (e.g. BF-5's
+    # o2_enrichment landing on BF-4's hot_blast_temp row). Each parameter has a
+    # distinct physical range, so a cross-block mixup shows up as an
+    # out-of-range value.
+    by_unit = {rec["unit"]: rec["techno_json"]["month"] for rec in records}
+    for unit in ("BF-1", "BF-4", "BF-5", "BF_Shop"):
+        m = by_unit.get(unit, {})
+        hbt = m.get("hot_blast_temp")
+        # 0 is a legitimate "furnace not running this month" sentinel some
+        # files use instead of leaving the cell blank — only flag values that
+        # are neither 0 nor in a physically plausible hot-blast-temperature
+        # range (a cross-block mixup lands on a %/ratio-scale value instead).
+        if hbt is not None and hbt != 0:
+            assert 500 < hbt < 1500, (
+                f"{fname}: {unit} hot_blast_temp={hbt} outside plausible range "
+                "500-1500°C (or 0 for not-running) — likely misattributed to "
+                "a neighboring block's row"
+            )
+        for pct_param in ("o2_enrichment", "silicon_in_hm"):
+            v = m.get(pct_param)
+            if v is not None:
+                assert 0 <= v < 50, (
+                    f"{fname}: {unit} {pct_param}={v} outside plausible range "
+                    "0-50 — likely misattributed to a neighboring block's row"
+                )
