@@ -122,10 +122,17 @@ class BspTechnoExtractor:
             techno = {"month": {}, "till_month": {}}
             for param_key, row_num in params.items():
                 try:
-                    month_val = ws.cell(row_num, month_col).value
-                    till_val  = ws.cell(row_num, cum_col).value
-                    techno["month"][param_key]     = _clean(month_val)
-                    techno["till_month"][param_key] = _clean(till_val)
+                    month_val = _clean(ws.cell(row_num, month_col).value)
+                    till_val  = _clean(ws.cell(row_num, cum_col).value)
+                    if till_val is None and month_val is not None and month_num == 4:
+                        # April is FY month 1, so cumulative April->April is
+                        # always identical to the month value — some report
+                        # preparers leave the Cum column blank for it (same
+                        # convention already handled in
+                        # pdf_extractor_bsp_flash.py's _text_param).
+                        till_val = month_val
+                    techno["month"][param_key]     = month_val
+                    techno["till_month"][param_key] = till_val
                 except Exception as e:
                     print(f"[BSP-TechnoExtractor] Warning: row {row_num} / {param_key}: {e}")
 
