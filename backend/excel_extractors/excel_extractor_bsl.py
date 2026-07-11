@@ -1,4 +1,4 @@
-﻿import re
+import re
 import calendar
 import openpyxl
 from openpyxl.utils import get_column_letter
@@ -490,7 +490,13 @@ _FAX_BF_FURNACE_PARAMS = [
 # Column F = month actual, Column G = till-the-month cumulative.
 # ---------------------------------------------------------------------------
 _HSM_SHEET     = "Sheet8"
-_HSM_ROWS      = [29, 35, 37, 41, 43]
+# Row 35 ("ROLLING HOURS/DAY") was previously registered here too, but it
+# isn't one of the 6 tracked HSM parameters at all, and it also matches the
+# "rolling" keyword — so it silently raced with row 29 ("SLAB ROLLING RATE",
+# the real Rolling Rate figure) for the same param, overwriting whichever one
+# got processed last. Removed. Rows 17/18 (Heat/Power Consumption) were
+# missing entirely — added.
+_HSM_ROWS      = [17, 18, 29, 37, 41, 43]
 _HSM_LABEL_COL = 2   # column B
 _HSM_MON_COL   = 6   # column F
 _HSM_CUM_COL   = 7   # column G
@@ -548,6 +554,159 @@ def _extract_hsm_rows(wb, db_month: str) -> list:
             "plant":      "BSL",
             "month":      db_month,
             "found_via":  f"hardcoded {_HSM_SHEET} R{row}C{_HSM_MON_COL} (label-matched {label!r} -> {param})",
+            "status":     "ok" if (actual is not None or cum is not None) else "skip",
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Cold Rolling Mill complex — "CRM 1&2" (Sheet9/Sheet10) and "CRM 3" (Sheet11)
+# are each actually a group of independently-operated sub-machines with their
+# own Yield/Rate-of-Production/Availability/Utilisation, not one figure for
+# the whole complex (confirmed against the source: no complex-wide summary
+# row exists for any of these). One mill-unit row per sub-machine, same
+# convention as HSM/PM/RSM/etc. elsewhere on this page.
+#
+# (sheet, row, mon_col, cum_col, unit_name, parameter, unit_str, label_keyword)
+# label_keyword is checked against column B for the same self-verification
+# HSM uses above — logs a warning (never crashes) if a future file reshuffles
+# rows, rather than silently mismapping data into the wrong parameter.
+# ---------------------------------------------------------------------------
+_CRM_LABEL_COL = 2   # column B, same as HSM
+# Per-sheet override — the "CM Review" summary sheet puts its label in
+# column A instead (everything else uses column B).
+_CRM_LABEL_COL_BY_SHEET = {"CM Review": 1}
+
+_CRM_ROWS = [
+    # Pickling Line - I (Sheet9)
+    ("Sheet9", 11, 6, 7, "Pickling Line-I",  "Yield",             "%",    "yield"),
+    ("Sheet9", 13, 6, 7, "Pickling Line-I",  "Rolling Rate",      "t/hr", "pickled"),
+    ("Sheet9", 15, 6, 7, "Pickling Line-I",  "Acid Consumption",  "kg/t", "acid"),
+    ("Sheet9", 17, 6, 7, "Pickling Line-I",  "Availability",      "%",    "availab"),
+    ("Sheet9", 19, 6, 7, "Pickling Line-I",  "Utilisation",       "%",    "utilis"),
+    # Pickling Line - II (Sheet9)
+    ("Sheet9", 23, 6, 7, "Pickling Line-II", "Yield",             "%",    "yield"),
+    ("Sheet9", 25, 6, 7, "Pickling Line-II", "Rolling Rate",      "t/hr", "pickled"),
+    ("Sheet9", 27, 6, 7, "Pickling Line-II", "Acid Consumption",  "kg/t", "acid"),
+    ("Sheet9", 29, 6, 7, "Pickling Line-II", "Availability",      "%",    "availab"),
+    ("Sheet9", 31, 6, 7, "Pickling Line-II", "Utilisation",       "%",    "utilis"),
+    # Tandem Mill - I (Sheet9)
+    ("Sheet9", 35, 6, 7, "Tandem Mill-I",    "Yield",             "%",    "yield"),
+    ("Sheet9", 37, 6, 7, "Tandem Mill-I",    "Rolling Rate",      "t/hr", "prod"),
+    ("Sheet9", 39, 6, 7, "Tandem Mill-I",    "Availability",      "%",    "availab"),
+    ("Sheet9", 41, 6, 7, "Tandem Mill-I",    "Utilisation",       "%",    "utilis"),
+    # Tandem Mill - II (Sheet9)
+    ("Sheet9", 45, 6, 7, "Tandem Mill-II",   "Yield",             "%",    "yield"),
+    ("Sheet9", 47, 6, 7, "Tandem Mill-II",   "Rolling Rate",      "t/hr", "prod"),
+    ("Sheet9", 49, 6, 7, "Tandem Mill-II",   "Availability",      "%",    "availab"),
+    ("Sheet9", 51, 6, 7, "Tandem Mill-II",   "Utilisation",       "%",    "utilis"),
+    # Annealing Furnace (Sheet9) — only reports a rate figure
+    ("Sheet9", 55, 6, 7, "Annealing Furnace","Rolling Rate",      "t/hr/base", "annealing"),
+    # Skin Pass Mill - I (Sheet10)
+    ("Sheet10", 12, 6, 7, "Skin Pass Mill-I",  "Yield",           "%",    "yield"),
+    ("Sheet10", 16, 6, 7, "Skin Pass Mill-I",  "Rolling Rate",    "t/hr", "prod"),
+    ("Sheet10", 18, 6, 7, "Skin Pass Mill-I",  "Availability",    "%",    "availab"),
+    ("Sheet10", 20, 6, 7, "Skin Pass Mill-I",  "Utilisation",     "%",    "utilis"),
+    # Skin Pass Mill - II (Sheet10)
+    ("Sheet10", 24, 6, 7, "Skin Pass Mill-II", "Yield",           "%",    "yield"),
+    ("Sheet10", 28, 6, 7, "Skin Pass Mill-II", "Rolling Rate",    "t/hr", "prod"),
+    ("Sheet10", 30, 6, 7, "Skin Pass Mill-II", "Availability",    "%",    "availab"),
+    ("Sheet10", 32, 6, 7, "Skin Pass Mill-II", "Utilisation",     "%",    "utilis"),
+    # CRCF (Sheet10)
+    ("Sheet10", 40, 6, 7, "CRCF", "Yield",        "%",    "yield"),
+    ("Sheet10", 42, 6, 7, "CRCF", "Rolling Rate", "t/hr", "prod"),
+    ("Sheet10", 44, 6, 7, "CRCF", "Availability", "%",    "availab"),
+    ("Sheet10", 46, 6, 7, "CRCF", "Utilisation",  "%",    "utilis"),
+    # HDGL — CRM 1&2's own Hot Dip Galvanizing Line (Sheet10; CRM 3 has a
+    # separate, distinctly-named one below — "HDGL-3")
+    ("Sheet10", 50, 6, 7, "HDGL-1&2", "Yield",             "%",    "yield"),
+    ("Sheet10", 52, 6, 7, "HDGL-1&2", "Zinc Consumption",  "kg/t", "zinc"),
+    ("Sheet10", 54, 6, 7, "HDGL-1&2", "Rolling Rate",      "t/hr", "prod"),
+    ("Sheet10", 56, 6, 7, "HDGL-1&2", "Availability",      "%",    "availab"),
+    ("Sheet10", 58, 6, 7, "HDGL-1&2", "Utilisation",       "%",    "utilis"),
+    # DCR (Sheet10)
+    ("Sheet10", 62, 6, 7, "DCR", "Yield",        "%",    "yield"),
+    ("Sheet10", 64, 6, 7, "DCR", "Rolling Rate", "t/hr", "prod"),
+    ("Sheet10", 66, 6, 7, "DCR", "Availability", "%",    "availab"),
+    ("Sheet10", 68, 6, 7, "DCR", "Utilisation",  "%",    "utilis"),
+    # Slitting Line - II (Sheet11, different month/cum columns — no
+    # "budgeted norms" column on this sheet). "Slitting Line (Overall)"'s
+    # only figure (Yield) was blank in the sample and isn't specific to
+    # either individual line, so it's not extracted here.
+    ("Sheet11", 15, 5, 6, "Slitting Line-II", "Rolling Rate", "t/hr", "prod"),
+    ("Sheet11", 17, 5, 6, "Slitting Line-II", "Availability", "%",    "availab"),
+    ("Sheet11", 19, 5, 6, "Slitting Line-II", "Utilisation",  "%",    "utilis"),
+    # PLTCM — CRM 3 (Sheet11)
+    ("Sheet11", 30, 5, 6, "PLTCM", "Yield",            "%",    "yield"),
+    ("Sheet11", 32, 5, 6, "PLTCM", "Rolling Rate",     "t/hr", "prod"),
+    ("Sheet11", 34, 5, 6, "PLTCM", "Acid Consumption", "kg/t", "acid"),
+    ("Sheet11", 36, 5, 6, "PLTCM", "Availability",     "%",    "availab"),
+    ("Sheet11", 38, 5, 6, "PLTCM", "Utilisation",      "%",    "utilis"),
+    # SPM — CRM 3 (Sheet11). Reports two distinct yield figures — from
+    # annealed coil (the mill's own process yield) and of CR coil from HR
+    # coil (the overall material-in/material-out yield) — both kept, under
+    # distinct keys.
+    ("Sheet11", 42, 5, 6, "SPM", "Yield",                       "%",    "yield"),
+    ("Sheet11", 44, 5, 6, "SPM", "Yield of CR Coil from HR Coil","%",    "yield of cr coil"),
+    ("Sheet11", 46, 5, 6, "SPM", "Rolling Rate",                "t/hr", "prod"),
+    ("Sheet11", 48, 5, 6, "SPM", "Availability",                "%",    "availab"),
+    ("Sheet11", 50, 5, 6, "SPM", "Utilisation",  "%",    "utilis"),
+    # TLIL — CRM 3 (Sheet11) — yield only
+    ("Sheet11", 54, 5, 6, "TLIL", "Yield", "%", "yield"),
+    # HDGL — CRM 3's own Hot Dip Galvanizing Line (Sheet11)
+    ("Sheet11", 58, 5, 6, "HDGL-3", "Yield",            "%",    "yield"),
+    ("Sheet11", 60, 5, 6, "HDGL-3", "Zinc Consumption", "kg/t", "zinc"),
+    ("Sheet11", 64, 5, 6, "HDGL-3", "Rolling Rate",     "t/hr", "prod"),
+    ("Sheet11", 66, 5, 6, "HDGL-3", "Availability",     "%",    "availab"),
+    ("Sheet11", 68, 5, 6, "HDGL-3", "Utilisation",      "%",    "utilis"),
+    # CRM 3 overall — Sp. Heat/Power Consumption live only on the "CM Review"
+    # summary sheet (col B = month, col C = cum), not attributable to any one
+    # CRM 3 sub-machine — confirmed complex-wide, not SPM-specific.
+    ("CM Review", 47, 2, 3, "CRM 3", "Sp. Heat Consumption",  "M.Cal/T", "heat"),
+    ("CM Review", 48, 2, 3, "CRM 3", "Sp. Power Consumption", "kWh/t",   "power"),
+]
+
+
+def _extract_crm_rows(wb, db_month: str) -> list:
+    """Extract BSL's Cold Rolling Mill sub-machine techno params from
+    Sheet9/Sheet10 (CRM 1&2) and Sheet11 (CRM 3), self-checking each row's
+    identity against its column-B label rather than trusting row position
+    alone (same approach as _extract_hsm_rows)."""
+    out = []
+    for i, (sheet, row, mon_col, cum_col, unit, param, unit_str, keyword) in enumerate(_CRM_ROWS):
+        if sheet not in wb.sheetnames:
+            logger.info("BSL techno: sheet %r not found — skipping %s/%s", sheet, unit, param)
+            continue
+        ws = wb[sheet]
+        label_col = _CRM_LABEL_COL_BY_SHEET.get(sheet, _CRM_LABEL_COL)
+        label = str(ws.cell(row, label_col).value or "").strip()
+        if keyword not in label.lower():
+            logger.warning(
+                "BSL techno: CRM %s row %d column %d label %r didn't contain "
+                "expected keyword %r for %s/%s — verify _CRM_ROWS in "
+                "excel_extractor_bsl.py still points at the right rows.",
+                sheet, row, label_col, label, keyword, unit, param,
+            )
+            continue
+
+        actual_raw = _cell_float(ws, row, mon_col)
+        cum_raw    = _cell_float(ws, row, cum_col)
+        actual = round(actual_raw, 4) if actual_raw is not None else None
+        cum    = round(cum_raw,    4) if cum_raw    is not None else None
+
+        out.append({
+            "group_code": "MILL_BSL",
+            "section":    unit,
+            "parameter":  param,
+            "unit":       unit_str,
+            "actual":     actual,
+            "cum_actual": cum,
+            "sort_order": 700 + i,
+            "cell":       f"{sheet}!{get_column_letter(mon_col)}{row}/{get_column_letter(cum_col)}{row}",
+            "file_label": label,
+            "plant":      "BSL",
+            "month":      db_month,
+            "found_via":  f"hardcoded {sheet} R{row}C{mon_col} (label-matched {label!r} -> {unit}/{param})",
             "status":     "ok" if (actual is not None or cum is not None) else "skip",
         })
     return out
@@ -1323,6 +1482,9 @@ def extract_preview(file_path: str, report_month: str) -> dict:
 
     # ── Sheet8 — HSM (Hot Strip Mill) ──────────────────────────────────────
     rows_out.extend(_extract_hsm_rows(wb, db_month))
+
+    # ── Sheet9/Sheet10/Sheet11 — Cold Rolling Mill sub-machines ─────────────
+    rows_out.extend(_extract_crm_rows(wb, db_month))
 
     ok = sum(1 for r in rows_out if r["status"] == "ok")
     logger.info("BSL techno preview: %d/%d rows ok for %s", ok, len(rows_out), db_month)
