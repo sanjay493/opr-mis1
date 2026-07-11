@@ -1622,8 +1622,10 @@ _TECHNO_DB_SCHEMA = {
     29: {
         "type": "param",
         "sections": [
-            # Sinter plants — RSP: SP-1/SP-2/SP-3, ISP: SP
-            ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity"), ("SP", "specific_productivity")]),
+            # Sinter plants — RSP: SP-1/SP-2/SP-3, ISP: SP, DSP/BSL: single
+            # "Sinter" unit (DSP splits it into two machine-specific keys
+            # dsp_sp_1/dsp_sp_2; BSL reports one combined machine_productivity)
+            ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity"), ("SP", "specific_productivity"), ("Sinter", "dsp_sp_1"), ("Sinter", "dsp_sp_2"), ("Sinter", "machine_productivity")]),
             ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons")]),
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
             ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
@@ -2014,6 +2016,15 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         "dry_coal_charge_batt_9_11": "Batt. 9-11",
     }
 
+    # DSP's Sinter Productivity reports two machines under one "Sinter" unit
+    # (dsp_sp_1/dsp_sp_2) rather than splitting into separate SP-1/SP-2 units
+    # like RSP/BSP - key-specific row labels so the two rows aren't both
+    # rendered as the identical "DSP Sinter".
+    _SINTER_MACHINE_LABEL = {
+        "dsp_sp_1": "SP-1",
+        "dsp_sp_2": "SP-2",
+    }
+
     def _coke_oven_label(plant, unit):
         """Page 28 row labels: drop the "COB"/"Coke Ovens" wording entirely -
         "RSP COB-old" -> "RSP-Old", "BSL Coke Ovens" -> "BSL" (single battery,
@@ -2077,6 +2088,8 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                     label, bold = _row_label_and_bold(page_no, plant, src_unit, multi_plant)
                     if src_key in _DRY_COAL_BATT_LABEL:
                         label = f"{plant} {_DRY_COAL_BATT_LABEL[src_key]}"
+                    elif src_key in _SINTER_MACHINE_LABEL:
+                        label = f"{plant} {_SINTER_MACHINE_LABEL[src_key]}"
                     if plant == "BSL" and src_unit == "SMS":
                         # BSL has only SMS-I/SMS-II, no 3rd "SMS" shop - a
                         # param stored only at the combined-shop level (no
