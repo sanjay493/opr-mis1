@@ -47,6 +47,7 @@ _SMS_KEY_NORM = {
     "heat_size":                   "average_heat_weight",
     "oxygen_converter":            "oxygen_blowing",
     "hot_metal_consumption":       "specific_hm_consumption",
+    "bloom_cum_round_caster_yield": "brc_caster_yield",
 }
 
 # Coke oven labels where DSP's own wording diverges from the canonical key
