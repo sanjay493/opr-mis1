@@ -363,14 +363,12 @@ _TECHNO_PARAM_MAP = [
     ("Sheet3", 43,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter M/c Availability",           "%"),
     ("Sheet3", 46,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter M/c Utilization",            "%"),
     # ── Sheet4 ─────────────────────────────────────────────────────────────
-    ("Sheet4", 31,  6,    1.0, "IRON_MAKING", "Sinter in Burden",      "BSL",                               "%"),
-    ("Sheet4", 33,  6,    1.0, "IRON_MAKING", "O2 Enrichment",         "BSL",                               "%"),
-    ("Sheet4", 35,  6,    1.0, "IRON_MAKING", "Coke Screen Loss",      "BSL",                               "%"),
-    ("Sheet4", 37,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Slag Rate",                          "Kg/THM"),
-    ("Sheet4", 38,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "BF Gas Yield",                       "Nm³/THM"),
-    ("Sheet4", 39,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "CV of BF Gas",                       "Kcal/Nm³"),
-    ("Sheet4", 40,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Furnace Availability",               "%"),
-    ("Sheet4", 41,  6,    1.0, "IRON_MAKING", "Blast Furnaces",        "Furnace Utilization",                "%"),
+    # Sinter/Pellet in Burden, O2 Enrichment, Coke Screening Loss, Slag Rate,
+    # BF Gas Yield, CV of BF Gas, Furnace Availability/Utilisation are
+    # extracted by _extract_sheet4_iron_making_rows() below instead of a
+    # hardcoded row here — a new "PELLET IN BURDEN" line item started
+    # appearing from Jun'26 onward, shifting every row after it down by 2,
+    # and a fixed row number can't handle both the old and new layouts.
     # ── SMS-I ──────────────────────────────────────────────────────────────
     ("SMS-I",   12,  6,    1.0, "SMS",         "SMS-I",                 "Tap to Tap Time (Avail. Hrs)",      "Min"),
     ("SMS-I",   14,  6,    1.0, "SMS",         "SMS-I",                 "Tap to Tap Time (Working Hrs)",     "Min"),
@@ -478,6 +476,104 @@ _FAX_BF_FURNACE_PARAMS = [
     (8,   9,   "Coke Rate",                        "Kg/THM"),
     (10,  11,  "Not Dry Cast",                     "%"),
 ]
+
+# ---------------------------------------------------------------------------
+# Sheet4 iron-making block (Sinter/Pellet in Burden, O2 Enrichment, Coke
+# Screening Loss, Slag Rate, BF Gas Yield, CV of BF Gas, Furnace Availability/
+# Utilisation). Unlike _TECHNO_PARAM_MAP's fixed row numbers, these params are
+# located by searching a bounded row window for each label's keyword in
+# column B — confirmed via TECHNO APRIL2026.xls vs TECHNO JUNE 2026.xls that
+# a new "PELLET IN BURDEN" line item appears from Jun'26 onward and shifts
+# every row below it (O2 Enrichment onward) down by 2, so a fixed row number
+# can't handle both the old and new report layouts at once. The labels in
+# this block are all distinct (no repeats to disambiguate, unlike RSP's
+# furnace blocks), so a plain keyword search is safe here.
+# Column F = month actual, Column G = till-the-month cumulative.
+# ---------------------------------------------------------------------------
+_SHEET4_SHEET     = "Sheet4"
+_SHEET4_LABEL_COL = 2   # column B
+_SHEET4_MON_COL   = 6   # column F
+_SHEET4_CUM_COL   = 7   # column G
+_SHEET4_WINDOW    = (28, 48)  # covers both the old and new row positions
+
+# (keyword to match in the column-B label, section, parameter, unit, optional)
+# optional=True means the row is genuinely expected to be missing on some
+# files (not a sign of a reshuffle) — logged at info level, not a warning.
+_SHEET4_KEYWORDS = [
+    ("sinter in burden",         "Sinter in Burden", "BSL",                  "%",       False),
+    ("pellet in burden",         "Pellet in Burden",  "BSL",                  "%",       True),
+    ("oxygen enrichment",        "O2 Enrichment",     "BSL",                  "%",       False),
+    ("coke screening loss",      "Coke Screen Loss",  "BSL",                  "%",       False),
+    ("slag rate",                "Blast Furnaces",    "Slag Rate",            "Kg/THM",  False),
+    ("bf gas yield",             "Blast Furnaces",    "BF Gas Yield",         "Nm³/THM", False),
+    ("cv of bf gas",             "Blast Furnaces",    "CV of BF Gas",         "Kcal/Nm³",False),
+    ("availability against cal", "Blast Furnaces",    "Furnace Availability", "%",       False),
+    ("utilin. against avl",      "Blast Furnaces",    "Furnace Utilization",  "%",       False),
+]
+
+
+def _extract_sheet4_iron_making_rows(wb, db_month: str) -> list:
+    """Extract BSL's Sheet4 iron-making params by searching a bounded row
+    window for each label's keyword, rather than trusting fixed row numbers —
+    row positions shift whenever SAIL inserts a new line item (e.g. "PELLET
+    IN BURDEN", added from Jun'26 onward, which pushed every row below it
+    down by 2). "Pellet in Burden" itself is only present from Jun'26 onward
+    — its absence on older files is expected, not a reshuffle."""
+    if _SHEET4_SHEET not in wb.sheetnames:
+        logger.info("BSL techno: sheet %r not found — skipping Sheet4 iron-making block", _SHEET4_SHEET)
+        return []
+
+    ws = wb[_SHEET4_SHEET]
+    lo, hi = _SHEET4_WINDOW
+    labels = {
+        r: str(ws.cell(r, _SHEET4_LABEL_COL).value or "").strip().lower()
+        for r in range(lo, hi + 1)
+    }
+
+    out = []
+    for i, (keyword, section, param, unit, optional) in enumerate(_SHEET4_KEYWORDS):
+        match_row = next((r for r in range(lo, hi + 1) if keyword in labels[r]), None)
+        if match_row is None:
+            if optional:
+                logger.info(
+                    "BSL techno: Sheet4 label containing %r not found in "
+                    "rows %d-%d — expected on reports before Jun'26.",
+                    keyword, lo, hi,
+                )
+            else:
+                logger.warning(
+                    "BSL techno: Sheet4 label containing %r not found in rows "
+                    "%d-%d — verify _SHEET4_KEYWORDS in excel_extractor_bsl.py "
+                    "still matches the report's wording.",
+                    keyword, lo, hi,
+                )
+            continue
+
+        actual_raw = _cell_float(ws, match_row, _SHEET4_MON_COL)
+        cum_raw    = _cell_float(ws, match_row, _SHEET4_CUM_COL)
+        actual = round(actual_raw, 4) if actual_raw is not None else None
+        cum    = round(cum_raw,    4) if cum_raw    is not None else None
+
+        mon_ltr = get_column_letter(_SHEET4_MON_COL)
+        cum_ltr = get_column_letter(_SHEET4_CUM_COL)
+
+        out.append({
+            "group_code": "IRON_MAKING",
+            "section":    section,
+            "parameter":  param,
+            "unit":       unit,
+            "actual":     actual,
+            "cum_actual": cum,
+            "sort_order": 370 + i * 10,
+            "cell":       f"{mon_ltr}{match_row}/{cum_ltr}{match_row}",
+            "file_label": labels[match_row],
+            "plant":      "BSL",
+            "month":      db_month,
+            "found_via":  f"Sheet4 label-search (matched {keyword!r} at row {match_row})",
+            "status":     "ok" if (actual is not None or cum is not None) else "skip",
+        })
+    return out
+
 
 # ---------------------------------------------------------------------------
 # HSM (Hot Strip Mill) — Sheet8. Unlike _TECHNO_PARAM_MAP (which reads column
@@ -1407,6 +1503,9 @@ def extract_preview(file_path: str, report_month: str) -> dict:
                 fax_idx += 1
     else:
         logger.info("BSL techno: sheet %r not found — skipping FAX GM OPRN extras", _FAX_SHEET)
+
+    # ── Sheet4 — iron-making block (Sinter/Pellet, O2, Coke Screen Loss, BF) ─
+    rows_out.extend(_extract_sheet4_iron_making_rows(wb, db_month))
 
     # ── Sheet8 — HSM (Hot Strip Mill) ──────────────────────────────────────
     rows_out.extend(_extract_hsm_rows(wb, db_month))
