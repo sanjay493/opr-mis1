@@ -33,10 +33,11 @@ export default function TechnoParamsTemplate({ data }) {
   // data cols: FY-3, FY-2, FY-1, Target, Apr…Month, CPLY-month, YTD, YTD-CPLY
   const nData = 3 + 1 + nMonths + 1 + 1 + 1;
 
-  // Param pages (27-30): fixed text columns take a fixed share, data columns share the rest.
-  // Mill pages (31-35): table-layout:auto instead, so every column (including
-  // data columns) sizes to its own content rather than a guessed percentage.
-  const fixedPct = 17;   // Param(10)+Shop(7)
+  // Param pages (27-30): Parameters column takes a fixed share, data columns
+  // share the rest. The Shop/Plant column has no width hint (see colgroup
+  // below) so it sizes to its own content instead of truncating/wrapping
+  // shop names like "BSL SMS-I" inside a fixed percentage.
+  const fixedPct = 10;   // Param(10)
   const dataW    = `${(100 - fixedPct) / nData}%`;
 
   const bk = (first, last) => ({
@@ -78,9 +79,9 @@ export default function TechnoParamsTemplate({ data }) {
 
       <table style={{
         width: '100%', borderCollapse: 'collapse', border: B,
-        tableLayout: isMill ? 'auto' : 'fixed', fontSize: 'var(--report-font-size, 6.5pt)', marginTop: 4,
+        tableLayout: 'auto', fontSize: 'var(--report-font-size, 6.5pt)', marginTop: 4,
       }}>
-        <colgroup>{isMill ? (<><col /><col /></>) : (<><col style={{ width: '10%' }} /><col style={{ width: '7%' }} /></>)}{[0, 1, 2, 3].map(i => <col key={`f${i}`} style={isMill ? undefined : { width: dataW }} />)}{month_labels.map((_, i) => <col key={`m${i}`} style={isMill ? undefined : { width: dataW }} />)}{[0, 1, 2].map(i => <col key={`c${i}`} style={isMill ? undefined : { width: dataW }} />)}</colgroup>
+        <colgroup>{isMill ? (<><col /><col /></>) : (<><col style={{ width: '10%' }} /><col /></>)}{[0, 1, 2, 3].map(i => <col key={`f${i}`} style={isMill ? undefined : { width: dataW }} />)}{month_labels.map((_, i) => <col key={`m${i}`} style={isMill ? undefined : { width: dataW }} />)}{[0, 1, 2].map(i => <col key={`c${i}`} style={isMill ? undefined : { width: dataW }} />)}</colgroup>
 
         <thead>
           {/* Row 1 — group headers */}
