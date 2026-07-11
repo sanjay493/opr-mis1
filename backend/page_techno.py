@@ -1629,8 +1629,8 @@ _TECHNO_DB_SCHEMA = {
             ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons")]),
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
             ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
-            ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
-            ("Oxygen Enrichment",   "%",         [("BF-1", "o2_enrichment"), ("BF-2", "o2_enrichment"), ("BF-4", "o2_enrichment"), ("BF-5", "o2_enrichment"), ("BF-6", "o2_enrichment"), ("BF-7", "o2_enrichment"), ("BF-8", "o2_enrichment"), ("BF_Shop", "o2_enrichment")]),
+            ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF-6", "hot_blast_temp"), ("BF-7", "hot_blast_temp"), ("BF-8", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
+            ("Oxygen Enrichment",   "%",         [("BF-1", "o2_enrichment"), ("BF-2", "o2_enrichment"), ("BF-3", "o2_enrichment"), ("BF-4", "o2_enrichment"), ("BF-5", "o2_enrichment"), ("BF-6", "o2_enrichment"), ("BF-7", "o2_enrichment"), ("BF-8", "o2_enrichment"), ("BF_Shop", "o2_enrichment")]),
         ],
     },
     30: {
@@ -1644,11 +1644,10 @@ _TECHNO_DB_SCHEMA = {
             ("Fe-Si Consumption",   "kg/t",  [("SMS-1", "fe-si"),  ("SMS-2", "fe-si"),  ("SMS-3", "fe-si"),  ("SMS", "fe-si"),  ("SMS-I", "fe-si"),  ("SMS-II", "fe-si")]),
             ("Si-Mn Consumption",   "kg/t",  [("SMS-1", "si-mn"),  ("SMS-2", "si-mn"),  ("SMS-3", "si-mn"),  ("SMS", "si-mn"),  ("SMS-I", "si-mn"),  ("SMS-II", "si-mn")]),
             ("Oxygen Blowing",      "NM3/t", [("SMS-1", "oxygen_blowing"), ("SMS-2", "oxygen_blowing"), ("SMS-3", "oxygen_blowing"), ("SMS", "oxygen_blowing"), ("SMS-I", "oxygen_blowing"), ("SMS-II", "oxygen_blowing")]),
-            ("Caster Yield",        "%",     [("SMS-1", "caster_yield"),   ("SMS-2", "caster_yield"),   ("SMS-3", "caster_yield"),   ("SMS", "caster_yield"), ("SMS-I", "caster_yield"), ("SMS-II", "caster_yield")]),
-            # TMI (Total Metallic Input): uses the raw "tmi" key where a plant
-            # stores it directly, else _gv() computes it as HM + Scrap
-            # Consumption on the fly (same fallback page 27's MAJOR page uses).
-            ("TMI",                 "kg/tcs", [("SMS-1", "tmi"), ("SMS-2", "tmi"), ("SMS-3", "tmi"), ("SMS", "tmi"), ("SMS-I", "tmi"), ("SMS-II", "tmi")]),
+            # BSP reports Caster Yield per product under SMS-2 (Conditioned
+            # Slabs, Conditioned Blooms) rather than one overall figure —
+            # see _CASTER_YIELD_LABEL for the distinct row labels.
+            ("Caster Yield",        "%",     [("SMS-1", "caster_yield"),   ("SMS-2", "caster_yield"),   ("SMS-3", "caster_yield"),   ("SMS", "caster_yield"), ("SMS-I", "caster_yield"), ("SMS-II", "caster_yield"), ("SMS-2", "conditioned_slab_caster_yield"), ("SMS-2", "conditioned_bloom_caster_yield")]),
         ],
     },
     # Mill pages: sections = mill-unit, rows = params for that plant
@@ -2033,6 +2032,13 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         "dsp_sp_2": "SP-2",
     }
 
+    # BSP's Caster Yield is reported per product under one SMS-2 unit
+    # (Conditioned Slab / Conditioned Blooms) rather than one overall figure.
+    _CASTER_YIELD_LABEL = {
+        "conditioned_slab_caster_yield":  "Conditioned Slabs",
+        "conditioned_bloom_caster_yield": "Conditioned Blooms",
+    }
+
     def _coke_oven_label(plant, unit):
         """Page 28 row labels: drop the "COB"/"Coke Ovens" wording entirely -
         "RSP COB-old" -> "RSP-Old", "BSL Coke Ovens" -> "BSL" (single battery,
@@ -2098,6 +2104,8 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                         label = f"{plant} {_DRY_COAL_BATT_LABEL[src_key]}"
                     elif src_key in _SINTER_MACHINE_LABEL:
                         label = f"{plant} {_SINTER_MACHINE_LABEL[src_key]}"
+                    elif src_key in _CASTER_YIELD_LABEL:
+                        label = f"{plant} {_CASTER_YIELD_LABEL[src_key]}"
                     if plant == "BSL" and src_unit == "SMS":
                         # BSL has only SMS-I/SMS-II, no 3rd "SMS" shop - a
                         # param stored only at the combined-shop level (no
