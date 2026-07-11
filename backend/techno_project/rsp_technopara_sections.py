@@ -37,6 +37,16 @@ To extract a new parameter:
 SECTION_UNITS = {
     "BATTERY - (1-5)":        "COB-old",
     "BATTERY - 6":            "COB-new",
+    # Some file editions (e.g. June-2026) wrap the same two headers in a
+    # "COKE OVENS (...)" prefix and drop the space before "1-5" — since
+    # section matching is exact (never substring), that alone made both
+    # battery sections invisible and silently dropped every row under them
+    # (bf_coke_yield, dry_coal_charge_oven, etc. — all already-correct
+    # PARAM_ALIASES entries that simply never got a current_unit to attach
+    # to). Registered as additional exact variants rather than changing the
+    # header-matching strategy.
+    "COKE OVENS (BATTERY -1-5)": "COB-old",
+    "COKE OVENS (BATTERY - 6)":  "COB-new",
     "COAL CHEMICALS":         "COB-new",   # byproduct-recovery rows for Battery 6
     "SINTER PLANT-I":         "SP-1",
     "SINTER PLANT - II":      "SP-2",
