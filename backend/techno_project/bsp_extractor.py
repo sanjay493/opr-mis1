@@ -12,9 +12,12 @@ Records are stored in techno_data with plant='BSP'.
 """
 
 import json
+import sys
 from pathlib import Path
-from openpyxl import load_workbook
 from typing import Dict, List, Optional
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "excel_extractors"))
+from excel_extractor_bsp import _open_workbook  # noqa: E402 — handles legacy .xls via xlrd
 
 _MONTH_NUM_TO_ABBR = {
     1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
@@ -86,7 +89,7 @@ class BspTechnoExtractor:
         self._map = _load_map()
 
     def extract(self) -> List[Dict]:
-        wb = load_workbook(self.excel_file, data_only=True)
+        wb = _open_workbook(str(self.excel_file))
 
         # Find Sheet1
         ws = None
@@ -119,11 +122,8 @@ class BspTechnoExtractor:
             techno = {"month": {}, "till_month": {}}
             for param_key, row_num in params.items():
                 try:
-                    row_data = list(ws.iter_rows(
-                        min_row=row_num, max_row=row_num, values_only=True
-                    ))[0]
-                    month_val = row_data[month_col - 1] if month_col - 1 < len(row_data) else None
-                    till_val  = row_data[cum_col - 1]   if cum_col  - 1 < len(row_data) else None
+                    month_val = ws.cell(row_num, month_col).value
+                    till_val  = ws.cell(row_num, cum_col).value
                     techno["month"][param_key]     = _clean(month_val)
                     techno["till_month"][param_key] = _clean(till_val)
                 except Exception as e:
