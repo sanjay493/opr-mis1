@@ -1,18 +1,27 @@
 """RSP Excel extractor — production, techno-table, and mill/sinter techno params
 in a single pass with preview support.
 
-Supports three file types:
-  • Final Monthly Report  — sheets 'page-9' + 'page 1-8'
-  • Daily Morning Report  — sheet starting with 'RSP Morning Report Data for-'
-  • Standalone Techno Parameters file (e.g. 'technopara *.xlsx')
+Supports these file types (a single workbook may contain either or both of the
+first two — see _find_report_sheets):
+  • page-9 production table   — sheet name canon-matches "page9"
+  • page-1-8 techno table     — sheet name canon-matches "^page1[89]" (RSP
+    renames this sheet almost every month: "page-1-8", "PAGE-1-8 & 11,12",
+    "PAGE1-8 &11-12", "PAGE-1-9", ...); only feeds preview/display — its
+    legacy DB target (techno_table) no longer exists, so it is not persisted
+    by extract_and_save_excel. techno_data (read by /data-entry/techno) is
+    populated by the separate TechnoExtractor upload flow.
+  • Daily Morning Report      — sheet starting with 'RSP Morning Report Data for-'
 
-Mill/sinter techno extraction is position-tolerant:
-  1. Column selection uses COL_MAP_P18 (month-number → column letter) directly,
-     avoiding unreliable text-header scanning.
-  2. Parameter rows are located by scanning anchor text in the first LABEL_COLS
-     columns; hardcoded row_hints serve as fallback only.
+Both page-9 and page-1-8 column detection are position-tolerant:
+  • page-9's month columns are stable across years (COL_MAP_P9, fixed letters).
+  • page-1-8 prepends one more legacy fiscal-year column every year, shifting
+    the current month's column annually — its month/Cum columns are located
+    dynamically per file via rsp_row_scan.find_month_cum_columns instead.
+  • Parameter rows are located by scanning anchor text in the first LABEL_COLS
+    columns; hardcoded row_hints serve as fallback only.
 """
 import re
+import sys
 import calendar
 import datetime
 import openpyxl
@@ -22,6 +31,11 @@ import os
 from typing import Optional
 
 from extraction_utils import calculate_tmi_consumption
+
+_TP_DIR = os.path.join(os.path.dirname(__file__), "..", "techno_project")
+if _TP_DIR not in sys.path:
+    sys.path.insert(0, _TP_DIR)
+from rsp_row_scan import find_month_cum_columns, P18_NAME_RE  # noqa: E402  (path set above)
 
 logger = logging.getLogger("excel_extractor")
 
@@ -55,13 +69,12 @@ def _canon_sheet(s: str) -> str:
     return re.sub(r'[^a-z0-9]', '', str(s).lower())
 
 
-_P9_NAMES  = {"page9", "pag9", "pg9"}
-_P18_NAMES = {"page18", "pag18", "pg18", "pages18"}
+_P9_NAMES   = {"page9", "pag9", "pg9"}
 
 
 def _find_report_sheets(sheet_names):
-    p9  = next((s for s in sheet_names if _canon_sheet(s) in _P9_NAMES),  None)
-    p18 = next((s for s in sheet_names if _canon_sheet(s) in _P18_NAMES), None)
+    p9  = next((s for s in sheet_names if _canon_sheet(s) in _P9_NAMES), None)
+    p18 = next((s for s in sheet_names if P18_NAME_RE.match(_canon_sheet(s))), None)
     return p9, p18
 
 
@@ -83,12 +96,9 @@ COL_MAP_P9 = {
     "04": "B", "05": "C", "06": "D", "07": "F", "08": "G", "09": "H",
     "10": "J", "11": "K", "12": "L", "01": "N", "02": "O", "03": "P",
 }
-# PAGE-1-8: month column letters. Cumulative is always column AM (index 39).
-COL_MAP_P18 = {
-    "04": "W", "05": "X", "06": "Y", "07": "AA", "08": "AB", "09": "AC",
-    "10": "AE", "11": "AF", "12": "AG", "01": "AI", "02": "AJ", "03": "AK",
-}
-CUM_COL_P18 = 39   # column AM — cumulative (Apr-to-month average)
+# PAGE-1-8's month/Cum columns are NOT a fixed map (see find_month_cum_columns):
+# the sheet prepends one more legacy fiscal-year column every year, shifting
+# every month's column by one letter annually.
 
 NO_CONVERT = {"Oven Pushing (nos/day)", "COB#6", "COB#1-5"}
 
@@ -253,44 +263,6 @@ TECHNO_UNIT_MAP = {
 # by days-in-month to yield the average blows per day.
 _BLOWS_DAILY_AVG = {"SMS-1 Avg Blows per day", "SMS-2 Avg Blows per day"}
 
-# P18 techno param name → (group_code, section, row_label, unit, sort_order)
-# These are also written to techno_monthly so page 29 (IRON MAKING) can display them.
-_IRON_MAKING_PARAM_MAP = {
-    "CDI":                  ("IRON_MAKING", "CDI",               "RSP",       "Kg/THM", 15),
-    "CDI BF-1":             ("IRON_MAKING", "CDI",               "RSP BF-1",             "Kg/THM", 18),
-    "CDI BF-4":             ("IRON_MAKING", "CDI",               "RSP BF-4",             "Kg/THM", 19),
-    "CDI BF-5":             ("IRON_MAKING", "CDI",               "RSP BF-5",             "Kg/THM", 20),
-    "Coal to Hot metal ratio": ("IRON_MAKING", "Coal to Hot Metal", "RSP",           "Ratio", 11),
-    "Coke Rate BF-1":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-1",             "Kg/THM",  53),
-    "Coke Rate BF-4":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-4",             "Kg/THM",  54),
-    "Coke Rate BF-5":       ("IRON_MAKING", "BF Coke Rate",      "RSP BF-5",             "Kg/THM",  55),
-    "Nut Coke BF-1":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-1",             "Kg/THM",  63),
-    "Nut Coke BF-4":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-4",             "Kg/THM",  64),
-    "Nut Coke BF-5":        ("IRON_MAKING", "Nut Coke Rate",     "RSP BF-5",             "Kg/THM",  65),
-    "BF Productivity BF-1": ("IRON_MAKING", "BF Productivity",   "RSP BF-1",             "T/m³/day",73),
-    "BF Productivity BF-4": ("IRON_MAKING", "BF Productivity",   "RSP BF-4",             "T/m³/day",74),
-    "BF Productivity BF-5": ("IRON_MAKING", "BF Productivity",   "RSP BF-5",             "T/m³/day",75),
-    "Si% in HM BF-1":       ("IRON_MAKING", "Si in HM",          "RSP BF-1",             "%",       83),
-    "Si% in HM BF-4":       ("IRON_MAKING", "Si in HM",          "RSP BF-4",             "%",       84),
-    "Si% in HM BF-5":       ("IRON_MAKING", "Si in HM",          "RSP BF-5",             "%",       85),
-    "Hot Blast Temp BF-1":  ("IRON_MAKING", "HBT",               "RSP BF-1",             "°C",     103),
-    "Hot Blast Temp BF-4":  ("IRON_MAKING", "HBT",               "RSP BF-4",             "°C",     104),
-    "Hot Blast Temp BF-5":  ("IRON_MAKING", "HBT",               "RSP BF-5",             "°C",     105),
-    # Shop-level rows — RSP source file provides shop averages directly
-    "Coke Rate":            ("IRON_MAKING", "BF Coke Rate",      "RSP",       "Kg/THM",  48),
-    "Nut Coke Rate":        ("IRON_MAKING", "Nut Coke Rate",     "RSP",       "Kg/THM",  58),
-    "BF Productivity":      ("IRON_MAKING", "BF Productivity",   "RSP",       "T/m³/day",68),
-    "Si% in HM":            ("IRON_MAKING", "Si in HM",          "RSP",       "%",       79),
-    "Hot Blast Temp":       ("IRON_MAKING", "HBT",               "RSP",       "°C",      99),
-    "Fuel Rate":            ("IRON_MAKING", "Fuel Rate",         "RSP",       "Kg/THM", 109),
-    "Sinter% in Burden":    ("IRON_MAKING", "Sinter in Burden",  "RSP",       "%",      119),
-    "Pellet% in Burden":    ("IRON_MAKING", "Pellet in Burden",  "RSP",       "%",      129),
-    "O2 Enrichment":        ("IRON_MAKING", "O2 Enrichment",     "RSP",       "%",      149),
-    "O2 Enrichment BF-1":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-1",             "%",      146),
-    "O2 Enrichment BF-4":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-4",             "%",      147),
-    "O2 Enrichment BF-5":   ("IRON_MAKING", "O2 Enrichment",     "RSP BF-5",             "%",      148),
-}
-
 # ---------------------------------------------------------------------------
 # RSP Special Steel Excel — product group name normalisation
 # ---------------------------------------------------------------------------
@@ -431,7 +403,7 @@ def _build_p9_cells(ws, col: str) -> dict:
     return {name: f"{col}{row}" for name, row in row_map.items()}
 
 
-def _build_p18_cells(ws, col: str) -> dict:
+def _build_p18_cells(ws, col: str, cum_col: str) -> dict:
     """Dynamically resolve page-1-8 techno rows; return {param: (month_cell, cum_cell)}."""
     row_map = _scan_rows_for_items(ws, P18_TECHNO_ITEMS, max_scan=400)
     # Several SMS params share labels across SMS-1 and SMS-2 sections — label scanning
@@ -449,7 +421,7 @@ def _build_p18_cells(ws, col: str) -> dict:
         row_map[sms + " Converter Yield"]    = _row_near_anchor(ws, o2_anchor, +3, 400, cv_fb)
         row_map[sms + " Caster Yield"]       = _row_near_anchor(ws, o2_anchor, +4, 400, cs_fb)
     return {
-        name: (f"{col}{row}", f"AM{row}")
+        name: (f"{col}{row}", f"{cum_col}{row}")
         for name, row in row_map.items()
     }
 
@@ -686,17 +658,17 @@ def extract_techno_params(wb, report_month: str) -> dict:
     """Extract MILL_RSP + COKE_SINTER rows from an already-open workbook.
     Returns a preview dict; caller decides whether to persist.
 
-    Column detection uses COL_MAP_P18 directly — no unreliable header scanning.
+    Column detection scans the sheet's own header row for the month/Cum tokens
+    (see rsp_row_scan.find_month_cum_columns) rather than assuming a fixed
+    month->column-letter map — the techno sheet prepends one more legacy
+    fiscal-year column every year, so a fixed map goes stale annually.
     """
     db_report_month, month_num = _parse_report_month(report_month)
 
-    col_letter = COL_MAP_P18.get(month_num)
-    if not col_letter:
-        raise ValueError(f"Month '{month_num}' not in COL_MAP_P18.")
-    month_col = openpyxl.utils.column_index_from_string(col_letter)
-    cum_col   = CUM_COL_P18
-
     ws      = _pick_mill_sheet(wb)
+    month_col, cum_col = find_month_cum_columns(ws, month_num)
+    if month_col is None:
+        raise ValueError(f"Cannot locate month '{month_num}' column header on sheet {ws.title!r}.")
     max_row = min(ws.max_row, MAX_SCAN_ROWS)
 
     def col_letter_of(c):
@@ -804,23 +776,6 @@ def extract_techno_params(wb, report_month: str) -> dict:
         "sinter_found": sorted(sinter_anchors.keys()),
         "rows":       rows,
     }
-
-
-def _save_techno_params(wb, report_month: str, source_file_name: str) -> int:
-    """Save extract_techno_params results to DB. Returns count of saved rows."""
-    import db as _db
-    db_report_month, _ = _parse_report_month(report_month)
-    result = extract_techno_params(wb, db_report_month)
-    ok_rows = [r for r in result["rows"] if r["status"] == "ok"]
-    for r in ok_rows:
-        pid = _db.get_or_create_techno_param(
-            r["group_code"], r["section"], r["parameter"],
-            r["unit"], r["sort_order"])
-        _db.save_techno_value(db_report_month, pid, r["actual"], r["cum_actual"])
-    if ok_rows:
-        logger.info(f"RSP mill/sinter techno params: {len(ok_rows)} values saved "
-                    f"(sheet={result['sheet']}, col={result['month_col']}).")
-    return len(ok_rows)
 
 
 # ---------------------------------------------------------------------------
@@ -1104,21 +1059,38 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     db_report_month, month_num = _parse_report_month(report_month)
 
     p9_sheet, p18_sheet = _find_report_sheets(sheet_names)
-    if p9_sheet and p18_sheet:
+    if p9_sheet or p18_sheet:
+        # Production (p9) and techno-table (p18) sheets are detected and processed
+        # independently — a workbook where only one of the two names/sheets is
+        # found (common: RSP's p18-style sheet name varies far more than p9's)
+        # should still yield whichever half is actually present, rather than
+        # silently discarding both.
         source_type = "Final Monthly Report"
-        sheets_used = f"{p9_sheet}, {p18_sheet}"
-        col_p9  = COL_MAP_P9.get(month_num)
-        col_p18 = COL_MAP_P18.get(month_num)
-        if not col_p9 or not col_p18:
-            raise ValueError(f"Month column mapping not found for month '{month_num}'.")
-        ws_p9  = wb[p9_sheet]
-        ws_p18 = wb[p18_sheet]
+        sheets_used = ", ".join(s for s in (p9_sheet, p18_sheet) if s)
         year_i, month_i = map(int, db_report_month.split('-'))
         days_in_month   = calendar.monthrange(year_i, month_i)[1]
         ytd_days_val    = _ytd_days(year_i, month_i)
-        production_rows = _preview_production_from_cells(ws_p9,  _build_p9_cells(ws_p9,  col_p9))
-        techno_rows     = _preview_techno_from_cells(ws_p18, _build_p18_cells(ws_p18, col_p18),
-                                                     days_in_month, ytd_days_val)
+
+        if p9_sheet:
+            col_p9 = COL_MAP_P9.get(month_num)
+            if not col_p9:
+                raise ValueError(f"Month column mapping not found for month '{month_num}'.")
+            ws_p9 = wb[p9_sheet]
+            production_rows = _preview_production_from_cells(ws_p9, _build_p9_cells(ws_p9, col_p9))
+
+        if p18_sheet:
+            ws_p18 = wb[p18_sheet]
+            month_col_idx, cum_col_idx = find_month_cum_columns(ws_p18, month_num)
+            if month_col_idx is not None and cum_col_idx is not None:
+                col_p18 = openpyxl.utils.get_column_letter(month_col_idx)
+                cum_p18 = openpyxl.utils.get_column_letter(cum_col_idx)
+                techno_rows = _preview_techno_from_cells(
+                    ws_p18, _build_p18_cells(ws_p18, col_p18, cum_p18),
+                    days_in_month, ytd_days_val)
+            else:
+                logger.warning(
+                    f"RSP page-1-8 techno: could not locate month '{month_num}'/Cum "
+                    f"header columns on sheet {ws_p18.title!r} — skipping techno_rows.")
     else:
         morning_sheet = next(
             (s for s in sheet_names
@@ -1186,12 +1158,16 @@ def extract_and_save_excel(file_path: str, report_month: str,
         sheet_names = wb.sheetnames
 
         p9_sheet, p18_sheet = _find_report_sheets(sheet_names)
-        if p9_sheet and p18_sheet:
-            ok = _extract_monthly_report(wb, report_month, source_file_name,
-                                         p9_sheet, p18_sheet)
-            # mill + sinter techno params (separate from the techno_table above)
-            _save_techno_params(wb, report_month, source_file_name)
-            return ok
+        if p9_sheet or p18_sheet:
+            # Production (p9) and page-1-8 techno-table data are extracted and
+            # persisted independently — a workbook where only one of the two
+            # sheets is found still gets whichever half is actually present.
+            # (Page-1-8's techno values feed only the legacy techno_table,
+            # which no longer exists as a DB table — RSP's techno_data table,
+            # read by /data-entry/techno, is populated exclusively via the
+            # dedicated TechnoExtractor upload flow, not from here.)
+            return _extract_monthly_report(wb, report_month, source_file_name,
+                                           p9_sheet, p18_sheet)
 
         morning_sheet = next(
             (s for s in sheet_names
@@ -1199,30 +1175,12 @@ def extract_and_save_excel(file_path: str, report_month: str,
         if morning_sheet:
             return _extract_morning_report(wb, morning_sheet, source_file_name)
 
-        # Standalone techno-parameters file
-        import db as _db
-        db_report_month, _ = _parse_report_month(report_month)
-        t = extract_techno_params(wb, db_report_month)
-        ok_rows = [r for r in t["rows"] if r["status"] == "ok"]
-        if t.get("shops_found") and ok_rows:
-            for r in ok_rows:
-                pid = _db.get_or_create_techno_param(
-                    r["group_code"], r["section"], r["parameter"],
-                    r["unit"], r["sort_order"])
-                _db.save_techno_value(db_report_month, pid, r["actual"], r["cum_actual"])
-            _db.log_extraction(
-                plant="RSP", report_month=db_report_month,
-                file_name=source_file_name, sheet_name=t["sheet"],
-                source_type="Techno Parameters File",
-                items_extracted=len(ok_rows))
-            logger.info(f"RSP techno-parameters extraction done: {len(ok_rows)} values.")
-            return True
-
         raise ValueError(
             "Uploaded RSP file does not match any known format. "
-            "Expected sheets 'page-9'+'page 1-8' (Monthly Report), "
-            "'RSP Morning Report Data for-...' (Daily Morning Report), or a "
-            "techno-parameters workbook with mill sections (Plate Mill, HSM-II, ...).")
+            "Expected a sheet named 'page-9' (production) and/or a 'page-1-8'-style "
+            "sheet (techno table), or 'RSP Morning Report Data for-...' "
+            "(Daily Morning Report). For a standalone RSP Technopara file, use the "
+            "techno-parameters upload flow instead.")
     except ValueError as ve:
         logger.error(f"RSP validation error: {ve}")
         raise ve
@@ -1236,14 +1194,25 @@ def extract_and_save_excel(file_path: str, report_month: str,
 # ---------------------------------------------------------------------------
 
 def _extract_monthly_report(wb, report_month: str, source_file_name: str,
-                             p9_name: str = "page-9",
-                             p18_name: str = "page 1-8") -> bool:
+                             p9_name: Optional[str] = "page-9",
+                             p18_name: Optional[str] = None) -> bool:
+    """Persist production_table data from the page-9 sheet.
+
+    p18_name (the page-1-8 techno-table sheet) is accepted for backward
+    compatibility but is not persisted here: its target table (techno_table)
+    no longer exists in the schema — RSP's techno_data table (read by
+    /data-entry/techno) is populated exclusively via the dedicated
+    TechnoExtractor upload flow. Page-1-8 values remain available read-only
+    through extract_preview()/_build_p18_cells() for that upload flow's own use.
+    """
+    if not p9_name:
+        raise ValueError("No page-9 production sheet found — nothing to save.")
+
     import db as _db
 
     db_report_month, month_num = _parse_report_month(report_month)
-    col_p9  = COL_MAP_P9.get(month_num)
-    col_p18 = COL_MAP_P18.get(month_num)
-    if not col_p9 or not col_p18:
+    col_p9 = COL_MAP_P9.get(month_num)
+    if not col_p9:
         raise ValueError(f"Month column mapping not found for month '{month_num}'.")
 
     conn   = sqlite3.connect(DB_PATH)
@@ -1264,43 +1233,6 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
             DO UPDATE SET month_actual = excluded.month_actual
         """, (db_report_month, "RSP", item_name, val))
 
-    year_i, month_i = map(int, db_report_month.split('-'))
-    days_in_month   = calendar.monthrange(year_i, month_i)[1]
-    ytd_days_val    = _ytd_days(year_i, month_i)
-
-    sheet_p18 = wb[p18_name]
-    techno_values = {}
-    for param, (month_cell, ytd_cell) in _build_p18_cells(sheet_p18, col_p18).items():
-        month_val = clean_val(sheet_p18[month_cell].value)
-        ytd_val   = clean_val(sheet_p18[ytd_cell].value)
-        if param in _BLOWS_DAILY_AVG:
-            if month_val is not None:
-                month_val = round(month_val / days_in_month, 1)
-            if ytd_val is not None:
-                ytd_val = round(ytd_val / ytd_days_val, 1)
-        techno_values[param] = (month_val, ytd_val)
-
-    # Calculate TMI as HM Consumption + Scrap Consumption for all SMS units
-    techno_values = calculate_tmi_consumption(techno_values)
-
-    for param, (month_val, ytd_val) in techno_values.items():
-        if month_val is not None or ytd_val is not None:
-            vals_extracted += 1
-        cursor.execute("""
-            INSERT INTO techno_table (report_month, plant_name, parameter_name,
-                                      unit, month_actual, ytd_actual)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, parameter_name)
-            DO UPDATE SET unit=excluded.unit,
-                          month_actual=excluded.month_actual,
-                          ytd_actual=excluded.ytd_actual
-        """, (db_report_month, "RSP", param,
-              TECHNO_UNIT_MAP.get(param, ""), month_val, ytd_val))
-        if param in _IRON_MAKING_PARAM_MAP and (month_val is not None or ytd_val is not None):
-            group_code, section, row_label, unit, sort = _IRON_MAKING_PARAM_MAP[param]
-            pid = _db.get_or_create_techno_param(group_code, section, row_label, unit, sort)
-            _db.save_techno_value(db_report_month, pid, month_val, ytd_val)
-
     if vals_extracted == 0:
         conn.close()
         raise ValueError("No numeric data found in the RSP monthly report sheets.")
@@ -1310,7 +1242,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
 
     _db.log_extraction(
         plant="RSP", report_month=db_report_month,
-        file_name=source_file_name, sheet_name=f"{p9_name}, {p18_name}",
+        file_name=source_file_name,
+        sheet_name=", ".join(s for s in (p9_name, p18_name) if s),
         source_type="Final Monthly Report",
         items_extracted=vals_extracted)
     logger.info(f"RSP Monthly Report: {vals_extracted} values for {db_report_month}.")

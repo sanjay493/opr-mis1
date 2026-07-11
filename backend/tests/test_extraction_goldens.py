@@ -80,6 +80,21 @@ CASES = [
     Case("bsp_flash_pdf_2026-06",
          "excel_extractors.pdf_extractor_bsp_flash",
          "Monthly/BSP/flash-jun26.pdf", "2026-06"),
+    # RSP "Final Monthly Report" (page-9 production + page-1-8 techno-table)
+    # cases below lock in the production-side fix: page-1-8's sheet name
+    # varies constantly ("PAGE-1-8", "page-1-8 &11-12", "PAGE-1-8 & 11' 12", …)
+    # and its month/Cum columns shift every year as a legacy fiscal-year
+    # column gets prepended — these three cover a plain name, and two
+    # differently-punctuated compound names.
+    Case("rsp_technopara_oct2025_2025-10",
+         "excel_extractors.excel_extractor_rsp",
+         "Monthly/RSP/TECHNOPARA OCT-2025.xlsx", "2025-10"),
+    Case("rsp_technopara_nov2023_2023-11",
+         "excel_extractors.excel_extractor_rsp",
+         "Monthly/RSP/TECHNOPARA NOV-2023 Revised.xlsx", "2023-11"),
+    Case("rsp_technopara_apr2024_2024-04",
+         "excel_extractors.excel_extractor_rsp",
+         "Monthly/RSP/TECHNOPARA APRIL-2024.xlsx", "2024-04"),
 ]
 
 
