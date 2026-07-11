@@ -16,10 +16,11 @@ a future report-template tweak could silently break:
      filename (catches the header-column scan silently landing on the wrong
      month).
 
-This does NOT assert exact values per parameter — the row-shift
-self-healing (verified_row/find_label_row) trades exactness for resilience,
-so the real safety net is "did it still find data," matching the label
-verification's own warning-not-exception design.
+The extractor itself no longer depends on row numbers at all (see
+techno_project/rsp_technopara_sections.py) — it walks the sheet top to
+bottom, tracking the current unit section and resolving each row via a
+declarative label/section registry, so row-shift between file editions
+can't misattribute a value the way a stored-row-number approach could.
 """
 from pathlib import Path
 
@@ -69,14 +70,13 @@ REAL_TECHNOPARA_FILES = [
     ("technopara may-2024.xlsx", "2024-05"),
 ]
 
-# rsp_technopara_map.json has 18 top-level units (BF-1/4/5/Shop, SMS-1/2,
+# rsp_technopara_sections.py's ALL_UNITS has 18 units (BF-1/4/5/Shop, SMS-1/2,
 # COB-old/new, General, SP-1/2/3, PM, NPM, HSM-2, SSM, SWP, ERW) — a file
 # should extract data for nearly all of them; a handful of samples are down
 # one unit some months (e.g. a mill with no data that period), so allow a
 # little slack rather than requiring an exact match.
 MIN_UNIT_COUNT = 15
-# Out of 122 total mapped parameters, a generous floor (observed range on
-# the real corpus is ~90-114).
+# Generous floor well below the observed range on the real corpus (~90-112).
 MIN_NONNULL_VALUES = 60
 
 

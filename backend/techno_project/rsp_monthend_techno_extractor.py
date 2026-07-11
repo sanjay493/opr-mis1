@@ -54,8 +54,8 @@ _TECHNO_COLS = [
     (12, "sinter_in_burden"),   # L
     (14, "nut_coke_rate"),      # N
     (18, "pellet_in_burden"),   # R
-    (22, "o2_enrichment"),      # V (matches rsp_technopara_map.json's key name,
-                                #    so the final technopara upload's
+    (22, "o2_enrichment"),      # V (matches rsp_technopara_sections.py's key
+                                #    name, so the final technopara upload's
                                 #    merge_upsert_techno_data call replaces this
                                 #    tentative value instead of leaving both
                                 #    keys side by side)
