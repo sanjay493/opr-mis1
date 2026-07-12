@@ -1741,22 +1741,49 @@ def generate_major_techno_verification(report_month: str) -> dict:
                 return v
         return None
 
-    def _calc_plant(plant, unit, key, kind="unit"):
-        """Calculated cumulative for one plant/unit, or None if nothing to
-        compute. "sms"/"tmi" kinds build their own monthly-values series
-        (with alias fallback / HM+Scrap reconstruction) since techno_data
-        doesn't always store these under one canonical key."""
+    def _calc_plant_detail(plant, unit, key, kind="unit"):
+        """Full calculated-cumulative breakdown (method/weights/rows/steps)
+        for one plant/unit, or None if nothing to compute. "sms"/"tmi" kinds
+        build their own monthly-values series (with alias fallback / HM+Scrap
+        reconstruction) since techno_data doesn't always store these under
+        one canonical key."""
         try:
             if kind == "tmi":
                 values = {m: v for m in ytd if (v := _tmi_val(plant, m, unit, "month")) is not None}
-                return compute_cumulative_from_values(plant, unit, "tmi", report_month, values)["result"]
+                return compute_cumulative_from_values(plant, unit, "tmi", report_month, values)
             if kind == "sms":
                 aliases = _sms_aliases(key)
                 values = {m: v for m in ytd if (v := _gv_aliases(plant, m, unit, aliases, "month")) is not None}
-                return compute_cumulative_from_values(plant, unit, key, report_month, values)["result"]
-            return compute_cumulative_preview(plant, unit, key, report_month)["result"]
+                return compute_cumulative_from_values(plant, unit, key, report_month, values)
+            return compute_cumulative_preview(plant, unit, key, report_month)
         except ValueError:
             return None
+
+    def _calc_plant(plant, unit, key, kind="unit"):
+        """Calculated cumulative value only (no breakdown) - convenience
+        wrapper around _calc_plant_detail for the SAIL aggregations, which
+        only need each plant's numeric result, not its own step breakdown."""
+        detail = _calc_plant_detail(plant, unit, key, kind)
+        return detail["result"] if detail else None
+
+    def _reshape_detail(detail):
+        """Normalize a techno_cumulative breakdown for the frontend "Steps"
+        view: rows keyed by "label" (month or plant, depending on caller)
+        rather than "month", so the same table component renders either."""
+        if detail is None:
+            return None
+        return {
+            "method": detail["method"],
+            "weight_item": detail.get("weight_item"),
+            "rows": [
+                {"label": r.get("month", r.get("label")), "value": r["value"],
+                 "weight": r.get("weight"), "product": r.get("product")}
+                for r in detail["rows"]
+            ],
+            "steps": detail["steps"],
+            "warnings": detail.get("warnings", []),
+            "result": detail["result"],
+        }
 
     def _months_row(plant, unit, key, kind="unit"):
         if kind == "tmi":
@@ -1781,7 +1808,8 @@ def generate_major_techno_verification(report_month: str) -> dict:
                 if unit is None:
                     continue
                 reported = _gv(plant, report_month, unit, src_key, "till_month")
-                calculated = _calc_plant(plant, unit, src_key)
+                detail = _calc_plant_detail(plant, unit, src_key)
+                calculated = detail["result"] if detail else None
                 if reported is None and calculated is None:
                     continue
                 rows.append({
@@ -1790,6 +1818,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
                     "reported": _fmt_param(reported, param_name),
                     "calculated": _verify_fmt4(calculated),
                     "deviation": _verify_deviates(reported, calculated, param_name),
+                    "calc_detail": _reshape_detail(detail),
                 })
             # SAIL rollup — same HM/CS weighting as generate_major_techno_from_db's
             # _bf_sail, but "Calculated" combines each plant's own CALCULATED
@@ -1825,7 +1854,23 @@ def generate_major_techno_verification(report_month: str) -> dict:
                         den += w
                 return num / den if den > 0 else None
 
-            def _sail_calculated():
+            def _sail_calculated_detail():
+                """SAIL's calculated cumulative combines each plant's own
+                CALCULATED cumulative (never a stored SAIL override, since
+                the point is to independently verify one) - same HM/CS
+                weighting formula as generate_major_techno_from_db's
+                _bf_sail, with a full rows/steps breakdown like
+                compute_cumulative_preview's, one row per contributing plant
+                instead of per month."""
+                weight_item = (
+                    f"cumulative Apr-{report_month} {'Total Crude Steel' if weight_by == 'cs' else 'Hot Metal'} "
+                    f"production per plant, applied to each plant's own CALCULATED cumulative (not its stored value)"
+                )
+                label = "production-weighted harmonic mean" if harmonic else "production-weighted average"
+                formula = ("Σ(production) ÷ Σ(production ÷ plant value)" if harmonic
+                           else "Σ(plant value × production) ÷ Σ(production)")
+                steps = [f"Method: SAIL = {label} of each plant's Calculated cumulative — {formula}. Weights = {weight_item}."]
+                data_rows = []
                 num = den = 0.0
                 for plant in _VERIFY_BF_PLANTS:
                     w = _cum_weight(weights, plant)
@@ -1841,12 +1886,31 @@ def generate_major_techno_verification(report_month: str) -> dict:
                     if harmonic:
                         if v <= 0:
                             continue
+                        term = round(w / v, 4)
                         num += w
                         den += w / v
                     else:
+                        term = round(v * w, 4)
                         num += v * w
                         den += w
-                return num / den if den > 0 else None
+                    data_rows.append({"label": plant, "value": v, "weight": round(w, 4), "product": term})
+                    op = "÷" if harmonic else "×"
+                    steps.append(f"{plant}: {round(w,4)} {op} {v} = {term}" if harmonic
+                                 else f"{plant}: {v} × {round(w,4)} = {term}")
+                result = round(num / den, 4) if den > 0 else None
+                if result is not None:
+                    if harmonic:
+                        steps.append(f"Σ(production) = {round(num, 4)}")
+                        steps.append(f"Σ(production ÷ value) = {round(den, 4)}")
+                    else:
+                        steps.append(f"Σ(value × production) = {round(num, 4)}")
+                        steps.append(f"Σ(production) = {round(den, 4)}")
+                    steps.append(f"Cumulative = {result}")
+                return {
+                    "method": "harmonic_mean" if harmonic else "weighted_average",
+                    "weight_item": weight_item, "rows": data_rows, "steps": steps,
+                    "warnings": [], "result": result,
+                }
 
             def _sail_month(m):
                 stored = _sail_stored(m, src_units, src_key, "month")
@@ -1875,13 +1939,15 @@ def generate_major_techno_verification(report_month: str) -> dict:
                 return num / den if den > 0 else None
 
             sail_reported = _sail_reported()
-            sail_calculated = _sail_calculated()
+            sail_detail = _sail_calculated_detail()
+            sail_calculated = sail_detail["result"] if sail_detail else None
             rows.append({
                 "label": "SAIL", "unit": unit_str,
                 "months": [_fmt_param(_sail_month(m), param_name) for m in ytd],
                 "reported": _fmt_param(sail_reported, param_name),
                 "calculated": _verify_fmt4(sail_calculated),
                 "deviation": _verify_deviates(sail_reported, sail_calculated, param_name),
+                "calc_detail": sail_detail,
             })
 
         else:  # "sms" or "tmi"
@@ -1894,7 +1960,8 @@ def generate_major_techno_verification(report_month: str) -> dict:
                         else _gv_aliases(plant, report_month, su,
                                          _VERIFY_HM_ALIASES if src_key == "specific_hm_consumption"
                                          else _VERIFY_SCRAP_ALIASES, "till_month")
-                    calculated = _calc_plant(plant, su, src_key, kind=kind)
+                    detail = _calc_plant_detail(plant, su, src_key, kind=kind)
+                    calculated = detail["result"] if detail else None
                     if reported is None and calculated is None:
                         continue
                     rows.append({
@@ -1904,6 +1971,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
                         "reported": _fmt_param(reported, param_name),
                         "calculated": _verify_fmt4(calculated),
                         "deviation": _verify_deviates(reported, calculated, param_name),
+                        "calc_detail": _reshape_detail(detail),
                     })
 
             def _sms_reported():
@@ -1928,7 +1996,20 @@ def generate_major_techno_verification(report_month: str) -> dict:
                             den += w
                 return num / den if den > 0 else None
 
-            def _sms_calculated():
+            def _sms_calculated_detail():
+                """SAIL's calculated cumulative combines each (plant, SMS-
+                unit)'s own CALCULATED cumulative (never a stored SAIL
+                override), weighted by plant Crude Steel production / shop
+                count - same formula as generate_major_techno_from_db's
+                _sms_sail, with a full rows/steps breakdown, one row per
+                contributing shop instead of per month."""
+                weight_item = (
+                    f"cumulative Apr-{report_month} plant 'Total Crude Steel' production ÷ shop count, "
+                    f"applied to each shop's own CALCULATED cumulative (not its stored value)"
+                )
+                steps = [f"Method: SAIL = production-weighted average of each shop's Calculated cumulative — "
+                         f"Σ(shop value × production) ÷ Σ(production). Weights = {weight_item}."]
+                data_rows = []
                 num = den = 0.0
                 for plant, shops in _VERIFY_SMS_UNIT_MAP.items():
                     n = _VERIFY_SMS_N_SHOPS[plant]
@@ -1938,10 +2019,22 @@ def generate_major_techno_verification(report_month: str) -> dict:
                         continue
                     for su in shops:
                         v = _calc_plant(plant, su, src_key, kind=kind)
-                        if v is not None:
-                            num += v * w
-                            den += w
-                return num / den if den > 0 else None
+                        if v is None:
+                            continue
+                        term = round(v * w, 4)
+                        num += v * w
+                        den += w
+                        data_rows.append({"label": f"{plant} {su}", "value": v, "weight": round(w, 4), "product": term})
+                        steps.append(f"{plant} {su}: {v} × {round(w,4)} = {term}")
+                result = round(num / den, 4) if den > 0 else None
+                if result is not None:
+                    steps.append(f"Σ(value × production) = {round(num, 4)}")
+                    steps.append(f"Σ(production) = {round(den, 4)}")
+                    steps.append(f"Cumulative = {result}")
+                return {
+                    "method": "weighted_average", "weight_item": weight_item,
+                    "rows": data_rows, "steps": steps, "warnings": [], "result": result,
+                }
 
             def _sms_month(m):
                 stored = _sail_stored(m, _VERIFY_SMS_UNIT_ORDER,
@@ -1966,13 +2059,15 @@ def generate_major_techno_verification(report_month: str) -> dict:
                 return num / den if den > 0 else None
 
             sail_reported = _sms_reported()
-            sail_calculated = _sms_calculated()
+            sail_detail = _sms_calculated_detail()
+            sail_calculated = sail_detail["result"] if sail_detail else None
             rows.append({
                 "label": "SAIL", "unit": unit_str,
                 "months": [_fmt_param(_sms_month(m), param_name) for m in ytd],
                 "reported": _fmt_param(sail_reported, param_name),
                 "calculated": _verify_fmt4(sail_calculated),
                 "deviation": _verify_deviates(sail_reported, sail_calculated, param_name),
+                "calc_detail": sail_detail,
             })
 
         if rows:
