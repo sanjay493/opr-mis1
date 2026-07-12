@@ -1185,6 +1185,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
             if not col_p9:
                 raise ValueError(f"Month column mapping not found for month '{month_num}'.")
             ws_p9 = wb[p9_sheet]
+            _assert_p9_month_year_match(ws_p9, report_month)
             production_rows = _preview_production_from_cells(ws_p9, _build_p9_cells(ws_p9, col_p9))
 
         if p18_sheet:
