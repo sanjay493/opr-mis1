@@ -38,6 +38,19 @@ _MONTH_NUM_TO_COL: Dict[int, int] = {
 }
 _CUM_COL = 16   # Column P = always cumulative (Apr → report month)
 
+# BSP's own sheet reports these two coke-oven byproduct yields at 1/10th the
+# scale used elsewhere — confirmed by comparing the sheet's own raw cell
+# (Crude Tar ~2.8, Ammonium Sulphate ~1.0) against the equivalent RSP figures
+# once RSP's own scale bug (rsp_technopara_extractor.py's _PARAM_SCALE) is
+# corrected: manually-entered RSP values sit in the ~30-32 / ~1-3 range, the
+# same order of magnitude a ×10'd BSP figure lands in. Scaled here, once,
+# centrally, matching the same fix applied to RSP.
+_PARAM_SCALE = {
+    "crude_tar_yield": 10,
+    "ammonium_sulphate_yield": 10,
+}
+
+
 def _resolve_month_columns(ws) -> Dict[int, int]:
     """Map calendar month number -> column index (1-based) by searching row
     4's header text for each month abbreviation, instead of trusting a fixed
@@ -293,6 +306,12 @@ class BspTechnoExtractor:
                 try:
                     month_val = _clean(ws.cell(row_num, month_col).value)
                     till_val  = _clean(ws.cell(row_num, cum_col).value)
+                    scale = _PARAM_SCALE.get(param_key)
+                    if scale:
+                        if month_val is not None:
+                            month_val = round(month_val * scale, 4)
+                        if till_val is not None:
+                            till_val = round(till_val * scale, 4)
                     if till_val is None and month_val is not None and month_num == 4:
                         # April is FY month 1, so cumulative April->April is
                         # always identical to the month value — some report
