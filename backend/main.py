@@ -1453,8 +1453,8 @@ async def save_techno_entries(payload: dict):
 # ---------------------------------------------------------------------------
 
 @app.get("/api/extraction-log")
-async def get_extraction_log(limit: int = 60):
-    return {"logs": db.get_extraction_logs(limit=limit)}
+async def get_extraction_log(limit: int = 60, plant: str = None, source_type: str = None):
+    return {"logs": db.get_extraction_logs(limit=limit, plant=plant, source_type=source_type)}
 
 
 @app.post("/api/debug-column-detection")

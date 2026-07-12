@@ -915,17 +915,30 @@ def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: i
     conn.close()
 
 
-def get_extraction_logs(limit: int = 60) -> List[Dict[str, Any]]:
-    """Returns the most recent extraction log entries, newest first."""
+def get_extraction_logs(limit: int = 60, plant: Optional[str] = None,
+                         source_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Returns the most recent extraction log entries, newest first.
+    Optional plant/source_type filters let a page (e.g. /data-entry/techno)
+    show only its own entries from this shared log table."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    rows = conn.execute("""
+    clauses, params = [], []
+    if plant:
+        clauses.append("plant_name = ?")
+        params.append(plant)
+    if source_type:
+        clauses.append("source_type = ?")
+        params.append(source_type)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(limit)
+    rows = conn.execute(f"""
         SELECT id, logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted
         FROM extraction_log
+        {where}
         ORDER BY id DESC
         LIMIT ?
-    """, (limit,)).fetchall()
+    """, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -1140,6 +1153,28 @@ def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Di
     _raw_upsert_techno_data(plant, report_month, unit, techno_json, source_file)
     _maybe_recompute_derived_params(plant, report_month, unit)
     _maybe_refresh_sail_bf(plant, report_month, unit)
+    _log_techno_save(plant, report_month, unit, techno_json, source_file)
+
+
+def _log_techno_save(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str) -> None:
+    """Audit-log every techno_data save through the extraction_log table, the
+    same table /upload's log panel reads — the /data-entry/techno page had no
+    equivalent trail before this, since none of its API routers ever called
+    log_extraction. Hooked here (the one function every techno save path
+    funnels through: extraction inserts, manual entry, and the SAIL BF_Shop
+    auto-refresh) so it can't be missed by adding a new save path later."""
+    try:
+        items = len(techno_json.get("month", {})) + len(techno_json.get("till_month", {}))
+        log_extraction(
+            plant=plant,
+            report_month=report_month,
+            file_name=source_file or "(manual entry)",
+            sheet_name=unit,
+            source_type="Techno Data",
+            items_extracted=items,
+        )
+    except Exception as e:
+        print(f"[db] techno save logging failed for {plant}/{report_month}/{unit}: {e}")
 
 
 # tmi and fuel_rate are physically derived, never independently measured:
