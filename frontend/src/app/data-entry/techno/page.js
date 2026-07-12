@@ -587,6 +587,86 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
 }
 
 // ── Techno Data Panel — works for all 5 plants ───────────────────────────────
+// ── "Last saved" log — same extraction_log table /upload reads, filtered to
+// this plant's techno_data writes so it shows when each unit/month was last
+// saved and from what file (or "(manual entry)"). ────────────────────────────
+function TechnoSaveLog({ plant, reportMonth, apiBase, refreshKey }) {
+  const [logs, setLogs] = React.useState([]);
+  const [expanded, setExpanded] = React.useState(false);
+  const [loadingLog, setLoadingLog] = React.useState(false);
+
+  const fetchLog = React.useCallback(async () => {
+    setLoadingLog(true);
+    try {
+      const res = await fetch(
+        `${apiBase}/api/extraction-log?plant=${plant}&source_type=${encodeURIComponent('Techno Data')}&limit=20`
+      );
+      const json = await res.json();
+      setLogs(json.logs || []);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLoadingLog(false);
+    }
+  }, [plant, apiBase]);
+
+  useEffect(() => { fetchLog(); }, [fetchLog, refreshKey]);
+
+  const latest = logs[0];
+
+  return (
+    <div style={{
+      marginBottom: 16, border: '1px solid #dadce0', borderRadius: 8,
+      background: '#fafafa', fontSize: 13,
+    }}>
+      <button
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 14px', background: 'transparent', border: 'none',
+          cursor: 'pointer', textAlign: 'left', color: '#374151',
+        }}
+      >
+        <span style={{ fontWeight: 600 }}>{expanded ? '▾' : '▸'} Last saved:</span>
+        {loadingLog && <span style={{ color: '#9aa0a6' }}>checking…</span>}
+        {!loadingLog && latest && (
+          <span style={{ color: '#5f6368' }}>
+            {latest.logged_at} — {latest.sheet_name} ({latest.report_month}) — {latest.items_extracted} params
+            {latest.file_name && latest.file_name !== '(manual entry)' ? ` — ${latest.file_name}` : ' — manual entry'}
+          </span>
+        )}
+        {!loadingLog && !latest && <span style={{ color: '#9aa0a6' }}>no save history yet for {plant}</span>}
+      </button>
+      {expanded && logs.length > 0 && (
+        <div style={{ borderTop: '1px solid #e5e7eb', maxHeight: 220, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ background: '#f3f4f6' }}>
+                <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368' }}>When</th>
+                <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368' }}>Unit</th>
+                <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368' }}>Report month</th>
+                <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368' }}>Source</th>
+                <th style={{ padding: '5px 12px', textAlign: 'right', color: '#5f6368' }}>Params</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map(l => (
+                <tr key={l.id} style={{ borderTop: '1px solid #f0f0f0' }}>
+                  <td style={{ padding: '5px 12px', fontFamily: 'monospace' }}>{l.logged_at}</td>
+                  <td style={{ padding: '5px 12px' }}>{l.sheet_name}</td>
+                  <td style={{ padding: '5px 12px' }}>{l.report_month}</td>
+                  <td style={{ padding: '5px 12px', color: '#5f6368' }}>{l.file_name || 'manual entry'}</td>
+                  <td style={{ padding: '5px 12px', textAlign: 'right', fontFamily: 'monospace' }}>{l.items_extracted}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TechnoDataPanel({ plant, reportMonth, apiBase }) {
   const [data, setData] = React.useState({});
   const [activeUnit, setActiveUnit] = React.useState(null);
@@ -595,9 +675,11 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
   const [cumStatus, setCumStatus] = React.useState(null);
   const [cumPreviewAll, setCumPreviewAll] = React.useState(null);
   const [cumConfirmBusy, setCumConfirmBusy] = React.useState(false);
+  const [logTick, setLogTick] = React.useState(0);
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
+    setLogTick(t => t + 1);
     try {
       const res = await fetch(
         `${apiBase}/api/techno/data?plant=${plant}&report_month=${reportMonth}`
@@ -696,6 +778,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
 
   return (
     <div>
+      <TechnoSaveLog plant={plant} reportMonth={reportMonth} apiBase={apiBase} refreshKey={logTick} />
       {/* RSP: Technopara Excel (final) + month-end Morning Report (tentative) */}
       {isRsp && (
         <div style={{
