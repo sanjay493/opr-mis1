@@ -851,7 +851,9 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         </div>
       )}
 
-      {/* BSL: Show ONLY the unified extraction table (no separate data display) */}
+      {/* BSL: upload bar + BF Performance extractor. Existing DB data is
+          still shown below via the shared units.length > 0 panel, same as
+          every other plant. */}
       {isBsl && (
         <div>
           <div style={{
@@ -873,7 +875,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             />
           </div>
 
-          {/* Unified BSL BF Performance Extractor - ONLY TABLE (no separate data display below) */}
+          {/* Unified BSL BF Performance Extractor */}
           <BSLBFTechnoExtractor
             reportMonth={reportMonth}
             apiBase={apiBase}
@@ -931,7 +933,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         </div>
       )}
 
-      {!loading && units.length > 0 && !isBsl && (
+      {!loading && units.length > 0 && (
         <div style={{ display: 'flex', gap: 0, border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden', minHeight: 400 }}>
           {/* Unit list (left) */}
           <div style={{ width: 180, borderRight: '1px solid #dadce0', background: '#f8f9fa', flexShrink: 0 }}>
