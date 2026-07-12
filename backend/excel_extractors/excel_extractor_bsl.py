@@ -793,6 +793,31 @@ def _detect_month_from_pdf_text(text: str) -> Optional[str]:
     return None
 
 
+def _detect_month_from_fax_sheet(fax_ws) -> Optional[str]:
+    """Scan the FAX GM OPRN sheet's own header rows for a month-name + year
+    pattern (its row 9 reads "THE REQUIRED INFORMATION FOR <MONTH> <YEAR> IS
+    AS UNDER"). This sheet is a supplementary monthly fax to Corporate that
+    isn't always updated when the workbook is reused as next month's
+    template — confirmed on a real file where every other sheet (Sheet1-4,
+    SMS-I, SMS-II) correctly read "JUNE-2026" but this one still read
+    "FEBRUARY 2026", silently attaching stale furnace-wise data (BF-1/2/4/5
+    Coke Rate, Hot Blast Temp, Productivity, CDI, etc. — this sheet's ONLY
+    source for per-furnace breakdown) to the current month. Returns None if
+    no signal is found (never block on an undetectable signal)."""
+    for row in range(1, 12):
+        for col in range(1, 6):
+            try:
+                val = str(fax_ws.cell(row, col).value or "").upper()
+            except Exception:
+                continue
+            m = _MONTH_NAME_RE.search(val)
+            if m:
+                mon_num = _MONTH_FROM_NAME.get(m.group(1))
+                if mon_num:
+                    return f"{m.group(2)}-{mon_num}"
+    return None
+
+
 def _detect_month_from_sheet1(wb) -> Optional[str]:
     """Scan the first 5 rows of Sheet1 for a month-name + year pattern (Techno Excel header)."""
     try:
@@ -1460,7 +1485,25 @@ def extract_preview(file_path: str, report_month: str) -> dict:
         })
 
     # ── FAX GM OPRN sheet — extra parameters not in Sheet1-4/SMS-I/SMS-II ──
+    fax_month_stale = False
     if _FAX_SHEET in wb.sheetnames:
+        fax_ws = wb[_FAX_SHEET]
+        fax_month = _detect_month_from_fax_sheet(fax_ws)
+        fax_month_stale = bool(fax_month and fax_month != db_month)
+        if fax_month_stale:
+            # Skip only this sheet's rows, not the whole extraction — the
+            # other sheets (Sheet1-4/SMS-I/SMS-II) already passed their own
+            # month check above and remain correct for db_month. Blocking
+            # the entire upload over one stale supplementary sheet would
+            # throw away otherwise-correct data.
+            logger.warning(
+                "BSL techno: %r sheet reports %s but upload is for %s — "
+                "skipping its rows (incl. the ONLY source of per-furnace "
+                "BF-1/2/4/5 Coke Rate/Hot Blast Temp/Productivity/CDI) "
+                "rather than attaching stale data to the wrong month.",
+                _FAX_SHEET, _fmt_month(fax_month), _fmt_month(db_month))
+
+    if _FAX_SHEET in wb.sheetnames and not fax_month_stale:
         fax_ws = wb[_FAX_SHEET]
         fax_idx = len(rows_out)
 
@@ -1501,7 +1544,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
             for mon_col, cum_col, param, unit in _FAX_BF_FURNACE_PARAMS:
                 rows_out.append(_fax_row(row, mon_col, cum_col, 1.0, "IRON_MAKING", unit_name, param, unit, fax_idx))
                 fax_idx += 1
-    else:
+    elif _FAX_SHEET not in wb.sheetnames:
         logger.info("BSL techno: sheet %r not found — skipping FAX GM OPRN extras", _FAX_SHEET)
 
     # ── Sheet4 — iron-making block (Sinter/Pellet, O2, Coke Screen Loss, BF) ─
