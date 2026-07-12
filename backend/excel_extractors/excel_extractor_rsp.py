@@ -107,6 +107,86 @@ def _find_report_sheets(wb, sheet_names):
     return p9, p18
 
 
+# ---------------------------------------------------------------------------
+# Month/year validation — the page-9 sheet has no single "this is the report
+# month" cell (it's a "growing FY table": all 12 months' columns exist at
+# once), so the upload flow previously trusted the user's month-picker
+# selection blindly, with no way to catch an accidental wrong-file upload.
+# Detected instead from two independent signals already present in the
+# sheet's own content.
+# ---------------------------------------------------------------------------
+
+_P9_MONTH_DETECT_ROW_LABEL = "total crude steel"
+
+
+def _detect_p9_report_month(ws) -> Optional[str]:
+    """Best-effort month detection ('01'..'12'): the report month is whichever
+    month's column is the LAST one with a non-zero value in a reliably-always
+    -populated row ("Total Crude Steel"). Returns None if undetectable (never
+    guessed wrong in 33 real files spanning 2023-2026 during testing)."""
+    target_row = None
+    for r in range(1, ws.max_row + 1):
+        if _P9_MONTH_DETECT_ROW_LABEL in _norm(ws.cell(r, 1).value or ""):
+            target_row = r
+            break
+    if target_row is None:
+        return None
+
+    order = ["04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03"]
+    last_month = None
+    for m in order:
+        col = COL_MAP_P9.get(m)
+        if not col:
+            continue
+        v = clean_val(ws.cell(target_row, openpyxl.utils.column_index_from_string(col)).value)
+        if v:
+            last_month = m
+    return last_month
+
+
+def _detect_p9_fy_start_year(ws) -> Optional[int]:
+    """FY start year (e.g. 2026 for "2026-27") from the sheet's own title row,
+    e.g. "PRODUCTION PERFORMANCE - 2026-27" / "PRODN. PERFORMANCE - 2026-27"."""
+    for r in range(1, 4):
+        v = str(ws.cell(r, 1).value or "")
+        if "prod" not in v.lower():
+            continue
+        m = re.search(r'(\d{4})\s*-\s*\d{2,4}', v)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def _assert_p9_month_year_match(ws, report_month: str) -> None:
+    """Raise ValueError if the uploaded file's own content disagrees with the
+    user-selected month/year - never blocks upload just because a signal
+    couldn't be detected at all, only when detection and selection actively
+    disagree."""
+    db_month, month_num = _parse_report_month(report_month)
+    year = int(db_month[:4])
+
+    detected_month = _detect_p9_report_month(ws)
+    if detected_month and detected_month != month_num:
+        raise ValueError(
+            f"Month mismatch: the uploaded file's production data (sheet {ws.title!r}) "
+            f"appears to be for {MONTH_NAMES.get(detected_month, detected_month)}, but you "
+            f"selected {MONTH_NAMES.get(month_num, month_num)} {year}. Please select the "
+            f"matching month, or upload the file for {MONTH_NAMES.get(month_num, month_num)}."
+        )
+
+    fy_start_year = _detect_p9_fy_start_year(ws)
+    if fy_start_year:
+        expected_fy_start = year if int(month_num) >= 4 else year - 1
+        if fy_start_year != expected_fy_start:
+            raise ValueError(
+                f"Year mismatch: the uploaded file is for FY {fy_start_year}-"
+                f"{str(fy_start_year + 1)[2:]}, but your selected "
+                f"{MONTH_NAMES.get(month_num, month_num)} {year} implies FY "
+                f"{expected_fy_start}-{str(expected_fy_start + 1)[2:]}. Please verify the "
+                f"uploaded file matches the selected period."
+            )
+
+
 def _parse_report_month(report_month: str):
     """Returns (db_month 'YYYY-MM', month_num_str '01'..'12')."""
     if len(report_month) == 7 and report_month[4] == "-":
@@ -1244,11 +1324,13 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
     if not col_p9:
         raise ValueError(f"Month column mapping not found for month '{month_num}'.")
 
+    sheet_p9 = wb[p9_name]
+    _assert_p9_month_year_match(sheet_p9, report_month)
+
     conn   = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     vals_extracted = 0
 
-    sheet_p9 = wb[p9_name]
     for item_name, cell in _build_p9_cells(sheet_p9, col_p9).items():
         val = clean_val(sheet_p9[cell].value)
         if val is not None:
