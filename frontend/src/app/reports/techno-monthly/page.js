@@ -202,14 +202,14 @@ export default function TechnoMonthlyPage() {
                         const zebra = i % 2 === 1 ? '#f8f9fa' : '#ffffff';
                         const isSail = r.plant === 'SAIL';
                         return (
-                          <tr key={r.plant} style={{ backgroundColor: isSail ? '#e8f0fe' : zebra }}>
-                            <td style={{ ...cell, fontWeight: isSail ? 800 : 600 }}>{r.plant}</td>
-                            <td style={{ ...cell, color: '#5f6368' }}>{r.unit}</td>
-                            <td style={{ ...cell, textAlign: 'right' }}>{fmtNum(r.target)}</td>
-                            <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>{fmtNum(r.month)}</td>
-                            <td style={{ ...cell, textAlign: 'right', fontWeight: 700, color: '#174ea6' }}>{fmtNum(r.till_month)}</td>
-                            <td style={{ ...cell, textAlign: 'right', color: '#5f6368' }}>{fmtNum(r.cply)}</td>
-                            <td style={{ ...cell, textAlign: 'right', color: '#5f6368' }}>{fmtNum(r.cum_cply)}</td>
+                          <tr key={r.plant} style={{ backgroundColor: isSail ? '#f9ab00' : zebra }}>
+                            <td style={{ ...cell, fontWeight: isSail ? 800 : 600, color: isSail ? '#202124' : undefined }}>{r.plant}</td>
+                            <td style={{ ...cell, color: isSail ? '#3c2f00' : '#5f6368' }}>{r.unit}</td>
+                            <td style={{ ...cell, textAlign: 'right', color: isSail ? '#202124' : undefined }}>{fmtNum(r.target)}</td>
+                            <td style={{ ...cell, textAlign: 'right', fontWeight: 700, color: isSail ? '#202124' : undefined }}>{fmtNum(r.month)}</td>
+                            <td style={{ ...cell, textAlign: 'right', fontWeight: 700, color: isSail ? '#202124' : '#174ea6' }}>{fmtNum(r.till_month)}</td>
+                            <td style={{ ...cell, textAlign: 'right', color: isSail ? '#3c2f00' : '#5f6368' }}>{fmtNum(r.cply)}</td>
+                            <td style={{ ...cell, textAlign: 'right', color: isSail ? '#3c2f00' : '#5f6368' }}>{fmtNum(r.cum_cply)}</td>
                           </tr>
                         );
                       })}
