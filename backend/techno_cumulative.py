@@ -168,6 +168,8 @@ def compute_cumulative_preview(
     """
     Compute the April→report_month cumulative for ONE parameter with a full
     step-by-step breakdown (rows, steps, warnings) so the user can verify it.
+    Monthly values are read from techno_data (param_key must be stored
+    directly under the unit's "month" dict).
 
     current_value       — unsaved form Month Value for report_month (overrides DB)
     current_production  — unsaved form 'production' Month Value (used as the
@@ -194,6 +196,44 @@ def compute_cumulative_preview(
         except (TypeError, ValueError):
             # Non-numeric stored value (e.g. a 'HH:MM' time) — cannot average
             warnings.append(f"{m}: non-numeric value {v!r} — excluded.")
+
+    return compute_cumulative_from_values(
+        plant, unit, param_key, report_month, values,
+        current_production=current_production, warnings=warnings,
+    )
+
+
+def compute_cumulative_from_values(
+    plant: str,
+    unit: str,
+    param_key: str,
+    report_month: str,
+    values: Dict[str, float],
+    current_production: Optional[float] = None,
+    warnings: Optional[list] = None,
+) -> Dict:
+    """
+    Compute the April→report_month cumulative for ONE parameter from an
+    already-assembled {month: value} dict, with the same step-by-step
+    breakdown as compute_cumulative_preview (which is now a thin wrapper
+    around this that reads `values` from techno_data directly).
+
+    Use this instead of compute_cumulative_preview when param_key isn't
+    stored under its own key in techno_data and the caller must assemble
+    the monthly series itself — e.g. TMI, which is stored directly when
+    reported but otherwise computed per-month as Hot Metal + Scrap
+    Consumption.
+
+    current_production — unsaved form 'production' Month Value (used as the
+                         report_month weight for unit-wise weighting)
+    warnings — pre-existing warnings to fold into the result (e.g. from the
+              caller's own value assembly)
+
+    Raises ValueError with a user-readable message when nothing can be computed.
+    """
+    plant = plant.upper()
+    months = _db.get_ytd_months(report_month)   # Apr → report_month inclusive
+    warnings = list(warnings) if warnings else []
 
     if report_month not in values:
         warnings.append(
