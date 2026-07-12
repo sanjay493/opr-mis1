@@ -24,6 +24,18 @@ _MONTH_ORDER = ["04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02"
 _TECHNO_MONTH_DETECT_LABEL = "coke rate"
 _TECHNO_MONTH_DETECT_LABEL2 = "shop"
 
+# RSP's own sheet reports these two coke-oven byproduct yields at 1/10th the
+# scale every other plant (and every manually-entered RSP value already in
+# the DB) uses for the same unit — confirmed by comparing the sheet's own
+# raw cell (~3.2, ~0.2-0.3) against manually-entered RSP figures for other
+# months (~30-32, ~1-3), which are consistent with other plants' Crude Tar
+# Yield/Ammonium Sulphate Yield range. Scaled here, once, centrally, rather
+# than leaving every caller to remember to do it.
+_PARAM_SCALE = {
+    "crude_tar_yield": 10,
+    "ammonium_sulphate_yield": 10,
+}
+
 
 def _techno_clean_value(v):
     if v is None:
@@ -198,6 +210,12 @@ class TechnoExtractor:
         def _set(unit, param_key, month_val, cum_val):
             if unit is None or param_key is None:
                 return
+            scale = _PARAM_SCALE.get(param_key)
+            if scale:
+                if isinstance(month_val, (int, float)):
+                    month_val = round(month_val * scale, 4)
+                if isinstance(cum_val, (int, float)):
+                    cum_val = round(cum_val * scale, 4)
             slot = units.setdefault(unit, {"month": {}, "till_month": {}})
             # First occurrence wins — a couple of labels legitimately repeat
             # later in the sheet (e.g. "Make-Up Water Cons." appears twice,
