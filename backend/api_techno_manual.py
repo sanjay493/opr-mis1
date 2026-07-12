@@ -84,18 +84,28 @@ def _get_hm_production(report_month: str, ytd: bool = False) -> Dict[str, float]
 
 
 def _get_bf_shop_data(report_month: str, period: str = "month") -> Dict[str, dict]:
-    """Return {plant: {param_key: value}} for BF_Shop unit, all plants."""
+    """Return {plant: {param_key: value}} for each plant's BF-shop-equivalent
+    unit — 'BF_Shop' where a plant stores one, else 'BF-5' for a single-
+    furnace plant (ISP) where the furnace IS the whole shop and no separate
+    'BF_Shop' row is ever stored. Same BF_Shop-then-BF-5 convention as
+    page_techno.py's _VERIFY_PARAMS/_resolve_unit — without this fallback,
+    ISP was silently excluded from every SAIL BF aggregate."""
     conn = sqlite3.connect(_db.DB_PATH)
     cur  = conn.cursor()
     try:
         cur.execute(
-            "SELECT plant, techno_json FROM techno_data WHERE report_month=? AND unit='BF_Shop'",
+            "SELECT plant, unit, techno_json FROM techno_data "
+            "WHERE report_month=? AND unit IN ('BF_Shop', 'BF-5')",
             [report_month],
         )
+        by_plant_unit: Dict[str, Dict[str, dict]] = {}
+        for plant, unit, tj in cur.fetchall():
+            by_plant_unit.setdefault(plant, {})[unit] = json.loads(tj)
         result = {}
-        for plant, tj in cur.fetchall():
-            d = json.loads(tj)
-            result[plant] = d.get(period, {})
+        for plant, units in by_plant_unit.items():
+            d = units.get("BF_Shop") or units.get("BF-5")
+            if d:
+                result[plant] = d.get(period, {})
         return result
     finally:
         conn.close()
@@ -223,31 +233,28 @@ async def save_entry(body: SaveRequest):
             "saved_till_params": len(till_clean)}
 
 
-@router.post("/sail/calculate")
-async def calculate_sail(body: SailCalcRequest):
+def _apply_sail_bf(report_month: str, overwrite_manual: bool = False) -> Optional[Dict]:
     """
-    Calculate SAIL BF_Shop aggregate from all plant BF_Shop data.
-    Uses HM production from production_table as weights.
+    Core SAIL BF_Shop compute-and-save logic — shared by the manual
+    /sail/calculate endpoint and the automatic post-save refresh
+    (auto_refresh_sail_bf below). Uses HM production from production_table
+    as weights.
 
     By default preserves any manually-entered SAIL values (overwrite_manual=False).
     Set overwrite_manual=True to replace ALL SAIL BF_Shop values with calculated ones.
-    """
-    _validate_month(body.report_month)
-    _db.init_db()
 
-    calc_month     = _compute_sail_bf(body.report_month, "month")
-    calc_till      = _compute_sail_bf(body.report_month, "till_month")
+    Returns {"month": {...}, "till_month": {...}}, or None if no contributing
+    plant has BF_Shop data for this month.
+    """
+    calc_month     = _compute_sail_bf(report_month, "month")
+    calc_till      = _compute_sail_bf(report_month, "till_month")
 
     if not calc_month and not calc_till:
-        raise HTTPException(
-            404,
-            f"No BF_Shop data found for any plant in {body.report_month}. "
-            "Upload plant data first."
-        )
+        return None
 
-    if not body.overwrite_manual:
+    if not overwrite_manual:
         # Preserve existing SAIL manual entries — only fill gaps
-        existing = _db.get_techno_data("SAIL", body.report_month, "BF_Shop")
+        existing = _db.get_techno_data("SAIL", report_month, "BF_Shop")
         ex_month = existing.get("BF_Shop", {}).get("month", {})
         ex_till  = existing.get("BF_Shop", {}).get("till_month", {})
 
@@ -261,18 +268,60 @@ async def calculate_sail(body: SailCalcRequest):
 
     _db.upsert_techno_data(
         plant="SAIL",
-        report_month=body.report_month,
+        report_month=report_month,
         unit="BF_Shop",
         techno_json={"month": calc_month, "till_month": calc_till},
         source_file="sail_calculated",
     )
 
+    return {"month": calc_month, "till_month": calc_till}
+
+
+def auto_refresh_sail_bf(report_month: str) -> None:
+    """
+    Called by db.upsert_techno_data whenever a contributing plant's BF-shop-
+    equivalent unit (BF_Shop or ISP's BF-5) is saved, so the stored SAIL
+    BF_Shop row never goes stale relative to the plant data it's built from.
+
+    Always overwrites (overwrite_manual=True) rather than the manual
+    endpoint's default preserve-existing behaviour: a "preserve" refresh
+    would never actually update anything once a value already exists for a
+    parameter, which is exactly the staleness this hook exists to eliminate.
+    One consequence: a SAIL BF_Shop value hand-typed via the generic manual-
+    entry form (as opposed to a prior "Apply SAIL" click) will also be
+    overwritten the next time any contributing plant saves — the schema has
+    no per-parameter way to tell "deliberately hand-typed" apart from
+    "previously auto-computed" within the same stored row.
+    """
+    _apply_sail_bf(report_month, overwrite_manual=True)
+
+
+@router.post("/sail/calculate")
+async def calculate_sail(body: SailCalcRequest):
+    """
+    Calculate SAIL BF_Shop aggregate from all plant BF_Shop data.
+    Uses HM production from production_table as weights.
+
+    By default preserves any manually-entered SAIL values (overwrite_manual=False).
+    Set overwrite_manual=True to replace ALL SAIL BF_Shop values with calculated ones.
+    """
+    _validate_month(body.report_month)
+    _db.init_db()
+
+    result = _apply_sail_bf(body.report_month, body.overwrite_manual)
+    if result is None:
+        raise HTTPException(
+            404,
+            f"No BF_Shop data found for any plant in {body.report_month}. "
+            "Upload plant data first."
+        )
+
     return {
         "status": "ok",
         "report_month": body.report_month,
-        "sail_bf_month": calc_month,
-        "sail_bf_till":  calc_till,
-        "params_calculated": len(calc_month),
+        "sail_bf_month": result["month"],
+        "sail_bf_till":  result["till_month"],
+        "params_calculated": len(result["month"]),
     }
 
 
