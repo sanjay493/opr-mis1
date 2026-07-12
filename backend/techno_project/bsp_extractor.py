@@ -3,9 +3,15 @@ BSP 3-page-Tech.xlsx extractor.
 
 Sheet layout (Sheet1):
   Row 3, Col A : month name, e.g. "MAY"
-  Row 4, Cols D-O (1-based cols 4-15): APR … MAR
-  Row 4, Col P (col 16): cumulative header ("ACTUAL" or "CUM")
-  Col layout is FIXED — April always = col 4, May = col 5, … Mar = col 15, Cum = col 16
+  Row 4           : APR … MAR month headers, followed by a cumulative header
+                    ("ACTUAL"/"CUM"). Column positions are NOT fixed across
+                    real files — some editions insert an extra "ABP/Norm"
+                    column right before APR, shifting every month (and the
+                    cumulative column) one to the right. Month columns are
+                    therefore resolved per-file by searching row 4's header
+                    text (see `_resolve_month_columns`); the old fixed
+                    _MONTH_NUM_TO_COL mapping is kept only as a last-resort
+                    fallback if that search somehow finds nothing.
 
 Row numbers come from bsp_techno_map.json (editable without touching Python).
 Records are stored in techno_data with plant='BSP'.
@@ -31,6 +37,23 @@ _MONTH_NUM_TO_COL: Dict[int, int] = {
     10: 10, 11: 11, 12: 12, 1: 13, 2: 14, 3: 15,
 }
 _CUM_COL = 16   # Column P = always cumulative (Apr → report month)
+
+def _resolve_month_columns(ws) -> Dict[int, int]:
+    """Map calendar month number -> column index (1-based) by searching row
+    4's header text for each month abbreviation, instead of trusting a fixed
+    position. Confirmed necessary: some real files insert an extra
+    "ABP/Norm" column before APR, shifting every month column one to the
+    right relative to files where APR sits directly at column 4."""
+    mapping: Dict[int, int] = {}
+    max_c = min(ws.max_column or 40, 40)
+    for c in range(1, max_c + 1):
+        label = str(ws.cell(4, c).value or "").strip().upper()
+        for abbr, num in _MONTH_ABBR_TO_NUM.items():
+            if label == abbr.upper() and num not in mapping:
+                mapping[num] = c
+                break
+    return mapping
+
 
 _BAD = {"#DIV/0!", "#VALUE!", "-", "--", None, ""}
 
@@ -143,6 +166,74 @@ def _detect_report_month(ws, report_month: Optional[str]) -> str:
     return f"{year}-{mon_num:02d}"
 
 
+_BF_COKE_LABEL = "bf coke"
+_FY_ORDER = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
+
+
+def _find_bf_coke_row(ws, month_cols: Dict[int, int]) -> Optional[int]:
+    """Row for the genuine "BF Coke" yield data row (a Yield-from-coal-charge
+    sub-item) — distinguished from header-like rows sharing the same
+    substring (e.g. "Av. Ash in BF Coke") by requiring real numeric data in
+    at least one resolved month column."""
+    check_cols = list(month_cols.values()) or list(range(4, 17))
+    for r in range(1, ws.max_row + 1):
+        label = str(ws.cell(r, 1).value or "").strip().lower()
+        if _BF_COKE_LABEL not in label:
+            continue
+        if any(_clean(ws.cell(r, c).value) is not None for c in check_cols):
+            return r
+    return None
+
+
+def _detect_actual_report_month(ws, month_cols: Dict[int, int]) -> Optional[int]:
+    """The true last non-blank month column — scanned across the FULL FY
+    (never capped at the selected month), via the "BF Coke" row, using the
+    same last-non-blank-column technique as RSP's production/technopara
+    sheets. Scanning the whole FY rather than stopping at the selected month
+    is what lets this catch mismatches in BOTH directions: a selected month
+    later than the file's real content (later columns are genuinely blank)
+    and — the case a capped scan would miss — a selected month earlier than
+    the file's real content (real data exists past the selected column,
+    since a capped scan would only ever "confirm" whatever was selected)."""
+    target_row = _find_bf_coke_row(ws, month_cols)
+    if target_row is None:
+        return None
+
+    last_found = None
+    for m in _FY_ORDER:
+        # Only consider months whose header was actually found in row 4 — a
+        # month missing from month_cols means this file's own header simply
+        # doesn't extend that far (a real, shorter-header file variant, e.g.
+        # a file whose row 4 stops at JAN with no Feb/Mar columns at all),
+        # which is itself corroborating evidence for an earlier report month
+        # rather than something to paper over with a guessed fallback column.
+        col = month_cols.get(m)
+        if col is None:
+            continue
+        v = _clean(ws.cell(target_row, col).value)
+        if v is not None and v != 0:
+            last_found = m
+    return last_found
+
+
+def _assert_bsp_month_match(ws, report_month: str, month_num: int, month_cols: Dict[int, int]) -> None:
+    """Raise ValueError only when the file's own BF-Coke data column actively
+    disagrees with the user-selected month — never blocks upload just because
+    detection failed. No reliable FY/year signal exists in this file format:
+    the only year-like header cell (row 4, near the "ACTUAL"/"Cum. APR-MAR"
+    columns) drifts position between files and represents a prior-year
+    comparison column, not the current report period — so only month is
+    checked here, not year."""
+    detected = _detect_actual_report_month(ws, month_cols)
+    if detected and detected != month_num:
+        raise ValueError(
+            f"Month mismatch: the uploaded file's techno data appears to be for "
+            f"month {_MONTH_NUM_TO_ABBR.get(detected, detected)}, but you selected "
+            f"month {_MONTH_NUM_TO_ABBR.get(month_num, month_num)} ({report_month}). "
+            f"Please select the matching month, or upload the correct file."
+        )
+
+
 class BspTechnoExtractor:
     def __init__(self, excel_file: str, report_month: Optional[str] = None):
         self.excel_file = Path(excel_file)
@@ -164,19 +255,23 @@ class BspTechnoExtractor:
         report_month = _detect_report_month(ws, self.report_month)
         month_num = int(report_month.split("-")[1])
 
-        if month_num not in _MONTH_NUM_TO_COL:
-            raise ValueError(f"Month {month_num} not in fixed column map")
-        month_col = _MONTH_NUM_TO_COL[month_num]
-        cum_col = _CUM_COL
+        month_cols = _resolve_month_columns(ws)
 
-        # Verify col header in row 4 matches expected month abbreviation
-        expected_abbr = _MONTH_NUM_TO_ABBR.get(month_num, "").upper()
-        actual_hdr = str(ws.cell(4, month_col).value or "").strip().upper()
-        if actual_hdr != expected_abbr:
+        if month_num in month_cols:
+            month_col = month_cols[month_num]
+        elif month_num in _MONTH_NUM_TO_COL:
+            month_col = _MONTH_NUM_TO_COL[month_num]
             print(
-                f"[BSP-TechnoExtractor] Warning: expected '{expected_abbr}' in row 4 col {month_col}, "
-                f"found '{actual_hdr}'. Verify bsp_techno_map.json row numbers."
+                f"[BSP-TechnoExtractor] Warning: could not find an '{_MONTH_NUM_TO_ABBR.get(month_num, month_num)}' "
+                f"header in row 4 — falling back to fixed column {month_col}, which may not match this file's layout."
             )
+        else:
+            raise ValueError(f"Month {month_num} not in fixed column map")
+
+        mar_col = month_cols.get(3)
+        cum_col = (mar_col + 1) if mar_col else _CUM_COL
+
+        _assert_bsp_month_match(ws, report_month, month_num, month_cols)
 
         search_rows = _resolve_search_rows(ws)
 
