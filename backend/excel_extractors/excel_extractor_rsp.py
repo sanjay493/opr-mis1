@@ -69,11 +69,40 @@ def _canon_sheet(s: str) -> str:
     return re.sub(r'[^a-z0-9]', '', str(s).lower())
 
 
-_P9_NAMES   = {"page9", "pag9", "pg9"}
+# The production sheet's name drifts over time the same way P18_NAME_RE
+# already tolerates page-1-8 becoming page-1-9 - RSP renamed "Page-9" to
+# "Page-10"/"Pg-10" partway through 2026 (confirmed: TECHNOPARA JUNE-2026's
+# real sheet list is ['PAGE-1-9', 'Pg-10', 'PAGE-11', 'PAGE-12'], no "page9"
+# match at all), which silently broke extraction since it was matched by an
+# exact canon-name set. Matched by a loose name pattern instead, and
+# confirmed by a "PRODUCTION" title in the sheet's own first few rows so an
+# unrelated sheet that happens to canon-match the same pattern (e.g.
+# "PAGE-11"/"PAGE-12", which hold Despatch/External-Receipt data in real
+# files) is never mistaken for it.
+_P9_NAME_RE = re.compile(r'^(page|pag|pg)\d{1,2}$')
 
 
-def _find_report_sheets(sheet_names):
-    p9  = next((s for s in sheet_names if _canon_sheet(s) in _P9_NAMES), None)
+def _looks_like_p9_sheet(ws) -> bool:
+    # Title wording varies by file edition ("PRODUCTION PERFORMANCE" vs the
+    # abbreviated "PRODN. PERFORMANCE" seen in some real files) - "prod"
+    # matches both without also matching the Despatch/External-Receipt
+    # titles on neighboring same-name-pattern sheets.
+    for r in range(1, 4):
+        for c in range(1, 5):
+            v = ws.cell(row=r, column=c).value
+            if v and "prod" in str(v).lower():
+                return True
+    return False
+
+
+def _find_report_sheets(wb, sheet_names):
+    p9 = next(
+        (s for s in sheet_names
+         if _P9_NAME_RE.match(_canon_sheet(s))
+         and not P18_NAME_RE.match(_canon_sheet(s))
+         and _looks_like_p9_sheet(wb[s])),
+        None,
+    )
     p18 = next((s for s in sheet_names if P18_NAME_RE.match(_canon_sheet(s))), None)
     return p9, p18
 
@@ -1058,7 +1087,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     source_type, sheets_used = "Techno Parameters File", ""
     db_report_month, month_num = _parse_report_month(report_month)
 
-    p9_sheet, p18_sheet = _find_report_sheets(sheet_names)
+    p9_sheet, p18_sheet = _find_report_sheets(wb, sheet_names)
     if p9_sheet or p18_sheet:
         # Production (p9) and techno-table (p18) sheets are detected and processed
         # independently — a workbook where only one of the two names/sheets is
@@ -1157,7 +1186,7 @@ def extract_and_save_excel(file_path: str, report_month: str,
 
         sheet_names = wb.sheetnames
 
-        p9_sheet, p18_sheet = _find_report_sheets(sheet_names)
+        p9_sheet, p18_sheet = _find_report_sheets(wb, sheet_names)
         if p9_sheet or p18_sheet:
             # Production (p9) and page-1-8 techno-table data are extracted and
             # persisted independently — a workbook where only one of the two
