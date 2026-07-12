@@ -36,6 +36,62 @@ const cell = {
   whiteSpace: 'nowrap',
 };
 
+const METHOD_LABEL = {
+  weighted_average: 'Production-weighted average',
+  harmonic_mean:    'Production-weighted harmonic mean',
+  simple_average:   'Simple average',
+  sum:              'Sum of monthly values',
+};
+
+// Calculation-step breakdown for one row's Calculated value — same table
+// shape (rows/steps/weight_item) and layout as the "Calculate Cumulative"
+// step window on data-entry/techno, so the two features read consistently.
+function CalcStepsDetail({ detail }) {
+  if (!detail) return null;
+  const th = { padding: '5px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, fontSize: 12, borderBottom: '1px solid #dadce0' };
+  const thR = { ...th, textAlign: 'right' };
+  return (
+    <div style={{ padding: '10px 14px 14px' }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: '#174ea6', marginBottom: 4 }}>
+        {METHOD_LABEL[detail.method] || detail.method}
+      </div>
+      {detail.weight_item && (
+        <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 8 }}>Weights: {detail.weight_item}</div>
+      )}
+      {(detail.warnings || []).map((w, i) => (
+        <div key={i} style={{ fontSize: 12, color: '#991b1b', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 5, padding: '4px 9px', marginBottom: 6 }}>
+          {w}
+        </div>
+      ))}
+      {detail.rows?.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 8, background: '#fff' }}>
+          <thead>
+            <tr>
+              <th style={th}>Month / Plant</th>
+              <th style={thR}>Value</th>
+              <th style={thR}>Weight</th>
+              <th style={thR}>Product</th>
+            </tr>
+          </thead>
+          <tbody>
+            {detail.rows.map((r, i) => (
+              <tr key={i} style={{ borderTop: '1px solid #f1f3f4' }}>
+                <td style={{ padding: '4px 10px', color: '#202124' }}>{r.label}</td>
+                <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{fmtNum(r.value)}</td>
+                <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{r.weight == null ? '—' : fmtNum(r.weight)}</td>
+                <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{r.product == null ? '—' : fmtNum(r.product)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div style={{ fontSize: 11.5, color: '#5f6368', fontFamily: 'monospace' }}>
+        {(detail.steps || []).map((s, i) => <div key={i}>{s}</div>)}
+      </div>
+    </div>
+  );
+}
+
 export default function TechnoVerificationPage() {
   const def = getDefaultPeriod();
   const [monthName, setMonthName] = useState(def.monthName);
@@ -44,6 +100,7 @@ export default function TechnoVerificationPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [expanded, setExpanded] = useState(null); // "sectionLabel::rowLabel" or null
 
   const reportMonth = `${year}-${MONTH_NUM[monthName]}`;
 
@@ -136,13 +193,14 @@ export default function TechnoVerificationPage() {
                     ))}
                     <th style={th({ minWidth: '110px' })}>{data.cum_label} (Reported)</th>
                     <th style={th({ minWidth: '110px' })}>{data.cum_label} (Calculated)</th>
+                    <th style={th({ minWidth: '70px' })}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.sections.map((sec) => (
                     <React.Fragment key={sec.label}>
                       <tr>
-                        <td colSpan={4 + monthLabels.length} style={{
+                        <td colSpan={5 + monthLabels.length} style={{
                           ...cell, backgroundColor: '#1a73e8', color: '#ffffff',
                           fontWeight: 800, fontSize: '11pt', letterSpacing: '0.02em',
                         }}>
@@ -154,27 +212,51 @@ export default function TechnoVerificationPage() {
                         const isSail = r.label === 'SAIL';
                         const rowBg = isSail ? '#f9ab00' : zebra;
                         const textColor = isSail ? '#202124' : undefined;
+                        const rowKey = `${sec.label}::${r.label}`;
+                        const isOpen = expanded === rowKey;
                         return (
-                          <tr key={r.label} style={{ backgroundColor: rowBg }}>
-                            <td style={{ ...cell, fontWeight: isSail ? 800 : 600, color: textColor }}>{r.label}</td>
-                            <td style={{ ...cell, color: isSail ? '#3c2f00' : '#5f6368' }}>{r.unit}</td>
-                            {r.months.map((mv, mi) => (
-                              <td key={mi} style={{ ...cell, textAlign: 'right', color: textColor ?? '#5f6368' }}>
-                                {fmtNum(mv)}
+                          <React.Fragment key={r.label}>
+                            <tr style={{ backgroundColor: rowBg }}>
+                              <td style={{ ...cell, fontWeight: isSail ? 800 : 600, color: textColor }}>{r.label}</td>
+                              <td style={{ ...cell, color: isSail ? '#3c2f00' : '#5f6368' }}>{r.unit}</td>
+                              {r.months.map((mv, mi) => (
+                                <td key={mi} style={{ ...cell, textAlign: 'right', color: textColor ?? '#5f6368' }}>
+                                  {fmtNum(mv)}
+                                </td>
+                              ))}
+                              <td style={{ ...cell, textAlign: 'right', fontWeight: 700, color: isSail ? '#202124' : '#174ea6' }}>
+                                {fmtNum(r.reported)}
                               </td>
-                            ))}
-                            <td style={{ ...cell, textAlign: 'right', fontWeight: 700, color: isSail ? '#202124' : '#174ea6' }}>
-                              {fmtNum(r.reported)}
-                            </td>
-                            <td style={{
-                              ...cell, textAlign: 'right', fontWeight: 700,
-                              backgroundColor: r.deviation && !isSail ? '#fbbc04' : undefined,
-                              boxShadow: r.deviation && isSail ? 'inset 0 0 0 3px #ea4335' : undefined,
-                              color: r.deviation && !isSail ? '#202124' : (isSail ? '#202124' : '#174ea6'),
-                            }}>
-                              {fmtNum(r.calculated)}
-                            </td>
-                          </tr>
+                              <td style={{
+                                ...cell, textAlign: 'right', fontWeight: 700,
+                                backgroundColor: r.deviation && !isSail ? '#fbbc04' : undefined,
+                                boxShadow: r.deviation && isSail ? 'inset 0 0 0 3px #ea4335' : undefined,
+                                color: r.deviation && !isSail ? '#202124' : (isSail ? '#202124' : '#174ea6'),
+                              }}>
+                                {fmtNum(r.calculated)}
+                              </td>
+                              <td style={{ ...cell, textAlign: 'right' }}>
+                                {r.calc_detail && (
+                                  <button
+                                    onClick={() => setExpanded(isOpen ? null : rowKey)}
+                                    style={{
+                                      fontSize: 11, padding: '2px 9px', border: '1px solid #dadce0',
+                                      borderRadius: 4, background: '#fff', cursor: 'pointer', color: '#174ea6',
+                                    }}
+                                  >
+                                    {isOpen ? 'Hide' : 'Steps'}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                            {isOpen && r.calc_detail && (
+                              <tr>
+                                <td colSpan={5 + monthLabels.length} style={{ background: '#f8f9fa', borderBottom: '1px solid #dadce0', padding: 0 }}>
+                                  <CalcStepsDetail detail={r.calc_detail} />
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </React.Fragment>
