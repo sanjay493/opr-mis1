@@ -111,6 +111,11 @@ PARAM_ALIASES = {
     "N/C --BF- 5":                     ("BF-5", "nut_coke_rate"),
     "N/C -SHOP":                       ("BF_Shop", "nut_coke_rate"),
     "Coal to H M Ratio ":              ("General", "coal_to_hm"),
+    # Some file editions (confirmed: Apr'25, Jun'25) append a footnote marker
+    # ("**") to this label — PARAM_ALIASES matches on the exact normalized
+    # label with no fuzzy/prefix fallback, so the asterisked variant silently
+    # didn't match at all and the row was skipped.
+    "Coal to H M Ratio **":            ("General", "coal_to_hm"),
     "Sinter in Burden":                ("BF_Shop", "sinter_in_burden"),
     "Pellet Burden":                   ("BF_Shop", "pellet_in_burden"),
     # RSP's own sheet calls this "Slag Volume", not "Slag Rate" — every other
