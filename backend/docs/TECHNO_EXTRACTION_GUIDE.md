@@ -65,7 +65,7 @@ spellings").
 | Plant | Final extractor | Reads | Monthend/tentative extractor |
 |---|---|---|---|
 | **RSP** | `techno_project/rsp_technopara_extractor.py` (+ `rsp_technopara_sections.py` registry) | `TECHNOPARA <MONTH><YYYY>.xlsx`, sheet matching `PAGE-?1-8/9` | `techno_project/rsp_monthend_techno_extractor.py` (Daily Morning Report) |
-| **BSP** | `techno_project/bsp_extractor.py` + `bsp_oisco_extractor.py`, row numbers from `bsp_techno_map.json` / `bsp_oisco_map.json` | `3 page Tech for CO_<Mon>'<YY>.xls(x)`, OISCO Excel | `excel_extractors/pdf_extractor_bsp_flash.py` (Flash.pdf), `pdf_extractor_bsp_furnace.py` |
+| **BSP** | `techno_project/bsp_extractor.py` + `bsp_oisco_extractor.py`, row numbers from `bsp_techno_map.json` / `bsp_oisco_map.json` | `3 page Tech for CO_<Mon>'<YY>.xls(x)`, OISCO Excel | `excel_extractors/pdf_extractor_bsp_flash.py` (Flash.pdf) |
 | **DSP** | `techno_project/dsp_technopara_extractor.py` (imports label/regex tables from `excel_extractors/pdf_extractor_dsp.py`) | DSP monthly PDF report | `techno_project/dsp_mcr_techno_extractor.py` (MCR daily Excel, `mcr1_*.xlsx`) |
 | **ISP** | `techno_project/isp_technopara_extractor.py`, row numbers from `isp_technopara_map.json` | `Summarized Monthly Report <Month>'<YY>.xlsx` | `techno_project/isp_monthend_techno_extractor.py` (Morning Report) |
 | **BSL** | `techno_project/bsl_technopara_extractor.py` (`_RAW_TO_PARAM_KEY`-style dict) | BF PDF report + BSL technopara Excel | `techno_project/bsl_mer_parser.py` (MER report) |
