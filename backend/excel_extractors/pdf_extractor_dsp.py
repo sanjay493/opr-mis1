@@ -26,8 +26,6 @@ extract_preview() returns rows for review — NO database writes.
 import gc
 import re
 
-from extraction_utils import calculate_tmi_consumption
-
 PLANT = "DSP"
 
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
@@ -2018,9 +2016,11 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
               flush=True, file=sys.stderr)
         gc.collect()
 
-    # Calculate TMI as HM Consumption + Scrap Consumption
-    if techno_rows:
-        techno_rows = calculate_tmi_consumption(techno_rows)
+    # TMI is a derived value (Hot Metal + Scrap Consumption), recomputed
+    # centrally in db._maybe_recompute_derived_params on every save rather
+    # than here — no "TMI" placeholder row exists in this PDF's own param
+    # tables for calculate_tmi_consumption to fill in, so calling it here was
+    # always a silent no-op.
 
     # ── Build result ──────────────────────────────────────────────────────
     sheets = f"PDF page {prod_page_no} (PRODUCTION MONTHWISE)"
