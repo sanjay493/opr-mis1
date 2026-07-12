@@ -1,20 +1,120 @@
 import calendar
+import re
 import sys
 from datetime import datetime, time
 from pathlib import Path
 from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
-from rsp_row_scan import find_p18_sheet, norm_label  # noqa: E402  (path set above)
+from rsp_row_scan import find_p18_sheet, find_month_cum_columns, norm_label  # noqa: E402  (path set above)
 from rsp_technopara_parser import clean_technopara_sheet  # noqa: E402
 from rsp_technopara_sections import (  # noqa: E402
     SECTION_UNITS, PARAM_ALIASES, FURNACE_BLOCKS, PARAM_UNIT_FILTERS, DAILY_AVG_PARAMS,
 )
 
-_MONTH_ABBR_TO_NUM = {
-    'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-    'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
-}
+# ---------------------------------------------------------------------------
+# Month/year validation - the sheet has no single "this is the report month"
+# cell (every FY month's header column exists as a fixed template regardless
+# of how far the year has actually progressed, same "growing FY table"
+# pattern as RSP's production page-9 sheet), so the report_month a caller
+# passes in was previously trusted blindly with no cross-check at all.
+# ---------------------------------------------------------------------------
+
+_MONTH_ORDER = ["04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03"]
+_TECHNO_MONTH_DETECT_LABEL = "coke rate"
+_TECHNO_MONTH_DETECT_LABEL2 = "shop"
+
+
+def _techno_clean_value(v):
+    if v is None:
+        return None
+    if isinstance(v, str):
+        s = v.strip()
+        if s in ("", "-", "--", "#DIV/0!", "#VALUE!"):
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            return None
+    if isinstance(v, (int, float)):
+        return v
+    return None
+
+
+def _detect_actual_report_month(ws) -> Optional[str]:
+    """Which month's own column is the true LAST one (in FY order, scanned
+    across the FULL year, never capped at the selected month) with a real
+    non-zero value in a reliably-always-populated row ("Coke Rate SHOP") -
+    the same technique used for RSP's production sheet. Scanning the whole
+    FY rather than stopping at the selected month is what lets this catch
+    mismatches in BOTH directions: a selected month later than the file's
+    real content (later columns are genuinely blank) and — the case a capped
+    scan would miss — a selected month earlier than the file's real content
+    (real data exists past the selected column, since a capped scan would
+    only ever "confirm" whatever was selected)."""
+    target_row = None
+    for r in range(1, ws.max_row + 1):
+        for c in (1, 2):
+            label = norm_label(ws.cell(r, c).value)
+            if _TECHNO_MONTH_DETECT_LABEL in label and _TECHNO_MONTH_DETECT_LABEL2 in label:
+                target_row = r
+                break
+        if target_row:
+            break
+    if target_row is None:
+        return None
+
+    last_found = None
+    for m in _MONTH_ORDER:
+        month_col, _cum_col = find_month_cum_columns(ws, m)
+        if month_col is None:
+            continue
+        v = _techno_clean_value(ws.cell(target_row, month_col).value)
+        if v:
+            last_found = m
+    return last_found
+
+
+def _detect_fy_start_year(ws, max_row: int = 6, max_col: int = 400) -> Optional[int]:
+    """FY start year (e.g. 2026 for '2026-27') from the sheet's own 'Norm
+    <YYYY>-<YY>' header cell (e.g. 'Norm 2026-27')."""
+    for r in range(1, max_row + 1):
+        for c in range(1, max_col + 1):
+            v = ws.cell(r, c).value
+            if isinstance(v, str):
+                m = re.search(r'norm\s+(\d{4})\s*-\s*\d{2,4}', v.lower())
+                if m:
+                    return int(m.group(1))
+    return None
+
+
+def _assert_techno_month_year_match(ws, report_month: str, month_num: str) -> None:
+    """Raise ValueError if the uploaded file's own content disagrees with the
+    user-selected month/year - never blocks upload just because a signal
+    couldn't be detected at all, only when detection and selection actively
+    disagree."""
+    year = int(report_month[:4])
+
+    detected_month = _detect_actual_report_month(ws)
+    if detected_month and detected_month != month_num:
+        raise ValueError(
+            f"Month mismatch: the uploaded file's techno data appears to be for "
+            f"month {detected_month}, but you selected month {month_num} "
+            f"({report_month}). Please select the matching month, or upload the "
+            f"correct file."
+        )
+
+    fy_start_year = _detect_fy_start_year(ws)
+    if fy_start_year:
+        expected_fy_start = year if int(month_num) >= 4 else year - 1
+        if fy_start_year != expected_fy_start:
+            raise ValueError(
+                f"Year mismatch: the uploaded file is for FY {fy_start_year}-"
+                f"{str(fy_start_year + 1)[2:]}, but your selected month/year "
+                f"({report_month}) implies FY {expected_fy_start}-"
+                f"{str(expected_fy_start + 1)[2:]}. Please verify the uploaded "
+                f"file matches the selected period."
+            )
 
 
 def _ytd_days(year_i: int, month_i: int) -> int:
@@ -166,6 +266,8 @@ class TechnoExtractor:
                 "report_month is required (YYYY-MM) — the technopara sheet has "
                 "no reliable way to auto-detect which month column is current."
             )
+
+        _assert_techno_month_year_match(self.ws, self.report_month, month_num)
 
         df = clean_technopara_sheet(self.ws, month_num, _PROBE_LABELS)
 
