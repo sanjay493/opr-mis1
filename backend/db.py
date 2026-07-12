@@ -1116,8 +1116,10 @@ def get_techno_sail_consolidated(report_month: str) -> Dict[str, Any]:
 # Techno Data helpers  (techno_data table — all plants)
 # ============================================================================
 
-def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
-    """Insert or replace techno data for one plant/unit/month."""
+def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
+    """Bare INSERT/UPDATE with no post-save hooks — used by upsert_techno_data
+    itself and by _maybe_recompute_derived_params (which must write its
+    recomputed values without re-triggering itself)."""
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -1131,7 +1133,81 @@ def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Di
     """, (plant, report_month, unit, json.dumps(techno_json), source_file))
     conn.commit()
     conn.close()
+
+
+def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
+    """Insert or replace techno data for one plant/unit/month."""
+    _raw_upsert_techno_data(plant, report_month, unit, techno_json, source_file)
+    _maybe_recompute_derived_params(plant, report_month, unit)
     _maybe_refresh_sail_bf(plant, report_month, unit)
+
+
+# tmi and fuel_rate are physically derived, never independently measured:
+#   tmi        = specific_hm_consumption + specific_scrap_consumption
+#   fuel_rate  = coke_rate + nut_coke_rate + cdi   (nut_coke_rate may be 0/absent)
+# Different extractors historically extracted these straight from whatever a
+# source file happened to report under a "TMI"/"Fuel Rate" label — sometimes
+# correctly recomputed (RSP's/BSP's excel extractors), sometimes a raw
+# extracted figure that could disagree with the app's own HM/Scrap or
+# Coke/Nut-Coke/CDI numbers, and sometimes silently absent altogether (BSL,
+# ISP's month-end path, DSP's month-end path — DSP's PDF path even LOOKED
+# computed but was a no-op since no placeholder row existed to overwrite).
+# Recomputing centrally here, on every save, guarantees the stored value
+# always matches the plant's own current inputs regardless of which
+# extractor/path last touched this unit. Both periods ("month" and
+# "till_month") are computed independently as plain sums — valid because
+# fuel_rate's inputs (coke_rate/nut_coke_rate/cdi) and tmi's inputs
+# (specific_hm_consumption/specific_scrap_consumption) share the same
+# production-weighted cumulative basis in techno_cumulative.CUMULATIVE_RULES,
+# so the weighted average of a sum equals the sum of the weighted averages —
+# the stored till_month values for the inputs are already correct weighted
+# cumulatives, so summing them needs no separate re-weighting.
+_TMI_INPUT_KEYS = ("specific_hm_consumption", "specific_scrap_consumption")
+_FUEL_RATE_INPUT_KEYS = ("coke_rate", "cdi")  # nut_coke_rate optional, defaults to 0
+
+
+def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str) -> None:
+    """Recompute tmi/fuel_rate for this (plant, report_month, unit) from
+    whatever inputs are currently stored, and overwrite the stored value if
+    it differs. Writes via _raw_upsert_techno_data (never upsert_techno_data)
+    so this cannot re-trigger itself; safe to call unconditionally after
+    every save since it's a no-op once the stored value already matches."""
+    try:
+        data = get_techno_data(plant, report_month, unit).get(unit, {})
+        if not data:
+            return
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+            (plant, report_month, unit),
+        )
+        row = cur.fetchone()
+        conn.close()
+        existing_source_file = row[0] if row else ''
+
+        updated = {"month": dict(data.get("month", {})), "till_month": dict(data.get("till_month", {}))}
+        changed = False
+        for period in ("month", "till_month"):
+            d = updated[period]
+            hm, scrap = d.get(_TMI_INPUT_KEYS[0]), d.get(_TMI_INPUT_KEYS[1])
+            if isinstance(hm, (int, float)) and isinstance(scrap, (int, float)):
+                new_tmi = round(hm + scrap, 4)
+                if d.get("tmi") != new_tmi:
+                    d["tmi"] = new_tmi
+                    changed = True
+            coke, cdi = d.get(_FUEL_RATE_INPUT_KEYS[0]), d.get(_FUEL_RATE_INPUT_KEYS[1])
+            if isinstance(coke, (int, float)) and isinstance(cdi, (int, float)):
+                nut_coke = d.get("nut_coke_rate")
+                nut_coke = nut_coke if isinstance(nut_coke, (int, float)) else 0
+                new_fuel = round(coke + nut_coke + cdi, 4)
+                if d.get("fuel_rate") != new_fuel:
+                    d["fuel_rate"] = new_fuel
+                    changed = True
+        if changed:
+            _raw_upsert_techno_data(plant, report_month, unit, updated, source_file=existing_source_file)
+    except Exception as e:
+        print(f"[db] tmi/fuel_rate recompute failed for {plant}/{report_month}/{unit}: {e}")
 
 
 # unit names that feed the SAIL BF_Shop rollup — 'BF_Shop' for most plants,
