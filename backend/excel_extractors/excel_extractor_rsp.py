@@ -217,33 +217,63 @@ NO_CONVERT = {"Oven Pushing (nos/day)", "COB#6", "COB#1-5"}
 # ---------------------------------------------------------------------------
 # Schema: (item_name, [label_aliases], row_hint)
 # row_hint is used only when label scanning finds nothing.
+# Aliases below cover every RSP page-9 label edition confirmed across the
+# real sample corpus (2023-24 through 2026-27 FY): the original aliases
+# ("cob 6", "sp 1", "hot metal", "pig iron", ...) never actually matched ANY
+# real file's labels — RSP's actual wording has always been "Battery-6
+# (Nos./Day)", "Sinter - I", "Tota Hot Metal" (a standing typo), "Cold Pig",
+# etc. Every item that lacked a working alias silently fell through to its
+# (also stale) row_hint, which — since the row layout has also shifted
+# between editions — frequently landed on a COMPLETELY DIFFERENT item's row,
+# corrupting values across the board (confirmed on the Jun'26 file: e.g.
+# "SMS-2 CCM-4" and "Total Crude Steel" both silently resolved to the same
+# row and the same wrong-for-one-of-them value). New aliases below were
+# verified against real files via cross-footing (e.g. Sinter Total = Sinter
+# I + II + III; Hot Metal = BF-1 + BF-5; Total Crude Steel = SMS-I Total +
+# SMS-II Total), not guessed.
 P9_ITEMS = [
-    ("COB#6",                ["cob no 6", "cob 6", "cob#6"],              6),
-    ("COB#1-5",              ["cob no 1 5", "cob 1 5"],                   7),
-    ("Oven Pushing (nos/day)",  ["oven pushing"],                             8),
-    ("SP-1",                 ["sp 1", "sinter plant 1"],                   9),
-    ("SP-2",                 ["sp 2", "sinter plant 2"],                  10),
-    ("SP-3",                 ["sp 3", "sinter plant 3"],                  11),
-    ("Total Sinter",         ["total sinter"],                             12),
+    ("COB#6",                ["cob no 6", "cob 6", "cob#6", "battery 6"], 6),
+    ("COB#1-5",              ["cob no 1 5", "cob 1 5", "oven pushed nos day"], 7),
+    ("Oven Pushing (nos/day)",  ["oven pushing", "equivalent oven pushed"], 8),
+    ("SP-1",                 ["sp 1", "sinter plant 1", "sinter i"],       9),
+    ("SP-2",                 ["sp 2", "sinter plant 2", "sinter ii"],     10),
+    ("SP-3",                 ["sp 3", "sinter plant 3", "sinter iii"],    11),
+    ("Total Sinter",         ["total sinter", "sinter total"],            12),
     ("BF-1",                 ["bf 1", "bf1"],                             13),
     ("BF-5",                 ["bf 5", "bf5"],                             14),
-    ("Hot Metal",            ["hot metal"],                                15),
-    ("Pig Iron",             ["pig iron"],                                 16),
-    ("SMS-1 CCM-1",          ["sms 1 ccm 1"],                             19),
-    ("SMS-2 CCM-1&2",        ["sms 2 ccm 1 2", "sms 2 ccm 1"],           20),
-    ("SMS-2 CCM-3",          ["sms 2 ccm 3"],                             21),
-    ("SMS-2 CCM-4",          ["sms 2 ccm 4"],                             22),
+    # "Tota Hot Metal" is a standing typo in RSP's own template (missing "l") —
+    # present in every recent file, not a one-off mistake to work around.
+    ("Hot Metal",            ["hot metal", "tota hot metal"],             15),
+    # "Cold Pig" is standard steel-industry terminology for Pig Iron that has
+    # been cast and cooled (vs. Hot Metal going straight to steelmaking).
+    ("Pig Iron",             ["pig iron", "cold pig"],                    16),
+    ("SMS-1 CCM-1",          ["sms 1 ccm 1", "ccm i slabs"],              19),
+    ("SMS-2 CCM-1&2",        ["sms 2 ccm 1 2", "sms 2 ccm 1", "ccm ii slabs"], 20),
+    ("SMS-2 CCM-3",          ["sms 2 ccm 3", "sms 2 caster iii"],         21),
+    ("SMS-2 CCM-4",          ["sms 2 ccm 4", "sms 2 caster 4", "sms 2 caster iv"], 22),
     ("Total Crude Steel",    ["total crude steel"],                        24),
-    ("HSM-2 Total HR Coil",  ["hsm 2 total hr coil", "total hr coil"],    26),
-    ("HSM-2 HR Coil (Sale)", ["hr coil sale", "hsm 2 hr coil sale"],      27),
-    ("HSM-2 HR Plate",       ["hsm 2 hr plate", "hr plate"],              28),
-    ("OPM Plate",            ["opm plate"],                               29),
-    ("NPM Plate",            ["npm plate"],                               30),
+    ("HSM-2 Total HR Coil",  ["hsm 2 total hr coil", "total hr coil", "hsm 2 total hr coils"], 26),
+    ("HSM-2 HR Coil (Sale)", ["hr coil sale", "hsm 2 hr coil sale", "hsm 2 h r c s"], 27),
+    # No confident match found in the current template for a distinct
+    # "HSM-2 HR Plate" row — "SSL - HR Plates" (Silicon Steel Mill Line) is a
+    # different product line, not HSM-2's own. Left unresolved (no row_hint)
+    # rather than guessed, so it's correctly absent instead of silently wrong.
+    ("HSM-2 HR Plate",       [],                                          None),
+    # 2023-24 era files use "Plates (PM)" / "New Plate Mill" instead of
+    # "OPM Plates" / "NPM Plates" — confirmed via plant_registry.py's RSP
+    # mill units, which register both "PM" and "NPM" as distinct mills, and
+    # "New Plate Mill" is literally the expansion of "NPM".
+    ("OPM Plate",            ["opm plate", "opm plates", "plates pm"],    29),
+    ("NPM Plate",            ["npm plate", "npm plates", "new plate mill"], 30),
     ("CRNO Coils",           ["crno coils", "crno"],                      31),
     ("ERW Pipes",            ["erw pipes", "erw pipe"],                   32),
     ("SW Pipes",             ["sw pipes", "sw pipe"],                     33),
     ("Saleable Steel",       ["saleable steel"],                           34),
-    ("Finished Steel",       ["finished steel"],                           34),
+    # "Finished Steel" has never had its own row in any real file — the
+    # original code pointed both items at the same row_hint (34), meaning
+    # RSP's report doesn't distinguish them. Resolved as an explicit mirror
+    # of Saleable Steel in _build_p9_cells instead of guessing a row here.
+    ("Finished Steel",       [],                                          None),
 ]
 
 # ---------------------------------------------------------------------------
@@ -481,10 +511,16 @@ def _scan_rows_for_items(ws, items, max_scan: int) -> dict:
             if name in row_map:
                 break
 
-    # Phase 3 — row hint fallback
+    # Phase 3 — row hint fallback. Must still respect `claimed`: a stale hint
+    # landing on a row another item already resolved via real label matching
+    # would silently duplicate that item's value under the wrong name (this
+    # is exactly how the Jun'26 RSP file's SMS-2 CCM-4/Total Crude Steel
+    # collision happened — an unresolved item's stale hint overwrote a row a
+    # different item had already correctly claimed).
     for name, _, hint in items:
-        if name not in row_map and hint:
+        if name not in row_map and hint and hint not in claimed:
             row_map[name] = hint
+            claimed.add(hint)
 
     return row_map
 
@@ -509,6 +545,10 @@ def _row_near_anchor(ws, anchor_aliases: list, offset: int,
 def _build_p9_cells(ws, col: str) -> dict:
     """Dynamically resolve page-9 production rows; return {item_name: cell_ref}."""
     row_map = _scan_rows_for_items(ws, P9_ITEMS, max_scan=60)
+    # "Finished Steel" has no row of its own in any real file — mirror
+    # Saleable Steel's resolved row rather than guessing one (see P9_ITEMS).
+    if "Finished Steel" not in row_map and "Saleable Steel" in row_map:
+        row_map["Finished Steel"] = row_map["Saleable Steel"]
     return {name: f"{col}{row}" for name, row in row_map.items()}
 
 

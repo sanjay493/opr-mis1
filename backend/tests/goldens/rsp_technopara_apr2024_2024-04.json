@@ -6,76 +6,6 @@
   "plant": "RSP",
   "production_rows": [
     {
-      "cell": "B59",
-      "item_name": "BF-1",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 76.801
-    },
-    {
-      "cell": "B13",
-      "item_name": "Hot Metal",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 383.3
-    },
-    {
-      "cell": "B22",
-      "item_name": "Total Crude Steel",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 341.191
-    },
-    {
-      "cell": "B57",
-      "item_name": "HSM-2 HR Coil (Sale)",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 180.473
-    },
-    {
-      "cell": "B30",
-      "item_name": "ERW Pipes",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 3.55
-    },
-    {
-      "cell": "B31",
-      "item_name": "SW Pipes",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 2.517
-    },
-    {
-      "cell": "B14",
-      "item_name": "BF-5",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 243.916
-    },
-    {
-      "cell": "B35",
-      "item_name": "CRNO Coils",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 3.302
-    },
-    {
-      "cell": "B39",
-      "item_name": "Saleable Steel",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 359.613
-    },
-    {
-      "cell": "B6",
-      "item_name": "COB#6",
-      "status": "ok",
-      "unit": "nos/d",
-      "value": 90.466667
-    },
-    {
       "cell": "B7",
       "item_name": "COB#1-5",
       "status": "ok",
@@ -118,25 +48,109 @@
       "value": 579.035
     },
     {
-      "cell": "B16",
+      "cell": "B59",
+      "item_name": "BF-1",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 76.801
+    },
+    {
+      "cell": "B13",
+      "item_name": "Hot Metal",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 383.3
+    },
+    {
+      "cell": "B15",
       "item_name": "Pig Iron",
       "status": "ok",
       "unit": "'000T",
-      "value": 0.069
+      "value": 20.655
+    },
+    {
+      "cell": "B17",
+      "item_name": "SMS-1 CCM-1",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 41.61
     },
     {
       "cell": "B19",
-      "item_name": "SMS-1 CCM-1",
+      "item_name": "SMS-2 CCM-1&2",
       "status": "ok",
       "unit": "'000T",
       "value": 164.604
     },
     {
-      "cell": "B20",
-      "item_name": "SMS-2 CCM-1&2",
+      "cell": "B22",
+      "item_name": "Total Crude Steel",
       "status": "ok",
       "unit": "'000T",
-      "value": 134.908
+      "value": 341.191
+    },
+    {
+      "cell": "B57",
+      "item_name": "HSM-2 HR Coil (Sale)",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 180.473
+    },
+    {
+      "cell": "B26",
+      "item_name": "OPM Plate",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 33.915
+    },
+    {
+      "cell": "B27",
+      "item_name": "NPM Plate",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 87.25
+    },
+    {
+      "cell": "B30",
+      "item_name": "ERW Pipes",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.55
+    },
+    {
+      "cell": "B31",
+      "item_name": "SW Pipes",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 2.517
+    },
+    {
+      "cell": "B6",
+      "item_name": "COB#6",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 90.466667
+    },
+    {
+      "cell": "B14",
+      "item_name": "BF-5",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 243.916
+    },
+    {
+      "cell": "B35",
+      "item_name": "CRNO Coils",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.302
+    },
+    {
+      "cell": "B39",
+      "item_name": "Saleable Steel",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 359.613
     },
     {
       "cell": "B21",
@@ -146,46 +160,11 @@
       "value": 299.512
     },
     {
-      "cell": "B22",
-      "item_name": "SMS-2 CCM-4",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 341.191
-    },
-    {
-      "cell": "B26",
-      "item_name": "HSM-2 Total HR Coil",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 33.915
-    },
-    {
-      "cell": "B28",
-      "item_name": "HSM-2 HR Plate",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 208.496
-    },
-    {
-      "cell": "B29",
-      "item_name": "OPM Plate",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 4.554
-    },
-    {
-      "cell": "B30",
-      "item_name": "NPM Plate",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 3.55
-    },
-    {
-      "cell": "B34",
+      "cell": "B39",
       "item_name": "Finished Steel",
       "status": "ok",
       "unit": "'000T",
-      "value": 0.0
+      "value": 359.613
     }
   ],
   "sheets": "PAGE-9, PAGE-1-8 & 11' 12",
@@ -998,16 +977,6 @@
       "status": "ok",
       "unit": "",
       "ytd_actual": 764.804556
-    },
-    {
-      "cell": "V105/AL105",
-      "mapping_ok": false,
-      "month_actual": 127.265849,
-      "parameter": "CDI BF-1",
-      "row_label": "12",
-      "status": "ok",
-      "unit": "Kg/THM",
-      "ytd_actual": 127.265849
     },
     {
       "cell": "V106/AL106",
