@@ -36,6 +36,67 @@ _BAD = {"#DIV/0!", "#VALUE!", "-", "--", None, ""}
 
 _MAP_PATH = Path(__file__).parent / "bsp_techno_map.json"
 
+# Heat Cons./Power Cons./Gross Energy Consumption block — resolved by label
+# search instead of trusting bsp_techno_map.json's fixed row numbers. Two
+# real file-layout variants circulate for the same "3 page Tech for CO_..."
+# filename convention: one with "BAR AND ROD MILL" inserted inline within
+# this block (shifting every row below it), one with it appended at the very
+# end of the sheet — confirmed via bsp_techno_map.json's rows silently
+# extracting the WRONG mill's data when fed the inline-variant file (RSM's
+# row returning Merchant Mill's figure, etc.), since the map is calibrated
+# to the append-variant. The labels themselves are stable across both
+# variants, so a bounded-window keyword search (same technique already used
+# for BSL's Sheet4 and RSP's furnace blocks) makes extraction correct
+# regardless of which variant is uploaded.
+# (unit, param_key) -> (block anchor header, label keyword)
+_HEAT_POWER_ENERGY_SEARCH = {
+    ("RSM", "heat_consumption"):  ("heat cons", "rail"),
+    ("URM", "heat_consumption"):  ("heat cons", "urm"),
+    ("MM",  "heat_consumption"):  ("heat cons", "merchant"),
+    ("WRM", "heat_consumption"):  ("heat cons", "wire rod"),
+    ("PM",  "heat_consumption"):  ("heat cons", "plate"),
+    ("RSM", "power_consumption"): ("power cons", "rail"),
+    ("URM", "power_consumption"): ("power cons", "urm"),
+    ("MM",  "power_consumption"): ("power cons", "merchant"),
+    ("WRM", "power_consumption"): ("power cons", "wire rod"),
+    ("PM",  "power_consumption"): ("power cons", "plate"),
+    ("General", "specific_energy_consumption"): (None, "gross energy"),
+}
+
+
+def _find_row(ws, start_row: int, end_row: int, keyword: str) -> Optional[int]:
+    """First row (1-based, inclusive range) whose column-A label contains
+    `keyword` (case-insensitive)."""
+    for r in range(start_row, min(end_row, ws.max_row) + 1):
+        label = str(ws.cell(r, 1).value or "").strip().lower()
+        if keyword in label:
+            return r
+    return None
+
+
+def _resolve_search_rows(ws) -> Dict:
+    """Resolve every (unit, param_key) in _HEAT_POWER_ENERGY_SEARCH to an
+    actual row number for this specific file, searching a generous window
+    rather than trusting a fixed row. Falls back to None (caller keeps the
+    map's row and logs a warning) if a label can't be found."""
+    heat_header  = _find_row(ws, 1, ws.max_row, "heat cons")
+    power_header = _find_row(ws, (heat_header or 1) + 1, ws.max_row, "power cons")
+    block_end    = _find_row(ws, (power_header or 1) + 1, ws.max_row, "gross energy")
+
+    resolved = {}
+    for (unit, param_key), (anchor, keyword) in _HEAT_POWER_ENERGY_SEARCH.items():
+        if anchor == "heat cons" and heat_header and power_header:
+            row = _find_row(ws, heat_header + 1, power_header - 1, keyword)
+        elif anchor == "power cons" and power_header:
+            row = _find_row(ws, power_header + 1, (block_end or power_header + 30) - 1, keyword)
+        elif anchor is None:  # Gross Energy Consumption itself
+            row = block_end
+        else:
+            row = None
+        if row is not None:
+            resolved[(unit, param_key)] = row
+    return resolved
+
 
 def _load_map() -> Dict:
     try:
@@ -117,10 +178,23 @@ class BspTechnoExtractor:
                 f"found '{actual_hdr}'. Verify bsp_techno_map.json row numbers."
             )
 
+        search_rows = _resolve_search_rows(ws)
+
         records = []
         for unit_name, params in self._map.items():
             techno = {"month": {}, "till_month": {}}
             for param_key, row_num in params.items():
+                search_key = (unit_name, param_key)
+                if search_key in _HEAT_POWER_ENERGY_SEARCH:
+                    found_row = search_rows.get(search_key)
+                    if found_row is not None:
+                        row_num = found_row
+                    else:
+                        print(
+                            f"[BSP-TechnoExtractor] Warning: label search failed for "
+                            f"{unit_name}/{param_key} — falling back to bsp_techno_map.json "
+                            f"row {row_num}, which may not match this file's layout."
+                        )
                 try:
                     month_val = _clean(ws.cell(row_num, month_col).value)
                     till_val  = _clean(ws.cell(row_num, cum_col).value)

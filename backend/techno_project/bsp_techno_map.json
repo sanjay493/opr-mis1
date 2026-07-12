@@ -1,5 +1,6 @@
 {
   "_comment": "BSP 3-page-Tech.xlsx row map. Sheet=Sheet1. Row 4 cols D-O = Apr-Mar, Col P = ACTUAL (cum). Row 3 Col A = month name. Edit row numbers to match your actual file.",
+  "_comment_heat_power": "RSM/URM/MM/WRM/PM heat_consumption/power_consumption and General.specific_energy_consumption are resolved by label search at extraction time (bsp_extractor.py's _HEAT_POWER_ENERGY_SEARCH) - two real file layouts circulate with these rows shifted relative to each other. The row numbers below for those keys are only a fallback if the search ever fails; they are NOT authoritative.",
 
   "COB": {
     "bf_coke_yield":            37,
