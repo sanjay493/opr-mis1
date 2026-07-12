@@ -62,7 +62,6 @@ def _safe_techno(month, pg):
         return {}
 from pdf import build_pdf_response
 from layout_loader import load_layout_config
-from api_file_upload import router as upload_router
 from api_rsp_techno import router as rsp_techno_router
 from api_bsp_techno import router as bsp_techno_router
 from api_isp_techno import router as isp_techno_router
@@ -115,9 +114,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
-
-# Include file upload router
-app.include_router(upload_router)
 
 # Include RSP, BSP, ISP, and DSP Technopara routers
 app.include_router(rsp_techno_router)
