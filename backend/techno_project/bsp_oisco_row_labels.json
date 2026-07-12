@@ -1,0 +1,58 @@
+{
+  "_comment": "Expected column-C label for each bsp_oisco_map.json row number, used by BspOiscoExtractor._verified_row() to detect and self-heal row shifts between file editions (same mechanism as isp_technopara_row_labels.json). Missing/wrong entries just disable verification for that param, never break extraction.",
+
+  "BF_Shop": {
+    "cdi":              "CDI Overall Shop",
+    "fuel_rate":         "Fuel Rate",
+    "pellet_in_burden":  "Pellets in Burden",
+    "ld_slag_cons":      "LD Slag Usg",
+    "not_dry_cast":      "Not Dry Casts"
+  },
+
+  "BF-4": { "cdi": "CDI BF-4" },
+  "BF-5": { "cdi": "CDI BF-5" },
+  "BF-6": { "cdi": "CDI BF-6" },
+  "BF-7": { "cdi": "CDI BF-7" },
+  "BF-8": { "cdi": "CDI BF-8" },
+
+  "General": {
+    "coal_to_hm":                 "Coal to Hot Metal ratio",
+    "specific_water_consumption": "Sp.Water consmpn",
+    "specific_co2_emissions":     "Sp.CO2 Emission"
+  },
+
+  "SMS-2": {
+    "converter_availability": "Converter Availability",
+    "converter_utilisation":  "Converter Utilisation",
+    "tap_to_tap_time":        "Tap to tap time",
+    "average_blows_per_day":  "Average Blows",
+    "average_heat_weight":    "Average Heat Weight",
+    "average_lining_life":    "Lining Life",
+    "fe-mn":                  "Fe-Mn",
+    "fe-si":                  "Fe-Si",
+    "si-mn":                  "Si-Mn",
+    "oxygen_blowing":         "Oxygen",
+    "alumina_consumption":    "Aluminimum",
+    "lime_consumtion":        "Lime",
+    "pellet_consumption":     "Pellets",
+    "ld_gas_recovery":        "LD Gas Recovery",
+    "ds_heats":               "Desulph"
+  },
+
+  "SMS-3": {
+    "converter_availability": "Converter Availability",
+    "converter_utilisation":  "Converter Utilisation",
+    "tap_to_tap_time":        "Tap to tap time",
+    "average_blows_per_day":  "Average Blows",
+    "average_heat_weight":    "Average Heat Weight",
+    "fe-mn":                  "Fe-Mn",
+    "fe-si":                  "Fe-Si",
+    "si-mn":                  "Si-Mn",
+    "oxygen_blowing":         "Oxygen",
+    "alumina_consumption":    "Aluminimum",
+    "lime_consumtion":        "Lime",
+    "pellet_consumption":     "Pellets",
+    "ld_gas_recovery":        "LD Gas Recovery",
+    "ds_heats":               "Desulph"
+  }
+}
