@@ -41,6 +41,49 @@ def _load_map() -> Dict:
         raise FileNotFoundError(f"bsp_oisco_map.json not found at {_MAP_PATH}")
 
 
+_ROW_LABELS_PATH = Path(__file__).parent / "bsp_oisco_row_labels.json"
+
+
+def _load_row_labels() -> Dict:
+    """Companion {unit: {param_key: expected column-C label substring}} used
+    to verify/self-heal bsp_oisco_map.json's hardcoded row numbers against
+    file-edition row shifts (same mechanism as isp_technopara_row_labels.json
+    — confirmed live on a real file: the Jan'26 OISCO export has every data
+    row shifted -1 vs the map, e.g. 'Coal to Hot Metal ratio' sits at row 19
+    not the configured row 20, so row 20 silently reads the 'SMS-2' section
+    header (blank) instead. Missing file/entries just disable verification
+    for that param, never break extraction."""
+    try:
+        with open(_ROW_LABELS_PATH, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        return {k: v for k, v in raw.items() if not k.startswith("_")}
+    except FileNotFoundError:
+        return {}
+
+
+def _norm_label(s) -> str:
+    return re.sub(r"\s+", " ", str(s or "")).strip().lower()
+
+
+def _find_label_row(ws, label: str, near_row: int, window: int = 20) -> Optional[int]:
+    """Scan column C for `label` (case-insensitive substring), searching
+    outward from `near_row` first within +/-`window` rows (bounded to the
+    sheet), so a shift is found nearby rather than matching a same-named
+    parameter in a distant, unrelated section (e.g. SMS-2 vs SMS-3 both have
+    a 'Converter Availability'/'Fe-Mn' row)."""
+    lc = _norm_label(label)
+    if not lc:
+        return None
+    max_row = ws.max_row or (near_row + window)
+    lo = max(1, near_row - window)
+    hi = min(max_row, near_row + window)
+    for offset in range(0, window + 1):
+        for r in ({near_row - offset, near_row + offset} if offset else {near_row}):
+            if lo <= r <= hi and lc in _norm_label(ws.cell(r, 3).value):
+                return r
+    return None
+
+
 def _clean(v) -> Optional[float]:
     if v in _BAD:
         return None
@@ -97,6 +140,28 @@ class BspOiscoExtractor:
         self.excel_file = Path(excel_file)
         self.report_month = report_month
         self._map = _load_map()
+        self._row_labels = _load_row_labels()
+
+    def _verified_row(self, ws, unit_name: str, param_key: str, configured_row: int) -> int:
+        """Return the row to actually read for (unit_name, param_key): the
+        configured row if its column-C label still matches, the nearby row
+        the label moved to if not, or the configured row unchanged (with a
+        warning) if the label can't be found nearby."""
+        expected = self._row_labels.get(unit_name, {}).get(param_key)
+        if not expected:
+            return configured_row
+        actual_label = ws.cell(configured_row, 3).value
+        if _norm_label(expected) in _norm_label(actual_label):
+            return configured_row
+        found = _find_label_row(ws, expected, configured_row)
+        if found:
+            print(f"[BSP-OiscoExtractor] Warning: '{unit_name}/{param_key}' row shifted "
+                  f"{configured_row} -> {found} (label '{expected}')")
+            return found
+        print(f"[BSP-OiscoExtractor] Warning: '{unit_name}/{param_key}' expected label "
+              f"'{expected}' not found near row {configured_row} — using "
+              f"configured row unverified (got {actual_label!r})")
+        return configured_row
 
     def extract(self) -> List[Dict]:
         wb = _open_workbook(str(self.excel_file))
@@ -137,8 +202,9 @@ class BspOiscoExtractor:
             techno = {"month": {}, "till_month": {}}
             for param_key, row_num in params.items():
                 try:
-                    month_val = ws.cell(row_num, data_col).value
-                    till_val  = ws.cell(row_num, cum_col).value
+                    verified_row = self._verified_row(ws, unit_name, param_key, row_num)
+                    month_val = ws.cell(verified_row, data_col).value
+                    till_val  = ws.cell(verified_row, cum_col).value
                     techno["month"][param_key]     = _clean(month_val)
                     techno["till_month"][param_key] = _clean(till_val)
                 except Exception as e:

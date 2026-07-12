@@ -45,6 +45,7 @@ class _XlsSheet:
     def __init__(self, sheet):
         self._s = sheet
         self.max_column = sheet.ncols
+        self.max_row = sheet.nrows
 
     def cell(self, row: int, col: int) -> _XlsCell:
         r, c = row - 1, col - 1
