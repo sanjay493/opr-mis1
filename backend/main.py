@@ -23,7 +23,8 @@ from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
-                          generate_major_techno_from_db, generate_techno_from_db)
+                          generate_major_techno_from_db, generate_techno_from_db,
+                          generate_major_techno_verification)
 from page_records import generate_records
 
 def _safe_te_table(month):
@@ -1963,6 +1964,16 @@ async def techno_major_monthly(month: str = Query(...)):
         "target_label":   data.get("target_label", ""),
         "sections": sections,
     }
+
+
+@app.get("/api/techno-major-verification")
+async def techno_major_verification(month: str = Query(...)):
+    """MAJOR page (27) parameters, Reported (stored till-month) vs Calculated
+    (recomputed from this FY's monthly actuals via the same production-
+    weighted rules the "Calculate Cumulative" feature uses), for every plant
+    plus the SAIL rollup — flags a deviation whenever the two differ after
+    rounding to that parameter's normal display precision."""
+    return generate_major_techno_verification(month)
 
 
 @app.get("/api/production-fys")

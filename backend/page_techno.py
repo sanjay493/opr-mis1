@@ -26,6 +26,7 @@ SAIL row computation (MAJOR page + Summary page te_table):
 import sqlite3
 from decimal import Decimal, ROUND_HALF_UP
 import db
+from techno_cumulative import compute_cumulative_preview, compute_cumulative_from_values
 
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -1576,6 +1577,422 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         "sections":       sections,
         "sail_is_user_supplied": sail_is_user_supplied,
     }
+
+
+# ---------------------------------------------------------------------------
+# MAJOR page verification — Reported (stored till_month) vs Calculated
+# (freshly recomputed from this FY's monthly actuals via techno_cumulative)
+# ---------------------------------------------------------------------------
+
+# (param_name, unit_str, src_units, src_key, kind)
+# kind: "unit" — one row per plant, src_units tried in order (unit_section-style)
+#       "sms"  — one row per (plant, SMS-unit) that reports this key
+#       "tmi"  — like "sms" but with the tmi-or-HM+Scrap fallback
+_VERIFY_PARAMS = [
+    ("Coal to Hot Metal",           "",           ["General", "BF_Shop"], "coal_to_hm",                  "unit"),
+    ("Coke Rate",                   "kg/thm",     ["BF_Shop", "BF-5"],     "coke_rate",                   "unit"),
+    ("Nut Coke Rate",               "kg/thm",     ["BF_Shop", "BF-5"],     "nut_coke_rate",               "unit"),
+    ("CDI Rate",                    "kg/thm",     ["BF_Shop", "BF-5"],     "cdi",                         "unit"),
+    ("Fuel Rate",                   "kg/thm",     ["BF_Shop", "BF-5"],     "fuel_rate",                   "unit"),
+    ("Sinter in Burden",            "%",          ["BF_Shop", "BF-5"],     "sinter_in_burden",            "unit"),
+    ("Pellet in Burden",            "%",          ["BF_Shop", "BF-5"],     "pellet_in_burden",            "unit"),
+    ("BF Productivity",             "t/m³/day",   ["BF_Shop", "BF-5"],     "bf_productivity",             "unit"),
+    ("Hot Metal Consumption",       "kg/tcs",     None,                    "specific_hm_consumption",     "sms"),
+    ("Scrap Consumption",           "kg/tcs",     None,                    "specific_scrap_consumption",  "sms"),
+    ("TMI",                         "kg/tcs",     None,                    "tmi",                         "tmi"),
+    ("Specific Energy Consumption", "Gcal/tcs",   ["General"],             "specific_energy_consumption", "unit"),
+]
+
+_VERIFY_BF_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+_VERIFY_SMS_UNIT_MAP = {
+    "BSP": ["SMS-2", "SMS-3"], "DSP": ["SMS"], "RSP": ["SMS-1", "SMS-2"],
+    "BSL": ["SMS-I", "SMS-II"], "ISP": ["SMS"],
+}
+_VERIFY_SMS_N_SHOPS = {"BSP": 2, "DSP": 1, "RSP": 2, "BSL": 2, "ISP": 1}
+_VERIFY_SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS", "SMS-I", "SMS-II"]
+_VERIFY_HM_ALIASES    = ["specific_hm_consumption", "hot_metal_consumption"]
+_VERIFY_SCRAP_ALIASES = ["specific_scrap_consumption", "scrap_consumption"]
+_VERIFY_TMI_ALIASES   = ["tmi"]
+# Only Pellet in Burden has a structural zero-fill exception today — DSP's
+# burden mix is sinter + iron ore, no pellets, and its report never carries a
+# pellet figure at all (see generate_major_techno_from_db's _bf_sail docstring).
+_VERIFY_ZERO_FILL = {"Pellet in Burden": {"DSP"}}
+
+
+def _verify_precision(param_name):
+    """Same per-parameter rounding rule as _fmt_param, used to decide whether
+    Reported and Calculated count as matching once rounded to the precision
+    actually shown in the rest of the report."""
+    if param_name in ("BF Productivity", "Specific Energy Consumption"):
+        return 2
+    if param_name == "Coal to Hot Metal":
+        return 3
+    return 0
+
+
+def _verify_fmt4(v):
+    """Calculated column is always shown to 4 decimal places regardless of
+    parameter, per direct user instruction — unlike Reported, which uses
+    _fmt_param's per-parameter display precision."""
+    if v is None:
+        return ""
+    return str(_round_half_up(v, 4))
+
+
+def generate_major_techno_verification(report_month: str) -> dict:
+    """
+    For every parameter on the MAJOR page (27), for every plant plus the SAIL
+    rollup: show this FY's monthly actuals (Apr->report_month), the Reported
+    till-month cumulative (same value page 27 shows), and a Calculated
+    till-month cumulative freshly recomputed from the monthly actuals via
+    techno_cumulative's production-weighted rules - the same engine the
+    "Calculate Cumulative" feature uses. Flags a deviation whenever the two
+    differ after rounding to that parameter's normal display precision.
+    """
+    import json as _json
+
+    fy         = _fy_start(report_month)
+    ytd        = db.get_ytd_months(report_month)
+    fy1_march  = f"{fy}-03"
+    fy2_march  = f"{fy - 1}-03"
+    fy3_march  = f"{fy - 2}-03"
+    all_months = sorted(set(ytd) | {fy1_march, fy2_march, fy3_march})
+
+    store = {}
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    try:
+        ph = ",".join("?" * len(all_months))
+        cur.execute(
+            f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
+            all_months,
+        )
+        for plant, rm, unit, tj in cur.fetchall():
+            store.setdefault((plant, rm), {})[unit] = _json.loads(tj)
+    finally:
+        conn.close()
+
+    _hm_monthly, _cs_monthly = {}, {}
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    try:
+        ph = ",".join("?" * len(ytd))
+        cur.execute(
+            f"SELECT plant_name, report_month, month_actual FROM production_table "
+            f"WHERE report_month IN ({ph}) AND item_name='Hot Metal'", ytd)
+        for pn, rm, val in cur.fetchall():
+            _hm_monthly.setdefault(pn, {})[rm] = val
+        cur.execute(
+            f"SELECT plant_name, report_month, month_actual FROM production_table "
+            f"WHERE report_month IN ({ph}) AND item_name='Total Crude Steel'", ytd)
+        for pn, rm, val in cur.fetchall():
+            _cs_monthly.setdefault(pn, {})[rm] = val
+    finally:
+        conn.close()
+
+    def _cum_weight(monthly_dict, plant):
+        return sum(monthly_dict.get(plant, {}).get(m, 0) or 0 for m in ytd)
+
+    def _gv(plant, rm, unit, key, period="month"):
+        return store.get((plant, rm), {}).get(unit, {}).get(period, {}).get(key)
+
+    def _gv_aliases(plant, rm, unit, aliases, period="month"):
+        d = store.get((plant, rm), {}).get(unit, {}).get(period, {})
+        for k in aliases:
+            v = d.get(k)
+            if v is not None:
+                return v
+        return None
+
+    def _tmi_val(plant, rm, unit, period):
+        v = _gv_aliases(plant, rm, unit, _VERIFY_TMI_ALIASES, period)
+        if v is not None:
+            return v
+        hm = _gv_aliases(plant, rm, unit, _VERIFY_HM_ALIASES, period)
+        sc = _gv_aliases(plant, rm, unit, _VERIFY_SCRAP_ALIASES, period)
+        if hm is not None and sc is not None:
+            return hm + sc
+        return hm if hm is not None else sc
+
+    def _resolve_unit(plant, src_units, key):
+        """Which of src_units this plant actually reports under - matches the
+        first-hit order unit_section/_gv_multi already use elsewhere."""
+        for u in src_units:
+            for rm in all_months:
+                if _gv(plant, rm, u, key) is not None or _gv(plant, rm, u, key, "till_month") is not None:
+                    return u
+        return None
+
+    def _sms_aliases(key):
+        if key == "specific_hm_consumption":
+            return _VERIFY_HM_ALIASES
+        if key == "specific_scrap_consumption":
+            return _VERIFY_SCRAP_ALIASES
+        return [key]
+
+    def _sail_stored(ref_month, unit_candidates, key, period):
+        """A manually entered SAIL override (plant='SAIL' techno_data row)
+        takes precedence over the on-the-fly weighted average - matches
+        generate_major_techno_from_db's _sail_stored/_bf_sail_v/_sms_sail_v
+        precedence, so "Reported" here always matches what page 27 shows."""
+        for u in unit_candidates:
+            v = _gv("SAIL", ref_month, u, key, period)
+            if isinstance(v, (int, float)):
+                return v
+        return None
+
+    def _calc_plant(plant, unit, key, kind="unit"):
+        """Calculated cumulative for one plant/unit, or None if nothing to
+        compute. "sms"/"tmi" kinds build their own monthly-values series
+        (with alias fallback / HM+Scrap reconstruction) since techno_data
+        doesn't always store these under one canonical key."""
+        try:
+            if kind == "tmi":
+                values = {m: v for m in ytd if (v := _tmi_val(plant, m, unit, "month")) is not None}
+                return compute_cumulative_from_values(plant, unit, "tmi", report_month, values)["result"]
+            if kind == "sms":
+                aliases = _sms_aliases(key)
+                values = {m: v for m in ytd if (v := _gv_aliases(plant, m, unit, aliases, "month")) is not None}
+                return compute_cumulative_from_values(plant, unit, key, report_month, values)["result"]
+            return compute_cumulative_preview(plant, unit, key, report_month)["result"]
+        except ValueError:
+            return None
+
+    def _months_row(plant, unit, key, kind="unit"):
+        if kind == "tmi":
+            return [_tmi_val(plant, m, unit, "month") for m in ytd]
+        if kind == "sms":
+            aliases = _sms_aliases(key)
+            return [_gv_aliases(plant, m, unit, aliases, "month") for m in ytd]
+        return [_gv(plant, m, unit, key) for m in ytd]
+
+    plants_with_data = sorted(
+        {p for (p, rm) in store if p != "SAIL"},
+        key=lambda p: _VERIFY_BF_PLANTS.index(p) if p in _VERIFY_BF_PLANTS else 99,
+    )
+
+    sections = []
+    for param_name, unit_str, src_units, src_key, kind in _VERIFY_PARAMS:
+        rows = []
+
+        if kind == "unit":
+            for plant in plants_with_data:
+                unit = _resolve_unit(plant, src_units, src_key)
+                if unit is None:
+                    continue
+                reported = _gv(plant, report_month, unit, src_key, "till_month")
+                calculated = _calc_plant(plant, unit, src_key)
+                if reported is None and calculated is None:
+                    continue
+                rows.append({
+                    "label": plant, "unit": unit_str,
+                    "months": [_fmt_param(v, param_name) for v in _months_row(plant, unit, src_key)],
+                    "reported": _fmt_param(reported, param_name),
+                    "calculated": _verify_fmt4(calculated),
+                    "deviation": _verify_deviates(reported, calculated, param_name),
+                })
+            # SAIL rollup — same HM/CS weighting as generate_major_techno_from_db's
+            # _bf_sail, but "Calculated" combines each plant's own CALCULATED
+            # cumulative rather than each plant's stored till_month.
+            weight_by = "cs" if src_key == "specific_energy_consumption" else "hm"
+            harmonic = (src_key == "bf_productivity")
+            weights = _cs_monthly if weight_by == "cs" else _hm_monthly
+            zero_fill = _VERIFY_ZERO_FILL.get(param_name)
+
+            def _sail_reported():
+                stored = _sail_stored(report_month, src_units, src_key, "till_month")
+                if stored is not None:
+                    return stored
+                num = den = 0.0
+                for plant in _VERIFY_BF_PLANTS:
+                    w = _cum_weight(weights, plant)
+                    if not w or w <= 0:
+                        continue
+                    unit = _resolve_unit(plant, src_units, src_key)
+                    v = _gv(plant, report_month, unit, src_key, "till_month") if unit else None
+                    if v is None:
+                        if zero_fill and plant in zero_fill:
+                            v = 0.0
+                        else:
+                            continue
+                    if harmonic:
+                        if v <= 0:
+                            continue
+                        num += w
+                        den += w / v
+                    else:
+                        num += v * w
+                        den += w
+                return num / den if den > 0 else None
+
+            def _sail_calculated():
+                num = den = 0.0
+                for plant in _VERIFY_BF_PLANTS:
+                    w = _cum_weight(weights, plant)
+                    if not w or w <= 0:
+                        continue
+                    unit = _resolve_unit(plant, src_units, src_key)
+                    v = _calc_plant(plant, unit, src_key) if unit else None
+                    if v is None:
+                        if zero_fill and plant in zero_fill:
+                            v = 0.0
+                        else:
+                            continue
+                    if harmonic:
+                        if v <= 0:
+                            continue
+                        num += w
+                        den += w / v
+                    else:
+                        num += v * w
+                        den += w
+                return num / den if den > 0 else None
+
+            def _sail_month(m):
+                stored = _sail_stored(m, src_units, src_key, "month")
+                if stored is not None:
+                    return stored
+                num = den = 0.0
+                for plant in _VERIFY_BF_PLANTS:
+                    w = weights.get(plant, {}).get(m, 0) or 0
+                    if w <= 0:
+                        continue
+                    unit = _resolve_unit(plant, src_units, src_key)
+                    v = _gv(plant, m, unit, src_key) if unit else None
+                    if v is None:
+                        if zero_fill and plant in zero_fill:
+                            v = 0.0
+                        else:
+                            continue
+                    if harmonic:
+                        if v <= 0:
+                            continue
+                        num += w
+                        den += w / v
+                    else:
+                        num += v * w
+                        den += w
+                return num / den if den > 0 else None
+
+            sail_reported = _sail_reported()
+            sail_calculated = _sail_calculated()
+            rows.append({
+                "label": "SAIL", "unit": unit_str,
+                "months": [_fmt_param(_sail_month(m), param_name) for m in ytd],
+                "reported": _fmt_param(sail_reported, param_name),
+                "calculated": _verify_fmt4(sail_calculated),
+                "deviation": _verify_deviates(sail_reported, sail_calculated, param_name),
+            })
+
+        else:  # "sms" or "tmi"
+            is_tmi = (kind == "tmi")
+            for plant in plants_with_data:
+                for su in _VERIFY_SMS_UNIT_MAP.get(plant, []):
+                    if plant == "BSL" and su == "SMS":
+                        continue
+                    reported = _tmi_val(plant, report_month, su, "till_month") if is_tmi \
+                        else _gv_aliases(plant, report_month, su,
+                                         _VERIFY_HM_ALIASES if src_key == "specific_hm_consumption"
+                                         else _VERIFY_SCRAP_ALIASES, "till_month")
+                    calculated = _calc_plant(plant, su, src_key, kind=kind)
+                    if reported is None and calculated is None:
+                        continue
+                    rows.append({
+                        "label": f"{plant} {su}", "unit": unit_str,
+                        "months": [_fmt_param(v, param_name)
+                                   for v in _months_row(plant, su, src_key, kind=kind)],
+                        "reported": _fmt_param(reported, param_name),
+                        "calculated": _verify_fmt4(calculated),
+                        "deviation": _verify_deviates(reported, calculated, param_name),
+                    })
+
+            def _sms_reported():
+                stored = _sail_stored(report_month, _VERIFY_SMS_UNIT_ORDER,
+                                       "tmi" if is_tmi else src_key, "till_month")
+                if stored is not None:
+                    return stored
+                num = den = 0.0
+                for plant, shops in _VERIFY_SMS_UNIT_MAP.items():
+                    n = _VERIFY_SMS_N_SHOPS[plant]
+                    cs = _cum_weight(_cs_monthly, plant)
+                    w = cs / n if cs > 0 else 0
+                    if w <= 0:
+                        continue
+                    for su in shops:
+                        v = _tmi_val(plant, report_month, su, "till_month") if is_tmi \
+                            else _gv_aliases(plant, report_month, su,
+                                             _VERIFY_HM_ALIASES if src_key == "specific_hm_consumption"
+                                             else _VERIFY_SCRAP_ALIASES, "till_month")
+                        if v is not None:
+                            num += v * w
+                            den += w
+                return num / den if den > 0 else None
+
+            def _sms_calculated():
+                num = den = 0.0
+                for plant, shops in _VERIFY_SMS_UNIT_MAP.items():
+                    n = _VERIFY_SMS_N_SHOPS[plant]
+                    cs = _cum_weight(_cs_monthly, plant)
+                    w = cs / n if cs > 0 else 0
+                    if w <= 0:
+                        continue
+                    for su in shops:
+                        v = _calc_plant(plant, su, src_key, kind=kind)
+                        if v is not None:
+                            num += v * w
+                            den += w
+                return num / den if den > 0 else None
+
+            def _sms_month(m):
+                stored = _sail_stored(m, _VERIFY_SMS_UNIT_ORDER,
+                                       "tmi" if is_tmi else src_key, "month")
+                if stored is not None:
+                    return stored
+                num = den = 0.0
+                for plant, shops in _VERIFY_SMS_UNIT_MAP.items():
+                    n = _VERIFY_SMS_N_SHOPS[plant]
+                    cs = _cs_monthly.get(plant, {}).get(m, 0) or 0
+                    w = cs / n if cs > 0 else 0
+                    if w <= 0:
+                        continue
+                    for su in shops:
+                        v = _tmi_val(plant, m, su, "month") if is_tmi \
+                            else _gv_aliases(plant, m, su,
+                                             _VERIFY_HM_ALIASES if src_key == "specific_hm_consumption"
+                                             else _VERIFY_SCRAP_ALIASES)
+                        if v is not None:
+                            num += v * w
+                            den += w
+                return num / den if den > 0 else None
+
+            sail_reported = _sms_reported()
+            sail_calculated = _sms_calculated()
+            rows.append({
+                "label": "SAIL", "unit": unit_str,
+                "months": [_fmt_param(_sms_month(m), param_name) for m in ytd],
+                "reported": _fmt_param(sail_reported, param_name),
+                "calculated": _verify_fmt4(sail_calculated),
+                "deviation": _verify_deviates(sail_reported, sail_calculated, param_name),
+            })
+
+        if rows:
+            sections.append({"label": param_name, "unit": unit_str, "rows": rows})
+
+    return {
+        "title":        "MAJOR TECHNO-ECONOMIC PARAMETERS — VERIFICATION",
+        "subtitle":     "Reported (stored) vs Calculated (recomputed from monthly actuals)",
+        "report_month": report_month,
+        "month_labels": [_mlabel(m) for m in ytd],
+        "cum_label":    _cum_label(ytd),
+        "sections":     sections,
+    }
+
+
+def _verify_deviates(reported, calculated, param_name):
+    if reported is None or calculated is None:
+        return False
+    precision = _verify_precision(param_name)
+    return _round_half_up(reported, precision) != _round_half_up(calculated, precision)
 
 
 # ---------------------------------------------------------------------------
