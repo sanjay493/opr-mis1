@@ -113,6 +113,11 @@ PARAM_ALIASES = {
     "Coal to H M Ratio ":              ("General", "coal_to_hm"),
     "Sinter in Burden":                ("BF_Shop", "sinter_in_burden"),
     "Pellet Burden":                   ("BF_Shop", "pellet_in_burden"),
+    # RSP's own sheet calls this "Slag Volume", not "Slag Rate" — every other
+    # plant's extractor uses the canonical "slag_rate" key (page_techno.py's
+    # cumulative rules and techno-verification page both look for it under
+    # that name), so map the label here rather than adding a new key.
+    "Slag Volume":                     ("BF_Shop", "slag_rate"),
 
     # ---- SMS-1 / SMS-2 (same aliases, current section supplies unit) ---------
     "Converter Avail. % on":           "converter_availability",
