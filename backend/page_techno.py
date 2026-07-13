@@ -1610,6 +1610,21 @@ _VERIFY_SMS_UNIT_MAP = {
 }
 _VERIFY_SMS_N_SHOPS = {"BSP": 2, "DSP": 1, "RSP": 2, "BSL": 2, "ISP": 1}
 _VERIFY_SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS", "SMS-I", "SMS-II"]
+# (plant, SMS techno-unit) -> production_table item_name(s) whose sum is that
+# shop's own Crude Steel production - the true per-shop weight for specific
+# consumption params (kg/tcs). Only plants with >1 shop need an entry (a
+# single-shop plant's shop already equals the whole plant, so plant-level
+# 'Total Crude Steel' is already correct for it). RSP's SMS-2 is split across
+# three casters in production_table; BSL/RSP's SMS-1 caster is labelled
+# "SMS-1 CCM-1" there even though the techno unit is bare "SMS-1"/"SMS-I".
+_VERIFY_SMS_PRODUCTION_ITEMS = {
+    ("BSP", "SMS-2"):  ["SMS-2"],
+    ("BSP", "SMS-3"):  ["SMS-3"],
+    ("RSP", "SMS-1"):  ["SMS-1 CCM-1"],
+    ("RSP", "SMS-2"):  ["SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
+    ("BSL", "SMS-I"):  ["SMS-1 CCM-1"],
+    ("BSL", "SMS-II"): ["SMS-2 CCM-1&2"],
+}
 _VERIFY_HM_ALIASES    = ["specific_hm_consumption", "hot_metal_consumption"]
 _VERIFY_SCRAP_ALIASES = ["specific_scrap_consumption", "scrap_consumption"]
 _VERIFY_TMI_ALIASES   = ["tmi"]
@@ -1690,8 +1705,59 @@ def generate_major_techno_verification(report_month: str) -> dict:
     finally:
         conn.close()
 
+    # Per-shop Crude Steel production ({(plant, shop): {month: value}}),
+    # summed from production_table's per-caster items - the true weight for
+    # SMS specific-consumption params. Falls back to plant CS / shop-count
+    # (the old behaviour) only for months a shop's own item is missing.
+    _cs_shop_monthly = {}
+    _shop_items = sorted({item for items in _VERIFY_SMS_PRODUCTION_ITEMS.values() for item in items})
+    if _shop_items:
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+        try:
+            ph_m = ",".join("?" * len(ytd))
+            ph_i = ",".join("?" * len(_shop_items))
+            cur.execute(
+                f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
+                f"WHERE report_month IN ({ph_m}) AND item_name IN ({ph_i})",
+                [*ytd, *_shop_items])
+            _item_monthly = {}
+            for pn, item, rm, val in cur.fetchall():
+                if val is not None:
+                    _item_monthly.setdefault((pn, item), {})[rm] = val
+        finally:
+            conn.close()
+        for (plant, shop), items in _VERIFY_SMS_PRODUCTION_ITEMS.items():
+            d = {}
+            for m in ytd:
+                vals = [_item_monthly.get((plant, item), {}).get(m) for item in items]
+                vals = [v for v in vals if v is not None]
+                if vals:
+                    d[m] = sum(vals)
+            _cs_shop_monthly[(plant, shop)] = d
+
     def _cum_weight(monthly_dict, plant):
         return sum(monthly_dict.get(plant, {}).get(m, 0) or 0 for m in ytd)
+
+    def _shop_weight(plant, shop, m):
+        """This shop's own Crude Steel for month m; falls back to plant
+        CS / shop-count when the shop-specific figure isn't in production_table."""
+        v = _cs_shop_monthly.get((plant, shop), {}).get(m)
+        if v is not None and v > 0:
+            return v
+        cs = _cs_monthly.get(plant, {}).get(m, 0) or 0
+        n = _VERIFY_SMS_N_SHOPS[plant]
+        return cs / n if cs > 0 else 0
+
+    def _shop_weight_cum(plant, shop):
+        """This shop's own Apr-report_month cumulative Crude Steel; falls
+        back to cumulative plant CS / shop-count when unavailable."""
+        total = sum(_cs_shop_monthly.get((plant, shop), {}).get(m, 0) or 0 for m in ytd)
+        if total > 0:
+            return total
+        cs = _cum_weight(_cs_monthly, plant)
+        n = _VERIFY_SMS_N_SHOPS[plant]
+        return cs / n if cs > 0 else 0
 
     def _gv(plant, rm, unit, key, period="month"):
         return store.get((plant, rm), {}).get(unit, {}).get(period, {}).get(key)
@@ -1981,12 +2047,10 @@ def generate_major_techno_verification(report_month: str) -> dict:
                     return stored
                 num = den = 0.0
                 for plant, shops in _VERIFY_SMS_UNIT_MAP.items():
-                    n = _VERIFY_SMS_N_SHOPS[plant]
-                    cs = _cum_weight(_cs_monthly, plant)
-                    w = cs / n if cs > 0 else 0
-                    if w <= 0:
-                        continue
                     for su in shops:
+                        w = _shop_weight_cum(plant, su)
+                        if w <= 0:
+                            continue
                         v = _tmi_val(plant, report_month, su, "till_month") if is_tmi \
                             else _gv_aliases(plant, report_month, su,
                                              _VERIFY_HM_ALIASES if src_key == "specific_hm_consumption"
@@ -1999,25 +2063,27 @@ def generate_major_techno_verification(report_month: str) -> dict:
             def _sms_calculated_detail():
                 """SAIL's calculated cumulative combines each (plant, SMS-
                 unit)'s own CALCULATED cumulative (never a stored SAIL
-                override), weighted by plant Crude Steel production / shop
-                count - same formula as generate_major_techno_from_db's
-                _sms_sail, with a full rows/steps breakdown, one row per
-                contributing shop instead of per month."""
+                override), weighted by that shop's own Crude Steel production
+                (falling back to plant Crude Steel / shop count only when the
+                shop-specific figure isn't in production_table) - same formula
+                as generate_major_techno_from_db's _sms_sail, with a full
+                rows/steps breakdown, one row per contributing shop instead of
+                per month."""
                 weight_item = (
-                    f"cumulative Apr-{report_month} plant 'Total Crude Steel' production ÷ shop count, "
-                    f"applied to each shop's own CALCULATED cumulative (not its stored value)"
+                    f"cumulative Apr-{report_month} Crude Steel production for that shop "
+                    f"(falling back to plant 'Total Crude Steel' ÷ shop count when a shop's own "
+                    f"figure is unavailable), applied to each shop's own CALCULATED cumulative "
+                    f"(not its stored value)"
                 )
                 steps = [f"Method: SAIL = production-weighted average of each shop's Calculated cumulative — "
                          f"Σ(shop value × production) ÷ Σ(production). Weights = {weight_item}."]
                 data_rows = []
                 num = den = 0.0
                 for plant, shops in _VERIFY_SMS_UNIT_MAP.items():
-                    n = _VERIFY_SMS_N_SHOPS[plant]
-                    cs = _cum_weight(_cs_monthly, plant)
-                    w = cs / n if cs > 0 else 0
-                    if w <= 0:
-                        continue
                     for su in shops:
+                        w = _shop_weight_cum(plant, su)
+                        if w <= 0:
+                            continue
                         v = _calc_plant(plant, su, src_key, kind=kind)
                         if v is None:
                             continue
@@ -2043,12 +2109,10 @@ def generate_major_techno_verification(report_month: str) -> dict:
                     return stored
                 num = den = 0.0
                 for plant, shops in _VERIFY_SMS_UNIT_MAP.items():
-                    n = _VERIFY_SMS_N_SHOPS[plant]
-                    cs = _cs_monthly.get(plant, {}).get(m, 0) or 0
-                    w = cs / n if cs > 0 else 0
-                    if w <= 0:
-                        continue
                     for su in shops:
+                        w = _shop_weight(plant, su, m)
+                        if w <= 0:
+                            continue
                         v = _tmi_val(plant, m, su, "month") if is_tmi \
                             else _gv_aliases(plant, m, su,
                                              _VERIFY_HM_ALIASES if src_key == "specific_hm_consumption"
