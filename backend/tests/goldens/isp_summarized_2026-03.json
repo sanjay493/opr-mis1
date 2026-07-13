@@ -120,6 +120,20 @@
       "status": "ok",
       "unit": "'000T",
       "value": 233.333
+    },
+    {
+      "cell": "SINTER!AZ65",
+      "item_name": "SP M/c-1",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 201.867
+    },
+    {
+      "cell": "SINTER!AZ66",
+      "item_name": "SP M/c-2",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 177.961
     }
   ],
   "sheets": "Maj Techno Summ, COKE OVENS, B-FCE, SINTER, SMS, WRM, BM, USM, Maj Production Summ",

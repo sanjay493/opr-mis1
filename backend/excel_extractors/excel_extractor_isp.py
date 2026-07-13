@@ -93,8 +93,8 @@ def _morning_report_config():
         "COB#10":               "E9",
         "COB#11":               "E10",
         "Oven Pushing (nos/day)":  "E11",
-        "SP-1":                 "E12",
-        "SP-2":                 "E13",
+        "SP M/c-1":             "E12",
+        "SP M/c-2":             "E13",
         "Total Sinter":         "E14",
         "Hot Metal":            "E16",
         "SMS CCM-1&2":              "E30",
@@ -125,8 +125,8 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
       E9:       COB#10              — monthly avg, no unit conversion
       E10:      COB#11              — monthly avg, no unit conversion
       E11:      Oven Pushing (nos/day) — monthly avg nos/day, no unit conversion
-      E12:      SP-1                — tonnes → /1000
-      E13:      SP-2                — tonnes → /1000
+      E12:      SP M/c-1            — tonnes → /1000
+      E13:      SP M/c-2            — tonnes → /1000
       E14:      Total Sinter        — tonnes → /1000
       E16:      Hot Metal           — tonnes → /1000
       E18+E20:  Pig Iron            — derived sum, tonnes → /1000
@@ -303,6 +303,29 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
             DO UPDATE SET month_actual = excluded.month_actual
         """, (db_report_month, "ISP", item_name, val))
 
+    # Machine-wise sinter production ("SP M/c-1"/"SP M/c-2") lives on the
+    # separate 'SINTER' tab under "MACHINE WISE SINTER PRODUCTION", not on
+    # 'Maj Production Summ' (which only has the "Total Sinter" figure). Its
+    # row position has shifted between report template revisions (R61 in
+    # Apr'25, R63 May'25-Feb'26, R65 from Mar'26) so locate it by label
+    # instead of a fixed row, same as the ISP techno extractor does for the
+    # 'COKE OVENS' sheet's shifting rows (see _find_label_rows below).
+    if "SINTER" in wb.sheetnames:
+        ws_sinter = wb["SINTER"]
+        mc_rows = _find_label_rows(ws_sinter, "M/C #", count=2)
+        for item_name, row_num in zip(("SP M/c-1", "SP M/c-2"), mc_rows):
+            cell_ref = f"{col}{row_num}"
+            val = clean_val(ws_sinter[cell_ref].value)
+            if val is not None:
+                vals_extracted += 1
+                val = round(val / 1000.0, 3)
+            cursor.execute("""
+                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(report_month, plant_name, item_name)
+                DO UPDATE SET month_actual = excluded.month_actual
+            """, (db_report_month, "ISP", item_name, val))
+
     if vals_extracted == 0:
         raise ValueError(
             "No numeric data could be extracted from 'Maj Production Summ'. "
@@ -448,6 +471,24 @@ def _preview_monthly_report_rows(wb, report_month: str):
             "unit":      "nos/d" if item_name in NO_CONVERT else "'000T",
             "status":    "ok" if val is not None else "no value",
         })
+
+    # See _extract_monthly_report for why this is looked up by label on the
+    # separate 'SINTER' tab instead of a fixed row on 'Maj Production Summ'.
+    if "SINTER" in wb.sheetnames:
+        ws_sinter = wb["SINTER"]
+        mc_rows = _find_label_rows(ws_sinter, "M/C #", count=2)
+        for item_name, row_num in zip(("SP M/c-1", "SP M/c-2"), mc_rows):
+            cell_ref = f"{col}{row_num}"
+            val = clean_val(ws_sinter[cell_ref].value)
+            if val is not None:
+                val = round(val / 1000.0, 3)
+            rows.append({
+                "item_name": item_name,
+                "value":     val,
+                "cell":      f"SINTER!{cell_ref}",
+                "unit":      "'000T",
+                "status":    "ok" if val is not None else "no value",
+            })
 
     return rows, db_report_month
 

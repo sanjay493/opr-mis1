@@ -1709,6 +1709,8 @@ PRODUCTION_ITEM_ORDER = [
     'SP-1',
     'SP-2',
     'SP-3',
+    'SP M/c-1',
+    'SP M/c-2',
     'Total Sinter',
     # 3. Hot metal
     'BF#1',
