@@ -335,78 +335,15 @@ _TECHNO_PARAM_MAP = [
     ("Sheet1", 51,  6,    1.0, "MILL_BSL",    "CRM 3",                 "Yield of HR Coil",                  "%"),
     ("Sheet1", 55,  6,    1.0, "SMS",         "Refractory",            "BSL",                               "Kg/TCS"),
     ("Sheet1", 57,  6,    1.0, "COKE_SINTER", "Water",                 "Water Consumption",                 "m³/T"),
-    # ── Sheet2 ─────────────────────────────────────────────────────────────
-    ("Sheet2", 11,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Dry Coal Charge per Oven",          "T/oven"),
-    ("Sheet2", 12,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Average Coking Time",               "Hrs"),
-    ("Sheet2", 14,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Gross Coke Yield",                  "%"),
-    ("Sheet2", 15,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "BF Coke Yield",                     "%"),
-    ("Sheet2", 16,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Ammonium Sulphate",                 "Kg/TCO"),
-    ("Sheet2", 17,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Crude Tar",                         "Kg/TCO"),
-    ("Sheet2", 18,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Crude Benzol",                      "Kg/TCO"),
-    ("Sheet2", 19,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Coke Oven Gas",                     "Nm³/TCO"),
-    ("Sheet2", 21,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "CV of Coke Oven Gas",               "Kcal/Nm³"),
-    ("Sheet2", 26,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Ash in Coal Blend",                 "%"),
-    ("Sheet2", 27,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "VM in Coal Blend",                  "%"),
-    ("Sheet2", 28,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Coal Crushing Index",               "%"),
-    ("Sheet2", 29,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Ash in BF Coke",                    "%"),
-    ("Sheet2", 30,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Fixed Carbon in BF Coke",           "%"),
-    ("Sheet2", 31,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Coke CSR",                          "%"),
-    ("Sheet2", 32,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Coke CRI",                          "%"),
-    ("Sheet2", 33,  6,    1.0, "COKE_SINTER", "Coke Ovens",            "Coke M-10",                         "%"),
-    # ── Sheet3 ─────────────────────────────────────────────────────────────
-    ("Sheet3", 25,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Coke Crushing Index for Sinter",    "%"),
-    ("Sheet3", 27,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Flux Crushing Index for Sinter",    "%"),
-    ("Sheet3", 29,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter Return",                     "%"),
-    ("Sheet3", 31,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "FeO in Sinter",                     "%"),
-    ("Sheet3", 39,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Basicity of Sinter",                "ratio"),
-    ("Sheet3", 41,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Fe% in Sinter",                     "%"),
-    ("Sheet3", 43,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter M/c Availability",           "%"),
-    ("Sheet3", 46,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Sinter M/c Utilization",            "%"),
-    # ── Sheet4 ─────────────────────────────────────────────────────────────
-    # Sinter/Pellet in Burden, O2 Enrichment, Coke Screening Loss, Slag Rate,
-    # BF Gas Yield, CV of BF Gas, Furnace Availability/Utilisation are
-    # extracted by _extract_sheet4_iron_making_rows() below instead of a
-    # hardcoded row here — a new "PELLET IN BURDEN" line item started
-    # appearing from Jun'26 onward, shifting every row after it down by 2,
-    # and a fixed row number can't handle both the old and new layouts.
-    # ── SMS-I ──────────────────────────────────────────────────────────────
-    ("SMS-I",   12,  6,    1.0, "SMS",         "SMS-I",                 "Tap to Tap Time (Avail. Hrs)",      "Min"),
-    ("SMS-I",   14,  6,    1.0, "SMS",         "SMS-I",                 "Tap to Tap Time (Working Hrs)",     "Min"),
-    ("SMS-I",  16,  6,    1.0, "SMS",         "SMS-I",                 "Average Lining Life",               "Heats"),
-    ("SMS-I",  18,  6,    1.0, "SMS",         "SMS-I",                 "Converter Availability (Cal. Hr)",  "%"),
-    ("SMS-I",  20,  6,    1.0, "SMS",         "SMS-I",                 "Converter Availability (Avail. Hr)","%"),
-    ("SMS-I",  23,  6,    1.0, "SMS",         "SMS-I",                 "Sp. Hot Metal Cons.",               "Kg/TCS"),
-    ("SMS-I",  25,  6,    1.0, "SMS",         "SMS-I",                 "Sp. Scrap Cons.",                   "Kg/TCS"),
-    ("SMS-I",  27,  6,    1.0, "SMS",         "SMS-I",                 "Sp. Iron Ore Cons.",                "Kg/TCS"),
-    ("SMS-I",  26,  6,    1.0, "SMS",         "SMS-I",                 "Sp. Pellet Cons.",                  "Kg/TCS"),
-    ("SMS-I",  28,  6,    1.0, "SMS",         "SMS-I",                 "Fe-Si Cons.",                       "Kg/TCS"),
-    ("SMS-I",  29,  6,    1.0, "SMS",         "SMS-I",                 "Fe-Mn Cons.",                       "Kg/TCS"),
-    ("SMS-I",  30,  6,    1.0, "SMS",         "SMS-I",                 "Si-Mn Cons.",                       "Kg/TCS"),
-    ("SMS-I",  34,  6,    1.0, "SMS",         "SMS-I",                 "Oxygen Blow per T Crude",           "Nm³/T CS"),
-    ("SMS-I",  33,  6,    1.0, "SMS",         "SMS-I",                 "Refractory Cons.",                  "Kg/TCS"),
-    ("SMS-I",  40,  6,    1.0, "SMS",         "SMS-I",                 "Heat Consumed",                     "Kcal/T CS"),
-    ("SMS-I",  42,  6,    1.0, "SMS",         "SMS-I",                 "Power Consumed",                    "KWH/T CS"),
-    ("SMS-I",  48,  6,    1.0, "SMS",         "SMS-I",                 "Reblown Heat",                      "%"),
-    ("SMS-I",  50,  6,    1.0, "SMS",         "SMS-I",                 "FeO in Slag",                       "%"),
-    # ── SMS-II ─────────────────────────────────────────────────────────────
-    ("SMS-II",  12,  6,    1.0, "SMS",         "SMS-II",                "Tap to Tap Time (Avail. Hrs)",      "Min"),
-    ("SMS-II",  14,  6,    1.0, "SMS",         "SMS-II",                "Tap to Tap Time (Working Hrs)",     "Min"),
-    ("SMS-II", 16,  6,    1.0, "SMS",         "SMS-II",                "Average Lining Life",               "Heats"),
-    ("SMS-II", 18,  6,    1.0, "SMS",         "SMS-II",                "Converter Availability (Cal. Hr)",  "%"),
-    ("SMS-II", 20,  6,    1.0, "SMS",         "SMS-II",                "Converter Availability (Avail. Hr)","%"),
-    ("SMS-II", 23,  6,    1.0, "SMS",         "SMS-II",                "Sp. Hot Metal Cons.",               "Kg/TCS"),
-    ("SMS-II", 25,  6,    1.0, "SMS",         "SMS-II",                "Sp. Scrap Cons.",                   "Kg/TCS"),
-    ("SMS-II", 27,  6,    1.0, "SMS",         "SMS-II",                "Sp. Iron Ore Cons.",                "Kg/TCS"),
-    ("SMS-II", 26,  6,    1.0, "SMS",         "SMS-II",                "Sp. Pellet Cons.",                  "Kg/TCS"),
-    ("SMS-II", 28,  6,    1.0, "SMS",         "SMS-II",                "Fe-Si Cons.",                       "Kg/TCS"),
-    ("SMS-II", 29,  6,    1.0, "SMS",         "SMS-II",                "Fe-Mn Cons.",                       "Kg/TCS"),
-    ("SMS-II", 30,  6,    1.0, "SMS",         "SMS-II",                "Si-Mn Cons.",                       "Kg/TCS"),
-    ("SMS-II", 36,  6,    1.0, "SMS",         "SMS-II",                "Oxygen Blow per T Crude",           "Nm³/T CS"),
-    ("SMS-II", 35,  6,    1.0, "SMS",         "SMS-II",                "Refractory Cons.",                  "Kg/TCS"),
-    ("SMS-II", 42,  6,    1.0, "SMS",         "SMS-II",                "Heat Consumed",                     "Kcal/T CS"),
-    ("SMS-II", 44,  6,    1.0, "SMS",         "SMS-II",                "Power Consumed",                    "KWH/T CS"),
-    ("SMS-II", 50,  6,    1.0, "SMS",         "SMS-II",                "Reblown Heat",                      "%"),
-    ("SMS-II", 52,  6,    1.0, "SMS",         "SMS-II",                "FeO in Slag",                       "%"),
+    # ── Sheet2 (Coke Ovens), Sheet3 (Sinter Plant), Sheet4, SMS-I/SMS-II ────
+    # All extracted by _extract_keyword_block()/_extract_sheet4_iron_making_
+    # rows() below instead of hardcoded rows here. Confirmed on real files
+    # (e.g. Techno April 2025 vs June 2025) that Sheet2's Ash/VM/Crushing
+    # Index/CSR/CRI/M-10 block and Sheet3's Basicity/Fe%/Availability/
+    # Utilisation block were off by a fixed number of rows against every
+    # file we have — not a layout drift over time, just wrong row numbers —
+    # so a bounded keyword search replaces them entirely rather than being
+    # patched to a different fixed offset that could drift again.
 ]
 
 # ---------------------------------------------------------------------------
@@ -573,6 +510,150 @@ def _extract_sheet4_iron_making_rows(wb, db_month: str) -> list:
             "status":     "ok" if (actual is not None or cum is not None) else "skip",
         })
     return out
+
+
+# ---------------------------------------------------------------------------
+# Generic bounded-window keyword-search extractor, shared by the Coke Ovens
+# (Sheet2), Sinter Plant (Sheet3), and SMS-I/SMS-II blocks below. These used
+# to be fixed row numbers in _TECHNO_PARAM_MAP, which turned out to already be
+# wrong on every file we have (Sheet2's Ash/VM/Crushing Index/Ash-in-BF-Coke/
+# Fixed Carbon/CSR/CRI/M-10 block was off by 1 row; Sheet3's Basicity/Fe%/
+# Availability/Utilisation block was off by 2) — the same class of bug fixed
+# for Sheet4's iron-making block (_extract_sheet4_iron_making_rows).
+# ---------------------------------------------------------------------------
+def _extract_keyword_block(wb, sheet_name: str, window: tuple, keywords: list,
+                            group_code: str, section: str, db_month: str,
+                            label_col: int = 2, mon_col: int = 6, cum_col: int = 7,
+                            sort_base: int = 0) -> list:
+    """Locate each keyword's row within a bounded row window by searching
+    column label_col, instead of trusting a fixed row number.
+
+    keywords: list of (keyword, parameter_label, unit, optional). Matched in
+    list order; each row can satisfy only one keyword, so when one label's
+    text is a substring of another's (e.g. "Iron Ore" inside "Iron Ore
+    Pellet"), list the longer/more specific one first — once a row is
+    claimed it's excluded from later keyword searches.
+    """
+    if sheet_name not in wb.sheetnames:
+        logger.info("BSL techno: sheet %r not found — skipping %s block", sheet_name, section)
+        return []
+
+    ws = wb[sheet_name]
+    lo, hi = window
+    # Collapse internal whitespace too — source labels are inconsistently
+    # spaced (e.g. "CONV.UTILISATION  ON AVL. Hrs." with a double space,
+    # "AVERAGE LINNING LIFE      " with trailing spaces).
+    labels = {
+        r: re.sub(r'\s+', ' ', str(ws.cell(r, label_col).value or "")).strip().lower()
+        for r in range(lo, hi + 1)
+    }
+
+    used_rows = set()
+    out = []
+    for i, (keyword, param, unit, optional) in enumerate(keywords):
+        match_row = next(
+            (r for r in range(lo, hi + 1) if r not in used_rows and keyword in labels[r]),
+            None,
+        )
+        if match_row is None:
+            if optional:
+                logger.info(
+                    "BSL techno: %s label containing %r not found in rows %d-%d.",
+                    section, keyword, lo, hi,
+                )
+            else:
+                logger.warning(
+                    "BSL techno: %s label containing %r not found in rows %d-%d — "
+                    "verify the keyword still matches the report's wording.",
+                    section, keyword, lo, hi,
+                )
+            continue
+        used_rows.add(match_row)
+
+        actual_raw = _cell_float(ws, match_row, mon_col)
+        cum_raw    = _cell_float(ws, match_row, cum_col)
+        actual = round(actual_raw, 4) if actual_raw is not None else None
+        cum    = round(cum_raw,    4) if cum_raw    is not None else None
+
+        mon_ltr = get_column_letter(mon_col)
+        cum_ltr = get_column_letter(cum_col)
+
+        out.append({
+            "group_code": group_code,
+            "section":    section,
+            "parameter":  param,
+            "unit":       unit,
+            "actual":     actual,
+            "cum_actual": cum,
+            "sort_order": sort_base + i * 10,
+            "cell":       f"{mon_ltr}{match_row}/{cum_ltr}{match_row}",
+            "file_label": labels[match_row],
+            "plant":      "BSL",
+            "month":      db_month,
+            "found_via":  f"{sheet_name} label-search (matched {keyword!r} at row {match_row})",
+            "status":     "ok" if (actual is not None or cum is not None) else "skip",
+        })
+    return out
+
+
+# (keyword, parameter, unit, optional) — Sheet2, "Coke Ovens" block.
+_SHEET2_WINDOW = (9, 34)
+_SHEET2_KEYWORDS = [
+    ("dry coal charge",             "Dry Coal Charge per Oven",  "T/oven",   False),
+    ("avg. coking time",            "Average Coking Time",       "Hrs",      False),
+    ("- gross coke",                "Gross Coke Yield",          "%",        False),
+    ("- bf coke",                   "BF Coke Yield",             "%",        False),
+    ("ammonium sulphate",           "Ammonium Sulphate",         "Kg/TCO",   False),
+    ("crude tar",                   "Crude Tar",                 "Kg/TCO",   False),
+    ("crude benzol",                "Crude Benzol",              "Kg/TCO",   False),
+    ("coke oven gas",               "Coke Oven Gas",             "Nm³/TCO",  False),
+    ("cv of coke oven gas",         "CV of Coke Oven Gas",       "Kcal/Nm³", False),
+    ("ash in coal blend",           "Ash in Coal Blend",         "%",        False),
+    ("v.m. in coal blend",          "VM in Coal Blend",          "%",        False),
+    ("coal crushing index",         "Coal Crushing Index",       "%",        False),
+    ("ash in bf coke",              "Ash in BF Coke",            "%",        False),
+    ("fixed carbon in b.f. coke",   "Fixed Carbon in BF Coke",   "%",        False),
+    ("c.s. r value",                "Coke CSR",                  "%",        False),
+    ("c.r.i. value",                "Coke CRI",                  "%",        False),
+    ("m - 10 value",                "Coke M-10",                 "%",        False),
+]
+
+# Sheet3, "Sinter Plant" block.
+_SHEET3_WINDOW = (18, 48)
+_SHEET3_KEYWORDS = [
+    ("coke crushing index",   "Coke Crushing Index for Sinter", "%",     False),
+    ("flux crushing index",   "Flux Crushing Index for Sinter", "%",     False),
+    ("sinter return",         "Sinter Return",                  "%",     False),
+    ("feo consistency",       "FeO in Sinter",                  "%",     False),
+    ("basicity of sinter",    "Basicity of Sinter",             "ratio", False),
+    ("fe content in sinter",  "Fe% in Sinter",                  "%",     False),
+    ("m/c availability",      "Sinter M/c Availability",         "%",     False),
+    ("m/c utilisation",       "Sinter M/c Utilization",          "%",     False),
+]
+
+# SMS-I / SMS-II — identical label wording on both sheets, only row positions
+# differ, so one keyword list serves both (called once per sheet name).
+_SMS_WINDOW = (10, 52)
+_SMS_KEYWORDS = [
+    ("tap to tap time on avl",   "Tap to Tap Time (Avail. Hrs)",       "Min",     False),
+    ("tap to tap time on work",  "Tap to Tap Time (Working Hrs)",      "Min",     False),
+    ("average linning life",     "Average Lining Life",                "Heats",   False),
+    ("conv.availabilty on cal",  "Converter Availability (Cal. Hr)",   "%",       False),
+    ("utilisation on avl",       "Converter Availability (Avail. Hr)", "%",       False),
+    ("net hot metal",            "Sp. Hot Metal Cons.",                "Kg/TCS",  False),
+    ("scrap + pig iron",         "Sp. Scrap Cons.",                    "Kg/TCS",  False),
+    ("iron ore pellet",          "Sp. Pellet Cons.",                   "Kg/TCS",  False),
+    ("iron ore",                 "Sp. Iron Ore Cons.",                 "Kg/TCS",  False),
+    ("fe - si",                  "Fe-Si Cons.",                        "Kg/TCS",  False),
+    ("fe - mn",                  "Fe-Mn Cons.",                        "Kg/TCS",  False),
+    ("si - mn",                  "Si-Mn Cons.",                        "Kg/TCS",  False),
+    ("refractory",               "Refractory Cons.",                   "Kg/TCS",  False),
+    ("oxygen",                   "Oxygen Blow per T Crude",            "Nm³/T CS",False),
+    ("heat cons",                "Heat Consumed",                      "Kcal/T CS",False),
+    ("power cons",               "Power Consumed",                     "KWH/T CS",False),
+    ("reblown heat",             "Reblown Heat",                       "%",       False),
+    ("feo in slag",              "FeO in Slag",                        "%",       False),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -1389,6 +1470,24 @@ def extract_preview(file_path: str, report_month: str) -> dict:
                 fax_idx += 1
     elif _FAX_SHEET not in wb.sheetnames:
         logger.info("BSL techno: sheet %r not found — skipping FAX GM OPRN extras", _FAX_SHEET)
+
+    # ── Sheet2 — Coke Ovens (Ash/VM/Crushing Index/CSR/CRI/M-10, etc.) ──────
+    rows_out.extend(_extract_keyword_block(
+        wb, "Sheet2", _SHEET2_WINDOW, _SHEET2_KEYWORDS,
+        "COKE_SINTER", "Coke Ovens", db_month, sort_base=400))
+
+    # ── Sheet3 — Sinter Plant (Basicity/Fe%/Availability/Utilisation, etc.) ─
+    rows_out.extend(_extract_keyword_block(
+        wb, "Sheet3", _SHEET3_WINDOW, _SHEET3_KEYWORDS,
+        "COKE_SINTER", "Sinter Plant", db_month, sort_base=600))
+
+    # ── SMS-I / SMS-II ───────────────────────────────────────────────────────
+    rows_out.extend(_extract_keyword_block(
+        wb, "SMS-I", _SMS_WINDOW, _SMS_KEYWORDS,
+        "SMS", "SMS-I", db_month, sort_base=700))
+    rows_out.extend(_extract_keyword_block(
+        wb, "SMS-II", _SMS_WINDOW, _SMS_KEYWORDS,
+        "SMS", "SMS-II", db_month, sort_base=750))
 
     # ── Sheet4 — iron-making block (Sinter/Pellet, O2, Coke Screen Loss, BF) ─
     rows_out.extend(_extract_sheet4_iron_making_rows(wb, db_month))
