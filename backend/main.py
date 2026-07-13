@@ -1240,15 +1240,27 @@ async def bsl_bf_techno_preview(
                 "unit": unit,
                 "db": {
                     **{k: db_month.get(k) for k in _param_keys},
-                    "production_ytd": db_till.get("production"),
-                    "coke_rate_ytd":  db_till.get("coke_rate"),
+                    "coke_rate_ytd": db_till.get("coke_rate"),
                 },
             }
-            # Furnace-wise month production lives in production_table, not
-            # techno_data (see save endpoint) - so the "In DB" comparison for
-            # it must read production_table, else it'd show stale/blank values.
+            # production/production_ytd are never stored in techno_data (see
+            # save endpoint) - production_table is the only source of truth.
+            # production_table stores '000 t; this UI's Production column is
+            # in tonnes, so convert back for a like-for-like comparison.
+            # BF_Shop has no production_table row of its own, so its "In DB"
+            # figure is derived as the sum of the four furnaces.
             if unit.startswith("BF-"):
-                row["db"]["production"] = db.get_production_actual_value("BSL", unit, month)
+                _db_prod_kt = db.get_production_actual_value("BSL", unit, month)
+                row["db"]["production"] = _db_prod_kt * 1000.0 if _db_prod_kt is not None else None
+            elif unit == "BF_Shop":
+                _conn = sqlite3.connect(db.DB_PATH)
+                _sum_kt = _conn.execute(
+                    "SELECT SUM(month_actual) FROM production_table WHERE plant_name='BSL' "
+                    "AND report_month=? AND item_name IN ('BF-1','BF-2','BF-4','BF-5')",
+                    (month,),
+                ).fetchone()[0]
+                _conn.close()
+                row["db"]["production"] = _sum_kt * 1000.0 if _sum_kt is not None else None
             for k in _param_keys:
                 row[k] = month_vals.get(k)
             row["production_ytd"] = till_vals.get("production")
@@ -1377,20 +1389,23 @@ async def bsl_bf_techno_save(payload: dict):
                 continue
 
             # Furnace-wise month production is saved to production_table
-            # below instead of techno_data, to avoid holding the same figure
-            # in two places. BF_Shop has no production_table row (shop-level
-            # aggregates are never populated there - see techno_aggregates.py),
-            # so it keeps carrying production in techno_data.
+            # below, never to techno_data - production and production_ytd
+            # aren't techno-economic parameters, and duplicating them here
+            # would just drift out of sync with production_table (the source
+            # of truth for the cumulative-weighting code in techno_cumulative.py
+            # / techno_aggregates.py). BF_Shop's total, when needed, is derived
+            # by summing the four furnaces' production_table rows (see the
+            # preview endpoint above) rather than stored separately.
             is_furnace = unit.startswith("BF-")
-            month_keys = [k for k in _month_keys if k != "production"] if is_furnace else _month_keys
+            month_keys = [k for k in _month_keys if k != "production"]
 
             # The PDF grid holds for-the-MONTH values; the only genuine
-            # cumulatives (FY production / coke rate) come in as *_ytd.
+            # techno cumulative here is coke rate (production's FY cumulative
+            # isn't persisted - see above).
             techno_json = {
                 "month": {k: row.get(k) for k in month_keys},
                 "till_month": {
-                    "production": row.get("production_ytd"),
-                    "coke_rate":  row.get("coke_rate_ytd"),
+                    "coke_rate": row.get("coke_rate_ytd"),
                 },
             }
 
