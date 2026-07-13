@@ -271,7 +271,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
               <col style={{ width: '7%' }} /><col style={{ width: '6%' }} />
             </colgroup>
           )}
-          <thead style={{ fontSize: '0.78em', lineHeight: 1.1 }}>
+          <thead style={{ fontSize: '0.7em', lineHeight: 1 }}>
             {isApril ? (
               <>
                 <tr>

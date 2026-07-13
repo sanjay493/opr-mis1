@@ -312,7 +312,7 @@ P18_TECHNO_ITEMS = [
     ("CDI BF-4",                   ["cdi bf 4", "pci bf 4"],                                  106),
     ("CDI BF-5",                   ["cdi bf 5", "pci bf 5"],                                107),
     ("CDI",                        ["cdi", "pci"],                                           108),
-    ("Coal to Hot metal ratio",    ["coal to hot metal ratio", "coal to hm ratio"],          113),
+    ("Coal to Hot metal ratio",    ["coal to hot metal ratio", "coal to hm ratio","Coal to H M Ratio **"],          113),
     ("Nut Coke BF-1",              ["nut coke bf 1", "nut coke bf#1", "n c bf 1"],            109),
     ("Nut Coke BF-4",              ["nut coke bf 4", "nut coke bf#4", "n c bf 4"],            110),
     ("Nut Coke BF-5",              ["nut coke bf 5", "nut coke bf#5", "n c bf 5"],            111),
