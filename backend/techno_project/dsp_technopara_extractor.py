@@ -54,9 +54,10 @@ _SMS_KEY_NORM = {
 # Coke oven labels where DSP's own wording diverges from the canonical key
 # used by RSP/ISP/BSP and page_techno.py's page-28 schema.
 _COKE_KEY_NORM = {
-    "coal_tar_yield":    "crude_tar_yield",
-    "crude_benzol":      "crude_benzol_yield",
-    "ammonium_sulphate": "ammonium_sulphate_yield",
+    "coal_tar_yield":      "crude_tar_yield",
+    "crude_benzol":        "crude_benzol_yield",
+    "ammonium_sulphate":   "ammonium_sulphate_yield",
+    "average_ash_in_coke": "ash_in_coke",
 }
 
 # DSP's PDF reports BF Productivity on both a "useful volume" and a "working

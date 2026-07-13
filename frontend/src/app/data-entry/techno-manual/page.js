@@ -91,7 +91,7 @@ const PARAM_TEMPLATES = {
     'crude_tar_yield','crude_benzol_yield','coke_oven_gas_yield','ammonium_sulphate_yield',
     'dry_coal_charge_oven',
     'm10','m40',
-    'average_ash_in_coke','average_ash_in_coal_blend',
+    'ash_in_coke','average_ash_in_coal_blend',
     'average_volatile_matter_in_coal_blend',
   ],
   'Sinter Plant': [
@@ -182,7 +182,7 @@ const _LABEL_MAP = {
   dry_coal_charge_oven:                 'Dry Coal Charge / Oven (T)',
   m10:                                  'M10 (%)',
   m40:                                  'M40 (%)',
-  average_ash_in_coke:                  'Average Ash in Coke (%)',
+  ash_in_coke:                          'Ash in Coke (%)',
   average_ash_in_coal_blend:            'Average Ash in Coal Blend (%)',
   average_volatile_matter_in_coal_blend:'Average Volatile Matter in Coal Blend (%)',
   // Sinter
