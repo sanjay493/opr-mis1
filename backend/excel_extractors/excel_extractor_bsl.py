@@ -1017,21 +1017,22 @@ def _extract_corp_ss_preview(wb, report_month: str) -> dict:
 
 def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     """
-    Extract BF-wise performance data from BSL BF Performance & Analysis Report PDF.
+    Extract furnace-wise HM production from BSL BF Performance & Analysis
+    Report PDF, for production_table (item_name = BF-1/BF-2/BF-4/BF-5, '000 t).
 
-    Parses three tables:
-      Table 1 — Production Performance: Productivity (W.V./24h), Hot Blast Temp
-      Table 2 — Fuel/Quality Parameters: Coke Rate, Nut Coke Rate, CDI Rate, Fuel Rate
-      Table 3 — Raw Material Consumption: O2 Enrichment%, Slag Rate
-
-    All values use OnDate/Monthly format (X/Y); monthly (second) value is stored.
-    Cumulative (till-month) is set to None — not available in this PDF.
-    BF-3 (UNDER CAPITAL REPAIR) is skipped automatically.
+    Parsing is delegated to bsl_mer_parser (shared with the /data-entry/techno
+    BF-techno upload, which saves the full 14-parameter set to techno_data —
+    production_table's BF-wise weight source stays consistent between the two
+    entry points). This path only surfaces production for review/insert here;
+    the other techno parameters for this PDF are entered via /data-entry/techno.
+    BF_Shop (plant aggregate) is skipped — production_table never carries a
+    separate shop-level row (see techno_aggregates.py).
     """
-    import pdfplumber, re as _re
+    import pdfplumber
+    import sys as _sys
 
     fname = os.path.basename(file_path)
-    logger.info("BSL BF PDF: opening %s for month %s", fname, report_month)
+    logger.info("BSL BF PDF (production, /upload): opening %s for month %s", fname, report_month)
 
     try:
         with pdfplumber.open(file_path) as pdf:
@@ -1042,208 +1043,49 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     detected = _detect_month_from_pdf_text(full_text)
     _assert_month_match(detected, report_month, "BSL BF Performance PDF")
 
-    lines = full_text.splitlines()
+    _techno_project_dir = os.path.join(os.path.dirname(__file__), "..", "techno_project")
+    if _techno_project_dir not in _sys.path:
+        _sys.path.insert(0, _techno_project_dir)
+    from bsl_mer_parser import extract_bsl_mer
 
-    def _monthly(cell: str):
-        """Parse 'X / Y' → float Y (last-day/monthly format: production table). Returns None if no slash."""
-        m = _re.search(r'[\d.*]+\s*/\s*([\d.]+)', cell.strip())
-        if m:
-            try:
-                return float(m.group(1))
-            except ValueError:
-                return None
-        return None
+    records = extract_bsl_mer(full_text, report_month=report_month, filename=fname)
 
-    def _first_val(cell: str):
-        """Parse 'X / Y' → float X (month/FY-cumulative format: fuel & raw tables). Parses plain value if no slash."""
-        cell = cell.strip()
-        m = _re.match(r'(-?[\d.]+)\s*/', cell)
-        if m:
-            try:
-                return float(m.group(1))
-            except ValueError:
-                return None
-        try:
-            return float(cell)
-        except ValueError:
-            return None
-
-    def _is_repair(line: str) -> bool:
-        # BSL PDF spells it "U N D E R  C A P I T A L  R E P A I R" with spaces; strip them before matching
-        lu_nospace = line.upper().replace(' ', '')
-        return 'UNDER' in lu_nospace and 'CAPITAL' in lu_nospace
-
-    def _parse_row(line: str):
-        """Split pipe-delimited line, strip cells, return list."""
-        return [c.strip() for c in line.split('|')]
-
-    def _is_fce_row(line: str) -> bool:
-        if _is_repair(line):
-            return False
-        return bool(_re.match(r'\|?\s*(\d+\.?|Shop|SH|SHOP)\s*\|', line, _re.IGNORECASE))
-
-    def _fce_id(cols):
-        if len(cols) < 2:
-            return None
-        s = cols[1].strip()
-        if s.upper() in ('SHOP', 'SH'):
-            return 'BF Shop'
-        m = _re.match(r'^(\d+)\.?$', s)
-        if m:
-            return f'BF-{int(m.group(1))}'
-        return None
-
-    # ── Identify table sections ───────────────────────────────────────────────
-    TABLE_NONE = 0
-    TABLE_PROD = 1   # Production Performance
-    TABLE_FUEL = 2   # Fuel/Quality Parameters
-    TABLE_RAW  = 3   # Raw Material Consumption
-
-    prod_rows = {}   # fce_id → cols list
-    fuel_rows = {}
-    raw_rows  = {}
-    current_table = TABLE_NONE
-
-    for line in lines:
-        lu = line.upper()
-        # Section transitions detected from header keywords
-        if 'PRODUCTIVT' in lu or ('W.V.' in lu and '24H' in lu):
-            current_table = TABLE_PROD
-            continue
-        if 'COKE RATE' in lu and ('CDI RATE' in lu or 'N/C RT' in lu):
-            current_table = TABLE_FUEL
-            continue
-        if ('O2 EN' in lu and 'SLG RATE' in lu) or ('NUTCOKE' in lu and 'CDI' in lu and 'PELLET' in lu):
-            current_table = TABLE_RAW
-            continue
-
-        if not _is_fce_row(line):
-            continue
-
-        cols = _parse_row(line)
-        fce = _fce_id(cols)
-        if fce is None:
-            continue
-
-        if current_table == TABLE_PROD and fce not in prod_rows:
-            prod_rows[fce] = cols
-        elif current_table == TABLE_FUEL and fce not in fuel_rows:
-            fuel_rows[fce] = cols
-        elif current_table == TABLE_RAW and fce not in raw_rows:
-            raw_rows[fce] = cols
-
-    # ── Column indices (0-based after split by |) ────────────────────────────
-    # Production table: [0]='' [1]=Fce [2]=Prod [3]=Theo [4]=DailyRate [5]=MonthlyRate
-    #   [6]=Chrg [7]=Tuyr [8]=FlueDust [9]=TotOff [10]=OffBlast [11]=LowBlast [12]=LowBlast2
-    #   [13]=HOT BLAST [14]=RecDaily [15]=RecMonthly [16]=Productivity W.V./24h
-    # Fuel table: [0]='' [1]=FCE [2]=Si [3]=S [4]=SlagAl2O3 [5]=MgO [6]=Basicity
-    #   [7]=HOT MET T [8]=COKE RATE [9]=N/C RT [10]=CDI RATE [11]=FUEL RATE ...
-    # Raw material table: [0]='' [1]=Fce [2]=Coke [3]=IronOre [4]=Sinter [5]=Scrap
-    #   [6]=NutCoke [7]=CDI [8]=Pellet [9]=CokeEcy [10]=O2 En(%) [11]=SLG RATE ...
-    TABLE_DATA = {'prod': prod_rows, 'fuel': fuel_rows, 'raw': raw_rows}
-
-    # ── Build techno_param_rows ───────────────────────────────────────────────
     rows_out = []
-    sort_idx = 0
-
-    # Monthly HM production per furnace + BF_Shop (prod col-2: last-day/monthly → _monthly gives monthly)
-    for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'), ('BF-3', 'BSL BF-3'),
-                        ('BF-4', 'BSL BF-4'), ('BF-5', 'BSL BF-5'),
-                        ('BF Shop', 'BSL')]:
-        prod_cols = TABLE_DATA['prod'].get(fce, [])
-        hm_val = _monthly(prod_cols[2]) if len(prod_cols) > 2 else None
+    for rec in records:
+        unit = rec['unit']
+        if not unit.startswith('BF-'):
+            continue
+        prod = rec['techno_json'].get('month', {}).get('production')
+        ok = isinstance(prod, (int, float)) and prod > 0
         rows_out.append({
-            'group_code': 'IRON_MAKING', 'section': 'HM Production',
-            'parameter': label, 'unit': 'T',
-            'actual': hm_val, 'cum_actual': None,
-            'sort_order': sort_idx * 10, 'cell': f'PDF prod-table col-2 {fce}',
-            'file_label': f'HM Production ({fce})', 'plant': 'BSL', 'month': report_month,
-            'found_via': f'BSL {fce} Monthly HM', 'status': 'ok' if hm_val is not None else 'skip',
+            'item_name': unit,
+            'value': round(prod / 1000.0, 3) if ok else None,
+            'unit': "'000T",
+            'cell': f'BF Performance PDF — {unit} monthly production',
+            'file_label': f'{unit} Production',
+            'plant': 'BSL', 'month': report_month,
+            'found_via': f'BSL {unit} monthly production',
+            'status': 'ok' if ok else 'skip',
         })
-        sort_idx += 1
-
-    # ── Cross-furnace parameter extraction ───────────────────────────────────
-    # Column format by table:
-    #   prod: last-day/monthly   → _monthly() (second value) for monthly averages/totals
-    #   fuel: month/FY-cumul     → _first_val() (first value) for monthly rates
-    #   raw:  month/FY-cumul     → _first_val() (first value) for monthly consumption
-    #
-    # (table, col, section, unit, sort_base, use_first)
-    _CROSS = [
-        # Production table — monthly avg is the second value
-        ('prod', 16, 'BF Productivity',    'T/m³/day',  76, False),
-        ('prod', 13, 'HBT',                '°C',        106, False),
-        # Fuel/quality table — monthly rate is the first value
-        ('fuel',  2, 'Si in HM',           '%',          86, True),
-        ('fuel',  3, 'S in HM',            '%',          93, True),
-        ('fuel',  4, 'Slag Al2O3',         '%',          97, True),
-        ('fuel',  5, 'Slag MgO',           '%',          98, True),
-        ('fuel',  6, 'Slag Basicity',      '',           99, True),
-        ('fuel',  7, 'Hot Metal Temp',     '°C',         95, True),
-        ('fuel',  8, 'BF Coke Rate',       'Kg/THM',     56, True),
-        ('fuel',  9, 'Nut Coke Rate',      'Kg/THM',     66, True),
-        ('fuel', 10, 'CDI',                'Kg/THM',     46, True),
-        ('fuel', 11, 'Fuel Rate',          'Kg/THM',    110, True),
-        ('fuel', 12, 'Carbon Rate',        'Kg/THM',    111, True),
-        ('fuel', 13, 'F Dust Rate',        'Kg/THM',    112, True),
-        ('fuel', 17, 'CO CO2 Ratio',       '',          113, True),
-        # Raw material table — monthly consumption is the first value
-        ('raw',   2, 'Coke Consumption',   'T',          15, True),
-        ('raw',   3, 'Iron Ore',           'T',          25, True),
-        ('raw',   4, 'Sinter Consumption', 'T',          35, True),
-        ('raw',   5, 'BF Scrap',           'T',          45, True),
-        ('raw',   6, 'Nut Coke',           'T',          64, True),
-        ('raw',   7, 'CDI Total',          'T',          47, True),
-        ('raw',   8, 'Pellet Consumption', 'T',          55, True),
-        ('raw',   9, 'Coke ECY',           'T',          58, True),
-        ('raw',  10, 'O2 Enrichment',      '%',         140, True),
-        ('raw',  11, 'Slag Rate',          'Kg/THM',    138, True),
-        ('raw',  12, 'Sinter in Burden',   '%',         120, True),
-        ('raw',  13, 'Sint Rate',          'Kg/THM',    122, True),
-        ('raw',  14, 'Ore Rate',           'Kg/THM',    125, True),
-    ]
-    for fce, label in [('BF-1', 'BSL BF-1'), ('BF-2', 'BSL BF-2'), ('BF-3', 'BSL BF-3'),
-                        ('BF-4', 'BSL BF-4'), ('BF-5', 'BSL BF-5'),
-                        ('BF Shop', 'BSL')]:
-        cols_f = TABLE_DATA['fuel'].get(fce, [])
-        cols_p = TABLE_DATA['prod'].get(fce, [])
-        cols_r = TABLE_DATA['raw'].get(fce, [])
-        for tbl, ci, section, unit, so_base, use_first in _CROSS:
-            cols = cols_f if tbl == 'fuel' else (cols_p if tbl == 'prod' else cols_r)
-            raw_cell = cols[ci] if ci < len(cols) else ''
-            val = _first_val(raw_cell) if use_first else _monthly(raw_cell)
-            rows_out.append({
-                'group_code': 'IRON_MAKING', 'section': section,
-                'parameter': label, 'unit': unit,
-                'actual': val, 'cum_actual': None,
-                'sort_order': so_base + sort_idx,
-                'source_priority': 5,
-                'cell': f'PDF {tbl}-table col-{ci} {fce}',
-                'file_label': f'{section} ({fce})', 'plant': 'BSL', 'month': report_month,
-                'found_via': f'BSL {fce} {section}',
-                'status': 'ok' if val is not None else 'skip',
-            })
-        sort_idx += 1
 
     ok = sum(1 for r in rows_out if r['status'] == 'ok')
-    logger.info("BSL BF PDF: %d/%d rows ok for %s", ok, len(rows_out), report_month)
+    logger.info("BSL BF PDF (production): %d/%d furnaces ok for %s", ok, len(rows_out), report_month)
 
     if ok == 0:
         raise ValueError(
-            "No BF performance values extracted. "
-            "Verify this is a BSL BF Performance & Analysis Report PDF with "
-            "'Productivty'/'W.V./24h', 'COKE RATE'/'CDI RATE', and 'O2 En(%)'/'SLG RATE' tables."
+            "No furnace-wise HM production extracted. Verify this is a BSL BF "
+            "Performance & Analysis Report PDF (BSL_BlastFurnace_DDMMYYYY.pdf)."
         )
 
     return {
-        'source_type':        'BSL BF Performance & Analysis Report (PDF)',
+        'source_type':        'BSL BF Performance & Analysis Report (PDF) — furnace-wise production',
         'month':              report_month,
         'detected_month':     detected,
         'plant':              'BSL',
         'workbook_sheets':    ['PDF'],
-        'production_rows':    [],
+        'production_rows':    rows_out,
         'techno_rows':        [],
-        'techno_param_rows':  rows_out,
+        'techno_param_rows':  [],
         'special_steel_rows': [],
     }
 
@@ -1396,7 +1238,8 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     Extract BSL data — auto-detects file type:
 
     • BF Performance & Analysis Report (.pdf)
-      → techno_param_rows populated with BF-wise Productivity, Coke Rate, etc.
+      → production_rows populated with BF-wise HM production (BF-1/2/4/5).
+        Full techno parameter set for this PDF is entered via /data-entry/techno.
 
     • DPR Mail Month-End Report (.xlsx, sheet 'DPR')
       → production_rows populated with ~19 production items.
