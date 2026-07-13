@@ -1244,6 +1244,11 @@ async def bsl_bf_techno_preview(
                     "coke_rate_ytd":  db_till.get("coke_rate"),
                 },
             }
+            # Furnace-wise month production lives in production_table, not
+            # techno_data (see save endpoint) - so the "In DB" comparison for
+            # it must read production_table, else it'd show stale/blank values.
+            if unit.startswith("BF-"):
+                row["db"]["production"] = db.get_production_actual_value("BSL", unit, month)
             for k in _param_keys:
                 row[k] = month_vals.get(k)
             row["production_ytd"] = till_vals.get("production")
@@ -1371,10 +1376,18 @@ async def bsl_bf_techno_save(payload: dict):
             if not unit:
                 continue
 
+            # Furnace-wise month production is saved to production_table
+            # below instead of techno_data, to avoid holding the same figure
+            # in two places. BF_Shop has no production_table row (shop-level
+            # aggregates are never populated there - see techno_aggregates.py),
+            # so it keeps carrying production in techno_data.
+            is_furnace = unit.startswith("BF-")
+            month_keys = [k for k in _month_keys if k != "production"] if is_furnace else _month_keys
+
             # The PDF grid holds for-the-MONTH values; the only genuine
             # cumulatives (FY production / coke rate) come in as *_ytd.
             techno_json = {
-                "month": {k: row.get(k) for k in _month_keys},
+                "month": {k: row.get(k) for k in month_keys},
                 "till_month": {
                     "production": row.get("production_ytd"),
                     "coke_rate":  row.get("coke_rate_ytd"),
@@ -1391,11 +1404,12 @@ async def bsl_bf_techno_save(payload: dict):
                 source_file="bsl_bf_pdf",
             )
 
-            # Furnace-wise production also goes to production_table ('000 t,
-            # item = unit name) — the cumulative rules use it as the weight
-            # source for furnace-level parameters, same as RSP/DSP/BSP.
+            # Furnace-wise month production goes to production_table ('000 t,
+            # item = unit name) instead of techno_data — the cumulative rules
+            # use it as the weight source for furnace-level parameters, same
+            # as RSP/DSP/BSP.
             prod = row.get("production")
-            if unit.startswith("BF-") and isinstance(prod, (int, float)) and prod > 0:
+            if is_furnace and isinstance(prod, (int, float)) and prod > 0:
                 conn = sqlite3.connect(db.DB_PATH)
                 conn.execute(
                     """INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
