@@ -2193,20 +2193,28 @@ _TECHNO_DB_SCHEMA = {
             # rows above) it's stored under "General" (BSL/DSP/ISP/RSP) or
             # BSP's "BF_Shop", never COB/Coke Ovens/COB-old/COB-new.
             ("Coke Screen Loss",       "%",          [("General", "coke_screen_loss"), ("BF_Shop", "coke_screen_loss")]),
+            # Moved from page 29 - Sinter Plant is already this page's topic
+            # per its subtitle ("COKE AND COAL CHEMICALS, SINTER PLANT").
+            # RSP: SP-1/SP-2/SP-3, ISP: SP, DSP/BSL: single "Sinter" unit
+            # (DSP splits it into two machine-specific keys dsp_sp_1/dsp_sp_2;
+            # BSL reports one combined machine_productivity).
+            ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity"), ("SP", "specific_productivity"), ("Sinter", "dsp_sp_1"), ("Sinter", "dsp_sp_2"), ("Sinter", "machine_productivity")]),
         ],
     },
     29: {
         "type": "param",
         "sections": [
-            # Sinter plants — RSP: SP-1/SP-2/SP-3, ISP: SP, DSP/BSL: single
-            # "Sinter" unit (DSP splits it into two machine-specific keys
-            # dsp_sp_1/dsp_sp_2; BSL reports one combined machine_productivity)
-            ("Sinter Productivity", "t/m²/day", [("SP-1", "specific_productivity"), ("SP-2", "specific_productivity"), ("SP-3", "specific_productivity"), ("SP", "specific_productivity"), ("Sinter", "dsp_sp_1"), ("Sinter", "dsp_sp_2"), ("Sinter", "machine_productivity")]),
             ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons")]),
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
             ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
             ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF-6", "hot_blast_temp"), ("BF-7", "hot_blast_temp"), ("BF-8", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
             ("Oxygen Enrichment",   "%",         [("BF-1", "o2_enrichment"), ("BF-2", "o2_enrichment"), ("BF-3", "o2_enrichment"), ("BF-4", "o2_enrichment"), ("BF-5", "o2_enrichment"), ("BF-6", "o2_enrichment"), ("BF-7", "o2_enrichment"), ("BF-8", "o2_enrichment"), ("BF_Shop", "o2_enrichment")]),
+            # Plant-wise (shop-level), not furnace-wise - unlike CDI/Hot Blast
+            # Temp/O2 Enrichment above, this deliberately excludes per-furnace
+            # BF-1..BF-8 entries. ISP has no separate BF_Shop unit (single
+            # furnace = the whole shop, see SINGLE_BF_PLANTS), so its shop
+            # figure lives under "BF-5" instead.
+            ("Slag Rate",           "kg/thm",    [("BF_Shop", "slag_rate"), ("BF-5", "slag_rate")]),
         ],
     },
     30: {
@@ -2531,8 +2539,15 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     # uploaded report_month's file yet shouldn't have its other-period data
     # hidden entirely. `store` is already scoped to `all_months` by the SQL
     # fetch above, so every key already qualifies.
+    # Exclude 'SAIL' itself - it's a real plant key in techno_data (holding
+    # the manually-entered/computed SAIL override under units like
+    # "General"/"BF_Shop"), but it must never be treated as one of the 5
+    # plants in this per-plant loop: whenever its src_unit matched (e.g.
+    # Coke Screen Loss's "BF_Shop", or CDI/Hot Blast Temp/Oxygen Enrichment's
+    # "BF_Shop"), it produced a row here IN ADDITION to the dedicated SAIL
+    # row appended below - the same figure shown twice.
     available_plants = sorted(
-        {p for (p, rm) in store},
+        {p for (p, rm) in store if p != "SAIL"},
         key=lambda p: _PLANT_ORDER.index(p) if p in _PLANT_ORDER else 99,
     )
 
@@ -2654,15 +2669,18 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
             return f"{plant}-New"
         return plant
 
-    def _row_label_and_bold(page_no, plant, src_unit, multi_plant):
+    def _row_label_and_bold(page_no, plant, src_unit, multi_plant, sec_label=None):
         """Resolve a (label, bold) pair for a "param" page row.
-        - Page 28: coke-oven naming (see _coke_oven_label).
+        - Page 28's coke-oven sections (everything except Sinter
+          Productivity, which moved here from page 29 but keeps its own
+          SP-1/SP-2/SP-3/dsp_sp_*/machine_productivity naming): coke-oven
+          naming (see _coke_oven_label).
         - "BF_Shop" (shop-wide average across furnaces): bare plant name,
           bold, to stand out from the individual furnace rows above it.
         - "General" (plant-wide, not furnace/shop specific): bare plant name.
         - Otherwise: "<plant> <unit>" as before.
         """
-        if page_no == 28:
+        if page_no == 28 and sec_label != "Sinter Productivity":
             return _coke_oven_label(plant, src_unit), False
         if src_unit == "BF_Shop":
             return plant, True
@@ -2678,11 +2696,25 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         multi_plant = len(available_plants) > 1
         for (sec_label, unit_str, unit_specs) in cfg["sections"]:
             rows = []
+            # "BF-5" doubles as ISP's shop-equivalent unit (its only furnace)
+            # AND as a literal furnace unit for multi-furnace plants (RSP,
+            # BSL). A plant-wise-only section (no other BF-N besides BF-5 in
+            # its unit_specs, e.g. Slag Rate) that lists ("BF-5", ...) purely
+            # to catch ISP's shop figure must not also pick up RSP's/BSL's
+            # actual BF-5 furnace data as a stray extra row. Sections that DO
+            # show a full furnace breakdown (CDI Rate, Hot Blast Temp, Oxygen
+            # Enrichment - which list BF-1/BF-2/BF-4/etc alongside BF-5) are
+            # unaffected, since _other_bf_units_present is True for those.
+            _other_bf_units_present = any(
+                u.startswith("BF-") and u != "BF-5" for (u, _) in unit_specs
+            )
             # Plant order (BSP, DSP, RSP, BSL, ISP - see _PLANT_ORDER) takes
             # priority over unit order, so e.g. RSP-Old/RSP-New stay grouped
             # together in plant position rather than all "-Old" units first.
             for plant in available_plants:
                 for (src_unit, src_key) in unit_specs:
+                    if src_unit == "BF-5" and plant != "ISP" and not _other_bf_units_present:
+                        continue
                     _key_aliases = [src_key] + _COKE_OVEN_PARAM_ALIASES.get(src_key, [])
                     # Include the row if ANY period this page displays has a
                     # value - current month, current-FY months so far, CPLY,
@@ -2706,7 +2738,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                         )
                     if not has_val:
                         continue
-                    label, bold = _row_label_and_bold(page_no, plant, src_unit, multi_plant)
+                    label, bold = _row_label_and_bold(page_no, plant, src_unit, multi_plant, sec_label)
                     if src_key in _DRY_COAL_BATT_LABEL:
                         label = f"{plant} {_DRY_COAL_BATT_LABEL[src_key]}"
                     elif src_key in _SINTER_MACHINE_LABEL:
