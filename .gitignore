@@ -1,6 +1,6 @@
 node_modules/
 frontend/.next/
-*.pdf
+#*.pdf
 
 archive/
 backend/__pycache__/
