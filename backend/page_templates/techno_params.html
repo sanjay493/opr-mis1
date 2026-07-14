@@ -1,14 +1,22 @@
         {% set _is_mill = page.group.startswith('MILL_') %}
         {% set _is_major = not _is_mill %}
         {% set _tsz = '10pt' if _is_major else '9pt' %}
+        {# Page 27 (MAJOR) keeps a fixed layout with hardcoded column widths -
+           its row labels are short plant codes ("BSP", "SAIL"). Pages 28-30
+           share _is_major's header/row structure but their row labels are
+           longer ("BSP SMS-2", "BSP Batt. 9-11", "RSP-Old") and were
+           overflowing the same fixed 7% column - switch those to auto
+           layout (like the mill pages already use) so column 2 sizes to
+           its actual content instead. #}
+        {% set _fixed_layout = page.group == 'MAJOR' %}
         <div style="padding:4px;font-family:'Roboto',sans-serif;font-size:{{ _tsz }};">
           <div style="text-align:center;font-weight:700;font-size:{{ _tsz }};">{{ page.title }}</div>
           {% if page.subtitle %}
           <div style="text-align:center;font-weight:600;font-size:{{ _tsz }};margin-bottom:3px;">{{ page.subtitle }}</div>
           {% endif %}
-          <table style="width:100%;border-collapse:collapse;border:1px solid #000;table-layout:{{ 'auto' if _is_mill else 'fixed' }};font-size:{{ _tsz }};margin-top:2px;">
+          <table style="width:100%;border-collapse:collapse;border:1px solid #000;table-layout:{{ 'fixed' if _fixed_layout else 'auto' }};font-size:{{ _tsz }};margin-top:2px;">
             <colgroup>
-              {% if _is_major %}
+              {% if _fixed_layout %}
               <col style="width:10%"/><col style="width:7%"/>
               {% set ncols = 7 + (page.month_labels | length) %}
               {% for i in range(ncols) %}<col/>{% endfor %}
