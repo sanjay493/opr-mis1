@@ -134,12 +134,12 @@ def _compute_sail_bf(report_month: str, period: str = "month") -> Dict[str, Opti
         plant_vals = [
             (bf_data[p][key], hm.get(p, 0))
             for p in _SAIL_PLANTS
-            if p in bf_data and key in bf_data[p] and hm.get(p, 0) > 0
+            if p in bf_data and bf_data[p].get(key) is not None and hm.get(p, 0) > 0
         ]
         if not plant_vals:
             # Fallback: no HM weights — simple average of available values
             vals = [bf_data[p][key] for p in _SAIL_PLANTS
-                    if p in bf_data and key in bf_data[p]]
+                    if p in bf_data and bf_data[p].get(key) is not None]
             result[key] = round(sum(vals) / len(vals), 4) if vals else None
             continue
 
