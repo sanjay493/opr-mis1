@@ -261,6 +261,27 @@ export default function MajorProductionPage() {
                     </tr>
                   );
                 })}
+                {/* ── Total row: FY sum of monthly values; Till Month shows the
+                       same figure (= cumulative up to the last month with data) ── */}
+                <tr style={{ background: '#fff7ed', borderTop: '2px solid #f59e0b' }}>
+                  <td style={{ ...TD, textAlign: 'left', fontWeight: 700, color: '#9a3412' }}>Total</td>
+                  {ITEMS.map(({ key }, idx) => {
+                    const sumOf = (mon) => {
+                      let s = null;
+                      months.forEach(m => { const v = mon[key][m]; if (v != null) s = (s ?? 0) + v; });
+                      return s != null ? Math.round(s * 1000) / 1000 : null;
+                    };
+                    const totPl = sumOf(monthlyPl), totAc = sumOf(monthly);
+                    return (
+                      <React.Fragment key={key}>
+                        <td style={{ ...TD, fontWeight: 600, color: '#9a3412', borderLeft: idx > 0 ? '2px solid #94a3b8' : TD.border }}>{fmt(totPl)}</td>
+                        <td style={{ ...TD, fontWeight: 700, color: '#9a3412' }}>{fmt(totAc)}</td>
+                        <td style={{ ...TD, fontWeight: 600, color: '#9a3412', backgroundColor: '#ffedd5' }}>{fmt(totPl)}</td>
+                        <td style={{ ...TD, fontWeight: 700, color: '#9a3412', backgroundColor: '#ffedd5' }}>{fmt(totAc)}</td>
+                      </React.Fragment>
+                    );
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>
