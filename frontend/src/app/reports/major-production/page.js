@@ -89,42 +89,55 @@ export default function MajorProductionPage() {
       }),
   ];
 
-  // monthly[itemKey][month] = value ('000 T)
-  const monthly = {};
-  if (plant === SUM_PLANT) {
-    const realPlants = (data?.plants || []).filter(p => p.plant !== 'SAIL');
-    ITEMS.forEach(({ key }) => {
-      monthly[key] = {};
-      months.forEach(m => {
-        let sum = null;
-        realPlants.forEach(p => {
-          const v = p.items?.find(i => i.item_name === key)?.actual?.[m];
-          if (v != null) sum = (sum ?? 0) + v;
+  // series[itemKey][month] = value ('000 T), for 'actual' and 'plan'
+  const buildMonthly = (kind) => {
+    const out = {};
+    if (plant === SUM_PLANT) {
+      const realPlants = (data?.plants || []).filter(p => p.plant !== 'SAIL');
+      ITEMS.forEach(({ key }) => {
+        out[key] = {};
+        months.forEach(m => {
+          let sum = null;
+          realPlants.forEach(p => {
+            const v = p.items?.find(i => i.item_name === key)?.[kind]?.[m];
+            if (v != null) sum = (sum ?? 0) + v;
+          });
+          out[key][m] = sum != null ? Math.round(sum * 1000) / 1000 : null;
         });
-        monthly[key][m] = sum != null ? Math.round(sum * 1000) / 1000 : null;
+      });
+    } else {
+      const plantData = (data?.plants || []).find(p => p.plant === plant);
+      ITEMS.forEach(({ key }) => {
+        const it = plantData?.items?.find(i => i.item_name === key);
+        out[key] = it?.[kind] || {};
+      });
+    }
+    return out;
+  };
+
+  // Cumulative April → month; null for months with no data
+  const buildCumulative = (mon) => {
+    const out = {};
+    ITEMS.forEach(({ key }) => {
+      out[key] = {};
+      let run = null;
+      months.forEach(m => {
+        const v = mon[key][m];
+        if (v != null) run = (run ?? 0) + v;
+        out[key][m] = v != null ? run : null;
       });
     });
-  } else {
-    const plantData = (data?.plants || []).find(p => p.plant === plant);
-    ITEMS.forEach(({ key }) => {
-      const it = plantData?.items?.find(i => i.item_name === key);
-      monthly[key] = it?.actual || {};
-    });
-  }
+    return out;
+  };
 
-  // Cumulative April → month; null until the first month with data
-  const cumulative = {};
-  ITEMS.forEach(({ key }) => {
-    cumulative[key] = {};
-    let run = null;
-    months.forEach(m => {
-      const v = monthly[key][m];
-      if (v != null) run = (run ?? 0) + v;
-      cumulative[key][m] = v != null ? run : null;
-    });
-  });
+  const monthly    = buildMonthly('actual');
+  const monthlyPl  = buildMonthly('plan');
+  const cumulative   = buildCumulative(monthly);
+  const cumulativePl = buildCumulative(monthlyPl);
 
-  const hasAnyData = ITEMS.some(({ key }) => Object.values(monthly[key]).some(v => v != null));
+  const hasAnyData = ITEMS.some(({ key }) =>
+    Object.values(monthly[key]).some(v => v != null) ||
+    Object.values(monthlyPl[key]).some(v => v != null));
 
   const fmt = (v) => {
     if (v == null) return '—';
@@ -201,34 +214,48 @@ export default function MajorProductionPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th rowSpan={2} style={{ ...TH, textAlign: 'left', verticalAlign: 'middle' }}>Month</th>
-                  {ITEMS.map(({ label }) => (
-                    <th key={label} colSpan={2} style={{ ...TH, textAlign: 'center' }}>{label}</th>
+                  <th rowSpan={3} style={{ ...TH, textAlign: 'left', verticalAlign: 'middle' }}>Month</th>
+                  {ITEMS.map(({ label }, idx) => (
+                    <th key={label} colSpan={4} style={{
+                      ...TH, textAlign: 'center',
+                      borderLeft: idx > 0 ? '2px solid #64748b' : TH.border,
+                    }}>{label}</th>
                   ))}
                 </tr>
                 <tr>
-                  {ITEMS.map(({ label }) => (
+                  {ITEMS.map(({ label }, idx) => (
                     <React.Fragment key={label}>
-                      <th style={{ ...TH, backgroundColor: '#2d5382', fontWeight: 600, fontSize: 12, textAlign: 'right' }}>Month</th>
-                      <th style={{ ...TH, backgroundColor: '#2d5382', fontWeight: 600, fontSize: 12, textAlign: 'right' }}>Till Month</th>
+                      <th colSpan={2} style={{ ...TH, backgroundColor: '#2d5382', fontWeight: 600, fontSize: 12, textAlign: 'center', borderLeft: idx > 0 ? '2px solid #64748b' : TH.border }}>Month</th>
+                      <th colSpan={2} style={{ ...TH, backgroundColor: '#2d5382', fontWeight: 600, fontSize: 12, textAlign: 'center' }}>Till Month</th>
+                    </React.Fragment>
+                  ))}
+                </tr>
+                <tr>
+                  {ITEMS.map(({ label }, idx) => (
+                    <React.Fragment key={label}>
+                      <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right', borderLeft: idx > 0 ? '2px solid #64748b' : TH.border }}>Plan</th>
+                      <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>Actual</th>
+                      <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>Plan</th>
+                      <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>Actual</th>
                     </React.Fragment>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {months.map((m, i) => {
-                  const rowHasData = ITEMS.some(({ key }) => monthly[key][m] != null);
+                  const rowHasData = ITEMS.some(({ key }) => monthly[key][m] != null || monthlyPl[key][m] != null);
+                  const cumBg = i % 2 === 0 ? '#f0f7ff' : '#e8f0fe';
                   return (
                     <tr key={m} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', opacity: rowHasData ? 1 : 0.45 }}>
                       <td style={{ ...TD, textAlign: 'left', fontWeight: 600, color: '#202124' }}>
                         {MONTH_LABEL[m.slice(5)]} <span style={{ color: '#9ca3af', fontWeight: 400 }}>{m.slice(0, 4)}</span>
                       </td>
-                      {ITEMS.map(({ key }) => (
+                      {ITEMS.map(({ key }, idx) => (
                         <React.Fragment key={key}>
-                          <td style={TD}>{fmt(monthly[key][m])}</td>
-                          <td style={{ ...TD, fontWeight: 600, backgroundColor: i % 2 === 0 ? '#f0f7ff' : '#e8f0fe' }}>
-                            {fmt(cumulative[key][m])}
-                          </td>
+                          <td style={{ ...TD, color: '#6b7280', borderLeft: idx > 0 ? '2px solid #94a3b8' : TD.border }}>{fmt(monthlyPl[key][m])}</td>
+                          <td style={{ ...TD, fontWeight: 600 }}>{fmt(monthly[key][m])}</td>
+                          <td style={{ ...TD, color: '#6b7280', backgroundColor: cumBg }}>{fmt(cumulativePl[key][m])}</td>
+                          <td style={{ ...TD, fontWeight: 600, backgroundColor: cumBg }}>{fmt(cumulative[key][m])}</td>
                         </React.Fragment>
                       ))}
                     </tr>
@@ -241,7 +268,8 @@ export default function MajorProductionPage() {
 
         {/* ── Footer note ── */}
         <div style={{ marginTop: 14, fontSize: 12, color: '#9ca3af' }}>
-          Values stored in '000 tonnes. "Till Month" = cumulative from April up to that month (months without data are skipped).
+          Values stored in '000 tonnes. Plan = AAP plan (production_plan_table); Actual = uploaded/entered production.
+          "Till Month" = cumulative from April up to that month (months without data are skipped).
           Tonnes view multiplies by 1000. "SAIL (Sum of Plants)" is computed by adding all plants; the "SAIL" option shows
           rounded figures as uploaded from the SAIL flash. Source: production_table (file uploads &amp; production entry).
         </div>
