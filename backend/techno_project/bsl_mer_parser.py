@@ -8,7 +8,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 _FURNACE_RE = re.compile(r'^(\d+|SHOP|SH)\b', re.IGNORECASE)
-_FURNACE_MAP = {"1": "BF-1", "2": "BF-2", "4": "BF-4", "5": "BF-5", "SHOP": "BF_Shop", "SH": "BF_Shop"}
+_FURNACE_MAP = {"1": "BF-1", "2": "BF-2", "3": "BF-3", "4": "BF-4", "5": "BF-5", "SHOP": "BF_Shop", "SH": "BF_Shop"}
 
 
 def _match_unit(furnace_str: str) -> Optional[str]:
@@ -96,7 +96,7 @@ class BslMerParser:
 
         Returns: {"BF-1": {"production_month": 3678, ...}, ...}
         """
-        units = {unit: {} for unit in ["BF-1", "BF-2", "BF-4", "BF-5", "BF_Shop"]}
+        units = {unit: {} for unit in ["BF-1", "BF-2", "BF-3", "BF-4", "BF-5", "BF_Shop"]}
 
         self._extract_production_data(units)
         self._extract_quality_data(units)

@@ -18,9 +18,11 @@ function fmt(v) {
   return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 });
 }
 
-// Items expressed as a daily rate — a yearly sum is meaningless, show average instead
+// Items expressed as a daily rate — a yearly sum is meaningless, show average instead.
+// COB# battery items (e.g. "COB#1-8", "COB#6") are oven-pushing counts in nos/day,
+// same unit family as "Oven Pushing (nos/day)", just without the unit in the name.
 function isRateItem(name) {
-  return /\/day|\/d\)/i.test(name);
+  return /\/day|\/d\)/i.test(name) || /^COB#/i.test(name);
 }
 
 function rowTotal(itemName, values, months) {

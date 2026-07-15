@@ -1099,7 +1099,8 @@ def _extract_corp_ss_preview(wb, report_month: str) -> dict:
 def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     """
     Extract furnace-wise HM production from BSL BF Performance & Analysis
-    Report PDF, for production_table (item_name = BF-1/BF-2/BF-4/BF-5, '000 t).
+    Report PDF, for production_table (item_name = BF-1/BF-2/BF-3/BF-4/BF-5,
+    whichever are actually producing that month — '000 t).
 
     Parsing is delegated to bsl_mer_parser (shared with the /data-entry/techno
     BF-techno upload, which saves the full 14-parameter set to techno_data —

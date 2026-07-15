@@ -8,7 +8,7 @@ production/techno data this app otherwise manages.
 Endpoints:
   GET    /api/todo/list             – list jobs (status=pending|done|all)
   POST   /api/todo/add              – create a job
-  POST   /api/todo/{id}/update      – edit a job's fields
+  POST   /api/todo/{id}/update      – edit a job's fields (incl. remark, any status)
   POST   /api/todo/{id}/complete    – mark done
   POST   /api/todo/{id}/reopen      – mark pending again
   POST   /api/todo/{id}/delete      – hard delete (POST, not DELETE verb —
@@ -46,6 +46,7 @@ class JobUpdateRequest(BaseModel):
     recipient: Optional[str] = None
     due_date: Optional[str] = None
     priority: Optional[str] = None
+    remark: Optional[str] = None
 
 
 def _validate_due_date(due_date: str):
@@ -67,6 +68,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "due_date":     row["due_date"],
         "priority":     row["priority"],
         "status":       row["status"],
+        "remark":       row["remark"],
         "created_at":   row["created_at"],
         "completed_at": row["completed_at"],
     }
@@ -125,7 +127,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
         _validate_priority(body.priority)
 
     fields, values = [], []
-    for col in ("subject", "details", "recipient", "due_date", "priority"):
+    for col in ("subject", "details", "recipient", "due_date", "priority", "remark"):
         val = getattr(body, col)
         if val is not None:
             fields.append(f"{col} = ?")

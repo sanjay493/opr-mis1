@@ -239,8 +239,8 @@ P9_ITEMS = [
     ("SP-2",                 ["sp 2", "sinter plant 2", "sinter ii"],     10),
     ("SP-3",                 ["sp 3", "sinter plant 3", "sinter iii"],    11),
     ("Total Sinter",         ["total sinter", "sinter total"],            12),
-    ("BF-1",                 ["bf 1", "bf1"],                             13),
-    ("BF-5",                 ["bf 5", "bf5"],                             14),
+    ("BF#1",                 ["bf 1", "bf1"],                             13),
+    ("BF#5",                 ["bf 5", "bf5"],                             14),
     # "Tota Hot Metal" is a standing typo in RSP's own template (missing "l") —
     # present in every recent file, not a one-off mistake to work around.
     ("Hot Metal",            ["hot metal", "tota hot metal"],             15),
@@ -586,8 +586,8 @@ MORNING_CELLS = {
     "SP-2":                "E42",
     "SP-3":                "E43",
     "Total Sinter":        "E44",
-    "BF-1":                "K50",
-    "BF-5":                "K52",
+    "BF#1":                "K50",
+    "BF#5":                "K52",
     "Hot Metal":           "K53",
     "Pig Iron":            "E296",
     "SMS-1 CCM-1":         "E92",

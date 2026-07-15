@@ -103,6 +103,23 @@ export default function TodoPage() {
     await callAction(jobId, 'delete');
   };
 
+  const saveRemark = async (jobId, remark) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/todo/${jobId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remark }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.detail || 'Failed to save remark');
+      }
+      await loadJobs();
+    } catch (err) {
+      setError(err.message || 'Failed to save remark');
+    }
+  };
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
@@ -214,7 +231,8 @@ export default function TodoPage() {
 
         {!loading && viewMode === 'list' && (
           <JobList jobs={visibleJobs} onComplete={(id) => callAction(id, 'complete')}
-                   onReopen={(id) => callAction(id, 'reopen')} onDelete={handleDelete} />
+                   onReopen={(id) => callAction(id, 'reopen')} onDelete={handleDelete}
+                   onSaveRemark={saveRemark} />
         )}
 
         {!loading && viewMode === 'calendar' && (
@@ -232,7 +250,7 @@ const inputStyle = {
 };
 
 // ── List view ──────────────────────────────────────────────────────────────
-function JobList({ jobs, onComplete, onReopen, onDelete }) {
+function JobList({ jobs, onComplete, onReopen, onDelete, onSaveRemark }) {
   if (jobs.length === 0) {
     return (
       <div style={{ padding: '30px', textAlign: 'center', color: '#5f6368', fontSize: '11pt', border: '1px solid #dadce0', borderRadius: '8px' }}>
@@ -242,48 +260,97 @@ function JobList({ jobs, onComplete, onReopen, onDelete }) {
   }
   return (
     <div style={{ border: '1px solid #dadce0', borderRadius: '8px', overflow: 'hidden' }}>
-      {jobs.map((job, idx) => {
-        const p = PRIORITY[job.priority] || PRIORITY.medium;
-        const done = job.status === 'done';
-        return (
-          <div key={job.id} style={{
-            display: 'flex', alignItems: 'center', gap: '14px',
-            padding: '12px 16px', borderLeft: `5px solid ${p.border}`,
-            borderBottom: idx < jobs.length - 1 ? '1px solid #f1f3f4' : 'none',
-            backgroundColor: done ? '#f8f9fa' : '#fff', opacity: done ? 0.7 : 1,
-          }}>
-            <input type="checkbox" checked={done} onChange={() => (done ? onReopen(job.id) : onComplete(job.id))}
-              title={done ? 'Mark as pending again' : 'Mark as done'}
-              style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#10b981' }} />
-            <div style={{ width: '90px', flexShrink: 0, fontSize: '9.5pt', fontWeight: 700, color: '#202124' }}>
-              {fmtDate(job.due_date)}
+      {jobs.map((job, idx) => (
+        <JobRow key={job.id} job={job} isLast={idx === jobs.length - 1}
+          onComplete={onComplete} onReopen={onReopen} onDelete={onDelete} onSaveRemark={onSaveRemark} />
+      ))}
+    </div>
+  );
+}
+
+function JobRow({ job, isLast, onComplete, onReopen, onDelete, onSaveRemark }) {
+  const [showRemark, setShowRemark] = useState(Boolean(job.remark));
+  const [draft, setDraft] = useState(job.remark || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setDraft(job.remark || ''); }, [job.remark]);
+
+  const p = PRIORITY[job.priority] || PRIORITY.medium;
+  const done = job.status === 'done';
+  const dirty = draft !== (job.remark || '');
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSaveRemark(job.id, draft);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{
+      borderBottom: isLast ? 'none' : '1px solid #f1f3f4',
+      backgroundColor: done ? '#f8f9fa' : '#fff', opacity: done ? 0.7 : 1,
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '14px',
+        padding: '12px 16px', borderLeft: `5px solid ${p.border}`,
+      }}>
+        <input type="checkbox" checked={done} onChange={() => (done ? onReopen(job.id) : onComplete(job.id))}
+          title={done ? 'Mark as pending again' : 'Mark as done'}
+          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#10b981' }} />
+        <div style={{ width: '90px', flexShrink: 0, fontSize: '9.5pt', fontWeight: 700, color: '#202124' }}>
+          {fmtDate(job.due_date)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '10.5pt', fontWeight: 600, color: '#202124', textDecoration: done ? 'line-through' : 'none' }}>
+            {job.subject}
+          </div>
+          {(job.recipient || job.details) && (
+            <div style={{ fontSize: '9pt', color: '#5f6368', marginTop: '2px' }}>
+              {job.recipient && <span>→ {job.recipient}</span>}
+              {job.recipient && job.details && <span> · </span>}
+              {job.details}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '10.5pt', fontWeight: 600, color: '#202124', textDecoration: done ? 'line-through' : 'none' }}>
-                {job.subject}
-              </div>
-              {(job.recipient || job.details) && (
-                <div style={{ fontSize: '9pt', color: '#5f6368', marginTop: '2px' }}>
-                  {job.recipient && <span>→ {job.recipient}</span>}
-                  {job.recipient && job.details && <span> · </span>}
-                  {job.details}
-                </div>
-              )}
-            </div>
-            <span style={{
-              padding: '3px 10px', borderRadius: '12px', fontSize: '9pt', fontWeight: 700,
-              color: p.text, backgroundColor: p.bg, whiteSpace: 'nowrap',
+          )}
+        </div>
+        <span style={{
+          padding: '3px 10px', borderRadius: '12px', fontSize: '9pt', fontWeight: 700,
+          color: p.text, backgroundColor: p.bg, whiteSpace: 'nowrap',
+        }}>
+          {p.label}
+        </span>
+        <button onClick={() => setShowRemark((v) => !v)} title="Write / view remark" style={{
+          background: showRemark ? '#e8f0fe' : 'none', border: `1px solid ${showRemark ? '#1a73e8' : '#dadce0'}`,
+          color: showRemark ? '#1a73e8' : '#5f6368', cursor: 'pointer', fontSize: '9pt', fontWeight: 600,
+          padding: '4px 10px', borderRadius: '12px', whiteSpace: 'nowrap',
+        }}>
+          📝 Remark{job.remark ? ' ✓' : ''}
+        </button>
+        <button onClick={() => onDelete(job.id)} title="Delete" style={{
+          background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer', fontSize: '13pt', padding: '2px 6px',
+        }}>
+          ✕
+        </button>
+      </div>
+      {showRemark && (
+        <div style={{ padding: '0 16px 14px 44px' }}>
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)}
+            placeholder="Write a remark — progress notes, blockers, or how/when it was completed…"
+            rows={2}
+            style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
+          <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={handleSave} disabled={!dirty || saving} style={{
+              padding: '6px 14px', background: (!dirty || saving) ? '#dadce0' : '#1a73e8', color: '#fff',
+              border: 'none', borderRadius: '6px', fontSize: '9.5pt', fontWeight: 700,
+              cursor: (!dirty || saving) ? 'not-allowed' : 'pointer',
             }}>
-              {p.label}
-            </span>
-            <button onClick={() => onDelete(job.id)} title="Delete" style={{
-              background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer', fontSize: '13pt', padding: '2px 6px',
-            }}>
-              ✕
+              {saving ? 'Saving…' : 'Save Remark'}
             </button>
           </div>
-        );
-      })}
+        </div>
+      )}
     </div>
   );
 }

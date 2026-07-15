@@ -1,9 +1,12 @@
 import os
 import json
+import csv
+import io
+import re
 import sqlite3
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -1719,6 +1722,12 @@ def normalize_item_name(name):
     name = name.replace('BOTTOM_POURING_INGOT', 'Bottom Pouring Ingot')
     # Standardize Semis Steel to Saleable Semis
     name = name.replace('Semis Steel', 'Saleable Semis')
+    # DSP: fold legacy item names into the ones the extractors now emit
+    # (pdf_extractor_dsp.py LABEL_MAP maps "brc bloom"/"brc round" -> these)
+    if name == 'BRC Bloom':
+        name = 'BRC'
+    elif name == 'BRC Round':
+        name = 'Round Production'
     return name.strip()
 
 # Custom sort order for production items — process sequence:
@@ -1771,8 +1780,6 @@ PRODUCTION_ITEM_ORDER = [
     'SMS Total Caster',
     'Billet Caster',
     'Bloom Caster',
-    'BRC Bloom',
-    'BRC Round',
     'Round Production',
     'BRC',
     '200 Blooms',
@@ -1901,20 +1908,207 @@ async def save_production_entry(request: ProductionEntryRequest):
             db.save_production_plan(request.month, request.plant, entry.item_name, entry.plan_value)
             saved.append(f"plan:{entry.item_name}")
 
-    # AUTO-TRIGGER: Recalculate SAIL if production (HM/CS) weights changed
-    # These affect SAIL weighting calculations
-    items_updated = [e.item_name for e in request.entries]
-    weight_items = ["Hot Metal", "Total Crude Steel"]
-    if any(item in weight_items for item in items_updated):
-        try:
-            from page_techno import calculate_and_store_sail_actuals
-            sail_result = calculate_and_store_sail_actuals(request.month)
-            if sail_result['success']:
-                print(f"✓ SAIL actuals recalculated after production update")
-        except Exception as e:
-            print(f"⚠ SAIL recalculation failed: {e}")
+    # SAIL techno actuals are no longer auto-recalculated/stored here on every
+    # production update — calculate_sail_actuals() is used as a read-time
+    # fallback wherever SAIL data is displayed instead (see page_techno.py).
 
     return {"status": "success", "saved": saved, "count": len(saved)}
+
+
+# ── Legacy CSV backfill: SMS-shop items + Total Crude Steel per plant ──────
+# SMS-shop breakdown items have real gaps (mostly pre-2023/2024, before the
+# per-shop rows started being tracked); Total Crude Steel is already fully
+# populated but is included so it can be reviewed/corrected against paper
+# legacy records via the same round-trip.
+LEGACY_SMS_CRUDE_ITEMS = {
+    "ASP":  ["Total Crude Steel"],
+    "BSL":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "Total Crude Steel"],
+    "BSP":  ["SMS-2", "SMS-3", "Total Crude Steel"],
+    "DSP":  ["SMS Total Caster", "Total Crude Steel"],
+    "ISP":  ["SMS CCM-1&2", "SMS CCM-3", "Total Crude Steel"],
+    "RSP":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4", "Total Crude Steel"],
+    "SSP":  ["Total Crude Steel"],
+    "VISL": ["Total Crude Steel"],
+}
+_LEGACY_START_MONTH = "2022-04"
+_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def _legacy_month_range():
+    conn = sqlite3.connect(db.DB_PATH)
+    # GLOB filter guards against non-YYYY-MM junk rows in report_month (seen in
+    # the wild: a literal CSV header row) which would otherwise win MAX() by
+    # sorting after all real dates.
+    row = conn.execute(
+        "SELECT MAX(report_month) FROM production_table WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'"
+    ).fetchone()
+    conn.close()
+    end_month = row[0] if row and row[0] else _LEGACY_START_MONTH
+
+    months = []
+    y, m = (int(x) for x in _LEGACY_START_MONTH.split("-"))
+    ey, em = (int(x) for x in end_month.split("-"))
+    while (y, m) <= (ey, em):
+        months.append(f"{y:04d}-{m:02d}")
+        m += 1
+        if m == 13:
+            m = 1
+            y += 1
+    return months
+
+
+@app.get("/api/legacy-sms-crude/template")
+async def legacy_sms_crude_template():
+    """CSV template for backfilling SMS-shop items and reviewing Total Crude
+    Steel from 2022-04 onward. `value` is pre-filled from production_table
+    where a row already exists (for review/correction) and left blank where
+    it's a genuine gap."""
+    months = _legacy_month_range()
+
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    existing = {}
+    for plant, items in LEGACY_SMS_CRUDE_ITEMS.items():
+        placeholders = ",".join("?" * len(items))
+        rows = cur.execute(
+            f"""SELECT report_month, item_name, month_actual FROM production_table
+                WHERE plant_name = ? AND item_name IN ({placeholders}) AND report_month >= ?""",
+            (plant, *items, _LEGACY_START_MONTH),
+        ).fetchall()
+        for report_month, item_name, value in rows:
+            existing[(plant, item_name, report_month)] = value
+    conn.close()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["report_month", "plant_name", "item_name", "value"])
+    for plant, items in LEGACY_SMS_CRUDE_ITEMS.items():
+        for item in items:
+            for month in months:
+                val = existing.get((plant, item, month))
+                writer.writerow([month, plant, item, "" if val is None else val])
+
+    return PlainTextResponse(
+        buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=legacy_sms_crude_steel_template.csv"},
+    )
+
+
+@app.post("/api/legacy-sms-crude/preview")
+async def legacy_sms_crude_preview(file: UploadFile = File(...)):
+    """Parse an uploaded legacy CSV, validate each row against the
+    plant/item whitelist, and diff it against the current production_table
+    value. Writes nothing — this is preview only."""
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(400, "CSV must be UTF-8 encoded.")
+
+    reader = csv.DictReader(io.StringIO(text))
+    required_cols = {"report_month", "plant_name", "item_name", "value"}
+    if not reader.fieldnames or not required_cols.issubset(set(reader.fieldnames)):
+        raise HTTPException(400, f"CSV must have columns: {', '.join(sorted(required_cols))}")
+
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+
+    rows = []
+    counts = {"new": 0, "changed": 0, "unchanged": 0, "blank": 0, "invalid": 0}
+    for i, raw_row in enumerate(reader, start=2):  # header is row 1
+        report_month = (raw_row.get("report_month") or "").strip()
+        plant_name = (raw_row.get("plant_name") or "").strip().upper()
+        item_name = (raw_row.get("item_name") or "").strip()
+        value_str = (raw_row.get("value") or "").strip()
+
+        reason = None
+        if not _MONTH_RE.match(report_month):
+            reason = f"bad report_month '{report_month}'"
+        elif plant_name not in LEGACY_SMS_CRUDE_ITEMS:
+            reason = f"unknown plant '{plant_name}'"
+        elif item_name not in LEGACY_SMS_CRUDE_ITEMS[plant_name]:
+            reason = f"item '{item_name}' not valid for {plant_name}"
+
+        value = None
+        if reason is None and value_str != "":
+            try:
+                value = float(value_str)
+            except ValueError:
+                reason = f"value '{value_str}' is not a number"
+
+        if reason:
+            rows.append({
+                "row": i, "report_month": report_month, "plant_name": plant_name,
+                "item_name": item_name, "csv_value": value_str, "db_value": None,
+                "status": "invalid", "reason": reason,
+            })
+            counts["invalid"] += 1
+            continue
+
+        db_row = cur.execute(
+            "SELECT month_actual FROM production_table WHERE report_month=? AND plant_name=? AND item_name=?",
+            (report_month, plant_name, item_name),
+        ).fetchone()
+        db_value = db_row[0] if db_row else None
+
+        if value is None:
+            status = "blank"
+        elif db_value is None:
+            status = "new"
+        elif abs(db_value - value) > 1e-6:
+            status = "changed"
+        else:
+            status = "unchanged"
+        counts[status] += 1
+
+        rows.append({
+            "row": i, "report_month": report_month, "plant_name": plant_name,
+            "item_name": item_name, "csv_value": value, "db_value": db_value,
+            "status": status, "reason": None,
+        })
+
+    conn.close()
+    return {"rows": rows, "counts": counts}
+
+
+@app.post("/api/legacy-sms-crude/confirm")
+async def legacy_sms_crude_confirm(payload: dict):
+    """Write rows from a previewed legacy CSV into production_table.
+    Only rows the client marked apply=true AND that were classified 'new'
+    or 'changed' at preview time are written; everything is re-validated
+    against the whitelist server-side rather than trusting the client."""
+    rows = payload.get("rows", [])
+    saved, skipped = 0, 0
+
+    for r in rows:
+        if not r.get("apply") or r.get("status") not in ("new", "changed"):
+            skipped += 1
+            continue
+
+        report_month = str(r.get("report_month", "")).strip()
+        plant_name = str(r.get("plant_name", "")).strip().upper()
+        item_name = str(r.get("item_name", "")).strip()
+
+        if not _MONTH_RE.match(report_month):
+            skipped += 1
+            continue
+        if plant_name not in LEGACY_SMS_CRUDE_ITEMS or item_name not in LEGACY_SMS_CRUDE_ITEMS[plant_name]:
+            skipped += 1
+            continue
+        try:
+            value = float(r.get("csv_value"))
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+
+        db.save_production_actual(report_month, plant_name, item_name, value)
+        saved += 1
+
+    # SAIL techno actuals are a read-time fallback now (see page_techno.py's
+    # calculate_sail_actuals), not auto-recalculated/stored on every import.
+
+    return {"status": "success", "saved": saved, "skipped": skipped}
 
 
 @app.get("/api/conversion-data")

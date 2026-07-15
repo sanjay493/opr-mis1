@@ -379,14 +379,9 @@ async def insert_mcr_techno(payload: dict):
         except Exception as e:
             print(f"Warning: Could not save {rec.get('unit')}: {e}")
 
-    sail_calc_status = "pending"
-    try:
-        from page_techno import calculate_and_store_sail_actuals
-        sail_result = calculate_and_store_sail_actuals(report_month)
-        sail_calc_status = "completed" if sail_result["success"] else "failed"
-    except Exception as e:
-        sail_calc_status = "error"
-        print(f"⚠ Error auto-calculating SAIL: {e}")
+    # SAIL techno actuals are no longer auto-calculated/stored here —
+    # calculate_sail_actuals() (page_techno.py) is used as a read-time
+    # fallback wherever SAIL data is displayed instead.
 
     return {
         "status": "ok",
@@ -397,5 +392,4 @@ async def insert_mcr_techno(payload: dict):
         "units_saved": saved_count,
         "units": [rec["unit"] for rec in records],
         "replaced_existing": bool(conflicts),
-        "sail_actuals": sail_calc_status,
     }

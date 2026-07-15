@@ -213,11 +213,18 @@ def generate_summary_te_table(report_month: str) -> list:
 # Auto-calculate and store SAIL actuals (materialized view)
 # ---------------------------------------------------------------------------
 
-def calculate_and_store_sail_actuals(report_month: str) -> dict:
+def calculate_sail_actuals(report_month: str) -> dict:
     """
-    Calculate SAIL techno actuals from plant-level data and store them.
-    Works with new techno_data JSON schema.
-    Called automatically after plant data extraction/update.
+    Calculate SAIL techno actuals from plant-level data — pure in-memory
+    calculation, no DB write. Works with the techno_data JSON schema.
+
+    This is the read-time fallback: call it wherever SAIL techno data is
+    displayed (report/PDF/preview pages) whenever no row exists in
+    techno_data for plant='SAIL' at that report_month/unit. A DB row (from
+    legacy published data, or a manually-entered figure used when there
+    isn't enough plant data to trust this formula) always takes precedence
+    over this calculated value — see calculate_and_store_sail_actuals()
+    below for the explicit "publish this as the stored SAIL figure" path.
 
     Returns: {success: bool, message: str, sail_data: {...}, calc_details: {...}}
     """
@@ -368,12 +375,9 @@ def calculate_and_store_sail_actuals(report_month: str) -> dict:
                         "unit": ""
                     }
 
-            # Save SAIL actuals
-            db.save_sail_techno_actuals(report_month, "Shop", sail_techno_json, {})
-
             return {
                 "success": True,
-                "message": f"SAIL actuals calculated and stored for {report_month}",
+                "message": f"SAIL actuals calculated for {report_month}",
                 "sail_data": sail_techno_json,
                 "calc_details": {"method": "weighted_average_by_HM", "calculated_at": datetime.now().isoformat()}
             }
@@ -390,6 +394,25 @@ def calculate_and_store_sail_actuals(report_month: str) -> dict:
             "sail_data": {},
             "calc_details": {}
         }
+
+
+def calculate_and_store_sail_actuals(report_month: str) -> dict:
+    """
+    Explicit calculate-and-persist wrapper around calculate_sail_actuals().
+
+    NOT auto-triggered by plant data updates — by default SAIL techno data
+    is never written to techno_data; calculate_sail_actuals() is used as a
+    read-time fallback instead (see its docstring). Call this only when you
+    deliberately want to publish a calculated SAIL figure into the DB (e.g.
+    the /api/techno-calculate-sail-actuals endpoint, invoked explicitly).
+
+    Returns: {success: bool, message: str, sail_data: {...}, calc_details: {...}}
+    """
+    result = calculate_sail_actuals(report_month)
+    if result["success"] and (result["sail_data"].get("month") or result["sail_data"].get("till_month")):
+        db.save_sail_techno_actuals(report_month, "Shop", result["sail_data"], {})
+        result["message"] = f"SAIL actuals calculated and stored for {report_month}"
+    return result
 
 
 # ---------------------------------------------------------------------------

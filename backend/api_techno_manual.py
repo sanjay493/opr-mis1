@@ -235,10 +235,10 @@ async def save_entry(body: SaveRequest):
 
 def _apply_sail_bf(report_month: str, overwrite_manual: bool = False) -> Optional[Dict]:
     """
-    Core SAIL BF_Shop compute-and-save logic — shared by the manual
-    /sail/calculate endpoint and the automatic post-save refresh
-    (auto_refresh_sail_bf below). Uses HM production from production_table
-    as weights.
+    Core SAIL BF_Shop compute-and-save logic, used by the explicit
+    /sail/calculate endpoint (and available for other explicit callers) —
+    NOT auto-triggered by plant saves. Uses HM production from
+    production_table as weights.
 
     By default preserves any manually-entered SAIL values (overwrite_manual=False).
     Set overwrite_manual=True to replace ALL SAIL BF_Shop values with calculated ones.
@@ -275,25 +275,6 @@ def _apply_sail_bf(report_month: str, overwrite_manual: bool = False) -> Optiona
     )
 
     return {"month": calc_month, "till_month": calc_till}
-
-
-def auto_refresh_sail_bf(report_month: str) -> None:
-    """
-    Called by db.upsert_techno_data whenever a contributing plant's BF-shop-
-    equivalent unit (BF_Shop or ISP's BF-5) is saved, so the stored SAIL
-    BF_Shop row never goes stale relative to the plant data it's built from.
-
-    Always overwrites (overwrite_manual=True) rather than the manual
-    endpoint's default preserve-existing behaviour: a "preserve" refresh
-    would never actually update anything once a value already exists for a
-    parameter, which is exactly the staleness this hook exists to eliminate.
-    One consequence: a SAIL BF_Shop value hand-typed via the generic manual-
-    entry form (as opposed to a prior "Apply SAIL" click) will also be
-    overwritten the next time any contributing plant saves — the schema has
-    no per-parameter way to tell "deliberately hand-typed" apart from
-    "previously auto-computed" within the same stored row.
-    """
-    _apply_sail_bf(report_month, overwrite_manual=True)
 
 
 @router.post("/sail/calculate")

@@ -18,7 +18,8 @@ export default function GlobalNavbar() {
         { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },
         { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
         { label: 'IPT Status', link: '/data-entry/ipt', icon: '↔️' },
-        { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' }
+        { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' },
+        { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' }
       ]
     },
     {

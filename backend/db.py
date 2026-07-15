@@ -173,10 +173,14 @@ def init_db():
             due_date     TEXT NOT NULL,          -- YYYY-MM-DD
             priority     TEXT NOT NULL DEFAULT 'medium',  -- 'high' | 'medium' | 'low'
             status       TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'done'
+            remark       TEXT DEFAULT '',        -- progress/completion notes, editable any time
             created_at   TEXT NOT NULL,
             completed_at TEXT
         )
     """)
+    cursor.execute("PRAGMA table_info(todo_jobs)")
+    if "remark" not in [r[1] for r in cursor.fetchall()]:
+        cursor.execute("ALTER TABLE todo_jobs ADD COLUMN remark TEXT DEFAULT ''")
 
     # 11b. Daily work log — free-text record of work completed each day
     cursor.execute("""
@@ -1149,10 +1153,17 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
 
 
 def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
-    """Insert or replace techno data for one plant/unit/month."""
+    """Insert or replace techno data for one plant/unit/month.
+
+    SAIL's BF_Shop rollup is no longer auto-refreshed here on every
+    contributing plant's save (see api_techno_manual.py's _apply_sail_bf) —
+    it's now a read-time fallback used wherever SAIL techno data is
+    displayed, computed only when no row already exists in techno_data for
+    plant='SAIL'. Call the /sail/calculate endpoint explicitly if you
+    deliberately want to publish a calculated SAIL BF_Shop figure into the DB.
+    """
     _raw_upsert_techno_data(plant, report_month, unit, techno_json, source_file)
     _maybe_recompute_derived_params(plant, report_month, unit)
-    _maybe_refresh_sail_bf(plant, report_month, unit)
     _log_techno_save(plant, report_month, unit, techno_json, source_file)
 
 
@@ -1246,30 +1257,12 @@ def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str) ->
 
 
 # unit names that feed the SAIL BF_Shop rollup — 'BF_Shop' for most plants,
-# 'BF-5' for ISP (single-furnace plant, no separate BF_Shop row ever stored)
+# 'BF-5' for ISP (single-furnace plant, no separate BF_Shop row ever stored).
+# No longer auto-refreshed on every contributing plant's save (removed from
+# upsert_techno_data above) — see api_techno_manual.py's _apply_sail_bf for
+# the explicit calculate-and-store path, and page_techno.py's
+# calculate_sail_actuals for the read-time fallback.
 _SAIL_BF_UNITS = ("BF_Shop", "BF-5")
-
-
-def _maybe_refresh_sail_bf(plant: str, report_month: str, unit: str) -> None:
-    """Whenever a contributing plant's BF-shop-equivalent unit is saved,
-    refresh the SAIL BF_Shop rollup so its stored ("Reported") value never
-    drifts out of sync with the plant data it's aggregated from — this is
-    what the techno-verification page's Reported-vs-Calculated deviation on
-    the SAIL row was catching (SAIL's own weighting formula was never wrong;
-    the stored figure was just a stale snapshot from whenever it was last
-    computed). plant='SAIL' is never itself a contributing plant, so this
-    can't recurse. Lazily imports api_techno_manual to avoid a module-load-
-    time circular import (it does `import db`); a refresh failure must never
-    block the save that triggered it."""
-    if unit not in _SAIL_BF_UNITS:
-        return
-    try:
-        import api_techno_manual
-        if plant not in api_techno_manual._SAIL_PLANTS:
-            return
-        api_techno_manual.auto_refresh_sail_bf(report_month)
-    except Exception as e:
-        print(f"[db] SAIL BF_Shop auto-refresh failed for {plant}/{report_month}: {e}")
 
 
 def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techno_json: Dict, source_file: str = ''):
