@@ -13,6 +13,7 @@ export default function GlobalNavbar() {
       submenu: [
         { label: 'Production Entry', link: '/data-entry', icon: '📊' },
         { label: 'Production, Stock & Special Steel Upload', link: '/upload', icon: '📤' },
+        { label: 'Special Steel Manual Entry (ISP)', link: '/data-entry/special-steel', icon: '🔩' },
         { label: 'Opening Stock', link: '/data-entry/opening-stock', icon: '📦' },
         { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
         { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },

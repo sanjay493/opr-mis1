@@ -61,8 +61,8 @@ const BTN = (bg, disabled) => ({
 const TH = { padding: '7px 8px', fontWeight: 600, fontSize: '8pt', color: '#fff', backgroundColor: '#1e3a5f', border: '1px solid #334155' };
 const TD = (bg = '#fff') => ({ padding: '3px 5px', borderBottom: '1px solid #e2e8f0', backgroundColor: bg });
 
-export default function SpecialSteelManualEntry({ apiBase = '' }) {
-  const [plant, setPlant]   = useState('RSP');
+export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = 'RSP' }) {
+  const [plant, setPlant]   = useState(defaultPlant);
   const [month, setMonth]   = useState(defaultMonth());
   const [year, setYear]     = useState(defaultYear());
   const [rows, setRows]     = useState([]);
