@@ -217,6 +217,30 @@ class DspMcrTechnoExtractor:
             for unit, col in _BF_UNIT_COLS:
                 put(unit, key, _clean_val(self._cell(grid, row, col)))
 
+        # Guard: DSP's MCR template has emitted the PELLET IN BURDEN row as an
+        # exact duplicate of SINTER IN BURDEN (e.g. Jun'26 — sinter + pellet
+        # >100% of burden is impossible). Drop pellet values that merely
+        # repeat sinter, and any pellet that would push the burden past 100%.
+        pairs = [(tj["month"].get("sinter_in_burden"), tj["month"].get("pellet_in_burden"))
+                 for tj in units.values() if tj["month"].get("pellet_in_burden") is not None]
+        if pairs and all(s is not None and s == p for s, p in pairs):
+            for tj in units.values():
+                tj["month"].pop("pellet_in_burden", None)
+            self.warnings.append(
+                "PELLET IN BURDEN row duplicates SINTER IN BURDEN for every "
+                "furnace — pellet values dropped (bad source row)."
+            )
+        else:
+            for unit, tj in units.items():
+                s = tj["month"].get("sinter_in_burden")
+                p = tj["month"].get("pellet_in_burden")
+                if s is not None and p is not None and s + p > 100:
+                    tj["month"].pop("pellet_in_burden", None)
+                    self.warnings.append(
+                        f"{unit}: sinter ({s}) + pellet ({p}) exceeds 100% of "
+                        "burden — pellet value dropped."
+                    )
+
         # SMS block — Todate is column G (F=Ondate, G=Todate)
         for label, key in _SMS_PARAMS:
             row = self._find_row(grid, label)

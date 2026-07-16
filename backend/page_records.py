@@ -1,12 +1,15 @@
 """
 Production record statistics — best/2nd-best by calendar month, FY quarter,
-FY half, and top-5 FY / calendar years for Hot Metal, Total Crude Steel,
-Saleable Steel. Used by the /api/production-records endpoint.
+FY half, and top-5 FY / calendar years for the major production items.
+Computed for the SAIL group aggregates ('sail5', 'all8') and for every
+individual plant/unit (keyed by plant code, e.g. 'BSP', 'ASP').
+Used by the /api/production-records endpoint.
 """
 import sqlite3
 import db
 
-ITEMS = ['Hot Metal', 'Total Crude Steel', 'Saleable Steel']
+ITEMS = ['Total Sinter', 'Hot Metal', 'Total Crude Steel',
+         'Saleable Steel', 'Pig Iron', 'Finished Steel']
 SAIL5 = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
 ALL8  = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'VISL']
 
@@ -50,7 +53,8 @@ def generate_records() -> dict:
     cur  = conn.cursor()
     try:
         result = {}
-        for group_name, plants in [('sail5', SAIL5), ('all8', ALL8)]:
+        groups = [('sail5', SAIL5), ('all8', ALL8)] + [(p, [p]) for p in ALL8]
+        for group_name, plants in groups:
             ph  = _ph(plants)
             grp = {
                 'cal_months':  {},
@@ -188,10 +192,20 @@ def generate_records() -> dict:
                 grp['best_quarter'][item] = {
                     'period': (f"{_fy_label(row[1])} {_Q_LABELS[row[0]]}"
                                if row else None),
+                    'qnum':     row[0] if row else None,
+                    'fy_start': row[1] if row else None,
                     'total':  round(row[2], 3) if row else None,
                 }
 
             result[group_name] = grp
+
+        # Latest month with production data — lets the UI flag records that
+        # were set just now (period ending at/near this month).
+        cur.execute("""
+            SELECT MAX(report_month) FROM production_table
+            WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        """)
+        result['latest_month'] = cur.fetchone()[0]
         return result
     finally:
         conn.close()
