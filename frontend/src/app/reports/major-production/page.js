@@ -15,12 +15,18 @@ const ITEMS = [
   { label: 'Finished Steel', key: 'Finished Steel' },
 ];
 
-const PLANT_ORDER = ['SAIL', 'BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'VISL'];
+const PLANTS_MAIN5 = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
+const PLANTS_SSP3  = ['ASP', 'SSP', 'VISL'];
+const PLANTS_ALL8  = [...PLANTS_MAIN5, ...PLANTS_SSP3];
 
-// Computed client-side by summing all plants. The uploaded 'SAIL' rows are
-// rounded whole numbers and miss some items/months, so the sum is the
-// full-precision default.
-const SUM_PLANT = 'SAIL (Sum of Plants)';
+// Conversion agents produce only Finished Steel; their actuals are stored
+// under plant 'SAIL', item 'Conversion' in production_table.
+const CONVERSION    = 'Conversion';
+const GROUP_5PLANTS = 'Group of 5 Plants (BSP, DSP, RSP, BSL, ISP)';
+const GROUP_3SSP    = 'Group of 3 SSPs (ASP, SSP, VISL)';
+const SAIL_TOTAL    = 'SAIL Total (8 Plants + Conversion)';
+
+const PLANT_OPTIONS = [...PLANTS_ALL8, CONVERSION, GROUP_5PLANTS, GROUP_3SSP, SAIL_TOTAL];
 
 const MONTH_LABEL = {
   '04': 'April', '05': 'May', '06': 'June', '07': 'July', '08': 'August',
@@ -40,7 +46,7 @@ const TD = {
 export default function MajorProductionPage() {
   const [fys, setFys]       = useState([]);
   const [fyStart, setFyStart] = useState(null);
-  const [plant, setPlant]   = useState(SUM_PLANT);
+  const [plant, setPlant]   = useState(SAIL_TOTAL);
   const [data, setData]     = useState(null);   // /api/production-fy response
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState(null);
@@ -80,38 +86,43 @@ export default function MajorProductionPage() {
 
   // ── Derived table ──────────────────────────────────────────────────────────
   const months = data?.months || [];
-  const availablePlants = [
-    SUM_PLANT,
-    ...(data?.plants || []).map(p => p.plant)
-      .sort((a, b) => {
-        const ia = PLANT_ORDER.indexOf(a), ib = PLANT_ORDER.indexOf(b);
-        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-      }),
-  ];
+
+  const findItem = (plantName, key) =>
+    (data?.plants || []).find(p => p.plant === plantName)?.items?.find(i => i.item_name === key);
 
   // series[itemKey][month] = value ('000 T), for 'actual' and 'plan'
   const buildMonthly = (kind) => {
     const out = {};
-    if (plant === SUM_PLANT) {
-      const realPlants = (data?.plants || []).filter(p => p.plant !== 'SAIL');
-      ITEMS.forEach(({ key }) => {
-        out[key] = {};
-        months.forEach(m => {
+    const groupPlants =
+      plant === GROUP_5PLANTS ? PLANTS_MAIN5 :
+      plant === GROUP_3SSP    ? PLANTS_SSP3 :
+      plant === SAIL_TOTAL    ? PLANTS_ALL8 :
+      null;
+
+    ITEMS.forEach(({ key }) => {
+      out[key] = {};
+      months.forEach(m => {
+        let value = null;
+        if (plant === CONVERSION) {
+          // Conversion only produces Finished Steel.
+          value = key === 'Finished Steel' ? (findItem('SAIL', 'Conversion')?.[kind]?.[m] ?? null) : null;
+        } else if (groupPlants) {
           let sum = null;
-          realPlants.forEach(p => {
-            const v = p.items?.find(i => i.item_name === key)?.[kind]?.[m];
+          groupPlants.forEach(pn => {
+            const v = findItem(pn, key)?.[kind]?.[m];
             if (v != null) sum = (sum ?? 0) + v;
           });
-          out[key][m] = sum != null ? Math.round(sum * 1000) / 1000 : null;
-        });
+          if (plant === SAIL_TOTAL && key === 'Finished Steel') {
+            const cv = findItem('SAIL', 'Conversion')?.[kind]?.[m];
+            if (cv != null) sum = (sum ?? 0) + cv;
+          }
+          value = sum != null ? Math.round(sum * 1000) / 1000 : null;
+        } else {
+          value = findItem(plant, key)?.[kind]?.[m] ?? null;
+        }
+        out[key][m] = value;
       });
-    } else {
-      const plantData = (data?.plants || []).find(p => p.plant === plant);
-      ITEMS.forEach(({ key }) => {
-        const it = plantData?.items?.find(i => i.item_name === key);
-        out[key] = it?.[kind] || {};
-      });
-    }
+    });
     return out;
   };
 
@@ -139,15 +150,71 @@ export default function MajorProductionPage() {
     Object.values(monthly[key]).some(v => v != null) ||
     Object.values(monthlyPl[key]).some(v => v != null));
 
+  // FY total per item — shared by the Total row and the Excel export.
+  const totals = {};
+  ITEMS.forEach(({ key }) => {
+    const sumOf = (mon) => {
+      let s = null;
+      months.forEach(m => { const v = mon[key][m]; if (v != null) s = (s ?? 0) + v; });
+      return s != null ? Math.round(s * 1000) / 1000 : null;
+    };
+    totals[key] = { plan: sumOf(monthlyPl), actual: sumOf(monthly) };
+  });
+
   const fmt = (v) => {
     if (v == null) return '—';
     if (inTonnes) return Math.round(v * 1000).toLocaleString('en-IN');
     return v.toFixed(3);
   };
 
+  const handlePrint = () => window.print();
+
+  const handleDownloadExcel = () => {
+    const csvVal = (v) => (v == null ? '' : inTonnes ? String(Math.round(v * 1000)) : v.toFixed(3));
+    const escape = (s) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+
+    const header = ['Month'];
+    ITEMS.forEach(({ label }) => {
+      header.push(`${label} Month Plan`, `${label} Month Actual`, `${label} Till Month Plan`, `${label} Till Month Actual`);
+    });
+
+    const rows = months.map(m => {
+      const row = [`${MONTH_LABEL[m.slice(5)]} ${m.slice(0, 4)}`];
+      ITEMS.forEach(({ key }) => {
+        row.push(csvVal(monthlyPl[key][m]), csvVal(monthly[key][m]), csvVal(cumulativePl[key][m]), csvVal(cumulative[key][m]));
+      });
+      return row;
+    });
+
+    const totalRow = ['Total'];
+    ITEMS.forEach(({ key }) => {
+      const { plan, actual } = totals[key];
+      totalRow.push(csvVal(plan), csvVal(actual), csvVal(plan), csvVal(actual));
+    });
+    rows.push(totalRow);
+
+    const csv = [header, ...rows].map(r => r.map(v => escape(String(v))).join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Major_Production_${plant.replace(/[^a-z0-9]+/gi, '_')}_${data?.fy_label || ''}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
-      <GlobalNavbar />
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 10mm; }
+          .mp-table-wrap { overflow: visible !important; border: none !important; }
+        }
+      `}</style>
+
+      <div className="no-print"><GlobalNavbar /></div>
 
       <div style={{ maxWidth: 1500, margin: '0 auto', padding: '22px 20px' }}>
 
@@ -162,14 +229,14 @@ export default function MajorProductionPage() {
         </div>
 
         {/* ── Controls ── */}
-        <div style={{
+        <div className="no-print" style={{
           display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
           marginBottom: 18, border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px',
         }}>
           <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Plant</label>
           <select value={plant} onChange={e => setPlant(e.target.value)}
                   style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
-            {(availablePlants.length ? availablePlants : ['SAIL']).map(p => <option key={p}>{p}</option>)}
+            {PLANT_OPTIONS.map(p => <option key={p}>{p}</option>)}
           </select>
 
           <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginLeft: 10 }}>Financial Year</label>
@@ -192,6 +259,18 @@ export default function MajorProductionPage() {
             ))}
           </div>
 
+          <button onClick={handlePrint} disabled={!data || !hasAnyData} style={{
+            marginLeft: 18, padding: '7px 16px', fontSize: 13, fontWeight: 600, borderRadius: 6,
+            border: '1px solid #d1d5db', cursor: data && hasAnyData ? 'pointer' : 'not-allowed',
+            background: '#fff', color: '#374151', opacity: data && hasAnyData ? 1 : 0.5,
+          }}>🖨 Print</button>
+
+          <button onClick={handleDownloadExcel} disabled={!data || !hasAnyData} style={{
+            padding: '7px 16px', fontSize: 13, fontWeight: 600, borderRadius: 6,
+            border: '1px solid #188038', cursor: data && hasAnyData ? 'pointer' : 'not-allowed',
+            background: '#e6f4ea', color: '#188038', opacity: data && hasAnyData ? 1 : 0.5,
+          }}>⬇ Download Excel</button>
+
           <span style={{ marginLeft: 'auto', fontSize: 13, color: '#5f6368' }}>
             {data?.fy_label || ''}{loading && ' ⟳ loading…'}
           </span>
@@ -210,7 +289,7 @@ export default function MajorProductionPage() {
             No production data for {plant} in {data.fy_label}.
           </div>
         ) : data && (
-          <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 8 }}>
+          <div className="mp-table-wrap" style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -266,12 +345,7 @@ export default function MajorProductionPage() {
                 <tr style={{ background: '#fff7ed', borderTop: '2px solid #f59e0b' }}>
                   <td style={{ ...TD, textAlign: 'left', fontWeight: 700, color: '#9a3412' }}>Total</td>
                   {ITEMS.map(({ key }, idx) => {
-                    const sumOf = (mon) => {
-                      let s = null;
-                      months.forEach(m => { const v = mon[key][m]; if (v != null) s = (s ?? 0) + v; });
-                      return s != null ? Math.round(s * 1000) / 1000 : null;
-                    };
-                    const totPl = sumOf(monthlyPl), totAc = sumOf(monthly);
+                    const { plan: totPl, actual: totAc } = totals[key];
                     return (
                       <React.Fragment key={key}>
                         <td style={{ ...TD, fontWeight: 600, color: '#9a3412', borderLeft: idx > 0 ? '2px solid #94a3b8' : TD.border }}>{fmt(totPl)}</td>
@@ -291,8 +365,10 @@ export default function MajorProductionPage() {
         <div style={{ marginTop: 14, fontSize: 12, color: '#9ca3af' }}>
           Values stored in '000 tonnes. Plan = AAP plan (production_plan_table); Actual = uploaded/entered production.
           "Till Month" = cumulative from April up to that month (months without data are skipped).
-          Tonnes view multiplies by 1000. "SAIL (Sum of Plants)" is computed by adding all plants; the "SAIL" option shows
-          rounded figures as uploaded from the SAIL flash. Source: production_table (file uploads &amp; production entry).
+          Tonnes view multiplies by 1000. Group/Total options are computed client-side: "Group of 5 Plants" sums BSP, DSP,
+          RSP, BSL, ISP; "Group of 3 SSPs" sums ASP, SSP, VISL; "SAIL Total" sums all 8 plants plus Conversion. "Conversion"
+          shows Conversion (SAIL) actuals under Finished Steel only, since Conversion agents only produce Finished Steel.
+          Source: production_table (file uploads &amp; production entry).
         </div>
       </div>
     </div>

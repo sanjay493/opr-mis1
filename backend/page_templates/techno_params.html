@@ -20,6 +20,13 @@
               <col style="width:10%"/><col style="width:7%"/>
               {% set ncols = 7 + (page.month_labels | length) %}
               {% for i in range(ncols) %}<col/>{% endfor %}
+              {% elif _is_major %}
+              {# Pages 28-30: constrain the rowspan'd Parameters column so a
+                 long label (e.g. "Sp. Heat Consmn./t DC (1000 Kcal/Kg DC)")
+                 wraps onto 2-3 lines instead of forcing the column to ~35%
+                 of the table width on one line - see the matching
+                 word-wrap on its <td> below. Plants/data columns stay auto. #}
+              <col style="width:14%"/><col/>
               {% else %}
               <col/><col/>
               {% endif %}
@@ -58,15 +65,15 @@
               {% set _v = 'border-left:1px solid #000;border-right:1px solid #000;' %}
               {% set _bt = 'border-top:1px solid #000;'    if loop.first else '' %}
               {% set _bb = 'border-bottom:1px solid #000;' if loop.last  else '' %}
-              {% set _box = 'border-top:1.5px solid #000;border-bottom:1.5px solid #000;font-weight:700;' if _bold_row else (_bt ~ _bb) %}
+              {% set _box = 'border-top:2px solid #000;border-bottom:2px solid #000;font-weight:700;' if _bold_row else (_bt ~ _bb) %}
               {% set _td = _v ~ _box %}
-              {% set _row_bg = 'background:#dcfce7;' if _sail else '' %}
+              {% set _row_bg = 'background:#dcfce7;' if _sail else ('background:#eef2f6;' if row.bold else '') %}
               <tr style="{{ _row_bg }}">
                 {% if loop.first %}
                 {% if _is_major %}
                 {% set _sec_unit = sec.rows[0].unit if sec.rows else '' %}
                 {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:700;vertical-align:top;">{{ _sec_label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:700;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label }}</td>
                 {% else %}
                 <td rowspan="{{ sec.rows | length }}" style="padding:2px 1.5px;border:1px solid #000;text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label }}</td>
                 {% endif %}

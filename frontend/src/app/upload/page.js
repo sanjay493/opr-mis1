@@ -1290,7 +1290,7 @@ export default function UploadPage() {
                         onChange={(e) => setTechnoPlant(e.target.value)}>
                   <option value="RSP">RSP (Excel — production / general)</option>
                   <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
-                  <option value="ISP">ISP (Morning Report or Final Monthly Excel)</option>
+                  <option value="ISP">ISP (Morning/Final Excel, or Special Steel PNG)</option>
                   <option value="BSP">BSP (Flash PDF / PPC MIS Month-End .xls / Special Steel .xlsx)</option>
                   <option value="BSL">BSL (DPR .xlsx / Corporate SS .xlsx)</option>
                   <option value="ASP">ASP (xlsx or PDF — REP / FL actuals)</option>
@@ -1315,7 +1315,7 @@ export default function UploadPage() {
                 <label>
                   {technoPlant === 'RSP_TECHNO' ? 'RSP Technopara Excel (.xlsx — sheet: page1-8)'
                     : technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
-                    : technoPlant === 'ISP' ? 'ISP Excel File (.xlsx)'
+                    : technoPlant === 'ISP' ? 'ISP File (.xlsx production/techno, or .png Special Steel screenshot)'
                     : technoPlant === 'BSP' ? 'BSP File (flash-*.pdf Monthly / .xls Month-End PPC MIS / .xlsx Techno/OISCO/SS)'
                     : technoPlant === 'BSL' ? 'BSL — DPR Mail (.xlsx) or Techno (.xls) or Corporate SS (.xlsx) or BF Performance PDF (.pdf)'
                     : technoPlant === 'ASP' ? 'ASP file — asp.xlsx  or  REP*.pdf / FL*.pdf'
@@ -1324,7 +1324,7 @@ export default function UploadPage() {
                     : 'RSP Excel File (.xlsx)'}
                 </label>
                 <input id="techno-file-input" type="file" className="form-control"
-                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx,.pdf' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : '.xlsx'}
+                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx,.pdf' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : technoPlant === 'ISP' ? '.xlsx,.png,.jpg,.jpeg' : '.xlsx'}
                        style={{ padding: '4px', fontSize: '0.8rem' }}
                        suppressHydrationWarning
                        onChange={(e) => setTechnoFile(e.target.files[0])} />
@@ -1334,7 +1334,7 @@ export default function UploadPage() {
                     : technoPlant === 'DSP'
                     ? 'OMI PDF: production + special steel + techno. MCR-I .xls: 21 production items. Month auto-detected.'
                     : technoPlant === 'ISP'
-                    ? 'Morning Report (DAILYREPORT1): ~19 items, month from K5. Final Monthly: ~17 items, set month above. Summarized Monthly (B-FCE): ~37 techno params.'
+                    ? 'Morning Report (DAILYREPORT1): ~19 items, month from K5. Final Monthly: ~17 items, set month above. Summarized Monthly (B-FCE): ~37 techno params. Special Steel screenshot (.png/.jpg of the PPC ISP "Order vs Despatch" email): OCR-read PRODUCTS/ORDER/DESPATCH table (WR COIL, TMT COIL, TMT BAR, STRUCTURALS, 150 BLT, 200 BLM), month auto-detected from the title — always review before inserting.'
                     : technoPlant === 'BSP'
                     ? "File type auto-detected from content: flash-<mon>YY.pdf → BSP Flash Monthly PDF — full production (incl. furnace-wise BF#1/4/5/6/7), ~80 techno params (coke yield, sinter, BF, SMS-2/3, all mills, energy) + closing stock, month auto-detected from cover. BSPMIS*.xls → PPC MIS Month-End (sheet S1) — production + opening stock (closing stock saved as next month). BSP MIS 2_coff_print*.xls/.xlsx → furnace-wise Hot Metal production (tentative; BF-1/4/5/6/7/8, column D CUM, month from row 2). BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → techno params (Sheet1, month from A3). OISCO_<Mon>'YY.xlsx → OISCO techno params (month from C3)."
                     : technoPlant === 'BSL'

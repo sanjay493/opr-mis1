@@ -356,8 +356,8 @@ def _gen_bsl(cur, month, cply_month, ytd_months, cply_ytd_months):
 
 
 def _gen_isp(cur, month, cply_month, ytd_months, cply_ytd_months):
-    """ISP: product-wise (WR COIL, TMT COIL, TMT BAR, STRUCTURALS, 150 BLT)."""
-    mills   = ["WR COIL", "TMT COIL", "TMT BAR", "STRUCTURALS", "150 BLT"]
+    """ISP: product-wise (WR COIL, TMT COIL, TMT BAR, STRUCTURALS, 150 BLT, 200 BLM)."""
+    mills   = ["WR COIL", "TMT COIL", "TMT BAR", "STRUCTURALS", "150 BLT", "200 BLM"]
     ph_ytd  = ",".join("?" * len(ytd_months))
     ph_cytd = ",".join("?" * len(cply_ytd_months))
     rows    = []

@@ -11,16 +11,29 @@ export default function GlobalNavbar() {
       label: 'Data Entry',
       icon: '📋',
       submenu: [
-        { label: 'Production Entry', link: '/data-entry', icon: '📊' },
-        { label: 'Production, Stock & Special Steel Upload', link: '/upload', icon: '📤' },
+        { label: 'Data Entry Hub', link: '/data-entry', icon: '📋' },
+
+        { type: 'group', groupLabel: 'Manual Entry' },
+        { label: 'Production Data Entry', link: '/data-entry/production', icon: '📊' },
         { label: 'Special Steel Manual Entry (ISP)', link: '/data-entry/special-steel', icon: '🔩' },
-        { label: 'Opening Stock', link: '/data-entry/opening-stock', icon: '📦' },
-        { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
-        { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },
         { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
+        { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' },
+
+        { type: 'group', groupLabel: 'Uploads & Extraction' },
+        { label: 'Production, Stock & Special Steel Upload', link: '/upload', icon: '📤' },
+        { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },
+
+        { type: 'group', groupLabel: 'Stock & Transfers' },
+        { label: 'Opening Stock', link: '/data-entry/opening-stock', icon: '📦' },
         { label: 'IPT Status', link: '/data-entry/ipt', icon: '↔️' },
+        { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
+
+        { type: 'group', groupLabel: 'Annual Targets' },
         { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' },
-        { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' }
+        { label: 'TE Targets (Pages 28-30)', link: '/data-entry/techno-page-targets', icon: '🎯' },
+
+        { type: 'group', groupLabel: 'Dashboards' },
+        { label: 'Techno Summary', link: '/data-entry/techno-summary', icon: '📈' },
       ]
     },
     {
@@ -168,39 +181,63 @@ export default function GlobalNavbar() {
                     border: '1px solid #dadce0',
                     borderRadius: '8px',
                     overflow: 'hidden',
-                    minWidth: '250px',
+                    overflowY: 'auto',
+                    maxHeight: 'calc(100vh - 100px)',
+                    minWidth: '280px',
                     boxShadow: '0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)'
                   }}
                   >
-                    {item.submenu.map((subitem, subidx) => (
-                      <Link key={subidx} href={subitem.link} style={{ textDecoration: 'none' }}>
-                        <div style={{
-                          padding: '13px 18px',
-                          borderBottom: subidx < item.submenu.length - 1 ? '1px solid #e8eaed' : 'none',
-                          color: '#202124',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          fontSize: '12pt',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'rgba(26, 115, 232, 0.1)';
-                          e.currentTarget.style.color = '#1a73e8';
-                          e.currentTarget.style.paddingLeft = '20px';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.color = '#202124';
-                          e.currentTarget.style.paddingLeft = '16px';
-                        }}
-                        >
-                          <span style={{ fontSize: '14px' }}>{subitem.icon}</span>
-                          {subitem.label}
-                        </div>
-                      </Link>
-                    ))}
+                    {item.submenu.map((subitem, subidx) => {
+                      if (subitem.type === 'group') {
+                        return (
+                          <div key={subidx} style={{
+                            padding: '10px 18px 6px',
+                            marginTop: subidx > 0 ? '4px' : '0',
+                            fontSize: '9.5pt',
+                            fontWeight: 700,
+                            color: '#5f6368',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            backgroundColor: '#eef1f4',
+                            borderTop: subidx > 0 ? '1px solid #e8eaed' : 'none',
+                            borderBottom: '1px solid #e8eaed',
+                          }}>
+                            {subitem.groupLabel}
+                          </div>
+                        );
+                      }
+                      const nextIsGroupOrEnd = subidx === item.submenu.length - 1
+                        || item.submenu[subidx + 1]?.type === 'group';
+                      return (
+                        <Link key={subidx} href={subitem.link} style={{ textDecoration: 'none' }}>
+                          <div style={{
+                            padding: '13px 18px',
+                            borderBottom: nextIsGroupOrEnd ? 'none' : '1px solid #e8eaed',
+                            color: '#202124',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            fontSize: '12pt',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(26, 115, 232, 0.1)';
+                            e.currentTarget.style.color = '#1a73e8';
+                            e.currentTarget.style.paddingLeft = '20px';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = '#202124';
+                            e.currentTarget.style.paddingLeft = '16px';
+                          }}
+                          >
+                            <span style={{ fontSize: '14px' }}>{subitem.icon}</span>
+                            {subitem.label}
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>

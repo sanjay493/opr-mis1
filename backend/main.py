@@ -27,7 +27,7 @@ from page_ipt import generate_ipt
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
                           generate_major_techno_from_db, generate_techno_from_db,
-                          generate_major_techno_verification)
+                          generate_major_techno_verification, generate_techno_target_columns)
 from page_records import generate_records
 
 def _safe_te_table(month):
@@ -823,12 +823,23 @@ async def extract_preview_endpoint(
             finally:
                 pool.shutdown(wait=False)
         elif plant_name == "ISP":
-            import excel_extractor_isp
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                result = await loop.run_in_executor(
-                    pool,
-                    lambda: excel_extractor_isp.extract_preview(tmp_path, month)
-                )
+            _ext = os.path.splitext(file.filename or "")[1].lower()
+            if _ext in (".png", ".jpg", ".jpeg"):
+                # ISP Special Steel arrives as a screenshot of a PPC ISP email,
+                # not Excel — OCR it instead.
+                import image_extractor_isp_special_steel as _isp_img_mod
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    result = await loop.run_in_executor(
+                        pool,
+                        lambda: _isp_img_mod.extract_preview(tmp_path, month)
+                    )
+            else:
+                import excel_extractor_isp
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    result = await loop.run_in_executor(
+                        pool,
+                        lambda: excel_extractor_isp.extract_preview(tmp_path, month)
+                    )
         elif plant_name == "BSP":
             _ext = os.path.splitext(file.filename or "")[1].lower()
             if _ext == ".pdf":
@@ -3297,6 +3308,72 @@ async def save_techno_plant_targets(payload: dict):
         return {"status": "success", "fy": fy, "plants_saved": saved_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/techno-page-targets")
+async def get_techno_page_targets(page: int = Query(...), fy: str = Query(...)):
+    """Target-entry columns for a pages 28-30 param (plant/unit/param_key,
+    discovered from data ever reported at any month) plus each column's
+    currently-saved target for this FY, from techno_plan_fy. No SAIL column
+    — page 27's own targets page (/data-entry/targets) already covers SAIL."""
+    cfg = generate_techno_target_columns(page)
+    if not cfg:
+        raise HTTPException(status_code=400, detail=f"Page {page} has no target-entry schema.")
+
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cache = {}
+    try:
+        for sec in cfg["sections"]:
+            for col in sec["columns"]:
+                key = (col["plant"], col["unit"])
+                if key not in cache:
+                    cur.execute(
+                        "SELECT techno_json FROM techno_plan_fy WHERE plant_name=? AND unit=? AND fy=?",
+                        (*key, fy),
+                    )
+                    row = cur.fetchone()
+                    cache[key] = json.loads(row[0]) if row and row[0] else {}
+                obj = cache[key].get(col["param_key"])
+                col["target"] = obj.get("value") if isinstance(obj, dict) else obj
+    finally:
+        conn.close()
+
+    return {"fy": fy, **cfg}
+
+
+@app.post("/api/techno-page-targets")
+async def save_techno_page_targets(payload: dict):
+    """Save pages 28-30 target-entry values.
+    Payload: { fy, entries: [{plant, unit, param_key, unit_str, value}] }
+    Merges into any existing techno_plan_fy row for (plant, unit, fy) so
+    saving one section's targets never clobbers another section's already-
+    saved values under the same (plant, unit)."""
+    fy = payload.get("fy", "")
+    entries = payload.get("entries", [])
+    if not fy:
+        raise HTTPException(status_code=400, detail="fy is required")
+
+    grouped = {}
+    for e in entries:
+        grouped.setdefault((e["plant"], e["unit"]), []).append(e)
+
+    saved = 0
+    for (plant, unit), rows in grouped.items():
+        existing = db.get_techno_plan(plant, fy, unit)
+        merged = dict(existing.get("data", {}))
+        for e in rows:
+            v = e.get("value")
+            if v is None or v == "":
+                continue
+            try:
+                merged[e["param_key"]] = {"value": float(v), "unit": e.get("unit_str", "")}
+                saved += 1
+            except (TypeError, ValueError):
+                continue
+        db.save_techno_plan(plant, fy, unit, merged, is_user_supplied=True)
+
+    return {"status": "success", "fy": fy, "saved": saved}
 
 
 @app.get("/api/techno-sms-targets")

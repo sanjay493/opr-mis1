@@ -141,6 +141,7 @@ def _fmt_param(v, param_name):
     """Format value based on parameter type. Hide zero values.
     - BF Productivity & Specific Energy Consumption: 2 decimal places
     - Coal to Hot Metal: 3 decimal places
+    - Pellet in Burden: 1 decimal place
     - Rest: 0 decimal places
     Always shows the fixed decimal-place count (no trailing-zero stripping).
     """
@@ -152,10 +153,53 @@ def _fmt_param(v, param_name):
         decimal_places = 2
     elif param_name == "Coal to Hot Metal":
         decimal_places = 3
+    elif param_name == "Pellet in Burden":
+        decimal_places = 1
     else:
         decimal_places = 0
 
     return str(_round_half_up(v, decimal_places))
+
+
+# Pages 28-30 (see _TECHNO_DB_SCHEMA / _make_row) normally auto-scale decimal
+# places by magnitude (see _fmt) rather than by parameter identity — these
+# specific parameters instead always display at a fixed decimal count,
+# regardless of magnitude.
+_FIXED_PRECISION_PARAMS = {
+    # 1 decimal place
+    "Dry Coal Charge/Oven": 1,
+    "Coal Tar Yield":       1,
+    "Crude Benzol Yield":   1,
+    "Amm. Sulphate Yield":  1,
+    "Coke Screen Loss":     1,
+    "Average Blows/Day":    1,
+    "Oxygen Blowing":       1,
+    # 2 decimal places
+    "Sinter Productivity":  2,
+    "LD Slag Usage":        2,
+    "Fe-Mn Consumption":    2,
+    "Fe-Si Consumption":    2,
+    "Si-Mn Consumption":    2,
+    "Oxygen Enrichment":    2,
+    # 0 decimal places (pinned explicitly rather than left to _fmt's
+    # magnitude-based default, which would show decimals for values < 100)
+    "Slag Rate":            0,
+    "Average Heat Weight":  0,
+    "Caster Yield":         0,
+    "CDI Rate":             0,
+    "Hot Blast Temp":       0,
+}
+
+
+def _fmt2(v, param_label=None):
+    """Like _fmt, but a param_label matching _FIXED_PRECISION_PARAMS always
+    displays at that fixed decimal count instead of _fmt's magnitude-based
+    auto-scaling. None/no-match falls back to plain _fmt(v)."""
+    if param_label in _FIXED_PRECISION_PARAMS:
+        if v is None:
+            return ""
+        return str(_round_half_up(v, _FIXED_PRECISION_PARAMS[param_label]))
+    return _fmt(v)
 
 # ---------------------------------------------------------------------------
 # Page 3 summary TE table
@@ -2227,7 +2271,10 @@ _TECHNO_DB_SCHEMA = {
     29: {
         "type": "param",
         "sections": [
-            ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons")]),
+            # RSP/ISP report this under their Sinter Plant unit(s); BSL under
+            # its SMS unit; DSP under "General" with its own key name
+            # (bof_slag_utilisation — BOF/LD are the same converter route).
+            ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons"),          ("SMS", "ld_slag_cons"),          ("General", "bof_slag_utilisation")]),
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
             ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
             ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF-6", "hot_blast_temp"), ("BF-7", "hot_blast_temp"), ("BF-8", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
@@ -2504,6 +2551,203 @@ _TECHNO_DB_SCHEMA = {
 }
 
 
+# Coke Ovens parameters: different plants store the same concept under
+# different snake_case keys (e.g. RSP/ISP historically also wrote
+# "cog_yield"/"dry_coal_charge" alongside the canonical long-form keys
+# below). Canonical key -> alternate keys to also check.
+_COKE_OVEN_PARAM_ALIASES = {
+    "dry_coal_charge_oven":      ["dry_coal_charge", "dry_coal_charge_per_oven"],
+    # BSL's own entry process switched from writing this under
+    # "coke_oven_gas_yield" to "coke_oven_gas" around mid-2025 — since
+    # ~Feb'26 "coke_oven_gas_yield" is always explicitly 0 (not missing) with
+    # the real value under "coke_oven_gas" instead, so the None-only alias
+    # fallback in _gv below is widened to also treat 0 as "no value" here.
+    "coke_oven_gas_yield":       ["cog_yield", "coke_oven_gas"],
+    "crude_tar_yield":           ["coal_tar_yield", "crude_tar"],
+    "crude_benzol_yield":        ["crude_benzol"],
+    "ammonium_sulphate_yield":   ["ammonium_sulphate"],
+    "ash_blend_coal":            ["average_ash_in_coal_blend", "ash_in_coal_blend"],
+    "ash_in_coke":               ["average_ash_in_coke", "ash_in_bf_coke"],
+    "m10_coke":                  ["m10", "coke_m_10"],
+    "m40_coke":                  ["m40"],
+    "csr_coke":                  ["coke_csr"],
+    "cri_coke":                  ["coke_cri"],
+    "vm_blend_coal":             ["average_volatile_matter_in_coal_blend", "vm_in_coal_blend"],
+    # BSL's own extractor stores this under "sp_heat_cons" (Sheet1 F10/G10,
+    # "HEAT CONSUMPN. IN G.CAL/T OF DRY COAL CHARGED", x1000 to kcal/kg DC
+    # - same basis and scale as DSP's "specific_heat_coke_ovens", confirmed
+    # against real data: BSL ~660-685 vs DSP ~668 for the same months).
+    "specific_heat_coke_ovens":  ["sp_heat_cons"],
+}
+
+# BSP's Dry Coal Charge/Oven comes as two battery groups ("3 page Tech"
+# rows 32/33) - key-specific row labels, used for no other parameter.
+_DRY_COAL_BATT_LABEL = {
+    "dry_coal_charge_batt_1_8":  "B#1-8",
+    "dry_coal_charge_batt_9_11": "B#9-11",
+}
+
+# DSP's Sinter Productivity reports two machines under one "Sinter" unit
+# (dsp_sp_1/dsp_sp_2) rather than splitting into separate SP-1/SP-2 units
+# like RSP/BSP - key-specific row labels so the two rows aren't both
+# rendered as the identical "DSP Sinter".
+_SINTER_MACHINE_LABEL = {
+    "dsp_sp_1": "SP-1",
+    "dsp_sp_2": "SP-2",
+}
+
+# BSP's Caster Yield is reported per product under one SMS-2 unit
+# (Conditioned Slab / Conditioned Blooms); DSP's is reported per caster
+# under one SMS unit (Billet / Bloom / BRC) — rather than one overall
+# figure in either case.
+_CASTER_YIELD_LABEL = {
+    "conditioned_slab_caster_yield":  "Cond. Slabs",
+    "conditioned_bloom_caster_yield": "Cond. Blooms",
+    "billet_caster_yield":            "Billet Caster",
+    "bloom_caster_yield":             "Bloom Caster",
+    "brc_caster_yield":               "BRC",
+}
+
+
+def _coke_oven_label(plant, unit):
+    """Page 28 row labels: drop the "COB"/"Coke Ovens" wording entirely -
+    "RSP COB-old" -> "RSP-Old", "BSL Coke Ovens" -> "BSL" (single battery,
+    no suffix needed)."""
+    if unit == "COB-old":
+        return f"{plant}-Old"
+    if unit == "COB-new":
+        return f"{plant}-New"
+    return plant
+
+
+def _row_label_and_bold(page_no, plant, src_unit, multi_plant, sec_label=None):
+    """Resolve a (label, bold) pair for a "param" page row.
+    - Page 28's coke-oven sections (everything except Sinter
+      Productivity, which moved here from page 29 but keeps its own
+      SP-1/SP-2/SP-3/dsp_sp_*/machine_productivity naming): coke-oven
+      naming (see _coke_oven_label).
+    - "BF_Shop" (shop-wide average across furnaces): bare plant name,
+      bold, to stand out from the individual furnace rows above it.
+    - "General" (plant-wide, not furnace/shop specific): bare plant name.
+    - Otherwise: "<plant> <unit>" as before.
+    """
+    if page_no == 28 and sec_label != "Sinter Productivity":
+        return _coke_oven_label(plant, src_unit), False
+    # Slag Rate: every row is already a plant total (BF_Shop, or BF-5 for
+    # ISP's single furnace) — never bold/bordered here, unlike CDI Rate/Hot
+    # Blast Temp/Oxygen Enrichment below, so the section doesn't turn into a
+    # solid block of heavy borders when EVERY row would otherwise qualify.
+    if sec_label == "Slag Rate":
+        return plant, False
+    # ISP has a single furnace (BF-5) with no separate BF_Shop unit, so its
+    # one row is normally shown as "ISP BF-5", unbolded, unlike every other
+    # plant's bold plant-total row. On these furnace-wise sections, show it
+    # as a bold bare "ISP" row instead, matching the other plants' totals
+    # (BF-5's figure already IS ISP's shop-wide figure, there being only one furnace).
+    if plant == "ISP" and src_unit == "BF-5" and sec_label in ("CDI Rate", "Hot Blast Temp", "Oxygen Enrichment"):
+        return plant, True
+    if src_unit == "BF_Shop":
+        return plant, True
+    if src_unit == "General":
+        return plant, False
+    label = f"{plant} {src_unit}" if multi_plant else src_unit
+    return label, False
+
+
+def _resolve_target_column_label(page_no, plant, src_unit, src_key, sec_label):
+    """Friendly column label for a (plant, unit, param_key) target-entry
+    column — same naming _row_label_and_bold/_DRY_COAL_BATT_LABEL/etc. use
+    for the display report, so target-entry columns read the same as the
+    report rows they'll fill in."""
+    label, _ = _row_label_and_bold(page_no, plant, src_unit, True, sec_label)
+    if src_key in _DRY_COAL_BATT_LABEL:
+        return f"{plant} {_DRY_COAL_BATT_LABEL[src_key]}"
+    if src_key in _SINTER_MACHINE_LABEL:
+        return f"{plant} {_SINTER_MACHINE_LABEL[src_key]}"
+    if src_key in _CASTER_YIELD_LABEL:
+        return f"{plant} {_CASTER_YIELD_LABEL[src_key]}"
+    return label
+
+
+def generate_techno_target_columns(page_no: int) -> dict:
+    """For pages 28-30 (type='param' in _TECHNO_DB_SCHEMA): discover every
+    (plant, unit, param_key) column that could take a Target value, from
+    data reported at ANY month (not scoped to a report_month/FY), so a
+    target can be entered before this FY's monthly uploads begin. Used by
+    the annual techno-target data-entry page — no SAIL column, since page
+    27's separate targets page already covers SAIL (see /data-entry/targets)."""
+    cfg = _TECHNO_DB_SCHEMA.get(page_no)
+    if not cfg or cfg["type"] != "param":
+        return {}
+    group, title, subtitle = TECHNO_PAGES[page_no]
+
+    # (plant, unit, key) present anywhere the key or one of its
+    # _COKE_OVEN_PARAM_ALIASES has ever actually been reported — not just
+    # "this plant has ever used this unit for something", which would wrongly
+    # offer e.g. "RSP Conditioned Slabs" just because RSP's SMS-2 unit exists
+    # (RSP never reports conditioned_slab_caster_yield; only BSP does).
+    import json as _json
+    available_keys = set()
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT plant, unit, techno_json FROM techno_data WHERE plant != 'SAIL'")
+        for plant, unit, tj in cur.fetchall():
+            try:
+                data = _json.loads(tj)
+            except (TypeError, ValueError):
+                continue
+            keys = set(data.get("month", {})) | set(data.get("till_month", {}))
+            for key in keys:
+                available_keys.add((plant, unit, key))
+    finally:
+        conn.close()
+
+    _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+    plants_present = sorted(
+        {p for (p, _u, _k) in available_keys},
+        key=lambda p: _PLANT_ORDER.index(p) if p in _PLANT_ORDER else 99,
+    )
+
+    def _key_available(plant, unit, key):
+        if (plant, unit, key) in available_keys:
+            return True
+        return any((plant, unit, alt) in available_keys
+                    for alt in _COKE_OVEN_PARAM_ALIASES.get(key, []))
+
+    sections = []
+    for (sec_label, unit_str, unit_specs) in cfg["sections"]:
+        columns = []
+        seen = set()
+        for plant in plants_present:
+            for (src_unit, src_key) in unit_specs:
+                if not _key_available(plant, src_unit, src_key):
+                    continue
+                col_key = (plant, src_unit, src_key)
+                if col_key in seen:
+                    continue
+                seen.add(col_key)
+                columns.append({
+                    "plant":     plant,
+                    "unit":      src_unit,
+                    "param_key": src_key,
+                    "label":     _resolve_target_column_label(page_no, plant, src_unit, src_key, sec_label),
+                })
+        if columns:
+            # Disambiguate columns that would otherwise share an identical
+            # label (e.g. a plant with a stale/legacy alternate unit for the
+            # same concept) by appending the underlying unit name.
+            label_counts = {}
+            for c in columns:
+                label_counts[c["label"]] = label_counts.get(c["label"], 0) + 1
+            for c in columns:
+                if label_counts[c["label"]] > 1:
+                    c["label"] = f"{c['label']} ({c['unit']})"
+            sections.append({"label": sec_label, "unit": unit_str, "columns": columns})
+
+    return {"page": page_no, "title": title, "subtitle": subtitle, "sections": sections}
+
+
 def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     """
     Generate techno pages 28-35 from techno_data.
@@ -2574,29 +2818,8 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         key=lambda p: _PLANT_ORDER.index(p) if p in _PLANT_ORDER else 99,
     )
 
-    # Coke Ovens parameters: different plants store the same concept under
-    # different snake_case keys (e.g. RSP/ISP historically also wrote
-    # "cog_yield"/"dry_coal_charge" alongside the canonical long-form keys
-    # below). Canonical key -> alternate keys to also check.
-    _COKE_OVEN_PARAM_ALIASES = {
-        "dry_coal_charge_oven":      ["dry_coal_charge", "dry_coal_charge_per_oven"],
-        "coke_oven_gas_yield":       ["cog_yield"],
-        "crude_tar_yield":           ["coal_tar_yield", "crude_tar"],
-        "crude_benzol_yield":        ["crude_benzol"],
-        "ammonium_sulphate_yield":   ["ammonium_sulphate"],
-        "ash_blend_coal":            ["average_ash_in_coal_blend", "ash_in_coal_blend"],
-        "ash_in_coke":               ["average_ash_in_coke", "ash_in_bf_coke"],
-        "m10_coke":                  ["m10", "coke_m_10"],
-        "m40_coke":                  ["m40"],
-        "csr_coke":                  ["coke_csr"],
-        "cri_coke":                  ["coke_cri"],
-        "vm_blend_coal":             ["average_volatile_matter_in_coal_blend", "vm_in_coal_blend"],
-        # BSL's own extractor stores this under "sp_heat_cons" (Sheet1 F10/G10,
-        # "HEAT CONSUMPN. IN G.CAL/T OF DRY COAL CHARGED", x1000 to kcal/kg DC
-        # - same basis and scale as DSP's "specific_heat_coke_ovens", confirmed
-        # against real data: BSL ~660-685 vs DSP ~668 for the same months).
-        "specific_heat_coke_ovens":  ["sp_heat_cons"],
-    }
+    # _COKE_OVEN_PARAM_ALIASES is module-level now (shared with
+    # generate_techno_target_columns).
 
     # TMI (Total Metallic Input) fallback — same aliases/logic page 27's
     # MAJOR page uses: prefer a stored "tmi" value, else compute HM + Scrap.
@@ -2618,10 +2841,16 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         if key == "tmi":
             return _tmi_value(d)
         v = d.get(key)
-        if v is None:
+        # Also fall back on an explicit 0 (not just missing/None) for keys
+        # with aliases: these are all physically-can't-be-zero coke-oven
+        # metrics, and some extractors write a literal 0 instead of omitting
+        # the key once they switch to writing the value under a new alias
+        # (e.g. BSL's "coke_oven_gas_yield" -> "coke_oven_gas" since mid-2025).
+        if (v is None or v == 0) and key in _COKE_OVEN_PARAM_ALIASES:
             for alt in _COKE_OVEN_PARAM_ALIASES.get(key, []):
-                v = d.get(alt)
-                if v is not None:
+                alt_v = d.get(alt)
+                if alt_v is not None and alt_v != 0:
+                    v = alt_v
                     break
         return v
 
@@ -2634,83 +2863,28 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
             return param_obj.get('value')
         return param_obj
 
-    def _make_row(label, unit_str, plant, src_unit, src_key, bold=False):
+    def _make_row(label, unit_str, plant, src_unit, src_key, bold=False, param_label=None):
         target_val = _get_plan_value(plant, src_unit, src_key)
         return {
             "label":    label,
             "unit":     unit_str,
             "bold":     bold,
-            "fy3":      _fmt(_gv(plant, fy3_march,    src_unit, src_key, "till_month")),
-            "fy2":      _fmt(_gv(plant, fy2_march,    src_unit, src_key, "till_month")),
-            "fy1":      _fmt(_gv(plant, fy1_march,    src_unit, src_key, "till_month")),
-            "target":   _fmt(target_val),
-            "months":   [_fmt(_gv(plant, m, src_unit, src_key)) for m in ytd],
-            "cply":     _fmt(_gv(plant, cply_month,   src_unit, src_key)),
-            "cum":      _fmt(_gv(plant, report_month, src_unit, src_key, "till_month")),
-            "cum_cply": _fmt(_gv(plant, cply_month,   src_unit, src_key, "till_month")),
+            "fy3":      _fmt2(_gv(plant, fy3_march,    src_unit, src_key, "till_month"), param_label),
+            "fy2":      _fmt2(_gv(plant, fy2_march,    src_unit, src_key, "till_month"), param_label),
+            "fy1":      _fmt2(_gv(plant, fy1_march,    src_unit, src_key, "till_month"), param_label),
+            "target":   _fmt2(target_val, param_label),
+            "months":   [_fmt2(_gv(plant, m, src_unit, src_key), param_label) for m in ytd],
+            "cply":     _fmt2(_gv(plant, cply_month,   src_unit, src_key), param_label),
+            "cum":      _fmt2(_gv(plant, report_month, src_unit, src_key, "till_month"), param_label),
+            "cum_cply": _fmt2(_gv(plant, cply_month,   src_unit, src_key, "till_month"), param_label),
         }
 
     # Page 34 (BSL mills) display names - techno_data stores these under
     # "CRM 1&2"/"CRM 3", shown here as "CRM"/"CRM-III" per report convention.
     _MILL_UNIT_LABEL = {"CRM 1&2": "CRM", "CRM 3": "CRM-III"}
-
-    # BSP's Dry Coal Charge/Oven comes as two battery groups ("3 page Tech"
-    # rows 32/33) - key-specific row labels, used for no other parameter.
-    _DRY_COAL_BATT_LABEL = {
-        "dry_coal_charge_batt_1_8":  "Batt. 1-8",
-        "dry_coal_charge_batt_9_11": "Batt. 9-11",
-    }
-
-    # DSP's Sinter Productivity reports two machines under one "Sinter" unit
-    # (dsp_sp_1/dsp_sp_2) rather than splitting into separate SP-1/SP-2 units
-    # like RSP/BSP - key-specific row labels so the two rows aren't both
-    # rendered as the identical "DSP Sinter".
-    _SINTER_MACHINE_LABEL = {
-        "dsp_sp_1": "SP-1",
-        "dsp_sp_2": "SP-2",
-    }
-
-    # BSP's Caster Yield is reported per product under one SMS-2 unit
-    # (Conditioned Slab / Conditioned Blooms); DSP's is reported per caster
-    # under one SMS unit (Billet / Bloom / BRC) — rather than one overall
-    # figure in either case.
-    _CASTER_YIELD_LABEL = {
-        "conditioned_slab_caster_yield":  "Conditioned Slabs",
-        "conditioned_bloom_caster_yield": "Conditioned Blooms",
-        "billet_caster_yield":            "Billet Caster",
-        "bloom_caster_yield":             "Bloom Caster",
-        "brc_caster_yield":               "Bloom cum Round Caster",
-    }
-
-    def _coke_oven_label(plant, unit):
-        """Page 28 row labels: drop the "COB"/"Coke Ovens" wording entirely -
-        "RSP COB-old" -> "RSP-Old", "BSL Coke Ovens" -> "BSL" (single battery,
-        no suffix needed)."""
-        if unit == "COB-old":
-            return f"{plant}-Old"
-        if unit == "COB-new":
-            return f"{plant}-New"
-        return plant
-
-    def _row_label_and_bold(page_no, plant, src_unit, multi_plant, sec_label=None):
-        """Resolve a (label, bold) pair for a "param" page row.
-        - Page 28's coke-oven sections (everything except Sinter
-          Productivity, which moved here from page 29 but keeps its own
-          SP-1/SP-2/SP-3/dsp_sp_*/machine_productivity naming): coke-oven
-          naming (see _coke_oven_label).
-        - "BF_Shop" (shop-wide average across furnaces): bare plant name,
-          bold, to stand out from the individual furnace rows above it.
-        - "General" (plant-wide, not furnace/shop specific): bare plant name.
-        - Otherwise: "<plant> <unit>" as before.
-        """
-        if page_no == 28 and sec_label != "Sinter Productivity":
-            return _coke_oven_label(plant, src_unit), False
-        if src_unit == "BF_Shop":
-            return plant, True
-        if src_unit == "General":
-            return plant, False
-        label = f"{plant} {src_unit}" if multi_plant else src_unit
-        return label, False
+    # _DRY_COAL_BATT_LABEL, _SINTER_MACHINE_LABEL, _CASTER_YIELD_LABEL,
+    # _coke_oven_label, _row_label_and_bold are module-level now (shared with
+    # generate_techno_target_columns).
 
     sections = []
 
@@ -2774,10 +2948,10 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                         # per-converter breakdown, e.g. LD Slag Cons) is
                         # shown under both real shops rather than as its own
                         # "BSL SMS" row implying a shop that doesn't exist.
-                        rows.append(_make_row(f"{plant} SMS-I",  unit_str, plant, src_unit, src_key))
-                        rows.append(_make_row(f"{plant} SMS-II", unit_str, plant, src_unit, src_key))
+                        rows.append(_make_row(f"{plant} SMS-I",  unit_str, plant, src_unit, src_key, param_label=sec_label))
+                        rows.append(_make_row(f"{plant} SMS-II", unit_str, plant, src_unit, src_key, param_label=sec_label))
                     else:
-                        rows.append(_make_row(label, unit_str, plant, src_unit, src_key, bold=bold))
+                        rows.append(_make_row(label, unit_str, plant, src_unit, src_key, bold=bold, param_label=sec_label))
             # Stored SAIL values (techno_data plant='SAIL', entered via the
             # techno-manual page) get a bold SAIL row at the end of the
             # section. Unlike plant rows, checked across ALL displayed months
@@ -2790,7 +2964,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
             )
             if sail_spec:
                 rows.append(_make_row("SAIL", unit_str, "SAIL",
-                                      sail_spec[0], sail_spec[1], bold=True))
+                                      sail_spec[0], sail_spec[1], bold=True, param_label=sec_label))
             if rows:
                 sections.append({"label": sec_label, "rows": rows})
 

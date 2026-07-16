@@ -18,7 +18,7 @@ const PLANT_PRODUCTS = {
   DSP: ['CC BILLET', 'CC Bloom', 'CC Round', 'ASP', 'Structurals', 'TMT', 'W & A'],
   RSP: ['PM PLATES', 'New PM PLATES', 'HR PLATES SSL', 'HR COILS (SALE) -HSM-2', 'Pipes, CRNO', 'SPP'],
   BSL: ['HR COIL', 'HR PLATE', 'HR SHEET', 'CR COIL/SHEET/GP GC', 'SLAB'],
-  ISP: ['US Mill', 'Semis', 'WRM', 'Bar Mill'],
+  ISP: ['WR COIL', 'TMT COIL', 'TMT BAR', 'STRUCTURALS', '150 BLT', '200 BLM'],
 };
 
 const uid = () => Math.random().toString(36).slice(2);

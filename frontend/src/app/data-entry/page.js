@@ -39,8 +39,8 @@ export default function DataEntryPage() {
       bgColor: 'rgba(139, 92, 246, 0.1)'
     },
     {
-      title: 'Opening Stock Targets',
-      description: 'Set annual opening stock targets by plant.',
+      title: 'Techno-Economic (TE) Targets',
+      description: 'Set annual techno-economic parameter targets by plant, shown as the Target column on techno reports.',
       icon: '🎯',
       link: '/data-entry/targets',
       color: '#ec4899',

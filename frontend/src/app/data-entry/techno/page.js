@@ -215,17 +215,24 @@ function BulkCumulativeModal({ preview, onConfirm, onClose, busy, confirmLabel, 
 function computeParamDefaults(records) {
   const checked = {};
   const autoProtected = {};
-  for (const rec of records || []) {
-    const monthData = rec.techno_json?.month || {};
-    const dbMonth = rec.db_json?.month || {};
+  // Two or more sheets can legitimately share a unit name (e.g. ISP's
+  // B-FCE, Coal to Hot Metal, and Maj Techno Summ all write "General" for
+  // different, non-overlapping parameters). Each record's own techno_json
+  // only carries the params ITS sheet extracted, but db_json carries the
+  // FULL previously-saved set for that unit — so deciding blank/protect
+  // per record (rather than per unit) means a later record that doesn't
+  // own a given param sees it as "not extracted here" and marks it
+  // auto-protected, clobbering an earlier record that genuinely extracted
+  // it. Merge every record sharing a unit into one combined view first,
+  // then decide blank/protect once per parameter from that merged view.
+  const units = Array.from(new Set((records || []).map((r) => r.unit)));
+  units.forEach((unit) => {
+    const unitRecords = (records || []).filter((r) => r.unit === unit);
+    const monthData = Object.assign({}, ...unitRecords.map((r) => r.techno_json?.month || {}));
+    const dbMonth = Object.assign({}, ...unitRecords.map((r) => r.db_json?.month || {}));
     const allParams = new Set([...Object.keys(monthData), ...Object.keys(dbMonth)]);
-    // Two sheets can legitimately share a unit name (e.g. ISP's B-FCE and
-    // Maj Techno Summ both write "General" for different, non-overlapping
-    // parameters) — start from whatever's already accumulated for this unit
-    // instead of a fresh object, so a second record for the same unit adds
-    // to it rather than wiping out the first one's params.
-    const checkedUnit = checked[rec.unit] || {};
-    const autoUnit = autoProtected[rec.unit] || {};
+    const checkedUnit = {};
+    const autoUnit = {};
     allParams.forEach((p) => {
       const extracted = monthData[p];
       const dbVal = dbMonth[p];
@@ -235,9 +242,9 @@ function computeParamDefaults(records) {
       checkedUnit[p] = !protect;
       autoUnit[p] = protect;
     });
-    checked[rec.unit] = checkedUnit;
-    autoProtected[rec.unit] = autoUnit;
-  }
+    checked[unit] = checkedUnit;
+    autoProtected[unit] = autoUnit;
+  });
   return { checked, autoProtected };
 }
 

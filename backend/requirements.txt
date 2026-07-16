@@ -10,6 +10,8 @@ pandas>=2.0.0
 pdfplumber>=0.9.0
 pypdf>=4.0.0
 schedule>=1.2.0
+Pillow>=10.0.0
+pytesseract>=0.3.10  # also requires the Tesseract OCR binary on the host (e.g. `winget install --id UB-Mannheim.TesseractOCR`) — used only for ISP Special Steel image extraction
 
 # Testing
 pytest>=8.0
