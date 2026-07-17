@@ -43,6 +43,7 @@ export default function GlobalNavbar() {
         { label: 'OMI Generate', link: '/report', icon: '📈' },
         { label: 'Production Highlights', link: '/reports/highlights', icon: '✨' },
         { label: 'Major Production (Month & Till Month)', link: '/reports/major-production', icon: '🏭' },
+        { label: 'New Facilities (Annexure-III)', link: '/reports/new-facilities', icon: '🆕' },
         { label: 'Month-wise Production', link: '/reports/production-fy', icon: '📅' },
         { label: 'Production Records', link: '/records', icon: '📊' },
         { label: 'Plant-wise Techno', link: '/reports/techno-monthly', icon: '⚙️' },
