@@ -50,6 +50,9 @@ function RankBadge({ rank }) {
   );
 }
 
+// Colour of the "2nd best of the same period" companion bar
+const SECOND_BAR_COLOR = '#93c5fd';
+
 // ── Vertical Bar Chart Component ───────────────────────────────────────────
 function VerticalBarChart({ data, item, title, isMonthChart = false }) {
   if (!data || data.length === 0) {
@@ -90,8 +93,13 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
     }}>
       {chartData.map((entry, idx) => {
         const colors = getRankColor(entry.total);
-        const barHeight = (entry.total / maxValue) * 100;
         const rank = getRankForValue(entry.total);
+        const mainBarHeight = (entry.total / maxValue) * 100;
+        // Best bar + (if provided) the 2nd best of the same period beside it
+        const bars = [
+          { total: entry.total, color: colors.bar, labelColor: colors.bar, sub: entry.subLabel, isMain: true },
+          ...(entry.second ? [{ total: entry.second.total, color: SECOND_BAR_COLOR, labelColor: '#3b82f6', sub: entry.second.label, isMain: false }] : []),
+        ];
 
         return (
           <div
@@ -104,75 +112,105 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
               justifyContent: 'flex-end'
             }}
           >
-            {/* Quantity Label (Top) */}
-            <div style={{
-              fontSize: '14px',
-              fontWeight: '900',
-              color: colors.bar,
-              textAlign: 'center',
-              maxWidth: '100%',
-              minHeight: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '20px',
-              transform: 'rotate(-70deg)',
-              transformOrigin: 'center',
-              whiteSpace: 'nowrap',
-              letterSpacing: '0.5px'
-            }}>
-              {fmt(entry.total)}
-            </div>
-
-            {/* Bar Container */}
-            <div style={{
-              width: '100%',
-              height: '180px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              position: 'relative'
-            }}>
-              {/* Bar - Scaled to show difference */}
-              <div
-                style={{
-                  width: '85%',
-                  height: `${Math.max(barHeight, 3)}%`,
-                  backgroundColor: colors.bar,
-                  borderRadius: '4px 4px 0 0',
-                  transition: 'all 0.3s ease',
-                  boxShadow: `0 2px 6px ${colors.bar}50`,
-                  position: 'relative',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'flex-start',
-                  paddingTop: '2px'
-                }}
-              >
-                {/* Rank Badge (Inside Bar if space) */}
-                {barHeight > 25 && rank <= 3 && (
-                  <div style={{
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    color: colors.bar,
+            {/* Bars: value label + bar + own year label, side by side */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '2px', width: '100%' }}>
+              {bars.map((b, bi) => {
+                const barHeight = (b.total / maxValue) * 100;
+                return (
+                  <div key={bi} style={{
+                    flex: 1,
+                    minWidth: 0,
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '9px',
-                    fontWeight: '900',
-                    border: `1px solid ${colors.bar}`,
-                    flexShrink: 0,
-                    marginTop: '2px'
+                    justifyContent: 'flex-end'
                   }}>
-                    {rank}
+                    {/* Quantity Label (Top) */}
+                    <div style={{
+                      fontSize: b.isMain ? '14px' : '11px',
+                      fontWeight: '900',
+                      color: b.labelColor,
+                      textAlign: 'center',
+                      maxWidth: '100%',
+                      minHeight: '18px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '20px',
+                      transform: 'rotate(-70deg)',
+                      transformOrigin: 'center',
+                      whiteSpace: 'nowrap',
+                      letterSpacing: '0.5px'
+                    }}>
+                      {fmt(b.total)}
+                    </div>
+
+                    {/* Bar Container */}
+                    <div style={{
+                      width: '100%',
+                      height: '180px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      position: 'relative'
+                    }}>
+                      {/* Bar - Scaled to show difference */}
+                      <div
+                        style={{
+                          width: '85%',
+                          height: `${Math.max(barHeight, 3)}%`,
+                          backgroundColor: b.color,
+                          borderRadius: '4px 4px 0 0',
+                          transition: 'all 0.3s ease',
+                          boxShadow: `0 2px 6px ${b.color}50`,
+                          position: 'relative',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'flex-start',
+                          paddingTop: '2px'
+                        }}
+                      >
+                        {/* Rank Badge (Inside Bar if space) */}
+                        {b.isMain && barHeight > 25 && rank <= 3 && (
+                          <div style={{
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            color: b.color,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '9px',
+                            fontWeight: '900',
+                            border: `1px solid ${b.color}`,
+                            flexShrink: 0,
+                            marginTop: '2px'
+                          }}>
+                            {rank}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Year / FY this bar belongs to */}
+                    {b.sub != null && (
+                      <div style={{
+                        fontSize: '9px',
+                        fontWeight: '700',
+                        color: b.isMain ? '#374151' : '#6b7280',
+                        whiteSpace: 'nowrap',
+                        marginTop: '2px'
+                      }}>
+                        {b.sub}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
 
             {/* Period Label (Bottom) */}
@@ -193,7 +231,7 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
             </div>
 
             {/* Rank Badge (Outside Bar if needed) */}
-            {barHeight <= 25 && rank <= 3 && (
+            {mainBarHeight <= 25 && rank <= 3 && (
               <div style={{
                 width: '16px',
                 height: '16px',
@@ -403,20 +441,20 @@ function CalMonthTable({ data, item, bestMonth }) {
     { num: 1, name: 'Jan' }, { num: 2, name: 'Feb' }, { num: 3, name: 'Mar' }
   ];
 
-  // Convert to flat array maintaining FY month order
+  // Convert to flat array maintaining FY month order; rows come sorted best
+  // first, so rows[1] (when present) is the 2nd best ever for that month
+  const yearOf = (r) => ((r?.month || '').match(/\d{4}/)?.[0]) || '';
   const chartData = FY_MONTHS
     .map(({ num, name }) => {
       const rows = calData[num] || [];
       if (rows.length === 0) return null;
-      // Extract year from month data if available, otherwise use current year
-      const monthData = rows[0]?.month || '';
-      const yearMatch = monthData.match(/\d{4}/);
-      const year = yearMatch ? yearMatch[0] : new Date().getFullYear();
 
       return {
-        period: `${name} ${year}`,  // e.g., "Apr 2024"
+        period: name,               // e.g., "Apr" — years shown under each bar
         total: rows[0]?.total,
         month: rows[0]?.month,
+        subLabel: yearOf(rows[0]),
+        second: rows[1] ? { total: rows[1].total, label: yearOf(rows[1]) } : null,
         isBest: rows.some(r => r.month === bestMonth)
       };
     })
@@ -429,20 +467,19 @@ function CalMonthTable({ data, item, bestMonth }) {
 function FYQuarterTable({ data, item, bestQuarterPeriod }) {
   const qData = data?.fy_quarters?.[item] || {};
 
-  // Convert to flat array - maintain Q1-Q4 order
+  // Convert to flat array - maintain Q1-Q4 order; rows come sorted best
+  // first, so rows[1] (when present) is the 2nd best ever for that quarter
   const chartData = FY_QUARTERS
     .map((ql, i) => {
       const rows = qData[ql] || [];
       if (rows.length === 0) return null;
       const qMatch = ql.match(/Q\d/)[0];  // Extract "Q1", "Q2", etc.
-      const periodData = rows[0]?.period || '';
-      // Extract FY year from period data if available
-      const fyMatch = periodData.match(/FY[\d]{2,4}/);
-      const fy = fyMatch ? fyMatch[0] : `FY${new Date().getFullYear().toString().slice(-2)}`;
 
       return {
-        period: `${qMatch} ${fy}`,  // e.g., "Q1 FY25"
+        period: qMatch,             // e.g., "Q1" — FY of each bar shown under it
         total: rows[0]?.total,
+        subLabel: rows[0]?.period,  // e.g., "2024-25"
+        second: rows[1] ? { total: rows[1].total, label: rows[1].period } : null,
         isBest: rows.length > 0 && bestQuarterPeriod && rows[0].period === bestQuarterPeriod
       };
     })
@@ -455,19 +492,19 @@ function FYQuarterTable({ data, item, bestQuarterPeriod }) {
 function FYHalfTable({ data, item }) {
   const hData = data?.fy_halves?.[item] || {};
 
-  // Convert to flat array - maintain H1-H2 order
+  // Convert to flat array - maintain H1-H2 order; rows come sorted best
+  // first, so rows[1] (when present) is the 2nd best ever for that half
   const chartData = FY_HALVES
     .map((hl, i) => {
       const rows = hData[hl] || [];
       if (rows.length === 0) return null;
       const hMatch = hl.match(/H\d/)[0];  // Extract "H1", "H2"
-      const periodData = rows[0] || {};
-      // Extract FY year or use current
-      const fy = `FY${new Date().getFullYear().toString().slice(-2)}`;
 
       return {
-        period: `${hMatch} ${fy}`,  // e.g., "H1 FY25"
-        total: rows[0]?.total
+        period: hMatch,             // e.g., "H1" — FY of each bar shown under it
+        total: rows[0]?.total,
+        subLabel: rows[0]?.period,  // e.g., "2024-25"
+        second: rows[1] ? { total: rows[1].total, label: rows[1].period } : null
       };
     })
     .filter(Boolean);
@@ -960,6 +997,10 @@ export default function RecordsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ width: '14px', height: '14px', borderRadius: '2px', background: '#16a34a' }}/>
                   <span>🌿 Others</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '14px', height: '14px', borderRadius: '2px', background: '#93c5fd' }}/>
+                  <span>2nd Best of the period</span>
                 </div>
               </div>
             </div>

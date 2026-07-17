@@ -45,6 +45,7 @@ export default function GlobalNavbar() {
         { label: 'Major Production (Month & Till Month)', link: '/reports/major-production', icon: '🏭' },
         { label: 'New Facilities (Annexure-III)', link: '/reports/new-facilities', icon: '🆕' },
         { label: 'Month-wise Production', link: '/reports/production-fy', icon: '📅' },
+        { label: 'Unit-wise Production Query', link: '/reports/production-query', icon: '🔍' },
         { label: 'Production Records', link: '/records', icon: '📊' },
         { label: 'Plant-wise Techno', link: '/reports/techno-monthly', icon: '⚙️' },
         { label: 'Techno Dashboard', link: '/reports/techno-dashboard', icon: '🔬' },

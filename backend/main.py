@@ -2284,6 +2284,153 @@ async def get_production_fy(fy_start: int = Query(...)):
     }
 
 
+@app.get("/api/production-query-meta")
+async def production_query_meta():
+    """Plants and available months for the ad-hoc production query page
+    (union of production_table and production_plan_table).
+    Response: { plants: [...], months: ["2026-06", ...] } (months newest first)"""
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT plant_name, report_month FROM production_table
+        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+          AND plant_name != 'plant_name'
+        UNION
+        SELECT plant_name, report_month FROM production_plan_table
+        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+          AND plant_name != 'plant_name'
+    """)
+    plants, months = set(), set()
+    for plant, month in cur.fetchall():
+        plants.add(plant)
+        months.add(month)
+    conn.close()
+
+    def plant_key(p):
+        try:
+            return (PRODUCTION_FY_PLANT_ORDER.index(p), p)
+        except ValueError:
+            return (len(PRODUCTION_FY_PLANT_ORDER), p)
+
+    return {
+        "plants": sorted(plants, key=plant_key),
+        "months": sorted(months, reverse=True),
+    }
+
+
+@app.get("/api/production-query-items")
+async def production_query_items(plants: str = Query(...)):
+    """Distinct (normalized) item names per plant, e.g. ?plants=BSP,RSP.
+    Union of actual and plan tables so plan-only units are selectable too.
+    Response: { items: {plant: [item, ...]} } in process order."""
+    plant_list = [p.strip() for p in plants.split(",") if p.strip()]
+    conn = sqlite3.connect(db.DB_PATH)
+    cur = conn.cursor()
+    items = {}
+    for plant in plant_list:
+        names = set()
+        for table in ("production_table", "production_plan_table"):
+            cur.execute(
+                f"SELECT DISTINCT item_name FROM {table} WHERE plant_name = ?",
+                (plant,),
+            )
+            names.update(normalize_item_name(r[0]) for r in cur.fetchall())
+        items[plant] = sorted(names, key=production_item_sort_key)
+    conn.close()
+    return {"items": items}
+
+
+@app.post("/api/production-query")
+async def production_query(payload: dict):
+    """Month-wise plan (APP) and actual for user-selected plant/unit pairs.
+    Payload: {"start": "2026-04", "end": "2026-06",
+              "units": [{"plant": "BSP", "item": "BF#8"}, ...]}
+    Response: {months, series: [{plant, item, plan: {m: v}, actual: {m: v}}]}
+    Values are rounded to 3 decimals."""
+    start = str(payload.get("start", ""))
+    end = str(payload.get("end", ""))
+    if not re.fullmatch(r"\d{4}-\d{2}", start) or not re.fullmatch(r"\d{4}-\d{2}", end):
+        raise HTTPException(status_code=400, detail="start/end must be YYYY-MM")
+    if start > end:
+        start, end = end, start
+
+    months = []
+    y, m = int(start[:4]), int(start[5:7])
+    while f"{y}-{m:02d}" <= end and len(months) < 120:
+        months.append(f"{y}-{m:02d}")
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+
+    wanted = []
+    seen = set()
+    for u in payload.get("units", []):
+        plant = str(u.get("plant", "")).strip()
+        item = normalize_item_name(str(u.get("item", "")).strip())
+        if plant and item and (plant, item) not in seen:
+            seen.add((plant, item))
+            wanted.append((plant, item))
+
+    series = [{"plant": p, "item": i, "plan": {}, "actual": {}} for p, i in wanted]
+    index = {key: s for key, s in zip(wanted, series)}
+    plant_set = sorted({p for p, _ in wanted})
+
+    # Units whose ABP plan has no direct row and is instead split into
+    # sub-items (normalized names). E.g. BSP SMS-3's plan is stored per
+    # caster grade — sum them wherever the unit has no direct plan row.
+    PLAN_SOURCE_ALIASES = {
+        ("BSP", "SMS-3"): {"SMS-3 Billet105", "SMS-3 Billet150", "SMS-3 BLOOM(CV1&2)"},
+    }
+
+    # Stored 'SAIL' rows are 5-integrated-plant totals written by the report
+    # pipeline; months it hasn't written yet (e.g. the latest month) are
+    # computed on the fly by summing the member plants. Stored rows win.
+    SAIL_MEMBER_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+    sail_items = {i for p, i in wanted if p == "SAIL"}
+
+    if wanted and months:
+        query_plants = sorted(set(plant_set) | (set(SAIL_MEMBER_PLANTS) if sail_items else set()))
+        phs_m = ",".join("?" for _ in months)
+        phs_p = ",".join("?" for _ in query_plants)
+        alias_plan = {k: {} for k in index if k in PLAN_SOURCE_ALIASES}
+        member_sums = {"actual": {}, "plan": {}}  # {(item, month): sum over 5 plants}
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+        for table, key in (("production_table", "actual"), ("production_plan_table", "plan")):
+            cur.execute(
+                f"SELECT plant_name, item_name, report_month, month_actual FROM {table} "
+                f"WHERE report_month IN ({phs_m}) AND plant_name IN ({phs_p})",
+                months + query_plants,
+            )
+            for plant, item, month, value in cur.fetchall():
+                norm = normalize_item_name(item)
+                s = index.get((plant, norm))
+                if s is not None and value is not None:
+                    s[key][month] = round(float(value), 3)
+                if key == "plan" and value is not None:
+                    for (t_plant, t_item), srcs in PLAN_SOURCE_ALIASES.items():
+                        if plant == t_plant and norm in srcs and (t_plant, t_item) in alias_plan:
+                            ap = alias_plan[(t_plant, t_item)]
+                            ap[month] = ap.get(month, 0.0) + float(value)
+                if value is not None and norm in sail_items and plant in SAIL_MEMBER_PLANTS:
+                    ms = member_sums[key]
+                    ms[(norm, month)] = ms.get((norm, month), 0.0) + float(value)
+        conn.close()
+        # Fill summed sub-item plans only where no direct plan row exists
+        for target, ap in alias_plan.items():
+            s = index[target]
+            for month, v in ap.items():
+                if month not in s["plan"]:
+                    s["plan"][month] = round(v, 3)
+        # Fill SAIL gaps from member-plant sums (stored SAIL rows take precedence)
+        for item in sail_items:
+            s = index[("SAIL", item)]
+            for key in ("actual", "plan"):
+                for month in months:
+                    if month not in s[key] and (item, month) in member_sums[key]:
+                        s[key][month] = round(member_sums[key][(item, month)], 3)
+
+    return {"months": months, "series": series}
+
+
 @app.get("/api/stock-data")
 async def get_stock_data(plant: str = Query(...), stock_month: str = Query(...)):
     """Return all stock entries for a plant + stock_month."""

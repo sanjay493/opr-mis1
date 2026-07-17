@@ -13,16 +13,15 @@ const SECTIONS = [
   {
     title: 'HOT METAL',
     rows: [
-      { label: 'BSP BF-8',  indent: 0, sources: [{ plant: 'BSP', item: 'BF#8' }] },
-      { label: 'RSP Total', indent: 0, bold: true, sources: [{ plant: 'RSP', item: 'Hot Metal' }] },
-      { label: 'BF-1',      indent: 1, sources: [{ plant: 'RSP', item: 'BF#1' }] },
-      { label: 'BF-5',      indent: 1, sources: [{ plant: 'RSP', item: 'BF#5' }] },
-      { label: 'ISP BF-5',  indent: 0, sources: [{ plant: 'ISP', item: 'Hot Metal' }] },
+      { label: 'BSP BF-8', indent: 0, sources: [{ plant: 'BSP', item: 'BF#8' }] },
+      { label: 'RSP BF-1', indent: 0, sources: [{ plant: 'RSP', item: 'BF#1' }] },
+      { label: 'RSP BF-5', indent: 0, sources: [{ plant: 'RSP', item: 'BF#5' }] },
+      { label: 'ISP BF-5', indent: 0, sources: [{ plant: 'ISP', item: 'Hot Metal' }] },
     ],
-    // Total = BSP BF-8 + RSP Total + ISP BF-5 (the three non-indented rows above)
     totalSources: [
       { plant: 'BSP', item: 'BF#8' },
-      { plant: 'RSP', item: 'Hot Metal' },
+      { plant: 'RSP', item: 'BF#1' },
+      { plant: 'RSP', item: 'BF#5' },
       { plant: 'ISP', item: 'Hot Metal' },
     ],
   },
@@ -33,10 +32,12 @@ const SECTIONS = [
         label: 'BSP SMS-3', indent: 0,
         sources: [{ plant: 'BSP', item: 'SMS-3' }],
         // production_plan_table has no plain 'SMS-3' for BSP; its ABP plan is
-        // split into these three product-grade sub-items instead.
+        // split into these three product-grade sub-items instead. Names must
+        // be the normalized forms served by /api/production-fy (Billet, not
+        // BILLET).
         planSources: [
-          { plant: 'BSP', item: 'SMS-3 BILLET105' },
-          { plant: 'BSP', item: 'SMS-3 BILLET150' },
+          { plant: 'BSP', item: 'SMS-3 Billet105' },
+          { plant: 'BSP', item: 'SMS-3 Billet150' },
           { plant: 'BSP', item: 'SMS-3 BLOOM(CV1&2)' },
         ],
       },
@@ -53,8 +54,8 @@ const SECTIONS = [
       { plant: 'ISP', item: 'Total Crude Steel' },
     ],
     totalPlanSources: [
-      { plant: 'BSP', item: 'SMS-3 BILLET105' },
-      { plant: 'BSP', item: 'SMS-3 BILLET150' },
+      { plant: 'BSP', item: 'SMS-3 Billet105' },
+      { plant: 'BSP', item: 'SMS-3 Billet150' },
       { plant: 'BSP', item: 'SMS-3 BLOOM(CV1&2)' },
       { plant: 'DSP', item: 'BRC' },
       { plant: 'RSP', item: 'SMS-2 CCM-3' },
@@ -65,23 +66,24 @@ const SECTIONS = [
   {
     title: 'SALEABLE STEEL',
     rows: [
-      { label: 'BSP Total', indent: 0, bold: true, sources: [{ plant: 'BSP', item: 'URM_RAIL' }, { plant: 'BSP', item: 'BARS&RODMILL' }] },
-      { label: 'URM',       indent: 1, sources: [{ plant: 'BSP', item: 'URM_RAIL' }] },
-      { label: 'BRM',       indent: 1, sources: [{ plant: 'BSP', item: 'BARS&RODMILL' }] },
+      { label: 'BSP URM',   indent: 0, sources: [{ plant: 'BSP', item: 'URM_RAIL' }] },
+      { label: 'BSP BRM',   indent: 0, sources: [{ plant: 'BSP', item: 'BARS&RODMILL' }] },
       { label: 'DSP MSM',   indent: 0, sources: [{ plant: 'DSP', item: 'MSM' }] },
-      { label: 'RSP Total', indent: 0, bold: true, sources: [{ plant: 'RSP', item: 'HSM-2 Total HR Coil' }, { plant: 'RSP', item: 'NPM Plate' }] },
-      { label: 'New HSM',   indent: 1, sources: [{ plant: 'RSP', item: 'HSM-2 Total HR Coil' }] },
-      { label: 'NPM',       indent: 1, sources: [{ plant: 'RSP', item: 'NPM Plate' }] },
-      { label: 'BSL CRM-III', indent: 0, sources: [{ plant: 'BSL', item: 'CRC(3)' }, { plant: 'BSL', item: 'CRC&S(1&2)' }] },
+      { label: 'RSP HSM-2', indent: 0, sources: [{ plant: 'RSP', item: 'HSM-2 Total HR Coil' }] },
+      { label: 'RSP NPM',   indent: 0, sources: [{ plant: 'RSP', item: 'NPM Plate' }] },
+      // CRM-III alone — CRC&S(1&2) belongs to the old CR mills. (Earlier
+      // Annexure-III exports summed both complexes here: APP showed 1660
+      // instead of CRM-III's 1000, actuals were likewise combined.)
+      { label: 'BSL CRM-III',  indent: 0, sources: [{ plant: 'BSL', item: 'CRC(3)' }] },
       { label: 'ISP WRM',      indent: 0, sources: [{ plant: 'ISP', item: 'WRMILL' }] },
-      { label: 'BAR MILL',     indent: 1, sources: [{ plant: 'ISP', item: 'BARMILL' }] },
-      { label: 'USM',          indent: 1, sources: [{ plant: 'ISP', item: 'USMILL' }] },
+      { label: 'ISP BAR MILL', indent: 0, sources: [{ plant: 'ISP', item: 'BARMILL' }] },
+      { label: 'ISP USM',      indent: 0, sources: [{ plant: 'ISP', item: 'USMILL' }] },
     ],
     totalSources: [
       { plant: 'BSP', item: 'URM_RAIL' }, { plant: 'BSP', item: 'BARS&RODMILL' },
       { plant: 'DSP', item: 'MSM' },
       { plant: 'RSP', item: 'HSM-2 Total HR Coil' }, { plant: 'RSP', item: 'NPM Plate' },
-      { plant: 'BSL', item: 'CRC(3)' }, { plant: 'BSL', item: 'CRC&S(1&2)' },
+      { plant: 'BSL', item: 'CRC(3)' },
       { plant: 'ISP', item: 'WRMILL' }, { plant: 'ISP', item: 'BARMILL' }, { plant: 'ISP', item: 'USMILL' },
     ],
   },
@@ -237,7 +239,8 @@ export default function NewFacilitiesPage() {
 
   const handleDownloadExcel = () => {
     const escape = (s) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-    const csvNum = (v) => (v == null ? '' : String(Math.round(v)));
+    // Excel export keeps up to 3 decimal places (on-screen table stays rounded)
+    const csvNum = (v) => (v == null ? '' : String(Math.round(v * 1000) / 1000));
 
     const header = ['Section', 'Item', 'Annual Capacity', `APP ${fyLabel}`];
     qMonths.forEach(m => {
@@ -282,6 +285,7 @@ export default function NewFacilitiesPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
       <style>{`
+        html, body { overflow-y: auto; overflow-x: hidden; }
         @media print {
           @page { size: A4 landscape; margin: 8mm; }
           .nf-table-wrap { overflow: visible !important; border: none !important; }
@@ -431,8 +435,7 @@ export default function NewFacilitiesPage() {
         <div style={{ marginTop: 14, fontSize: 12, color: '#9ca3af' }}>
           Values in '000 tonnes, rounded. APP = Annual Production Plan (production_plan_table); Actual = uploaded/entered
           production (production_table). %Ful = Actual ÷ APP for that period. Annual Capacity is left blank (not tracked
-          in this application). RSP Total (Hot Metal) and BSL/RSP Saleable Steel "Total" rows are computed sums of their
-          listed sub-items; section "Total" rows sum only the non-indented top-level items so sub-items are not double-counted.
+          in this application). Each row is a single plant unit; section "Total" rows sum all listed units.
           ISP has a single blast furnace, so "ISP BF-5" reflects the plant's total Hot Metal. ISP SMS uses ISP's Total Crude
           Steel (its only SMS shop). Source: Annexure-III.pdf column layout, mapped to this application's production tables.
         </div>

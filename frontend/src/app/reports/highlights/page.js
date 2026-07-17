@@ -274,41 +274,66 @@ export default function HighlightsPage() {
     v == null ? '#6b7280' : v >= good ? '#188038' : v >= good - 5 ? '#b45309' : '#c5221f';
   const growthColor = (v) => (v == null ? '#6b7280' : v >= 0 ? '#188038' : '#c5221f');
 
+  // ── Items shown in the Records table for the selected scope ────────────────
+  // Single-plant scopes report every unit/item of that plant (BF#1, SMS-2,
+  // URM …); group scopes carry only the summary items. Friendly labels are
+  // used where an item matches the summary list, raw names otherwise.
+  const scopeItems = useMemo(() => {
+    const names = records?.[recordScope]?.items;
+    if (!names || !names.length) return ITEMS;
+    return names.map(name => ITEMS.find(i => i.key === name) || { label: name, key: name });
+  }, [records, recordScope]);
+
   // ── Best-ever records for the selected scope ────────────────────────────────
-  // recordRows[itemKey] = { month, quarter, half, fy, cy },
-  // each {period, total, end} | null — end = last month of the record period,
-  // used to flag records that were just set.
+  // recordRows[itemKey] = { month, quarter, half, fy, cy }, each
+  // { best, second } where best/second = {period, total, end} | null —
+  // end = last month of the record period, used to flag fresh records.
+  // The per-period top-2 sets from the API always contain the global #1 and
+  // #2 (the global #2 is either the same period's runner-up or another
+  // period's #1), so sorting their union gives both.
   const recordRows = useMemo(() => {
     const scope = records?.[recordScope];
     if (!scope) return null;
     const qEnd = (fy, q) => (q === 4 ? `${fy + 1}-03` : `${fy}-${String(q * 3 + 3).padStart(2, '0')}`);
+    const top2 = (arr) => {
+      const sorted = [...arr].sort((a, b) => (b.total ?? -Infinity) - (a.total ?? -Infinity));
+      return { best: sorted[0] ?? null, second: sorted[1] ?? null };
+    };
     const out = {};
-    ITEMS.forEach(({ key }) => {
-      const bm = scope.best_month?.[key];
-      const bq = scope.best_quarter?.[key];
-      const halves = scope.fy_halves?.[key] || {};
-      let half = null;
-      Object.entries(halves).forEach(([label, rows]) => {
-        const top = rows?.[0];
-        if (top && (half == null || top.total > half.total)) {
-          half = {
-            period: `${label} ${top.period}`, total: top.total,
-            end: label.startsWith('H1') ? `${top.fy_start}-09` : `${top.fy_start + 1}-03`,
-          };
-        }
-      });
-      const fyTop = scope.top5_fy?.[key]?.[0];
-      const cyTop = scope.top5_cy?.[key]?.[0];
+    scopeItems.forEach(({ key }) => {
+      const monFlat = Object.values(scope.cal_months?.[key] || {}).flat()
+        .filter(r => r.total != null)
+        .map(r => ({ period: r.period, total: r.total, end: r.month }));
+
+      const qFlat = Object.entries(scope.fy_quarters?.[key] || {}).flatMap(([label, rows]) =>
+        (rows || []).filter(r => r.total != null).map(r => ({
+          period: `${r.period} ${label}`,
+          total: r.total,
+          end: qEnd(r.fy_start, Number(label[1])),
+        })));
+
+      const hFlat = Object.entries(scope.fy_halves?.[key] || {}).flatMap(([label, rows]) =>
+        (rows || []).filter(r => r.total != null).map(r => ({
+          period: `${label} ${r.period}`,
+          total: r.total,
+          end: label.startsWith('H1') ? `${r.fy_start}-09` : `${r.fy_start + 1}-03`,
+        })));
+
+      const fyRows = (scope.top5_fy?.[key] || [])
+        .map(r => ({ ...r, end: `${parseInt(r.period, 10) + 1}-03` }));
+      const cyRows = (scope.top5_cy?.[key] || [])
+        .map(r => ({ ...r, end: `${r.period}-12` }));
+
       out[key] = {
-        month:   bm?.total != null ? { period: bm.period, total: bm.total, end: bm.month } : null,
-        quarter: bq?.total != null ? { period: bq.period, total: bq.total, end: qEnd(bq.fy_start, bq.qnum) } : null,
-        half,
-        fy: fyTop ? { ...fyTop, end: `${parseInt(fyTop.period, 10) + 1}-03` } : null,
-        cy: cyTop ? { ...cyTop, end: `${cyTop.period}-12` } : null,
+        month:   top2(monFlat),
+        quarter: top2(qFlat),
+        half:    top2(hFlat),
+        fy:      { best: fyRows[0] ?? null, second: fyRows[1] ?? null },
+        cy:      { best: cyRows[0] ?? null, second: cyRows[1] ?? null },
       };
     });
     return out;
-  }, [records, recordScope]);
+  }, [records, recordScope, scopeItems]);
 
   // Months between the record period's end and the newest data month;
   // a record is "just set" when its period ended within the last 3 months.
@@ -323,8 +348,8 @@ export default function HighlightsPage() {
     return ago != null && ago >= 0 && ago <= 3;
   };
 
-  const recordsHaveData = recordRows && ITEMS.some(({ key }) =>
-    Object.values(recordRows[key]).some(v => v != null));
+  const recordsHaveData = recordRows && scopeItems.some(({ key }) =>
+    Object.values(recordRows[key] || {}).some(v => v?.best != null));
 
   const handlePrint = () => window.print();
 
@@ -592,21 +617,22 @@ export default function HighlightsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ITEMS.map(({ label, key }, i) => (
+                  {scopeItems.map(({ label, key }, i) => (
                     <tr key={key} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                       <td style={{ ...TD, textAlign: 'left', fontWeight: 600, color: '#202124' }}>{label}</td>
                       {['month', 'quarter', 'half', 'fy', 'cy'].map(k => {
-                        const rec = recordRows[key][k];
-                        const fresh = rec != null && isFreshRecord(rec);
+                        const rec = recordRows[key]?.[k];
+                        const best = rec?.best ?? null;
+                        const fresh = best != null && isFreshRecord(best);
                         return (
                           <td key={k} style={{
-                            ...TD, textAlign: 'center',
+                            ...TD, textAlign: 'center', verticalAlign: 'top',
                             ...(fresh && {
                               backgroundColor: '#fef3c7',
                               boxShadow: 'inset 0 0 0 2px #f59e0b',
                             }),
                           }}>
-                            {rec == null ? '—' : (
+                            {best == null ? '—' : (
                               <>
                                 {fresh && (
                                   <span style={{
@@ -615,9 +641,20 @@ export default function HighlightsPage() {
                                     fontSize: 10, fontWeight: 800, verticalAlign: 'middle',
                                   }}>★ NEW</span>
                                 )}
-                                <span style={{ fontWeight: 700, color: fresh ? '#92400e' : '#14532d' }}>{fmt(rec.total)}</span>
+                                <span style={{ fontWeight: 700, color: fresh ? '#92400e' : '#14532d' }}>{fmt(best.total)}</span>
                                 <br />
-                                <span style={{ fontSize: 11, color: fresh ? '#b45309' : '#5f6368' }}>{rec.period}</span>
+                                <span style={{ fontSize: 11, color: fresh ? '#b45309' : '#5f6368' }}>{best.period}</span>
+                                {rec.second != null && (
+                                  <div style={{
+                                    marginTop: 4, paddingTop: 3,
+                                    borderTop: '1px dashed #d1d5db',
+                                    fontSize: 11, color: '#6b7280',
+                                  }}>
+                                    <span style={{ fontWeight: 700 }}>2nd · {fmt(rec.second.total)}</span>
+                                    <br />
+                                    <span style={{ fontSize: 10.5 }}>{rec.second.period}</span>
+                                  </div>
+                                )}
                               </>
                             )}
                           </td>
@@ -633,10 +670,12 @@ export default function HighlightsPage() {
           <div style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
             <span style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4, padding: '0 5px', color: '#92400e', fontWeight: 700 }}>★ NEW</span>{' '}
             marks records just set — the record period ended within the last 3 months of available data.
+            Each cell shows the all-time best and, below it, the 2nd best of that period type.
             All-time records from production_table (since Apr 2000), in '000 tonnes (Tonnes view multiplies by 1000).
             Quarters/halves/years count only complete periods (3, 6 or 12 months of data). Best Half/FY/CY show the
-            highest complete FY half, financial year and calendar year. Groups sum the member plants; Conversion is
-            not included.
+            highest complete FY half, financial year and calendar year. Groups sum the member plants and show the
+            summary items; selecting a single plant/unit lists every item that plant reports (BF, SMS, mills …).
+            Conversion is not included.
           </div>
         </div>
       </div>
