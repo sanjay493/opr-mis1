@@ -1874,6 +1874,11 @@ PRODUCTION_ITEM_ORDER = [
     'Saleable Semis',
     # 10. Saleable steel
     'Saleable Steel',
+    # VISL's per-mill Saleable Steel breakdown
+    'Primary Mill',
+    'Bar Mill',
+    'Forging Press',
+    'Long Forging Machine',
     'Saleable Steel Despatch',
 ]
 

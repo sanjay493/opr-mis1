@@ -214,6 +214,36 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
         prod_rows.append(_row(item, sal_val,
                               f"{cell_tag} · Total Saleable Steel · {col_desc}", sal_label))
 
+    # ── Per-mill Saleable Steel breakdown: Primary Mill / Bar Mill /
+    # Forging Press / Long Forging Machine ─────────────────────────────────
+    # These same mill names also appear earlier in the report's "Production"
+    # section (gross tonnage through the mill, not saleable output) and, in
+    # Format A, in a "WORK IN PROGRESS(WIP)" section — so the rows are only
+    # read from between the "Saleable Steel" section header and the
+    # "Total Saleable Steel" line that closes it, never by label alone.
+    sec_start = None
+    sec_end = len(lines)
+    for i, ln in enumerate(lines):
+        skeleton = _letters_only(ln)
+        if sec_start is None and skeleton == "SALEABLESTEEL":
+            sec_start = i
+        elif sec_start is not None and "TOTALSALEABLESTEEL" in skeleton:
+            sec_end = i
+            break
+    section_lines = lines[sec_start + 1:sec_end] if sec_start is not None else []
+
+    for item_name in ("Primary Mill", "Bar Mill", "Forging Press", "Long Forging Machine"):
+        item_skel = _letters_only(item_name)
+        val, label = None, f"({item_name} line not found in Saleable Steel section)"
+        for ln in section_lines:
+            if _letters_only(ln).startswith(item_skel):
+                nums = _nums_from_line(_strip_letters(ln))
+                val = _extract_value(nums, fmt, item_name)
+                label = ln.strip()[:80]
+                break
+        prod_rows.append(_row(item_name, val,
+                              f"{cell_tag} · Saleable Steel · {item_name} · {col_desc}", label))
+
     # ── Saleable Steel Despatch: "Sales (AS+MS)" row ───────────────────────────
     desp_val   = None
     desp_label = "(Sales (AS+MS) line not found)"
