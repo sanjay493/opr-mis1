@@ -424,36 +424,50 @@ _PLANT_TITLES = {
 
 # ── per-page density tiering ──────────────────────────────────────────────────
 #
-# Plants share one table layout, but not one row count or label length: RSP
-# runs ~66 grade rows, BSP has far fewer rows yet its combined-grade labels
-# ("TLT/MMn/45C8/Cr5 Grade(Billets)+(SBS-Slab)") are the longest of any plant,
-# while BSL/ISP are short on both counts. A single compact/normal switch either
-# over-shrinks the roomy pages or still overflows the dense ones, so pick a
-# tier from BOTH signals — whichever dimension is more demanding wins, since
-# each elif only qualifies when neither threshold is exceeded.
+# Row count alone decides the tier — it's what actually governs whether the
+# table fits one page vertically. Label length no longer gates the tier
+# (BSP has only 36 rows, same ballpark as BSL's 42, but one combined-grade
+# label — "TLT/MMn/45C8/Cr5 Grade(Billets)+(SBS-Slab)", 42 chars — used to
+# force BSP down to RSP's tightest tier despite BSP using barely half the
+# page). Instead, label length only tunes split_label's tail_scale: how hard
+# the shrunk remainder of a split label must shrink to still fit the Grade
+# column at THIS tier's font size. _TAIL_BUDGET is calibrated against the
+# known-working case (tightest tier, 6.7pt, BSP's 42-char label, tail_scale
+# 0.82) so plants that don't have an outlier label keep the default 0.82.
 _DENSITY_TIERS = [
-    # (max_rows, max_label_len, table_fs, label_fs, pad,          line_height, split_at)
-    (15,         20,            "10.6pt", "10.3pt", "3.4px 5.5px","1.3",       999),
-    (45,         26,            "9.1pt",  "8.7pt",  "2.4px 5px",  "1.22",      26),
-    (60,         36,            "7.8pt",  "7.3pt",  "1.6px 3.3px","1.16",      22),
+    # (max_rows, table_fs, label_fs, pad,           line_height, split_at)
+    (15,         "10.6pt", "10.3pt", "3.4px 5.5px", "1.3",       999),
+    (45,         "9.1pt",  "8.7pt",  "2.4px 5px",   "1.22",      26),
+    (60,         "7.8pt",  "7.3pt",  "1.6px 3.3px", "1.16",      22),
 ]
 _DENSITY_TIGHTEST = ("7.1pt", "6.7pt", "1.2px 2.6px", "1.12", 18)
+_TAIL_SCALE_DEFAULT = 0.82
+_TAIL_BUDGET = 190  # tuned against real rendered output, not pure font-ratio math —
+# padding also grows a tier's cell width eats into, which a linear font-size
+# ratio alone doesn't capture
+
+
+def _tail_scale(label_fs: str, max_label_len: int) -> float:
+    if not max_label_len:
+        return _TAIL_SCALE_DEFAULT
+    fs = float(label_fs.rstrip("pt"))
+    return round(min(_TAIL_SCALE_DEFAULT, _TAIL_BUDGET / (fs * max_label_len)), 2)
 
 
 def _compute_density(rows: list) -> dict:
-    """Return table_fs/label_fs/pad/lh/split_at for this page's actual rows."""
+    """Return table_fs/label_fs/pad/lh/split_at/tail_scale for this page's rows."""
     labels = [r.get("label", "") for r in rows if r.get("type") != "separator"]
     nrows = len(labels)
     max_label_len = max((len(l) for l in labels), default=0)
 
-    for max_rows, max_len, table_fs, label_fs, pad, lh, split_at in _DENSITY_TIERS:
-        if nrows <= max_rows and max_label_len <= max_len:
-            return {"table_fs": table_fs, "label_fs": label_fs, "pad": pad,
-                    "lh": lh, "split_at": split_at}
+    for max_rows, table_fs, label_fs, pad, lh, split_at in _DENSITY_TIERS:
+        if nrows <= max_rows:
+            return {"table_fs": table_fs, "label_fs": label_fs, "pad": pad, "lh": lh,
+                    "split_at": split_at, "tail_scale": _tail_scale(label_fs, max_label_len)}
 
     table_fs, label_fs, pad, lh, split_at = _DENSITY_TIGHTEST
-    return {"table_fs": table_fs, "label_fs": label_fs, "pad": pad,
-            "lh": lh, "split_at": split_at}
+    return {"table_fs": table_fs, "label_fs": label_fs, "pad": pad, "lh": lh,
+            "split_at": split_at, "tail_scale": _tail_scale(label_fs, max_label_len)}
 
 
 # ── product-column rowspan helper ────────────────────────────────────────────

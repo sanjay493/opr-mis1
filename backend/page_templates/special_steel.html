@@ -19,7 +19,7 @@
 
           {% set d = page.isp %}
           {% set pad = d.density.pad %}{% set lfs = d.density.label_fs %}
-          {% set tfs = d.density.table_fs %}{% set lh = d.density.lh %}{% set split_at = d.density.split_at %}
+          {% set tfs = d.density.table_fs %}{% set lh = d.density.lh %}{% set split_at = d.density.split_at %}{% set tail_scale = d.density.tail_scale %}
           <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ d.title }}</div>
           <div style="text-align:right;font-size:6.8pt;margin-bottom:1px;">Unit: Tonnes</div>
           <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
@@ -55,7 +55,7 @@
               <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
               {% elif row.type == 'grand-total' %}
               <tr style="background:#dcfce7;font-weight:700;">
-                <td style="padding:1px 1px;border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:1px 1px;border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
@@ -69,7 +69,7 @@
               </tr>
               {% else %}
               <tr>
-                <td style="padding:{{ pad }};padding-left:10px;border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};padding-left:10px;border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
@@ -113,7 +113,7 @@
 
           {% set d = page.sail %}
           {% set pad = d.density.pad %}{% set lfs = d.density.label_fs %}
-          {% set tfs = d.density.table_fs %}{% set lh = d.density.lh %}{% set split_at = d.density.split_at %}
+          {% set tfs = d.density.table_fs %}{% set lh = d.density.lh %}{% set split_at = d.density.split_at %}{% set tail_scale = d.density.tail_scale %}
           <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ d.title }}</div>
           <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:2px;">{{ d.month_label }}</div>
           <div style="text-align:right;font-size:6.8pt;margin-bottom:1px;">Unit: Tonnes</div>
@@ -152,7 +152,7 @@
             {% set b1 = ('border:1px solid ' ~ vb ~ ';') if is_tot else ('border-left:1px solid ' ~ vb ~ ';border-right:1px solid ' ~ vb ~ ';') %}
             {% set b2 = ('border:1px solid ' ~ vbc ~ ';') if is_tot else ('border-left:1px solid ' ~ vbc ~ ';border-right:1px solid ' ~ vbc ~ ';') %}
             <tr style="{{ rowbg }}font-weight:{{ '700' if is_tot else '400' }};">
-              <td style="padding:{{ pad }};{{ b1 }}text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.abp }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.orders }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.actual }}</td>
@@ -201,7 +201,7 @@
         {% else %}
         {# ── existing sail_summary / plant_detail rendering ── #}
         {% set pad = page.density.pad %}{% set lfs = page.density.label_fs %}
-        {% set tfs = page.density.table_fs %}{% set lh = page.density.lh %}{% set split_at = page.density.split_at %}
+        {% set tfs = page.density.table_fs %}{% set lh = page.density.lh %}{% set split_at = page.density.split_at %}{% set tail_scale = page.density.tail_scale %}
         <div style="padding:2px 6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
           <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ page.title }}</div>
           {% if page.variant == 'sail_summary' %}
@@ -246,7 +246,7 @@
             {% set b1 = ('border:1px solid ' ~ vb ~ ';') if is_tot else ('border-left:1px solid ' ~ vb ~ ';border-right:1px solid ' ~ vb ~ ';') %}
             {% set b2 = ('border:1px solid ' ~ vbc ~ ';') if is_tot else ('border-left:1px solid ' ~ vbc ~ ';border-right:1px solid ' ~ vbc ~ ';') %}
             <tr style="{{ rowbg }}font-weight:{{ '700' if is_tot else '400' }};">
-              <td style="padding:{{ pad }};{{ b1 }}text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.abp }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.orders }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.actual }}</td>
@@ -294,11 +294,11 @@
           {# ── Plant detail / ISP table — 12 cols (Product + Quality/Grade) ── #}
           <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
-              <col style="width:6%"/>
+              <col style="width:7.5%"/>
               <col style="width:19.5%"/>
-              <col style="width:7.5%"/><col style="width:7.5%"/><col style="width:5.5%"/>
+              <col style="width:6.75%"/><col style="width:6.75%"/><col style="width:5.5%"/>
               <col style="width:6.5%"/><col style="width:5%"/>
-              <col style="width:7.5%"/><col style="width:7.5%"/><col style="width:5.5%"/>
+              <col style="width:6.75%"/><col style="width:6.75%"/><col style="width:5.5%"/>
               <col style="width:6.5%"/><col style="width:5%"/>
             </colgroup>
             <thead>
@@ -327,7 +327,7 @@
               <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
               {% elif row.type == 'grand-total' %}
               <tr style="background:#dcfce7;font-weight:700;">
-                <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
@@ -341,7 +341,7 @@
               </tr>
               {% elif row.type == 'subtotal' %}
               <tr style="background:#fed7aa;font-weight:700;">
-                <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
@@ -358,7 +358,7 @@
                 {% if row.prod_first %}
                 <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
                 {% endif %}
-                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
@@ -375,7 +375,7 @@
                 {% if row.prod_first %}
                 <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
                 {% endif %}
-                <td style="padding:{{ pad }};padding-left:10px;border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};padding-left:10px;border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
