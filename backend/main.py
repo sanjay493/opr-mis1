@@ -2372,7 +2372,11 @@ async def production_query(payload: dict):
 
     months = []
     y, m = int(start[:4]), int(start[5:7])
-    while f"{y}-{m:02d}" <= end and len(months) < 120:
+    # Generous backstop only (production_table alone spans 2000-present, and
+    # plan data reaches a year ahead) — not a realistic range limit. At 120
+    # this silently truncated any query over ~10 years, dropping the tail of
+    # the range (e.g. the current FY's plan months) with no error shown.
+    while f"{y}-{m:02d}" <= end and len(months) < 600:
         months.append(f"{y}-{m:02d}")
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
 
