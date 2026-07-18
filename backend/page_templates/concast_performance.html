@@ -32,12 +32,12 @@
                 </thead>
                 <tbody>
                     {% for row in page.monthly %}
-                    {% set bg = '#dcfce7' if row.plant == 'SAIL' else ('#fef9c3' if row.plant == '5 Plants' else 'white') %}
-                    <tr style="{% if row.bold %}font-weight:700;{% endif %}">
+                    {% set bg = '#dcfce7' if row.plant == 'SAIL' else ('#fef9c3' if row.plant == '5 Plants' else '') %}
+                    <tr style="{% if bg %}background:{{ bg }};{% endif %}{% if row.bold %}font-weight:700;{% endif %}">
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;font-weight:{{ '700' if row.bold else '500' }};">{{ row.plant }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;background:#dbeafe;">{{ row.ann_plan }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ann_plan }}</td>
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.m_plan }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;background:#d1fae5;">{{ row.m_act }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;{% if not bg %}background:#d1fae5;{% endif %}">{{ row.m_act }}</td>
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.m_pct }}</td>
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.cply_act }}</td>
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.m_growth }}</td>
@@ -73,12 +73,12 @@
                 </thead>
                 <tbody>
                     {% for row in page.ytd %}
-                    {% set bg = '#dcfce7' if row.plant == 'SAIL' else ('#fef9c3' if row.plant == '5 Plants' else 'white') %}
-                    <tr style="{% if row.bold %}font-weight:700;{% endif %}">
+                    {% set bg = '#dcfce7' if row.plant == 'SAIL' else ('#fef9c3' if row.plant == '5 Plants' else '') %}
+                    <tr style="{% if bg %}background:{{ bg }};{% endif %}{% if row.bold %}font-weight:700;{% endif %}">
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;font-weight:{{ '700' if row.bold else '500' }};">{{ row.plant }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;background:#dbeafe;">{{ row.ann_plan }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ann_plan }}</td>
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ytd_plan }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;background:#d1fae5;">{{ row.ytd_act }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;{% if not bg %}background:#d1fae5;{% endif %}">{{ row.ytd_act }}</td>
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ytd_pct }}</td>
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ytd_cply }}</td>
                         <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ytd_growth }}</td>

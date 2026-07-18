@@ -536,11 +536,13 @@
         .page14-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid #1e293b; margin-bottom: 10pt; }
         .page14-table th { font-size: 8pt; padding: 2px 3px; line-height: 1.1; text-align: center; vertical-align: middle; border: 1px solid #94a3b8; }
         .page14-table td { font-size: 8.5pt; padding: 2px 3px; line-height: 1.1; text-align: right; border: 1px solid #cbd5e1; }
-        .page14-table td.plant-col { text-align: left; font-weight: 600; background-color: #f8fafc; }
+        .page14-table td.plant-col { text-align: left; font-weight: 600; }
         .page14-table tr.agg-row td { font-weight: 700; background-color: #fef9c3 !important; }
         .page14-table tr.sail-row td { font-weight: 700; background-color: #dcfce7 !important; }
-        .page14-table td.cs-col { background-color: #dbeafe !important; }
-        .page14-table td.cc-col { background-color: #d1fae5 !important; }
+        /* CS is this page's one "headline" figure per period (report-month table /
+           till-month table), so it's the column kept highlighted; only the current
+           period's cell carries the class — the prior-year comparison cell doesn't. */
+        .page14-table td.cs-col { background-color: #d1fae5 !important; }
         .page14-table td.prev-sep { border-left: 2.5px solid #1e293b; }
 
         /* ── pages 15-17: Category Wise Saleable Steel ──────────────────── */
@@ -557,12 +559,13 @@
         .catwise-table td.cat-td { text-align: center; font-weight: 700; vertical-align: middle; background-color: #fff; color: #000; font-size: 10pt; border-right: 2px solid #94a3b8; writing-mode: vertical-rl; transform: rotate(180deg); }
         .catwise-table td.lbl-td { text-align: left; }
         .catwise-table td.num-td { text-align: right; }
-        .catwise-table td.cum-td { background-color: #f0f7ff; }
-        .catwise-table tr.cw-data td { background-color: #f8fafc; }
-        .catwise-table tr.cw-data td.cat-td { background-color: #fff; }
-        .catwise-table tr.cw-data td.cum-td { background-color: #e8f3ff; }
-        .catwise-table tr.cw-section-data td { background-color: #eff6ff; font-weight: 600; }
+        /* Report-month Actual (m-act-td) / till-month Actual (cum-td) stay
+           highlighted only on plain data rows — total/subtotal/pct rows already
+           carry their own full-row color below and shouldn't fight with this one. */
+        .catwise-table tr.cw-data td.m-act-td,
+        .catwise-table tr.cw-data td.cum-td { background-color: #d1fae5; }
         .catwise-table tr.cw-section-hdr td { background-color: #e2e8f0; font-weight: 700; font-size: 10pt; }
+        .catwise-table tr.cw-section-data td { background-color: #eff6ff; font-weight: 600; }
         .catwise-table tr.cw-subtotal td { background-color: #fef9c3; font-weight: 700; }
         .catwise-table tr.cw-pct td { background-color: #f1f5f9; font-style: italic; font-size: 10pt; }
         .catwise-table tr.cw-total td { background-color: #dcfce7; font-weight: 700; }
@@ -578,7 +581,8 @@
         .segwise-table td.num-td { text-align: right; }
         .segwise-table td.sw-group-cell { background-color: #fff; color: #000; font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid #334155; writing-mode: vertical-rl; transform: rotate(180deg); }
         .segwise-table td.sw-plant-cell { background-color: #fff; color: #000; font-weight: 700; text-align: center; vertical-align: middle; }
-        .segwise-table tr.sw-data td { background-color: #f8fafc; }
+        .segwise-table tr.sw-data td.m-act-td,
+        .segwise-table tr.sw-data td.cum-td { background-color: #d1fae5; }
         .segwise-table tr.sw-seg-total td { background-color: #fef9c3; font-weight: 700; }
         .segwise-table tr.sw-seg-pct td { background-color: #f1f5f9; font-weight: 700; font-style: italic; }
         .segwise-table tr.sw-grand-total td { background-color: #dcfce7; font-weight: 700; }

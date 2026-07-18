@@ -44,30 +44,30 @@
                         <td class="lbl-td">{{ row.label }}</td>
                         <td class="num-td">{{ row.ann_plan }}</td>
                         <td class="num-td">{{ row.m_plan }}</td>
-                        <td class="num-td">{{ row.m_act }}</td>
+                        <td class="num-td m-act-td">{{ row.m_act }}</td>
                         <td class="num-td">{{ row.m_pct }}</td>
                         <td class="num-td">{{ row.cply_act }}</td>
                         <td class="num-td">{{ row.m_growth }}</td>
-                        <td class="num-td cum-td">{{ row.cum_plan }}</td>
+                        <td class="num-td">{{ row.cum_plan }}</td>
                         <td class="num-td cum-td">{{ row.cum_act }}</td>
-                        <td class="num-td cum-td">{{ row.cum_pct }}</td>
-                        <td class="num-td cum-td">{{ row.cum_cply }}</td>
-                        <td class="num-td cum-td">{{ row.cum_growth }}</td>
+                        <td class="num-td">{{ row.cum_pct }}</td>
+                        <td class="num-td">{{ row.cum_cply }}</td>
+                        <td class="num-td">{{ row.cum_growth }}</td>
                     </tr>
                     {% else %}
                     <tr class="cw-{{ row.type }}">
                         <td colspan="2" class="lbl-td">{{ row.label }}</td>
                         <td class="num-td">{{ row.ann_plan }}</td>
                         <td class="num-td">{{ row.m_plan }}</td>
-                        <td class="num-td">{{ row.m_act }}</td>
+                        <td class="num-td m-act-td">{{ row.m_act }}</td>
                         <td class="num-td">{{ row.m_pct }}</td>
                         <td class="num-td">{{ row.cply_act }}</td>
                         <td class="num-td">{{ row.m_growth }}</td>
-                        <td class="num-td cum-td">{{ row.cum_plan }}</td>
+                        <td class="num-td">{{ row.cum_plan }}</td>
                         <td class="num-td cum-td">{{ row.cum_act }}</td>
-                        <td class="num-td cum-td">{{ row.cum_pct }}</td>
-                        <td class="num-td cum-td">{{ row.cum_cply }}</td>
-                        <td class="num-td cum-td">{{ row.cum_growth }}</td>
+                        <td class="num-td">{{ row.cum_pct }}</td>
+                        <td class="num-td">{{ row.cum_cply }}</td>
+                        <td class="num-td">{{ row.cum_growth }}</td>
                     </tr>
                     {% endif %}
                 {% endfor %}

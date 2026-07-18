@@ -29,10 +29,10 @@
                     <tr class="{% if row.plant == 'SAIL' %}sail-row{% elif row.bold %}agg-row{% endif %}">
                         <td class="plant-col">{{ row.plant }}</td>
                         <td>{{ row.bof }}</td><td>{{ row.eaf }}</td>
-                        <td class="cc-col">{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
+                        <td>{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
                         <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td>
                         <td class="prev-sep">{{ pr.bof }}</td><td>{{ pr.eaf }}</td>
-                        <td class="cc-col">{{ pr.cc }}</td><td class="cs-col">{{ pr.cs }}</td>
+                        <td>{{ pr.cc }}</td><td>{{ pr.cs }}</td>
                         <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td>
                     </tr>
                     {% endfor %}
@@ -63,10 +63,10 @@
                     <tr class="{% if row.plant == 'SAIL' %}sail-row{% elif row.bold %}agg-row{% endif %}">
                         <td class="plant-col">{{ row.plant }}</td>
                         <td>{{ row.bof }}</td><td>{{ row.eaf }}</td>
-                        <td class="cc-col">{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
+                        <td>{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
                         <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td>
                         <td class="prev-sep">{{ pr.bof }}</td><td>{{ pr.eaf }}</td>
-                        <td class="cc-col">{{ pr.cc }}</td><td class="cs-col">{{ pr.cs }}</td>
+                        <td>{{ pr.cc }}</td><td>{{ pr.cs }}</td>
                         <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td>
                     </tr>
                     {% endfor %}
