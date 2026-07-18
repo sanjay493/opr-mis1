@@ -56,6 +56,43 @@ def _nums_from_line(line: str):
     return result
 
 
+_DATE_RE = re.compile(r"Date:\s*(\d{1,2})-([A-Za-z]{3})-(\d{2})")
+
+
+def _detect_month_from_pdf_text(full_text: str):
+    """Detect 'YYYY-MM' from the report's own header 'Date: DD-Mon-YY' line
+    (e.g. 'Date: 30-Jun-24') — always the last day of the report's own
+    month across every sample checked. Returns None if not found, since a
+    missing signal shouldn't block extraction, only a genuine mismatch."""
+    m = _DATE_RE.search(full_text[:300])
+    if not m:
+        return None
+    _, mon_abbr, yy = m.groups()
+    try:
+        mon_num = _MONTHS.index(mon_abbr.upper()) + 1
+    except ValueError:
+        return None
+    return f"20{yy}-{mon_num:02d}"
+
+
+def _fmt_month(ym: str) -> str:
+    try:
+        y, mo = ym[:4], int(ym[5:7])
+        return f"{_MONTHS[mo - 1].title()} {y}"
+    except Exception:
+        return ym
+
+
+def _assert_month_match(detected, user_month: str) -> None:
+    if detected and detected != user_month:
+        raise ValueError(
+            f"Month mismatch: this VISL report's own header shows "
+            f"{_fmt_month(detected)}, but you selected {_fmt_month(user_month)}. "
+            f"Please select '{_fmt_month(detected)}' in the month picker, "
+            f"or upload the report for {_fmt_month(user_month)}."
+        )
+
+
 def _detect_format(full_text: str) -> str:
     """
     Returns 'B' for Daily-Production format (Day/Month APP ACT layout)
@@ -128,6 +165,10 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
           flush=True, file=sys.stderr)
 
     full_text, n_pages = _load_pdf_text(file_path)
+
+    detected_month = _detect_month_from_pdf_text(full_text)
+    _assert_month_match(detected_month, report_month)
+
     fmt = _detect_format(full_text)
     col_desc = "To Date (col 2)" if fmt == "A" else "Month ACT (col 4)"
 
@@ -180,6 +221,7 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     return {
         "plant":              PLANT,
         "month":              report_month,
+        "detected_month":     detected_month,
         "source_type":        f"VISL Monthly Report ({fmt_label})",
         "sheets":             f"PDF ({n_pages} page) — VISL {fmt_label}",
         "workbook_sheets":    [f"PDF ({n_pages} pages)"],
