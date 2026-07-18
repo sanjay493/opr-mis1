@@ -433,11 +433,11 @@ _PLANT_TITLES = {
 # each elif only qualifies when neither threshold is exceeded.
 _DENSITY_TIERS = [
     # (max_rows, max_label_len, table_fs, label_fs, pad,          line_height, split_at)
-    (15,         20,            "9.5pt",  "9.2pt",  "3px 5px",    "1.3",       999),
-    (45,         26,            "8.0pt",  "7.6pt",  "2px 4px",    "1.2",       26),
-    (60,         36,            "7.3pt",  "6.8pt",  "1.5px 3px",  "1.15",      22),
+    (15,         20,            "10.6pt", "10.3pt", "3.4px 5.5px","1.3",       999),
+    (45,         26,            "9.1pt",  "8.7pt",  "2.4px 5px",  "1.22",      26),
+    (60,         36,            "7.8pt",  "7.3pt",  "1.6px 3.3px","1.16",      22),
 ]
-_DENSITY_TIGHTEST = ("6.8pt", "6.3pt", "1.2px 2.5px", "1.1", 18)
+_DENSITY_TIGHTEST = ("7.1pt", "6.7pt", "1.2px 2.6px", "1.12", 18)
 
 
 def _compute_density(rows: list) -> dict:

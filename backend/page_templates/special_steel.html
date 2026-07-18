@@ -2,7 +2,17 @@
            its font/padding tier (see _compute_density in page_special_steel.py)
            — RSP's ~66 rows, BSP's outlier-long combined-grade labels, and
            BSL/ISP's short roomy content each land on a different tier rather
-           than one common compact/normal switch. #}
+           than one common compact/normal switch.
+
+           Visual language: no row background except group-total/grand-total/
+           special-steel-% rows; no horizontal rule between plain item rows
+           (only totals and the table frame carry one — group boundaries get
+           one for free from the preceding total row's own bottom border, or
+           from the Product column's own cell border where a group has no
+           total row of its own); vertical column rules are a shade darker
+           than before for readability without look busy. #}
+        {% set vb  = '#94a3b8' %}
+        {% set vbc = '#96ae83' %}
         {% if page.variant == 'isp_sail_combined' %}
         {# ── Page 23: ISP mill-wise + SAIL summary combined on one portrait page ── #}
         <div style="padding:2px 6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
@@ -44,57 +54,57 @@
               {% if row.type == 'separator' %}
               <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
               {% elif row.type == 'grand-total' %}
-              <tr style="font-weight:700;">
-                <td style="padding:1px 1px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+              <tr style="background:#dcfce7;font-weight:700;">
+                <td style="padding:1px 1px;border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
               </tr>
               {% else %}
-              <tr style="background:#f8fafc;">
-                <td style="padding:{{ pad }};padding-left:10px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+              <tr>
+                <td style="padding:{{ pad }};padding-left:10px;border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.cply }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
               </tr>
               {% endif %}
             {% endfor %}
             <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
-            <tr style="background:#e0f2fe;font-weight:600;">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Saleable Steel Production</td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_pct_growth }}</td>
+            <tr style="font-weight:600;">
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Saleable Steel Production</td>
+              <td colspan="2" style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ d.saleable_production.current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ d.saleable_production.cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
+              <td colspan="2" style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_pct_growth }}</td>
             </tr>
             <tr style="background:#e0f2fe;font-weight:600;">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.special_pct.current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.special_pct.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.special_pct.cum_current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.special_pct.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ d.special_pct.current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ d.special_pct.cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ d.special_pct.cum_current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ d.special_pct.cum_cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
             </tr>
             </tbody>
           </table>
@@ -137,50 +147,52 @@
             </thead>
             <tbody>
             {% for row in d.rows %}
-            {% set bg = '#dcfce7' if row.type == 'sail-total' else '#f8fafc' %}
-            {% set fw = '700' if row.type == 'sail-total' else '400' %}
-            <tr style="background:{{ bg }};font-weight:{{ fw }};">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.abp }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+            {% set is_tot = row.type == 'sail-total' %}
+            {% set rowbg = 'background:#dcfce7;' if is_tot else '' %}
+            {% set b1 = ('border:1px solid ' ~ vb ~ ';') if is_tot else ('border-left:1px solid ' ~ vb ~ ';border-right:1px solid ' ~ vb ~ ';') %}
+            {% set b2 = ('border:1px solid ' ~ vbc ~ ';') if is_tot else ('border-left:1px solid ' ~ vbc ~ ';border-right:1px solid ' ~ vbc ~ ';') %}
+            <tr style="{{ rowbg }}font-weight:{{ '700' if is_tot else '400' }};">
+              <td style="padding:{{ pad }};{{ b1 }}text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.abp }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.orders }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.actual }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.pct_ful }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.cply }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.pct_growth }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_orders }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_actual }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_pct_ful }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_cply }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_pct_growth }}</td>
             </tr>
             {% endfor %}
             <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
-            <tr style="background:#e0f2fe;font-weight:600;">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;">Saleable Steel production</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.abp }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.saleable_production.pct_growth }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.saleable_production.cum_pct_growth }}</td>
+            <tr style="font-weight:600;">
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;">Saleable Steel production</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ d.saleable_production.abp }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ d.saleable_production.current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ d.saleable_production.cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ d.saleable_production.pct_growth }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_pct_growth }}</td>
             </tr>
             <tr style="background:#e0f2fe;font-weight:600;">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.special_pct.current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ d.special_pct.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.special_pct.cum_current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ d.special_pct.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ d.special_pct.current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ d.special_pct.cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ d.special_pct.cum_current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ d.special_pct.cum_cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
             </tr>
             </tbody>
           </table>
@@ -229,50 +241,51 @@
             </thead>
             <tbody>
             {% for row in page.rows %}
-            {% set bg = '#dcfce7' if row.type == 'sail-total' else '#f8fafc' %}
-            {% set fw = '700' if row.type == 'sail-total' else '400' %}
-            <tr style="background:{{ bg }};font-weight:{{ fw }};">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.abp }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+            {% set is_tot = row.type == 'sail-total' %}
+            {% set rowbg = 'background:#dcfce7;' if is_tot else '' %}
+            {% set b1 = ('border:1px solid ' ~ vb ~ ';') if is_tot else ('border-left:1px solid ' ~ vb ~ ';border-right:1px solid ' ~ vb ~ ';') %}
+            {% set b2 = ('border:1px solid ' ~ vbc ~ ';') if is_tot else ('border-left:1px solid ' ~ vbc ~ ';border-right:1px solid ' ~ vbc ~ ';') %}
+            <tr style="{{ rowbg }}font-weight:{{ '700' if is_tot else '400' }};">
+              <td style="padding:{{ pad }};{{ b1 }}text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.abp }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.orders }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.actual }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.pct_ful }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.cply }}</td>
+              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.pct_growth }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_orders }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_actual }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_pct_ful }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_cply }}</td>
+              <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_pct_growth }}</td>
             </tr>
             {% endfor %}
             <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
-            <tr style="background:#e0f2fe;font-weight:600;">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;">Saleable Steel production</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.abp }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.pct_growth }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
+            <tr style="font-weight:600;">
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;">Saleable Steel production</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.abp }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.pct_growth }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
             </tr>
             <tr style="background:#e0f2fe;font-weight:600;">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.special_pct.cum_current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.special_pct.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ page.special_pct.cum_current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ page.special_pct.cum_cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
             </tr>
             </tbody>
           </table>
@@ -282,10 +295,10 @@
           <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:6%"/>
-              <col style="width:18%"/>
-              <col style="width:8%"/><col style="width:8%"/><col style="width:5.5%"/>
+              <col style="width:19.5%"/>
+              <col style="width:7.5%"/><col style="width:7.5%"/><col style="width:5.5%"/>
               <col style="width:6.5%"/><col style="width:5%"/>
-              <col style="width:8%"/><col style="width:8%"/><col style="width:5.5%"/>
+              <col style="width:7.5%"/><col style="width:7.5%"/><col style="width:5.5%"/>
               <col style="width:6.5%"/><col style="width:5%"/>
             </colgroup>
             <thead>
@@ -314,90 +327,90 @@
               <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
               {% elif row.type == 'grand-total' %}
               <tr style="background:#dcfce7;font-weight:700;">
-                <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+                <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
               </tr>
               {% elif row.type == 'subtotal' %}
               <tr style="background:#fed7aa;font-weight:700;">
-                <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+                <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
               </tr>
               {% elif row.type == 'product-total' %}
               <tr style="background:#fef9c3;font-weight:700;">
                 {% if row.prod_first %}
-                <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid #94a3b8;background:#eef2ff;text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
+                <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
                 {% endif %}
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
               </tr>
               {% else %}
-              <tr style="background:#f8fafc;">
+              <tr>
                 {% if row.prod_first %}
-                <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid #94a3b8;background:#eef2ff;text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
+                <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
                 {% endif %}
-                <td style="padding:{{ pad }};padding-left:10px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_growth }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_orders }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_actual }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_ful }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_cply }}</td>
-                <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ row.cum_pct_growth }}</td>
+                <td style="padding:{{ pad }};padding-left:10px;border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.cply }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
               </tr>
               {% endif %}
             {% endfor %}
             <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
-            <tr style="background:#e0f2fe;font-weight:600;">
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Saleable Steel Production</td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
+            <tr style="font-weight:600;">
+              <td colspan="2" style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Saleable Steel Production</td>
+              <td colspan="2" style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
+              <td colspan="2" style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
             </tr>
             <tr style="background:#e0f2fe;font-weight:600;">
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
-              <td colspan="2" style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.special_pct.cum_current }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.special_pct.cum_cply }}</td>
-              <td style="padding:{{ pad }};border:1px solid #b7d4a0;"></td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ page.special_pct.cum_current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ page.special_pct.cum_cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
             </tr>
             </tbody>
           </table>
