@@ -9,6 +9,23 @@ _TMPL_DIR = os.path.join(os.path.dirname(__file__), 'page_templates')
 _jinja_env = Environment(loader=FileSystemLoader(_TMPL_DIR), autoescape=False)
 
 
+def _split_label(label, threshold: int = 20, tail_scale: float = 0.82) -> str:
+    """Keep a long, single-line label from wrapping (or getting silently
+    clipped by overflow:hidden) by shrinking everything after the first word.
+    Short labels pass through unchanged; a single very long word with no
+    space shrinks in its entirety since there's nothing else to split."""
+    label = "" if label is None else str(label)
+    if len(label) <= threshold:
+        return label
+    first, _, rest = label.partition(" ")
+    if not rest:
+        return f'<span style="font-size:{tail_scale}em;">{label}</span>'
+    return f'{first} <span style="font-size:{tail_scale}em;">{rest}</span>'
+
+
+_jinja_env.filters['split_label'] = _split_label
+
+
 FONT_CATALOG = {
     "IBM Plex Sans": {
         "import": "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;700&display=swap');",

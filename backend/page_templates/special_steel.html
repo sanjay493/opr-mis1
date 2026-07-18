@@ -1,21 +1,18 @@
-        {# One-page fit: plant pages (19-22) carry up to ~66 grade rows, so
-           dense pages get tighter padding, a smaller table font and a
-           reduced, no-wrap label font — labels spilling to a 2nd line was
-           pushing RSP (and DSP) onto a 2nd PDF page. sail/combined variants
-           have few rows and keep their current look (nrows ≤ 20). #}
-        {% set nrows = (page.rows or []) | length %}
-        {% set compact = nrows > 20 %}
-        {% set pad = '1px 2px' if compact else '1.5px 3px' %}
-        {% set lfs = '5.8pt' if compact else 'inherit' %}
-        {% set tfs = '6.2pt' if compact else '6.5pt' %}
+        {# One-page fit: each plant's own row count AND longest label decide
+           its font/padding tier (see _compute_density in page_special_steel.py)
+           — RSP's ~66 rows, BSP's outlier-long combined-grade labels, and
+           BSL/ISP's short roomy content each land on a different tier rather
+           than one common compact/normal switch. #}
         {% if page.variant == 'isp_sail_combined' %}
         {# ── Page 23: ISP mill-wise + SAIL summary combined on one portrait page ── #}
-        <div style="padding:6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
+        <div style="padding:2px 6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
 
           {% set d = page.isp %}
-          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ d.title }}</div>
-          <div style="text-align:right;font-size:6.8pt;margin-bottom:2px;">Unit: Tonnes</div>
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.5pt;">
+          {% set pad = d.density.pad %}{% set lfs = d.density.label_fs %}
+          {% set tfs = d.density.table_fs %}{% set lh = d.density.lh %}{% set split_at = d.density.split_at %}
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ d.title }}</div>
+          <div style="text-align:right;font-size:6.8pt;margin-bottom:1px;">Unit: Tonnes</div>
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:20%"/>
               <col style="width:8%"/><col style="width:8%"/><col style="width:6%"/>
@@ -48,7 +45,7 @@
               <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
               {% elif row.type == 'grand-total' %}
               <tr style="font-weight:700;">
-                <td style="padding:1px 1px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
+                <td style="padding:1px 1px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
@@ -62,7 +59,7 @@
               </tr>
               {% else %}
               <tr style="background:#f8fafc;">
-                <td style="padding:{{ pad }};padding-left:10px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
+                <td style="padding:{{ pad }};padding-left:10px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
@@ -102,13 +99,15 @@
             </tbody>
           </table>
 
-          <div style="margin-top:6px;"></div>
+          <div style="margin-top:3px;"></div>
 
           {% set d = page.sail %}
-          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ d.title }}</div>
-          <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:3px;">{{ d.month_label }}</div>
-          <div style="text-align:right;font-size:6.8pt;margin-bottom:2px;">Unit: Tonnes</div>
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.8pt;">
+          {% set pad = d.density.pad %}{% set lfs = d.density.label_fs %}
+          {% set tfs = d.density.table_fs %}{% set lh = d.density.lh %}{% set split_at = d.density.split_at %}
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ d.title }}</div>
+          <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:2px;">{{ d.month_label }}</div>
+          <div style="text-align:right;font-size:6.8pt;margin-bottom:1px;">Unit: Tonnes</div>
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:13%"/><col style="width:8%"/>
               <col style="width:7%"/><col style="width:7%"/><col style="width:5.5%"/>
@@ -141,7 +140,7 @@
             {% set bg = '#dcfce7' if row.type == 'sail-total' else '#f8fafc' %}
             {% set fw = '700' if row.type == 'sail-total' else '400' %}
             <tr style="background:{{ bg }};font-weight:{{ fw }};">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
+              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.abp }}</td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
@@ -189,16 +188,18 @@
 
         {% else %}
         {# ── existing sail_summary / plant_detail rendering ── #}
-        <div style="padding:6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
-          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ page.title }}</div>
+        {% set pad = page.density.pad %}{% set lfs = page.density.label_fs %}
+        {% set tfs = page.density.table_fs %}{% set lh = page.density.lh %}{% set split_at = page.density.split_at %}
+        <div style="padding:2px 6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ page.title }}</div>
           {% if page.variant == 'sail_summary' %}
-          <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:3px;">{{ page.month_label }}</div>
+          <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:2px;">{{ page.month_label }}</div>
           {% endif %}
-          <div style="text-align:right;font-size:6.8pt;margin-bottom:2px;">Unit: Tonnes</div>
+          <div style="text-align:right;font-size:6.8pt;margin-bottom:1px;">Unit: Tonnes</div>
 
           {% if page.variant == 'sail_summary' %}
           {# ── SAIL consolidated table — 12 cols ── #}
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:6.8pt;">
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:13%"/><col style="width:8%"/>
               <col style="width:7%"/><col style="width:7%"/><col style="width:5.5%"/>
@@ -231,7 +232,7 @@
             {% set bg = '#dcfce7' if row.type == 'sail-total' else '#f8fafc' %}
             {% set fw = '700' if row.type == 'sail-total' else '400' %}
             <tr style="background:{{ bg }};font-weight:{{ fw }};">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
+              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.abp }}</td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
@@ -277,10 +278,11 @@
           </table>
 
           {% else %}
-          {# ── Plant detail / ISP table — 11 cols ── #}
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};{% if compact %}line-height:1.15;{% endif %}">
+          {# ── Plant detail / ISP table — 12 cols (Product + Quality/Grade) ── #}
+          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
-              <col style="width:24%"/>
+              <col style="width:6%"/>
+              <col style="width:18%"/>
               <col style="width:8%"/><col style="width:8%"/><col style="width:5.5%"/>
               <col style="width:6.5%"/><col style="width:5%"/>
               <col style="width:8%"/><col style="width:8%"/><col style="width:5.5%"/>
@@ -288,6 +290,7 @@
             </colgroup>
             <thead>
               <tr style="background:#fff;color:#000;">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Product</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Quality / Grade</th>
                 <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ page.month_label }}</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ page.cply_label }}<br/>Actual</th>
@@ -308,14 +311,10 @@
             <tbody>
             {% for row in page.rows %}
               {% if row.type == 'separator' %}
-              <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
-              {% elif row.type == 'product-hdr' %}
-              <tr style="background:#fff;color:#000;font-weight:700;">
-                <td colspan="11" style="padding:2px 5px;border:1px solid #334155;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
-              </tr>
+              <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
               {% elif row.type == 'grand-total' %}
               <tr style="background:#dcfce7;font-weight:700;">
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
+                <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
@@ -329,7 +328,7 @@
               </tr>
               {% elif row.type == 'subtotal' %}
               <tr style="background:#fed7aa;font-weight:700;">
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
+                <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
@@ -343,7 +342,10 @@
               </tr>
               {% elif row.type == 'product-total' %}
               <tr style="background:#fef9c3;font-weight:700;">
-                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
+                {% if row.prod_first %}
+                <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid #94a3b8;background:#eef2ff;text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
+                {% endif %}
+                <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
@@ -357,7 +359,10 @@
               </tr>
               {% else %}
               <tr style="background:#f8fafc;">
-                <td style="padding:{{ pad }};padding-left:10px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label }}</td>
+                {% if row.prod_first %}
+                <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid #94a3b8;background:#eef2ff;text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
+                {% endif %}
+                <td style="padding:{{ pad }};padding-left:10px;border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at) }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.actual }}</td>
                 <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ row.pct_ful }}</td>
@@ -371,9 +376,9 @@
               </tr>
               {% endif %}
             {% endfor %}
-            <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
+            <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
             <tr style="background:#e0f2fe;font-weight:600;">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Saleable Steel Production</td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Saleable Steel Production</td>
               <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.current }}</td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.saleable_production.cply }}</td>
@@ -384,7 +389,7 @@
               <td style="padding:{{ pad }};border:1px solid #b7d4a0;text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
             </tr>
             <tr style="background:#e0f2fe;font-weight:600;">
-              <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
               <td colspan="2" style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.current }}</td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;"></td>
               <td style="padding:{{ pad }};border:1px solid #cbd5e1;text-align:right;">{{ page.special_pct.cply }}</td>

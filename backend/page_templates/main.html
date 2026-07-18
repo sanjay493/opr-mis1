@@ -67,6 +67,22 @@
             padding-bottom: 0;
         }
 
+        /* Pages 19-24: Special Steel — dense grade tables, so margins are
+           trimmed to the minimum that still clears the header/footer band
+           (matches the techno pages' 5-6mm), maximising rows-per-page. */
+        @page special-steel-layout {
+            size: A4 portrait;
+            margin-top: 6mm;
+            margin-right: 8mm;
+            margin-bottom: 6mm;
+            margin-left: 8mm;
+        }
+
+        .page.special-steel-page {
+            page: special-steel-layout;
+            padding: 1mm 0;
+        }
+
         /* Pages 27–35: techno-economic parameter pages — portrait */
         @page techno-layout {
             size: A4 portrait;
@@ -618,7 +634,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'special_steel', 'opening_stock', 'ipt_status') %} content-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status') %} content-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
         {% else %}

@@ -972,15 +972,24 @@ _CORP_SS_SKIP_B  = {"TOTAL", "GRAND TOTAL"}
 _CORP_SS_CONT    = "SHEET"            # continuation of "CR COIL/SHEET/GP GC"
 
 
+def _find_corp_ss_sheet(wb) -> Optional[str]:
+    """Return the sheet name holding a BSL Corporate Office Special Steel
+    report, or None. The Corp Office mails this as a single-sheet workbook
+    whose tab name varies (e.g. "CORPORATE OFFICE", "Sheet1") — detection
+    goes by the "SPECIAL STEEL" title in cell A1, not the tab name."""
+    for name in wb.sheetnames:
+        try:
+            r1 = str(wb[name].cell(1, 1).value or "").upper()
+        except Exception:
+            continue
+        if "SPECIAL STEEL" in r1:
+            return name
+    return None
+
+
 def _is_corp_ss_file(wb) -> bool:
     """True if the workbook is a BSL Corporate Office Special Steel report."""
-    if "Sheet1" not in wb.sheetnames:
-        return False
-    try:
-        r1 = str(wb["Sheet1"].cell(1, 1).value or "").upper()
-        return "SPECIAL STEEL" in r1
-    except Exception:
-        return False
+    return _find_corp_ss_sheet(wb) is not None
 
 
 def _corp_ss_month(ws) -> Optional[str]:
@@ -1007,7 +1016,8 @@ def _extract_corp_ss_preview(wb, report_month: str) -> dict:
     Col I (Despatch Till Date)     = monthly actual for the report month → actual_despatch.
     Col D (Actual Up To Last Month) = previous month's actual (stored as cply_actual for reference).
     """
-    ws = wb["Sheet1"]
+    sheet_name = _find_corp_ss_sheet(wb) or "Sheet1"
+    ws = wb[sheet_name]
     detected = _corp_ss_month(ws)
     db_month = detected or report_month
 
@@ -1072,7 +1082,7 @@ def _extract_corp_ss_preview(wb, report_month: str) -> dict:
 
     if ok == 0 and not rows:
         raise ValueError(
-            "No data rows found in Sheet1. "
+            f"No data rows found in sheet {sheet_name!r}. "
             "Verify this is a BSL 'Corporate office Report <MON><YEAR>.xlsx' file."
         )
 
@@ -1084,7 +1094,7 @@ def _extract_corp_ss_preview(wb, report_month: str) -> dict:
         "plant":              "BSL",
         "month":              db_month,
         "source_type":        "BSL Corporate Office Special Steel Report",
-        "sheets":             "Sheet1",
+        "sheets":             sheet_name,
         "workbook_sheets":    list(wb.sheetnames),
         "report_type":        "CORP_SS",
         "detected_month":     detected,

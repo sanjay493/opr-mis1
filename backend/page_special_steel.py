@@ -422,6 +422,40 @@ _PLANT_TITLES = {
 }
 
 
+# ── per-page density tiering ──────────────────────────────────────────────────
+#
+# Plants share one table layout, but not one row count or label length: RSP
+# runs ~66 grade rows, BSP has far fewer rows yet its combined-grade labels
+# ("TLT/MMn/45C8/Cr5 Grade(Billets)+(SBS-Slab)") are the longest of any plant,
+# while BSL/ISP are short on both counts. A single compact/normal switch either
+# over-shrinks the roomy pages or still overflows the dense ones, so pick a
+# tier from BOTH signals — whichever dimension is more demanding wins, since
+# each elif only qualifies when neither threshold is exceeded.
+_DENSITY_TIERS = [
+    # (max_rows, max_label_len, table_fs, label_fs, pad,          line_height, split_at)
+    (15,         20,            "9.5pt",  "9.2pt",  "3px 5px",    "1.3",       999),
+    (45,         26,            "8.0pt",  "7.6pt",  "2px 4px",    "1.2",       26),
+    (60,         36,            "7.3pt",  "6.8pt",  "1.5px 3px",  "1.15",      22),
+]
+_DENSITY_TIGHTEST = ("6.8pt", "6.3pt", "1.2px 2.5px", "1.1", 18)
+
+
+def _compute_density(rows: list) -> dict:
+    """Return table_fs/label_fs/pad/lh/split_at for this page's actual rows."""
+    labels = [r.get("label", "") for r in rows if r.get("type") != "separator"]
+    nrows = len(labels)
+    max_label_len = max((len(l) for l in labels), default=0)
+
+    for max_rows, max_len, table_fs, label_fs, pad, lh, split_at in _DENSITY_TIERS:
+        if nrows <= max_rows and max_label_len <= max_len:
+            return {"table_fs": table_fs, "label_fs": label_fs, "pad": pad,
+                    "lh": lh, "split_at": split_at}
+
+    table_fs, label_fs, pad, lh, split_at = _DENSITY_TIGHTEST
+    return {"table_fs": table_fs, "label_fs": label_fs, "pad": pad,
+            "lh": lh, "split_at": split_at}
+
+
 # ── product-column rowspan helper ────────────────────────────────────────────
 
 def _add_product_spans(rows):
@@ -487,6 +521,7 @@ def generate_special_steel_plant(report_month: str, plant: str) -> dict:
             "plant":   plant,
             "variant": "isp_summary" if plant == "ISP" else "plant_detail",
             "rows":    rows,
+            "density": _compute_density(rows),
             "cum_label":      _cum_label(ytd_months),
             "cum_cply_label": _cum_label(cply_ytd_months),
             "saleable_production": {
@@ -614,6 +649,7 @@ def generate_special_steel_sail(report_month: str) -> dict:
             "plant":   "SAIL",
             "variant": "sail_summary",
             "rows":    rows,
+            "density": _compute_density(rows),
             "cum_label":      _cum_label(ytd_months),
             "cum_cply_label": _cum_label(cply_ytd_months),
             "saleable_production": {
