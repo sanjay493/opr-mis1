@@ -92,7 +92,10 @@ export default function ProductionFYPage() {
 
       <main style={{
         flex: 1,
-        overflow: 'auto',
+        minHeight: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
         maxWidth: '1600px',
         margin: '0 auto',
         padding: '32px',
@@ -199,7 +202,9 @@ export default function ProductionFYPage() {
           <div style={{
             border: '1px solid #dadce0',
             borderRadius: '8px',
-            overflowX: 'auto',
+            overflow: 'auto',
+            flex: 1,
+            minHeight: 0,
           }}>
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
               <thead>
