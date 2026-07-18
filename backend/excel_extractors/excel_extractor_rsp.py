@@ -1016,26 +1016,46 @@ def _preview_techno_from_cells(ws, cells, days_in_month=None, ytd_days=None):
 
 def _is_rsp_ss_file(wb) -> bool:
     """True when the workbook is the RSP Special Steel report.
-    Signature: single sheet whose R1C1 starts with 'Special Steel'."""
-    if len(wb.sheetnames) != 1:
-        return False
+    Signature: the FIRST sheet's R1C1 starts with 'Special Steel'. Extra
+    unrelated sheets (e.g. old scratch tabs left over in a compilation
+    workbook — one real sample has 10) don't disqualify it; only the
+    first sheet's own content does."""
     ws = wb.worksheets[0]
     r1c1 = str(ws.cell(1, 1).value or "").strip().lower()
     return r1c1.startswith("special steel")
 
 
+_MON_ABBR_TO_NUM = {name[:3]: num for num, name in MONTH_NAMES.items()}
+
+
 def _parse_rsp_ss_header_month(ws) -> Optional[str]:
-    """Read the report-month label from R4C2 (e.g. \"Jan'26\") → '2026-01'."""
+    """Read the report-month label from R4C2 (e.g. "Jan'26") → '2026-01'.
+
+    The header spells the month as a 3-letter abbreviation ("Aug", "Jan"),
+    not the full name — MONTH_NUMS is keyed by full names ("August"), so
+    looking it up there always missed and this returned None on every real
+    file, silently disabling month detection (and with it, the mismatch
+    check) entirely.
+    """
     raw = str(ws.cell(4, 2).value or "").strip().strip("'\"")
     m = re.match(r"([A-Za-z]+)'(\d{2})", raw)
     if not m:
         return None
     mon_name, yr2 = m.group(1).capitalize(), int(m.group(2))
     yr_full = 2000 + yr2 if yr2 < 50 else 1900 + yr2
-    mon_num = MONTH_NUMS.get(mon_name)
+    mon_num = _MON_ABBR_TO_NUM.get(mon_name[:3])
     if not mon_num:
         return None
     return f"{yr_full}-{mon_num}"
+
+
+def _fmt_ym(ym: str) -> str:
+    """'2026-01' -> 'January 2026'"""
+    try:
+        y, mo = ym[:4], ym[5:7]
+        return f"{MONTH_NAMES.get(mo, mo)} {y}"
+    except Exception:
+        return ym
 
 
 def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
@@ -1052,7 +1072,15 @@ def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
     Returns the standard preview dict with special_steel_rows.
     """
     ws = wb.worksheets[0]
-    db_month = _parse_rsp_ss_header_month(ws) or report_month
+    detected_month = _parse_rsp_ss_header_month(ws)
+    if detected_month and detected_month != report_month:
+        raise ValueError(
+            f"Month mismatch: this RSP Special Steel report's own header (cell B4) shows "
+            f"{_fmt_ym(detected_month)}, but you selected {_fmt_ym(report_month)}. "
+            f"Please select '{_fmt_ym(detected_month)}' in the month picker, "
+            f"or upload the report for {_fmt_ym(report_month)}."
+        )
+    db_month = detected_month or report_month
 
     rows = []
     cur_product = ""
@@ -1115,6 +1143,7 @@ def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
     return {
         "plant":             "RSP",
         "month":             db_month,
+        "detected_month":    detected_month,
         "source_type":       "Special Steel Report",
         "sheets":            ws.title,
         "workbook_sheets":   wb.sheetnames,
