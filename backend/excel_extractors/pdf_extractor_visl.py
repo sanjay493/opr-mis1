@@ -56,6 +56,27 @@ def _nums_from_line(line: str):
     return result
 
 
+def _letters_only(s: str) -> str:
+    """Upper-cased letters only — for matching a label against a line whose
+    layout got scrambled (see _strip_letters)."""
+    return re.sub(r"[^A-Za-z]", "", s).upper()
+
+
+def _strip_letters(s: str) -> str:
+    """Drop only the alphabetic characters, keeping digits/./,/spaces intact.
+
+    Some PDF exports (e.g. reports_Dec'25.pdf) render a label column and the
+    number right after it with slightly overlapping x-positions, so
+    pdfplumber's extract_text() interleaves a stray label character into the
+    middle of the number: "Total Saleable Steel 92.030" comes out as
+    "Total Saleable Stee9l2.030" — the '9' and '2.030' end up split by the
+    displaced 'l' and _nums_from_line reads them as two numbers (9, 2.03)
+    instead of one (92.030). Stripping letters first re-joins '9' directly
+    against '2.030' into '92.030', with no effect on an already-clean line.
+    """
+    return re.sub(r"[A-Za-z]", "", s)
+
+
 _DATE_RE = re.compile(r"Date:\s*(\d{1,2})-([A-Za-z]{3})-(\d{2})")
 
 
@@ -183,8 +204,8 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     sal_val   = None
     sal_label = "(Total Saleable Steel line not found)"
     for ln in lines:
-        if "total saleable steel" in ln.lower():
-            nums = _nums_from_line(ln)
+        if "TOTALSALEABLESTEEL" in _letters_only(ln):
+            nums = _nums_from_line(_strip_letters(ln))
             sal_val   = _extract_value(nums, fmt, "Total Saleable Steel")
             sal_label = ln.strip()[:80]
             break
@@ -197,9 +218,9 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     desp_val   = None
     desp_label = "(Sales (AS+MS) line not found)"
     for ln in lines:
-        low = ln.lower()
-        if "sales" in low and "as" in low and "ms" in low:
-            nums = _nums_from_line(ln)
+        skeleton = _letters_only(ln)
+        if "SALES" in skeleton and "AS" in skeleton and "MS" in skeleton:
+            nums = _nums_from_line(_strip_letters(ln))
             desp_val   = _extract_value(nums, fmt, "Sales (AS+MS)")
             desp_label = ln.strip()[:80]
             break
