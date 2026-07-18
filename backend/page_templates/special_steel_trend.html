@@ -1,0 +1,30 @@
+{# Page 24: Special Steel — Trend & Performance Analysis #}
+<div style="padding:4px 8px;font-family:'Arial Narrow',Arial,sans-serif;">
+  <div style="text-align:center;font-weight:700;font-size:12pt;margin-bottom:2px;">{{ page.title }}</div>
+  <div style="text-align:center;font-size:8pt;color:#64748b;margin-bottom:8px;">{{ page.fy_range_label }}</div>
+
+  <div style="font-size:9pt;font-weight:700;color:#1e293b;margin-bottom:2px;">
+    Special Steel % of Saleable Steel — Monthly Trend
+  </div>
+  <div style="border:0.5px solid #e2e8f0;border-radius:3px;padding:4px;margin-bottom:12px;">
+    {{ page.line_chart_svg }}
+  </div>
+
+  <div style="border:0.5px solid #e2e8f0;border-radius:3px;padding:4px;margin-bottom:8px;">
+    {{ page.annual_bar_plants_svg }}
+  </div>
+
+  <div style="display:flex;gap:8px;">
+    <div style="flex:0 0 30%;border:0.5px solid #e2e8f0;border-radius:3px;padding:4px;">
+      {{ page.annual_bar_sail_svg }}
+    </div>
+    <div style="flex:1;border:0.5px solid #e2e8f0;border-radius:3px;padding:4px;">
+      {{ page.month_bar_svg }}
+    </div>
+  </div>
+
+  <div style="font-size:6.5pt;color:#94a3b8;margin-top:6px;text-align:center;">
+    Dashed "N/A" bars indicate a fiscal year not yet populated in special steel records; they will appear automatically once entered.
+    Current-FY bar is an annualized rate (actual-to-date &divide; elapsed days &times; days in FY), not a plan or a plain YTD total.
+  </div>
+</div>

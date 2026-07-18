@@ -22,6 +22,7 @@ from page_prod_by_process import generate_prod_by_process
 from page_catwise_saleable import generate_catwise_saleable
 from page_segment_wise import generate_segment_wise
 from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, generate_special_steel_isp_sail
+from page_special_steel_trend import generate_special_steel_trend
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
@@ -270,8 +271,14 @@ def get_data(month: str = "2025-11"):
         _ml = _dt_obj.strftime("%b'%y")
         _cl = _dt.datetime(_dt_obj.year - 1, _dt_obj.month, 1).strftime("%b'%y")
         _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL"}
-        # Page 24 is merged into page 23 (ISP + SAIL combined on one page)
+        # Page 24: was "merged into page 23" (stale DB-cached rows from before
+        # that merge); now repurposed as the Special Steel trend/performance
+        # analysis page (line + bar charts). Strip any stale copy, then insert
+        # a fresh placeholder right after page 23 if one isn't already there.
         pages_config = [p for p in pages_config if p.get("page") != 24]
+        _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
+        if _idx23 is not None:
+            pages_config.insert(_idx23 + 1, {"page": 24})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -283,6 +290,8 @@ def get_data(month: str = "2025-11"):
             if pg == 23:
                 page.update(generate_special_steel_isp_sail(month))
                 page["type"] = "special_steel"
+            if pg == 24:
+                page.update(generate_special_steel_trend(month))
             if pg == 25:
                 page.update(generate_opening_stock(month))
                 page["type"] = "opening_stock"
@@ -346,8 +355,14 @@ def save_data(request: PDFRequest):
 async def generate_pdf(request: PDFRequest):
     import datetime as _dt
     enriched = []
-    for page in request.pages:
-        p = page.dict()
+    _pages_list = [page.dict() for page in request.pages]
+    # Page 24: ensure the trend/performance analysis page is present even for
+    # requests built from a page list saved before this page existed.
+    if not any(p.get("page") == 24 for p in _pages_list):
+        _idx23 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 23), None)
+        if _idx23 is not None:
+            _pages_list.insert(_idx23 + 1, {"page": 24})
+    for p in _pages_list:
         pg = p.get("page", 0)
         if pg == 3 or p.get("type") == "summary":
             p["te_table"] = _safe_te_table(request.month)
@@ -385,7 +400,8 @@ async def generate_pdf(request: PDFRequest):
             p.update(generate_special_steel_isp_sail(request.month))
             p["type"] = "special_steel"
         if pg == 24:
-            continue  # merged into page 23
+            p.update(generate_special_steel_trend(request.month))
+            p["type"] = "special_steel_trend"
         if pg == 25:
             p.update(generate_opening_stock(request.month))
             p["type"] = "opening_stock"
