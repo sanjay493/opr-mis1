@@ -316,12 +316,20 @@ export default function ProductionQueryPage() {
           </div>
         )}
 
-        {/* Result table: months as rows, one APP/Actual column pair per unit */}
+        {/* Result table: months as rows, one APP/Actual column pair per unit.
+            Bounded height + overflow:auto (not just overflowX) makes this div
+            the table's actual scrolling container in both directions, so its
+            sticky header sticks to it — leaving overflowY unset here would
+            silently compute to 'auto' too (CSS overflow spec), but the div
+            would never actually scroll internally (no height cap), so all
+            real scrolling would happen on the page instead and the sticky
+            header would just scroll away with everything else. */}
         {data && series.length > 0 && (
           <div style={{
             border: '1px solid #dadce0',
             borderRadius: '8px',
-            overflowX: 'auto',
+            overflow: 'auto',
+            maxHeight: '65vh',
           }}>
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
               <thead>
