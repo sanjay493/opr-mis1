@@ -67,12 +67,13 @@
             padding-bottom: 0;
         }
 
-        /* Pages 19-24: Special Steel — dense grade tables, so margins are
-           trimmed to the minimum that still clears the header/footer band
-           (matches the techno pages' 5-6mm), maximising rows-per-page. */
+        /* Pages 19-24: Special Steel — dense grade tables, so side/bottom
+           margins are trimmed to maximise rows-per-page. Top margin stays
+           just wide enough to clear the Playwright header band (title text
+           sits right at the header's own separator line below 6mm). */
         @page special-steel-layout {
             size: A4 portrait;
-            margin-top: 6mm;
+            margin-top: 8mm;
             margin-right: 8mm;
             margin-bottom: 6mm;
             margin-left: 8mm;
