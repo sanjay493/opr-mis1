@@ -1749,6 +1749,11 @@ def normalize_item_name(name):
     name = name.replace('BOTTOM_POURING_INGOT', 'Bottom Pouring Ingot')
     # Standardize Semis Steel to Saleable Semis
     name = name.replace('Semis Steel', 'Saleable Semis')
+    # ASP/SSP/VISL plan tables call this "Saleable Despatch"; VISL's actual
+    # table calls the same quantity "Saleable Steel Despatch" — unify so a
+    # plant's plan and actual land on one query row instead of two.
+    if name == 'Saleable Despatch':
+        name = 'Saleable Steel Despatch'
     # DSP: fold legacy item names into the ones the extractors now emit
     # (pdf_extractor_dsp.py LABEL_MAP maps "brc bloom"/"brc round" -> these)
     if name == 'BRC Bloom':
@@ -1869,7 +1874,6 @@ PRODUCTION_ITEM_ORDER = [
     'Saleable Semis',
     # 10. Saleable steel
     'Saleable Steel',
-    'Saleable Despatch',
     'Saleable Steel Despatch',
 ]
 
