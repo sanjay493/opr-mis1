@@ -1,8 +1,29 @@
 # MySQL Migration Plan — SAIL MIS Portal
 
-Status: **planning document** (not yet executed). Written against the codebase
-as of July 2026. All counts below were measured from the live SQLite DB and
-source tree, not estimated.
+Status: **EXECUTED July 2026.** The app now runs on MySQL 8.4.8 (LTS), ZIP
+install at `D:\mysql` (no admin required), `DB_ENGINE=mysql` in backend/.env.
+SQLite remains the rollback path (`DB_ENGINE=sqlite` + restart; the .db file
+is a frozen snapshot from cutover time).
+
+Operational pieces (all also copied into `backend/scripts/`):
+- `D:\mysql\start_mysql.bat` — starts mysqld if not running, then refreshes
+  today's backup; a copy in the user's Startup folder runs it at every logon.
+- `D:\mysql\backup_mysql.bat` — mysqldump (single-transaction,
+  no-tablespaces) to `Report_format/db_backup/mis_reports_YYYY-MM-DD.sql`,
+  14-day retention; also runs daily at 13:00 via the
+  `MIS_MySQL_Daily_Backup` scheduled task. Credentials come from
+  `D:\mysql\backup.cnf` (never on the command line).
+- `backend/scripts/mysql_schema.sql` — canonical schema (21 tables).
+- `backend/scripts/migrate_sqlite_to_mysql.py` — copy + verification gate.
+- Restore: `mysql -u root -p mis_reports < mis_reports_YYYY-MM-DD.sql`.
+
+What the execution found beyond this plan: case-insensitive unique keys
+exposed same-month duplicate rows and cross-month case/whitespace-variant
+item names that had been silently splitting YTD sums under SQLite — cleaned
+in the data and guarded at the insert points (see commit 0bcc962).
+
+The original plan follows, kept for reference. All counts below were
+measured from the live SQLite DB and source tree, not estimated.
 
 ---
 
