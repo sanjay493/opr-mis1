@@ -29,7 +29,14 @@ const PLANT_PRODUCTS = {
   RSP: ['PM PLATES', 'New PM PLATES', 'HR PLATES SSL', 'HR COILS (SALE) -HSM-2', 'Pipes, CRNO', 'SPP'],
   BSL: ['HR COIL', 'HR PLATE', 'HR SHEET', 'CR COIL/SHEET/GP GC', 'SLAB'],
   ISP: ['WR COIL', 'TMT COIL', 'TMT BAR', 'STRUCTURALS', '150 BLT', '200 BLM'],
+  // Combined ASP+SSP+VISL special steel despatch — single total row per month
+  SSPs: ['TOTAL SPECIAL STEEL'],
 };
+
+const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SSPs'];
+
+// Plants whose report has no grade breakdown — grade is always 'TOTAL'
+const TOTAL_GRADE_PLANTS = new Set(['ISP', 'SSPs']);
 
 const uid = () => Math.random().toString(36).slice(2);
 
@@ -38,7 +45,7 @@ function blankRow(plant) {
   return {
     _id: uid(),
     product: products[0] || '',
-    quality_grade: plant === 'ISP' ? 'TOTAL' : '',
+    quality_grade: TOTAL_GRADE_PLANTS.has(plant) ? 'TOTAL' : '',
     section: '',
     order_qty: '',
     actual_despatch: '',
@@ -185,7 +192,7 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
           {[
             { label: 'Plant', comp: (
               <select style={SEL} value={plant} onChange={e => resetSelector(setPlant, e.target.value)}>
-                {['BSP','DSP','RSP','BSL','ISP'].map(p => <option key={p}>{p}</option>)}
+                {PLANTS.map(p => <option key={p}>{p}</option>)}
               </select>
             )},
             { label: 'Month', comp: (
@@ -256,7 +263,7 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
                         <td style={TD(bg)}>
                           <input value={row.quality_grade}
                             onChange={e => updateRow(row._id, 'quality_grade', e.target.value)}
-                            placeholder={plant === 'ISP' ? 'TOTAL' : 'e.g. E250, IS:2062'}
+                            placeholder={TOTAL_GRADE_PLANTS.has(plant) ? 'TOTAL' : 'e.g. E250, IS:2062'}
                             style={INP()} />
                         </td>
                         {/* Section */}

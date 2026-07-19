@@ -8,11 +8,14 @@ import SpecialSteelManualEntry from '@/components/SpecialSteelManualEntry';
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 function SpecialSteelEntryPageInner() {
+  // globals.css sets html/body overflow:hidden, so the page must provide its
+  // own scroll container (same pattern as the other data-entry pages).
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
       <GlobalNavbar />
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '22px 20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', maxWidth: 1200, margin: '0 auto', padding: '22px 20px', width: '100%' }}>
+
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 18 }}>
           <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
             Special Steel — Manual Entry
