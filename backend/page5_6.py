@@ -193,7 +193,8 @@ _FS_ALIAS = frozenset({"SSP", "VISL"})
 # Maps (plant, actual_item_name) -> list of plan item names to sum.
 _PLAN_ALIASES = {
     ("BSP", "SMS-2"): ["SMS-2 BLOOM", "SMS-2 SLAB"],
-    ("BSP", "SMS-3"): ["SMS-3 BILLET105", "SMS-3 BILLET150", "SMS-3 BLOOM(CV1&2)"],
+    # canonical casing per normalize_item_name (BILLET -> Billet)
+    ("BSP", "SMS-3"): ["SMS-3 Billet105", "SMS-3 Billet150", "SMS-3 BLOOM(CV1&2)"],
 }
 
 # Some months were entered under a differently-cased/spelled item name.
@@ -433,7 +434,7 @@ def _compute_row(cur, plant, db_item, is_nos_day, report_month, one_dp: bool = F
 # ---------------------------------------------------------------------------
 
 def _build_rows(plant_defs, report_month):
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     rows = []
     try:

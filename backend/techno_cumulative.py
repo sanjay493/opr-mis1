@@ -95,7 +95,7 @@ def get_rule(param_key: str):
 
 def _plant_production(plant: str, item: str, months) -> Dict[str, float]:
     """{month: production} for a plant-level item from production_table."""
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     cur = conn.cursor()
     ph = ",".join("?" * len(months))
     cur.execute(
@@ -128,7 +128,7 @@ def _unit_production(plant: str, unit: str, months,
     if unit.startswith("BF-"):
         candidates.append("BF#" + unit[3:])
 
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     cur = conn.cursor()
     ph_m = ",".join("?" * len(months))
     ph_i = ",".join("?" * len(candidates))

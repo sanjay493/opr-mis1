@@ -98,7 +98,7 @@ def _fetch_group(cur, month, plant, product):
         SELECT quality_grade, section, order_qty, actual_despatch
         FROM special_steel_orders
         WHERE report_month=? AND plant_name=? AND product=?
-        ORDER BY sort_order, rowid
+        ORDER BY sort_order, quality_grade, section
     """, (month, plant, product))
     return cur.fetchall()
 
@@ -548,7 +548,7 @@ def generate_special_steel_plant(report_month: str, plant: str) -> dict:
     ytd_months      = db.get_ytd_months(report_month)
     cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
     try:
         gen = _GENERATORS.get(plant)
@@ -600,7 +600,7 @@ def generate_special_steel_sail(report_month: str) -> dict:
     ytd_months      = db.get_ytd_months(report_month)
     cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
     try:
         plants  = ["BSP", "DSP", "RSP", "BSL", "ISP"]

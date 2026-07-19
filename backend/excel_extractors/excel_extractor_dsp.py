@@ -1,4 +1,4 @@
-﻿import re
+import re
 import logging
 import sqlite3
 import os
@@ -169,7 +169,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
         (46, COL_E, "BRC"),                    # CC Bloom/BRC despatch
     ]
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 

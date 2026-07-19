@@ -381,7 +381,7 @@ def generate_special_steel_trend(report_month: str) -> dict:
     for fy in fys:
         all_months.extend(_fy_months(fy))
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     try:
         series_pct = {ent: [] for ent in _ENTITIES}

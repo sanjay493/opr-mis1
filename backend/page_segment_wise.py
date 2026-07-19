@@ -142,7 +142,7 @@ def generate_segment_wise(report_month: str) -> dict:
     ytd        = db.get_ytd_months(report_month)
     cply_ytd   = [f"{int(m[:4])-1}{m[4:]}" for m in ytd]
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
 
     rows = []

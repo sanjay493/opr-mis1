@@ -140,7 +140,7 @@ def extract_production_to_json(report_month: str) -> bool:
 
         # Query old table
         import sqlite3
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute(
             "SELECT plant_name, item_name, month_actual FROM production_table WHERE report_month = ?",
@@ -176,7 +176,7 @@ def extract_production_plan_to_json(report_month: str) -> bool:
 
         # Query old table
         import sqlite3
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute(
             "SELECT plant_name, item_name, month_actual FROM production_plan_table WHERE report_month = ?",
@@ -212,7 +212,7 @@ def extract_special_steel_to_json(report_month: str) -> bool:
 
         # Query old table
         import sqlite3
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute("""
             SELECT plant_name, product, quality_grade, section, sort_order, order_qty, actual_despatch
@@ -248,7 +248,7 @@ def extract_stock_to_json(stock_month: str) -> bool:
 
         # Query old table
         import sqlite3
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute("""
             SELECT plant_name, item_type, stock_type, stock
@@ -284,7 +284,7 @@ def extract_ipt_to_json(report_month: str) -> bool:
 
         # Query old table
         import sqlite3
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute("""
             SELECT item, from_plant, to_plant, unit, sort_order, plan, actual, plan_tonnage, actual_tonnage
@@ -332,7 +332,7 @@ def extract_all_months_to_json() -> Dict[str, int]:
     }
 
     try:
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
 
         # Get unique months from old tables

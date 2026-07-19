@@ -25,7 +25,7 @@ _ACT = {
 
 # plan table  (BSP plan stored as sub-items; sum them to get SMS-2/SMS-3 totals)
 _PLAN = {
-    "BSP":  ["SMS-2 BLOOM", "SMS-2 SLAB", "SMS-3 BILLET105", "SMS-3 BILLET150", "SMS-3 BLOOM(CV1&2)"],
+    "BSP":  ["SMS-2 BLOOM", "SMS-2 SLAB", "SMS-3 Billet105", "SMS-3 Billet150", "SMS-3 BLOOM(CV1&2)"],
     "DSP":  "SMS Total Caster",
     "RSP":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
     "BSL":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2"],
@@ -126,7 +126,7 @@ def generate_concast_data(report_month: str) -> dict:
     prev_month      = db.get_cply_month(report_month)
     prev_ytd_months = db.get_ytd_months(prev_month)
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
 
     monthly_rows, ytd_rows = [], []

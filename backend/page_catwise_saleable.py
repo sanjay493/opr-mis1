@@ -541,7 +541,7 @@ def generate_catwise_saleable(report_month: str, plants: list) -> list:
     ytd_months  = db.get_ytd_months(report_month)
     cply_ytd    = [f"{int(m[:4])-1}{m[4:]}" for m in ytd_months]
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
     try:
         result = []

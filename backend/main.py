@@ -298,7 +298,7 @@ def get_data(month: str = "2025-11"):
                 pages_config = json.load(f)
             pages_config = blank_out_page_data(pages_config)
 
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM production_table WHERE report_month = ?", (month,))
         has_actuals = cursor.fetchone()[0] > 0
@@ -547,7 +547,7 @@ async def generate_pdf(request: PDFRequest):
 @app.get("/api/special-steel-manual")
 def get_special_steel_manual(plant: str = Query(...), month: str = Query(...)):
     """Return all special_steel_orders rows for a plant+month for manual editing."""
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     try:
         cur.execute("""
@@ -865,7 +865,7 @@ async def confirm_plan(payload: dict):
         raise HTTPException(status_code=400, detail="No plan rows provided.")
     try:
         DB_PATH = db.DB_PATH
-        conn = sqlite3.connect(DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
         saved = 0
         for r in plan_rows:
@@ -876,7 +876,7 @@ async def confirm_plan(payload: dict):
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(report_month, plant_name, item_name)
                 DO UPDATE SET month_actual = excluded.month_actual
-            """, (r["month"], r.get("plant", ""), r["item_name"], r["value"]))
+            """, (r["month"], r.get("plant", ""), normalize_item_name(r["item_name"]), r["value"]))
             saved += 1
         conn.commit()
         conn.close()
@@ -1090,7 +1090,7 @@ async def confirm_extraction(payload: dict):
 
         saved_prod = saved_plan = saved_te = saved_mill = 0
 
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
         try:
             for r in payload.get("production_rows", []):
@@ -1111,7 +1111,7 @@ async def confirm_extraction(payload: dict):
                     VALUES (?, ?, ?, ?)
                     ON CONFLICT(report_month, plant_name, item_name)
                     DO UPDATE SET month_actual = excluded.month_actual
-                """, (r["month"], r.get("plant", plant), r["item_name"], r["value"]))
+                """, (r["month"], r.get("plant", plant), normalize_item_name(r["item_name"]), r["value"]))
                 saved_plan += 1
 
             for r in payload.get("techno_rows", []):
@@ -1201,7 +1201,7 @@ async def confirm_extraction(payload: dict):
             try:
                 import sqlite3 as _sqlite3
                 from techno_aggregates import compute_bf_shop_averages as _bf_agg
-                _conn = _sqlite3.connect(db.DB_PATH)
+                _conn = _db.connect()
                 agg_written = _bf_agg(_conn, month, plants=[plant])
                 _conn.close()
             except Exception:
@@ -1406,7 +1406,7 @@ async def bsl_bf_techno_preview(
                 _db_prod_kt = db.get_production_actual_value("BSL", unit, month)
                 row["db"]["production"] = _db_prod_kt * 1000.0 if _db_prod_kt is not None else None
             elif unit == "BF_Shop":
-                _conn = sqlite3.connect(db.DB_PATH)
+                _conn = db.connect()
                 _sum_kt = _conn.execute(
                     "SELECT SUM(month_actual) FROM production_table WHERE plant_name='BSL' "
                     "AND report_month=? AND item_name IN ('BF-1','BF-2','BF-4','BF-5')",
@@ -1578,7 +1578,7 @@ async def bsl_bf_techno_save(payload: dict):
             # as RSP/DSP/BSP.
             prod = row.get("production")
             if is_furnace and isinstance(prod, (int, float)) and prod > 0:
-                conn = sqlite3.connect(db.DB_PATH)
+                conn = db.connect()
                 conn.execute(
                     """INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
                        VALUES (?, 'BSL', ?, ?)
@@ -1806,7 +1806,7 @@ async def get_item_mapping_suggestions(plant: str):
         "aliases": {pdf_label: (item_name, convert_t), ...}  # Saved PDF label → item mappings
       }
     """
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
 
     # Get all unique item names for this plant
@@ -2032,7 +2032,7 @@ def production_item_sort_key(item):
 
 @app.get("/api/production-items")
 async def get_production_items(plant: str, month: str):
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT item_name, month_actual FROM production_plan_table WHERE plant_name = ? AND report_month = ? ORDER BY item_name",
@@ -2096,7 +2096,7 @@ async def save_production_entry(request: ProductionEntryRequest):
     # the paired item in this same request, which wins over the derivation.
     if request.plant == "BSP":
         entry_map = {e.item_name: e for e in request.entries}
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
         for entry in request.entries:
             pair = BSP_SPLIT_PAIRS.get(entry.item_name)
@@ -2152,7 +2152,7 @@ _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
 def _legacy_month_range():
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     # GLOB filter guards against non-YYYY-MM junk rows in report_month (seen in
     # the wild: a literal CSV header row) which would otherwise win MAX() by
     # sorting after all real dates.
@@ -2182,7 +2182,7 @@ async def legacy_sms_crude_template():
     it's a genuine gap."""
     months = _legacy_month_range()
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     existing = {}
     for plant, items in LEGACY_SMS_CRUDE_ITEMS.items():
@@ -2228,7 +2228,7 @@ async def legacy_sms_crude_preview(file: UploadFile = File(...)):
     if not reader.fieldnames or not required_cols.issubset(set(reader.fieldnames)):
         raise HTTPException(400, f"CSV must have columns: {', '.join(sorted(required_cols))}")
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
 
     rows = []
@@ -2340,7 +2340,7 @@ async def get_conversion_data(fy_start: str = Query(...)):
         f"{y}-10", f"{y}-11", f"{y}-12",
         f"{y+1}-01", f"{y+1}-02", f"{y+1}-03",
     ]
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     phs = ",".join("?" for _ in months)
     cur.execute(
@@ -2418,7 +2418,7 @@ async def techno_major_verification(month: str = Query(...)):
 async def list_production_fys():
     """List financial years that have actual or plan production data.
     Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("""
         SELECT DISTINCT report_month FROM production_table
@@ -2448,7 +2448,7 @@ async def get_production_fy(fy_start: int = Query(...)):
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
     phs = ",".join("?" for _ in months)
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     # data[plant][item] = {"actual": {month: val}, "plan": {month: val}}
     data = {}
@@ -2495,7 +2495,7 @@ async def production_query_meta():
     """Plants and available months for the ad-hoc production query page
     (union of production_table and production_plan_table).
     Response: { plants: [...], months: ["2026-06", ...] } (months newest first)"""
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("""
         SELECT plant_name, report_month FROM production_table
@@ -2530,7 +2530,7 @@ async def production_query_items(plants: str = Query(...)):
     Union of actual and plan tables so plan-only units are selectable too.
     Response: { items: {plant: [item, ...]} } in process order."""
     plant_list = [p.strip() for p in plants.split(",") if p.strip()]
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     items = {}
     for plant in plant_list:
@@ -2602,7 +2602,7 @@ async def production_query(payload: dict):
         phs_p = ",".join("?" for _ in query_plants)
         alias_plan = {k: {} for k in index if k in PLAN_SOURCE_ALIASES}
         member_sums = {"actual": {}, "plan": {}}  # {(item, month): sum over 5 plants}
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
         for table, key in (("production_table", "actual"), ("production_plan_table", "plan")):
             cur.execute(
@@ -2644,7 +2644,7 @@ async def production_query(payload: dict):
 @app.get("/api/stock-data")
 async def get_stock_data(plant: str = Query(...), stock_month: str = Query(...)):
     """Return all stock entries for a plant + stock_month."""
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute(
         "SELECT item_type, stock_type, stock FROM stock_table "
@@ -2722,7 +2722,7 @@ async def api_plant_units(plant_code: str = Query(None), unit_type: str = Query(
     Response: { units: [{unit_id, plant_code, unit_type, unit_name, display_label, is_shop}] }
     """
     from plant_registry import get_plant_units
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     units = get_plant_units(conn, plant_code=plant_code, unit_type=unit_type)
     conn.close()
     return {"units": units}
@@ -2735,7 +2735,7 @@ async def api_param_types(unit_type: str = Query(None)):
     Response: { param_types: [{type_id, unit_type, param_name, unit_of_meas, agg_method, sort_order}] }
     """
     from plant_registry import get_param_types
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     pts = get_param_types(conn, unit_type=unit_type)
     conn.close()
     return {"param_types": pts}
@@ -2775,7 +2775,7 @@ async def get_production_records():
 @app.get("/api/techno-groups")
 async def get_techno_groups():
     """Return distinct group_codes with labels and types."""
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("""
         SELECT group_code, COUNT(*) as cnt
@@ -2800,7 +2800,7 @@ async def get_techno_groups():
 async def get_techno_monthly_data(group_code: str = Query(...), month: str = Query(...)):
     """Return all params for a group with their current monthly actual and till_month_actual."""
     try:
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
         cur.execute("""
             SELECT p.param_name, p.row_label, p.unit, p.param_id, g.sort_order,
@@ -2816,7 +2816,7 @@ async def get_techno_monthly_data(group_code: str = Query(...), month: str = Que
     except sqlite3.OperationalError:
         # Legacy schema not available - return empty results
         rows = []
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         conn.close()
 
     sections_map = {}
@@ -2862,7 +2862,7 @@ async def save_techno_manual(payload: dict):
 
         if clear:
             try:
-                conn = sqlite3.connect(db.DB_PATH)
+                conn = db.connect()
                 conn.execute("DELETE FROM techno_actuals WHERE param_id=? AND report_month=?",
                              (param_id, month))
                 conn.commit()
@@ -2936,7 +2936,7 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
     sms_values = {}
 
     try:
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
 
         # First check if SAIL values exist in DB
@@ -3093,7 +3093,7 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
 
 @app.get("/api/ipt-entries")
 def get_ipt_entries(month: str = Query(..., description="YYYY-MM")):
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
     cur.execute("""
         SELECT item, from_plant, to_plant, unit, sort_order,
@@ -3152,7 +3152,7 @@ async def delete_ipt_entry_api(payload: dict):
     to_plant   = payload.get("to_plant", "")
     if not all([month, item, from_plant, to_plant]):
         raise HTTPException(status_code=400, detail="month, item, from_plant, to_plant required")
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     conn.execute(
         "DELETE FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
         (month, item, from_plant, to_plant),
@@ -3217,7 +3217,7 @@ async def get_techno_parameters():
     """
     import json
     try:
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute("SELECT techno_json FROM techno_data")
         keys = set()
@@ -3265,7 +3265,7 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         # Normalize parameter names to match database keys (lowercase, with underscores)
         param_keys = [p.lower().replace(' ', '_') for p in param_list]
 
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -3677,7 +3677,7 @@ async def get_techno_page_targets(page: int = Query(...), fy: str = Query(...)):
     if not cfg:
         raise HTTPException(status_code=400, detail=f"Page {page} has no target-entry schema.")
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cache = {}
     try:
@@ -3827,7 +3827,7 @@ async def recalculate_sail_weighted(payload: dict):
             [f"{fy_year + 1}-{m:02d}" for m in range(1, 4)]
         )
 
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
 
         # Fetch HM production targets by plant (for BF params)
@@ -4076,7 +4076,7 @@ async def get_techno_summary(fy: str = Query("2026-27")):
     try:
         fy_year = int(fy.split("-")[0])
 
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
 
         # Get all plants and their BF targets

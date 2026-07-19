@@ -58,7 +58,7 @@ def _validate_month(report_month: str):
 
 def _get_hm_production(report_month: str, ytd: bool = False) -> Dict[str, float]:
     """Return {plant: HM_production} for the given month (or YTD sum)."""
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     cur  = conn.cursor()
     try:
         if ytd:
@@ -90,7 +90,7 @@ def _get_bf_shop_data(report_month: str, period: str = "month") -> Dict[str, dic
     'BF_Shop' row is ever stored. Same BF_Shop-then-BF-5 convention as
     page_techno.py's _VERIFY_PARAMS/_resolve_unit — without this fallback,
     ISP was silently excluded from every SAIL BF aggregate."""
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     cur  = conn.cursor()
     try:
         cur.execute(

@@ -178,7 +178,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
 
     production_cells, NO_CONVERT, derived_rules = _dpr_config()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 

@@ -60,7 +60,7 @@ def _item_sort_key():
 
 
 def generate_records() -> dict:
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
     sort_key = _item_sort_key()
     try:

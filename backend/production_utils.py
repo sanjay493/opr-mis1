@@ -20,7 +20,7 @@ def get_hm_production_for_furnace(plant: str, furnace: str, report_month: str) -
     Returns: HM production value or None
     """
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
 
     possible_names = [
@@ -52,7 +52,7 @@ def get_plant_hm_production(plant: str, report_month: str) -> Optional[float]:
     Returns: Total HM production for the plant or None
     """
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -98,7 +98,7 @@ def get_furnace_production_variants(plant: str, report_month: str, base_name: st
         'Plant Total HM': None,
     }
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
 
     # Try different formats

@@ -162,7 +162,7 @@ def _row(sub, plant, vals, apr_i, nxt_i, bold=False, sail=False):
 
 
 def generate_opening_stock(report_month: str) -> dict:
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
     try:
         months, apr, nxt = _select_months(cur, report_month)

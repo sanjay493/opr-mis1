@@ -246,7 +246,7 @@ async def get_units(
     _validate_month(report_month)
     try:
         init_db()
-        conn = sqlite3.connect(DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute(
             "SELECT unit FROM techno_data WHERE plant = ? AND report_month = ? ORDER BY unit",

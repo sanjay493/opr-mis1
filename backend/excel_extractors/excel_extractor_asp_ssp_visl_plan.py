@@ -1,8 +1,9 @@
-﻿import openpyxl
+import openpyxl
 import logging
 import sqlite3
 import os
 from typing import Optional
+import db
 
 logger = logging.getLogger("excel_extractor_plan")
 
@@ -87,7 +88,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         # --- Scan data rows ---
         # Col A: plant name (carried forward when blank)
         # Col B: item name (row skipped when blank)
-        conn = sqlite3.connect(DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         vals_written = 0
         current_plant = None

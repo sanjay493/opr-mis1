@@ -36,14 +36,14 @@ def _fmt(v):
 def generate_ipt(report_month: str) -> dict:
     ytd_months = db.get_ytd_months(report_month)
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
     try:
         ph = ",".join("?" * len(ytd_months))
 
         # union of routes seen this FY, keeping entry order
         cur.execute(f"""
-            SELECT item, from_plant, to_plant, unit, MIN(sort_order)
+            SELECT item, from_plant, to_plant, MAX(unit), MIN(sort_order)
             FROM ipt_table
             WHERE report_month IN ({ph})
             GROUP BY item, from_plant, to_plant

@@ -1397,7 +1397,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
     sheet_p9 = wb[p9_name]
     _assert_p9_month_year_match(sheet_p9, report_month)
 
-    conn   = sqlite3.connect(DB_PATH)
+    conn   = db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
@@ -1449,7 +1449,7 @@ def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
     db_report_month = f"{year}-{m_num}"
     logger.info(f"RSP Morning Report: month auto-detected → {db_report_month}")
 
-    conn   = sqlite3.connect(DB_PATH)
+    conn   = db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 

@@ -273,7 +273,7 @@ def calculate_sail_actuals(report_month: str) -> dict:
         ytd = db.get_ytd_months(report_month)
         all_months = sorted(set(ytd) | {report_month})
 
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
 
         try:
@@ -497,7 +497,7 @@ def _sail_manual_value(param_name, month, period):
     if not spec:
         return None
     unit, keys = spec
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     try:
         return _sail_stored_json_value(conn.cursor(), month, unit, keys, period)
     finally:
@@ -630,7 +630,7 @@ def compute_sail_targets(fy: str) -> dict:
 
         # If no data, compute from plant-level targets
         print(f"[DEBUG] Computing SAIL from plant-level targets")
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur  = conn.cursor()
     except Exception as e:
         import traceback
@@ -945,7 +945,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
     # store[(plant, month)][unit] = {"month": {...}, "till_month": {...}}
     store = {}
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     try:
         ph = ",".join("?" * len(all_months))
@@ -972,7 +972,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
     # Fetch Total Crude Steel production for SAIL SMS weighted-average computation
     _cs_monthly = {}  # {plant: {month: month_actual}}
-    conn3 = sqlite3.connect(db.DB_PATH)
+    conn3 = db.connect()
     cur3 = conn3.cursor()
     try:
         ph3 = ",".join("?" * len(_weight_months))
@@ -988,7 +988,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
     # Fetch Hot Metal production for SAIL BF weighted-average computation
     _hm_monthly = {}  # {plant: {month: month_actual}}
-    conn4 = sqlite3.connect(db.DB_PATH)
+    conn4 = db.connect()
     cur4 = conn4.cursor()
     try:
         ph4 = ",".join("?" * len(_weight_months))
@@ -1588,7 +1588,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
     all_months = sorted(set(ytd) | {fy1_march, fy2_march, fy3_march})
 
     store = {}
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     try:
         ph = ",".join("?" * len(all_months))
@@ -1602,7 +1602,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
         conn.close()
 
     _hm_monthly, _cs_monthly = {}, {}
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     try:
         ph = ",".join("?" * len(ytd))
@@ -1626,7 +1626,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
     _cs_shop_monthly = {}
     _shop_items = sorted({item for items in _VERIFY_SMS_PRODUCTION_ITEMS.values() for item in items})
     if _shop_items:
-        conn = sqlite3.connect(db.DB_PATH)
+        conn = db.connect()
         cur = conn.cursor()
         try:
             ph_m = ",".join("?" * len(ytd))
@@ -2518,7 +2518,7 @@ def generate_techno_target_columns(page_no: int) -> dict:
     # (RSP never reports conditioned_slab_caster_yield; only BSP does).
     import json as _json
     available_keys = set()
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     try:
         cur.execute("SELECT plant, unit, techno_json FROM techno_data WHERE plant != 'SAIL'")
@@ -2601,7 +2601,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     all_months = sorted(set(ytd) | {cply_month, fy1_march, fy2_march, fy3_march})
 
     store = {}
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     try:
         ph = ",".join("?" * len(all_months))
@@ -2617,7 +2617,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     # Fetch plan data from techno_plan_fy for the current FY
     fy_str = _fy_label(fy)  # e.g., "2026-27"
     plan_store = {}
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     try:
         cur.execute(

@@ -97,7 +97,7 @@ def register_verify(body: RegisterVerify, response: Response):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
 
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO users (email, password_hash, name, role, profile_pic, created_at, updated_at)
@@ -160,7 +160,7 @@ def password_verify(body: ResetVerify):
     if len(body.new_password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute(
         "UPDATE users SET password_hash=?, updated_at=? WHERE email=?",
@@ -184,7 +184,7 @@ def update_profile(
     picture: Optional[UploadFile] = File(default=None),
     user: dict = Depends(auth.get_current_user),
 ):
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     updates = []
     params = []

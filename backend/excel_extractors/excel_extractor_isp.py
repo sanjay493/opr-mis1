@@ -1,4 +1,4 @@
-﻿import re
+import re
 import openpyxl
 from openpyxl.utils import get_column_letter
 import logging
@@ -171,7 +171,7 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
 
     production_cells, NO_CONVERT, derived_rules = _morning_report_config()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
@@ -285,7 +285,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
         "Saleable Steel":        37,
     }
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 

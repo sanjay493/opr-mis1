@@ -17,6 +17,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "mis_reports.db")
 # Each page config lists display groups as (label, [plants_to_sum]).
 # A single-plant group sums only that plant; an aggregate sums all listed plants.
 from constants import ALL_PLANTS as _SAIL_8
+import db
 
 _PIG_IRON_CFG = {
     "display": "PIG IRON",
@@ -232,7 +233,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     plan_min = f"{cur_fy}-04"
     plan_max = f"{cur_fy + 1}-03"
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
 
     cur.execute(

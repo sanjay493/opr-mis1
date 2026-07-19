@@ -301,7 +301,7 @@ class TechnoSAILCalculator:
         all_params = set()
 
         for plant in self.PLANTS:
-            conn = sqlite3.connect(DB_PATH)
+            conn = db.connect()
             cursor = conn.cursor()
 
             cursor.execute("""
@@ -345,7 +345,7 @@ class TechnoSAILCalculator:
         Returns: value if found in legacy table, None otherwise
         """
         try:
-            conn = sqlite3.connect(DB_PATH)
+            conn = db.connect()
             cursor = conn.cursor()
 
             cursor.execute("""
@@ -374,7 +374,7 @@ class TechnoSAILCalculator:
         values = []
 
         for plant in self.PLANTS:
-            conn = sqlite3.connect(DB_PATH)
+            conn = db.connect()
             cursor = conn.cursor()
 
             cursor.execute("""

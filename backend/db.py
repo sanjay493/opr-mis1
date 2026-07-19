@@ -4,19 +4,35 @@ import os
 from typing import List, Dict, Any, Optional
 from constants import ALL_PLANTS as PLANTS
 from techno_registry import canonical_unit as _canon_unit
+import dbengine
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "mis_reports.db")
+
+
+def connect():
+    """Single connection factory for the whole backend. Returns a sqlite3
+    connection or a MySQL sqlite-dialect wrapper depending on DB_ENGINE
+    (see dbengine.py). Every module should use this instead of calling
+    connect() directly."""
+    return dbengine.connect(DB_PATH)
+
 
 _INIT_DONE = False
 
 def init_db():
     """Initializes the database and creates the production tables if they don't exist.
-    Runs the DDL only once per process — subsequent calls are no-ops."""
+    Runs the DDL only once per process — subsequent calls are no-ops.
+
+    Under MySQL this is a no-op: the DDL below is sqlite-flavored, and the
+    MySQL schema is owned by scripts/mysql_schema.sql (applied once during
+    migration/deploy), not created lazily at runtime."""
     global _INIT_DONE
     if _INIT_DONE:
         return
     _INIT_DONE = True
-    conn = sqlite3.connect(DB_PATH)
+    if dbengine.DB_ENGINE == "mysql":
+        return
+    conn = connect()
     cursor = conn.cursor()
     
     # 1. Actuals table
@@ -391,7 +407,7 @@ def _sail_conversion_actual(cursor, month: str) -> Optional[float]:
 def get_sail_production_actual(month: str, item: str) -> Optional[float]:
     """Calculates the sum of actuals across active plants. Falls back to explicit 'SAIL' record if none found."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     if item == "Finished Steel":
@@ -436,7 +452,7 @@ def get_sail_production_actual(month: str, item: str) -> Optional[float]:
 def get_sail_production_plan(month: str, item: str) -> Optional[float]:
     """Calculates the sum of plans across active plants. Falls back to explicit 'SAIL' record if none found."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     if item == "Finished Steel":
@@ -481,7 +497,7 @@ def get_sail_production_ytd_actual(months: List[str], item: str) -> Optional[flo
     if not months:
         return None
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     if item == "Finished Steel":
@@ -528,7 +544,7 @@ def get_sail_production_ytd_plan(months: List[str], item: str) -> Optional[float
     if not months:
         return None
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     if item == "Finished Steel":
@@ -573,7 +589,7 @@ def save_production_actual(month: str, plant: str, item: str, value: Optional[fl
     """Saves or updates an actual production record."""
     item = item.strip()
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     if value is None:
         cursor.execute("""
@@ -594,7 +610,7 @@ def save_production_plan(month: str, plant: str, item: str, value: Optional[floa
     """Saves or updates a planned production record."""
     item = item.strip()
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     if value is None:
         cursor.execute("""
@@ -614,7 +630,7 @@ def save_production_plan(month: str, plant: str, item: str, value: Optional[floa
 def get_page_config(month: str, page_number: int) -> Optional[dict]:
     """Retrieves standard page configuration if saved in DB."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     cursor.execute("SELECT page_data FROM page_configs WHERE report_month = ? AND page_number = ?", (month, page_number))
     row = cursor.fetchone()
@@ -624,7 +640,7 @@ def get_page_config(month: str, page_number: int) -> Optional[dict]:
 def get_all_page_configs(month: str) -> List[dict]:
     """Retrieves all standard page configurations for a month, ordered by page number."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     cursor.execute("SELECT page_data FROM page_configs WHERE report_month = ? ORDER BY page_number ASC", (month,))
     rows = cursor.fetchall()
@@ -634,7 +650,7 @@ def get_all_page_configs(month: str) -> List[dict]:
 def save_page_config(month: str, page_number: int, page_data: dict):
     """Saves or updates a page configuration."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO page_configs (report_month, page_number, page_data)
@@ -650,7 +666,7 @@ def save_techno_parameter(month: str, plant: str, parameter: str, unit: str,
     """Upsert a techno actual by (row_label=plant, param_name=parameter).
     ytd_val is ignored — YTD is computed on the fly."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cur = conn.cursor()
     cur.execute(
         "SELECT param_id FROM techno_param WHERE row_label=? AND param_name=?",
@@ -675,7 +691,7 @@ def clear_special_steel_orders(month: str, plant: str) -> int:
     """Delete all special_steel_orders rows for a given month + plant.
     Called once before a batch insert so stale grades/products don't linger."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cur = conn.execute(
         "DELETE FROM special_steel_orders WHERE report_month=? AND plant_name=?",
         (month, plant),
@@ -693,7 +709,7 @@ def save_special_steel_entry(month: str, plant: str, product: str, quality_grade
     """Upsert one row into special_steel_orders. section stays '' for plants
     whose report has no section breakdown."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.execute("""
         INSERT INTO special_steel_orders
             (report_month, plant_name, product, quality_grade, section,
@@ -714,7 +730,7 @@ def save_stock_entry(stock_month: str, plant: str, item_type: str,
                      stock_type: str = "", stock: Optional[float] = None):
     """Upsert one opening-stock record ('000T, as on 1st of stock_month)."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.execute("""
         INSERT INTO stock_table (stock_month, plant_name, item_type, stock_type, stock)
         VALUES (?, ?, ?, ?, ?)
@@ -734,7 +750,7 @@ def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
     For Rake routes, plan/actual are rake counts and
     plan_tonnage/actual_tonnage hold the tonnes equivalent."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.execute("""
         INSERT INTO ipt_table
             (report_month, item, from_plant, to_plant, unit, sort_order,
@@ -785,7 +801,7 @@ def get_or_create_techno_param(group_code: str, section: str, row_label: str,
     param_name = canonical_name(param_name)
     unit = canonical_unit(unit, group_code, param_name)
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO techno_param (param_name, row_label, unit, sort_order)
@@ -843,7 +859,7 @@ def save_techno_data_from_extraction(plant: str, report_month: str, extracted_ro
         "till_month": till_month_data
     }
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     now = datetime.now().isoformat()
 
@@ -866,7 +882,7 @@ def save_techno_json(plant: str, report_month: str, unit: str,
     import json
     from datetime import datetime
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     now = datetime.now().isoformat()
     cursor.execute("""
@@ -896,7 +912,7 @@ def save_techno_value(month: str, param_id: int, actual: Optional[float],
     source = 'excel' if source_priority >= 5 else 'computed'
     init_db()
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect()
         conn.execute("""
             INSERT INTO techno_actuals (report_month, param_id, actual, till_month_actual, source)
             VALUES (?, ?, ?, ?, ?)
@@ -922,7 +938,7 @@ def save_techno_monthly(param_id: int, report_month: str, actual: Optional[float
 def save_techno_target(fy: str, param_id: int, target: Optional[float]):
     """Upsert annual target for a parameter ('2026-27' style fy)."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.execute("""
         INSERT INTO techno_target (fy, param_id, target)
         VALUES (?, ?, ?)
@@ -937,7 +953,7 @@ def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: st
     """Appends a record to the extraction audit log."""
     init_db()
     from datetime import datetime
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.execute("""
         INSERT INTO extraction_log (logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -949,7 +965,7 @@ def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: st
 def get_pdf_item_aliases(plant: str) -> Dict[str, Any]:
     """User-saved PDF label corrections for a plant: {pdf_label: (item_name, convert_t)}."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     rows = conn.execute("""
         SELECT pdf_label, item_name, convert_t FROM pdf_item_alias WHERE plant_name = ?
     """, (plant,)).fetchall()
@@ -965,7 +981,7 @@ def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: i
     if "(nos" in (item_name or "").lower():
         convert_t = 0
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.execute("""
         INSERT INTO pdf_item_alias (plant_name, pdf_label, item_name, convert_t)
         VALUES (?, ?, ?, ?)
@@ -982,7 +998,7 @@ def get_extraction_logs(limit: int = 60, plant: Optional[str] = None,
     Optional plant/source_type filters let a page (e.g. /data-entry/techno)
     show only its own entries from this shared log table."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     clauses, params = [], []
     if plant:
@@ -1019,7 +1035,7 @@ def insert_techno_furnace_data(plant: str, furnace: str, report_month: str, data
         data: {param: {value, unit, source, ...}}
     """
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1042,7 +1058,7 @@ def get_techno_furnace_data(plant: str, report_month: str, furnace: str = "") ->
     Returns: {furnace: {param: {value, unit, ...}}} or specific furnace data
     """
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1085,7 +1101,7 @@ def insert_techno_plant_data(plant: str, report_month: str, data: Dict[str, Any]
         calculation_details: {param: {formula, furnaces_used, ...}}
     """
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1109,7 +1125,7 @@ def get_techno_plant_data(plant: str, report_month: str) -> Dict[str, Any]:
     Returns: {data: {param: {value, unit, ...}}, calculation_details: {...}}
     """
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1141,7 +1157,7 @@ def insert_techno_sail_consolidated(report_month: str, data: Dict[str, float],
         calculation_method: {param: "SAIL_direct" | "avg_5_plants"}
     """
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1165,7 +1181,7 @@ def get_techno_sail_consolidated(report_month: str) -> Dict[str, Any]:
     Returns: {data: {param: value}, calculation_method: {param: "SAIL_direct" | "avg_5_plants"}}
     """
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1195,7 +1211,7 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
     itself and by _maybe_recompute_derived_params (which must write its
     recomputed values without re-triggering itself)."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
@@ -1279,7 +1295,7 @@ def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str) ->
         data = get_techno_data(plant, report_month, unit).get(unit, {})
         if not data:
             return
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect()
         cur = conn.cursor()
         cur.execute(
             "SELECT source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
@@ -1326,7 +1342,7 @@ def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techn
     """Merge new_techno_json into any existing row (non-null values win; existing non-null kept if new value is null).
     Use this when multiple source files contribute different parameters to the same plant/unit/month."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT techno_json FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
@@ -1356,7 +1372,7 @@ def get_production_actual_value(plant: str, item_name: str, report_month: str) -
     aggregation) - used to show 'current DB value' next to a freshly-extracted
     figure during upload preview, so the user can compare before confirming."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name=? AND report_month=?",
@@ -1374,7 +1390,7 @@ def enrich_rows_with_db_production(rows: List[Dict[str, Any]], plant: str, repor
     if not rows:
         return rows
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT item_name, month_actual FROM production_table WHERE plant_name=? AND report_month=?",
@@ -1405,7 +1421,7 @@ def enrich_techno_records_with_db(records: List[Dict[str, Any]], plant: str, rep
 def get_techno_data(plant: str, report_month: str, unit: str = None) -> Dict:
     """Return {unit: {month: {...}, till_month: {...}}} for a given plant/month."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1437,7 +1453,7 @@ def get_sail_techno_actuals(report_month: str) -> Dict[str, Any]:
     Returns: {unit: {month: {...}, till_month: {...}}} where unit is typically 'Shop'
     """
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1464,7 +1480,7 @@ def save_sail_techno_actuals(report_month: str, unit: str, techno_json: Dict,
     from datetime import datetime
     now = datetime.now().isoformat()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1491,7 +1507,7 @@ def get_techno_months(plant: str = None) -> List[str]:
     """Return distinct report_month values in techno_data, newest first.
     Optionally filter by plant."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
     if plant:
         cursor.execute(
@@ -1516,7 +1532,7 @@ def get_techno_plan(plant: str, fy: str, unit: str = "") -> Dict[str, Any]:
     If unit specified, returns that specific unit's data.
     Otherwise returns all units for the plant."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
@@ -1562,7 +1578,7 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
                     calculation_method: Dict = None, created_by: str = ""):
     """Save or update techno plan data for a plant/unit/FY in unified table."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cur = conn.cursor()
     from datetime import datetime
     now = datetime.now().isoformat()
@@ -1587,7 +1603,7 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
 def get_techno_plant_plan(plant: str, fy: str) -> Dict[str, Any]:
     """Fetch plant-level techno plan data (unit='Shop') for a FY."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute(
@@ -1620,7 +1636,7 @@ def save_techno_plant_plan(plant: str, fy: str, data: Dict, is_user_supplied: bo
 def get_sail_techno_plan(fy: str) -> Dict[str, Any]:
     """Fetch SAIL consolidated techno plan data (plant_name='SAIL', unit='Shop') for a FY."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute(
@@ -1653,7 +1669,7 @@ def save_sail_techno_plan(fy: str, data: Dict, is_user_supplied: bool = False,
 def list_techno_plan_fys(plant: str = None) -> List[str]:
     """List distinct FYs in techno_plan_fy table, optionally filtered by plant."""
     init_db()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     cursor = conn.cursor()
 
     if plant:

@@ -394,7 +394,7 @@ async def get_plants():
         import sqlite3
         from db import DB_PATH
 
-        conn = sqlite3.connect(DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT plant FROM techno_data ORDER BY plant")
         plants = [row[0] for row in cursor.fetchall()]

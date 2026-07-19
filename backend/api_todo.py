@@ -79,7 +79,7 @@ async def list_jobs(status: str = Query("pending", description="pending | done |
     if status not in ("pending", "done", "all"):
         raise HTTPException(400, "status must be 'pending', 'done', or 'all'")
     _db.init_db()
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     conn.row_factory = sqlite3.Row
     try:
         if status == "all":
@@ -103,7 +103,7 @@ async def add_job(body: JobRequest):
         raise HTTPException(400, "subject is required")
 
     _db.init_db()
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     try:
         cur = conn.execute(
             """INSERT INTO todo_jobs
@@ -135,7 +135,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
     if not fields:
         raise HTTPException(400, "No fields provided to update.")
 
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     try:
         cur = conn.execute(
             f"UPDATE todo_jobs SET {', '.join(fields)} WHERE id = ?",
@@ -151,7 +151,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
 
 @router.post("/{job_id}/complete")
 async def complete_job(job_id: int):
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     try:
         cur = conn.execute(
             "UPDATE todo_jobs SET status='done', completed_at=? WHERE id=?",
@@ -167,7 +167,7 @@ async def complete_job(job_id: int):
 
 @router.post("/{job_id}/reopen")
 async def reopen_job(job_id: int):
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     try:
         cur = conn.execute(
             "UPDATE todo_jobs SET status='pending', completed_at=NULL WHERE id=?",
@@ -183,7 +183,7 @@ async def reopen_job(job_id: int):
 
 @router.post("/{job_id}/delete")
 async def delete_job(job_id: int):
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     try:
         cur = conn.execute("DELETE FROM todo_jobs WHERE id=?", (job_id,))
         conn.commit()

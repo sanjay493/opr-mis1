@@ -32,7 +32,7 @@ class RoleRequest(BaseModel):
 
 @router.get("/allowed-emails")
 def list_allowed_emails():
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute("SELECT * FROM allowed_emails ORDER BY added_at DESC")
@@ -45,7 +45,7 @@ def list_allowed_emails():
 def add_allowed_email(body: EmailOnly, admin: dict = Depends(auth.require_admin)):
     email = body.email.lower()
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO allowed_emails (email, added_by, added_at, barred)
@@ -62,7 +62,7 @@ def add_allowed_email(body: EmailOnly, admin: dict = Depends(auth.require_admin)
 @router.delete("/allowed-emails/{email}")
 def remove_allowed_email(email: str, admin: dict = Depends(auth.require_admin)):
     email = email.lower()
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("DELETE FROM allowed_emails WHERE email=?", (email,))
     conn.commit()
@@ -75,7 +75,7 @@ def remove_allowed_email(email: str, admin: dict = Depends(auth.require_admin)):
 def bar_allowed_email(email: str, body: BarRequest, admin: dict = Depends(auth.require_admin)):
     email = email.lower()
     now = datetime.now(timezone.utc).isoformat()
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("SELECT 1 FROM allowed_emails WHERE email=?", (email,))
     if not cur.fetchone():
@@ -96,7 +96,7 @@ def bar_allowed_email(email: str, body: BarRequest, admin: dict = Depends(auth.r
 
 @router.get("/users")
 def list_users():
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute("SELECT id, email, name, role, profile_pic, created_at, updated_at FROM users ORDER BY created_at DESC")
@@ -109,7 +109,7 @@ def list_users():
 def set_user_role(user_id: int, body: RoleRequest, admin: dict = Depends(auth.require_admin)):
     if body.role not in (None, "editor", "admin"):
         raise HTTPException(status_code=400, detail="Role must be 'editor', 'admin', or null.")
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("SELECT email FROM users WHERE id=?", (user_id,))
     row = cur.fetchone()
@@ -128,7 +128,7 @@ def set_user_role(user_id: int, body: RoleRequest, admin: dict = Depends(auth.re
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("SELECT email FROM users WHERE id=?", (user_id,))
     row = cur.fetchone()
@@ -146,7 +146,7 @@ def delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
 
 @router.get("/activity-log")
 def get_activity_log(limit: int = 200, offset: int = 0, user_email: Optional[str] = None, action: Optional[str] = None):
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     where = []

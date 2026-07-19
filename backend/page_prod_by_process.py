@@ -167,7 +167,7 @@ def generate_prod_by_process(report_month: str) -> dict:
     ytd_months      = db.get_ytd_months(report_month)
     prev_ytd_months = db.get_ytd_months(prev_month)
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur  = conn.cursor()
     m_cur, m_prev, y_cur, y_prev = [], [], [], []
 

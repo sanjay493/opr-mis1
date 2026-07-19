@@ -84,7 +84,7 @@ async def list_entries(
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
     _db.init_db()
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.execute(
@@ -104,7 +104,7 @@ async def add_entry(body: EntryRequest):
         raise HTTPException(400, "description is required")
 
     _db.init_db()
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     try:
         cur = conn.execute(
             """INSERT INTO daily_work_log (work_date, description, remarks, created_at)
@@ -135,7 +135,7 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
     if not fields:
         raise HTTPException(400, "No fields provided to update.")
 
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     try:
         cur = conn.execute(
             f"UPDATE daily_work_log SET {', '.join(fields)} WHERE id = ?",
@@ -151,7 +151,7 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
 
 @router.post("/{entry_id}/delete")
 async def delete_entry(entry_id: int):
-    conn = sqlite3.connect(_db.DB_PATH)
+    conn = _db.connect()
     try:
         cur = conn.execute("DELETE FROM daily_work_log WHERE id=?", (entry_id,))
         conn.commit()

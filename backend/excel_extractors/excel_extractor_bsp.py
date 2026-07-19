@@ -327,7 +327,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
             if needle not in guard_label:
                 production_cells.pop(item_name, None)
 
-        conn = sqlite3.connect(DB_PATH)
+        conn = db.connect()
         cursor = conn.cursor()
         vals_extracted = 0
 

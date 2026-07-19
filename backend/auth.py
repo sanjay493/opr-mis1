@@ -72,7 +72,7 @@ def decode_session_token(token: str) -> Optional[dict]:
 # ── DB user lookups ──────────────────────────────────────────────────────────
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute("SELECT * FROM users WHERE email=?", (email,))
@@ -82,7 +82,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
 
 
 def get_user_by_id(user_id: int) -> Optional[dict]:
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute("SELECT * FROM users WHERE id=?", (user_id,))
@@ -92,7 +92,7 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
 
 
 def is_email_allowed(email: str) -> bool:
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("SELECT barred FROM allowed_emails WHERE email=?", (email,))
     row = cur.fetchone()
@@ -103,7 +103,7 @@ def is_email_allowed(email: str) -> bool:
 # ── FastAPI dependencies ──────────────────────────────────────────────────────
 
 def _is_barred(email: str) -> bool:
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute("SELECT barred FROM allowed_emails WHERE email=?", (email,))
     row = cur.fetchone()
@@ -165,7 +165,7 @@ def generate_and_store_otp(email: str, purpose: str) -> str:
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=OTP_EXPIRE_MINUTES)
 
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute(
         "UPDATE otp_codes SET used=1 WHERE email=? AND purpose=? AND used=0",
@@ -184,7 +184,7 @@ def generate_and_store_otp(email: str, purpose: str) -> str:
 def verify_otp(email: str, purpose: str, code: str) -> bool:
     """Checks the code against the latest unused, unexpired OTP for
     email+purpose. Marks it used on success so it can't be replayed."""
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute(
         """SELECT id, code_hash, expires_at FROM otp_codes
@@ -246,7 +246,7 @@ def send_otp_email(to_email: str, code: str, purpose: str) -> None:
 
 def log_activity(user: Optional[dict], action: str, entity: str, details: str = "") -> None:
     """action: 'insert' | 'update' | 'delete'."""
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO activity_log (user_email, user_name, action, entity, details, timestamp)

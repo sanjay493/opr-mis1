@@ -293,7 +293,7 @@ def _safe_gr(c_s, p_s):
 
 def generate_page4_rows(month: str) -> list:
     """Build all page-4 rows for `month`."""
-    conn = sqlite3.connect(db.DB_PATH)
+    conn = db.connect()
     cur = conn.cursor()
     rows = []
     try:
