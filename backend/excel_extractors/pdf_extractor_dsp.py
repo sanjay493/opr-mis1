@@ -176,6 +176,12 @@ def _extract_pdf_report_month(file_path: str) -> str:
     )
 
 
+# Recognized non-month aggregate-column labels: newer reports end the row
+# with "TOTAL"; older (~2015-2018) reports interleave quarterly/half-yearly
+# cumulative columns ("Q1", "Q2", "Q3", "Q4", "H1", "H2") with no "TOTAL".
+_AGGREGATE_TOKENS = {"TOTAL", "Q1", "Q2", "Q3", "Q4", "H1", "H2", "YTD"}
+
+
 def _month_header(lines):
     """Returns the month-column list from a header line like 'SL. APR MAY TOTAL' or 'APR'25 MAY'25 TOTAL'.
 
@@ -839,11 +845,17 @@ def _block_production(file_path: str, prod_page_idx: int,
 
     for ln in lines[:15]:
         toks = [t.upper().rstrip('.') for t in ln.split()]
-        # Find header row: has months AND aggregates (Q1, Q2, H1, TOTAL)
+        # Find header row: has months AND an aggregate column. Newer reports
+        # end the row with "TOTAL"; older (~2015-2018) reports instead
+        # interleave "Q1"/"Q2"/"H1" cumulative columns right after each
+        # quarter (e.g. "APR MAY JUN Q1 JUL AUG SEP Q2 H1") with no "TOTAL"
+        # at all - either way, the column position of the requested month
+        # among ALL these columns (not just the month-only list) is what
+        # matters, so any recognized aggregate label counts.
         has_months = any(m in toks for m in month_cols)
-        has_total = 'TOTAL' in toks
+        has_aggregate = any(t in _AGGREGATE_TOKENS for t in toks)
 
-        if has_months and has_total:
+        if has_months and has_aggregate:
             header_row_text = toks
             # Find position of first month
             first_month_pos = min((toks.index(m) for m in month_cols if m in toks), default=-1)
