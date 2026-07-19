@@ -626,7 +626,12 @@ function UploadPageInner() {
       const millOk = (result.techno_param_rows || []).filter((r) => r.status === 'ok').length;
       addLog('success', `File type: ${result.source_type} (month ${result.month})`);
       if (result.month_mismatch) {
-        addLog('error', `Month mismatch: file contains data for ${result.month} but you selected ${result.selected_month}. File month (${result.month}) will be used — please re-select the correct month if needed.`);
+        if (result.month_mismatch.warning_only) {
+          // Same-FY earlier month extracted from a later report — valid, just inform.
+          addLog('warning', `⚠ ${result.month_mismatch.message}`);
+        } else {
+          addLog('error', `Month mismatch: ${result.month_mismatch.message || `file contains data for ${result.month} but you selected ${result.selected_month}. File month (${result.month}) will be used — please re-select the correct month if needed.`}`);
+        }
       }
       addLog('info', `Workbook sheets: ${(result.workbook_sheets || []).join(' | ')}`);
       if (!result.production_rows?.length) {

@@ -759,6 +759,10 @@ def _preview_maj_techno_summ(wb, db_report_month: str, month_num: str,
     rows = []
     for label, section, unit, so in _MAP:
         found = _find_label_rows(ws, label, count=1, label_col=2, max_row=80)
+        if not found and label == "Sp Energy Consumption":
+            # 2016-18 vintage files truncate this label to "Overall Sp Energy
+            # Consumpt" — retry with the shortened form.
+            found = _find_label_rows(ws, "Sp Energy Consumpt", count=1, label_col=2, max_row=80)
         if not found:
             rows.append({
                 "group_code": "MAJOR", "section": section, "parameter": "ISP",
@@ -790,6 +794,343 @@ def _preview_maj_techno_summ(wb, db_report_month: str, month_num: str,
     return rows
 
 
+def _summ_header_months(ws, header_row: int) -> list:
+    """Ordered list of 'YYYY-MM' month columns present on a summarized-sheet
+    header row (labels like "Apr'17", "Jul'25"). Cumulative columns ("2M",
+    "Qrt-1", "H-1") don't match and are skipped."""
+    out = []
+    for c in range(1, 130):
+        raw = ws.cell(row=header_row, column=c).value
+        if raw is None:
+            continue
+        m = re.match(r"^\s*([A-Za-z]{3,9})\s*'\s*(\d{2})\s*$", str(raw).strip())
+        if not m:
+            continue
+        ab = m.group(1)[:3].title()
+        for num, abbr in _MONTH_ABBR3.items():
+            if abbr == ab:
+                ym = f"20{m.group(2)}-{num}"
+                if ym not in out:
+                    out.append(ym)
+                break
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Old-vintage (2016-18 "Summarised monthly statistical") extraction.
+# Same ABP/ACT column layout as modern files, but different sheet names
+# (BF/CO in 2016-17), all headers on rows 3/4, and different row anchors.
+# Everything below is label-anchored — no bare fixed-row fallbacks, so a row
+# that isn't found is simply skipped instead of silently reading garbage.
+# ---------------------------------------------------------------------------
+
+def _old_bf_rows(ws, ac, cum_ac, col, techno_rows, techno_param_rows):
+    """BF sheet, old vintage: rates under 'NET RAW MATERIALS CONSUMPTION RATE
+    (DRY BASIS)' (+1 Coke, +2 Nut Coke, +3 CDI), productivity/labels scanned."""
+    _CROSS_BF = {
+        "PCI Rate":          ("CDI",              "Kg/THM",   17),
+        "Coke Rate":         ("BF Coke Rate",     "Kg/THM",   45),
+        "Nut Coke Rate":     ("Nut Coke Rate",    "Kg/THM",   55),
+        "Productivity":      ("BF Productivity",  "T/m³/day", 65),
+        "Sinter in Burden":  ("Sinter in Burden", "%",       115),
+        "Blast Temperature": ("HBT",              "°C",      100),
+        "Si in HM":          ("Si in HM",         "%",        75),
+        "S in HM":           ("S in HM",          "%",        85),
+    }
+
+    def _v3(r):
+        v = clean_val(ws.cell(row=r, column=ac).value)
+        y = clean_val(ws.cell(row=r, column=cum_ac).value) if cum_ac else None
+        l = str(ws.cell(row=r, column=2).value or '').strip()
+        return v, y, l
+
+    def _emit(name, cross, unit, r):
+        v, y, l = _v3(r)
+        techno_rows.append(_tr("BF", name, unit, v, f"BF!{col}{r}", l, y))
+        if cross in _CROSS_BF:
+            sec, u, so = _CROSS_BF[cross]
+            techno_param_rows.append({
+                "group_code": "IRON_MAKING", "section": sec,
+                "parameter": "ISP", "unit": u,
+                "sort_order": so, "actual": v, "cum_actual": y,
+                "cell": f"BF!{col}{r}", "found_via": f"ISP BF (old) {name}",
+                "status": "ok" if v is not None else "no value",
+            })
+
+    anchor = _find_label_rows(ws, "NET RAW MATERIALS CONSUMPTION RATE", count=1, max_row=60)
+    if anchor:
+        a = anchor[0]
+        _emit("Coke Rate",     "Coke Rate",     "Kg/THM", a + 1)
+        _emit("Nut Coke Rate", "Nut Coke Rate", "Kg/THM", a + 2)
+        _emit("PCI Rate",      "PCI Rate",      "Kg/THM", a + 3)
+
+    # Label-scanned rows — emitted only when the label exists (old files have
+    # no Pellet or Oxygen-enrichment rows, so those are simply absent here).
+    for label, name, cross, unit in [
+        ("BF Productivity",      "Productivity",      "Productivity",      "T/M3/Day"),
+        ("Sinter in Fe bearing", "Sinter% in Burden", "Sinter in Burden",  "%"),
+        ("Blast Temperature",    "Hot Blast Temp",    "Blast Temperature", "°C"),
+        ("Slag Rate",            "Slag Rate",         None,                "Kg/T"),
+        ("Si in HM",             "Si in HM",          "Si in HM",          "%"),
+        ("S in HM",              "S in HM",           "S in HM",           "%"),
+        ("Sp Power Cons",        "Sp Power Cons",     None,                "KWh/T"),
+    ]:
+        found = _find_label_rows(ws, label, count=1)
+        if found:
+            _emit(name, cross, unit, found[0])
+
+
+def _old_sms_rows(ws, ac, cum_ac, col, techno_rows, techno_param_rows):
+    """SMS sheet, old vintage — all rows located by label. Old files carry
+    Steel Scrap and Iron Scrap as separate rate rows; their sum is the
+    'Scrap Consumption' figure modern files report as one row."""
+    def _val(r, c):
+        return clean_val(ws.cell(row=r, column=c).value)
+
+    def _lbl(r):
+        return str(ws.cell(row=r, column=2).value or '').strip()
+
+    def _find1(label):
+        f = _find_label_rows(ws, label, count=1, max_row=130)
+        return f[0] if f else None
+
+    days     = _val(2, ac) or 30
+    cum_days = _val(2, cum_ac) if cum_ac else None
+
+    r_heats = _find1("Total heats")
+    blows_day = cum_blows = None
+    if r_heats:
+        heats = _val(r_heats, ac)
+        blows_day = round(heats / days, 2) if heats is not None else None
+        cum_heats = _val(r_heats, cum_ac) if cum_ac else None
+        cum_blows = round(cum_heats / cum_days, 2) if (cum_heats is not None and cum_days) else None
+        techno_rows.append(_tr("SMS", "Blows per Day", "Nos/Day", blows_day,
+                               f"SMS!{col}{r_heats}÷{int(days)}days", _lbl(r_heats), cum_blows))
+
+    r_acw = _find1("Avg. Cast Weight")
+    acw = acw_c = None
+    if r_acw:
+        acw   = _val(r_acw, ac)
+        acw_c = _val(r_acw, cum_ac) if cum_ac else None
+        techno_rows.append(_tr("SMS", "Avg Cast Wt", "Mt/Cast", acw,
+                               f"SMS!{col}{r_acw}", _lbl(r_acw), acw_c))
+
+    r_hm = _find1("Hot Metal Consumption rate")
+    if r_hm:
+        techno_rows.append(_tr("SMS", "HM Consumption", "Kg/TCS", _val(r_hm, ac),
+                               f"SMS!{col}{r_hm}", _lbl(r_hm),
+                               _val(r_hm, cum_ac) if cum_ac else None))
+
+    r_ss = _find1("Steel Scrap Consumption rate")
+    r_is = _find1("Iron Scrap Consumption rate")
+    if r_ss:
+        sv  = _val(r_ss, ac)
+        iv  = _val(r_is, ac) if r_is else None
+        scv = (sv or 0) + (iv or 0) if (sv is not None or iv is not None) else None
+        scy = None
+        if cum_ac:
+            svc = _val(r_ss, cum_ac)
+            ivc = _val(r_is, cum_ac) if r_is else None
+            scy = (svc or 0) + (ivc or 0) if (svc is not None or ivc is not None) else None
+        cell = f"SMS!{col}{r_ss}" + (f"+{col}{r_is}" if r_is else "")
+        techno_rows.append(_tr("SMS", "Scrap Consumption", "Kg/TCS", scv,
+                               cell, "Steel+Iron Scrap Consumption rate", scy))
+
+    r_tmi = _find1("TMI")
+    if r_tmi:
+        techno_rows.append(_tr("SMS", "TMI", "Kg/TCS", _val(r_tmi, ac),
+                               f"SMS!{col}{r_tmi}", _lbl(r_tmi),
+                               _val(r_tmi, cum_ac) if cum_ac else None))
+
+    r_o2 = _find1("Sp Oxygen Consumption")
+    o2 = o2c = None
+    if r_o2:
+        o2  = _val(r_o2, ac)
+        o2c = _val(r_o2, cum_ac) if cum_ac else None
+        techno_rows.append(_tr("SMS", "Sp O2 Consumption", "Nm³/T", o2,
+                               f"SMS!{col}{r_o2}", _lbl(r_o2), o2c))
+
+    for section, unit, so, val, cum in [
+        ("Average Blows (Per Day)", "Nos.",    8,  blows_day, cum_blows),
+        ("Average Heat Weight",     "T",       15, acw,       acw_c),
+        ("Oxygen Blowing",          "Nm³/TCS", 34, o2,        o2c),
+    ]:
+        techno_param_rows.append({
+            "group_code": "SMS", "section": section,
+            "parameter": "ISP SMS", "unit": unit, "sort_order": so,
+            "actual": val, "cum_actual": cum,
+            "cell": f"SMS (old vintage, label-scanned)",
+            "found_via": f"ISP SMS {section}",
+            "status": "ok" if val is not None else "no value",
+        })
+
+
+def _old_coke_rows(ws, sheet_label, db_report_month, month_num, ac, cum_ac, col) -> list:
+    """COKE OVENS / CO sheet, old vintage.
+
+    Ovens-pushed rows here are per-DAY averages (row 2 holds calendar days),
+    and dry-coal-charge rows are Old Batts (COB#8+10) / New Batt (COB#11)
+    monthly totals — COB#8 was idle through 2016-18, so Old Batts ≈ COB#10.
+    """
+    def _v(r, c):
+        return clean_val(ws.cell(row=r, column=c).value)
+
+    def _find1(label, max_row=260):
+        f = _find_label_rows(ws, label, count=1, max_row=max_row)
+        return f[0] if f else None
+
+    def _div(a, b):
+        return round(a / b, 4) if (a is not None and b) else None
+
+    rows = []
+    days     = _v(2, ac)
+    cum_days = _v(2, cum_ac) if cum_ac else None
+
+    # BF Coke Yield: '+1 under the OVERALL ... YIELD header
+    ya = _find1("OVERALL COKE & COKE FRACTION YIELD")
+    if ya:
+        rows.append(_tco("BF Coke Yield", "ISP", "%", 70,
+                         _v(ya + 1, ac), _v(ya + 1, cum_ac) if cum_ac else None,
+                         f"{sheet_label}!{col}{ya+1}", f"R{ya+1}", "ISP", db_report_month))
+
+    # Dry Coal Charge/Oven = monthly charge ÷ (ovens-per-day × days)
+    r_ov10 = _find1("Ovens Pushed (COB#10")
+    r_ov11 = _find1("Ovens Pushed (COB#11")
+    r_ch_old = _find1("Dry Coal Charge (Old Batts)")
+    r_ch_new = _find1("Dry Coal Charge (New Batt)")
+    for cob, r_ov, r_ch, so in [("COB#10", r_ov10, r_ch_old, 440),
+                                ("COB#11", r_ov11, r_ch_new, 445)]:
+        if not (r_ov and r_ch):
+            continue
+        ov_pd  = _v(r_ov, ac)
+        charge = _v(r_ch, ac)
+        dcc = _div(charge, ov_pd * days) if (ov_pd and days) else None
+        cdcc = None
+        if cum_ac and cum_days:
+            ov_pd_c  = _v(r_ov, cum_ac)
+            charge_c = _v(r_ch, cum_ac)
+            cdcc = _div(charge_c, ov_pd_c * cum_days) if ov_pd_c else None
+        rows.append(_tco("Dry Coal Charge/Oven", f"ISP {cob}", "Tonnes", so,
+                         dcc, cdcc,
+                         f"{sheet_label}!{col}{r_ch}÷({col}{r_ov}×days)",
+                         f"R{r_ch}÷(R{r_ov}×d)", "ISP", db_report_month))
+
+    # Sp Heat Cons ×1000 and C.O.Gas Yield — two occurrences (COB#8/10, COB#11)
+    sh = _find_label_rows(ws, "Sp Heat Cons", count=2, max_row=260)
+    def _kc(x): return round(x * 1000, 4) if x is not None else None
+    for i, (cob, so) in enumerate([("COB#10", 170), ("COB#11", 175)]):
+        if i < len(sh):
+            r = sh[i]
+            rows.append(_tco("Sp. Heat Cons.", f"ISP {cob}", "000 K.Cal/TDC", so,
+                             _kc(_v(r, ac)), _kc(_v(r, cum_ac)) if cum_ac else None,
+                             f"{sheet_label}!{col}{r}×1000", f"R{r}×1000", "ISP", db_report_month))
+
+    cog = _find_label_rows(ws, "C.O.Gas Yield", count=2, max_row=260)
+    for i, (cob, so) in enumerate([("COB#10", 540), ("COB#11", 545)]):
+        if i < len(cog):
+            r = cog[i]
+            rows.append(_tco("Coke Oven Gas Yield", f"ISP {cob}", "M3/TDC", so,
+                             _v(r, ac), _v(r, cum_ac) if cum_ac else None,
+                             f"{sheet_label}!{col}{r}", f"R{r}", "ISP", db_report_month))
+
+    # By-product yields under 'Yield of Coal Chemicals': +1/+2 = Coal Tar
+    # (Existing→COB#8/10 batteries, New→COB#11), +4/+5 = Amm. Sulphate
+    yc = _find1("Yield of Coal Chemicals")
+    if yc:
+        for off, sec, cob, so in [(1, "Coal Tar Yield", "COB#10", 270),
+                                  (2, "Coal Tar Yield", "COB#11", 275),
+                                  (4, "Amm. Sulphate Yld", "COB#10", 740),
+                                  (5, "Amm. Sulphate Yld", "COB#11", 745)]:
+            r = yc + off
+            rows.append(_tco(sec, f"ISP {cob}", "kg/TDC", so,
+                             _v(r, ac), _v(r, cum_ac) if cum_ac else None,
+                             f"{sheet_label}!{col}{r}", f"R{r}", "ISP", db_report_month))
+    return rows
+
+
+def _old_prod_summ_rows(wb, prod_sheet, month_num, year_2d) -> list:
+    """Production from the old-vintage 'Maj Prod Summ' sheet (identical row
+    layout in the 2016-17 and 2017-18 files). Each fixed row is verified
+    against its expected label text before use — a mismatch skips the row."""
+    ws = wb[prod_sheet]
+    ac = _find_act_col(ws, month_num, year_2d, 3, 4)
+    if ac is None:
+        return []
+    col = get_column_letter(ac)
+
+    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
+    # (item_name, row, expected label substring)
+    _ROWS = [
+        ("COB#10",                  7,  "COB#10"),
+        ("COB#11",                  8,  "COB#11"),
+        ("Oven Pushing (nos/day)",  9,  "Ovens Pushed"),
+        ("Total Sinter",            14, "SINTER"),
+        ("Hot Metal",               15, "HOT METAL"),
+        ("Total Crude Steel",       16, "CRUDE STEEL"),
+        ("200 Blooms",              27, "Bloom Caster"),
+        ("Saleable 150 Billets",    28, "Billet Caster"),
+        ("WRMILL",                  29, "WR Mill"),
+        ("BARMILL",                 30, "Bar Mill"),
+        ("USMILL",                  31, "US Mill"),
+        ("Saleable Steel",          32, "TOTAL"),
+        ("Saleable Semis",          34, "Semis"),
+    ]
+    rows = []
+    by_item = {}
+    for item, r, expect in _ROWS:
+        lbl = str(ws.cell(row=r, column=2).value or "").strip()
+        if expect.lower() not in lbl.lower():
+            continue
+        val = clean_val(ws.cell(row=r, column=ac).value)
+        if val is not None and item not in NO_CONVERT:
+            val = round(val / 1000.0, 3)
+        by_item[item] = val
+        rows.append({
+            "item_name": item, "value": val, "cell": f"{prod_sheet}!{col}{r}",
+            "unit": "nos/d" if item in NO_CONVERT else "'000T",
+            "status": "ok" if val is not None else "no value",
+        })
+
+    # Pig Iron: TOTAL row of the 'Cold Pig & Pig Equivalent' block
+    cp = _find_label_rows(ws, "Cold Pig & Pig Equivalent", count=1, max_row=40)
+    if cp:
+        for r in range(cp[0] + 1, cp[0] + 8):
+            if str(ws.cell(row=r, column=2).value or "").strip().upper() == "TOTAL":
+                val = clean_val(ws.cell(row=r, column=ac).value)
+                rows.append({
+                    "item_name": "Pig Iron",
+                    "value": round(val / 1000.0, 3) if val is not None else None,
+                    "cell": f"{prod_sheet}!{col}{r}", "unit": "'000T",
+                    "status": "ok" if val is not None else "no value",
+                })
+                break
+
+    # Finished Steel = Saleable Steel − Saleable Semis
+    ss, sem = by_item.get("Saleable Steel"), by_item.get("Saleable Semis")
+    if ss is not None and sem is not None:
+        rows.append({
+            "item_name": "Finished Steel", "value": round(ss - sem, 3),
+            "cell": f"{prod_sheet}!{col}32-{col}34", "unit": "'000T", "status": "ok",
+        })
+
+    # SP M/c-1 / M/c-2 from the SINTER sheet
+    if "SINTER" in wb.sheetnames:
+        ws_s = wb["SINTER"]
+        ac_s = _find_act_col(ws_s, month_num, year_2d, 3, 4)
+        if ac_s:
+            col_s = get_column_letter(ac_s)
+            mc_rows = _find_label_rows(ws_s, "M/C #", count=2)
+            for item_name, r in zip(("SP M/c-1", "SP M/c-2"), mc_rows):
+                val = clean_val(ws_s.cell(row=r, column=ac_s).value)
+                rows.append({
+                    "item_name": item_name,
+                    "value": round(val / 1000.0, 3) if val is not None else None,
+                    "cell": f"SINTER!{col_s}{r}", "unit": "'000T",
+                    "status": "ok" if val is not None else "no value",
+                })
+    return rows
+
+
 def _preview_summarized_monthly(wb, report_month: str, sheet_names: list) -> dict:
     """Extract ISP techno parameters from the Summarized Monthly Report.
 
@@ -814,8 +1155,146 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list) -> dic
     _co = _ISP_SUMM_CUM_OFFSET.get(month_num, 2)
     def _cum(ac): return ac if _co == 0 else ac + _co
 
+    # ── Month-scope validation against the file's own header ─────────────────
+    # A summarized workbook carries one column per elapsed month of ITS fiscal
+    # year, so any earlier month of the same FY is extractable from a later
+    # (e.g. up-to-March) file. A month outside the file's FY is a hard error —
+    # never silently extract mismatched-FY data.
+    bf_sheet = "B-FCE" if "B-FCE" in sheet_names else ("BF" if "BF" in sheet_names else None)
+    file_months, bf_hr = [], None
+    if bf_sheet:
+        ws_bf = wb[bf_sheet]
+        for hr in (4, 3):
+            file_months = _summ_header_months(ws_bf, hr)
+            if file_months:
+                bf_hr = hr
+                break
+    # Old vintage (2016-18 files): month headers on ROW 3 of the BF sheet
+    # (modern B-FCE files put them on row 4), plus the old rate-block label.
+    # Both conditions — the label alone also exists on modern B-FCE sheets.
+    old_vintage = (
+        bf_hr == 3
+        and bf_sheet is not None
+        and bool(_find_label_rows(wb[bf_sheet], "NET RAW MATERIALS CONSUMPTION RATE",
+                                  count=1, max_row=60))
+    )
+
+    month_mismatch = None
+    if file_months:
+        if db_report_month not in file_months:
+            raise ValueError(
+                f"Month mismatch: this file covers {file_months[0]} to {file_months[-1]} "
+                f"only — selected month {db_report_month} belongs to a different FY. "
+                f"Nothing was extracted; select a month within this file's FY or upload "
+                f"the correct FY's report."
+            )
+        if db_report_month != file_months[-1]:
+            month_mismatch = {
+                "selected_month": db_report_month,
+                "actual_month":   file_months[-1],
+                "warning_only":   True,
+                "message": (
+                    f"This file's latest month is {file_months[-1]}; extracting the "
+                    f"earlier month {db_report_month} from its {db_report_month} column "
+                    f"(same FY, so the data is authoritative)."
+                ),
+            }
+
     techno_rows = []
     techno_param_rows = []
+
+    # ── Old vintage (2016-18 'Summarised monthly statistical' files) ─────────
+    if old_vintage:
+        ws = wb[bf_sheet]
+        ac = _find_act_col(ws, month_num, year_2d, 3, 4)
+        if ac:
+            _old_bf_rows(ws, ac, _cum(ac), get_column_letter(ac),
+                         techno_rows, techno_param_rows)
+
+        if "SINTER" in sheet_names:
+            ws_s = wb["SINTER"]
+            ac_s = _find_act_col(ws_s, month_num, year_2d, 3, 4)
+            if ac_s:
+                col_s = get_column_letter(ac_s)
+                found = _find_label_rows(ws_s, "Specific Productivity", count=1)
+                if found:
+                    r = found[0]
+                    techno_rows.append(_tr(
+                        "Sinter", "Sp Productivity", "T/M2/Utlz Hr",
+                        clean_val(ws_s.cell(row=r, column=ac_s).value),
+                        f"SINTER!{col_s}{r}",
+                        str(ws_s.cell(row=r, column=2).value or "").strip(),
+                        clean_val(ws_s.cell(row=r, column=_cum(ac_s)).value)))
+
+        if "SMS" in sheet_names:
+            ws_m = wb["SMS"]
+            ac_m = _find_act_col(ws_m, month_num, year_2d, 3, 4)
+            if ac_m:
+                _old_sms_rows(ws_m, ac_m, _cum(ac_m), get_column_letter(ac_m),
+                              techno_rows, techno_param_rows)
+
+        # Mills — same anchors as modern but old-vintage offsets
+        # (rows verified identical across both 2016-17 and 2017-18 files)
+        for sn, anchor, kw in [("WRM", "WR MILL YIELD",  dict(avail_off=5, util_off=7, spow_off=12, rrate_off=16)),
+                               ("BM",  "BAR MILL YIELD", dict(avail_off=5, util_off=7, heat_off=10, spow_off=12, rrate_off=16, total_off=-1)),
+                               ("USM", "US MILL YIELD",  dict(avail_off=5, util_off=7, heat_off=10, spow_off=12, rrate_off=16, total_off=-1))]:
+            if sn in sheet_names:
+                ws_x = wb[sn]
+                ac_x = _find_act_col(ws_x, month_num, year_2d, 3, 4)
+                if ac_x:
+                    techno_rows += _mill_params(ws_x, ac_x, _cum(ac_x),
+                                                get_column_letter(ac_x), sn, anchor, **kw)
+
+        ok_count = sum(1 for r in techno_rows if r["status"] == "ok")
+        if ok_count == 0:
+            raise ValueError(
+                f"No data found for month '{report_month}' in this Summarised "
+                f"monthly statistical file (old format). Verify the month falls "
+                f"within the file's FY."
+            )
+
+        coke_sheet = "COKE OVENS" if "COKE OVENS" in sheet_names else ("CO" if "CO" in sheet_names else None)
+        if coke_sheet:
+            try:
+                ws_c = wb[coke_sheet]
+                ac_c = _find_act_col(ws_c, month_num, year_2d, 3, 4)
+                if ac_c:
+                    techno_param_rows += _old_coke_rows(
+                        ws_c, coke_sheet, db_report_month, month_num,
+                        ac_c, _cum(ac_c), get_column_letter(ac_c))
+            except Exception as e:
+                logger.warning(f"ISP (old vintage): {coke_sheet} extraction failed: {e}")
+
+        if "Maj Techno Summ" in sheet_names:
+            try:
+                techno_param_rows += _preview_maj_techno_summ(
+                    wb, db_report_month, month_num, year_2d, _co)
+            except Exception as e:
+                logger.warning(f"ISP (old vintage): Maj Techno Summ extraction failed: {e}")
+
+        prod_rows = []
+        if "Maj Prod Summ" in sheet_names:
+            try:
+                prod_rows = _old_prod_summ_rows(wb, "Maj Prod Summ", month_num, year_2d)
+            except Exception as e:
+                logger.warning(f"ISP (old vintage): Maj Prod Summ extraction failed: {e}")
+
+        logger.info(f"ISP Summarised (old vintage): {ok_count} techno, "
+                    f"{len(prod_rows)} production values for {db_report_month}.")
+        return {
+            "plant":             "ISP",
+            "month":             db_report_month,
+            "source_type":       "Summarised Monthly Statistical (2016-18 format)",
+            "sheets":            f"{bf_sheet}, SINTER, SMS, WRM, BM, USM"
+                                 + (f", {coke_sheet}" if coke_sheet else "")
+                                 + (", Maj Techno Summ" if "Maj Techno Summ" in sheet_names else "")
+                                 + (", Maj Prod Summ" if prod_rows else ""),
+            "workbook_sheets":   sheet_names,
+            "production_rows":   prod_rows,
+            "techno_rows":       techno_rows,
+            "techno_param_rows": techno_param_rows,
+            "month_mismatch":    month_mismatch,
+        }
 
     # ------------------------------------------------------------------
     # B-FCE   (header row 4, ABP/ACT sub-header row 5, days in row 2)
@@ -1056,7 +1535,7 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list) -> dic
         sheets_str += ", Maj Production Summ"
 
     logger.info(f"ISP Summarized Monthly Report preview: {ok_count} techno, {len(prod_rows)} production values for {db_report_month}.")
-    return {
+    result = {
         "plant":             "ISP",
         "month":             db_report_month,
         "source_type":       "Summarized Monthly Report",
@@ -1066,6 +1545,11 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list) -> dic
         "techno_rows":       techno_rows,
         "techno_param_rows": techno_param_rows,
     }
+    # Key present only when extracting an earlier same-FY month, so output for
+    # the normal latest-month case stays byte-identical (golden-tested).
+    if month_mismatch:
+        result["month_mismatch"] = month_mismatch
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1175,8 +1659,11 @@ def extract_preview(file_path: str, report_month: str) -> dict:
         }
 
     # Check B-FCE before Maj Production Summ — the Summarized Monthly Report
-    # contains BOTH sheets; the standalone Final Monthly Report has only the latter.
-    if "B-FCE" in sheet_names:
+    # contains BOTH sheets; the standalone Final Monthly Report has only the
+    # latter. The 2016-17 vintage names its BF sheet just "BF" (and coke ovens
+    # "CO") — require Maj Techno Summ alongside so a bare "BF" sheet in some
+    # unrelated workbook can't false-positive.
+    if "B-FCE" in sheet_names or ("BF" in sheet_names and "Maj Techno Summ" in sheet_names):
         return _preview_summarized_monthly(wb, report_month, sheet_names)
 
     if "Maj Production Summ" in sheet_names:
