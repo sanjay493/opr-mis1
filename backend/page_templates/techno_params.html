@@ -14,7 +14,7 @@
           {% if page.subtitle %}
           <div style="text-align:center;font-weight:600;font-size:{{ _tsz }};margin-bottom:3px;">{{ page.subtitle }}</div>
           {% endif %}
-          <table style="width:100%;border-collapse:collapse;border:1px solid #000;table-layout:{{ 'fixed' if _fixed_layout else 'auto' }};font-size:{{ _tsz }};margin-top:2px;">
+          <table style="width:100%;border-collapse:collapse;border:1px solid {{ colors.border_black }};table-layout:{{ 'fixed' if _fixed_layout else 'auto' }};font-size:{{ _tsz }};margin-top:2px;">
             <colgroup>
               {% if _fixed_layout %}
               <col style="width:10%"/><col style="width:7%"/>
@@ -34,27 +34,27 @@
             <thead>
               <tr>
                 {% if _is_major %}
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;text-align:left;">Parameters</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Plants</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};text-align:left;">Parameters</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Plants</th>
                 {% else %}
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">Mill</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;text-align:left;">Parameters</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Mill</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};text-align:left;">Parameters</th>
                 {% endif %}
-                <th colspan="3" style="padding:2px 3px;border:1px solid #000;">Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;background:#fef9c3;">{{ page.target_label }}</th>
-                <th colspan="{{ page.month_labels | length }}" style="padding:2px 3px;border:1px solid #000;">Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #000;">{{ page.cply_label }}<br/>Actual</th>
-                <th colspan="2" style="padding:2px 3px;border:1px solid #000;">Actual</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};background:{{ colors.highlight_target_band_bg }};">{{ page.target_label }}</th>
+                <th colspan="{{ page.month_labels | length }}" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.cply_label }}<br/>Actual</th>
+                <th colspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Actual</th>
               </tr>
               <tr>
-                <th style="padding:2px 3px;border:1px solid #000;">{{ page.fy3_label }}</th>
-                <th style="padding:2px 3px;border:1px solid #000;">{{ page.fy2_label }}</th>
-                <th style="padding:2px 3px;border:1px solid #000;">{{ page.fy1_label }}</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.fy3_label }}</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.fy2_label }}</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.fy1_label }}</th>
                 {% for m in page.month_labels %}
-                <th style="padding:2px 3px;border:1px solid #000;">{{ m }}</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ m }}</th>
                 {% endfor %}
-                <th style="padding:2px 3px;border:1px solid #000;">{{ page.cum_label }}</th>
-                <th style="padding:2px 3px;border:1px solid #000;">{{ page.cum_cply_label }}</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.cum_label }}</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.cum_cply_label }}</th>
               </tr>
             </thead>
             <tbody>
@@ -62,20 +62,20 @@
               {% for row in sec.rows %}
               {% set _sail = row.label == 'SAIL' %}
               {% set _bold_row = _sail or row.bold %}
-              {% set _v = 'border-left:1px solid #000;border-right:1px solid #000;' %}
-              {% set _bt = 'border-top:1px solid #000;'    if loop.first else '' %}
-              {% set _bb = 'border-bottom:1px solid #000;' if loop.last  else '' %}
-              {% set _box = 'border-top:2px solid #000;border-bottom:2px solid #000;font-weight:700;' if _bold_row else (_bt ~ _bb) %}
+              {% set _v = 'border-left:1px solid ' ~ colors.border_black ~ ';border-right:1px solid ' ~ colors.border_black ~ ';' %}
+              {% set _bt = ('border-top:1px solid ' ~ colors.border_black ~ ';')    if loop.first else '' %}
+              {% set _bb = ('border-bottom:1px solid ' ~ colors.border_black ~ ';') if loop.last  else '' %}
+              {% set _box = ('border-top:2px solid ' ~ colors.border_black ~ ';border-bottom:2px solid ' ~ colors.border_black ~ ';font-weight:700;') if _bold_row else (_bt ~ _bb) %}
               {% set _td = _v ~ _box %}
-              {% set _row_bg = 'background:#dcfce7;' if _sail else ('background:#eef2f6;' if row.bold else '') %}
+              {% set _row_bg = ('background:' ~ colors.highlight_achieved_band_bg ~ ';') if _sail else (('background:' ~ colors.highlight_bold_row_bg ~ ';') if row.bold else '') %}
               <tr style="{{ _row_bg }}">
                 {% if loop.first %}
                 {% if _is_major %}
                 {% set _sec_unit = sec.rows[0].unit if sec.rows else '' %}
                 {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid #000;text-align:left;font-weight:700;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label }}</td>
                 {% else %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:2px 1.5px;border:1px solid #000;text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:2px 1.5px;border:1px solid {{ colors.border_black }};text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label }}</td>
                 {% endif %}
                 {% endif %}
                 {% set _row_label = (row.label ~ ' (' ~ row.unit ~ ')') if (not _is_major and row.unit) else row.label %}
@@ -83,7 +83,7 @@
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy3 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy2 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy1 }}</td>
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;background:#fef9c3;">{{ row.target }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;background:{{ colors.highlight_target_band_bg }};">{{ row.target }}</td>
                 {% for v in row.months %}
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ v }}</td>
                 {% endfor %}
@@ -95,7 +95,7 @@
             {% endfor %}
             </tbody>
           </table>
-          <!-- <div style="display:flex;justify-content:space-between;font-size:5.8pt;color:#475569;margin-top:2px;">
+          <!-- <div style="display:flex;justify-content:space-between;font-size:5.8pt;color:{{ colors.text_secondary }};margin-top:2px;">
             <span>figures are provisional</span><span>for internal circulation only</span>
           </div> -->
         </div>

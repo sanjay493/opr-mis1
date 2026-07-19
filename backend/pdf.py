@@ -211,7 +211,9 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
 
     try:
         from layout_loader import load_layout_config
+        from colors_loader import load_colors_config
         _layout_cfg = load_layout_config()
+        _colors = load_colors_config()
         _g = _layout_cfg["global"]
         _g_table = _g.get("table", {})
 
@@ -295,6 +297,7 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
             th_size=fc.th_size,
             title_size=fc.title_size,
             heading_size=fc.heading_size,
+            colors=_colors,
             **vars,
         )
         front_html = _template.render(pages=front_pages, **_render_kwargs) if front_pages else ""

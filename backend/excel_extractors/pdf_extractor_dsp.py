@@ -111,6 +111,19 @@ def _num(tok):
     return None
 
 
+def _strip_lead_digit(label):
+    """Drop a leading roman-numeral-derived serial ('1 cc bloom' -> 'cc bloom').
+
+    Items like CC Bloom/CC Billet/BRC Bloom/BRC Round are printed as a
+    lettered sub-list (i, ii, iii, iv) whose ORDER varies between report
+    vintages — which physical item gets "i)" isn't fixed, so a hardcoded
+    "1 cc bloom" alias only covers one ordering. BF#2/3/4 don't have this
+    problem (the number is the furnace's own identity, always fixed), so
+    this is only used as a fallback after an exact match already failed.
+    """
+    return re.sub(r'^\d+\s+', '', label)
+
+
 def _extract_pdf_report_month(file_path: str) -> str:
     """Extract report month from first page of PDF.
 
@@ -132,9 +145,12 @@ def _extract_pdf_report_month(file_path: str) -> str:
 
     # Try to find month name (full or abbreviated) + year
     # Patterns: "SEPTEMBER 2025", "SEP 2025", "SEP'25", "September'25"
+    # Older reports (~2016-2019) use a curly/typographic apostrophe (U+2019/U+2018)
+    # between month and year instead of a plain ASCII "'" — include both, plus a
+    # dash, so "January’ 2018" style headers still match.
     patterns = [
-        r'(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)[\'|\s]+(20\d{2})',
-        r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[\'|\s]+(20\d{2})',
+        r'(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)[\'‘’\-|\s]+(20\d{2})',
+        r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[\'‘’\-|\s]+(20\d{2})',
     ]
 
     for pattern in patterns:
@@ -178,7 +194,11 @@ def _month_header(lines):
                 cols.append(mon_abbr)
                 seen.add(mon_abbr)
 
-        if cols and "TOTAL" in toks:
+        # Older (~2015-2018) mid-year reports sometimes omit the redundant
+        # "TOTAL" column entirely (the last Q/H-period column already IS
+        # the cumulative-to-date figure), so don't require it — just require
+        # at least one recognized month abbreviation on the line.
+        if cols:
             return cols
     return None
 
@@ -288,12 +308,17 @@ def _scan_page_index(file_path: str, max_pages: int = 120) -> dict:
 # ---------------------------------------------------------------------------
 
 def _period_month(label):
-    """'April 26' / "May'26" → 'APR'/'MAY'; None for 'Cum. 2026-27' etc."""
-    m = re.match(r"\s*([A-Za-z]+)", label or "")
-    if not m:
-        return None
-    tok = m.group(1).upper()[:3]
-    return tok if tok in _MONTHS else None
+    """'April 26' / "May'26" → 'APR'/'MAY'; None for 'Cum. 2026-27' etc.
+
+    Scans every word in the label rather than just the first one — some
+    exports (e.g. Feb'24) run adjacent header cells together so the month
+    token isn't always at the start (seen as "Section Jan" / "24 Feb 24").
+    """
+    for tok in re.findall(r"[A-Za-z]+", label or ""):
+        u = tok.upper()[:3]
+        if u in _MONTHS:
+            return u
+    return None
 
 
 def _parse_te_nums(line):
@@ -700,20 +725,44 @@ def _parse_special_steel_table(tbl, page_no, want_mon, yy):
 
     c_ord, c_pro, c_des = _col("ORDER", start), _col("PRODN", start + 1), _col("DESP", start + 2)
 
+    # Section is always the column immediately before the first period column —
+    # but older reports (~2016-2017) insert extra "APP"/"Pro-rata" columns
+    # between Quality/Grade and Section, shifting it right of a hardcoded
+    # index 2. Deriving it from `start` keeps both layouts working.
+    sec_ci = max(2, start - 1)
+
     rows = []
     cur_product = cur_grade = ""
     for row in tbl[period_row + 2:]:
         cells = ["" if c is None else str(c).strip() for c in row]
         if len(cells) <= max(c_ord, c_pro, c_des):
             continue
-        col0, col1, col2 = cells[0], cells[1], cells[2]
-        label0 = col0 or col1
-        is_total = bool(label0) and label0.upper().startswith("TOTAL")
-        if not is_total:
-            if col0:
-                cur_product = col0
-            if col1:
-                cur_grade = col1
+        col0, col1, col2 = cells[0], cells[1], cells[sec_ci]
+        # A subtotal's "Total ..." label can land in either column — usually
+        # col0, but sometimes col1 while col0 already holds the *next*
+        # product group's name on the same row (e.g. mis1021.pdf row
+        # ['TMT', 'Total Structurals', ...]). Check both independently
+        # rather than picking whichever is non-blank first, or a real
+        # product name sharing a row with a subtotal gets treated as the
+        # subtotal's own label and the subtotal's figures get double-counted
+        # as if they were a fresh line item.
+        col0_is_total = bool(col0) and col0.upper().startswith("TOTAL")
+        col1_is_total = bool(col1) and col1.upper().startswith("TOTAL")
+        label0 = col0 if col0_is_total else (col1 if col1_is_total else (col0 or col1))
+        # A per-grade subtotal row sometimes prints with no "Total ..." label
+        # at all (just the summed figures) — e.g. DSP mis0523/mis0524.pdf,
+        # grades like "SEQR 550D"/"E250 BR" where the row after all section
+        # lines has product/grade/section all blank. A genuine data row
+        # always carries at least a section value (even when product/grade
+        # are blank continuation cells), so treat an all-blank identifier
+        # row as a subtotal to avoid double-counting it as a real entry.
+        is_total = col0_is_total or col1_is_total or (not col0 and not col1 and not col2)
+        # col0 may introduce a new product group even on a total row (the
+        # "TMT" in the example above) — only col1-as-grade is suppressed.
+        if col0 and not col0_is_total:
+            cur_product = col0
+        if not is_total and col1:
+            cur_grade = col1
 
         order, prodn, desp = (_num(cells[ci]) for ci in (c_ord, c_pro, c_des))
         if order is None and prodn is None and desp is None:
@@ -877,6 +926,13 @@ def _block_production(file_path: str, prod_page_idx: int,
                 if label == alias:
                     item, convert = name, conv
                     break
+        if item is None:
+            stripped = _strip_lead_digit(label)
+            if stripped != label:
+                for alias, name, conv in _ITEM_MAP:
+                    if stripped == alias:
+                        item, convert = name, conv
+                        break
 
         # Count-type items (nos/day) are never tonnes — override any stale
         # alias/config convert flag so they are never divided by 1000.
@@ -1039,6 +1095,14 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
                     if label == alias:
                         item, convert = name, conv
                         break
+
+            if item is None:
+                stripped = _strip_lead_digit(label)
+                if stripped != label:
+                    for alias, name, conv in _ITEM_MAP:
+                        if stripped == alias:
+                            item, convert = name, conv
+                            break
 
             if item is None:
                 item = label

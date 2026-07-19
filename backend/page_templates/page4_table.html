@@ -1,8 +1,8 @@
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid #0f172a; padding-bottom: 3px; margin-bottom: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid {{ colors.text_primary }}; padding-bottom: 3px; margin-bottom: 4px;">
                 <h2 class="page4-heading">
                     SAIL: Production Performance during {{ m_name }}'{{ short_y }} and Apr-{{ short_m }}'{{ short_y }}
                 </h2>
-                <h2 class="page4-heading" style="color: #0f172a;">
+                <h2 class="page4-heading" style="color: {{ colors.text_primary }};">
                     w.r.t APP
                 </h2>
             </div>
@@ -56,14 +56,14 @@
                         {% if row.is_first_in_group %}
                         <td class="label-cell" rowspan="{{ row.group_size }}"
                             style="font-weight: 700; font-size: 8pt; vertical-align: middle;
-                                   background-color: #f8fafc; padding: 1px 2px 1px 4px;
+                                   background-color: {{ colors.highlight_group_label_bg }}; padding: 1px 2px 1px 4px;
                                    overflow: hidden; font-family: inherit;">
                             {{ row.item }}
                         </td>
                         {% endif %}
                         <td class="label-cell"
                             style="font-weight: 600; font-size: 8pt; text-align: center;
-                                   background-color: #f8fafc; padding: 1px 2px;
+                                   background-color: {{ colors.highlight_group_label_bg }}; padding: 1px 2px;
                                    font-family: inherit;
                                    white-space: nowrap; overflow: hidden;">
                             {{ row.plant }}

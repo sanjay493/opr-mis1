@@ -151,12 +151,20 @@ def _compute_cat_rowspans(rows):
 def _bsp(cur, rm, pm, fy, ytd, cply_ytd):
     rows = []
 
-    for label, item in [
-        ("Wire Rods",           "WIRERODS"),
-        ("Rounds & Bars (MM)",  "MM"),
-        ("Rounds & Bars (BRM)", "BARS&RODMILL"),
-        ("Rail (RSM)",          "RSM_RAIL"),
-        ("Rail (URM)",          "URM_RAIL"),
+    # Wire Rod Mill and Merchant Mill each split into two product groups —
+    # WRM's split is manual (source report only has a WRM total; TMT Coils is
+    # entered and Others derived — see data-entry/bsp-mm-wrm-split), MM's is
+    # extracted directly from two source cells (excel_extractor_bsp.py), with
+    # "MM" itself re-derived as their sum. The mill row stays the on-report
+    # total in both cases; the two group rows underneath break it down.
+    for label, item, sub in [
+        ("Wire Rods",           "WIRERODS", [("&nbsp;&nbsp;TMT Coils (WRM)", "TMT COILS(WRM)"),
+                                              ("&nbsp;&nbsp;Others (WRM)",    "OTHERS(WRM)")]),
+        ("Rounds & Bars (MM)",  "MM",       [("&nbsp;&nbsp;TMT Bars (MM)",   "TMT BARS(MM)"),
+                                              ("&nbsp;&nbsp;Lt Strs (MM)",    "LT STRS(MM)")]),
+        ("Rounds & Bars (BRM)", "BARS&RODMILL", []),
+        ("Rail (RSM)",          "RSM_RAIL", []),
+        ("Rail (URM)",          "URM_RAIL", []),
     ]:
         rows.append(_row(label, "data",
                          _ann(cur, "BSP", item, fy),
@@ -167,6 +175,16 @@ def _bsp(cur, rm, pm, fy, ytd, cply_ytd):
                          _ytd_one(cur, "act",  "BSP", item, ytd),
                          _ytd_one(cur, "act",  "BSP", item, cply_ytd),
                          category="LONG"))
+        for sub_label, sub_item in sub:
+            rows.append(_row(sub_label, "data",
+                             _ann(cur, "BSP", sub_item, fy),
+                             _one(cur, "plan", "BSP", sub_item, rm),
+                             _one(cur, "act",  "BSP", sub_item, rm),
+                             _one(cur, "act",  "BSP", sub_item, pm),
+                             _ytd_one(cur, "plan", "BSP", sub_item, ytd),
+                             _ytd_one(cur, "act",  "BSP", sub_item, ytd),
+                             _ytd_one(cur, "act",  "BSP", sub_item, cply_ytd),
+                             category="LONG"))
 
     rows.append(_zero_row("Hy.Struls.", category="LONG"))
 

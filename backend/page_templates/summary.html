@@ -73,7 +73,7 @@
                     {% for row in page.te_table %}
                     <tr>
                         <td class="label-cell" style="font-weight:600;">{{ row.parameter }}</td>
-                        <td class="label-cell" style="font-style:italic;color:#475569;">{{ row.unit }}</td>
+                        <td class="label-cell" style="font-style:italic;color:{{ colors.text_secondary }};">{{ row.unit }}</td>
                         <td style="text-align:right;">{{ row['values'][0] if row['values']|length > 0 else '' }}</td>
                         <td style="font-weight:700;text-align:right;">{{ row['values'][1] if row['values']|length > 1 else '' }}</td>
                         <td style="text-align:right;">{{ row['values'][2] if row['values']|length > 2 else '' }}</td>

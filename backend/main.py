@@ -1762,6 +1762,19 @@ def normalize_item_name(name):
         name = 'Round Production'
     return name.strip()
 
+# BSP's two rolling mills each split into product groups where only one
+# figure is ever entered by hand — the other is the mill total minus it.
+# MM's actual comes pre-split from the extractor (both cells at once, so
+# this auto-derive path only matters for MM's plan, which has no source
+# breakdown); WRM has no source breakdown for either actual or plan.
+# value: (paired_item, mill_total_item).
+BSP_SPLIT_PAIRS = {
+    "TMT COILS(WRM)": ("OTHERS(WRM)",   "WIRERODS"),
+    "OTHERS(WRM)":    ("TMT COILS(WRM)", "WIRERODS"),
+    "TMT BARS(MM)":   ("LT STRS(MM)",   "MM"),
+    "LT STRS(MM)":    ("TMT BARS(MM)",  "MM"),
+}
+
 # Custom sort order for production items — process sequence:
 # coke oven pushing → sinter → hot metal → crude steel → pig iron → mills
 # → secondary mills → finished steel → saleable semis → saleable steel.
@@ -1824,6 +1837,8 @@ PRODUCTION_ITEM_ORDER = [
     'Pig Iron',
     # 6. Mills (primary / rolling)
     'MM',
+    'TMT BARS(MM)',
+    'LT STRS(MM)',
     'MSM',
     'SM',
     'USMILL',
@@ -1832,6 +1847,8 @@ PRODUCTION_ITEM_ORDER = [
     'BARS&RODMILL',
     'WRMILL',
     'WIRERODS',
+    'TMT COILS(WRM)',
+    'OTHERS(WRM)',
     'PLATEMILL',
     'PLATES',
     'NPM Plate',
@@ -1916,6 +1933,12 @@ async def get_production_items(plant: str, month: str):
 
     all_items = set(plan_rows.keys()) | set(actual_rows.keys())
 
+    # BSP's MM/WRM group-split items always get a row on the data-entry page,
+    # even for a month with no data yet — TMT Coils(WRM) needs somewhere to
+    # be typed into before anything else about that month exists.
+    if plant == "BSP":
+        all_items |= set(BSP_SPLIT_PAIRS.keys())
+
     # Sort items in process order, with remaining items at the end
     sorted_items = sorted(all_items, key=production_item_sort_key)
 
@@ -1943,6 +1966,41 @@ async def save_production_entry(request: ProductionEntryRequest):
         if entry.plan_value is not None:
             db.save_production_plan(request.month, request.plant, entry.item_name, entry.plan_value)
             saved.append(f"plan:{entry.item_name}")
+
+    # BSP MM/WRM group split: if only one side of a pair was entered (e.g.
+    # TMT Coils(WRM)), derive the other as mill-total minus the entered value
+    # and save it too — unless the caller also supplied an explicit value for
+    # the paired item in this same request, which wins over the derivation.
+    if request.plant == "BSP":
+        entry_map = {e.item_name: e for e in request.entries}
+        conn = sqlite3.connect(db.DB_PATH)
+        cur = conn.cursor()
+        for entry in request.entries:
+            pair = BSP_SPLIT_PAIRS.get(entry.item_name)
+            if not pair:
+                continue
+            paired_item, total_item = pair
+            paired_entry = entry_map.get(paired_item)
+            for value_type, table, save_fn in (
+                ("actual_value", "production_table", db.save_production_actual),
+                ("plan_value", "production_plan_table", db.save_production_plan),
+            ):
+                entered_val = getattr(entry, value_type)
+                if entered_val is None:
+                    continue
+                if paired_entry is not None and getattr(paired_entry, value_type) is not None:
+                    continue  # explicit value for both sides — respect it, don't derive
+                cur.execute(
+                    f"SELECT month_actual FROM {table} WHERE plant_name=? AND report_month=? AND item_name=?",
+                    ("BSP", request.month, total_item),
+                )
+                row = cur.fetchone()
+                if row is None or row[0] is None:
+                    continue
+                derived = round(row[0] - entered_val, 3)
+                save_fn(request.month, "BSP", paired_item, derived)
+                saved.append(f"{value_type.replace('_value','')}:{paired_item} (derived)")
+        conn.close()
 
     # SAIL techno actuals are no longer auto-recalculated/stored here on every
     # production update — calculate_sail_actuals() is used as a read-time

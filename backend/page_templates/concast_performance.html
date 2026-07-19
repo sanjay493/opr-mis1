@@ -1,8 +1,8 @@
             <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:3px;">
-                <h2 style="font-size:13pt;font-weight:700;color:#060177;margin:0;text-transform:uppercase;">
+                <h2 style="font-size:13pt;font-weight:700;color:{{ colors.text_accent_navy }};margin:0;text-transform:uppercase;">
                     CONCAST PRODUCTION PERFORMANCE – {{ short_m }}'{{ short_y }}
                 </h2>
-                <span style="font-size:8.5pt;color:#475569;font-weight:500;">Unit: Tonnes</span>
+                <span style="font-size:8.5pt;color:{{ colors.text_secondary }};font-weight:500;">Unit: Tonnes</span>
             </div>
 
             {# ── Monthly table ── #}
@@ -17,30 +17,30 @@
                     <col style="width:11%"/>
                 </colgroup>
                 <thead>
-                    <tr style="color:black;">
-                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;vertical-align:middle;">PLANT</th>
-                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;vertical-align:middle;">{{ fy_str }}<br/>Plan</th>
-                        <th colspan="3" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;">{{ short_m }}'{{ short_y }}</th>
-                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;vertical-align:middle;">{{ short_m }}'{{ short_prev_y }}<br/>Actual</th>
-                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;vertical-align:middle;">% Growth over<br/>{{ short_m }}'{{ short_prev_y }}</th>
+                    <tr style="color:{{ colors.text_black }};">
+                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};vertical-align:middle;">PLANT</th>
+                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};vertical-align:middle;">{{ fy_str }}<br/>Plan</th>
+                        <th colspan="3" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};">{{ short_m }}'{{ short_y }}</th>
+                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};vertical-align:middle;">{{ short_m }}'{{ short_prev_y }}<br/>Actual</th>
+                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};vertical-align:middle;">% Growth over<br/>{{ short_m }}'{{ short_prev_y }}</th>
                     </tr>
-                    <tr style="color:black;">
-                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid #93c5fd;">Plan</th>
-                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid #93c5fd;">Actual</th>
-                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid #93c5fd;">% Ful.</th>
+                    <tr style="color:{{ colors.text_black }};">
+                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};">Plan</th>
+                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};">Actual</th>
+                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};">% Ful.</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in page.monthly %}
-                    {% set bg = '#dcfce7' if row.plant == 'SAIL' else ('#fef9c3' if row.plant == '5 Plants' else '') %}
+                    {% set bg = colors.highlight_achieved_band_bg if row.plant == 'SAIL' else (colors.highlight_target_band_bg if row.plant == '5 Plants' else '') %}
                     <tr style="{% if bg %}background:{{ bg }};{% endif %}{% if row.bold %}font-weight:700;{% endif %}">
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;font-weight:{{ '700' if row.bold else '500' }};">{{ row.plant }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ann_plan }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.m_plan }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;{% if not bg %}background:#d1fae5;{% endif %}">{{ row.m_act }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.m_pct }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.cply_act }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.m_growth }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};font-weight:{{ '700' if row.bold else '500' }};">{{ row.plant }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.ann_plan }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.m_plan }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;{% if not bg %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ row.m_act }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.m_pct }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.cply_act }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.m_growth }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -58,30 +58,30 @@
                     <col style="width:11%"/>
                 </colgroup>
                 <thead>
-                    <tr style="color:black;">
-                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;vertical-align:middle;">PLANT</th>
-                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;vertical-align:middle;">{{ fy_str }}<br/>Plan</th>
-                        <th colspan="3" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;">Apr-{{ short_m }}'{{ short_y }}</th>
-                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;vertical-align:middle;">Apr-{{ short_m }}'{{ short_prev_y }}<br/>Actual</th>
-                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid #93c5fd;vertical-align:middle;">% Growth over<br/>Apr-{{ short_m }}'{{ short_prev_y }}</th>
+                    <tr style="color:{{ colors.text_black }};">
+                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};vertical-align:middle;">PLANT</th>
+                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};vertical-align:middle;">{{ fy_str }}<br/>Plan</th>
+                        <th colspan="3" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};vertical-align:middle;">Apr-{{ short_m }}'{{ short_prev_y }}<br/>Actual</th>
+                        <th rowspan="2" style="padding:3px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};vertical-align:middle;">% Growth over<br/>Apr-{{ short_m }}'{{ short_prev_y }}</th>
                     </tr>
-                    <tr style="color:black;">
-                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid #93c5fd;">Plan</th>
-                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid #93c5fd;">Actual</th>
-                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid #93c5fd;">% Ful.</th>
+                    <tr style="color:{{ colors.text_black }};">
+                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};">Plan</th>
+                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};">Actual</th>
+                        <th style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_header }};">% Ful.</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in page.ytd %}
-                    {% set bg = '#dcfce7' if row.plant == 'SAIL' else ('#fef9c3' if row.plant == '5 Plants' else '') %}
+                    {% set bg = colors.highlight_achieved_band_bg if row.plant == 'SAIL' else (colors.highlight_target_band_bg if row.plant == '5 Plants' else '') %}
                     <tr style="{% if bg %}background:{{ bg }};{% endif %}{% if row.bold %}font-weight:700;{% endif %}">
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;font-weight:{{ '700' if row.bold else '500' }};">{{ row.plant }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ann_plan }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ytd_plan }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;{% if not bg %}background:#d1fae5;{% endif %}">{{ row.ytd_act }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ytd_pct }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ytd_cply }}</td>
-                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid #cbd5e1;text-align:right;">{{ row.ytd_growth }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};font-weight:{{ '700' if row.bold else '500' }};">{{ row.plant }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.ann_plan }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.ytd_plan }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;{% if not bg %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ row.ytd_act }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.ytd_pct }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.ytd_cply }}</td>
+                        <td style="padding:2px 4px;font-size:10.5pt;border:1px solid {{ colors.border_light }};text-align:right;">{{ row.ytd_growth }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

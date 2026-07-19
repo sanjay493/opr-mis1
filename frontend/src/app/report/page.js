@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import PageRenderer from '../../components/PageRenderer';
-import { useReportData, useSaveReportData, useGeneratePDF } from '@/hooks/useReportAPI';
+import { useReportData, useGeneratePDF } from '@/hooks/useReportAPI';
 
 // Edit these labels to change what appears in the Page Selector dropdown
 const PAGE_LABELS = {
@@ -178,12 +178,12 @@ export default function ReportPage() {
   const [activePageNum, setActivePageNum] = useState(1);
   const [selectedMonthName, setSelectedMonthName] = useState(defaultDate.month);
   const [selectedYear, setSelectedYear] = useState(defaultDate.year);
+  const [selectedPages, setSelectedPages] = useState(new Set());
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
 
   // Use React Query to fetch report data - automatically cached for 10 minutes
   const { data: rawData, isLoading, error } = useReportData(selectedMonth);
-  const { mutate: saveData, isPending: isSaving } = useSaveReportData();
   const { mutate: generatePDF, isPending: isGeneratingPDF } = useGeneratePDF();
 
   // Format data when it loads
@@ -199,25 +199,27 @@ export default function ReportPage() {
     }
   }, [rawData, selectedMonthName, selectedYear]);
 
+  // Default the PDF export selection to "all pages" whenever a new report loads
+  useEffect(() => {
+    setSelectedPages(new Set(pagesData.map((p) => p.page)));
+  }, [pagesData]);
+
   const activePage = useMemo(
     () => pagesData.find((p) => p.page === activePageNum) || pagesData[0],
     [pagesData, activePageNum]
   );
 
-  const handleSaveToDatabase = () => {
-    saveData(
-      { month: selectedMonth, pages: pagesData },
-      {
-        onSuccess: () => {
-          alert('Changes saved successfully to SQLite database!');
-        },
-        onError: (error) => {
-          console.error(error);
-          alert('Error saving data to SQLite database. Ensure backend is running.');
-        },
-      }
-    );
+  const togglePageSelection = (pageNum) => {
+    setSelectedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageNum)) next.delete(pageNum);
+      else next.add(pageNum);
+      return next;
+    });
   };
+
+  const selectAllPages = () => setSelectedPages(new Set(pagesData.map((p) => p.page)));
+  const selectNoPages = () => setSelectedPages(new Set());
 
   const handleCellChange = (updatedPageData) => {
     setPagesData((prev) =>
@@ -226,8 +228,13 @@ export default function ReportPage() {
   };
 
   const handleBackendExport = () => {
+    const pagesToExport = pagesData.filter((p) => selectedPages.has(p.page));
+    if (pagesToExport.length === 0) {
+      alert('Select at least one page to export.');
+      return;
+    }
     generatePDF(
-      { month: selectedMonth, pages: pagesData },
+      { month: selectedMonth, pages: pagesToExport },
       {
         onSuccess: (blob) => {
           const url = window.URL.createObjectURL(blob);
@@ -354,33 +361,60 @@ export default function ReportPage() {
           </div>
         </div>
 
-        {/* Typography and Layout Settings — now configured via backend layout_config.json only */}
+        {/* PDF Export — Page Selection */}
         <div className="control-section">
-          <h2>Layout & Typography</h2>
-          <p style={{ fontSize: '0.8rem', color: '#5f6368', lineHeight: '1.4' }}>
-            Font sizes, margins, and layout settings are now configured in the backend <code style={{ backgroundColor: '#f8f9fa', padding: '2px 6px', borderRadius: '3px', fontFamily: 'monospace', fontSize: '0.75rem' }}>layout_config.json</code> file.
-          </p>
-          <p style={{ fontSize: '0.8rem', color: '#5f6368', lineHeight: '1.4', marginTop: '8px' }}>
-            Edit that file to customize per-page layouts and global typography, then regenerate the PDF.
-          </p>
-        </div>
-
-        {/* Database Actions */}
-        <div className="control-section">
-          <h2>Database Actions</h2>
-          <button
-            className="btn btn-primary"
-            onClick={handleSaveToDatabase}
-            disabled={isSaving}
-            style={{ width: '100%' }}
+          <h2>PDF Export — Page Selection</h2>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1, margin: 0 }}
+              onClick={selectAllPages}
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1, margin: 0 }}
+              onClick={selectNoPages}
+            >
+              Select None
+            </button>
+          </div>
+          <div
+            style={{
+              maxHeight: '260px',
+              overflowY: 'auto',
+              border: '1px solid #dadce0',
+              borderRadius: '6px',
+              padding: '4px 8px',
+            }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px', verticalAlign: 'middle' }}>
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-              <polyline points="17 21 17 13 7 13 7 21" />
-              <polyline points="7 3 7 8 15 8" />
-            </svg>
-            {isSaving ? 'Saving...' : 'Save Changes to DB'}
-          </button>
+            {pagesData.map((page) => (
+              <label
+                key={page.page}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '0.8rem',
+                  padding: '4px 0',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedPages.has(page.page)}
+                  onChange={() => togglePageSelection(page.page)}
+                />
+                {page.page}. {PAGE_LABELS[page.page] || page.title || 'Page ' + page.page}
+              </label>
+            ))}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#5f6368', marginTop: '6px' }}>
+            {selectedPages.size} of {pagesData.length} pages selected
+          </div>
         </div>
 
         {/* Export triggers */}

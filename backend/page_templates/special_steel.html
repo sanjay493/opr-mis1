@@ -11,8 +11,8 @@
            from the Product column's own cell border where a group has no
            total row of its own); vertical column rules are a shade darker
            than before for readability without look busy. #}
-        {% set vb  = '#94a3b8' %}
-        {% set vbc = '#96ae83' %}
+        {% set vb  = colors.border_medium %}
+        {% set vbc = colors.border_cumulative_col %}
         {% if page.variant == 'isp_sail_combined' %}
         {# ── Page 23: ISP mill-wise + SAIL summary combined on one portrait page ── #}
         <div style="padding:2px 6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
@@ -22,7 +22,7 @@
           {% set tfs = d.density.table_fs %}{% set lh = d.density.lh %}{% set split_at = d.density.split_at %}{% set tail_scale = d.density.tail_scale %}
           <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ d.title }}</div>
           <div style="text-align:right;font-size:6.8pt;margin-bottom:1px;">Unit: Tonnes</div>
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
+          <table style="width:100%;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:20%"/>
               <col style="width:8%"/><col style="width:8%"/><col style="width:6%"/>
@@ -31,22 +31,22 @@
               <col style="width:6.5%"/><col style="width:5.5%"/>
             </colgroup>
             <thead>
-              <tr style="background:#fff;color:#000;">
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Quality / Grade</th>
-                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ d.month_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ d.cply_label }}<br/>Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">%Gr<br/>{{ d.cply_label }}</th>
-                <th colspan="3" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">{{ d.cum_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">{{ d.cum_cply_label }}<br/>Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">%Gr<br/>{{ d.cum_cply_label }}</th>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};text-align:left;">Quality / Grade</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ d.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ d.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Gr<br/>{{ d.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ d.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ d.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Gr<br/>{{ d.cum_cply_label }}</th>
               </tr>
-              <tr style="background:#fff;color:#000;">
-                <th style="padding:2px 3px;border:1px solid #334155;">Order</th>
-                <th style="padding:2px 3px;border:1px solid #334155;">Actual</th>
-                <th style="padding:2px 3px;border:1px solid #334155;">%Ful</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">Order</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">Actual</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">%Ful</th>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Order</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Order</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Ful</th>
               </tr>
             </thead>
             <tbody>
@@ -54,7 +54,7 @@
               {% if row.type == 'separator' %}
               <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
               {% elif row.type == 'grand-total' %}
-              <tr style="background:#dcfce7;font-weight:700;">
+              <tr style="background:{{ colors.highlight_achieved_band_bg }};font-weight:700;">
                 <td style="padding:1px 1px;border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
@@ -95,7 +95,7 @@
               <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_cply }}</td>
               <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_pct_growth }}</td>
             </tr>
-            <tr style="background:#e0f2fe;font-weight:600;">
+            <tr style="background:{{ colors.highlight_info_band_bg }};font-weight:600;">
               <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
               <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ d.special_pct.current }}</td>
               <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
@@ -117,7 +117,7 @@
           <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ d.title }}</div>
           <div style="text-align:center;font-weight:600;font-size:8pt;margin-bottom:2px;">{{ d.month_label }}</div>
           <div style="text-align:right;font-size:6.8pt;margin-bottom:1px;">Unit: Tonnes</div>
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
+          <table style="width:100%;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:13%"/><col style="width:8%"/>
               <col style="width:7%"/><col style="width:7%"/><col style="width:5.5%"/>
@@ -126,29 +126,29 @@
               <col style="width:6%"/><col style="width:5%"/>
             </colgroup>
             <thead>
-              <tr style="background:#fff;color:#000;">
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Plants</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">ABP<br/>26-27</th>
-                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ d.month_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ d.cply_label }}<br/>Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">%Gr<br/>{{ d.cply_label }}</th>
-                <th colspan="3" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">{{ d.cum_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">{{ d.cum_cply_label }}<br/>Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">%Gr<br/>{{ d.cum_cply_label }}</th>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};text-align:left;">Plants</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">ABP<br/>26-27</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ d.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ d.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Gr<br/>{{ d.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ d.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ d.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Gr<br/>{{ d.cum_cply_label }}</th>
               </tr>
-              <tr style="background:#fff;color:#000;">
-                <th style="padding:2px 3px;border:1px solid #334155;">Orders</th>
-                <th style="padding:2px 3px;border:1px solid #334155;">Actual</th>
-                <th style="padding:2px 3px;border:1px solid #334155;">%Ful</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">Orders</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">Actual</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">%Ful</th>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Orders</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Orders</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Ful</th>
               </tr>
             </thead>
             <tbody>
             {% for row in d.rows %}
             {% set is_tot = row.type == 'sail-total' %}
-            {% set rowbg = 'background:#dcfce7;' if is_tot else '' %}
+            {% set rowbg = ('background:' ~ colors.highlight_achieved_band_bg ~ ';') if is_tot else '' %}
             {% set b1 = ('border:1px solid ' ~ vb ~ ';') if is_tot else ('border-left:1px solid ' ~ vb ~ ';border-right:1px solid ' ~ vb ~ ';') %}
             {% set b2 = ('border:1px solid ' ~ vbc ~ ';') if is_tot else ('border-left:1px solid ' ~ vbc ~ ';border-right:1px solid ' ~ vbc ~ ';') %}
             <tr style="{{ rowbg }}font-weight:{{ '700' if is_tot else '400' }};">
@@ -181,7 +181,7 @@
               <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_cply }}</td>
               <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ d.saleable_production.cum_pct_growth }}</td>
             </tr>
-            <tr style="background:#e0f2fe;font-weight:600;">
+            <tr style="background:{{ colors.highlight_info_band_bg }};font-weight:600;">
               <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
               <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
               <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ d.special_pct.current }}</td>
@@ -211,7 +211,7 @@
 
           {% if page.variant == 'sail_summary' %}
           {# ── SAIL consolidated table — 12 cols ── #}
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
+          <table style="width:100%;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:13%"/><col style="width:8%"/>
               <col style="width:7%"/><col style="width:7%"/><col style="width:5.5%"/>
@@ -220,29 +220,29 @@
               <col style="width:6%"/><col style="width:5%"/>
             </colgroup>
             <thead>
-              <tr style="background:#fff;color:#000;">
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Plants</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">ABP<br/>26-27</th>
-                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ page.month_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ page.cply_label }}<br/>Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">%Gr<br/>{{ page.cply_label }}</th>
-                <th colspan="3" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">{{ page.cum_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">{{ page.cum_cply_label }}<br/>Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">%Gr<br/>{{ page.cum_cply_label }}</th>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};text-align:left;">Plants</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">ABP<br/>26-27</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Gr<br/>{{ page.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ page.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ page.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Gr<br/>{{ page.cum_cply_label }}</th>
               </tr>
-              <tr style="background:#fff;color:#000;">
-                <th style="padding:2px 3px;border:1px solid #334155;">Orders</th>
-                <th style="padding:2px 3px;border:1px solid #334155;">Actual</th>
-                <th style="padding:2px 3px;border:1px solid #334155;">%Ful</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">Orders</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">Actual</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">%Ful</th>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Orders</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Orders</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Ful</th>
               </tr>
             </thead>
             <tbody>
             {% for row in page.rows %}
             {% set is_tot = row.type == 'sail-total' %}
-            {% set rowbg = 'background:#dcfce7;' if is_tot else '' %}
+            {% set rowbg = ('background:' ~ colors.highlight_achieved_band_bg ~ ';') if is_tot else '' %}
             {% set b1 = ('border:1px solid ' ~ vb ~ ';') if is_tot else ('border-left:1px solid ' ~ vb ~ ';border-right:1px solid ' ~ vb ~ ';') %}
             {% set b2 = ('border:1px solid ' ~ vbc ~ ';') if is_tot else ('border-left:1px solid ' ~ vbc ~ ';border-right:1px solid ' ~ vbc ~ ';') %}
             <tr style="{{ rowbg }}font-weight:{{ '700' if is_tot else '400' }};">
@@ -275,7 +275,7 @@
               <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_cply }}</td>
               <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
             </tr>
-            <tr style="background:#e0f2fe;font-weight:600;">
+            <tr style="background:{{ colors.highlight_info_band_bg }};font-weight:600;">
               <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
               <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.current }}</td>
               <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
@@ -292,7 +292,7 @@
 
           {% else %}
           {# ── Plant detail / ISP table — 12 cols (Product + Quality/Grade) ── #}
-          <table style="width:100%;border-collapse:collapse;border:2px solid #1e293b;table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
+          <table style="width:100%;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:7.5%"/>
               <col style="width:19.5%"/>
@@ -302,23 +302,23 @@
               <col style="width:6.5%"/><col style="width:5%"/>
             </colgroup>
             <thead>
-              <tr style="background:#fff;color:#000;">
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Product</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;text-align:left;">Quality / Grade</th>
-                <th colspan="3" style="padding:2px 3px;border:1px solid #334155;">{{ page.month_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">{{ page.cply_label }}<br/>Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #334155;">%Gr<br/>{{ page.cply_label }}</th>
-                <th colspan="3" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">{{ page.cum_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">{{ page.cum_cply_label }}<br/>Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">%Gr<br/>{{ page.cum_cply_label }}</th>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};text-align:left;">Product</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};text-align:left;">Quality / Grade</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Gr<br/>{{ page.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ page.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ page.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Gr<br/>{{ page.cum_cply_label }}</th>
               </tr>
-              <tr style="background:#fff;color:#000;">
-                <th style="padding:2px 3px;border:1px solid #334155;">Order</th>
-                <th style="padding:2px 3px;border:1px solid #334155;">Actual</th>
-                <th style="padding:2px 3px;border:1px solid #334155;">%Ful</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">Order</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">Actual</th>
-                <th style="padding:2px 3px;border:1px solid #2d5016;background:#fff;">%Ful</th>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Order</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Order</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Ful</th>
               </tr>
             </thead>
             <tbody>
@@ -326,7 +326,7 @@
               {% if row.type == 'separator' %}
               <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
               {% elif row.type == 'grand-total' %}
-              <tr style="background:#dcfce7;font-weight:700;">
+              <tr style="background:{{ colors.highlight_achieved_band_bg }};font-weight:700;">
                 <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
@@ -340,7 +340,7 @@
                 <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
               </tr>
               {% elif row.type == 'subtotal' %}
-              <tr style="background:#fed7aa;font-weight:700;">
+              <tr style="background:{{ colors.highlight_shortfall_band_bg }};font-weight:700;">
                 <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
                 <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
@@ -354,7 +354,7 @@
                 <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
               </tr>
               {% elif row.type == 'product-total' %}
-              <tr style="background:#fef9c3;font-weight:700;">
+              <tr style="background:{{ colors.highlight_target_band_bg }};font-weight:700;">
                 {% if row.prod_first %}
                 <td rowspan="{{ row.prod_rowspan }}" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;vertical-align:top;font-size:{{ lfs }};word-break:break-word;">{{ row.product_name }}</td>
                 {% endif %}
@@ -401,7 +401,7 @@
               <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_cply }}</td>
               <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
             </tr>
-            <tr style="background:#e0f2fe;font-weight:600;">
+            <tr style="background:{{ colors.highlight_info_band_bg }};font-weight:600;">
               <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
               <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.current }}</td>
               <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>

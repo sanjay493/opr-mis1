@@ -77,13 +77,13 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
              "SP-2": 11,
              "SP-3": 12,
              "Total Sinter": 13,
-            
+
             "BF#1-7": 14,
             "BF#8": 15,
             "Hot Metal": 16,
             "Pig Iron": 17,
-            "SMS-2": 18,
-            "SMS-3": 19,
+            # SMS-2 / SMS-3 are NOT read directly (see below) — derived as the
+            # sum of their respective cast sub-groups instead.
             "SMS-2 BLOOM ": 22,
             "SMS-2 SLAB ": 23,
             "SMS-3 BLOOM(CV1&2)": 26,
@@ -101,11 +101,29 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
             "SEMIS BLOOM": 40,
             "SEMIS BILLETS": 41,
             "Saleable Semis": 42,
-            
+
             "Saleable Steel": 43,
             "RSMPRIME": 45,
             "URMPRIME": 46,
-        
+
+            # Blast-furnace-wise plan (added alongside the BF#1-7/BF#8 rows above).
+            "BF#4": 55,
+            "BF#6": 56,
+            "BF#7": 57,
+
+            # MM / WRM product-group split (added alongside the MM/WIRERODS totals above).
+            "TMT COILS(WRM)": 49,
+            "OTHERS(WRM)":    50,
+            "TMT BARS(MM)":   51,
+            "LT STRS(MM)":    52,
+        }
+
+        # SMS-2 / SMS-3 monthwise plan = sum of their cast sub-groups, not a
+        # directly-entered total cell (mirrors the same "derive from parts"
+        # rule used for BSP's actual-production extraction).
+        sms_derived = {
+            "SMS-2": ["SMS-2 BLOOM ", "SMS-2 SLAB "],
+            "SMS-3": ["SMS-3 BLOOM(CV1&2)", "SMS-3 BILLET105 ", "SMS-3 BILLET150 "],
         }
         
         vals_extracted = 0
@@ -123,23 +141,32 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
             if not col_p9:
                 continue
                 
+            # Read every mapped cell first (raw, unrounded) so the SMS-2/SMS-3
+            # derivation below can sum the already-fetched sub-group values.
+            month_vals = {}
             for db_item, row_num in production_cells.items():
                 cell_coord = f"{col_p9}{row_num}"
-                raw_val = sheet[cell_coord].value
-                val = clean_val(raw_val)
-                
+                month_vals[db_item] = clean_val(sheet[cell_coord].value)
+
+            for total_item, parts in sms_derived.items():
+                part_vals = [month_vals.get(p) for p in parts]
+                month_vals[total_item] = (
+                    sum(part_vals) if all(v is not None for v in part_vals) else None
+                )
+
+            for db_item, val in month_vals.items():
                 if val is not None:
                     vals_extracted += 1
                     # In plan sheet, if numbers are already in thousands, preserve them
                     # (only round to 3 decimal places to keep precision)
                     if db_item not in ("Oven Pushing (nos/day)", "COB#1-8", "COB#9-10", "COB#11"):
                         val = round(val, 3)
-                
+
                 # Insert or replace in production_plan_table (using column 'month_actual' as per DB schema)
                 cursor.execute("""
                     INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
                     VALUES (?, ?, ?, ?)
-                    ON CONFLICT(report_month, plant_name, item_name) 
+                    ON CONFLICT(report_month, plant_name, item_name)
                     DO UPDATE SET month_actual = excluded.month_actual
                 """, (db_report_month, "BSP", db_item, val))
                 

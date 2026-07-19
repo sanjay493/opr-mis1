@@ -1,0 +1,69 @@
+{
+  "_doc": "SINGLE SOURCE OF TRUTH for every color used in the PDF report templates (page_templates/*.html). Edit this file to retint the report — changes apply on the next PDF generation, no restart needed. Do NOT hardcode colors in the templates; add a new named entry here instead. Any valid CSS color value works (hex, rgb(), 'transparent', 'white', etc).",
+
+  "_doc_headers": "Every '*_header_bg' key controls a table header's background and is set to \"transparent\" by default so header rows carry no fill — only the *_highlight_* entries below keep a background. Set any of these to a color to bring a header fill back.",
+
+  "table_header_bg":            "transparent",
+  "table_header_bg_qtr":        "transparent",
+  "table_header_bg_total":      "transparent",
+  "table_header_bg_section":    "transparent",
+
+  "_doc_highlights": "Backgrounds that carry real meaning (a comparison column, a total/aggregate row, a target band) — these are the 'highlighted rows and columns' kept by design. Change a value to retint that specific highlight everywhere it's used.",
+
+  "highlight_actual_bg":        "#dbeafe",
+  "highlight_actual_border":    "#1d4ed8",
+  "highlight_cumulative_bg":    "#d1fae5",
+  "highlight_planned_band_bg":  "#eff6ff",
+  "highlight_target_band_bg":   "#fef9c3",
+  "highlight_achieved_band_bg": "#dcfce7",
+  "highlight_shortfall_band_bg":"#fed7aa",
+  "highlight_info_band_bg":     "#e0f2fe",
+  "highlight_agg_sail_bg":      "#bbf7d0",
+  "highlight_agg_5plants_bg":   "#fef08a",
+  "highlight_qtr_col_bg":       "#f0f5ff",
+  "highlight_total_col_bg":     "#e8f0fb",
+  "highlight_plant_label_bg":   "#e8edf3",
+  "highlight_group_label_bg":   "#f8fafc",
+  "highlight_pct_row_bg":       "#f1f5f9",
+  "highlight_section_data_bg":  "#eff6ff",
+  "highlight_alt_section_bg":   "transparent",
+  "highlight_bold_row_bg":      "#eef2f6",
+  "highlight_default_row_bg":   "transparent",
+
+  "_doc_borders": "Border colors used across every table's cell/rule lines.",
+
+  "border_light":     "#cbd5e1",
+  "border_medium":    "#94a3b8",
+  "border_dark":      "#334155",
+  "border_darkest":   "#1e293b",
+  "border_black":     "#000000",
+  "border_divider":   "#e2e8f0",
+  "border_group_top": "#374151",
+  "border_heavy":     "#64748b",
+  "border_green":     "#2d5016",
+  "border_slate_sep": "#5a7fa0",
+  "border_header":    "#93c5fd",
+  "border_cumulative_col": "#96ae83",
+
+  "_doc_text": "Text colors used across titles, headings, and data-significant cell text (e.g. CC/CS process columns).",
+
+  "text_primary":        "#0f172a",
+  "text_secondary":      "#475569",
+  "text_muted":          "#64748b",
+  "text_faint":          "#94a3b8",
+  "text_accent_navy":    "#060177",
+  "text_black":          "#000000",
+  "text_white":          "#ffffff",
+  "text_dark_gray":      "#333333",
+  "text_variance_green": "#064e3b",
+  "text_variance_blue":  "#1e40af",
+  "text_plant_cell":     "#1e3a5f",
+  "text_heading_dark":   "#1e293b",
+
+  "_doc_misc": "Cover-page accent, callout box, and other non-table chrome.",
+
+  "misc_white":               "#ffffff",
+  "misc_accent_blue":         "#0284c7",
+  "misc_highlights_box_bg":   "#f8fafc",
+  "misc_highlights_box_border": "#0284c7"
+}

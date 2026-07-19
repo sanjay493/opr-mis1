@@ -203,11 +203,82 @@ def _ppc_mis_config() -> Dict[str, tuple]:
     } if cfg_rc else default_rc
 
 
+def _detect_ppc_date(ws):
+    """Scan row 0 for a plausible Excel date serial.
+
+    The date lived at N1 (col 13) from ~2021-Mar onward, but older (~2012-2020)
+    reports have it one column to the left (M1, col 12) instead — everything
+    below it shifted too (see _PPC_STABLE_LABELS / _PPC_GUARDED_ITEMS), so a
+    fixed column here isn't safe either. Bounded plausibility window (roughly
+    1982-2036) avoids false positives from stray numeric cells nearby.
+    """
+    for c in range(9, 16):
+        v = ws.cell_value(0, c)
+        if isinstance(v, float) and 25000 < v < 55000:
+            return v
+    return None
+
+
+# Items whose column-A label text has been verified to identify the same row
+# reliably across every report vintage seen (~2012-2026), despite surrounding
+# rows being inserted/removed/renamed between eras. Matched by substring
+# (case-insensitive) against the *whole sheet*, first match wins.
+_PPC_STABLE_LABELS = {
+    "Oven Pushing(nos/d)": (False, ["EQV. PUSHING"]),
+    "SP-2":                (True,  ["SP-2"]),
+    "SP-3":                (True,  ["SP-3"]),
+    "Total Sinter":        (True,  ["TOTAL SINTER"]),
+    "BF#1-7":              (True,  ["BF-1 TO 7"]),
+    "BF#8":                (True,  ["BF-8"]),
+    "MM":                  (True,  ["MERCH"]),
+    "WIRERODS":            (True,  ["WIRE RODS"]),
+    "BARS&RODMILL":        (True,  ["BRM"]),
+    "PLATEMILL":           (True,  ["PLATES"]),
+    "Finished Steel":      (True,  ["FINISHED STEEL"]),
+    "Saleable Semis":      (True,  ["TOTAL SEMIS"]),
+    "Saleable Steel":      (True,  ["SAL. STEEL", "SAL STEEL", "SAL. STEEL PROD"]),
+}
+
+# Items whose section genuinely restructured across eras (rows added/removed,
+# e.g. "Total Hot Metal" didn't exist before ~2020; SMS-1 disappeared after
+# ~2021) — not safe to search for by label across the whole sheet the way
+# _PPC_STABLE_LABELS is, since old and new eras mean different things by
+# similar text. Instead keep the current config's fixed cell, but only trust
+# it if the label actually sitting there (or a nearby anchor cell, for the
+# two sub-tables that use a different column) still matches — otherwise the
+# item is skipped for that file rather than risk silently-wrong data.
+# value: (guard_row, guard_col, required_substring)
+_PPC_GUARDED_ITEMS = {
+    "Hot Metal":         (12, 0, "HOT METAL"),
+    "SMS-2":             (13, 0, "SMS-2"),
+    "SMS-3":             (15, 0, "SMS-3"),
+    "Total Crude Steel": (16, 0, "CR STEEL"),
+    "RSM_RAIL":          (17, 0, "RSM"),
+    "URM_RAIL":          (21, 0, "URM"),
+    "COB#1-8":           (3,  0, "BATT"),
+    "RSMPRIME":          (37, 2, "RSM"),
+    "URMPRIME":          (37, 7, "URM"),
+    "Pig Iron":          (60, 12, "PIG IRON"),
+}
+
+
+def _find_ppc_label_row(ws, substrings, max_row=45):
+    """First row (0-based) whose column-A text contains any of substrings."""
+    for r in range(0, max_row):
+        label = str(ws.cell_value(r, 0) or "").strip().upper()
+        if not label:
+            continue
+        if any(s in label for s in substrings):
+            return r
+    return None
+
+
 def extract_and_save_excel(file_path: str, report_month: str = None,
                            source_file_name: str = "") -> bool:
     """Extract BSP production actuals from the daily PPC MIS .xls report (sheet S1).
 
-    Month auto-detected from N1 (date serial). report_month used only as fallback.
+    Month auto-detected from the date cell (see _detect_ppc_date — its column
+    has drifted between report vintages). report_month used only as fallback.
     Units: raw Tonnes → stored as '000 T (divide by 1000). Coke items as-is (nos/day).
     """
     try:
@@ -220,21 +291,41 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
 
         ws = wb.sheet_by_name("S1")
 
-        # Auto-detect report month from N1 (col 13, row 0)
-        n1_raw = ws.cell_value(0, 13)
-        if n1_raw and isinstance(n1_raw, float) and n1_raw > 0:
-            y, m, *_ = xlrd.xldate_as_tuple(n1_raw, wb.datemode)
+        date_serial = _detect_ppc_date(ws)
+        if date_serial is not None:
+            y, m, *_ = xlrd.xldate_as_tuple(date_serial, wb.datemode)
             db_report_month = f"{y}-{m:02d}"
-            logger.info(f"BSP PPC MIS: month auto-detected from N1 → {db_report_month}")
+            logger.info(f"BSP PPC MIS: month auto-detected → {db_report_month}")
         elif report_month:
             db_report_month = report_month
         else:
             raise ValueError(
-                "Cannot determine report month: N1 is not a valid date and "
+                "Cannot determine report month: no plausible date found and "
                 "no report_month was provided."
             )
 
-        production_cells = _ppc_mis_config()
+        production_cells = dict(_ppc_mis_config())
+
+        # Stable items: search for the row by label instead of trusting the
+        # config's row number, which is only valid for the current-era layout.
+        for item_name, (convert, substrings) in _PPC_STABLE_LABELS.items():
+            row = _find_ppc_label_row(ws, substrings)
+            default_col = production_cells.get(item_name, (None, 5, None))[1]
+            if row is not None:
+                production_cells[item_name] = (row, default_col, convert)
+            else:
+                production_cells.pop(item_name, None)
+
+        # Restructured items: keep the config's row/col, but only if the
+        # label actually there (or its section anchor) still matches —
+        # otherwise this file's layout doesn't match what that row assumes,
+        # so skip rather than risk reading the wrong quantity.
+        for item_name, (grow, gcol, needle) in _PPC_GUARDED_ITEMS.items():
+            if item_name not in production_cells:
+                continue
+            guard_label = str(ws.cell_value(grow, gcol) or "").strip().upper()
+            if needle not in guard_label:
+                production_cells.pop(item_name, None)
 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -1003,6 +1094,28 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
 _MIS2_FURNACE_LABELS = ["BF-1", "BF-4", "BF-5", "BF-6", "BF-7", "BF-8"]
 _MIS2_PRODUCTION_COL = 4   # column D — CUM
 
+# Merchant Mill's two product groups — always printed as their own rows
+# ("MM Rods & Bar" / "MM Strls.", column D = CUM) directly below the furnace
+# block. "MM" (the mill total already fed by the PPC MIS extractor above) is
+# re-derived here as their sum on every MIS-2 upload: verified against real
+# data that MM Rods & Bar + MM Strls always equals the existing MM total
+# exactly, so this is a strictly more granular replacement, not a new figure.
+_MIS2_MM_LABELS = {
+    "MM RODS & BAR": "TMT BARS(MM)",
+    "MM RODS":       "TMT BARS(MM)",   # older (~2015-2019) label, no "& Bar"
+    "MM STRLS.":     "LT STRS(MM)",
+}
+
+# Two more figures unique to this report (not derivable from anything the
+# PPC MIS extractor already covers — verified against real data that
+# "Pig Iron Prodn." and "BF 1-8(TOTAL)" on this same sheet exactly match the
+# existing "Pig Iron"/"Hot Metal" items, so those two are redundant and
+# deliberately NOT added here).
+_MIS2_EXTRA_LABELS = {
+    "COB #11":                 "COB#11",
+    "SP - III (M/C-2 PRODN.)":  "SP-3 M/C-2",
+}
+
 
 def _is_mis2_file(wb) -> bool:
     """True if row 2 (any of the first few cells) reads 'BSP MIS-2'."""
@@ -1057,6 +1170,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
     # preview screen even though it would merge correctly on confirm.
     production_rows: List[Dict[str, Any]] = []
     found = set()
+    mm_values: Dict[str, Optional[float]] = {}
     for r in range(1, ws.max_row + 1):
         label = str(ws.cell(r, 2).value or "").strip().upper()   # column B
         if label in _MIS2_FURNACE_LABELS and label not in found:
@@ -1071,12 +1185,71 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
                 "pdf_label": label,
                 "status":    "ok" if val_000t is not None else "skip",
             })
+        elif label in _MIS2_MM_LABELS and _MIS2_MM_LABELS[label] not in mm_values:
+            # Two label spellings ("MM Rods & Bar" vs. the older "MM Rods")
+            # map to the same item — dedupe on the target item, not the label,
+            # so a file using the older wording doesn't also get a spurious
+            # "skip" row for the newer label further down.
+            item_name = _MIS2_MM_LABELS[label]
+            val = _clean(ws.cell(r, _MIS2_PRODUCTION_COL).value)
+            val_000t = round(val / 1000.0, 3) if val is not None else None
+            mm_values[item_name] = val_000t
+            production_rows.append({
+                "item_name": item_name,
+                "value":     val_000t,
+                "unit":      "'000T",
+                "cell":      f"{ws.title}!D{r}",
+                "pdf_label": label,
+                "status":    "ok" if val_000t is not None else "skip",
+            })
+        elif label in _MIS2_EXTRA_LABELS and label not in found:
+            found.add(label)
+            item_name = _MIS2_EXTRA_LABELS[label]
+            val = _clean(ws.cell(r, _MIS2_PRODUCTION_COL).value)
+            val_000t = round(val / 1000.0, 3) if val is not None else None
+            production_rows.append({
+                "item_name": item_name,
+                "value":     val_000t,
+                "unit":      "'000T",
+                "cell":      f"{ws.title}!D{r}",
+                "pdf_label": label,
+                "status":    "ok" if val_000t is not None else "skip",
+            })
     for label in _MIS2_FURNACE_LABELS:
         if label not in found:
             production_rows.append({
                 "item_name": label.replace("BF-", "BF#"), "value": None, "unit": "'000T",
                 "cell": "", "pdf_label": label, "status": "skip",
             })
+    for item_name in dict.fromkeys(_MIS2_MM_LABELS.values()):
+        if item_name not in mm_values:
+            production_rows.append({
+                "item_name": item_name, "value": None, "unit": "'000T",
+                "cell": "", "pdf_label": item_name, "status": "skip",
+            })
+    for label, item_name in _MIS2_EXTRA_LABELS.items():
+        if label not in found:
+            production_rows.append({
+                "item_name": item_name, "value": None, "unit": "'000T",
+                "cell": "", "pdf_label": label, "status": "skip",
+            })
+
+    # "MM" (mill total) re-derived as the sum of the two product groups above
+    # — only when both are present, so a partial/garbled read doesn't silently
+    # understate the total. Compare against the number of unique *target*
+    # items, not label count — "MM Rods"/"MM Rods & Bar" are two label
+    # spellings for the same one target ("TMT BARS(MM)"), so len() of the
+    # raw label dict overcounts and would never be satisfied.
+    _mm_target_count = len(set(_MIS2_MM_LABELS.values()))
+    if len(mm_values) == _mm_target_count and all(v is not None for v in mm_values.values()):
+        production_rows.append({
+            "item_name": "MM",
+            "value":     round(sum(mm_values.values()), 3),
+            "unit":      "'000T",
+            "cell":      "derived: TMT BARS(MM) + LT STRS(MM)",
+            "pdf_label": "MM (derived)",
+            "status":    "ok",
+        })
 
     ok = sum(1 for r in production_rows if r["status"] == "ok")
     logger.info("BSP MIS-2 furnace preview: %d/%d furnace rows ok for %s",

@@ -40,7 +40,8 @@ _MONTH_NAME_TO_NUM = {
 }
 
 # ── MIS-2 blast-furnace block ────────────────────────────────────────────────
-# column-B label → unit name (BF-1 / BF-5 are shut and not extracted)
+# label (column A or B, whichever holds it — has drifted between eras) →
+# unit name (BF-1 / BF-5 are shut and not extracted)
 _MIS2_UNIT_LABELS = {
     "BF-4": "BF-4",
     "BF-6": "BF-6",
@@ -48,15 +49,23 @@ _MIS2_UNIT_LABELS = {
     "BF-8": "BF-8",
     "BF 1-8": "BF_Shop",   # prefix match — actual label is 'BF 1-8(TOTAL)'
 }
-# (1-based CUM column, canonical param key)
-_MIS2_PARAM_COLS = [
-    (4,  "production"),        # D — tonnes for the month
-    (8,  "cdi"),               # H
-    (10, "sinter_in_burden"),  # J
-    (12, "pellet_in_burden"),  # L
-    (14, "nut_coke_rate"),     # N
-    (16, "bf_productivity"),   # P
-    (18, "o2_enrichment"),     # R
+# canonical param key → header-text substrings (matched against the row
+# containing 'FURNACES', case-insensitive). The CUM value sits one column to
+# the right of wherever the descriptive header text is found — this holds in
+# every era seen, even though the header's own column position drifts (the
+# ~2018-19 reports track Coal-Tar injection instead of Sinter%/Pellet%/BF
+# productivity/O2 enrichment, shifting everything after 'cdi' rightward by a
+# different amount than current-era files). Matching by label text — instead
+# of trusting a fixed column offset — avoids silently reading the wrong
+# parameter's value when the column layout doesn't match what's expected.
+_MIS2_PARAM_LABELS = [
+    ("production",       ["PRODUCTION"]),
+    ("cdi",              ["CDI COAL RATE"]),   # not 'CDI COAL INJ.' (tonnage)
+    ("sinter_in_burden", ["SINTER"]),
+    ("pellet_in_burden", ["PALLET", "PELLET"]),  # report spells it 'Pallets'
+    ("nut_coke_rate",    ["NUT COKE"]),
+    ("bf_productivity",  ["PRODUCTIVITY"]),
+    ("o2_enrichment",    ["OXYGEN"]),
 ]
 
 # ── PPC MIS S1 coke-rate block ───────────────────────────────────────────────
@@ -187,20 +196,63 @@ class BspMonthendTechnoExtractor:
             )
         self._verify_month()
 
+        # Locate the furnace-block header row ('FURNACES', in column A or B —
+        # has drifted between eras) and, on that same row, find each param's
+        # CUM column by its descriptive header text (see _MIS2_PARAM_LABELS).
+        header_row = None
+        for r in range(1, len(grid) + 1):
+            for c in (1, 2):
+                if str(_cell(grid, r, c) or "").strip().upper() == "FURNACES":
+                    header_row = r
+                    break
+            if header_row is not None:
+                break
+        if header_row is None:
+            raise ValueError("Cannot find the 'FURNACES' header row in the MIS-2 report.")
+
+        header = grid[header_row - 1]
+        param_cols: Dict[str, int] = {}   # canonical key -> 1-based CUM column
+        for key, substrings in _MIS2_PARAM_LABELS:
+            for c, v in enumerate(header, start=1):
+                text = str(v or "").strip().upper()
+                if text and any(s in text for s in substrings):
+                    param_cols[key] = c + 1   # CUM sits one column right of the label
+                    break
+
+        # Furnace labels sit in whichever of column A/B actually holds them
+        # for this era.
+        label_col = None
+        for c in (2, 1):
+            for r in range(header_row + 1, min(header_row + 20, len(grid)) + 1):
+                v = str(_cell(grid, r, c) or "").strip().upper()
+                if any(v.startswith(p.upper()) for p in _MIS2_UNIT_LABELS):
+                    label_col = c
+                    break
+            if label_col is not None:
+                break
+        if label_col is None:
+            raise ValueError("Cannot find the furnace label column in the MIS-2 report.")
+
         units: Dict[str, Dict] = {}
         found = set()
-        for r in range(1, len(grid) + 1):
-            label = str(_cell(grid, r, 2) or "").strip()   # column B
+        for r in range(header_row + 1, len(grid) + 1):
+            label = str(_cell(grid, r, label_col) or "").strip()
             for prefix, unit in _MIS2_UNIT_LABELS.items():
-                if label.upper().startswith(prefix.upper()) and unit not in found:
+                if label.upper().startswith(prefix.upper()):
                     # exact furnace labels must not prefix-match each other
                     if prefix.startswith("BF-") and label.upper() != prefix.upper():
                         continue
-                    found.add(unit)
                     month = {
                         key: _clean_val(_cell(grid, r, col))
-                        for col, key in _MIS2_PARAM_COLS
+                        for key, col in param_cols.items()
                     }
+                    # Some older reports carry a blank placeholder row for a
+                    # furnace not yet commissioned (production '-', not a
+                    # real 0) ahead of — or instead of — the real data row;
+                    # skip it so a later genuine row (or 'not found') wins.
+                    if "production" in month and month["production"] is None:
+                        continue
+                    found.add(unit)
                     units[unit] = {"month": month, "till_month": {}}
         for prefix, unit in _MIS2_UNIT_LABELS.items():
             if unit not in found:
@@ -215,9 +267,22 @@ class BspMonthendTechnoExtractor:
         if s1 is None:
             raise ValueError("PPC MIS workbook has no 'S1' sheet.")
 
-        # Date from S1!N1 (Excel serial)
-        n1 = _cell(s1, 1, 14)
+        # Date lives at N1 (col 14) from ~2021-Mar onward, but older (~2012-2020)
+        # reports have it one column to the left (M1, col 13) — scan the same
+        # plausible-column window the production extractor uses (see
+        # excel_extractor_bsp._detect_ppc_date) instead of trusting a fixed cell.
+        n1 = None
+        for c in range(10, 17):
+            v = _cell(s1, 1, c)
+            if isinstance(v, float) and 25000 < v < 55000:
+                n1 = v
+                break
+            if isinstance(v, date):
+                n1 = v
+                break
         try:
+            if n1 is None:
+                raise TypeError
             if self._xls_datemode is not None:
                 import xlrd
                 y, m, d, *_ = xlrd.xldate_as_tuple(float(n1), self._xls_datemode)
@@ -228,7 +293,7 @@ class BspMonthendTechnoExtractor:
                 raise TypeError
         except Exception:
             raise ValueError(
-                f"Cannot read the report date from S1!N1 (got {n1!r}) — "
+                f"Cannot read the report date from S1 row 1 (got {n1!r}) — "
                 "verify this is the BSP PPC MIS workbook."
             )
         self._verify_month()

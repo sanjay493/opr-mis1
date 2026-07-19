@@ -332,12 +332,32 @@
         true
       ],
       [
+        "2 cc billet",
+        "BILLET Caster",
+        true
+      ],
+      [
         "cc bloom",
         "Bloom Caster ",
         true
       ],
       [
+        "1 cc bloom",
+        "Bloom Caster ",
+        true
+      ],
+      [
         "brc bloom",
+        "BRC",
+        true
+      ],
+      [
+        "3 cc bloom brc",
+        "BRC",
+        true
+      ],
+      [
+        "brc",
         "BRC",
         true
       ],
@@ -360,6 +380,26 @@
         "wheel axle plant",
         "WAP",
         true
+      ],
+      [
+        "axle plant",
+        "Axle plant",
+        true
+      ],
+      [
+        "1 axle plant",
+        "Axle plant",
+        true
+      ],
+      [
+        "wheel plant",
+        "wheel plant",
+        true
+      ],
+      [
+        "2 wheel plant",
+        "wheel plant",
+        true
       ]
     ],
     "saleable_map": [
@@ -369,12 +409,27 @@
         true
       ],
       [
+        "1 finished",
+        "Finished Steel",
+        true
+      ],
+      [
         "semis",
         "Saleable Semis",
         true
       ],
       [
+        "2 semis",
+        "Saleable Semis",
+        true
+      ],
+      [
         "total",
+        "Saleable Steel",
+        true
+      ],
+      [
+        "3 total",
         "Saleable Steel",
         true
       ]
