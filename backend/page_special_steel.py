@@ -168,11 +168,16 @@ def _get_prod_ytd(cur, ytd_months, plant, item):
 
 
 def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
-                 plant, product_group, total_label):
+                 plant, product_group, total_label, club_sections=False):
     """Return (rows, g_ord, g_act, g_cply, g_cum_ord, g_cum_act, g_cum_cply).
 
     Lists every quality grade that has data in ANY of: current month,
-    YTD months, CPLY month, or CPLY-YTD months."""
+    YTD months, CPLY month, or CPLY-YTD months.
+
+    club_sections=True collapses a quality grade's separate section/size
+    variants into a single row (figures summed across sections) instead of
+    one row per (quality_grade, section) pair — used where the section
+    breakdown isn't wanted on the printed page."""
     rows     = [_hdr(product_group)]
     cur_map  = {(qg, sec): (o, a) for qg, sec, o, a in _fetch_group(cur, month, plant, product_group)}
     cply_map = _fetch_cply(cur, cply_month, plant, product_group)
@@ -181,6 +186,37 @@ def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
 
     # ytd_months includes the current month; cply_ytd_months includes cply_month
     all_grades = _fetch_all_grades(cur, ytd_months + cply_ytd_months, plant, product_group)
+
+    if club_sections:
+        collapsed_order = []
+        for qg, _sec in all_grades:
+            if qg not in collapsed_order:
+                collapsed_order.append(qg)
+        all_grades = [(qg, "") for qg in collapsed_order]
+
+        def _collapse_qty(m):
+            out = {}
+            for (qg, _sec), (o, a) in m.items():
+                oo, aa = out.get(qg, (0, 0))
+                out[qg] = (oo + (o or 0), aa + (a or 0))
+            return {(qg, ""): v for qg, v in out.items()}
+
+        def _collapse_single(m):
+            # Stays None only if every section variant was also None for
+            # that period, so has_cply/has_cum_cply still distinguish a
+            # real zero from "not reported this period".
+            out = {}
+            for (qg, _sec), v in m.items():
+                if v is None:
+                    out.setdefault(qg, None)
+                else:
+                    out[qg] = (out.get(qg) or 0) + v
+            return {(qg, ""): v for qg, v in out.items()}
+
+        cur_map  = _collapse_qty(cur_map)
+        ytd_map  = _collapse_qty(ytd_map)
+        cply_map = _collapse_single(cply_map)
+        cytd_map = _collapse_single(cytd_map)
 
     g_ord = g_act = g_cply = 0.0
     g_cum_ord = g_cum_act = g_cum_cply = 0.0
@@ -270,7 +306,8 @@ def _gen_dsp(cur, month, cply_month, ytd_months, cply_ytd_months):
         ("ASP",       None),
     ]:
         r, o, a, c, co, ca, cc = _build_group(
-            cur, month, cply_month, ytd_months, cply_ytd_months, "DSP", grp, lbl)
+            cur, month, cply_month, ytd_months, cply_ytd_months, "DSP", grp, lbl,
+            club_sections=True)
         rows.extend(r)
         semi_o += o; semi_a += a; semi_c += c
         semi_co += co; semi_ca += ca; semi_cc += cc
@@ -288,7 +325,8 @@ def _gen_dsp(cur, month, cply_month, ytd_months, cply_ytd_months):
         ("W & A",       None),
     ]:
         r, o, a, c, co, ca, cc = _build_group(
-            cur, month, cply_month, ytd_months, cply_ytd_months, "DSP", grp, lbl)
+            cur, month, cply_month, ytd_months, cply_ytd_months, "DSP", grp, lbl,
+            club_sections=True)
         rows.extend(r)
         fin_o += o; fin_a += a; fin_c += c
         fin_co += co; fin_ca += ca; fin_cc += cc
