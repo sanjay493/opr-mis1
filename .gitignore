@@ -22,3 +22,9 @@ backup.log
 # Local env files (copy frontend/.env.example to frontend/.env.local)
 .env.local
 .env*.local
+.env
+backend/.env
+
+# Compiled Python bytecode
+__pycache__/
+*.pyc
