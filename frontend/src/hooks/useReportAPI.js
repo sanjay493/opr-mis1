@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const fetchWithTimeout = (url, options = {}, timeoutMs = 30000) => {
   return new Promise((resolve, reject) => {

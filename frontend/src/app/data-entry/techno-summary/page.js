@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter } from 'recharts';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const FY_LIST = ['2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29'];
 
 export default function TechnoSummaryPage() {

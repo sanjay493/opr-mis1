@@ -1,5 +1,7 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React, { useState, useEffect } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import { useStockData, useSaveStockEntry } from '@/hooks/useDataEntryAPI';
@@ -14,7 +16,7 @@ const STOCK_ITEMS = [
   { item_type: 'PIG IRON',       stock_type: '',          label: 'PIG IRON' },
 ];
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 function StockEntryCard({ apiBase }) {
   const defaultMonth = () => {
@@ -209,6 +211,14 @@ function StockEntryCard({ apiBase }) {
   );
 }
 
-export default function OpeningStockPage() {
+function OpeningStockPageInner() {
   return <StockEntryCard apiBase={API_BASE_URL} />;
+}
+
+export default function OpeningStockPage() {
+  return (
+    <RequireEditor>
+      <OpeningStockPageInner />
+    </RequireEditor>
+  );
 }

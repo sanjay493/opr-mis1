@@ -75,6 +75,8 @@ from api_techno_manual import router as techno_manual_router
 from api_mcr_techno import router as mcr_techno_router
 from api_todo import router as todo_router
 from api_worklog import router as worklog_router
+from api_auth import router as auth_router
+from api_admin import router as admin_router
 
 db.init_db()
 
@@ -111,11 +113,126 @@ if frontend_port:
         f"http://127.0.0.1:{frontend_port}",
     ])
 
+# NOTE: CORSMiddleware is registered AFTER EditorAdminGateMiddleware (below)
+# so it wraps the gate. Starlette runs the last-added middleware outermost;
+# if the gate were outermost, its 401/403 short-circuit responses would skip
+# CORS entirely and reach the browser without Access-Control-Allow-Origin —
+# surfacing as an opaque "Failed to fetch" instead of the intended message.
+
+# ---------------------------------------------------------------------------
+# Editor/Administrator gate for every insert-update-delete endpoint.
+#
+# Rather than adding a Depends(...) to ~45 individual route handlers spread
+# across main.py and 9 api_*.py routers, every mutating route is listed once
+# here and enforced (plus logged to activity_log) by a single middleware.
+# /api/auth/* and /api/admin/* are excluded — they already gate themselves
+# per-route via FastAPI Depends (registration must be reachable while logged
+# out; admin routes need admin specifically, not just editor).
+# ---------------------------------------------------------------------------
+import re as _re
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+import auth as _auth
+
+_GATED_ROUTE_TEMPLATES = [
+    ("POST", "/api/bsp-techno/insert"),
+    ("POST", "/api/bsp-techno/extract/techno"),
+    ("POST", "/api/bsp-techno/extract/oisco"),
+    ("POST", "/api/dsp-techno/extract"),
+    ("POST", "/api/isp-techno/extract"),
+    ("POST", "/api/mcr-techno/cumulative-all"),
+    ("POST", "/api/mcr-techno/insert"),
+    ("POST", "/api/rsp-techno/insert"),
+    ("POST", "/api/rsp-techno/extract"),
+    ("POST", "/api/techno/manual/save"),
+    ("POST", "/api/techno/manual/sail/calculate"),
+    ("POST", "/api/todo/add"),
+    ("POST", "/api/todo/{job_id}/update"),
+    ("POST", "/api/todo/{job_id}/complete"),
+    ("POST", "/api/todo/{job_id}/reopen"),
+    ("POST", "/api/todo/{job_id}/delete"),
+    ("POST", "/api/techno/extract"),
+    ("POST", "/api/techno/insert"),
+    ("POST", "/api/worklog/add"),
+    ("POST", "/api/worklog/{entry_id}/update"),
+    ("POST", "/api/worklog/{entry_id}/delete"),
+    ("POST", "/api/data"),
+    ("POST", "/api/special-steel-manual/save"),
+    ("POST", "/api/upload-excel"),
+    ("POST", "/api/upload-excel-plan"),
+    ("POST", "/api/confirm-plan"),
+    ("POST", "/api/confirm-extraction"),
+    ("POST", "/api/bsl-bf-techno/save"),
+    ("POST", "/api/techno-entries"),
+    ("POST", "/api/save-item-alias"),
+    ("POST", "/api/production-entry"),
+    ("POST", "/api/legacy-sms-crude/confirm"),
+    ("POST", "/api/conversion-entry"),
+    ("POST", "/api/stock-entry"),
+    ("POST", "/api/techno-targets"),
+    ("POST", "/api/techno-manual-save"),
+    ("POST", "/api/ipt-entry"),
+    ("POST", "/api/ipt-delete"),
+    ("POST", "/api/techno-plan"),
+    ("POST", "/api/techno-plant-plan"),
+    ("POST", "/api/sail-techno-plan"),
+    ("POST", "/api/techno-calculate-sail-actuals"),
+    ("POST", "/api/techno-sail-targets"),
+    ("POST", "/api/techno-recalculate-sail"),
+    ("POST", "/api/techno-plant-targets"),
+    ("POST", "/api/techno-page-targets"),
+    ("POST", "/api/techno-sms-targets"),
+    ("POST", "/api/techno-recalculate-sail-weighted"),
+]
+
+
+def _template_to_regex(template: str):
+    pattern = _re.sub(r"\{[^/]+\}", r"[^/]+", template)
+    return _re.compile(f"^{pattern}$")
+
+
+_GATED_ROUTES = [(method, _template_to_regex(tmpl)) for method, tmpl in _GATED_ROUTE_TEMPLATES]
+
+
+def _is_gated(method: str, path: str) -> bool:
+    return any(method == m and rx.match(path) for m, rx in _GATED_ROUTES)
+
+
+class EditorAdminGateMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        method = request.method
+        if not _is_gated(method, path):
+            return await call_next(request)
+
+        token = request.cookies.get(_auth.COOKIE_NAME)
+        payload = _auth.decode_session_token(token) if token else None
+        if not payload:
+            return JSONResponse({"detail": "Not logged in."}, status_code=401)
+        user = _auth.get_user_by_id(int(payload["sub"]))
+        if not user or _auth._is_barred(user["email"]):
+            return JSONResponse({"detail": "Your account has been barred by an administrator."}, status_code=403)
+        if user.get("role") not in ("editor", "admin"):
+            return JSONResponse(
+                {"detail": "You don't have permission to do this — editor or administrator access required."},
+                status_code=403,
+            )
+
+        response = await call_next(request)
+        if response.status_code < 400:
+            _auth.log_activity(user, "insert/update/delete", f"{method} {path}", "")
+        return response
+
+
+app.add_middleware(EditorAdminGateMiddleware)
+
+# Added last = outermost, so every response (including the gate's 401/403
+# short-circuits) passes through CORS on the way out. See NOTE above.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 
@@ -129,6 +246,12 @@ app.include_router(techno_manual_router)
 app.include_router(mcr_techno_router)
 app.include_router(todo_router)
 app.include_router(worklog_router)
+app.include_router(auth_router)
+app.include_router(admin_router)
+
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(os.path.join(_STATIC_DIR, "profile_pics"), exist_ok=True)
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 # Serve dashboard
 @app.get("/dashboard")

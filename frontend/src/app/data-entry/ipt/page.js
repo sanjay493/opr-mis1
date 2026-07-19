@@ -1,5 +1,7 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React, { useState, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
@@ -241,7 +243,7 @@ function NewRouteRow({ month, onAdded }) {
   );
 }
 
-export default function IptDataEntryPage() {
+function IptDataEntryPageInner() {
   const [month, setMonth]     = useState(defaultMonth);
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(false);
@@ -433,5 +435,13 @@ export default function IptDataEntryPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function IptDataEntryPage() {
+  return (
+    <RequireEditor>
+      <IptDataEntryPageInner />
+    </RequireEditor>
   );
 }

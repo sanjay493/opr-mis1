@@ -1,10 +1,12 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React from 'react';
 import Link from 'next/link';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
-export default function DataEntryPage() {
+function DataEntryPageInner() {
   const sections = [
     {
       title: 'Production Data Entry',
@@ -180,5 +182,13 @@ export default function DataEntryPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function DataEntryPage() {
+  return (
+    <RequireEditor>
+      <DataEntryPageInner />
+    </RequireEditor>
   );
 }

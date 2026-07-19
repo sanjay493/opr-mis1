@@ -1,9 +1,11 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 const PRIORITY = {
   high:   { label: 'High',   text: '#c5221f', bg: '#fce8e6', border: '#dc2626' },
@@ -28,7 +30,7 @@ function todayISO() {
 
 const emptyForm = { subject: '', details: '', recipient: '', due_date: todayISO(), priority: 'medium' };
 
-export default function TodoPage() {
+function TodoPageInner() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -240,6 +242,14 @@ export default function TodoPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function TodoPage() {
+  return (
+    <RequireEditor>
+      <TodoPageInner />
+    </RequireEditor>
   );
 }
 

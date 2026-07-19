@@ -1,12 +1,23 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
 const MONTH_SHORT = { '01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec' };
-const FY_YEARS = Array.from({ length: 6 }, (_, i) => (2022 + i).toString());
+const YEAR_RANGE_START = 2000;
+const _now = new Date();
+// FY start year: Apr..Dec -> this calendar year; Jan..Mar -> previous calendar year
+const CURRENT_FY_START_YEAR = _now.getMonth() >= 3 ? _now.getFullYear() : _now.getFullYear() - 1;
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+// FY start years: 2000 through the current FY only.
+const FY_YEARS = Array.from(
+  { length: CURRENT_FY_START_YEAR - YEAR_RANGE_START + 1 },
+  (_, i) => (YEAR_RANGE_START + i).toString()
+);
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 function ConversionCard({ apiBase }) {
   const getDefaultFy = () => {
@@ -141,6 +152,14 @@ function ConversionCard({ apiBase }) {
   );
 }
 
-export default function ConversionPage() {
+function ConversionPageInner() {
   return <ConversionCard apiBase={API_BASE_URL} />;
+}
+
+export default function ConversionPage() {
+  return (
+    <RequireEditor>
+      <ConversionPageInner />
+    </RequireEditor>
+  );
 }

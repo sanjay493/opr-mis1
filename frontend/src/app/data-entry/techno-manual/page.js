@@ -1,9 +1,11 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
 
@@ -16,7 +18,17 @@ const MONTH_NUM = {
   May:'05', June:'06', July:'07', August:'08',
   September:'09', October:'10', November:'11', December:'12',
 };
-const YEARS = Array.from({ length: 10 }, (_, i) => String(2022 + i));
+const YEAR_RANGE_START = 2000;
+const _now = new Date();
+// FY start year: Apr..Dec -> this calendar year; Jan..Mar -> previous calendar year
+const CURRENT_FY_END_YEAR = (_now.getMonth() >= 3 ? _now.getFullYear() : _now.getFullYear() - 1) + 1;
+
+// Calendar years: 2000 through the current FY's end year (covers Jan-Mar
+// report months that fall in the current FY but the next calendar year).
+const YEARS = Array.from(
+  { length: CURRENT_FY_END_YEAR - YEAR_RANGE_START + 1 },
+  (_, i) => String(YEAR_RANGE_START + i)
+);
 
 function getDefaultPeriod() {
   const d = new Date(); d.setMonth(d.getMonth() - 1);
@@ -613,7 +625,7 @@ function CumulativeModal({ preview, onApply, onClose }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-export default function TechnoManualPage() {
+function TechnoManualPageInner() {
   const def = getDefaultPeriod();
   const [plant,     setPlant]     = useState('RSP');
   const [monthName, setMonthName] = useState(def.monthName);
@@ -1181,5 +1193,13 @@ export default function TechnoManualPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TechnoManualPage() {
+  return (
+    <RequireEditor>
+      <TechnoManualPageInner />
+    </RequireEditor>
   );
 }

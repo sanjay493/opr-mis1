@@ -1,9 +1,11 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React, { useState, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 const STATUS_META = {
   new:       { label: 'New',       text: '#188038', bg: '#e6f4ea', border: '#34a853' },
@@ -18,7 +20,7 @@ function fmtNum(v) {
   return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 });
 }
 
-export default function LegacySmsCrudePage() {
+function LegacySmsCrudePageInner() {
   const [file, setFile] = useState(null);
   const [rows, setRows] = useState(null);
   const [counts, setCounts] = useState(null);
@@ -244,6 +246,14 @@ export default function LegacySmsCrudePage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function LegacySmsCrudePage() {
+  return (
+    <RequireEditor>
+      <LegacySmsCrudePageInner />
+    </RequireEditor>
   );
 }
 

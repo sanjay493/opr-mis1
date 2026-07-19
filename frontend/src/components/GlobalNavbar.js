@@ -2,9 +2,19 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
 
 export default function GlobalNavbar() {
   const [openDropdown, setOpenDropdown] = useState(null);
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await logout();
+    setOpenDropdown(null);
+    router.push('/');
+  };
 
   const navItems = [
     {
@@ -247,9 +257,95 @@ export default function GlobalNavbar() {
             ))}
           </div>
 
+          {/* Account menu */}
+          <div
+            style={{ position: 'relative', marginLeft: 'auto' }}
+            onMouseEnter={() => setOpenDropdown('account')}
+            onMouseLeave={() => setOpenDropdown(null)}
+          >
+            {user ? (
+              <>
+                <div style={{
+                  cursor: 'pointer',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: openDropdown === 'account' ? '#1a73e8' : '#202124',
+                  backgroundColor: openDropdown === 'account' ? 'rgba(26, 115, 232, 0.08)' : 'transparent',
+                }}>
+                  <span>👤</span>
+                  <span style={{ fontSize: '12pt', fontWeight: '600' }}>{user.name || user.email}</span>
+                  {user.role && (
+                    <span style={{
+                      fontSize: '8.5pt', fontWeight: 700, textTransform: 'uppercase',
+                      padding: '2px 6px', borderRadius: '10px',
+                      backgroundColor: user.role === 'admin' ? '#fce8e6' : '#e6f4ea',
+                      color: user.role === 'admin' ? '#c5221f' : '#188038',
+                    }}>
+                      {user.role}
+                    </span>
+                  )}
+                </div>
+                {openDropdown === 'account' && (
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0,
+                    backgroundColor: '#f8f9fa', border: '1px solid #dadce0', borderRadius: '8px',
+                    overflow: 'hidden', minWidth: '200px', zIndex: 10,
+                    boxShadow: '0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)',
+                  }}>
+                    <Link href="/profile" style={{ textDecoration: 'none' }}>
+                      <div style={{ padding: '12px 18px', color: '#202124', fontSize: '12pt', borderBottom: '1px solid #e8eaed' }}>
+                        👤 My Profile
+                      </div>
+                    </Link>
+                    {user.role === 'admin' && (
+                      <>
+                        <Link href="/admin/users" style={{ textDecoration: 'none' }}>
+                          <div style={{ padding: '12px 18px', color: '#202124', fontSize: '12pt', borderBottom: '1px solid #e8eaed' }}>
+                            🛠️ Manage Users
+                          </div>
+                        </Link>
+                        <Link href="/admin/allowed-emails" style={{ textDecoration: 'none' }}>
+                          <div style={{ padding: '12px 18px', color: '#202124', fontSize: '12pt', borderBottom: '1px solid #e8eaed' }}>
+                            ✉️ Allowed Emails
+                          </div>
+                        </Link>
+                        <Link href="/admin/activity-log" style={{ textDecoration: 'none' }}>
+                          <div style={{ padding: '12px 18px', color: '#202124', fontSize: '12pt', borderBottom: '1px solid #e8eaed' }}>
+                            📜 Activity Log
+                          </div>
+                        </Link>
+                      </>
+                    )}
+                    <div
+                      onClick={handleLogout}
+                      style={{ padding: '12px 18px', color: '#c5221f', fontSize: '12pt', cursor: 'pointer' }}
+                    >
+                      🚪 Log Out
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Link href="/login" style={{ textDecoration: 'none' }}>
+                  <div style={{ padding: '8px 12px', fontSize: '12pt', fontWeight: 600, color: '#1a73e8', cursor: 'pointer' }}>
+                    Log In
+                  </div>
+                </Link>
+                <Link href="/register" style={{ textDecoration: 'none' }}>
+                  <div className="btn btn-primary" style={{ margin: 0, padding: '8px 14px', fontSize: '11pt' }}>
+                    Register
+                  </div>
+                </Link>
+              </div>
+            )}
+          </div>
+
           {/* Status badge */}
           <div style={{
-            marginLeft: 'auto',
             padding: '6px 14px',
             backgroundColor: '#f8f9fa',
             border: '1px solid #dadce0',

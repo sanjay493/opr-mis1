@@ -1,13 +1,15 @@
 'use client';
+
+import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useEffect, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const FY_LIST = ['2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29'];
 const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
 
-export default function TechnoTargetsPage() {
+function TechnoTargetsPageInner() {
   const [fy, setFy] = useState('2026-27');
   const [bfParams, setBfParams] = useState([]);
   const [smsParams, setSmsParams] = useState([]);
@@ -772,5 +774,13 @@ export default function TechnoTargetsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function TechnoTargetsPage() {
+  return (
+    <RequireEditor>
+      <TechnoTargetsPageInner />
+    </RequireEditor>
   );
 }

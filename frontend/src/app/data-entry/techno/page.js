@@ -1,10 +1,12 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import BSLBFTechnoExtractor from '@/components/BSLBFTechnoExtractor';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
 
@@ -17,7 +19,17 @@ const MONTH_NUM = {
   May: '05', June: '06', July: '07', August: '08',
   September: '09', October: '10', November: '11', December: '12',
 };
-const YEARS = Array.from({ length: 8 }, (_, i) => (2022 + i).toString());
+const YEAR_RANGE_START = 2000;
+const _now = new Date();
+// FY start year: Apr..Dec -> this calendar year; Jan..Mar -> previous calendar year
+const CURRENT_FY_END_YEAR = (_now.getMonth() >= 3 ? _now.getFullYear() : _now.getFullYear() - 1) + 1;
+
+// Calendar years: 2000 through the current FY's end year (covers Jan-Mar
+// report months that fall in the current FY but the next calendar year).
+const YEARS = Array.from(
+  { length: CURRENT_FY_END_YEAR - YEAR_RANGE_START + 1 },
+  (_, i) => (YEAR_RANGE_START + i).toString()
+);
 
 function getDefaultPeriod() {
   const d = new Date();
@@ -1104,7 +1116,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-export default function TechnoDataEntry() {
+function TechnoDataEntryInner() {
   const def = getDefaultPeriod();
   const [month, setMonth] = useState(def.month);
   const [year, setYear] = useState(def.year);
@@ -1166,5 +1178,13 @@ export default function TechnoDataEntry() {
         <TechnoDataPanel plant={plant} reportMonth={reportMonth} apiBase={API_BASE_URL} />
       </div>
     </div>
+  );
+}
+
+export default function TechnoDataEntry() {
+  return (
+    <RequireEditor>
+      <TechnoDataEntryInner />
+    </RequireEditor>
   );
 }

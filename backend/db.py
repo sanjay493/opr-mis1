@@ -207,6 +207,63 @@ def init_db():
         )
     """)
 
+    # 13. User accounts — role is NULL until an administrator assigns 'editor'
+    # or 'admin'; a freshly-registered user has no data-entry access at all.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            email         TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            name          TEXT DEFAULT '',
+            role          TEXT,                  -- NULL | 'editor' | 'admin'
+            profile_pic   TEXT DEFAULT '',        -- filename under static/profile_pics/
+            created_at    TEXT NOT NULL,
+            updated_at    TEXT
+        )
+    """)
+
+    # 14. Registration whitelist — only emails listed here (and not barred)
+    # may register. Administrators add/remove/bar entries.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS allowed_emails (
+            email      TEXT PRIMARY KEY,
+            added_by   TEXT,
+            added_at   TEXT NOT NULL,
+            barred     INTEGER NOT NULL DEFAULT 0,
+            barred_by  TEXT,
+            barred_at  TEXT
+        )
+    """)
+
+    # 15. One-time passcodes — used for both registration and any password
+    # change (voluntary or forgotten), per spec: every password set/change
+    # is completed by emailing a passcode, never by old-password alone.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS otp_codes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            email      TEXT NOT NULL,
+            purpose    TEXT NOT NULL,   -- 'register' | 'reset_password'
+            code_hash  TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used       INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # 16. Activity log — every insert/update/delete performed through a
+    # gated (editor/admin-only) endpoint, with who and when.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_email TEXT,
+            user_name  TEXT,
+            action     TEXT NOT NULL,   -- 'insert' | 'update' | 'delete'
+            entity     TEXT,            -- e.g. 'production_table', 'upload-excel'
+            details    TEXT DEFAULT '',
+            timestamp  TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
     conn.close()
 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Display label → item_name in production_table
 const ITEMS = [

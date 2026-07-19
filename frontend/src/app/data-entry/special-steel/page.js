@@ -1,11 +1,13 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import GlobalNavbar from '@/components/GlobalNavbar';
 import SpecialSteelManualEntry from '@/components/SpecialSteelManualEntry';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API = process.env.NEXT_PUBLIC_API_URL || '';
 
-export default function SpecialSteelEntryPage() {
+function SpecialSteelEntryPageInner() {
   return (
     <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
       <GlobalNavbar />
@@ -23,5 +25,13 @@ export default function SpecialSteelEntryPage() {
         <SpecialSteelManualEntry apiBase={API} defaultPlant="ISP" />
       </div>
     </div>
+  );
+}
+
+export default function SpecialSteelEntryPage() {
+  return (
+    <RequireEditor>
+      <SpecialSteelEntryPageInner />
+    </RequireEditor>
   );
 }

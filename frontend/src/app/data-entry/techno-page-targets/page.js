@@ -1,8 +1,10 @@
 'use client';
+
+import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useEffect, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const FY_LIST = ['2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29'];
 const PAGES = [
@@ -13,7 +15,7 @@ const PAGES = [
 
 const keyOf = (col) => `${col.plant}|${col.unit}|${col.param_key}`;
 
-export default function TechnoPageTargetsPage() {
+function TechnoPageTargetsPageInner() {
   const [fy, setFy] = useState('2026-27');
   const [page, setPage] = useState(28);
   const [data, setData] = useState(null);
@@ -212,5 +214,13 @@ export default function TechnoPageTargetsPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function TechnoPageTargetsPage() {
+  return (
+    <RequireEditor>
+      <TechnoPageTargetsPageInner />
+    </RequireEditor>
   );
 }

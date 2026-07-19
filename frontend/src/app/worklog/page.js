@@ -1,9 +1,11 @@
 'use client';
 
+import RequireEditor from '@/components/RequireEditor';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -23,7 +25,7 @@ function todayISO() {
 
 const emptyForm = { work_date: todayISO(), description: '', remarks: '' };
 
-export default function WorklogPage() {
+function WorklogPageInner() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -264,6 +266,14 @@ export default function WorklogPage() {
         ))}
       </main>
     </div>
+  );
+}
+
+export default function WorklogPage() {
+  return (
+    <RequireEditor>
+      <WorklogPageInner />
+    </RequireEditor>
   );
 }
 

@@ -55,7 +55,17 @@ const MONTH_NUM = {
   'September': '09', 'October': '10', 'November': '11', 'December': '12',
 };
 
-const years = Array.from({ length: 16 }, (_, i) => (2020 + i).toString());
+const YEAR_RANGE_START = 2000;
+const _now = new Date();
+// FY start year: Apr..Dec -> this calendar year; Jan..Mar -> previous calendar year
+const CURRENT_FY_END_YEAR = (_now.getMonth() >= 3 ? _now.getFullYear() : _now.getFullYear() - 1) + 1;
+
+// Calendar years: 2000 through the current FY's end year (covers Jan-Mar
+// report months that fall in the current FY but the next calendar year).
+const years = Array.from(
+  { length: CURRENT_FY_END_YEAR - YEAR_RANGE_START + 1 },
+  (_, i) => (YEAR_RANGE_START + i).toString()
+);
 
 function replaceTimeStrings(text, newMonth, newYear, oldMonth, oldYear) {
   if (typeof text !== 'string') return text;
@@ -161,7 +171,7 @@ function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
   });
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 console.log('API_BASE_URL:', API_BASE_URL);
 
 const getDefaultDate = () => {
