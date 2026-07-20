@@ -160,6 +160,12 @@ schtasks /Create /F /SC DAILY /ST 13:00 /TN "MIS_MySQL_Daily_Backup" /TR "D:\mys
 Backups land in `D:\opr-mis1\Report_format\db_backup\mis_reports_YYYY-MM-DD.sql`,
 14-day retention. Same-day runs overwrite, so overlapping triggers are fine.
 
+`backup_mysql.bat` fails loudly: it dumps to a temp file and only replaces
+today's backup once the dump passes sanity checks (mysqldump exit code,
+minimum size, completion footer) — a bad run never overwrites a good backup.
+On failure it exits non-zero, logs to `D:\mysql\backup_error.log`, and pops
+a Windows notification balloon.
+
 ## 6. Run the app
 
 ```powershell
@@ -201,3 +207,5 @@ New-NetFirewallRule -DisplayName "SAIL MIS Frontend (3000)" -Direction Inbound -
 | Login broken / "Not logged in" on every action | `JWT_SECRET` missing or changed in `.env`; cookie sessions died — log in again |
 | Everything broken after a bad migration/experiment | set `DB_ENGINE=sqlite` in `.env`, restart backend → instantly on the pre-MySQL snapshot |
 | Need yesterday's data | `mysql -u root -p mis_reports < db_backup\mis_reports_<date>.sql` (replaces ALL current data with that day's) |
+| Notification balloon "MIS Backup Failed" appears, or Task Scheduler shows a non-zero `Last Result` for `MIS_MySQL_Daily_Backup` | check `D:\mysql\backup_error.log` for the reason (mysqld down, bad credentials in `backup.cnf`, truncated dump); today's `db_backup\*.sql` still holds the last known-good backup — nothing was overwritten |
+| Today's `db_backup\*.sql` is missing/stale after a failure | expected — the failed dump was discarded, not written over the last good one; fix the cause in `backup_error.log`, then rerun `D:\mysql\backup_mysql.bat` (or wait for the next trigger) |
