@@ -30,7 +30,7 @@ python -m venv venv
 venv\Scripts\pip install -r requirements.txt
 venv\Scripts\pip install pymysql     # if not yet in requirements.txt
 
-# Frontend (Node 18+)
+# Frontend (Node 20.9+, required by Next.js 16)
 cd D:\opr-mis1\frontend
 npm install
 ```
