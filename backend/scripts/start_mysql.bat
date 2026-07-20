@@ -7,4 +7,4 @@ if errorlevel 1 (
   timeout /t 15 /nobreak >nul
 )
 call D:\mysql\backup_mysql.bat
-exit /b 0
+exit /b %ERRORLEVEL%
