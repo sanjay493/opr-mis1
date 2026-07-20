@@ -66,6 +66,8 @@ def translate_sql(sql: str) -> str:
     t = _OR_REPLACE_RE.sub("REPLACE", t)
     t = _OR_IGNORE_RE.sub("INSERT IGNORE", t)
     t = _GLOB_RE.sub(_glob_to_regexp, t)
+    # sqlite datetime('now') -> NOW(); both yield 'YYYY-MM-DD HH:MM:SS'
+    t = re.sub(r"datetime\('now'\)", "NOW()", t, flags=re.I)
     _translate_cache[sql] = t
     return t
 
