@@ -6,6 +6,9 @@ archive/
 backend/__pycache__/
 backend/venv/
 
+# Report formats and DB backups (local only, not for git)
+Report_format/
+
 # Databases
 mis_reports.db
 backend/mis_reports.db
