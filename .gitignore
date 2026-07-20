@@ -21,6 +21,9 @@ __pycache__/
 # Temp files
 backend/temp/
 backup.log
+uvicorn_out.log
+uvicorn_err.log
+frontend/frontend_out.log
 
 # Local env files (copy frontend/.env.example to frontend/.env.local)
 .env.local

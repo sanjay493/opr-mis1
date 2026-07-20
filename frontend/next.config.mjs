@@ -5,6 +5,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devIndicators: false,
   turbopack: {
     // Restrict Turbopack's workspace root to this directory only.
     // Without this, Turbopack walks up to H:\opr-mis1 (where the Playwright

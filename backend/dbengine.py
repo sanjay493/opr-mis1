@@ -15,6 +15,7 @@ and the wrapper translates at execute time:
   pymysql Programming/OperationalErr -> sqlite3.OperationalError (5 call
                                         sites catch it for missing tables)
   DATETIME/DATE/TIMESTAMP results    -> ISO strings (sqlite semantics)
+  CAST(x AS INTEGER)                 -> CAST(x AS SIGNED)
 
 The two PRAGMA table_info sites and init_db's CREATE TABLEs are handled in
 db.py (skipped under MySQL — schema is owned by scripts/mysql_schema.sql).
@@ -68,6 +69,8 @@ def translate_sql(sql: str) -> str:
     t = _GLOB_RE.sub(_glob_to_regexp, t)
     # sqlite datetime('now') -> NOW(); both yield 'YYYY-MM-DD HH:MM:SS'
     t = re.sub(r"datetime\('now'\)", "NOW()", t, flags=re.I)
+    # sqlite CAST(x AS INTEGER) -> MySQL requires SIGNED, not INTEGER
+    t = re.sub(r"\bAS\s+INTEGER\b", "AS SIGNED", t, flags=re.I)
     _translate_cache[sql] = t
     return t
 
