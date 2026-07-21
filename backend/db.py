@@ -1,6 +1,8 @@
 import sqlite3
 import json
 import os
+import copy
+import functools
 from typing import List, Dict, Any, Optional
 from constants import ALL_PLANTS as PLANTS
 from techno_registry import canonical_unit as _canon_unit
@@ -1582,7 +1584,19 @@ def get_techno_months(plant: str = None) -> List[str]:
 def get_techno_plan(plant: str, fy: str, unit: str = "") -> Dict[str, Any]:
     """Fetch techno plan data from unified techno_plan_fy table.
     If unit specified, returns that specific unit's data.
-    Otherwise returns all units for the plant."""
+    Otherwise returns all units for the plant.
+
+    Cached per (plant, fy, unit) for the process lifetime - report generation
+    (page_techno.py) calls this dozens of times per request with the same
+    args (once per parameter row), which used to mean a fresh MySQL round
+    trip each time. save_techno_plan() clears the cache on write. Returns a
+    deep copy so callers can freely mutate their result without corrupting
+    the cached entry."""
+    return copy.deepcopy(_get_techno_plan_cached(plant, fy, unit))
+
+
+@functools.lru_cache(maxsize=None)
+def _get_techno_plan_cached(plant: str, fy: str, unit: str = "") -> Dict[str, Any]:
     init_db()
     conn = connect()
     conn.row_factory = sqlite3.Row
@@ -1651,9 +1665,22 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
     conn.commit()
     conn.close()
 
+    # This is the only write path into techno_plan_fy (save_techno_plant_plan
+    # and save_sail_techno_plan both delegate here) - clear all three read
+    # caches so the next request sees the update instead of a stale entry.
+    _get_techno_plan_cached.cache_clear()
+    _get_techno_plant_plan_cached.cache_clear()
+    _get_sail_techno_plan_cached.cache_clear()
+
 
 def get_techno_plant_plan(plant: str, fy: str) -> Dict[str, Any]:
-    """Fetch plant-level techno plan data (unit='Shop') for a FY."""
+    """Fetch plant-level techno plan data (unit='Shop') for a FY.
+    Cached - see get_techno_plan() docstring for why and invalidation."""
+    return copy.deepcopy(_get_techno_plant_plan_cached(plant, fy))
+
+
+@functools.lru_cache(maxsize=None)
+def _get_techno_plant_plan_cached(plant: str, fy: str) -> Dict[str, Any]:
     init_db()
     conn = connect()
     conn.row_factory = sqlite3.Row
@@ -1686,7 +1713,13 @@ def save_techno_plant_plan(plant: str, fy: str, data: Dict, is_user_supplied: bo
 
 
 def get_sail_techno_plan(fy: str) -> Dict[str, Any]:
-    """Fetch SAIL consolidated techno plan data (plant_name='SAIL', unit='Shop') for a FY."""
+    """Fetch SAIL consolidated techno plan data (plant_name='SAIL', unit='Shop') for a FY.
+    Cached - see get_techno_plan() docstring for why and invalidation."""
+    return copy.deepcopy(_get_sail_techno_plan_cached(fy))
+
+
+@functools.lru_cache(maxsize=None)
+def _get_sail_techno_plan_cached(fy: str) -> Dict[str, Any]:
     init_db()
     conn = connect()
     conn.row_factory = sqlite3.Row

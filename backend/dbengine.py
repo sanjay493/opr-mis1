@@ -230,7 +230,7 @@ def _mysql_connect():
             host=_MYSQL_CFG["host"], port=_MYSQL_CFG["port"],
             user=_MYSQL_CFG["user"], password=_MYSQL_CFG["password"],
             database=_MYSQL_CFG["database"], charset="utf8mb4",
-            conv=conv, autocommit=False,
+            conv=conv, autocommit=False, ssl_disabled=True,
         )
     except Exception as e:  # noqa: BLE001
         raise _wrap_error(e) from e
