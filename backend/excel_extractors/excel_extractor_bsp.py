@@ -20,6 +20,7 @@ Public API:
   extract_preview(file_path, report_month)  ← unified, auto-detects type (2-5)
 """
 
+import calendar
 import logging
 import os
 import re
@@ -1116,6 +1117,12 @@ _MIS2_EXTRA_LABELS = {
     "SP - III (M/C-2 PRODN.)":  "SP-3 M/C-2",
 }
 
+# COB#11's CUM column holds the month's cumulative COUNT of oven pushings,
+# not a tonnage — unlike every other figure on this sheet, it must NOT be
+# divided by 1000. The meaningful number is the average pushings per day,
+# i.e. divided by the number of days in the report month.
+_MIS2_PER_DAY_COUNT_ITEMS = {"COB#11"}
+
 
 def _is_mis2_file(wb) -> bool:
     """True if row 2 (any of the first few cells) reads 'BSP MIS-2'."""
@@ -1206,14 +1213,20 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
             found.add(label)
             item_name = _MIS2_EXTRA_LABELS[label]
             val = _clean(ws.cell(r, _MIS2_PRODUCTION_COL).value)
-            val_000t = round(val / 1000.0, 3) if val is not None else None
+            if item_name in _MIS2_PER_DAY_COUNT_ITEMS:
+                days_in_month = calendar.monthrange(y, m)[1]
+                item_val = round(val / days_in_month, 2) if val is not None else None
+                item_unit = "nos/day"
+            else:
+                item_val = round(val / 1000.0, 3) if val is not None else None
+                item_unit = "'000T"
             production_rows.append({
                 "item_name": item_name,
-                "value":     val_000t,
-                "unit":      "'000T",
+                "value":     item_val,
+                "unit":      item_unit,
                 "cell":      f"{ws.title}!D{r}",
                 "pdf_label": label,
-                "status":    "ok" if val_000t is not None else "skip",
+                "status":    "ok" if item_val is not None else "skip",
             })
     for label in _MIS2_FURNACE_LABELS:
         if label not in found:
@@ -1229,8 +1242,9 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
             })
     for label, item_name in _MIS2_EXTRA_LABELS.items():
         if label not in found:
+            unit = "nos/day" if item_name in _MIS2_PER_DAY_COUNT_ITEMS else "'000T"
             production_rows.append({
-                "item_name": item_name, "value": None, "unit": "'000T",
+                "item_name": item_name, "value": None, "unit": unit,
                 "cell": "", "pdf_label": label, "status": "skip",
             })
 
