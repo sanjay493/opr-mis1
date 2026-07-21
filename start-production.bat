@@ -14,6 +14,15 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8082" ^| findstr "LISTENING
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":80 " ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
 
+echo Checking MySQL server...
+tasklist /FI "IMAGENAME eq mysqld.exe" | findstr /I "mysqld.exe" >nul
+if errorlevel 1 (
+  echo MySQL not running - starting it...
+  call "%~dp0backend\scripts\start_mysql.bat"
+) else (
+  echo MySQL already running.
+)
+
 echo Starting FastAPI backend on port 8082...
 start "MIS Backend (8082)" cmd /k "cd /d %~dp0backend && venv\Scripts\python.exe main.py"
 
