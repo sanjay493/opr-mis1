@@ -1,14 +1,14 @@
 @echo off
 setlocal enabledelayedexpansion
-rem Daily MySQL backup of mis_reports -> D:\opr-mis1\Report_format\db_backup
+rem Daily MySQL backup of mis_reports -> C:\opr-mis1\Report_format\db_backup
 rem Fails LOUDLY on any problem: non-zero exit code, entry in backup_error.log,
 rem and a popup dialog. Never overwrites a good backup with a bad one - the
 rem dump is written to a temp file and only moved into place after it passes
 rem sanity checks (mysqldump exit code, minimum size, completion footer).
 rem Safe to run repeatedly: same-day runs overwrite that day's file.
 
-set BACKUP_DIR=D:\opr-mis1\Report_format\db_backup
-set LOG_FILE=D:\mysql\backup_error.log
+set BACKUP_DIR=C:\opr-mis1\Report_format\db_backup
+set LOG_FILE=C:\mysql\backup_error.log
 if not exist "%BACKUP_DIR%" mkdir "%BACKUP_DIR%"
 
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"') do set TODAY=%%i
@@ -22,7 +22,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-"D:\mysql\mysql-8.4.8-winx64\bin\mysqldump.exe" --defaults-extra-file=D:\mysql\backup.cnf ^
+"C:\mysql\mysql-9.7.1-winx64\bin\mysqldump.exe" --defaults-extra-file=C:\mysql\backup.cnf ^
   --single-transaction --no-tablespaces --routines --triggers mis_reports > "%TMP_FILE%" 2>>"%LOG_FILE%"
 set DUMP_RC=%ERRORLEVEL%
 

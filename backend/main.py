@@ -133,6 +133,7 @@ import re as _re
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 import auth as _auth
+import activity_context as _activity_context
 
 _GATED_ROUTE_TEMPLATES = [
     ("POST", "/api/bsp-techno/insert"),
@@ -218,9 +219,17 @@ class EditorAdminGateMiddleware(BaseHTTPMiddleware):
                 status_code=403,
             )
 
+        _activity_context.start()
         response = await call_next(request)
         if response.status_code < 400:
-            _auth.log_activity(user, "insert/update/delete", f"{method} {path}", "")
+            # Old/new row snapshots collected by db.py's save/delete helpers
+            # (and a few routers that write directly) while handling this
+            # request — stored as a compact, unformatted JSON string so the
+            # activity log shows exactly what changed, not just which route
+            # was hit.
+            changes = _activity_context.pop()
+            details = json.dumps(changes, separators=(",", ":"), default=str) if changes else ""
+            _auth.log_activity(user, "insert/update/delete", f"{method} {path}", details)
         return response
 
 
@@ -3174,13 +3183,7 @@ async def delete_ipt_entry_api(payload: dict):
     to_plant   = payload.get("to_plant", "")
     if not all([month, item, from_plant, to_plant]):
         raise HTTPException(status_code=400, detail="month, item, from_plant, to_plant required")
-    conn = db.connect()
-    conn.execute(
-        "DELETE FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
-        (month, item, from_plant, to_plant),
-    )
-    conn.commit()
-    conn.close()
+    db.delete_ipt_entry(month, item, from_plant, to_plant)
     return {"status": "ok", "message": "Deleted."}
 
 

@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 import db as _db
+import activity_context as _activity_context
 
 router = APIRouter(prefix="/api/worklog", tags=["worklog"])
 
@@ -47,6 +48,17 @@ class EntryUpdateRequest(BaseModel):
 def _validate_work_date(work_date: str):
     if not work_date or not _DATE_RE.match(work_date):
         raise HTTPException(400, "work_date must be YYYY-MM-DD, e.g. '2026-07-10'")
+
+
+def _fetch_entry(conn, entry_id: int) -> Optional[dict]:
+    """Snapshot one work-log entry as a plain dict, for old/new activity-log capture."""
+    prev_factory = conn.row_factory
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM daily_work_log WHERE id=?", (entry_id,)).fetchone()
+        return _row_to_dict(row) if row else None
+    finally:
+        conn.row_factory = prev_factory
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
@@ -116,6 +128,7 @@ async def add_entry(body: EntryRequest):
         new_id = cur.lastrowid
     finally:
         conn.close()
+    _activity_context.record(f"daily_work_log/{new_id}", None, body.model_dump())
     return {"status": "ok", "id": new_id}
 
 
@@ -137,6 +150,7 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
 
     conn = _db.connect()
     try:
+        old = _fetch_entry(conn, entry_id)
         cur = conn.execute(
             f"UPDATE daily_work_log SET {', '.join(fields)} WHERE id = ?",
             (*values, entry_id),
@@ -144,8 +158,10 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No entry with id {entry_id}")
+        new = _fetch_entry(conn, entry_id)
     finally:
         conn.close()
+    _activity_context.record(f"daily_work_log/{entry_id}", old, new)
     return {"status": "ok", "id": entry_id}
 
 
@@ -153,10 +169,12 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
 async def delete_entry(entry_id: int):
     conn = _db.connect()
     try:
+        old = _fetch_entry(conn, entry_id)
         cur = conn.execute("DELETE FROM daily_work_log WHERE id=?", (entry_id,))
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No entry with id {entry_id}")
     finally:
         conn.close()
+    _activity_context.record(f"daily_work_log/{entry_id}", old, None)
     return {"status": "ok", "id": entry_id}

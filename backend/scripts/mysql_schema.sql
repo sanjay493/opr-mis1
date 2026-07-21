@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS activity_log (
     user_name  VARCHAR(190),
     action     VARCHAR(64) NOT NULL,
     entity     VARCHAR(160),
-    details    TEXT,
+    details    MEDIUMTEXT,  -- old/new JSON snapshots of what an editor changed; can be large for bulk uploads
     timestamp  VARCHAR(40) NOT NULL,
     KEY idx_activity_ts (timestamp)
 ) ENGINE=InnoDB;

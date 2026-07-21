@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 import db as _db
+import activity_context as _activity_context
 
 router = APIRouter(prefix="/api/todo", tags=["todo"])
 
@@ -57,6 +58,17 @@ def _validate_due_date(due_date: str):
 def _validate_priority(priority: str):
     if priority not in _PRIORITIES:
         raise HTTPException(400, f"priority must be one of {_PRIORITIES}")
+
+
+def _fetch_job(conn, job_id: int) -> Optional[dict]:
+    """Snapshot one job as a plain dict, for old/new activity-log capture."""
+    prev_factory = conn.row_factory
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM todo_jobs WHERE id=?", (job_id,)).fetchone()
+        return _row_to_dict(row) if row else None
+    finally:
+        conn.row_factory = prev_factory
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
@@ -116,6 +128,7 @@ async def add_job(body: JobRequest):
         new_id = cur.lastrowid
     finally:
         conn.close()
+    _activity_context.record(f"todo_jobs/{new_id}", None, body.model_dump())
     return {"status": "ok", "id": new_id}
 
 
@@ -137,6 +150,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
 
     conn = _db.connect()
     try:
+        old = _fetch_job(conn, job_id)
         cur = conn.execute(
             f"UPDATE todo_jobs SET {', '.join(fields)} WHERE id = ?",
             (*values, job_id),
@@ -144,8 +158,10 @@ async def update_job(job_id: int, body: JobUpdateRequest):
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")
+        new = _fetch_job(conn, job_id)
     finally:
         conn.close()
+    _activity_context.record(f"todo_jobs/{job_id}", old, new)
     return {"status": "ok", "id": job_id}
 
 
@@ -153,6 +169,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
 async def complete_job(job_id: int):
     conn = _db.connect()
     try:
+        old = _fetch_job(conn, job_id)
         cur = conn.execute(
             "UPDATE todo_jobs SET status='done', completed_at=? WHERE id=?",
             (datetime.now().isoformat(), job_id),
@@ -160,8 +177,10 @@ async def complete_job(job_id: int):
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")
+        new = _fetch_job(conn, job_id)
     finally:
         conn.close()
+    _activity_context.record(f"todo_jobs/{job_id}", old, new)
     return {"status": "ok", "id": job_id}
 
 
@@ -169,6 +188,7 @@ async def complete_job(job_id: int):
 async def reopen_job(job_id: int):
     conn = _db.connect()
     try:
+        old = _fetch_job(conn, job_id)
         cur = conn.execute(
             "UPDATE todo_jobs SET status='pending', completed_at=NULL WHERE id=?",
             (job_id,),
@@ -176,8 +196,10 @@ async def reopen_job(job_id: int):
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")
+        new = _fetch_job(conn, job_id)
     finally:
         conn.close()
+    _activity_context.record(f"todo_jobs/{job_id}", old, new)
     return {"status": "ok", "id": job_id}
 
 
@@ -185,10 +207,12 @@ async def reopen_job(job_id: int):
 async def delete_job(job_id: int):
     conn = _db.connect()
     try:
+        old = _fetch_job(conn, job_id)
         cur = conn.execute("DELETE FROM todo_jobs WHERE id=?", (job_id,))
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")
     finally:
         conn.close()
+    _activity_context.record(f"todo_jobs/{job_id}", old, None)
     return {"status": "ok", "id": job_id}

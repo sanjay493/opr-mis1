@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from constants import ALL_PLANTS as PLANTS
 from techno_registry import canonical_unit as _canon_unit
 import dbengine
+import activity_context
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "mis_reports.db")
 
@@ -17,6 +18,21 @@ def connect():
     (see dbengine.py). Every module should use this instead of calling
     connect() directly."""
     return dbengine.connect(DB_PATH)
+
+
+def _row_dict(conn, sql: str, params) -> Optional[dict]:
+    """Fetch one row as a plain dict, regardless of sqlite/MySQL engine.
+    Used to snapshot a row's 'old' state before an upsert/delete for the
+    activity log (see activity_context.py)."""
+    prev_factory = conn.row_factory
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.row_factory = prev_factory
 
 
 _INIT_DONE = False
@@ -605,6 +621,9 @@ def save_production_actual(month: str, plant: str, item: str, value: Optional[fl
     init_db()
     conn = connect()
     cursor = conn.cursor()
+    old = _row_dict(conn,
+        "SELECT * FROM production_table WHERE report_month=? AND plant_name=? AND item_name=?",
+        (month, plant, item))
     if value is None:
         cursor.execute("""
             DELETE FROM production_table
@@ -619,6 +638,8 @@ def save_production_actual(month: str, plant: str, item: str, value: Optional[fl
         """, (month, plant, item, value))
     conn.commit()
     conn.close()
+    new = None if value is None else {"report_month": month, "plant_name": plant, "item_name": item, "month_actual": value}
+    activity_context.record(f"production_table/{plant}/{item}/{month}", old, new)
 
 def save_production_plan(month: str, plant: str, item: str, value: Optional[float]):
     """Saves or updates a planned production record."""
@@ -626,20 +647,25 @@ def save_production_plan(month: str, plant: str, item: str, value: Optional[floa
     init_db()
     conn = connect()
     cursor = conn.cursor()
+    old = _row_dict(conn,
+        "SELECT * FROM production_plan_table WHERE report_month=? AND plant_name=? AND item_name=?",
+        (month, plant, item))
     if value is None:
         cursor.execute("""
-            DELETE FROM production_plan_table 
+            DELETE FROM production_plan_table
             WHERE report_month = ? AND plant_name = ? AND item_name = ?
         """, (month, plant, item))
     else:
         cursor.execute("""
             INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
             VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name) 
+            ON CONFLICT(report_month, plant_name, item_name)
             DO UPDATE SET month_actual = excluded.month_actual
         """, (month, plant, item, value))
     conn.commit()
     conn.close()
+    new = None if value is None else {"report_month": month, "plant_name": plant, "item_name": item, "month_actual": value}
+    activity_context.record(f"production_plan_table/{plant}/{item}/{month}", old, new)
 
 def get_page_config(month: str, page_number: int) -> Optional[dict]:
     """Retrieves standard page configuration if saved in DB."""
@@ -746,6 +772,13 @@ def clear_special_steel_orders(month: str, plant: str) -> int:
     Called once before a batch insert so stale grades/products don't linger."""
     init_db()
     conn = connect()
+    conn.row_factory = sqlite3.Row
+    old_rows = conn.execute(
+        "SELECT * FROM special_steel_orders WHERE report_month=? AND plant_name=?",
+        (month, plant),
+    )
+    olds = [dict(r) for r in old_rows.fetchall()]
+    conn.row_factory = None
     cur = conn.execute(
         "DELETE FROM special_steel_orders WHERE report_month=? AND plant_name=?",
         (month, plant),
@@ -753,6 +786,11 @@ def clear_special_steel_orders(month: str, plant: str) -> int:
     deleted = cur.rowcount
     conn.commit()
     conn.close()
+    for old in olds:
+        activity_context.record(
+            f"special_steel_orders/{plant}/{old.get('product')}/{old.get('quality_grade')}/{month}",
+            old, None,
+        )
     return deleted
 
 
@@ -764,6 +802,9 @@ def save_special_steel_entry(month: str, plant: str, product: str, quality_grade
     whose report has no section breakdown."""
     init_db()
     conn = connect()
+    old = _row_dict(conn,
+        "SELECT * FROM special_steel_orders WHERE report_month=? AND plant_name=? AND product=? AND quality_grade=? AND section=?",
+        (month, plant, product, quality_grade, section or ""))
     conn.execute("""
         INSERT INTO special_steel_orders
             (report_month, plant_name, product, quality_grade, section,
@@ -778,6 +819,10 @@ def save_special_steel_entry(month: str, plant: str, product: str, quality_grade
           sort_order, order_qty, actual_despatch))
     conn.commit()
     conn.close()
+    new = {"report_month": month, "plant_name": plant, "product": product,
+           "quality_grade": quality_grade, "section": section or "",
+           "sort_order": sort_order, "order_qty": order_qty, "actual_despatch": actual_despatch}
+    activity_context.record(f"special_steel_orders/{plant}/{product}/{quality_grade}/{month}", old, new)
 
 
 def save_stock_entry(stock_month: str, plant: str, item_type: str,
@@ -785,6 +830,9 @@ def save_stock_entry(stock_month: str, plant: str, item_type: str,
     """Upsert one opening-stock record ('000T, as on 1st of stock_month)."""
     init_db()
     conn = connect()
+    old = _row_dict(conn,
+        "SELECT * FROM stock_table WHERE stock_month=? AND plant_name=? AND item_type=? AND stock_type=?",
+        (stock_month, plant, item_type, stock_type))
     conn.execute("""
         INSERT INTO stock_table (stock_month, plant_name, item_type, stock_type, stock)
         VALUES (?, ?, ?, ?, ?)
@@ -793,6 +841,9 @@ def save_stock_entry(stock_month: str, plant: str, item_type: str,
     """, (stock_month, plant, item_type, stock_type, stock))
     conn.commit()
     conn.close()
+    new = {"stock_month": stock_month, "plant_name": plant, "item_type": item_type,
+           "stock_type": stock_type, "stock": stock}
+    activity_context.record(f"stock_table/{plant}/{item_type}/{stock_month}", old, new)
 
 
 def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
@@ -805,6 +856,9 @@ def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
     plan_tonnage/actual_tonnage hold the tonnes equivalent."""
     init_db()
     conn = connect()
+    old = _row_dict(conn,
+        "SELECT * FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
+        (month, item, from_plant, to_plant))
     conn.execute("""
         INSERT INTO ipt_table
             (report_month, item, from_plant, to_plant, unit, sort_order,
@@ -822,6 +876,29 @@ def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
           plan, actual, plan_tonnage, actual_tonnage))
     conn.commit()
     conn.close()
+    new = {"report_month": month, "item": item, "from_plant": from_plant, "to_plant": to_plant,
+           "unit": unit, "sort_order": sort_order, "plan": plan, "actual": actual,
+           "plan_tonnage": plan_tonnage, "actual_tonnage": actual_tonnage}
+    activity_context.record(f"ipt_table/{item}/{from_plant}->{to_plant}/{month}", old, new)
+
+
+def delete_ipt_entry(month: str, item: str, from_plant: str, to_plant: str) -> int:
+    """Delete one IPT route record for a month, recording its prior state."""
+    init_db()
+    conn = connect()
+    old = _row_dict(conn,
+        "SELECT * FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
+        (month, item, from_plant, to_plant))
+    cur = conn.execute(
+        "DELETE FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
+        (month, item, from_plant, to_plant),
+    )
+    deleted = cur.rowcount
+    conn.commit()
+    conn.close()
+    if old:
+        activity_context.record(f"ipt_table/{item}/{from_plant}->{to_plant}/{month}", old, None)
+    return deleted
 
 
 def _techno_param_entity(group_code: str, section: str, row_label: str):
@@ -1036,6 +1113,9 @@ def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: i
         convert_t = 0
     init_db()
     conn = connect()
+    old = _row_dict(conn,
+        "SELECT * FROM pdf_item_alias WHERE plant_name=? AND pdf_label=?",
+        (plant, pdf_label))
     conn.execute("""
         INSERT INTO pdf_item_alias (plant_name, pdf_label, item_name, convert_t)
         VALUES (?, ?, ?, ?)
@@ -1044,6 +1124,8 @@ def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: i
     """, (plant, pdf_label, item_name, convert_t))
     conn.commit()
     conn.close()
+    new = {"plant_name": plant, "pdf_label": pdf_label, "item_name": item_name, "convert_t": convert_t}
+    activity_context.record(f"pdf_item_alias/{plant}/{pdf_label}", old, new)
 
 
 def get_extraction_logs(limit: int = 60, plant: Optional[str] = None,
@@ -1263,9 +1345,17 @@ def get_techno_sail_consolidated(report_month: str) -> Dict[str, Any]:
 def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
     """Bare INSERT/UPDATE with no post-save hooks — used by upsert_techno_data
     itself and by _maybe_recompute_derived_params (which must write its
-    recomputed values without re-triggering itself)."""
+    recomputed values without re-triggering itself).
+
+    This is the one function every techno_data write funnels through
+    (extraction, manual entry, SAIL rollup, derived-param recompute), so it's
+    the single hook point for activity-log old/new capture across all plant
+    techno routers."""
     init_db()
     conn = connect()
+    old = _row_dict(conn,
+        "SELECT techno_json, source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+        (plant, report_month, unit))
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
@@ -1277,6 +1367,10 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
     """, (plant, report_month, unit, json.dumps(techno_json), source_file))
     conn.commit()
     conn.close()
+    if old is not None:
+        old = {**old, "techno_json": json.loads(old["techno_json"])}
+    new = {"techno_json": techno_json, "source_file": source_file}
+    activity_context.record(f"techno_data/{plant}/{unit}/{report_month}", old, new)
 
 
 def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
@@ -1642,9 +1736,17 @@ def _get_techno_plan_cached(plant: str, fy: str, unit: str = "") -> Dict[str, An
 def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
                     is_user_supplied: bool = False, calculated_json: Dict = None,
                     calculation_method: Dict = None, created_by: str = ""):
-    """Save or update techno plan data for a plant/unit/FY in unified table."""
+    """Save or update techno plan data for a plant/unit/FY in unified table.
+
+    This is the only write path into techno_plan_fy (save_techno_plant_plan
+    and save_sail_techno_plan both delegate here), so it's the single hook
+    point for activity-log old/new capture across the whole techno-plan
+    family (/api/techno-plan, /api/techno-plant-plan, /api/sail-techno-plan)."""
     init_db()
     conn = connect()
+    old = _row_dict(conn,
+        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name=? AND unit=? AND fy=?",
+        (plant, unit, fy))
     cur = conn.cursor()
     from datetime import datetime
     now = datetime.now().isoformat()
@@ -1671,6 +1773,14 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
     _get_techno_plan_cached.cache_clear()
     _get_techno_plant_plan_cached.cache_clear()
     _get_sail_techno_plan_cached.cache_clear()
+
+    if old is not None:
+        for key in ("techno_json", "calculated_json", "calculation_method"):
+            if old.get(key):
+                old[key] = json.loads(old[key])
+    new = {"techno_json": techno_json, "is_user_supplied": bool(is_user_supplied),
+           "calculated_json": calculated_json or {}, "calculation_method": calculation_method or {}}
+    activity_context.record(f"techno_plan_fy/{plant}/{unit}/{fy}", old, new)
 
 
 def get_techno_plant_plan(plant: str, fy: str) -> Dict[str, Any]:

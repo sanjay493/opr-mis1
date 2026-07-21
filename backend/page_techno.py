@@ -19,7 +19,9 @@ SAIL row computation (MAJOR page + Summary page te_table):
   BF Productivity:
       SAIL = Σ(HM) / Σ(HM / plant_BFprod)
   SMS params (HM Consumption, Scrap, TMI):
-      weighted average of shop values, weight = plant Crude Steel / shops_per_plant
+      weighted average of shop values, weight = that shop's own Crude Steel
+      production (falls back to plant Crude Steel / shops_per_plant when a
+      shop's own production_table figure isn't available)
   Specific Energy Consumption:
       weighted average of plant values, weight = plant Crude Steel production
 """
@@ -1021,9 +1023,64 @@ def generate_major_techno_from_db(report_month: str) -> dict:
     }
     _sms_n_shops = {"BSP": 2, "DSP": 1, "RSP": 2, "BSL": 2, "ISP": 1}
 
+    # Per-shop Crude Steel production (production_table's per-caster items) -
+    # the true weight for SMS specific-consumption params, as opposed to
+    # splitting plant CS evenly across its shops. Falls back to plant CS /
+    # shop-count (_shop_weight below) only for months a shop's own item is
+    # missing. Reuses generate_major_techno_verification's item mapping so
+    # page 27 and its verification page can't drift apart.
+    _cs_shop_monthly = {}  # {(plant, shop): {month: value}}
+    _shop_items = sorted({item for items in _VERIFY_SMS_PRODUCTION_ITEMS.values() for item in items})
+    if _shop_items:
+        conn5 = db.connect()
+        cur5 = conn5.cursor()
+        try:
+            ph5m = ",".join("?" * len(_weight_months))
+            ph5i = ",".join("?" * len(_shop_items))
+            cur5.execute(
+                f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
+                f"WHERE report_month IN ({ph5m}) AND item_name IN ({ph5i})",
+                [*_weight_months, *_shop_items],
+            )
+            _item_monthly = {}
+            for _pn, _item, _rm, _val in cur5.fetchall():
+                if _val is not None:
+                    _item_monthly.setdefault((_pn, _item), {})[_rm] = _val
+        finally:
+            conn5.close()
+        for (_plant, _shop), _items in _VERIFY_SMS_PRODUCTION_ITEMS.items():
+            _d = {}
+            for _m in _weight_months:
+                _vals = [_item_monthly.get((_plant, _item), {}).get(_m) for _item in _items]
+                _vals = [v for v in _vals if v is not None]
+                if _vals:
+                    _d[_m] = sum(_vals)
+            _cs_shop_monthly[(_plant, _shop)] = _d
+
+    def _shop_weight(plant, shop, ref_month, period):
+        """This shop's own Crude Steel production - summed Apr->ref_month
+        when period='till_month' - falling back to plant CS / shop-count
+        when the shop's own production_table item(s) aren't available for
+        that span."""
+        own = _cs_shop_monthly.get((plant, shop), {})
+        if period == "till_month":
+            months = db.get_ytd_months(ref_month)
+            total = sum(own.get(m, 0) or 0 for m in months)
+            has_data = any(m in own for m in months)
+        else:
+            total = own.get(ref_month, 0) or 0
+            has_data = ref_month in own
+        if has_data and total > 0:
+            return total
+        cs = (_cum_weight(_cs_monthly, plant, ref_month) if period == "till_month"
+              else _cs_monthly.get(plant, {}).get(ref_month, 0))
+        n = _sms_n_shops[plant]
+        return cs / n if cs > 0 else 0
+
     def _sms_sail(src_key, is_tmi, ref_month, period):
         """Compute SAIL weighted average for an SMS parameter.
-        Weight per shop = plant_CS[ref_month] / n_shops.
+        Weight per shop = that shop's own Crude Steel production (falling
+        back to plant_CS/n_shops when the shop-specific figure is missing).
         Handles alternate key names (e.g. DSP uses hot_metal_consumption).
         Returns None if no data available."""
         _HM_KEYS   = ["specific_hm_consumption", "hot_metal_consumption"]
@@ -1039,13 +1096,10 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
         num = den = 0.0
         for _plant, _shops in _sms_unit_map.items():
-            _n  = _sms_n_shops[_plant]
-            _cs = (_cum_weight(_cs_monthly, _plant, ref_month) if period == "till_month"
-                   else _cs_monthly.get(_plant, {}).get(ref_month, 0))
-            _w  = _cs / _n if _cs > 0 else 0
-            if _w <= 0:
-                continue
             for _su in _shops:
+                _w = _shop_weight(_plant, _su, ref_month, period)
+                if _w <= 0:
+                    continue
                 _pd = store.get((_plant, ref_month), {}).get(_su, {}).get(period, {})
                 if is_tmi:
                     _v = _pick(_pd, _TMI_KEYS)
