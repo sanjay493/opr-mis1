@@ -63,6 +63,12 @@ class PDFRequest(BaseModel):
     font_config: Optional[FontConfig] = None
 
 
+class Page3NarrativeRequest(BaseModel):
+    month: str
+    production_narrative: str = ""
+    highlights: List[str] = []
+
+
 class ProductionEntry(BaseModel):
     item_name: str
     actual_value: Optional[float] = None

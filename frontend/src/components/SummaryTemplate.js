@@ -1,5 +1,6 @@
 'use client';
-import React from 'react';
+import React, { useState } from 'react';
+import { useSavePage3Narrative } from '@/hooks/useReportAPI';
 
 // ---------------------------------------------------------------------------
 // Bar chart colours  (match screenshot palette)
@@ -217,6 +218,24 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
 
   const highlightsText = Array.isArray(highlights) ? highlights.join('\n') : (highlights || '');
 
+  // -- Production Narrative + Highlights persistence (keyed by report month) --
+  const { mutate: saveNarrative, isPending: isSavingNarrative } = useSavePage3Narrative();
+  const [narrativeSaveStatus, setNarrativeSaveStatus] = useState(null); // null | 'saved' | 'error'
+
+  const handleSaveNarrative = () => {
+    if (!selectedMonth) return;
+    saveNarrative(
+      { month: selectedMonth, production_narrative, highlights },
+      {
+        onSuccess: () => {
+          setNarrativeSaveStatus('saved');
+          setTimeout(() => setNarrativeSaveStatus(null), 3000);
+        },
+        onError: () => setNarrativeSaveStatus('error'),
+      }
+    );
+  };
+
   const textareaStyle = {
     width: '100%',
     border: 'none',
@@ -355,6 +374,35 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
           onChange={e => handleHighlightsChange(e.target.value)}
           placeholder="Enter highlights..."
         />
+      </div>
+
+      {/* ── Save narrative + highlights, linked to the reporting month ── */}
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <button
+          type="button"
+          onClick={handleSaveNarrative}
+          disabled={isSavingNarrative || !selectedMonth}
+          style={{
+            fontSize: '0.78em',
+            padding: '4px 10px',
+            borderRadius: '4px',
+            border: '1px solid #1a73e8',
+            color: isSavingNarrative ? '#94a3b8' : '#1a73e8',
+            borderColor: isSavingNarrative ? '#94a3b8' : '#1a73e8',
+            background: 'transparent',
+            cursor: isSavingNarrative ? 'default' : 'pointer',
+          }}
+        >
+          {isSavingNarrative ? 'Saving…' : 'Save Narrative & Highlights'}
+        </button>
+        {narrativeSaveStatus === 'saved' && (
+          <span style={{ fontSize: '0.78em', color: '#059669' }}>
+            &#10003; Saved for {selectedMonth}
+          </span>
+        )}
+        {narrativeSaveStatus === 'error' && (
+          <span style={{ fontSize: '0.78em', color: '#dc2626' }}>Save failed — try again</span>
+        )}
       </div>
 
       {/* ── SAIL Performance Summary Table ── */}

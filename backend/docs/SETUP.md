@@ -100,7 +100,7 @@ Verify the import:
 
 ```powershell
 D:\mysql\mysql-8.4.8-winx64\bin\mysql.exe -u root --host=127.0.0.1 -p -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mis_reports'; SELECT COUNT(*) FROM mis_reports.production_table;"
-# expect: 21 tables; production_table in the tens of thousands of rows
+# expect: 22 tables; production_table in the tens of thousands of rows
 ```
 
 **If you have no backup file** (worst case): apply the empty schema with

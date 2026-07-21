@@ -280,6 +280,18 @@ def init_db():
         )
     """)
 
+    # 17. Page 3 narrative — Production Narrative + Highlights text, kept
+    # separate from page_configs so a save here never touches (or requires
+    # touching) the other 34 pages' rows for the month.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS page3_narrative (
+            report_month          TEXT PRIMARY KEY,
+            production_narrative  TEXT,
+            highlights            TEXT,
+            updated_at            TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -655,9 +667,49 @@ def save_page_config(month: str, page_number: int, page_data: dict):
     cursor.execute("""
         INSERT INTO page_configs (report_month, page_number, page_data)
         VALUES (?, ?, ?)
-        ON CONFLICT(report_month, page_number) 
+        ON CONFLICT(report_month, page_number)
         DO UPDATE SET page_data = excluded.page_data
     """, (month, page_number, json.dumps(page_data)))
+    conn.commit()
+    conn.close()
+
+def get_page3_narrative(month: str) -> Optional[dict]:
+    """Returns the saved Page 3 Production Narrative + Highlights for a month,
+    or None if nothing has ever been saved (caller should keep whatever
+    default/computed value it already has)."""
+    init_db()
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT production_narrative, highlights FROM page3_narrative WHERE report_month = ?",
+        (month,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    narrative, highlights_text = row[0] or "", row[1] or ""
+    return {
+        "production_narrative": narrative,
+        "highlights": highlights_text.split("\n") if highlights_text else [],
+    }
+
+def save_page3_narrative(month: str, production_narrative: str, highlights: List[str]):
+    """Saves/updates Page 3's Production Narrative + Highlights, keyed only by
+    report_month — independent of page_configs so it never risks touching
+    the other 34 pages' saved data for the month."""
+    init_db()
+    conn = connect()
+    cursor = conn.cursor()
+    highlights_text = "\n".join(highlights or [])
+    cursor.execute("""
+        INSERT INTO page3_narrative (report_month, production_narrative, highlights, updated_at)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT(report_month)
+        DO UPDATE SET production_narrative = excluded.production_narrative,
+                       highlights = excluded.highlights,
+                       updated_at = excluded.updated_at
+    """, (month, production_narrative or "", highlights_text))
     conn.commit()
     conn.close()
 

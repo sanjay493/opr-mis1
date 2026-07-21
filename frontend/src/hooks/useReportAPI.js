@@ -99,6 +99,31 @@ export function useSaveReportData() {
   });
 }
 
+// Save Page 3 Production Narrative + Highlights, keyed by report month
+export function useSavePage3Narrative() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ month, production_narrative, highlights }) => {
+      const response = await fetch(`${API_BASE_URL}/api/page3-narrative`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ month, production_narrative, highlights }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save narrative');
+      }
+      return response.json();
+    },
+    onSuccess: (_, { month }) => {
+      queryClient.invalidateQueries({ queryKey: ['report', month] });
+    },
+  });
+}
+
 // Generate PDF mutation
 export function useGeneratePDF() {
   return useMutation({

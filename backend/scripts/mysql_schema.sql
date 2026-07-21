@@ -217,3 +217,13 @@ CREATE TABLE IF NOT EXISTS stock_data_json (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+-- Page 3 Production Narrative + Highlights, keyed only by report_month —
+-- independent of page_configs so saving it never touches the other 34
+-- pages' saved data for the month.
+CREATE TABLE IF NOT EXISTS page3_narrative (
+    report_month          CHAR(7) NOT NULL PRIMARY KEY,
+    production_narrative  TEXT,
+    highlights            TEXT,
+    updated_at            DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;

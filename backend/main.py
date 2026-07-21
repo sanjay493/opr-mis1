@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 import db
-from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest
+from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, Page3NarrativeRequest
 from report_utils import compute_item_row, blank_out_page_data
 from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
@@ -426,6 +426,16 @@ def get_data(month: str = "2025-11"):
                 page["type"] = "techno_params"
                 page["orientation"] = "landscape" if 31 <= pg <= 35 else "portrait"
 
+        # Page 3: overlay the saved Production Narrative + Highlights, if the
+        # user has ever saved one for this month (independent of whether
+        # actuals/plans exist, and of page_configs).
+        saved_narrative = db.get_page3_narrative(month)
+        if saved_narrative is not None:
+            for page in pages_config:
+                if page.get("page") == 3 or page.get("type") == "summary":
+                    page["production_narrative"] = saved_narrative["production_narrative"]
+                    page["highlights"] = saved_narrative["highlights"]
+
         return pages_config
     except Exception as e:
         import traceback
@@ -468,6 +478,18 @@ def save_data(request: PDFRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to save data: {str(e)}")
+
+
+@app.post("/api/page3-narrative")
+def save_page3_narrative(request: Page3NarrativeRequest):
+    """Saves Page 3's Production Narrative + Highlights for a month. Stored
+    independently of page_configs, so this never touches the other 34
+    pages' saved data — safe to call on its own without a full page save."""
+    try:
+        db.save_page3_narrative(request.month, request.production_narrative, request.highlights)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save narrative: {str(e)}")
 
 
 # ---------------------------------------------------------------------------
