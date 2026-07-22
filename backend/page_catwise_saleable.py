@@ -397,8 +397,28 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
                          _ytd_one(cur, "act",  "BSL", item, cply_ytd),
                          category="FLAT"))
 
-    rows.append(_zero_row("CR Sheets",    rtype="data", category="FLAT"))
-    rows.append(_zero_row("New CR Sheet", rtype="data", category="FLAT"))
+    rows.append(_row("CR Sheets", "data",
+                     _ann(cur, "BSL", "CR Sheets", fy),
+                     _one(cur, "plan", "BSL", "CR Sheets", rm),
+                     _one(cur, "act",  "BSL", "CR Sheets", rm),
+                     _one(cur, "act",  "BSL", "CR Sheets", pm),
+                     _ytd_one(cur, "plan", "BSL", "CR Sheets", ytd),
+                     _ytd_one(cur, "act",  "BSL", "CR Sheets", ytd),
+                     _ytd_one(cur, "act",  "BSL", "CR Sheets", cply_ytd),
+                     category="FLAT"))
+    # "New CR Sheet" (CRM-III) is backfilled historically (always 0 — mill 3
+    # makes coil only) but has no live extractor cell, since no report ever
+    # carries a nonzero figure for it. Future months read as blank rather
+    # than a guessed 0 until a real source proves otherwise.
+    rows.append(_row("New CR Sheet", "data",
+                     _ann(cur, "BSL", "New CR Sheet", fy),
+                     _one(cur, "plan", "BSL", "New CR Sheet", rm),
+                     _one(cur, "act",  "BSL", "New CR Sheet", rm),
+                     _one(cur, "act",  "BSL", "New CR Sheet", pm),
+                     _ytd_one(cur, "plan", "BSL", "New CR Sheet", ytd),
+                     _ytd_one(cur, "act",  "BSL", "New CR Sheet", ytd),
+                     _ytd_one(cur, "act",  "BSL", "New CR Sheet", cply_ytd),
+                     category="FLAT"))
 
     rows.append(_row("Thick Plates", "data",
                      _ann(cur, "BSL", "CRSALE", fy),

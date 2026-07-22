@@ -2022,8 +2022,10 @@ PRODUCTION_ITEM_ORDER = [
     # 7. Secondary mills
     'CRC&S(1&2)',
     'CR I/II CR(Coil) Sale',
+    'CR Sheets',
     'CRC(3)',
     'CR III CR(Coil) Sale',
+    'New CR Sheet',
     'CRSALE',
     'CR Saleable',
     'CRNO Coils',

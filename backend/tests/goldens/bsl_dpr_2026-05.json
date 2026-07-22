@@ -99,6 +99,14 @@
       "value": 24.072
     },
     {
+      "cell": "DPR!Z10",
+      "item_name": "CR Sheets",
+      "pdf_label": "Z10",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.024
+    },
+    {
       "cell": "DPR!Z15",
       "item_name": "CRC(3)",
       "pdf_label": "Z15",

@@ -203,7 +203,14 @@ def generate_segment_wise(report_month: str) -> dict:
                            _ytd_one(cur,"plan","BSL",item,ytd),
                            _ytd_one(cur,"act","BSL",item,ytd),
                            _ytd_one(cur,"act","BSL",item,cply_ytd)))
-        rows.append(_zero("CR Sheets", "FLAT", "BSL"))
+        rows.append(_r("CR Sheets", "data", "FLAT", "BSL",
+                       _ann(cur,"BSL","CR Sheets",fy),
+                       _one(cur,"plan","BSL","CR Sheets",report_month),
+                       _one(cur,"act","BSL","CR Sheets",report_month),
+                       _one(cur,"act","BSL","CR Sheets",prev_month),
+                       _ytd_one(cur,"plan","BSL","CR Sheets",ytd),
+                       _ytd_one(cur,"act","BSL","CR Sheets",ytd),
+                       _ytd_one(cur,"act","BSL","CR Sheets",cply_ytd)))
         rows.append(_r("Thick Plates", "data", "FLAT", "BSL",
                        _ann(cur,"BSL","CRSALE",fy),
                        _one(cur,"plan","BSL","CRSALE",report_month),
