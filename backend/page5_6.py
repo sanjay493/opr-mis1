@@ -647,6 +647,28 @@ def _line_chart_svg(x_labels: list, fy_point_count: int, series: dict,
                      f'font-size="7.5" font-family="Arial,sans-serif" {weight}'
                      f'fill="#334155">{label}</text>')
 
+    # Value-label y positions, nudged apart per x-position so two plants
+    # landing on nearly the same value at the same period don't render as
+    # overlapping text: within each column, labels default to just above
+    # their point, but any label that would land within MIN_LABEL_GAP of
+    # the one above it (sorted top-to-bottom by point position) gets pushed
+    # down just far enough to clear it.
+    MIN_LABEL_GAP = 8.0
+    label_y_at = {}  # (plant, i) -> label y
+    for i in range(n):
+        col = []
+        for plant, vals in series.items():
+            v = vals[i]
+            if v is not None:
+                col.append((plant, ys(v)))
+        col.sort(key=lambda t: t[1])
+        last_label_y = None
+        for plant, py in col:
+            desired = py - 6
+            y = desired if last_label_y is None else max(desired, last_label_y + MIN_LABEL_GAP)
+            label_y_at[(plant, i)] = y
+            last_label_y = y
+
     # One polyline per plant, with a marker dot and its value labelled at
     # each point (broken at gaps so a missing value doesn't silently join
     # two unrelated points)
@@ -659,15 +681,16 @@ def _line_chart_svg(x_labels: list, fy_point_count: int, series: dict,
                     segments.append(seg)
                     seg = []
                 continue
-            seg.append((xs(i), ys(v), v))
+            seg.append((xs(i), ys(v), v, i))
         if seg:
             segments.append(seg)
         for s in segments:
-            path = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y, _ in s)
+            path = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y, _, _ in s)
             lines.append(f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2.4"/>')
-            for x, y, v in s:
+            for x, y, v, i in s:
                 lines.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.6" fill="{color}"/>')
-                lines.append(f'<text x="{x:.1f}" y="{y - 6:.1f}" text-anchor="middle" '
+                ly = label_y_at.get((plant, i), y - 6)
+                lines.append(f'<text x="{x:.1f}" y="{ly:.1f}" text-anchor="middle" '
                              f'font-size="6.5" font-weight="bold" font-family="Arial,sans-serif" '
                              f'fill="{color}">{v:.3f}</text>')
 
