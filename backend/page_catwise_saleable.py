@@ -372,6 +372,11 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
 
     rows.append(_section_hdr("FINISHED STEEL"))
 
+    # Total Flat products still sums the bundled CRC&S(1&2)/CRC(3) items (not
+    # the Coil-Sale-only ones displayed below) — CRC&S(1&2) includes the CR
+    # Sheet quantity that has no visible row of its own (see "CR Sheets"
+    # zero-row below), so summing the Coil-only figures instead would silently
+    # drop CR Sheet out of the page total.
     flat_items_bsl = ["HSM HR Coil (Sale)", "HSM HR Plate", "HR Sheet",
                       "CRC&S(1&2)", "CRC(3)", "GP/GC", "GPC3"]
 
@@ -379,8 +384,8 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
         ("HR Coils",               "HSM HR Coil (Sale)"),
         ("HR Plates",              "HSM HR Plate"),
         ("HR Sheets",              "HR Sheet"),
-        ("CR Coils",               "CRC&S(1&2)"),
-        ("New CR Coils",           "CRC(3)"),
+        ("CR Coils",               "CR I/II CR(Coil) Sale"),
+        ("New CR Coils",           "CR III CR(Coil) Sale"),
     ]:
         rows.append(_row(label, "data",
                          _ann(cur, "BSL", item, fy),

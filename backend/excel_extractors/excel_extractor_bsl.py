@@ -92,7 +92,9 @@ def _dpr_config():
         "HSM HR Coil (Sale)":  "Z6",
         "HSM HR Plate":        "Z7",
         "HR Sheet":            "Z8",
+        "CR I/II CR(Coil) Sale": "Z9",
         "CRC(3)":              "Z15",
+        "CR III CR(Coil) Sale": "Z15",
         "GPC3":                "Z16",
         "CRSALE":              "Z18",
         "Saleable Steel":      "O31",
@@ -125,7 +127,9 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       HSM HR Coil (Sale)   Z6
       HSM HR Plate         Z7
       HR Sheet             Z8
+      CR I/II CR(Coil) Sale Z9  (CR Coil I&II alone, no CR Sheet — same row CRC&S(1&2) sums with Z10)
       CRC(3)               Z15
+      CR III CR(Coil) Sale Z15  (same cell as CRC(3) — the DPR sheet's CRC(3) row is already CR Coil III alone)
       GPC3                 Z16
       CRSALE               Z18
       Saleable Steel       O31  (CUM column, "PRODUCTION:-(MAIN UNITS)" table)
@@ -1265,9 +1269,11 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
         HR COIL                      → HSM HR Coil (Sale)
         HR PLATE                     → HSM HR Plate             (matches page 3 HR PLATE)
         HR SHEET                     → HR Sheet                 (matches page 3 HR SHEET)
-        CR COIL III                  → CRC(3)
+        CR COIL III                  → CRC(3), CR III CR(Coil) Sale (same value, both names)
         CR COIL I & II + CR SHEET    → CRC&S(1&2)               (mill 3 makes coil only,
                                                                    no separate CR Sheet row)
+        CR COIL I & II               → CR I/II CR(Coil) Sale    (Coil-only, no CR Sheet —
+                                                                   pages 17/18 product mix)
         GP Coil III                  → GPC3
         GP/GC I & II                 → GP/GC
       SAL.CR PRODUCTS                → CRSALE                   (= CRC(3)+CRC&S(1&2)+GPC3+GP/GC,
@@ -1364,6 +1370,15 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
         add("CRC&S(1&2)", (coil12 or 0) + (sheet or 0), f"{c1} + {c2}")
     else:
         add("CRC&S(1&2)", None, None)
+
+    # CR I/II CR(Coil) Sale / CR III CR(Coil) Sale — the Coil-Sale-only
+    # figures (pages 17/18 product mix), as distinct from CRC&S(1&2) above
+    # which bundles CR Sheet into the mills 1&2 figure. "CR COIL III" is
+    # already Coil-only in this report (mill 3 makes coil only), so it's the
+    # same value already saved as CRC(3) above, just under this name too.
+    add("CR I/II CR(Coil) Sale", coil12, c1)
+    crc3_val, crc3_cell = month_actual(p2, "CR COIL III")
+    add("CR III CR(Coil) Sale", crc3_val, crc3_cell)
 
     # Finished Steel / Saleable Semis aren't on page 2 — page 3's breakup
     # table carries them (Saleable Semis = the SLAB + THICK PLATE lines).

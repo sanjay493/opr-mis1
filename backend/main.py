@@ -2021,7 +2021,9 @@ PRODUCTION_ITEM_ORDER = [
     'RSMPRIME',
     # 7. Secondary mills
     'CRC&S(1&2)',
+    'CR I/II CR(Coil) Sale',
     'CRC(3)',
+    'CR III CR(Coil) Sale',
     'CRSALE',
     'CR Saleable',
     'CRNO Coils',

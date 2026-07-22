@@ -192,8 +192,8 @@ def generate_segment_wise(report_month: str) -> dict:
             ("HR Coils",     "HSM HR Coil (Sale)"),
             ("HR Plates",    "HSM HR Plate"),
             ("HR Sheets",    "HR Sheet"),
-            ("CR Coils",     "CRC&S(1&2)"),
-            ("New CR Coils", "CRC(3)"),
+            ("CR Coils",     "CR I/II CR(Coil) Sale"),
+            ("New CR Coils", "CR III CR(Coil) Sale"),
         ]:
             rows.append(_r(label, "data", "FLAT", "BSL",
                            _ann(cur,"BSL",item,fy),

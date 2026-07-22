@@ -42,15 +42,16 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
       H = HSM Total HR Coil      J = CRC&S(1&2)          K = CRC(3)
       L = CR Saleable            M = Saleable Steel       N = Pig Iron
       O = Saleable Semis         P = HSM HR Coil (Sale)  Q = HSM HR Plate
-      R = HR Sheet               U = GP/GC (CRM-I/II GC Sheet)
+      R = HR Sheet               S = CR I/II CR(Coil) Sale (CRM-I/II CR Coil(Sale))
+      U = GP/GC (CRM-I/II GC Sheet)  V = CR III CR(Coil) Sale (CRM-III CR Coil(Sale))
       W = GPC3 (CRM-III GP Coil)
 
-    U and W are product-mix columns appended to the sheet for pages 17/18
-    (Category-Wise Saleable Steel / Segment-Wise Production), which already
-    reference GP/GC and GPC3 as plan items — S, T and V (CRM-I/II CR
-    Coil(Sale), CRM-I/II CR Sheet, CRM-III CR Coil(Sale)) are left unmapped
-    since J/K (CRC&S(1&2)/CRC(3)) already cover that ground and no page reads
-    a more granular split.
+    S, U, V and W are product-mix columns appended to the sheet for pages
+    17/18 (Category-Wise Saleable Steel / Segment-Wise Production), which
+    read GP/GC, GPC3, and the CR(Coil) Sale-only figures (as opposed to J/K —
+    CRC&S(1&2)/CRC(3) — which bundle CR Sheet into the CRM-I/II figure) as
+    plan items. T (CRM-I/II CR Sheet) is left unmapped — no page reads it
+    standalone.
 
     Finished Steel is derived: Saleable Steel (M) − Saleable Semis (O).
     """
@@ -115,7 +116,9 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
             "P": ("HSM HR Coil (Sale)",   False),
             "Q": ("HSM HR Plate",         False),
             "R": ("HR Sheet",             False),
+            "S": ("CR I/II CR(Coil) Sale", False),
             "U": ("GP/GC",                False),
+            "V": ("CR III CR(Coil) Sale", False),
             "W": ("GPC3",                 False),
         }
 

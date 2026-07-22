@@ -91,8 +91,24 @@
       "value": 3.872
     },
     {
+      "cell": "DPR!Z9",
+      "item_name": "CR I/II CR(Coil) Sale",
+      "pdf_label": "Z9",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 24.072
+    },
+    {
       "cell": "DPR!Z15",
       "item_name": "CRC(3)",
+      "pdf_label": "Z15",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 53.482
+    },
+    {
+      "cell": "DPR!Z15",
+      "item_name": "CR III CR(Coil) Sale",
       "pdf_label": "Z15",
       "status": "ok",
       "unit": "'000T",
