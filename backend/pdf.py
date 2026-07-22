@@ -242,6 +242,9 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
             if p.get("type") == "summary" and p.get("chart_data"):
                 from page_techno import generate_summary_chart_html
                 p["_chart_html"] = generate_summary_chart_html(p["chart_data"])
+            if p.get("page") == 6:
+                from page5_6 import generate_page6_trend_charts_html
+                p["_page6_charts_html"] = generate_page6_trend_charts_html(request.month)
             flat_pages.append(p)
 
         # Collect all consecutive trend pages into ONE section so items flow

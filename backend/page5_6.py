@@ -1,9 +1,8 @@
 """
 Page 5 & 6 – Plant-Wise Production Performance.
-Page 5: SAIL + BSP + DSP
-Page 6: RSP + BSL + ISP + ASP + SSP + VISP
+Page 5: SAIL + BSP + DSP + RSP
+Page 6: BSL + ISP + ASP + SSP + VISP
 """
-import sqlite3
 import db
 
 # ---------------------------------------------------------------------------
@@ -80,9 +79,6 @@ PAGE5_PLANTS = [
         ("Semi-finished steel", "Saleable Semis",        False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
-]
-
-PAGE6_PLANTS = [
     ("RSP", [
         ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
         ("SP-I",                "SP-1",                  False, False),
@@ -102,6 +98,9 @@ PAGE6_PLANTS = [
         ("HR Coils Rolling(Tot)", "HSM-2 Total HR Coil", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
+]
+
+PAGE6_PLANTS = [
     ("BSL", [
         ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
         ("Sinter",              "Total Sinter",          False, False),
@@ -458,3 +457,244 @@ def generate_page5_rows(report_month: str) -> list:
 
 def generate_page6_rows(report_month: str) -> list:
     return _build_rows(PAGE6_PLANTS, report_month)
+
+
+# ---------------------------------------------------------------------------
+# Page 6 trend charts — the space freed up by moving RSP to page 5 is filled
+# with two line graphs (5 Plants, one line each) tracking:
+#   1) Crude Steel / Hot Metal
+#   2) Crude Steel / (Hot Metal - Pig Iron/0.85)
+#
+# X-axis: the last 3 complete FYs as a single ANNUAL (whole-year) ratio point
+# each — sum of that FY's Crude Steel over sum of that FY's Hot Metal, not an
+# average of 12 monthly ratios — followed by the current FY's individual
+# months (Apr..report_month), one point per month. Mirrors the same
+# "closed years get one summary figure, the live year gets month-by-month
+# detail" convention page7_13.py's trend tables already use for historical
+# vs. current-FY rows.
+#
+# Colors reuse page 3's bar-chart palette family (generate_summary_chart_html
+# in page_techno.py: _C_FY="#FFC000", _C_TARGET="#70AD47", _C_MONTHLY="#4472C4")
+# extended with the same Office theme's other two accents for the two extra
+# plants, so all five stay visually consistent with page 3.
+# ---------------------------------------------------------------------------
+
+_TREND_PLANT_COLORS = {
+    "BSP": "#4472C4",   # = page 3's _C_MONTHLY
+    "DSP": "#ED7D31",
+    "RSP": "#FFC000",   # = page 3's _C_FY
+    "BSL": "#70AD47",   # = page 3's _C_TARGET
+    "ISP": "#A5A5A5",
+}
+
+_MON_ABBR = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+             'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+
+def _fy_months_p6(fy_start_year: int) -> list:
+    months = [f"{fy_start_year}-{m:02d}" for m in range(4, 13)]
+    months += [f"{fy_start_year + 1}-{m:02d}" for m in range(1, 4)]
+    return months
+
+
+def _fetch_monthly_item(cur, plant: str, item: str, months: list) -> dict:
+    ph = ",".join("?" for _ in months)
+    cur.execute(
+        f"SELECT report_month, month_actual FROM production_table "
+        f"WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+        (plant, item, *months),
+    )
+    return {rm: v for rm, v in cur.fetchall() if v is not None}
+
+
+def _sum_over(item_dict: dict, months: list):
+    vals = [item_dict.get(m) for m in months]
+    vals = [v for v in vals if v is not None]
+    return sum(vals) if vals else None
+
+
+def _ratios(cs_v, hm_v, pig_v):
+    r1 = round(cs_v / hm_v, 4) if (cs_v is not None and hm_v) else None
+    if cs_v is not None and hm_v is not None:
+        denom = hm_v - (pig_v or 0) / 0.85
+        r2 = round(cs_v / denom, 4) if denom else None
+    else:
+        r2 = None
+    return r1, r2
+
+
+def _compute_ratio_series(report_month: str):
+    """Returns (x_labels, fy_point_count, ratio_cs_hm, ratio_cs_hm_adj).
+    fy_point_count is how many of the leading x_labels are annual FY points
+    (always 3) — the rest are current-FY month labels."""
+    y, m_num = int(report_month[:4]), int(report_month[5:7])
+    cur_fy     = y if m_num >= 4 else y - 1
+    hist_fys   = [cur_fy - 3, cur_fy - 2, cur_fy - 1]
+    cur_months = [mo for mo in _fy_months_p6(cur_fy) if mo <= report_month]
+
+    all_months = sorted({mo for fy in hist_fys for mo in _fy_months_p6(fy)} | set(cur_months))
+
+    conn = db.connect()
+    cur  = conn.cursor()
+    try:
+        cs, hm, pig = {}, {}, {}
+        for plant in _5P:
+            cs[plant]  = _fetch_monthly_item(cur, plant, "Total Crude Steel", all_months)
+            hm[plant]  = _fetch_monthly_item(cur, plant, "Hot Metal", all_months)
+            pig[plant] = _fetch_monthly_item(cur, plant, "Pig Iron", all_months)
+    finally:
+        conn.close()
+
+    x_labels = []
+    ratio_cs_hm     = {p: [] for p in _5P}
+    ratio_cs_hm_adj = {p: [] for p in _5P}
+
+    for fy in hist_fys:
+        x_labels.append(f"FY{fy % 100:02d}-{(fy + 1) % 100:02d}")
+        fy_mo = _fy_months_p6(fy)
+        for plant in _5P:
+            cs_tot  = _sum_over(cs[plant], fy_mo)
+            hm_tot  = _sum_over(hm[plant], fy_mo)
+            pig_tot = _sum_over(pig[plant], fy_mo)
+            r1, r2 = _ratios(cs_tot, hm_tot, pig_tot)
+            ratio_cs_hm[plant].append(r1)
+            ratio_cs_hm_adj[plant].append(r2)
+
+    for mo in cur_months:
+        x_labels.append(f"{_MON_ABBR[int(mo[5:7])]}'{mo[2:4]}")
+        for plant in _5P:
+            r1, r2 = _ratios(cs[plant].get(mo), hm[plant].get(mo), pig[plant].get(mo))
+            ratio_cs_hm[plant].append(r1)
+            ratio_cs_hm_adj[plant].append(r2)
+
+    return x_labels, len(hist_fys), ratio_cs_hm, ratio_cs_hm_adj
+
+
+def _line_chart_svg(x_labels: list, fy_point_count: int, series: dict,
+                    title: str, vw: int = 980, vh: int = 270) -> str:
+    """x_labels: one label per plotted point — the first `fy_point_count` are
+    annual FY summaries, the rest are current-FY month labels (Apr'26, ...).
+    A dashed separator marks the FY/month boundary. Title sits top-left,
+    legend top-right, on the same row — clear of each other since the title
+    is short and left-anchored rather than centered across the full width."""
+    mt, mb, ml, mr = 34, 28, 40, 15
+    cw, ch = vw - ml - mr, vh - mt - mb
+
+    all_vals = [v for vals in series.values() for v in vals if v is not None]
+    if not all_vals:
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
+            f'style="width:100%;height:auto;display:block;">'
+            f'<rect width="{vw}" height="{vh}" fill="#f8fafc" rx="3"/>'
+            f'<text x="{vw // 2}" y="{vh // 2}" text-anchor="middle" '
+            f'font-size="8" font-family="Arial,sans-serif" fill="#94a3b8">'
+            f'{title} – no data</text></svg>'
+        )
+
+    ylo_v, yhi_v = min(all_vals), max(all_vals)
+    rng = yhi_v - ylo_v
+    pad = rng * 0.2 if rng > 0 else max(abs(yhi_v) * 0.1, 0.02)
+    ylo, yhi = ylo_v - pad, yhi_v + pad
+    yspan = (yhi - ylo) or 1.0
+
+    n = len(x_labels)
+
+    def xs(i):
+        return ml + (cw * i / max(n - 1, 1))
+
+    def ys(v):
+        return mt + ch * (1.0 - (v - ylo) / yspan)
+
+    lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
+             f'style="width:100%;height:auto;display:block;">']
+
+    # Title (left) and legend (right) share the same header row, clear of
+    # each other by construction — title is left-anchored/short, legend is
+    # right-anchored, and the gap between them spans most of the width.
+    lines.append(
+        f'<text x="{ml}" y="14" text-anchor="start" '
+        f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">'
+        f'{title}</text>'
+    )
+    lx = vw - mr - 5 * 74
+    for plant in series:
+        color = _TREND_PLANT_COLORS.get(plant, "#888")
+        lines.append(f'<rect x="{lx:.1f}" y="6" width="9" height="9" fill="{color}" rx="1.5"/>')
+        lines.append(f'<text x="{lx + 12:.1f}" y="14" font-size="8.5" font-weight="bold" '
+                     f'font-family="Arial,sans-serif" fill="#374151">{plant}</text>')
+        lx += 74
+
+    # Y gridlines + value labels (4 bands)
+    for frac in (0.0, 0.33, 0.67, 1.0):
+        yv = ylo + yspan * frac
+        y  = ys(yv)
+        lines.append(f'<line x1="{ml}" y1="{y:.1f}" x2="{vw - mr}" y2="{y:.1f}" '
+                     f'stroke="#e5e7eb" stroke-width="0.5"/>')
+        lines.append(f'<text x="{ml - 5}" y="{y + 2.5:.1f}" text-anchor="end" '
+                     f'font-size="7.5" font-family="Arial,sans-serif" fill="#64748b">{yv:.2f}</text>')
+
+    # Separator between the 3 annual FY points and the current-FY monthly points
+    if 0 < fy_point_count < n:
+        sep_x = xs(fy_point_count - 0.5)
+        lines.append(f'<line x1="{sep_x:.1f}" y1="{mt}" x2="{sep_x:.1f}" y2="{mt + ch}" '
+                     f'stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="2.5,2"/>')
+
+    # X labels — one per point (annual FY labels bold, month labels plain)
+    for i, label in enumerate(x_labels):
+        x = xs(i)
+        weight = 'font-weight="bold" ' if i < fy_point_count else ''
+        lines.append(f'<text x="{x:.1f}" y="{mt + ch + 13:.1f}" text-anchor="middle" '
+                     f'font-size="7.5" font-family="Arial,sans-serif" {weight}'
+                     f'fill="#334155">{label}</text>')
+
+    # One polyline per plant, with a marker dot and its value labelled at
+    # each point (broken at gaps so a missing value doesn't silently join
+    # two unrelated points)
+    for plant, vals in series.items():
+        color = _TREND_PLANT_COLORS.get(plant, "#888")
+        seg, segments = [], []
+        for i, v in enumerate(vals):
+            if v is None:
+                if seg:
+                    segments.append(seg)
+                    seg = []
+                continue
+            seg.append((xs(i), ys(v), v))
+        if seg:
+            segments.append(seg)
+        for s in segments:
+            path = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y, _ in s)
+            lines.append(f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2.4"/>')
+            for x, y, v in s:
+                lines.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.6" fill="{color}"/>')
+                lines.append(f'<text x="{x:.1f}" y="{y - 6:.1f}" text-anchor="middle" '
+                             f'font-size="6.5" font-weight="bold" font-family="Arial,sans-serif" '
+                             f'fill="{color}">{v:.3f}</text>')
+
+    lines.append("</svg>")
+    return "\n".join(lines)
+
+
+def generate_page6_trend_charts_html(report_month: str) -> str:
+    """Two full-width line-graph SVGs, stacked one above the other, for the
+    bottom of page 6. Titles stay short (left-aligned, matched by a
+    right-aligned legend on the same row) — the "5 Plants / last 3 FY
+    annual + current FY monthly" context they'd otherwise repeat is stated
+    once in the shared caption below instead."""
+    x_labels, fy_point_count, ratio1, ratio2 = _compute_ratio_series(report_month)
+    svg1 = _line_chart_svg(x_labels, fy_point_count, ratio1, "CRUDE STEEL / HOT METAL")
+    svg2 = _line_chart_svg(x_labels, fy_point_count, ratio2,
+                           "CRUDE STEEL / (HOT METAL − PIG IRON/0.85)")
+    caption = (
+        '<div style="text-align:center;font-size:6.5px;color:#64748b;'
+        'font-family:Arial,sans-serif;margin-top:2px;">'
+        '5 Plants — last 3 FY annual ratios, then current FY month-by-month to the report month'
+        '</div>'
+    )
+    return (
+        '<div style="margin-top:6px;">'
+        f'<div style="border:0.5px solid #e2e8f0;border-radius:3px;padding:3px;margin-bottom:6px;">{svg1}</div>'
+        f'<div style="border:0.5px solid #e2e8f0;border-radius:3px;padding:3px;">{svg2}</div>'
+        f'{caption}'
+        "</div>"
+    )
