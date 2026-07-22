@@ -1182,6 +1182,223 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Extractor 5 — BSL "Production of Main Products" PPC/Statistical report (PDF)
+# ---------------------------------------------------------------------------
+# The plant's month-end PDF bundle (e.g. "Rev <Mon><YY> (n).pdf") carries this
+# as its page 2 ("PRODUCTION OF MAIN PRODUCTS") and page 3 ("BREAKUP OF PRIME
+# & SECONDARY SALEABLE STEEL") — a different report to the BF Performance &
+# Analysis PDF above (furnace-wise only) and the DPR Mail Excel (cumulative,
+# month-end only). This one is plant-wide production for a single month,
+# already finalised (not tentative), covering the same 19 production_table
+# items as _dpr_config() (see that function's docstring for the canonical
+# item-name set this app already uses for BSL).
+#
+# Only the MONTH ACTUAL column of each row is used — page 2 also carries
+# month plan, cumulative plan/actual and YoY growth%, but no other monthly
+# extractor in this app persists plan from a monthly actuals report (ABP
+# plan comes from the separate annual Plan upload), so those columns are
+# read for validation/preview only, never stored.
+
+_MAIN_PRODUCTS_TITLE_RE = re.compile(r'PRODUCTION\s+OF\s+MAIN\s+PRODUCTS', re.IGNORECASE)
+_BREAKUP_TITLE_RE = re.compile(r'BREAKUP\s+OF\s+PRIME', re.IGNORECASE)
+_NUM_TOKEN_RE = re.compile(r'^-?[\d,]+\.?\d*$')
+
+
+def _parse_products_line(line: str):
+    """Split one text line of the products/breakup table into (label, [data
+    tokens]). A single leading '-' is a sub-item bullet (e.g. '- HR COIL ...')
+    and is stripped before the label starts; a '-' found after the label has
+    begun is a genuine "no value" placeholder and marks where data starts."""
+    tokens = line.split()
+    if not tokens:
+        return None, []
+    if tokens[0] == '-':
+        tokens = tokens[1:]
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+        if t == '-' or _NUM_TOKEN_RE.match(t):
+            break
+        i += 1
+    label = ' '.join(tokens[:i])
+    return label, tokens[i:]
+
+
+def _num(tok: Optional[str]) -> Optional[float]:
+    if tok is None or tok == '-':
+        return None
+    try:
+        return float(tok.replace(',', ''))
+    except ValueError:
+        return None
+
+
+def _index_products_lines(text: str) -> dict:
+    """{label: [data tokens]} for every parsable line, first occurrence wins
+    (labels are unique within each of page 2 / page 3 — verified against a
+    real report; see extract_preview_main_products_pdf's mapping comments)."""
+    out = {}
+    for line in text.split('\n'):
+        label, data = _parse_products_line(line)
+        if label and data:
+            out.setdefault(label, data)
+    return out
+
+
+def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict:
+    """Extract BSL's "Production of Main Products" PDF (PPC/Statistical,
+    typically pages 2-3 of the month-end PDF bundle) into the same 19
+    production_table items the DPR Mail Excel path uses.
+
+    Mapping (PDF label → item_name), each cross-checked against another PDF
+    total so the source row for every item is unambiguous:
+      OVEN PUSHED                    → Oven Pushing (nos/day)  [no unit convert]
+      GROSS SINTER                   → Total Sinter
+      HOT METAL                      → Hot Metal
+      PIG IRON                       → Pig Iron
+      FS/CC SLAB (SMS NEW)           → SMS-1 CCM-1
+      CC SLAB (SMS II)               → SMS-2 CCM-1&2
+      CRUDE STEEL                    → Total Crude Steel        (= SMS-1 + SMS-2, verified)
+      H R COIL (TOTAL)**             → HSM Total HR Coil
+      SALEABLE STEEL section:
+        HR COIL                      → HSM HR Coil (Sale)
+        HR PLATE                     → HSM HR Plate             (matches page 3 HR PLATE)
+        HR SHEET                     → HR Sheet                 (matches page 3 HR SHEET)
+        CR COIL III                  → CRC(3)
+        CR COIL I & II + CR SHEET    → CRC&S(1&2)               (mill 3 makes coil only,
+                                                                   no separate CR Sheet row)
+        GP Coil III                  → GPC3
+        GP/GC I & II                 → GP/GC
+      SAL.CR PRODUCTS                → CRSALE                   (= CRC(3)+CRC&S(1&2)+GPC3+GP/GC,
+                                                                   verified: 50893+40548+21319+380
+                                                                   = 113140 on the report this was
+                                                                   built against)
+      SALEABLE STEEL                 → Saleable Steel
+    Page 3 breakup table (month-total = 3rd number of the first PRIME/SEC/
+    TOTAL group):
+      FIN. STEEL                     → Finished Steel
+      SLAB + THICK PLATE             → Saleable Semis
+    """
+    import pdfplumber
+
+    fname = os.path.basename(file_path)
+    logger.info("BSL Main Products PDF: opening %s for month %s", fname, report_month)
+
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            pages_text = [pg.extract_text() or "" for pg in pdf.pages[:4]]
+    except Exception as exc:
+        raise ValueError(f"Cannot open PDF '{fname}': {exc}") from exc
+
+    p2_text = next((t for t in pages_text if _MAIN_PRODUCTS_TITLE_RE.search(t)), None)
+    if p2_text is None:
+        raise ValueError(
+            "This doesn't look like a BSL 'Production of Main Products' report — "
+            "no page with that title was found in the first 4 pages."
+        )
+    p3_text = next((t for t in pages_text if _BREAKUP_TITLE_RE.search(t)), "")
+
+    full_text = "\n".join(pages_text)
+    detected = _detect_month_from_pdf_text(full_text)
+    _assert_month_match(detected, report_month, "BSL Production of Main Products PDF")
+    db_month = detected or report_month
+
+    p2 = _index_products_lines(p2_text)
+    p3 = _index_products_lines(p3_text)
+
+    rows = []
+
+    def add(item_name, value, cell):
+        no_convert = item_name == "Oven Pushing (nos/day)"
+        stored = value if (value is None or no_convert) else round(value / 1000.0, 3)
+        rows.append({
+            "item_name": item_name,
+            "value": stored,
+            "unit": "nos/d" if no_convert else "'000T",
+            "cell": cell or f"{item_name} — not found in PDF",
+            "status": "ok" if stored is not None else "no value",
+        })
+
+    def month_actual(index, label):
+        """2nd token of a PRODUCTS row (APP, ACTUAL, %, ...) = the month's actual."""
+        toks = index.get(label)
+        if not toks or len(toks) < 2:
+            return None, None
+        return _num(toks[1]), f"p2 {label!r}"
+
+    def p3_month_total(label):
+        """Breakup rows are PRIME SEC TOTAL groups; month total = 3rd token."""
+        toks = p3.get(label)
+        if not toks or len(toks) < 3:
+            return None, None
+        return _num(toks[2]), f"p3 {label!r}"
+
+    for pdf_label, item_name in (
+        ("OVEN PUSHED", "Oven Pushing (nos/day)"),
+        ("GROSS SINTER", "Total Sinter"),
+        ("HOT METAL", "Hot Metal"),
+        ("PIG IRON", "Pig Iron"),
+        ("FS/CC SLAB (SMS NEW)", "SMS-1 CCM-1"),
+        ("CC SLAB (SMS II)", "SMS-2 CCM-1&2"),
+        ("CRUDE STEEL", "Total Crude Steel"),
+        ("H R COIL (TOTAL)**", "HSM Total HR Coil"),
+        ("HR COIL", "HSM HR Coil (Sale)"),
+        ("HR PLATE", "HSM HR Plate"),
+        ("HR SHEET", "HR Sheet"),
+        ("CR COIL III", "CRC(3)"),
+        ("GP Coil III", "GPC3"),
+        ("GP/GC I & II", "GP/GC"),
+        ("SAL.CR PRODUCTS", "CRSALE"),
+        ("SALEABLE STEEL", "Saleable Steel"),
+    ):
+        v, c = month_actual(p2, pdf_label)
+        add(item_name, v, c)
+
+    # CRC&S(1&2) = CR Coil I&II (Saleable) + CR Sheet (report carries CR Sheet
+    # as one combined figure, not split by mill — attributed entirely to
+    # mills 1&2 since mill 3's row is coil-only in this report).
+    coil12, c1 = month_actual(p2, "CR COIL I & II")
+    sheet, c2 = month_actual(p2, "CR SHEET")
+    if coil12 is not None or sheet is not None:
+        add("CRC&S(1&2)", (coil12 or 0) + (sheet or 0), f"{c1} + {c2}")
+    else:
+        add("CRC&S(1&2)", None, None)
+
+    # Finished Steel / Saleable Semis aren't on page 2 — page 3's breakup
+    # table carries them (Saleable Semis = the SLAB + THICK PLATE lines).
+    fin, cf = p3_month_total("FIN. STEEL")
+    add("Finished Steel", fin, cf)
+
+    slab, cs1 = p3_month_total("SLAB")
+    thick, cs2 = p3_month_total("THICK PLATE")
+    if slab is not None or thick is not None:
+        add("Saleable Semis", (slab or 0) + (thick or 0), f"{cs1} + {cs2}")
+    else:
+        add("Saleable Semis", None, None)
+
+    ok = sum(1 for r in rows if r["status"] == "ok")
+    logger.info("BSL Main Products PDF: %d/%d items ok for %s", ok, len(rows), db_month)
+
+    if ok == 0:
+        raise ValueError(
+            "No production values could be matched in this PDF. Verify this is "
+            "the BSL 'Production of Main Products' PPC/Statistical report."
+        )
+
+    return {
+        "source_type":        "BSL Production of Main Products (PDF)",
+        "month":              db_month,
+        "detected_month":     detected,
+        "plant":              "BSL",
+        "workbook_sheets":    ["PDF p2/p3"],
+        "production_rows":    rows,
+        "techno_rows":        [],
+        "techno_param_rows":  [],
+        "special_steel_rows": [],
+    }
+
+
 def _extract_delhi_report_stock(wb, db_month: str) -> list:
     """Extract next-month opening stock from 'Delhi Report' sheet.
 
@@ -1333,6 +1550,13 @@ def extract_preview(file_path: str, report_month: str) -> dict:
       → production_rows populated with BF-wise HM production (BF-1/2/4/5).
         Full techno parameter set for this PDF is entered via /data-entry/techno.
 
+    • Production of Main Products (.pdf) — plant month-end PDF bundle,
+      typically pages 2-3 ("PRODUCTION OF MAIN PRODUCTS" / "BREAKUP OF
+      PRIME & SECONDARY SALEABLE STEEL")
+      → production_rows populated with the same 19 production items as the
+        DPR Mail path, read straight from the finalised monthly report
+        rather than a cumulative month-end DPR cell dump.
+
     • DPR Mail Month-End Report (.xlsx, sheet 'DPR')
       → production_rows populated with ~19 production items.
 
@@ -1345,6 +1569,14 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     Returns a preview dict compatible with /api/confirm-extraction.
     """
     if file_path.lower().endswith('.pdf'):
+        import pdfplumber as _plumb_probe
+        try:
+            with _plumb_probe.open(file_path) as _pdf:
+                _probe_text = "\n".join((pg.extract_text() or "") for pg in _pdf.pages[:4])
+        except Exception as exc:
+            raise ValueError(f"Cannot open PDF: {exc}") from exc
+        if _MAIN_PRODUCTS_TITLE_RE.search(_probe_text):
+            return extract_preview_main_products_pdf(file_path, report_month)
         return extract_preview_bf_pdf(file_path, report_month)
 
     wb = _open_wb(file_path)
