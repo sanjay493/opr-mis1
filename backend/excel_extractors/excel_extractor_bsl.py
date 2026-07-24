@@ -1287,8 +1287,8 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
       SALEABLE STEEL                 → Saleable Steel
     Page 3 breakup table (month-total = 3rd number of the first PRIME/SEC/
     TOTAL group):
-      FIN. STEEL                     → Finished Steel
-      SLAB + THICK PLATE             → Saleable Semis
+      FIN. STEEL + THICK PLATE       → Finished Steel
+      SLAB                           → Saleable Semis
     """
     import pdfplumber
 
@@ -1386,16 +1386,17 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
     add("CR III CR(Coil) Sale", crc3_val, crc3_cell)
 
     # Finished Steel / Saleable Semis aren't on page 2 — page 3's breakup
-    # table carries them (Saleable Semis = the SLAB + THICK PLATE lines).
+    # table carries them. Thick Plate is folded into Finished Steel (not
+    # tracked as its own item), so Saleable Semis is SLAB alone.
     fin, cf = p3_month_total("FIN. STEEL")
-    add("Finished Steel", fin, cf)
+    thick, ct = p3_month_total("THICK PLATE")
+    if fin is not None or thick is not None:
+        add("Finished Steel", (fin or 0) + (thick or 0), f"{cf} + {ct}")
+    else:
+        add("Finished Steel", None, None)
 
     slab, cs1 = p3_month_total("SLAB")
-    thick, cs2 = p3_month_total("THICK PLATE")
-    if slab is not None or thick is not None:
-        add("Saleable Semis", (slab or 0) + (thick or 0), f"{cs1} + {cs2}")
-    else:
-        add("Saleable Semis", None, None)
+    add("Saleable Semis", slab, cs1)
 
     ok = sum(1 for r in rows if r["status"] == "ok")
     logger.info("BSL Main Products PDF: %d/%d items ok for %s", ok, len(rows), db_month)
