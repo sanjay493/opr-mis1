@@ -14,6 +14,7 @@ function TechnoDashboard() {
   const [monthRange, setMonthRange] = useState({ from: 0, to: 11 });
   const [allParameters, setAllParameters] = useState([]);
   const [data, setData] = useState({});
+  const [sailMissing, setSailMissing] = useState({});
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState('table');
   const [error, setError] = useState(null);
@@ -59,6 +60,7 @@ function TechnoDashboard() {
         const json = await res.json();
         console.log('Data received:', json);
         setData(json.data || {});
+        setSailMissing(json.sail_missing || {});
       } catch (err) {
         console.error('Error loading data:', err);
         setError(err.message || 'Failed to load data');
@@ -110,6 +112,21 @@ function TechnoDashboard() {
     return null;
   };
 
+  // Remark data for the Table View: which selected parameters are missing a
+  // SAIL figure for one or more of the currently displayed months, and which
+  // plant(s) are most often the reason (union across those months).
+  const sailMissingSummary = selectedPlant === 'all'
+    ? selectedParams
+        .map(param => {
+          const monthsMissing = displayMonths.filter(m => data['SAIL']?.[param]?.[m.key] == null);
+          if (monthsMissing.length === 0) return null;
+          const plantsInvolved = new Set();
+          monthsMissing.forEach(m => (sailMissing[param]?.[m.key] || []).forEach(p => plantsInvolved.add(p)));
+          return { param, missingCount: monthsMissing.length, totalCount: displayMonths.length, plants: Array.from(plantsInvolved) };
+        })
+        .filter(Boolean)
+    : [];
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
@@ -157,7 +174,7 @@ function TechnoDashboard() {
                   cursor: 'pointer'
                 }}
               >
-                All 5
+                SAIL
               </button>
               {PLANTS.map(plant => (
                 <button
@@ -291,6 +308,7 @@ function TechnoDashboard() {
 
         {/* Table View */}
         {!loading && viewMode === 'table' && selectedParams.length > 0 && (
+          <>
           <div style={{
             backgroundColor: '#fff',
             border: '1px solid #dadce0',
@@ -330,35 +348,24 @@ function TechnoDashboard() {
                         {param}
                       </td>
                       {displayMonths.map(month => {
-                        // Try to find data for this parameter and month across all plants
                         let value = null;
-                        let dataSource = '';
+                        let tooltip = '';
 
                         if (selectedPlant === 'all') {
-                          // Priority 1: Use SAIL consolidated value if available
-                          if (data['SAIL']?.[param]?.[month.key]) {
-                            value = data['SAIL'][param][month.key];
-                            dataSource = '(SAIL)';
+                          // The backend only fills this in when all 5 plants have
+                          // BOTH the parameter and its production weight (Hot Metal /
+                          // Crude Steel) for the month — never a partial-plant average.
+                          const raw = data['SAIL']?.[param]?.[month.key];
+                          if (raw !== null && raw !== undefined) {
+                            value = parseFloat(raw).toFixed(2);
+                            tooltip = 'SAIL — weighted across all 5 plants';
                           } else {
-                            // Priority 2: Calculate weighted average based on production
-                            // For now, use simple average as fallback
-                            const plantData = [];
-                            PLANTS.forEach(plant => {
-                              if (data[plant]?.[param]?.[month.key]) {
-                                plantData.push(data[plant][param][month.key]);
-                              }
-                            });
-                            if (plantData.length > 0) {
-                              value = (plantData.reduce((a, b) => a + b, 0) / plantData.length).toFixed(2);
-                              dataSource = `(avg ${plantData.length})`;
-                            }
-                          }
-                          // Format value if found
-                          if (value !== null && value !== undefined) {
-                            value = parseFloat(value).toFixed(2);
+                            const missingPlants = sailMissing[param]?.[month.key];
+                            tooltip = missingPlants
+                              ? `SAIL not shown — missing ${param} and/or production data for: ${missingPlants.join(', ')}`
+                              : 'No data';
                           }
                         } else {
-                          // For specific plant, get exact value
                           value = data[selectedPlant]?.[param]?.[month.key];
                           if (value !== null && value !== undefined) {
                             value = parseFloat(value).toFixed(2);
@@ -368,6 +375,7 @@ function TechnoDashboard() {
                         return (
                           <td
                             key={`${param}-${month.key}`}
+                            title={tooltip}
                             style={{
                               padding: '6px 6px',
                               textAlign: 'right',
@@ -375,7 +383,6 @@ function TechnoDashboard() {
                               borderRight: '1px solid #dadce0',
                               fontSize: '9px',
                               fontWeight: value ? '600' : '400',
-                              title: dataSource
                             }}
                           >
                             {value || '—'}
@@ -388,6 +395,32 @@ function TechnoDashboard() {
               </table>
             </div>
           </div>
+
+          {sailMissingSummary.length > 0 && (
+            <div style={{
+              marginTop: '12px',
+              padding: '10px 14px',
+              background: '#fef7e0',
+              border: '1px solid #fde68a',
+              borderRadius: '6px',
+              fontSize: '10px',
+              color: '#92400e'
+            }}>
+              <strong>⚠️ Remark:</strong> a SAIL figure is only shown for a month when all 5 plants
+              (BSP, DSP, RSP, BSL, ISP) have reported both the parameter and its production weight
+              (Hot Metal, or Crude Steel for Specific Energy Consumption) for that month — never a
+              partial-plant average. Currently incomplete for the shown range:
+              <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+                {sailMissingSummary.map(s => (
+                  <li key={s.param}>
+                    {s.param}: missing in {s.missingCount} of {s.totalCount} shown months
+                    {s.plants.length > 0 && ` (plants involved: ${s.plants.join(', ')})`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          </>
         )}
 
         {/* Chart View */}

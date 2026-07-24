@@ -28,7 +28,8 @@ from page_ipt import generate_ipt
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
                           generate_major_techno_from_db, generate_techno_from_db,
-                          generate_major_techno_verification, generate_techno_target_columns)
+                          generate_major_techno_verification, generate_techno_target_columns,
+                          calculate_sail_actuals_strict, _BF_PLANTS as _SAIL_DASHBOARD_PLANTS)
 from page_records import generate_records
 
 def _safe_te_table(month):
@@ -3310,7 +3311,6 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         """, plant_list)
 
         rows = cursor.fetchall()
-        conn.close()
 
         # Format data by plant and parameter
         data = {}
@@ -3334,8 +3334,10 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        # For "All" plants or if SAIL not included, fetch SAIL consolidated data
-        if 'all' in [p.lower() for p in plant_list] or 'SAIL' in plant_list:
+        # SAIL consolidated row is only meaningful once all 5 plants are in
+        # play — a single-plant filter has no "SAIL" figure to show.
+        sail_missing = {}
+        if set(_SAIL_DASHBOARD_PLANTS) <= set(plant_list) or 'SAIL' in plant_list:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT report_month, techno_json
@@ -3344,28 +3346,48 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
                 ORDER BY report_month
             """)
             sail_rows = cursor.fetchall()
-            conn.close()
 
             if 'SAIL' not in data:
                 data['SAIL'] = {}
 
+            # Priority 1: an explicitly published SAIL row (vetted figure).
+            months_with_published_sail = set()
             for row in sail_rows:
                 month = row['report_month']
                 try:
                     techno_json = json.loads(row['techno_json'])
                     month_data = techno_json.get('month', {})
-
-                    # Extract requested parameters
                     for param_name, param_key in zip(param_list, param_keys):
                         value = _extract_param_value(month_data, param_key)
                         if value is not None:
-                            if param_name not in data['SAIL']:
-                                data['SAIL'][param_name] = {}
-                            data['SAIL'][param_name][month] = value
+                            data['SAIL'].setdefault(param_name, {})[month] = value
+                            months_with_published_sail.add((param_name, month))
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-        return {"data": data, "plants": plant_list, "parameters": param_list, "has_sail": 'SAIL' in data}
+            # Priority 2: no published row — compute a weighted SAIL figure,
+            # but ONLY for months/parameters where all 5 plants have both a
+            # techno value and its production weight (Hot Metal/Crude Steel).
+            # Otherwise leave it blank and record which plant(s) are missing,
+            # instead of silently averaging whichever plants happen to report.
+            # Union of every report_month seen for any requested plant/param.
+            all_months = sorted({month for p in plant_list for param_name in param_list
+                                  for month in data.get(p, {}).get(param_name, {})})
+            for month in all_months:
+                strict = calculate_sail_actuals_strict(month)
+                for param_name in param_list:
+                    if (param_name, month) in months_with_published_sail:
+                        continue
+                    if param_name in strict["values"]:
+                        data['SAIL'].setdefault(param_name, {})[month] = strict["values"][param_name]
+                    elif param_name in strict["missing"]:
+                        sail_missing.setdefault(param_name, {})[month] = strict["missing"][param_name]
+
+        conn.close()
+        return {
+            "data": data, "plants": plant_list, "parameters": param_list,
+            "has_sail": 'SAIL' in data, "sail_missing": sail_missing,
+        }
     except HTTPException:
         raise
     except Exception as e:

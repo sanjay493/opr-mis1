@@ -435,6 +435,103 @@ def calculate_sail_actuals(report_month: str) -> dict:
         }
 
 
+# Parameters calculate_sail_actuals()/calculate_sail_actuals_strict() know how
+# to weight-average across plants, and which production figure to weight by.
+_SAIL_DASHBOARD_PARAM_MAP = {
+    "Coke Rate": "coke_rate",
+    "CDI Rate": "cdi",
+    "Fuel Rate": "fuel_rate",
+    "BF Productivity": "bf_productivity",
+    "Specific Energy Consumption": "specific_energy_consumption",
+}
+_SAIL_DASHBOARD_SEC_PARAM = "Specific Energy Consumption"
+
+
+def calculate_sail_actuals_strict(report_month: str) -> dict:
+    """
+    Like calculate_sail_actuals() above, but for on-demand dashboard display
+    rather than the published reports: a SAIL figure is only returned for a
+    parameter when ALL 5 plants (_BF_PLANTS) have both a techno value and a
+    positive production weight (Hot Metal, or Crude Steel for Specific Energy
+    Consumption) for report_month. A parameter missing even one plant is
+    omitted from "values" and listed in "missing" instead of being silently
+    averaged over whichever plants happen to have data — see the "SAIL row
+    computation" note at the top of this file for the weighting rules this
+    reuses (weighted average by Hot Metal, harmonic mean for BF Productivity,
+    weighted by Crude Steel for Specific Energy Consumption).
+
+    Returns: {"values": {param_display: float}, "missing": {param_display: [plant, ...]}}
+    """
+    import json as _json
+
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        plant_data = {}
+        for plant in _BF_PLANTS:
+            for _unit in ("BF_Shop", "General"):
+                cur.execute(
+                    "SELECT techno_json FROM techno_data WHERE plant=? AND unit=? AND report_month=?",
+                    (plant, _unit, report_month),
+                )
+                row = cur.fetchone()
+                if row:
+                    try:
+                        techno_json = _json.loads(row[0])
+                        pd_m = plant_data.setdefault(plant, {})
+                        for k, v in techno_json.get("month", {}).items():
+                            pd_m.setdefault(k, v)
+                    except (_json.JSONDecodeError, TypeError):
+                        pass
+
+        def _get_weight(plant, item):
+            cur.execute(
+                "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name=? AND report_month=?",
+                (plant, item, report_month),
+            )
+            row = cur.fetchone()
+            return (row[0] or 0) if row else 0
+
+        values = {}
+        missing = {}
+
+        for param_display, param_key in _SAIL_DASHBOARD_PARAM_MAP.items():
+            weight_item = "Total Crude Steel" if param_display == _SAIL_DASHBOARD_SEC_PARAM else "Hot Metal"
+            per_plant = []
+            missing_plants = []
+
+            for plant in _BF_PLANTS:
+                pdata = plant_data.get(plant, {})
+                pval = pdata.get(param_key)
+                # Fuel Rate fallback: Coke Rate + Nut Coke Rate + CDI Rate
+                if pval is None and param_key == "fuel_rate":
+                    cr = pdata.get("coke_rate")
+                    nr = pdata.get("nut_coke_rate")
+                    cd = pdata.get("cdi")
+                    if cr is not None and cd is not None:
+                        pval = cr + (nr or 0) + cd
+                wt = _get_weight(plant, weight_item) if pval is not None else 0
+                if pval is not None and isinstance(pval, (int, float)) and wt > 0:
+                    per_plant.append((pval, wt))
+                else:
+                    missing_plants.append(plant)
+
+            if missing_plants:
+                missing[param_display] = missing_plants
+                continue
+
+            total_wt = sum(wt for _, wt in per_plant)
+            if param_display == "BF Productivity":
+                hm_sum = sum(wt / pval for pval, wt in per_plant if pval > 0)
+                values[param_display] = round(total_wt / hm_sum, 3) if hm_sum > 0 else None
+            else:
+                values[param_display] = round(sum(pval * wt for pval, wt in per_plant) / total_wt, 3)
+
+        return {"values": values, "missing": missing}
+    finally:
+        conn.close()
+
+
 def calculate_and_store_sail_actuals(report_month: str) -> dict:
     """
     Explicit calculate-and-persist wrapper around calculate_sail_actuals().
