@@ -684,7 +684,7 @@ def generate_special_steel_sail(report_month: str) -> dict:
             "abp": "", "orders": _fmt(sail_o),
             "actual": _fmt(sail_at), "pct_ful": _pct(sail_at, sail_o),
             "cply": _fmt(sail_ct), "pct_growth": _growth(sail_at, sail_ct),
-            "cum_orders": "", "cum_actual": _fmt(sail_cat),
+            "cum_orders": _fmt(sail_co), "cum_actual": _fmt(sail_cat),
             "cum_pct_ful": _pct(sail_cat, sail_co),
             "cum_cply": _fmt(sail_cct), "cum_pct_growth": _growth(sail_cat, sail_cct),
         })
