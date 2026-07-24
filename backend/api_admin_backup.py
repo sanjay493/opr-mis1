@@ -126,6 +126,7 @@ def _run_dump(dest: Path) -> None:
                     str(bin_dir / "mysqldump.exe"),
                     f"--defaults-extra-file={ini_path}",
                     "--single-transaction", "--no-tablespaces", "--routines", "--triggers",
+                    "--set-gtid-purged=OFF",
                     _MYSQL_CFG["database"],
                 ],
                 stdout=out, stderr=subprocess.PIPE, timeout=180,
