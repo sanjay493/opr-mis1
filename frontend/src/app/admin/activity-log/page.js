@@ -31,7 +31,7 @@ function ActivityLogInner() {
   return (
     <>
       <GlobalNavbar />
-      <main style={{ maxWidth: '1000px', margin: '40px auto', padding: '0 20px' }}>
+      <main style={{ maxWidth: '1000px', margin: '0 auto', padding: '40px 20px', height: 'calc(100vh - 72px)', overflowY: 'auto' }}>
         <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Activity Log</h1>
         <p style={{ color: '#5f6368', marginBottom: '20px' }}>
           Every insert, update, or delete performed through a data-entry or admin action.
