@@ -124,6 +124,13 @@ MYSQL_PORT=3306
 MYSQL_DB=mis_reports
 MYSQL_USER=mis_app
 MYSQL_PASSWORD=<the password you set in step 2.5>
+# Folder holding mysqldump.exe/mysql.exe, for the admin Backup & Restore
+# page (Admin > Backup & Restore). Set this to wherever MySQL actually
+# lives on THIS machine — it varies (e.g. D:\mysql\mysql-8.4.8-winx64\bin
+# at home, C:\sql\mysql-9.7.1-winx64\bin at the Office). Whenever MySQL
+# gets reinstalled or moved on any machine, update this value here — no
+# code change needed.
+MYSQL_BIN_DIR=<path to the bin folder inside your MySQL install, forward slashes>
 ```
 
 Notes:

@@ -317,6 +317,11 @@ export default function GlobalNavbar() {
                             📜 Activity Log
                           </div>
                         </Link>
+                        <Link href="/admin/backup" style={{ textDecoration: 'none' }}>
+                          <div style={{ padding: '12px 18px', color: '#202124', fontSize: '12pt', borderBottom: '1px solid #e8eaed' }}>
+                            💾 Backup & Restore
+                          </div>
+                        </Link>
                       </>
                     )}
                     <div
