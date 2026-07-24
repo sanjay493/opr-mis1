@@ -82,8 +82,8 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(12, 1fr)',
-      gap: '8px',
+      gridTemplateColumns: `repeat(${chartData.length}, minmax(100px, 1fr))`,
+      gap: '24px',
       alignItems: 'flex-end',
       padding: '20px',
       backgroundColor: '#fff',
@@ -920,6 +920,7 @@ export default function RecordsPage() {
             boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
             border: '1px solid #dadce0',
             minHeight: '350px',
+            minWidth: 0,
             display: 'flex',
             flexDirection: 'column'
           }}>
@@ -951,6 +952,7 @@ export default function RecordsPage() {
             {/* Chart Display */}
             <div style={{
               flexGrow: 1,
+              minWidth: 0,
               display: 'flex',
               flexDirection: 'column'
             }}>
