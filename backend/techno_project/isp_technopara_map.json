@@ -23,11 +23,6 @@
       "coke_screen_loss": 72
     }
   },
-  "Coal to Hot Metal": {
-    "General": {
-      "coal_to_hm": 20
-    }
-  },
   "SMS": {
     "SMS": {
     "average_blows_per_day": "10/days",
@@ -125,6 +120,7 @@
   },
   "Maj Techno Summ": {
     "General": {
+      "coal_to_hm": 15,
       "specific_energy_consumption": 24,
       "specific_water_consumption": 27,
       "specific_co2_emissions": 28

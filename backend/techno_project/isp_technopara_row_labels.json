@@ -20,11 +20,6 @@
       "coke_screen_loss": "Return Coke fines (dry) to BMP"
     }
   },
-  "Coal to Hot Metal": {
-    "General": {
-      "coal_to_hm": "Coal to HM"
-    }
-  },
   "SMS": {
     "SMS": {
       "average_heat_weight": "Avg. Cast Weight",
@@ -109,6 +104,7 @@
   },
   "Maj Techno Summ": {
     "General": {
+      "coal_to_hm": "Gross Coal to Hot Metal Ratio",
       "specific_energy_consumption": "Sp Energy Consumption",
       "specific_water_consumption": "Sp Water Consumption",
       "specific_co2_emissions": "Sp. CO2 emission"

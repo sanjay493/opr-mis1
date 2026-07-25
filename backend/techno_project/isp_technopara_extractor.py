@@ -226,9 +226,9 @@ class IspTechnoExtractor:
             "USM": {"specific_heat_consumption": 1000},
             "WRM": {"specific_heat_consumption": 1000},
             "COKE OVENS": {"specific_heat_coke_ovens": 1000},
-            # "Coal to HM" (row 20 of the dedicated "Coal to Hot Metal" sheet)
-            # is reported in Kg/THM; SAIL's convention for this parameter is
-            # a small ~0.8-1.0 ratio (raw Kg/THM ÷ 1000), matching the
+            # "Gross Coal to Hot Metal Ratio" (row 15 of "Maj Techno Summ") is
+            # reported in Kg/THM; SAIL's convention for this parameter is a
+            # small ~0.8-1.0 ratio (raw Kg/THM ÷ 1000), matching the
             # historical stored values. The map used to read this via a
             # "75/1000" string expression against row 75 of B-FCE, but that
             # row is absent in some files (verified: present in the Mar'26
@@ -236,11 +236,16 @@ class IspTechnoExtractor:
             # Hours" instead) — and even where present, the generic
             # row-expression evaluator has no way to tell "1000" is a
             # literal constant apart from a (non-existent) row 1000, so it
-            # always silently evaluated to a division-by-zero. The dedicated
-            # "Coal to Hot Metal" sheet's row 20 is stable across every
-            # sample file checked; the /1000 now happens here instead of in
-            # a row-expression string.
-            "Coal to Hot Metal": {"coal_to_hm": 0.001},
+            # always silently evaluated to a division-by-zero. Later moved to
+            # a dedicated "Coal to Hot Metal" sheet's row 20 (also stable, but
+            # that sheet doesn't exist in some older archival files, and its
+            # till_month/cumulative column carries a #REF! error baked into
+            # the source template for the FY's first month). "Maj Techno
+            # Summ" row 15 ("Gross Coal to Hot Metal Ratio") carries the
+            # identical value, is present in every sample file checked
+            # (2016-17 through 2026-27), and the /1000 still happens here
+            # rather than in a row-expression string.
+            "Maj Techno Summ": {"coal_to_hm": 0.001},
         }
 
         if sheet_name in multipliers and param_key in multipliers[sheet_name]:
@@ -361,6 +366,15 @@ class IspTechnoExtractor:
                     if till_val is not None:
                         till_val = float(till_val) * multiplier
                     print(f"  Applied multiplier {multiplier}x to {param_key}")
+
+                # April is month 1 of the FY, so till-April cumulative always
+                # equals April's own month value. Some sheets carry a broken
+                # #REF! in their "2-month" cumulative column for the FY's
+                # first month (it references May data that doesn't exist yet
+                # when the April file is prepared) - fall back to month_val
+                # rather than leaving a genuinely-known figure blank.
+                if till_val is None and month_val is not None and self.report_month and self.report_month.endswith("-04"):
+                    till_val = month_val
 
                 # Store both month and till_month
                 data["month"][param_key] = month_val
