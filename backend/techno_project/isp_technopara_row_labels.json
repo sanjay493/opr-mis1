@@ -84,6 +84,7 @@
     "COB-old": {
       "specific_heat_coke_ovens": "Sp Heat Cons",
       "coke_oven_gas_yield": "C.O.Gas Yield",
+      "crude_tar_yield": "Coal Tar (Existing Plant)",
       "ash_blend_coal": "Ash in blend coal",
       "ash_in_coke": "Ash",
       "m40_coke": "M40",
@@ -95,7 +96,7 @@
       "bf_coke_yield": "BF Coke",
       "coke_oven_gas_yield": "C.O.Gas Yield",
       "specific_heat_coke_ovens": "Sp Heat Cons",
-      "crude_tar_yield": "Total Coal Tar",
+      "crude_tar_yield": "Coal Tar (New Plant)",
       "crude_benzol_yield": "Crude Benzol",
       "ammonium_sulphate_yield": "Total (NH4)₂SO4",
       "ash_blend_coal": "Ash in blend coal",
