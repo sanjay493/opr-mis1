@@ -32,6 +32,13 @@ import pytest
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 ISP_DIR = BACKEND_DIR.parent / "Report_format" / "Monthly" / "ISP"
 MARCH_FILE = ISP_DIR / "ISPSummarizedMonthlyReport-March26.xlsx"
+# A second, independently-shifted cumulative workbook (FY2026-27, Apr-Jun so
+# far) — its row layout is NOT the same as MARCH_FILE's (confirmed: B-FCE -1,
+# SINTER +1, WRM +4, USM +5, COKE OVENS -3, Maj Techno Summ +2 vs. the
+# isp_technopara_map.json row numbers), which is exactly the "cell shifting"
+# scenario extract_available_months()/the offset-correction in
+# _compute_unit_offset need to survive.
+BULK_FILE = ISP_DIR / "Summarized Monthly Report 2026-27 upto Jun26.xlsx"
 
 FY2025_26_MONTHS = [f"2025-{m:02d}" for m in range(4, 13)] + [f"2026-{m:02d}" for m in range(1, 4)]
 
@@ -55,24 +62,24 @@ REAL_MONTHLY_FILES = [
 
 # Expected record count (extract() emits one record per (sheet, unit)
 # pair, so a unit name reused by multiple sheets — e.g. "General" from
-# B-FCE, "Coal to Hot Metal", and Maj Techno Summ — legitimately produces
-# multiple records that get merged into the same techno_data row on save):
+# B-FCE and Maj Techno Summ — legitimately produces multiple records that
+# get merged into the same techno_data row on save):
 #   B-FCE: BF-5, General [coke_screen_loss only] (2)
-#   + Coal to Hot Metal: General [coal_to_hm] (1)
 #   + SMS: SMS (1) + SINTER: SP (1) + WRM (1) + BM (1) + USM (1)
-#   + COKE OVENS: COB-old/COB-new (2) + Maj Techno Summ: General (1) = 11
+#   + COKE OVENS: COB-old/COB-new (2) + Maj Techno Summ: General [incl.
+#     coal_to_hm] (1) = 10
 #
 # B-FCE's stray "SP" sub-group (just "return_fines", no other consumer
 # expects a specific unit for it) was folded into "BF-5" to remove that
-# particular collision. coal_to_hm moved out to its own "Coal to Hot Metal"
-# sheet entry (see isp_technopara_map.json) since B-FCE row 75 — the old
-# source — doesn't reliably hold this parameter across files (confirmed
-# absent in some), while the dedicated "Coal to Hot Metal" sheet's row 20
-# is stable everywhere; coke_screen_loss stays under "General" because
-# page_techno.py's report reads it from units ["General", "BF_Shop"]
+# particular collision. coal_to_hm lives under Maj Techno Summ's "General"
+# (row 15, isp_technopara_map.json) — an earlier revision moved it to a
+# dedicated "Coal to Hot Metal" sheet/row and back again (see git history);
+# "Maj Techno Summ" row 15 is present and stable across every sample file
+# checked (2016-17 through 2026-27), coke_screen_loss stays under "General"
+# because page_techno.py's report reads it from units ["General", "BF_Shop"]
 # specifically. merge_upsert_techno_data (not the old clobbering upsert)
-# makes sharing the "General" unit name across three sheets safe.
-EXPECTED_UNIT_COUNT = 11
+# makes sharing the "General" unit name across two sheets safe.
+EXPECTED_UNIT_COUNT = 10
 MIN_NONNULL_VALUES = 30  # out of 81 mapped params total, a generous floor
 
 
@@ -149,3 +156,61 @@ def test_real_monthly_files_extract_without_crashing(filename, report_month):
     assert total_nonnull >= MIN_NONNULL_VALUES, (
         f"{filename} ({report_month}): only {total_nonnull} non-null month values"
     )
+
+
+# ── Regression guard: expression/list row specs must survive a row-shifted
+# workbook, not just the simple int specs _verified_row already checks. ─────
+#
+# BULK_FILE's row layout is shifted vs. isp_technopara_map.json (WRM +4,
+# USM +5 — confirmed via the extractor's own "row shifted" warnings). Before
+# _compute_unit_offset (see isp_technopara_extractor.py), WRM/USM's
+# total_gas_consumption ("174+175+176+177" / "140+141+142+143" — expression
+# specs, which _verified_row never touches) silently summed the WRONG rows in
+# this file and returned values in the millions (~7.4M / ~3.9M) instead of
+# the correct single-digit m3/t figures. This test pins a plausible ceiling
+# so that regression can't silently reappear.
+_TOTAL_GAS_CONSUMPTION_CEILING = 1000  # real values are single/low-double digits
+
+
+@pytest.mark.parametrize("report_month", ["2026-04", "2026-05", "2026-06"])
+def test_bulk_file_expression_rows_survive_shift(report_month):
+    """WRM/USM total_gas_consumption (expression row specs) must stay in a
+    plausible range against BULK_FILE, whose rows are shifted vs. the map."""
+    if not BULK_FILE.exists():
+        pytest.skip(f"sample file not present: {BULK_FILE}")
+    IspTechnoExtractor = _extractor_class()
+    records = IspTechnoExtractor(str(BULK_FILE), report_month).extract()
+    by_unit = {r["unit"]: r["techno_json"] for r in records}
+
+    for unit in ("WRM", "USM"):
+        assert unit in by_unit, f"{report_month}: expected unit {unit!r} in {sorted(by_unit)}"
+        val = by_unit[unit]["month"].get("total_gas_consumption")
+        assert val is None or abs(val) < _TOTAL_GAS_CONSUMPTION_CEILING, (
+            f"{report_month}: {unit}.total_gas_consumption = {val!r} — looks like an "
+            f"unshifted expression row spec summing the wrong cells (row-shift regression)"
+        )
+
+
+def test_extract_available_months_against_bulk_file():
+    """extract_available_months() must return exactly April..June 2026 for
+    BULK_FILE (a file that only carries those 3 FY2026-27 months so far),
+    with real data in each — the backing extraction for the "backfill all
+    months" upload feature."""
+    if not BULK_FILE.exists():
+        pytest.skip(f"sample file not present: {BULK_FILE}")
+    IspTechnoExtractor = _extractor_class()
+    result = IspTechnoExtractor(str(BULK_FILE)).extract_available_months("2026-06")
+
+    assert result["months"] == ["2026-04", "2026-05", "2026-06"], result["months"]
+    assert result["skipped_months"] == [], result["skipped_months"]
+    for month in result["months"]:
+        recs = result["records_by_month"][month]
+        assert len(recs) == EXPECTED_UNIT_COUNT, (
+            f"{month}: expected {EXPECTED_UNIT_COUNT} units, got {len(recs)}"
+        )
+        total_nonnull = sum(
+            1 for rec in recs for v in rec["techno_json"]["month"].values() if v is not None
+        )
+        assert total_nonnull >= MIN_NONNULL_VALUES, (
+            f"{month}: only {total_nonnull} non-null month values"
+        )

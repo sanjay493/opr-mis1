@@ -367,7 +367,14 @@ function PreviewReview({ preview, paramChecked, autoProtected, onToggleParam }) 
 }
 
 // ── Single file-upload row used for each file type ────────────────────────────
-function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint, reportMonth, apiBase, onSuccess, plant, accent = '#e8f0fe', accept = '.xlsx,.xls' }) {
+// `bulkMonths`: when true, shows a "Backfill all months" checkbox that swaps
+// Preview/Confirm&Save over to /api/techno/preview-months + /insert-months —
+// extracts every FY month April..reportMonth from one uploaded workbook
+// instead of just reportMonth (ISP's workbook carries every month as its own
+// column, so a later cumulative upload can refresh/backfill earlier months
+// whose figures were revised before the FY closed). Unchecked, this row
+// behaves exactly as before.
+function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint, reportMonth, apiBase, onSuccess, plant, accent = '#e8f0fe', accept = '.xlsx,.xls', bulkMonths = false }) {
   const [file, setFile] = React.useState(null);
   const [busy,  setBusy]  = React.useState(false);
   const [status, setStatus] = React.useState(null);
@@ -377,10 +384,17 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
   const [autoProtected, setAutoProtected] = React.useState({});
   const inputRef = React.useRef();
 
+  // ── Bulk "all months" mode state ──
+  const [bulkMode, setBulkMode] = React.useState(false);
+  const [bulkPreview, setBulkPreview] = React.useState(null); // { months, skipped_months, source_file, per_month }
+  const [activeBulkMonth, setActiveBulkMonth] = React.useState(null);
+  const [bulkParamState, setBulkParamState] = React.useState({}); // { [month]: { checked, autoProtected } }
+
   React.useEffect(() => {
     setFile(null);
     setStatus(null);
     setPreview(null);
+    setBulkPreview(null);
     if (inputRef.current) inputRef.current.value = '';
   }, [reportMonth]);
 
@@ -388,7 +402,97 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
     setParamChecked(prev => ({ ...prev, [unit]: { ...(prev[unit] || {}), [param]: checked } }));
   };
 
+  const toggleBulkParam = (month, unit, param, checked) => {
+    setBulkParamState(prev => ({
+      ...prev,
+      [month]: {
+        ...(prev[month] || { checked: {}, autoProtected: {} }),
+        checked: {
+          ...(prev[month]?.checked || {}),
+          [unit]: { ...(prev[month]?.checked?.[unit] || {}), [param]: checked },
+        },
+      },
+    }));
+  };
+
+  const handleBulkPreview = async () => {
+    if (!file) return;
+    setBusy(true);
+    setStatus(null);
+    setBulkPreview(null);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('upto_month', reportMonth);
+    if (plant) form.append('plant', plant);
+    try {
+      const res = await fetch(`${apiBase}/api/techno/preview-months`, { method: 'POST', body: form });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Preview failed');
+      setBulkPreview(json);
+      setActiveBulkMonth(json.months?.[0] || null);
+      const nextState = {};
+      for (const [month, d] of Object.entries(json.per_month || {})) {
+        const { checked, autoProtected: auto } = computeParamDefaults(d.records || []);
+        nextState[month] = { checked, autoProtected: auto };
+      }
+      setBulkParamState(nextState);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleBulkConfirmSave = async () => {
+    if (!bulkPreview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const months = Object.entries(bulkPreview.per_month || {}).map(([month, d]) => {
+        const unitChecked = bulkParamState[month]?.checked || {};
+        const recordsToSave = d.records.map(rec => {
+          const checkedForUnit = unitChecked[rec.unit] || {};
+          const keep = (obj) => Object.fromEntries(
+            Object.entries(obj || {}).filter(([p]) => checkedForUnit[p] !== false)
+          );
+          return {
+            unit: rec.unit,
+            techno_json: {
+              month: keep(rec.techno_json?.month),
+              till_month: keep(rec.techno_json?.till_month),
+            },
+          };
+        });
+        return { report_month: month, records: recordsToSave };
+      });
+      const res = await fetch(`${apiBase}/api/techno/insert-months`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plant, source_file: bulkPreview.source_file, months }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Save failed');
+      const savedText = Object.entries(json.saved || {}).map(([m, n]) => `${m}: ${n}`).join(', ');
+      setStatus({ type: 'success', text: `Saved — ${savedText}` });
+      setBulkPreview(null);
+      setBulkMode(false);
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = '';
+      onSuccess();
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleBulkCancelPreview = () => {
+    setBulkPreview(null);
+    setStatus(null);
+  };
+
   const handlePreview = async () => {
+    if (bulkMonths && bulkMode) return handleBulkPreview();
     if (!file) return;
     setBusy(true);
     setStatus(null);
@@ -522,6 +626,8 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
     setStatus(null);
   };
 
+  const busyLocked = !!(preview || bulkPreview);
+
   return (
     <div style={{ marginBottom: 10 }}>
       <div style={{
@@ -530,11 +636,19 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
       }}>
         <span style={{ fontSize: 13, color: '#5f6368', minWidth: 180, fontWeight: 600 }}>{label}</span>
         <input ref={inputRef} type="file" accept={accept}
-          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
+          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); setBulkPreview(null); }}
           style={{ fontSize: 13, flex: 1 }}
           suppressHydrationWarning
         />
-        {!preview && (
+        {bulkMonths && (
+          <label style={{ fontSize: 12.5, color: '#5f6368', display: 'flex', alignItems: 'center', gap: 5, cursor: busyLocked ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={bulkMode} disabled={busyLocked}
+              onChange={e => setBulkMode(e.target.checked)}
+              style={{ accentColor: '#7c3aed', cursor: busyLocked ? 'default' : 'pointer' }} />
+            Backfill all months (Apr → {reportMonth})
+          </label>
+        )}
+        {!busyLocked && (
           <button onClick={handlePreview} disabled={!file || busy}
             style={{
               padding: '7px 18px', background: busy ? '#5f6368' : accent,
@@ -542,7 +656,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
               cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
             }}
           >
-            {busy ? 'Extracting…' : 'Preview'}
+            {busy ? (bulkMode ? 'Extracting all months…' : 'Extracting…') : 'Preview'}
           </button>
         )}
         {preview && (
@@ -578,6 +692,28 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
             </button>
           </>
         )}
+        {bulkPreview && (
+          <>
+            <button onClick={handleBulkConfirmSave} disabled={busy}
+              style={{
+                padding: '7px 18px', background: busy ? '#5f6368' : '#16a34a',
+                color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              {busy ? 'Saving…' : `Confirm & Save all ${bulkPreview.months.length} months`}
+            </button>
+            <button onClick={handleBulkCancelPreview} disabled={busy}
+              style={{
+                padding: '7px 14px', background: '#fff', color: '#5f6368',
+                border: '1px solid #dadce0', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
       </div>
       {preview && (preview.warnings || []).length > 0 && (
         <div style={{
@@ -591,6 +727,42 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
         <PreviewReview preview={preview} paramChecked={paramChecked}
                        autoProtected={autoProtected} onToggleParam={toggleParam} />
       )}
+
+      {bulkPreview && (bulkPreview.skipped_months || []).length > 0 && (
+        <div style={{
+          marginTop: 6, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+          background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+        }}>
+          ⚠ This file has no column for: {bulkPreview.skipped_months.join(', ')} — skipped.
+        </div>
+      )}
+      {bulkPreview && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+            {bulkPreview.months.map(month => (
+              <button key={month} onClick={() => setActiveBulkMonth(month)}
+                style={{
+                  padding: '5px 12px', fontSize: 12.5, fontWeight: activeBulkMonth === month ? 700 : 500,
+                  background: activeBulkMonth === month ? '#5b21b6' : '#f3f4f6',
+                  color: activeBulkMonth === month ? '#fff' : '#374151',
+                  border: '1px solid #dadce0', borderRadius: 5, cursor: 'pointer',
+                }}
+              >
+                {month}
+              </button>
+            ))}
+          </div>
+          {activeBulkMonth && bulkPreview.per_month[activeBulkMonth] && (
+            <PreviewReview
+              preview={{ ...bulkPreview.per_month[activeBulkMonth], report_month: activeBulkMonth }}
+              paramChecked={bulkParamState[activeBulkMonth]?.checked || {}}
+              autoProtected={bulkParamState[activeBulkMonth]?.autoProtected || {}}
+              onToggleParam={(unit, param, checked) => toggleBulkParam(activeBulkMonth, unit, param, checked)}
+            />
+          )}
+        </div>
+      )}
+
       <StatusMsg status={status} />
 
       <BulkCumulativeModal
@@ -903,6 +1075,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             apiBase={apiBase}
             onSuccess={loadData}
             accent="#7c3aed"
+            bulkMonths
           />
           <ExtractRow
             label="ISP Morning Report — month-end (tentative)"
@@ -1127,7 +1300,7 @@ function TechnoDataEntryInner() {
   const plantHint = {
     RSP: 'Upload the Technopara Excel (final), or the month-end Daily Morning Report (tentative furnace/SMS data; month verified against the report date in A2).',
     BSP: 'Upload the BSP Flash Monthly PDF (one file: coke yield, SP-2/3, BF shop + per-furnace CDI/productivity, SMS-2/3, all mills, energy — month auto-detected from the cover), BSP-3-page-Tech.xlsx and/or OISCO Excel (final), or the month-end MIS-2 / PPC MIS Excel (tentative furnace & SMS data). All merged automatically.',
-    ISP: 'Upload the multi-sheet ISP Technopara Excel (final), or the month-end Morning Report (tentative furnace/SMS/energy data; month verified against the report date in J5/K5). Both merged automatically.',
+    ISP: 'Upload the multi-sheet ISP Technopara Excel (final — check "Backfill all months" to extract every month from April through the selected month out of one file, e.g. a later cumulative upload), or the month-end Morning Report (tentative furnace/SMS/energy data; month verified against the report date in J5/K5). Both merged automatically.',
     DSP: 'Upload the Monthly Report PDF (final) and/or the month-end MCR Excel (tentative for-the-month values; month is verified against the report date in C1).',
     BSL: 'Upload Techno Excel and/or BF Performance PDF. Both merged automatically.',
   }[plant] || `${plant} extraction coming soon.`;

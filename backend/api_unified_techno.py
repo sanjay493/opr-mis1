@@ -330,6 +330,134 @@ async def insert_techno(payload: dict):
     }
 
 
+# Plants whose extractor is built around one workbook that carries every FY
+# month as its own column (so one upload can supply several months at once).
+# Only ISP today — see IspTechnoExtractor.extract_available_months.
+_MULTI_MONTH_PLANTS = {"ISP"}
+
+
+@router.post("/preview-months")
+async def preview_techno_months(
+    plant: str = Form(..., description="Plant — only ISP currently supports multi-month extraction"),
+    file: UploadFile = File(...),
+    upto_month: str = Form(..., description="Extract every FY month from April through this month (YYYY-MM) that the file has a column for"),
+):
+    """
+    Preview extracted techno data for EVERY FY month from April through
+    upto_month in one pass over a single uploaded workbook — lets a later
+    cumulative file (e.g. the FY-end closing report, or any file spanning
+    several months) backfill/refresh earlier months whose figures were
+    revised before the FY closed. Does NOT write to the database; follow
+    with POST /insert-months after review, same as the single-month
+    /preview + /insert pair.
+    """
+    _validate_month(upto_month)
+    if plant.upper() not in _MULTI_MONTH_PLANTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Multi-month extraction is only supported for {sorted(_MULTI_MONTH_PLANTS)} currently.",
+        )
+
+    from isp_technopara_extractor import IspTechnoExtractor
+
+    suffix = Path(file.filename or "upload.xlsx").suffix or ".xlsx"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        content = await file.read()
+        tmp.write(content)
+        tmp.close()
+
+        extractor = IspTechnoExtractor(tmp.name)
+        result = extractor.extract_available_months(upto_month)
+
+        if not result["records_by_month"]:
+            raise HTTPException(
+                status_code=422,
+                detail="No data extracted for any month in range — verify the file and the selected month.",
+            )
+
+        per_month = {}
+        for rm, records in result["records_by_month"].items():
+            preview_records = [
+                {"unit": rec["unit"], "techno_json": rec["techno_json"]}
+                for rec in records
+            ]
+            enrich_techno_records_with_db(preview_records, plant, rm)
+            per_month[rm] = {
+                "units_extracted": len(preview_records),
+                "total_params": sum(len(r["techno_json"].get("month", {})) for r in preview_records),
+                "records": preview_records,
+            }
+
+        return {
+            "status": "preview",
+            "plant": plant,
+            "source_file": file.filename or "",
+            "months": result["months"],
+            "skipped_months": result["skipped_months"],
+            "per_month": per_month,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+
+
+@router.post("/insert-months")
+async def insert_techno_months(payload: dict):
+    """
+    Save previously-previewed multi-month records (from POST /preview-months)
+    to the techno_data table — one merge_upsert_techno_data call per
+    (month, unit), same merge-safe semantics as POST /insert.
+
+    Body: { plant, source_file, months: [{report_month, records: [{unit, techno_json}]}] }
+    """
+    plant       = payload.get("plant", "")
+    source_file = payload.get("source_file", "")
+    months      = payload.get("months", [])
+
+    if not months:
+        raise HTTPException(status_code=400, detail="No months to insert")
+    for m in months:
+        _validate_month(m.get("report_month", ""))
+    validate_units_for_plant(
+        plant,
+        (rec.get("unit", "") for m in months for rec in m.get("records", [])),
+    )
+
+    init_db()
+    saved = {}
+    for m in months:
+        report_month = m["report_month"]
+        saved_count = 0
+        for rec in m.get("records", []):
+            try:
+                merge_upsert_techno_data(
+                    plant=plant,
+                    report_month=report_month,
+                    unit=rec["unit"],
+                    new_techno_json=rec["techno_json"],
+                    source_file=source_file,
+                )
+                saved_count += 1
+            except Exception as e:
+                print(f"Warning: Could not save {plant}/{report_month}/{rec.get('unit')}: {e}")
+        saved[report_month] = saved_count
+
+    return {
+        "status": "ok",
+        "plant": plant,
+        "source_file": source_file,
+        "saved": saved,
+    }
+
+
 @router.get("/data")
 async def get_data(
     plant: str = Query(..., description="Plant: RSP, BSP, ISP, DSP"),

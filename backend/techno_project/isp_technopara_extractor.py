@@ -17,6 +17,24 @@ _MONTH_ABBR_TO_NUM = {
 _NEXT_YEAR_MONTHS = {'Jan', 'Feb', 'Mar'}
 
 
+def _fy_month_sequence(upto_month: str) -> List[str]:
+    """April..`upto_month` (inclusive) in FY order, as 'YYYY-MM' strings.
+
+    e.g. upto_month='2026-06' -> ['2026-04','2026-05','2026-06'];
+    upto_month='2026-03' -> ['2025-04', ..., '2026-03'] (a full FY, since
+    March belongs to the FY that started the previous April)."""
+    y, m = upto_month.split('-')
+    y, m = int(y), int(m)
+    fy_start_year = y if m >= 4 else y - 1
+    upto_idx = _MONTH_ABBRS.index(_MONTH_NUM_TO_ABBR[m])
+    months = []
+    for abbr in _MONTH_ABBRS[:upto_idx + 1]:
+        num = _MONTH_ABBR_TO_NUM[abbr]
+        yr = fy_start_year + 1 if abbr in _NEXT_YEAR_MONTHS else fy_start_year
+        months.append(f"{yr}-{num:02d}")
+    return months
+
+
 class IspTechnoExtractor:
     def __init__(self, excel_file: str, report_month: str = None):
         """
@@ -100,6 +118,46 @@ class IspTechnoExtractor:
               f"configured row unverified (got {actual_label!r})")
         return configured_row
 
+    def _compute_unit_offset(self, ws, sheet_name: str, unit_name: str, unit_params: Dict) -> Optional[int]:
+        """Derive a single row-shift delta for this (sheet, unit) from its
+        *simple* row specs (the ones _verified_row can check via column-B
+        labels), so that expression-based ('174+175+176+177') and list-based
+        ([134,135,136]) specs — which _verified_row never touches — can be
+        shifted by the same amount instead of silently reading whatever now
+        sits at their stale row numbers.
+
+        Returns 0 if every checkable simple spec still matches its configured
+        row, the common non-zero delta if every checkable spec agrees on one
+        shift, or None if there's nothing to check or the deltas disagree
+        (ambiguous — safer to leave expression/list rows unshifted than to
+        guess wrong)."""
+        expected_labels = self.row_labels.get(sheet_name, {}).get(unit_name, {})
+        deltas = set()
+        for param_key, row_spec in unit_params.items():
+            if isinstance(row_spec, list) or not isinstance(row_spec, (int, str)):
+                continue
+            if isinstance(row_spec, str) and any(op in row_spec for op in ['+', '-', '/', '*', '(', ')']):
+                continue  # expression spec — nothing simple to check here
+            expected = expected_labels.get(param_key)
+            if not expected:
+                continue
+            configured_row = int(row_spec)
+            actual_label = ws.cell(row=configured_row, column=2).value
+            if self._norm_label(expected) in self._norm_label(actual_label):
+                deltas.add(0)
+                continue
+            found = self._find_label_row(ws, expected, configured_row)
+            if found:
+                deltas.add(found - configured_row)
+        if not deltas:
+            return None
+        if len(deltas) > 1:
+            print(f"Warning: '{sheet_name}/{unit_name}' simple row specs disagree on "
+                  f"shift amount ({sorted(deltas)}) — leaving expression/list row specs "
+                  f"unshifted for this unit.")
+            return None
+        return next(iter(deltas))
+
     @staticmethod
     def _clean_value(val):
         """Convert value to JSON-serializable format."""
@@ -170,8 +228,13 @@ class IspTechnoExtractor:
         except Exception:
             return None
 
-    def _evaluate_row_expression(self, ws, expression: str, month_col: int) -> float:
-        """Evaluate expressions like '5+6', '5/days', '(5+6)/days'."""
+    def _evaluate_row_expression(self, ws, expression: str, month_col: int, row_offset: int = 0) -> float:
+        """Evaluate expressions like '5+6', '5/days', '(5+6)/days'.
+
+        `row_offset` (from _compute_unit_offset) is added to every row-number
+        token before reading — expressions are never checked by
+        _verified_row, so if the sheet's rows shifted, this is the only
+        correction they get."""
         try:
             # Get days in month from row 2
             days_val = ws.cell(2, month_col + 1).value
@@ -183,7 +246,7 @@ class IspTechnoExtractor:
             # Parse row references (numbers)
             import re
             def get_row_value(match):
-                row_num = int(match.group(1))
+                row_num = int(match.group(1)) + row_offset
                 val = self._get_cell_value(ws, row_num, month_col)
                 return str(val) if val is not None else "0"
 
@@ -312,11 +375,16 @@ class IspTechnoExtractor:
             month_num = int(self.report_month.split('-')[1])
             cum_offset = self._get_cum_column_offset(month_num)
             cum_col = month_col + cum_offset
-            print(f"Cumulative offset for month {month_num}: +{cum_offset} → column {cum_col}")
+            print(f"Cumulative offset for month {month_num}: +{cum_offset} -> column {cum_col}")
         except Exception as e:
             print(f"Warning calculating cum_col: {e}")
 
         print(f"Extracting from sheet '{sheet_name}', month_col={month_col}, cum_col={cum_col}")
+
+        # Row-shift delta derived from this unit's simple (label-verifiable)
+        # row specs, applied below to list/expression specs that _verified_row
+        # can't check directly — see _compute_unit_offset's docstring.
+        unit_offset = self._compute_unit_offset(ws, sheet_name, unit_name, unit_params) or 0
 
         # Extract parameters from this sheet
         data = {"month": {}, "till_month": {}}
@@ -330,11 +398,12 @@ class IspTechnoExtractor:
                     # expression, so there's no ambiguity between "this digit
                     # sequence is a row number" and "this one is a literal
                     # divisor" (see _evaluate_row_expression's docstring).
+                    shifted_rows = [r + unit_offset for r in row_spec]
                     def _avg_rows(col):
                         if col is None:
                             return None
                         vals = []
-                        for r in row_spec:
+                        for r in shifted_rows:
                             row = list(ws.iter_rows(min_row=r, max_row=r, values_only=True))[0]
                             v = self._clean_value(row[col]) if col < len(row) else None
                             if v is not None:
@@ -345,8 +414,8 @@ class IspTechnoExtractor:
                 elif isinstance(row_spec, str):
                     if any(op in row_spec for op in ['+', '-', '/', '*', '(', ')']):
                         # Expression - evaluate for both columns
-                        month_val = self._evaluate_row_expression(ws, row_spec, month_col)
-                        till_val = self._evaluate_row_expression(ws, row_spec, cum_col) if cum_col else None
+                        month_val = self._evaluate_row_expression(ws, row_spec, month_col, unit_offset)
+                        till_val = self._evaluate_row_expression(ws, row_spec, cum_col, unit_offset) if cum_col else None
                     else:
                         # Simple row number as string
                         row_num = self._verified_row(ws, sheet_name, unit_name, param_key, int(row_spec))
@@ -420,6 +489,11 @@ class IspTechnoExtractor:
             self.report_month = "2026-03"
             print(f"Using default report month: {self.report_month}")
 
+        return self._extract_records_for_month()
+
+    def _extract_records_for_month(self) -> List[Dict]:
+        """Process every mapped sheet for self.report_month (already open,
+        already set). Shared body for extract() and extract_for_month()."""
         records = []
         print(f"\n--- Starting ISP Techno Extraction ---\n")
 
@@ -443,3 +517,61 @@ class IspTechnoExtractor:
 
         print(f"\nExtraction Completed. Total Records: {len(records)}")
         return records
+
+    def extract_for_month(self, report_month: str) -> List[Dict]:
+        """Extract this workbook's data for one specific FY month, without
+        re-running auto-detection. Used by extract_available_months() to
+        pull several months out of one cumulative workbook."""
+        if self.workbook is None:
+            self.open_workbook()
+        self.report_month = report_month
+        return self._extract_records_for_month()
+
+    def extract_available_months(self, upto_month: str) -> Dict:
+        """Extract every FY month from April through `upto_month` that this
+        workbook's header row actually has a column for — lets one upload
+        (e.g. the FY-end March closing file, or any later cumulative file)
+        backfill/refresh every earlier month in one pass, since ISP revises
+        earlier months' figures in-place before the FY closes.
+
+        Returns {"months": [report_month...], "skipped_months": [...],
+        "records_by_month": {report_month: [records...]}}. A candidate month
+        the file simply doesn't have a column for (e.g. an older single-month
+        upload) is skipped, not an error."""
+        if self.workbook is None:
+            self.open_workbook()
+
+        candidate_months = _fy_month_sequence(upto_month)
+
+        ref_sheet_name = next((s for s in self.hardcoded_map if s in self.workbook.sheetnames), None)
+        if ref_sheet_name is None:
+            raise ValueError(
+                "No mapped sheet found in this workbook — verify this is "
+                "the ISP Summarized Monthly Report."
+            )
+        ws = self.workbook[ref_sheet_name]
+        _, header = self._find_month_column(ws)
+        if not header:
+            raise ValueError(f"Cannot find month headers in sheet '{ref_sheet_name}'.")
+
+        included, skipped = [], []
+        for rm in candidate_months:
+            abbr = _MONTH_NUM_TO_ABBR[int(rm.split('-')[1])]
+            if any(abbr in h for h in header):
+                included.append(rm)
+            else:
+                skipped.append(rm)
+
+        records_by_month: Dict[str, List[Dict]] = {}
+        for rm in included:
+            try:
+                records_by_month[rm] = self.extract_for_month(rm)
+            except Exception as e:
+                print(f"Warning: could not extract {rm} from this file: {e}")
+                skipped.append(rm)
+
+        return {
+            "months": list(records_by_month.keys()),
+            "skipped_months": skipped,
+            "records_by_month": records_by_month,
+        }
