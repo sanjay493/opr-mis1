@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi.concurrency import run_in_threadpool
 
 # Make techno_project importable
 _TP_DIR = str(Path(__file__).parent / "techno_project")
@@ -358,8 +359,6 @@ async def preview_techno_months(
             detail=f"Multi-month extraction is only supported for {sorted(_MULTI_MONTH_PLANTS)} currently.",
         )
 
-    from isp_technopara_extractor import IspTechnoExtractor
-
     suffix = Path(file.filename or "upload.xlsx").suffix or ".xlsx"
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
@@ -367,27 +366,40 @@ async def preview_techno_months(
         tmp.write(content)
         tmp.close()
 
-        extractor = IspTechnoExtractor(tmp.name)
-        result = extractor.extract_available_months(upto_month)
+        # Extracting up to 12 months from one workbook, then a DB round-trip
+        # per month to enrich with current values, is genuinely slow (tens
+        # of seconds) — all synchronous/blocking code. Running it directly
+        # in this async endpoint would freeze the single event loop for
+        # that whole time, starving every other connection this worker
+        # holds; confirmed in practice as the underlying cause of "socket
+        # hang up"/ECONNRESET errors from the Next.js dev proxy on the
+        # sibling /insert-months endpoint. run_in_threadpool hands the
+        # blocking work to a worker thread so the event loop stays live.
+        def _extract_and_enrich():
+            from isp_technopara_extractor import IspTechnoExtractor
+            extractor = IspTechnoExtractor(tmp.name)
+            result = extractor.extract_available_months(upto_month)
+            per_month = {}
+            for rm, records in result["records_by_month"].items():
+                preview_records = [
+                    {"unit": rec["unit"], "techno_json": rec["techno_json"]}
+                    for rec in records
+                ]
+                enrich_techno_records_with_db(preview_records, plant, rm)
+                per_month[rm] = {
+                    "units_extracted": len(preview_records),
+                    "total_params": sum(len(r["techno_json"].get("month", {})) for r in preview_records),
+                    "records": preview_records,
+                }
+            return result, per_month
+
+        result, per_month = await run_in_threadpool(_extract_and_enrich)
 
         if not result["records_by_month"]:
             raise HTTPException(
                 status_code=422,
                 detail="No data extracted for any month in range — verify the file and the selected month.",
             )
-
-        per_month = {}
-        for rm, records in result["records_by_month"].items():
-            preview_records = [
-                {"unit": rec["unit"], "techno_json": rec["techno_json"]}
-                for rec in records
-            ]
-            enrich_techno_records_with_db(preview_records, plant, rm)
-            per_month[rm] = {
-                "units_extracted": len(preview_records),
-                "total_params": sum(len(r["techno_json"].get("month", {})) for r in preview_records),
-                "records": preview_records,
-            }
 
         return {
             "status": "preview",
@@ -431,16 +443,23 @@ async def insert_techno_months(payload: dict):
         (rec.get("unit", "") for m in months for rec in m.get("records", [])),
     )
 
-    # A bulk save is ~10 units x however many months = dozens of individual
-    # DB writes and can take tens of seconds — long enough to be vulnerable
-    # to a mid-request hiccup (DB connection blip, dev-server --reload
-    # restart if a source file changed mid-request, etc.). Without this
-    # catch-all, anything that escapes the per-record try/except below
-    # bypasses FastAPI's normal JSON error handling entirely and Starlette
-    # returns a PLAIN-TEXT "Internal Server Error" — which the frontend's
-    # res.json() then chokes on ("Unexpected token 'I' ... is not valid
-    # JSON"), hiding whatever the real problem was. Always return JSON here.
-    try:
+    # A bulk save is ~10 units x however many months = dozens of individual,
+    # BLOCKING DB writes (merge_upsert_techno_data uses plain pymysql/sqlite3
+    # calls, no async) and can take tens of seconds. Running that directly
+    # in this async endpoint would freeze the single event loop for the
+    # whole duration, starving every other connection this worker holds —
+    # confirmed in practice as the real cause of "socket hang up"/ECONNRESET
+    # from the Next.js dev proxy: the DB writes kept completing successfully
+    # (verified against extraction_log) even as the client-facing connection
+    # was reported reset, because the backend was still "alive", just
+    # unresponsive. run_in_threadpool hands the blocking loop to a worker
+    # thread so the event loop — and thus this connection — stays live.
+    #
+    # Also: a catch-all here (matching preview-months) so anything that
+    # escapes the per-record try/except below still comes back as a JSON
+    # error instead of Starlette's plain-text "Internal Server Error" (which
+    # the frontend's res.json() previously choked on).
+    def _save_all():
         init_db()
         saved = {}
         for m in months:
@@ -459,7 +478,10 @@ async def insert_techno_months(payload: dict):
                 except Exception as e:
                     print(f"Warning: Could not save {plant}/{report_month}/{rec.get('unit')}: {e}")
             saved[report_month] = saved_count
+        return saved
 
+    try:
+        saved = await run_in_threadpool(_save_all)
         return {
             "status": "ok",
             "plant": plant,
