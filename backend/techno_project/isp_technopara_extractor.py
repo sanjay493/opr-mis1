@@ -16,6 +16,21 @@ _MONTH_ABBR_TO_NUM = {
 }
 _NEXT_YEAR_MONTHS = {'Jan', 'Feb', 'Mar'}
 
+# dry_coal_charge_oven's denominator ("Num of Ovens Pushed (COB#10/11)", the
+# MONTHLY TOTAL oven-push count) is simply absent as its own row in some
+# older report templates — they only carry a per-day average instead, under
+# various wordings across vintages. Per SAIL convention (confirmed against
+# the canonical template: Average Pushing (COB#10)=98, Num of Ovens Pushed
+# (COB#10)=2940, April=30 days -> 98*30=2940 exactly; and independently
+# against Mar'24Summarized Monthly Report.xlsx's own wording, "No.of Ovens
+# Pushed (COB#10)"=99.0645..., March=31 days -> 3071, reproducing the
+# known-correct dry_coal_charge_oven of 17.2 for that file too):
+#   Num of Ovens Pushed = <daily average> * days in month
+_OVEN_COUNT_FALLBACK_ALIASES = {
+    "num of ovens pushed (cob#10)": ["Average Pushing (COB#10)", "No.of Ovens Pushed (COB#10)"],
+    "num of ovens pushed (cob#11)": ["Average Pushing (COB#11)", "Nos.of Ovens Pushed (COB#11)"],
+}
+
 
 def _fy_month_sequence(upto_month: str) -> List[str]:
     """April..`upto_month` (inclusive) in FY order, as 'YYYY-MM' strings.
@@ -203,10 +218,19 @@ class IspTechnoExtractor:
         for key, aliases, configured_row in targets:
             cands = find_candidates(aliases)
             if not cands:
-                self._safe_print(
-                    f"Warning: '{sheet_name}/{unit_name}/{key}' expected label "
-                    f"{aliases!r} not found anywhere in '{sheet_name}' — using "
-                    f"configured row {configured_row} unverified")
+                has_fallback = any(
+                    self._norm_label(a) in _OVEN_COUNT_FALLBACK_ALIASES for a in aliases
+                )
+                if has_fallback:
+                    self._safe_print(
+                        f"Info: '{sheet_name}/{unit_name}/{key}' expected label "
+                        f"{aliases!r} not found — will use the daily-average "
+                        f"fallback instead (see _oven_count_fallback_value)")
+                else:
+                    self._safe_print(
+                        f"Warning: '{sheet_name}/{unit_name}/{key}' expected label "
+                        f"{aliases!r} not found anywhere in '{sheet_name}' — using "
+                        f"configured row {configured_row} unverified")
                 continue
             best = min(cands, key=lambda r: abs(r - configured_row))
             if best != configured_row:
@@ -234,6 +258,34 @@ class IspTechnoExtractor:
             deltas.add(unit_row_map[param_key] - int(row_spec))
         if len(deltas) == 1:
             return next(iter(deltas))
+        return None
+
+    def _oven_count_fallback_value(self, ws, sheet_name: str, unit_name: str,
+                                    param_key: str, token: str, col: int, days: float) -> Optional[float]:
+        """Fallback for dry_coal_charge_oven's denominator token when its
+        primary label ('Num of Ovens Pushed (COB#10/11)') isn't found
+        anywhere in the sheet — see _OVEN_COUNT_FALLBACK_ALIASES's comment
+        for the formula and how it was verified. Returns the computed
+        monthly-total oven-push count, or None if no alias matches either."""
+        expected = self.expr_row_labels.get(sheet_name, {}).get(unit_name, {}).get(param_key, {}).get(token)
+        if not expected:
+            return None
+        primary_labels = expected if isinstance(expected, list) else [expected]
+        fallback_aliases = []
+        for label in primary_labels:
+            fallback_aliases.extend(_OVEN_COUNT_FALLBACK_ALIASES.get(self._norm_label(label), []))
+        if not fallback_aliases:
+            return None
+        norms = [self._norm_label(a) for a in fallback_aliases]
+        for r in range(1, ws.max_row + 1):
+            if self._norm_label(ws.cell(row=r, column=2).value) in norms:
+                avg = self._get_cell_value(ws, r, col)
+                if avg is not None:
+                    self._safe_print(
+                        f"Info: '{sheet_name}/{unit_name}/{param_key}#{token}' — 'Num of "
+                        f"Ovens Pushed' row absent, using row {r} (daily average) * "
+                        f"{days:g} days = {float(avg) * days!r}")
+                    return float(avg) * days
         return None
 
     @staticmethod
@@ -306,14 +358,15 @@ class IspTechnoExtractor:
         except Exception:
             return None
 
-    def _evaluate_row_expression(self, ws, expression: str, month_col: int, row_lookup=None) -> float:
+    def _evaluate_row_expression(self, ws, expression: str, month_col: int, value_lookup=None) -> float:
         """Evaluate expressions like '5+6', '5/days', '(5+6)/days'.
 
-        `row_lookup(row_num) -> corrected_row_num`, if given, is applied to
-        every row-number token before reading — expressions are never
-        checked by _verified_row itself, so this (normally _verified_expr_row,
-        falling back to the unit's blanket offset) is the only correction
-        they get."""
+        `value_lookup(row_num, col, days) -> value`, if given, resolves each
+        row-number token to its VALUE directly (not just a corrected row) —
+        needed because some tokens have no usable row at all in a given
+        file and must instead be computed from a different row entirely
+        (see _oven_count_fallback_value). Falls back to a plain cell read
+        at the literal token row when no lookup is given."""
         try:
             # Get days in month from row 2
             days_val = ws.cell(2, month_col + 1).value
@@ -326,9 +379,10 @@ class IspTechnoExtractor:
             import re
             def get_row_value(match):
                 row_num = int(match.group(1))
-                if row_lookup:
-                    row_num = row_lookup(row_num)
-                val = self._get_cell_value(ws, row_num, month_col)
+                if value_lookup:
+                    val = value_lookup(row_num, month_col, days)
+                else:
+                    val = self._get_cell_value(ws, row_num, month_col)
                 return str(val) if val is not None else "0"
 
             expr = re.sub(r'(\d+)(?![\d\.])', get_row_value, expr)
@@ -499,11 +553,21 @@ class IspTechnoExtractor:
                 elif isinstance(row_spec, str) and any(op in row_spec for op in ['+', '-', '/', '*', '(', ')']):
                     # Expression - evaluate for both columns. Each row token
                     # is looked up individually in unit_row_map (keyed
-                    # "param_key#token"), falling back to the unit's blanket
-                    # offset for any token with no registered per-row label.
-                    row_lookup = lambda rn, pk=param_key: unit_row_map.get(f"{pk}#{rn}", rn + unit_offset)
-                    month_val = self._evaluate_row_expression(ws, row_spec, month_col, row_lookup)
-                    till_val = self._evaluate_row_expression(ws, row_spec, cum_col, row_lookup) if cum_col else None
+                    # "param_key#token"); a token with no registered per-row
+                    # label falls back to the unit's blanket offset unless a
+                    # dedicated computed fallback applies (see
+                    # _oven_count_fallback_value).
+                    def value_lookup(rn, col, days, pk=param_key):
+                        row = unit_row_map.get(f"{pk}#{rn}")
+                        if row is not None:
+                            return self._get_cell_value(ws, row, col)
+                        computed = self._oven_count_fallback_value(
+                            ws, sheet_name, unit_name, pk, str(rn), col, days)
+                        if computed is not None:
+                            return computed
+                        return self._get_cell_value(ws, rn + unit_offset, col)
+                    month_val = self._evaluate_row_expression(ws, row_spec, month_col, value_lookup)
+                    till_val = self._evaluate_row_expression(ws, row_spec, cum_col, value_lookup) if cum_col else None
                 else:
                     # Simple row number (int, or numeric string)
                     row_num = unit_row_map.get(param_key, int(row_spec))

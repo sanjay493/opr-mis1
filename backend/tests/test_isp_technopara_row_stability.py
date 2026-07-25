@@ -281,6 +281,25 @@ def test_mar24_file_expression_rows_verified_individually():
         )
 
 
+def test_mar24_dry_coal_charge_oven_uses_average_pushing_fallback():
+    """dry_coal_charge_oven = Dry Coal Charge / Num of Ovens Pushed (the
+    MONTHLY TOTAL push count). This file has no such row at all — only a
+    per-day average under the wording 'No.of Ovens Pushed (COB#10)' /
+    'Nos.of Ovens Pushed (COB#11)'. Per SAIL convention (confirmed by the
+    user and cross-checked against the canonical template's own Average
+    Pushing/Num of Ovens Pushed pair): monthly total = daily average * days
+    in month. Verified: COB-old 99.0645...*31 = 3071 -> 52821.2/3071 = 17.2
+    (the same value a clean, unshifted file gives), COB-new -> 31.55."""
+    if not MAR24_FILE.exists():
+        pytest.skip(f"sample file not present: {MAR24_FILE}")
+    IspTechnoExtractor = _extractor_class()
+    records = IspTechnoExtractor(str(MAR24_FILE), "2024-03").extract()
+    by_unit = {r["unit"]: r["techno_json"] for r in records}
+
+    assert by_unit["COB-old"]["month"]["dry_coal_charge_oven"] == pytest.approx(17.2, abs=0.01)
+    assert by_unit["COB-new"]["month"]["dry_coal_charge_oven"] == pytest.approx(31.55, abs=0.01)
+
+
 @pytest.mark.parametrize("report_month", ["2026-04", "2026-05"])
 def test_short_generic_labels_resolve_to_own_row_not_a_distant_match(report_month):
     """Regression test for a real bug in _resolve_unit_rows: short/generic
