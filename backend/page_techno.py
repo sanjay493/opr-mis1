@@ -169,6 +169,7 @@ _FIXED_PRECISION_PARAMS = {
     "Coke Screen Loss":     1,
     "Average Blows/Day":    1,
     "Oxygen Blowing":       1,
+    "BF Coke Yield":        1,
     # 2 decimal places
     "Sinter Productivity":  2,
     "LD Slag Usage":        2,
