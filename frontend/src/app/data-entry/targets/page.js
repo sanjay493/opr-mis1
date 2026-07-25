@@ -517,22 +517,6 @@ function TechnoTargetsPageInner() {
                 ))}
               </div>
             </div>
-            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e7ff' }}>
-              <strong>SMS Shop-wise Crude Steel Production (Weighted Average):</strong>
-              <div style={{ fontSize: '13pt', marginTop: '4px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                {Object.entries(prodMetadata.shop_to_plant || {}).map(([shop, plant]) => {
-                  const weight = prodMetadata.shop_cs_weights?.[shop];
-                  return (
-                    <div key={shop} style={{ padding: '8px', backgroundColor: '#bfdbfe', borderRadius: '3px', textAlign: 'center' }}>
-                      <div style={{ fontWeight: '600', color: '#174ea6', fontSize: '13pt' }}>{shop}</div>
-                      <div style={{ fontSize: '12pt', color: '#174ea6', marginTop: '4px' }}>
-                        {weight?.toLocaleString() || '0'}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         )}
 
