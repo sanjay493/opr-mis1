@@ -3926,12 +3926,26 @@ async def recalculate_sail_weighted(payload: dict):
         """, months)
 
         # Build SMS-wise production totals: {(plant, sms_id): total_cs_production}
-        sms_production = {}
+        # Some plants (BSP) report BOTH a shop-total item ("SMS-2") AND its own
+        # product breakdown ("SMS-2 BLOOM"/"SMS-2 SLAB", which sum to that same
+        # total) - summing every item sharing the first token would double-count
+        # those plants. Prefer the exact shop-total item when one exists; only
+        # fall back to summing sub-items for plants with no separate total row
+        # (RSP/BSL: per-caster items only; DSP/ISP: a single differently-named
+        # item, which the sum reduces to trivially).
+        _exact_items = {}
+        _by_sms_id = {}
         for plant_name, item_name, cs_prod in cur.fetchall():
+            cs_prod = cs_prod or 0
+            _exact_items[(plant_name, item_name)] = cs_prod
             # Extract SMS identifier from item_name (e.g., "SMS-2 BLOOM" → "SMS-2")
             sms_id = item_name.split()[0]  # Get first part
             key = (plant_name, sms_id)
-            sms_production[key] = sms_production.get(key, 0) + (cs_prod or 0)
+            _by_sms_id[key] = _by_sms_id.get(key, 0) + cs_prod
+        sms_production = {
+            key: _exact_items.get(key, summed)
+            for key, summed in _by_sms_id.items()
+        }
 
         # Map shop names to CS production weights
         shop_cs_weights = {}
