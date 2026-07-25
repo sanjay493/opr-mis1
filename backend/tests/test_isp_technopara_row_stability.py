@@ -17,11 +17,11 @@ future report-template tweak could silently break:
      column).
 
 This does NOT catch row-position drift between files (the row numbers are
-fixed within one workbook) — that's what the label-verification fallback in
-_verified_row()/_find_label_row() is for, and what the per-real-file sanity
-loop below (using the 15 actual monthly report files) guards against
-instead: those are the real upload artifacts, so if SAIL ever changes the
-template, extraction from one of them should still return data, not raise.
+fixed within one workbook) — that's what the whole-sheet label search in
+_resolve_unit_rows() is for, and what the per-real-file sanity loop below
+(using real monthly report files spanning 2021-26) guards against instead:
+those are the real upload artifacts, so if SAIL ever changes the template,
+extraction from one of them should still return data, not raise.
 """
 
 import importlib
@@ -59,6 +59,13 @@ REAL_MONTHLY_FILES = [
     ("Summarized Monthly Report Apr'26.xlsx", "2026-04"),
     ("Summarized Monthly Report May'26.xlsx", "2026-05"),
     ("Mar'24Summarized Monthly Report.xlsx", "2024-03"),
+    # Older archival files (2021-24) — real crash found here: 'ammonium_
+    # sulphate_yield's expected label 'Total (NH4)₂SO4' (isp_technopara_
+    # row_labels.json) crashed the WHOLE extraction with UnicodeEncodeError
+    # on Windows' cp1252 console the moment _resolve_unit_rows had to print
+    # a "not found" warning quoting it — fixed via _safe_print.
+    ("Summarized Report 2023-24 (final).xlsx", "2023-04"),
+    ("Summarised Monthly 2021-22 (R=f 2.5.22).xlsx", "2021-04"),
 ]
 
 # Mar'24Summarized Monthly Report.xlsx — a real file with a MUCH bigger and
@@ -272,3 +279,44 @@ def test_mar24_file_expression_rows_verified_individually():
             f"{unit}.total_gas_consumption = {val!r} — looks like the wrong "
             f"shift zone was applied (row-shift regression)"
         )
+
+
+@pytest.mark.parametrize("report_month", ["2026-04", "2026-05"])
+def test_short_generic_labels_resolve_to_own_row_not_a_distant_match(report_month):
+    """Regression test for a real bug in _resolve_unit_rows: short/generic
+    expected labels ('Coke', 'CDI', 'Total Fuel') substring-match many
+    unrelated rows across a whole sheet (B-FCE has 16+ rows containing
+    'coke' alone). An earlier version of _resolve_unit_rows disambiguated
+    those against a cross-parameter centroid of other already-resolved
+    rows, which let one contaminated resolution drag the anchor for every
+    other ambiguous param toward it — confirmed: BF-5's coke_rate resolved
+    to row 72 (a distant, unrelated 'coke' mention) instead of row ~38-39,
+    reading a completely wrong parameter's value (10.35 instead of 10.52 for
+    2026-05). Each param must resolve nearest to its OWN configured row,
+    verified here by requiring the bulk multi-month file (BULK_FILE, whose
+    B-FCE sheet is shifted by -1 vs the single-month file) and the
+    single-month file to agree exactly on coke_rate for the same month."""
+    if not BULK_FILE.exists():
+        pytest.skip(f"sample file not present: {BULK_FILE}")
+    single_name = "Summarized Monthly Report Apr'26.xlsx" if report_month == "2026-04" \
+        else "Summarized Monthly Report May'26.xlsx"
+    single_file = ISP_DIR / single_name
+    if not single_file.exists():
+        pytest.skip(f"sample file not present: {single_file}")
+
+    IspTechnoExtractor = _extractor_class()
+    single_val = next(
+        r["techno_json"]["month"]["coke_rate"]
+        for r in IspTechnoExtractor(str(single_file), report_month).extract()
+        if r["unit"] == "BF-5"
+    )
+    bulk_val = next(
+        r["techno_json"]["month"]["coke_rate"]
+        for r in IspTechnoExtractor(str(BULK_FILE), report_month).extract()
+        if r["unit"] == "BF-5"
+    )
+    assert single_val == pytest.approx(bulk_val, rel=1e-6), (
+        f"{report_month}: BF-5.coke_rate differs between the single-month file "
+        f"({single_val}) and the bulk file ({bulk_val}) — looks like a "
+        f"short-label mis-resolution (row-shift regression)"
+    )
