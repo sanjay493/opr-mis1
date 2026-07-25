@@ -1,0 +1,32 @@
+{
+  "_comment": "Expected column-B label for each individual row referenced inside an expression/list row spec in isp_technopara_map.json (e.g. COB-old's dry_coal_charge_oven='17/8' references rows 17 and 8 separately). isp_technopara_row_labels.json only covers simple int/numeric-string specs — a whole expression can't be checked against one label. Verified per real report files: a sheet can have more than one row-shift zone (e.g. Mar'24's COKE OVENS sheet shifted its 'Dry Coal Charge'/oven-count block by -4 rows but its coke-quality block by -7), so the per-unit blanket offset in _compute_unit_offset is not reliable for these specific rows — each is checked independently instead, exactly like _verified_row does for simple specs. Missing entries just fall back to the unit's blanket offset (or unchanged), never break extraction.",
+  "COKE OVENS": {
+    "COB-old": {
+      "dry_coal_charge_oven": {
+        "17": "Dry Coal Charge (Old Batts)",
+        "8": "Num of Ovens Pushed (COB#10)"
+      }
+    },
+    "COB-new": {
+      "dry_coal_charge_oven": {
+        "18": "Dry Coal Charge (New Batt)",
+        "9": "Num of Ovens Pushed (COB#11)"
+      }
+    }
+  },
+  "BM": {
+    "BM": {
+      "total_gas_consumption": {"75": "CO Gas consumption", "76": "BF Gas consumption", "77": "BOF Gas consumption", "78": "CBM consumption"}
+    }
+  },
+  "USM": {
+    "USM": {
+      "total_gas_consumption": {"140": "CO Gas consumption", "141": "BF Gas consumption", "142": "BOF Gas consumption", "143": "CBM consumption"}
+    }
+  },
+  "WRM": {
+    "WRM": {
+      "total_gas_consumption": {"174": "CO Gas consumption", "175": "BF Gas consumption", "176": "BOF Gas consumption", "177": "CBM consumption"}
+    }
+  }
+}

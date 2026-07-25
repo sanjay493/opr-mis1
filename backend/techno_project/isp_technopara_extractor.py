@@ -47,6 +47,7 @@ class IspTechnoExtractor:
         self.workbook = None
         self.hardcoded_map = self._load_hardcoded_map()
         self.row_labels = self._load_row_labels()
+        self.expr_row_labels = self._load_expr_row_labels()
         self.month_col = None
         self.header_row = None
 
@@ -74,6 +75,21 @@ class IspTechnoExtractor:
         except FileNotFoundError:
             return {}
 
+    def _load_expr_row_labels(self) -> Dict:
+        """Load {sheet: {unit: {param_key: {row_num_str: expected column-B
+        label}}}} — per-row verification for the individual rows referenced
+        inside an expression spec (e.g. '17/8'), since a whole expression
+        can't be checked against a single label the way a simple row spec
+        can. See isp_technopara_expr_row_labels.json's _comment. Missing
+        file/entries just fall back to the unit's blanket offset, never
+        break extraction."""
+        labels_path = Path(__file__).parent / "isp_technopara_expr_row_labels.json"
+        try:
+            with open(labels_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return {}
+
     @staticmethod
     def _norm_label(s) -> str:
         return re.sub(r"\s+", " ", str(s or "")).strip().lower()
@@ -95,6 +111,22 @@ class IspTechnoExtractor:
                     return r
         return None
 
+    def _max_safe_window(self, sheet_name: str, param_key: str) -> int:
+        """How far _find_label_row may search from the configured row for
+        this (sheet, param_key). Most ISP sheets hold exactly one unit (WRM,
+        USM, BM, SMS, SINTER, Maj Techno Summ, B-FCE's General) so their
+        labels are unique sheet-wide and it's safe to search the whole
+        sheet — needed for real files where the shift is large (confirmed:
+        USM shifted -51 rows, WRM -34, both well past a fixed small window).
+        COKE OVENS is the exception: COB-old and COB-new share the same
+        param_key names ('specific_heat_coke_ovens', 'coke_oven_gas_yield',
+        ...) in two sequential blocks of the same sheet, so a wide search
+        from one block risks matching into the other's — keep that case
+        narrow, as originally designed."""
+        sheet_units = self.hardcoded_map.get(sheet_name, {})
+        units_with_key = sum(1 for params in sheet_units.values() if param_key in params)
+        return 20 if units_with_key > 1 else 9999
+
     def _verified_row(self, ws, sheet_name: str, unit_name: str, param_key: str, configured_row: int) -> int:
         """Return the row to actually read for (sheet, unit, param_key):
         the configured row if its column-B label still matches, the nearby
@@ -108,7 +140,7 @@ class IspTechnoExtractor:
         actual_label = ws.cell(row=configured_row, column=2).value
         if self._norm_label(expected) in self._norm_label(actual_label):
             return configured_row
-        found = self._find_label_row(ws, expected, configured_row)
+        found = self._find_label_row(ws, expected, configured_row, window=self._max_safe_window(sheet_name, param_key))
         if found:
             print(f"Warning: '{sheet_name}/{unit_name}/{param_key}' row shifted "
                   f"{configured_row} -> {found} (label '{expected}')")
@@ -117,6 +149,46 @@ class IspTechnoExtractor:
               f"'{expected}' not found near row {configured_row} — using "
               f"configured row unverified (got {actual_label!r})")
         return configured_row
+
+    def _verified_expr_row(self, ws, sheet_name: str, unit_name: str, param_key: str,
+                            row_num: int, unit_offset: int) -> int:
+        """Like _verified_row, but for one row referenced *inside* an
+        expression spec (e.g. the '17' or the '8' in '17/8'). A sheet can
+        have more than one row-shift zone at once (confirmed in a real file:
+        COKE OVENS' 'Dry Coal Charge'/oven-count rows shifted -4 while its
+        coke-quality rows below shifted -7), so the single blanket
+        `unit_offset` from _compute_unit_offset is not reliable for these
+        rows specifically — check each one against isp_technopara_expr_row_
+        labels.json independently. Falls back to `row_num + unit_offset` if
+        this row has no configured expected label (keeps prior behaviour for
+        every expression that doesn't have per-row labels registered).
+        `expected` may be a single label string or a list of accepted
+        alias wordings (older report vintages sometimes phrase the same row
+        differently, e.g. 'No.of Ovens Pushed' vs 'Num of Ovens Pushed') —
+        per the project convention, add the new exact wording as another
+        alias rather than loosening the match to fuzzy/substring."""
+        expected = self.expr_row_labels.get(sheet_name, {}).get(unit_name, {}).get(param_key, {}).get(str(row_num))
+        if not expected:
+            return row_num + unit_offset
+        candidates = expected if isinstance(expected, list) else [expected]
+        actual_label = ws.cell(row=row_num, column=2).value
+        actual_norm = self._norm_label(actual_label)
+        if any(self._norm_label(c) in actual_norm for c in candidates):
+            return row_num
+        window = self._max_safe_window(sheet_name, param_key)
+        best = None
+        for c in candidates:
+            found = self._find_label_row(ws, c, row_num, window=window)
+            if found is not None and (best is None or abs(found - row_num) < abs(best - row_num)):
+                best = found
+        if best is not None:
+            print(f"Warning: '{sheet_name}/{unit_name}/{param_key}' expression row "
+                  f"{row_num} shifted -> {best} (label {candidates!r})")
+            return best
+        print(f"Warning: '{sheet_name}/{unit_name}/{param_key}' expression row "
+              f"{row_num} expected label {candidates!r} not found — using "
+              f"unit offset ({unit_offset:+d}) unverified")
+        return row_num + unit_offset
 
     def _compute_unit_offset(self, ws, sheet_name: str, unit_name: str, unit_params: Dict) -> Optional[int]:
         """Derive a single row-shift delta for this (sheet, unit) from its
@@ -146,7 +218,7 @@ class IspTechnoExtractor:
             if self._norm_label(expected) in self._norm_label(actual_label):
                 deltas.add(0)
                 continue
-            found = self._find_label_row(ws, expected, configured_row)
+            found = self._find_label_row(ws, expected, configured_row, window=self._max_safe_window(sheet_name, param_key))
             if found:
                 deltas.add(found - configured_row)
         if not deltas:
@@ -228,13 +300,14 @@ class IspTechnoExtractor:
         except Exception:
             return None
 
-    def _evaluate_row_expression(self, ws, expression: str, month_col: int, row_offset: int = 0) -> float:
+    def _evaluate_row_expression(self, ws, expression: str, month_col: int, row_lookup=None) -> float:
         """Evaluate expressions like '5+6', '5/days', '(5+6)/days'.
 
-        `row_offset` (from _compute_unit_offset) is added to every row-number
-        token before reading — expressions are never checked by
-        _verified_row, so if the sheet's rows shifted, this is the only
-        correction they get."""
+        `row_lookup(row_num) -> corrected_row_num`, if given, is applied to
+        every row-number token before reading — expressions are never
+        checked by _verified_row itself, so this (normally _verified_expr_row,
+        falling back to the unit's blanket offset) is the only correction
+        they get."""
         try:
             # Get days in month from row 2
             days_val = ws.cell(2, month_col + 1).value
@@ -246,7 +319,9 @@ class IspTechnoExtractor:
             # Parse row references (numbers)
             import re
             def get_row_value(match):
-                row_num = int(match.group(1)) + row_offset
+                row_num = int(match.group(1))
+                if row_lookup:
+                    row_num = row_lookup(row_num)
                 val = self._get_cell_value(ws, row_num, month_col)
                 return str(val) if val is not None else "0"
 
@@ -413,9 +488,16 @@ class IspTechnoExtractor:
                     till_val = _avg_rows(cum_col)
                 elif isinstance(row_spec, str):
                     if any(op in row_spec for op in ['+', '-', '/', '*', '(', ')']):
-                        # Expression - evaluate for both columns
-                        month_val = self._evaluate_row_expression(ws, row_spec, month_col, unit_offset)
-                        till_val = self._evaluate_row_expression(ws, row_spec, cum_col, unit_offset) if cum_col else None
+                        # Expression - evaluate for both columns. Each row
+                        # token is verified individually against
+                        # isp_technopara_expr_row_labels.json (falling back
+                        # to the unit's blanket offset where unconfigured) —
+                        # see _verified_expr_row's docstring for why a single
+                        # per-unit offset isn't always enough here.
+                        row_lookup = lambda rn: self._verified_expr_row(
+                            ws, sheet_name, unit_name, param_key, rn, unit_offset)
+                        month_val = self._evaluate_row_expression(ws, row_spec, month_col, row_lookup)
+                        till_val = self._evaluate_row_expression(ws, row_spec, cum_col, row_lookup) if cum_col else None
                     else:
                         # Simple row number as string
                         row_num = self._verified_row(ws, sheet_name, unit_name, param_key, int(row_spec))

@@ -58,7 +58,22 @@ REAL_MONTHLY_FILES = [
     ("Summarized Monthly Report Mar'25.xlsx", "2025-03"),
     ("Summarized Monthly Report Apr'26.xlsx", "2026-04"),
     ("Summarized Monthly Report May'26.xlsx", "2026-05"),
+    ("Mar'24Summarized Monthly Report.xlsx", "2024-03"),
 ]
+
+# Mar'24Summarized Monthly Report.xlsx — a real file with a MUCH bigger and
+# non-uniform row shift than any other sample (USM -51 rows, WRM -34, BM -7,
+# and COKE OVENS' oven-count block -4 rows while its coke-quality block
+# shifted -7 in the SAME sheet). It exposed two real bugs:
+#   1. The row-shift self-heal's fixed +/-20 search window was too narrow
+#      to find labels shifted further than that (USM/WRM) — widened via
+#      _max_safe_window (unbounded for sheets holding only one unit).
+#   2. total_gas_consumption/dry_coal_charge_oven (expression row specs) were
+#      never verified per-row at all, so a shift there silently summed the
+#      wrong cells (confirmed: BM read 2532.8 instead of ~9.9) — fixed via
+#      _verified_expr_row + isp_technopara_expr_row_labels.json.
+MAR24_FILE = ISP_DIR / "Mar'24Summarized Monthly Report.xlsx"
+_MAR24_GAS_CEILING = 1000  # same reasoning as _TOTAL_GAS_CONSUMPTION_CEILING below
 
 # Expected record count (extract() emits one record per (sheet, unit)
 # pair, so a unit name reused by multiple sheets — e.g. "General" from
@@ -213,4 +228,47 @@ def test_extract_available_months_against_bulk_file():
         )
         assert total_nonnull >= MIN_NONNULL_VALUES, (
             f"{month}: only {total_nonnull} non-null month values"
+        )
+
+
+def test_mar24_file_wide_shift_recovers_full_coverage():
+    """Regression test for a real bug: before _max_safe_window (unbounded
+    search for sheets holding only one unit), USM's labels — shifted -51
+    rows in this file — were never found within the old +/-20 window, so
+    USM extracted ZERO units and WRM extracted only 1/8 params. Both must
+    now fully recover."""
+    if not MAR24_FILE.exists():
+        pytest.skip(f"sample file not present: {MAR24_FILE}")
+    IspTechnoExtractor = _extractor_class()
+    records = IspTechnoExtractor(str(MAR24_FILE), "2024-03").extract()
+    by_unit = {r["unit"]: r["techno_json"] for r in records}
+
+    for unit, expected_param_count in (("WRM", 8), ("USM", 8), ("BM", 8)):
+        assert unit in by_unit, f"expected unit {unit!r} in {sorted(by_unit)}"
+        nonnull = sum(1 for v in by_unit[unit]["month"].values() if v is not None)
+        assert nonnull == expected_param_count, (
+            f"{unit}: expected all {expected_param_count} params non-null, got {nonnull}"
+        )
+
+
+def test_mar24_file_expression_rows_verified_individually():
+    """Regression test for a real bug: this file's COKE OVENS sheet has TWO
+    different shift zones in the same sheet (oven-count block -4, coke-
+    quality block -7), so the single per-unit blanket offset that
+    total_gas_consumption/dry_coal_charge_oven fell back to before
+    _verified_expr_row was wrong for at least one of them. Confirmed:
+    BM.total_gas_consumption read 2532.8 (summing 'Crop'/'Total Mill
+    Arisings'/etc., the wrong block entirely) instead of ~9.9."""
+    if not MAR24_FILE.exists():
+        pytest.skip(f"sample file not present: {MAR24_FILE}")
+    IspTechnoExtractor = _extractor_class()
+    records = IspTechnoExtractor(str(MAR24_FILE), "2024-03").extract()
+    by_unit = {r["unit"]: r["techno_json"] for r in records}
+
+    for unit in ("WRM", "USM", "BM"):
+        val = by_unit[unit]["month"].get("total_gas_consumption")
+        assert val is not None, f"{unit}: total_gas_consumption unexpectedly null"
+        assert abs(val) < _MAR24_GAS_CEILING, (
+            f"{unit}.total_gas_consumption = {val!r} — looks like the wrong "
+            f"shift zone was applied (row-shift regression)"
         )
