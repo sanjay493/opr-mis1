@@ -136,11 +136,21 @@ class IspTechnoExtractor:
     def _get_cum_column_offset(self, month_num: int) -> int:
         """
         Get cumulative column offset based on month.
-        ISP Excel pattern:
-          - Most months: cum is 2 columns ahead
-          - Sep & Dec: cum is 4 columns ahead
-          - Mar: cum is 6 columns ahead
+        ISP Excel pattern (verified against the full-year column header row,
+        e.g. Apr/May/2M/Jun/QTR-1/Jul/4M/Aug/5M/Sep/QRT-2/H1/Oct/7M/Nov/8M/
+        Dec/QRT-3/...):
+          - Apr: NO offset - there is no separate "1-month cumulative" column
+            in this template (it would just duplicate April's own ACT
+            column), so till_month must read from the same column as month.
+          - Most other months: cum is 2 columns ahead (the next periodic
+            cumulative marker - 2M, QTR-1, 4M, 5M, 7M, 8M - sits right after
+            that month's own pair).
+          - Sep & Dec: cum is 4 columns ahead, skipping a nearer quarter-only
+            marker (QRT-2/QRT-3) to reach the true YTD figure (H1/9M).
+          - Mar: cum is 6 columns ahead (the annual figure).
         """
+        if month_num == 4:  # April - FY's first month
+            return 0
         if month_num == 3:  # March
             return 6
         elif month_num in [9, 12]:  # September, December
@@ -366,15 +376,6 @@ class IspTechnoExtractor:
                     if till_val is not None:
                         till_val = float(till_val) * multiplier
                     print(f"  Applied multiplier {multiplier}x to {param_key}")
-
-                # April is month 1 of the FY, so till-April cumulative always
-                # equals April's own month value. Some sheets carry a broken
-                # #REF! in their "2-month" cumulative column for the FY's
-                # first month (it references May data that doesn't exist yet
-                # when the April file is prepared) - fall back to month_val
-                # rather than leaving a genuinely-known figure blank.
-                if till_val is None and month_val is not None and self.report_month and self.report_month.endswith("-04"):
-                    till_val = month_val
 
                 # Store both month and till_month
                 data["month"][param_key] = month_val
