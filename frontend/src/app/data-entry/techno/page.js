@@ -41,6 +41,27 @@ function formatMonth(year, month) {
   return `${year}-${MONTH_NUM[month]}`;
 }
 
+// A long-running request (a 12-month bulk save is dozens of DB writes and
+// can take tens of seconds) is long enough to occasionally hit something
+// that returns plain text instead of JSON — a proxy/dev-server error page,
+// or a backend crash that slipped past its own JSON error handling. Calling
+// res.json() directly on that throws a cryptic "Unexpected token '<char>'
+// ... is not valid JSON", which surfaces as the error text with no hint of
+// what actually went wrong. Read the body as text first so a non-JSON
+// response becomes a readable message instead.
+async function parseJsonResponse(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const snippet = text.slice(0, 200).replace(/\s+/g, ' ').trim();
+    throw new Error(
+      `Server returned an unexpected (non-JSON) response — HTTP ${res.status}`
+      + (snippet ? `: "${snippet}${text.length > 200 ? '…' : ''}"` : '')
+    );
+  }
+}
+
 // ── Shared styled status message ──────────────────────────────────────────────
 function StatusMsg({ status }) {
   if (!status) return null;
@@ -443,7 +464,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
     if (plant) form.append('plant', plant);
     try {
       const res = await fetch(`${apiBase}/api/techno/preview-months`, { method: 'POST', body: form });
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) throw new Error(json.detail || 'Preview failed');
       setBulkPreview(json);
       setActiveBulkMonth(json.months?.[0] || null);
@@ -488,7 +509,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plant, source_file: bulkPreview.source_file, months }),
       });
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) throw new Error(json.detail || 'Save failed');
       const savedEntries = Object.entries(json.saved || {});
       const totalUnits = savedEntries.reduce((sum, [, n]) => sum + n, 0);
@@ -528,7 +549,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
     if (plant) form.append('plant', plant);
     try {
       const res = await fetch(`${apiBase}${previewEndpoint}`, { method: 'POST', body: form });
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) throw new Error(json.detail || 'Preview failed');
       setPreview(json);
       const { checked, autoProtected: auto } = computeParamDefaults(json.records || []);
@@ -558,7 +579,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
           records: preview.records,
         }),
       });
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) throw new Error(json.detail || 'Cumulative calculation failed');
       if (!json.details || json.details.length === 0) {
         setStatus({ type: 'info', text: 'Nothing to calculate — no monthly values to compute a cumulative from.' });
@@ -623,7 +644,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
         }),
       });
       let res = await doInsert(false);
-      let json = await res.json();
+      let json = await parseJsonResponse(res);
       if (res.status === 409) {
         // Existing data would be replaced — ask for user consent, then retry
         if (!window.confirm(`${json.detail}\n\nReplace the existing values?`)) {
@@ -631,7 +652,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
           return;
         }
         res = await doInsert(true);
-        json = await res.json();
+        json = await parseJsonResponse(res);
       }
       if (!res.ok) throw new Error(json.detail || 'Save failed');
       setStatus({ type: 'success', text: `Saved ${json.units_saved} units for ${preview.report_month}` });
@@ -834,7 +855,7 @@ function TechnoSaveLog({ plant, reportMonth, apiBase, refreshKey }) {
       const res = await fetch(
         `${apiBase}/api/extraction-log?plant=${plant}&source_type=${encodeURIComponent('Techno Data')}&limit=20`
       );
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       setLogs(json.logs || []);
     } catch {
       setLogs([]);
@@ -918,7 +939,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         `${apiBase}/api/techno/data?plant=${plant}&report_month=${reportMonth}`
       );
       if (res.ok) {
-        const json = await res.json();
+        const json = await parseJsonResponse(res);
         const d = json.data || {};
         setData(d);
         const units = Object.keys(d);
@@ -951,7 +972,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plant, report_month: reportMonth, overwrite: true, preview: true }),
       });
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) throw new Error(json.detail || 'Cumulative calculation failed');
       if (!json.details || json.details.length === 0) {
         setCumStatus({
@@ -977,7 +998,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plant, report_month: reportMonth, overwrite: true, preview: false }),
       });
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) throw new Error(json.detail || 'Cumulative save failed');
       const warn = (json.warnings || []).length;
       setCumStatus({

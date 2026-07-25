@@ -431,31 +431,45 @@ async def insert_techno_months(payload: dict):
         (rec.get("unit", "") for m in months for rec in m.get("records", [])),
     )
 
-    init_db()
-    saved = {}
-    for m in months:
-        report_month = m["report_month"]
-        saved_count = 0
-        for rec in m.get("records", []):
-            try:
-                merge_upsert_techno_data(
-                    plant=plant,
-                    report_month=report_month,
-                    unit=rec["unit"],
-                    new_techno_json=rec["techno_json"],
-                    source_file=source_file,
-                )
-                saved_count += 1
-            except Exception as e:
-                print(f"Warning: Could not save {plant}/{report_month}/{rec.get('unit')}: {e}")
-        saved[report_month] = saved_count
+    # A bulk save is ~10 units x however many months = dozens of individual
+    # DB writes and can take tens of seconds — long enough to be vulnerable
+    # to a mid-request hiccup (DB connection blip, dev-server --reload
+    # restart if a source file changed mid-request, etc.). Without this
+    # catch-all, anything that escapes the per-record try/except below
+    # bypasses FastAPI's normal JSON error handling entirely and Starlette
+    # returns a PLAIN-TEXT "Internal Server Error" — which the frontend's
+    # res.json() then chokes on ("Unexpected token 'I' ... is not valid
+    # JSON"), hiding whatever the real problem was. Always return JSON here.
+    try:
+        init_db()
+        saved = {}
+        for m in months:
+            report_month = m["report_month"]
+            saved_count = 0
+            for rec in m.get("records", []):
+                try:
+                    merge_upsert_techno_data(
+                        plant=plant,
+                        report_month=report_month,
+                        unit=rec["unit"],
+                        new_techno_json=rec["techno_json"],
+                        source_file=source_file,
+                    )
+                    saved_count += 1
+                except Exception as e:
+                    print(f"Warning: Could not save {plant}/{report_month}/{rec.get('unit')}: {e}")
+            saved[report_month] = saved_count
 
-    return {
-        "status": "ok",
-        "plant": plant,
-        "source_file": source_file,
-        "saved": saved,
-    }
+        return {
+            "status": "ok",
+            "plant": plant,
+            "source_file": source_file,
+            "saved": saved,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/data")
