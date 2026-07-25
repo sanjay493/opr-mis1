@@ -4077,7 +4077,7 @@ async def recalculate_sail_weighted(payload: dict):
                         })
                     sms_calc_steps[param] = {
                         "formula": "Weighted Average: Σ(Shop_Value × Shop_CS) / Σ(Shop_CS)",
-                        "description": "Simple weighted average: each SMS shop value weighted by its actual Crude Steel production",
+                        "description": "Weighted average: each SMS shop value weighted by that shop's Crude Steel production plan (target), not actual production",
                         "shops": shop_details,
                         "sum_products": round(total_val, 2),
                         "sum_weights": round(total_weight, 2),
