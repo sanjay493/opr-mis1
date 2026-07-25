@@ -389,6 +389,23 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
   const [bulkPreview, setBulkPreview] = React.useState(null); // { months, skipped_months, source_file, per_month }
   const [activeBulkMonth, setActiveBulkMonth] = React.useState(null);
   const [bulkParamState, setBulkParamState] = React.useState({}); // { [month]: { checked, autoProtected } }
+  // Separate from `busy` (shared with the single-month path) so the UI can
+  // show an unmissable, save-specific progress banner — a bulk save writes
+  // one DB row per (month, unit), which can genuinely take tens of seconds
+  // for a dozen months; without a clear in-progress state a user has no way
+  // to tell "still working" from "did nothing", and re-submits, which is
+  // harmless (merge-safe) but wasteful and confusing.
+  const [bulkSaving, setBulkSaving] = React.useState(false);
+
+  // Warn before leaving/reloading mid-save — the save keeps running
+  // server-side either way, but a user who navigates away and comes back
+  // has no way to tell that, and is likely to just re-submit.
+  React.useEffect(() => {
+    if (!bulkSaving) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [bulkSaving]);
 
   React.useEffect(() => {
     setFile(null);
@@ -446,6 +463,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
   const handleBulkConfirmSave = async () => {
     if (!bulkPreview) return;
     setBusy(true);
+    setBulkSaving(true);
     setStatus(null);
     try {
       const months = Object.entries(bulkPreview.per_month || {}).map(([month, d]) => {
@@ -472,8 +490,14 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Save failed');
-      const savedText = Object.entries(json.saved || {}).map(([m, n]) => `${m}: ${n}`).join(', ');
-      setStatus({ type: 'success', text: `Saved — ${savedText}` });
+      const savedEntries = Object.entries(json.saved || {});
+      const totalUnits = savedEntries.reduce((sum, [, n]) => sum + n, 0);
+      const savedText = savedEntries.map(([m, n]) => `${m}: ${n}`).join(', ');
+      setStatus({
+        type: 'success',
+        text: `✓ Saved ${savedEntries.length} month${savedEntries.length === 1 ? '' : 's'} `
+          + `(${totalUnits} units total) — ${savedText}`,
+      });
       setBulkPreview(null);
       setBulkMode(false);
       setFile(null);
@@ -483,6 +507,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
       setStatus({ type: 'error', text: err.message });
     } finally {
       setBusy(false);
+      setBulkSaving(false);
     }
   };
 
@@ -701,7 +726,7 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
                 cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
               }}
             >
-              {busy ? 'Saving…' : `Confirm & Save all ${bulkPreview.months.length} months`}
+              {bulkSaving ? 'Saving, please wait…' : `Confirm & Save all ${bulkPreview.months.length} months`}
             </button>
             <button onClick={handleBulkCancelPreview} disabled={busy}
               style={{
@@ -715,6 +740,23 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
           </>
         )}
       </div>
+      {bulkSaving && (
+        <div style={{
+          marginTop: 8, padding: '12px 16px', borderRadius: 8, fontSize: 13.5,
+          background: '#eff6ff', color: '#174ea6', border: '2px solid #1a73e8',
+          display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600,
+        }}>
+          <span style={{
+            display: 'inline-block', width: 14, height: 14, borderRadius: '50%',
+            border: '2px solid #1a73e8', borderTopColor: 'transparent',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+          Saving {bulkPreview?.months?.length} month{bulkPreview?.months?.length === 1 ? '' : 's'} — this
+          writes one database row per unit per month and can take up to a minute.
+          Please don&apos;t close or refresh this page; a green confirmation will appear here when it&apos;s done.
+          <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>
+        </div>
+      )}
       {preview && (preview.warnings || []).length > 0 && (
         <div style={{
           marginTop: 6, padding: '6px 12px', borderRadius: 6, fontSize: 12,
