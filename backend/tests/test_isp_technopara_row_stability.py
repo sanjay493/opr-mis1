@@ -320,3 +320,33 @@ def test_short_generic_labels_resolve_to_own_row_not_a_distant_match(report_mont
         f"({single_val}) and the bulk file ({bulk_val}) — looks like a "
         f"short-label mis-resolution (row-shift regression)"
     )
+
+
+FINAL_2023_24_FILE = ISP_DIR / "Summarized Report 2023-24 (final).xlsx"
+
+
+def test_substring_match_never_beats_an_exact_match_elsewhere():
+    """Regression test for a real bug: 'Coke' is a substring of 'Nut Coke'
+    too, and in this file 'Nut Coke' (value 37.49, the nut-coke RATE)
+    happens to sit exactly at coke_rate's configured row 39 — so the
+    nearest-to-configured-row tiebreak alone picked it as a false match,
+    reading 37.49 (a completely different parameter) as coke_rate instead
+    of the real ~394.49 (row 38, labelled exactly 'Coke'). Exact label
+    matches must always be preferred over mere substring hits."""
+    if not FINAL_2023_24_FILE.exists():
+        pytest.skip(f"sample file not present: {FINAL_2023_24_FILE}")
+    IspTechnoExtractor = _extractor_class()
+    records = IspTechnoExtractor(str(FINAL_2023_24_FILE), "2023-04").extract()
+    by_unit = {r["unit"]: r["techno_json"] for r in records}
+
+    coke_rate = by_unit["BF-5"]["month"]["coke_rate"]
+    nut_coke_rate = by_unit["BF-5"]["month"]["nut_coke_rate"]
+    assert coke_rate == pytest.approx(394.49, abs=0.01), (
+        f"coke_rate = {coke_rate!r} — expected ~394.49 (row 38, exact label "
+        f"'Coke'); got the nut-coke-rate row instead if this is ~37.49"
+    )
+    assert nut_coke_rate == pytest.approx(37.49, abs=0.01), (
+        f"nut_coke_rate = {nut_coke_rate!r} — expected ~37.49 (row 39, exact "
+        f"label 'Nut Coke')"
+    )
+    assert coke_rate != nut_coke_rate

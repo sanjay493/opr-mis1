@@ -174,7 +174,19 @@ class IspTechnoExtractor:
                         targets.append((f"{param_key}#{tok}", aliases, int(tok)))
 
         def find_candidates(aliases):
+            # Exact matches (whole normalized cell text equals an alias)
+            # always win over mere substring hits — a short label like
+            # 'Coke' is a substring of 'Nut Coke' too, and confirmed in a
+            # real file: 'Nut Coke' happened to sit exactly at coke_rate's
+            # configured row, so the nearest-to-configured-row tiebreak
+            # picked it as a false "exact-row" match even though it isn't
+            # the same parameter at all. Only fall back to substring
+            # matching (for legitimate label-text drift between file
+            # vintages) when nothing matches exactly anywhere in the sheet.
             norms = [self._norm_label(a) for a in aliases]
+            exact = [r for r, text in sheet_rows if text in norms]
+            if exact:
+                return exact
             return [r for r, text in sheet_rows if any(n in text for n in norms)]
 
         # A short/generic label ('Coke', 'CDI') can substring-match many
