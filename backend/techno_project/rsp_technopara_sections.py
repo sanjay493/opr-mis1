@@ -77,10 +77,20 @@ SECTION_UNITS = {
 #                                  different section than its true unit)
 PARAM_ALIASES = {
     # ---- COB-old (Battery 1-5) / COB-new (Battery 6) ------------------------
-    # "H/Coke Yield(+25mm)" appears twice per section (a "T / Oven" row and a
-    # "% dry coal" row) — see PARAM_UNIT_FILTERS below, which restricts this
-    # alias to the "% dry coal" occurrence only (the one the old row-number
-    # map targeted).
+    # BF Coke Yield: Battery 1-5 always carries a "BFCoke (H/C+N/C)Yld" row
+    # (the DPR-matching figure, wanted over "H/Coke Yield(+25mm)") followed
+    # immediately by "H/Coke Yield(+25mm)" - Battery 6 only ever has the
+    # latter, no "BFCoke" row at all (confirmed across every sample file,
+    # Mar'24 through Jun'26, incl. the older pre-relayout column format).
+    # _walk()'s "first occurrence wins" per unit means listing BOTH aliases
+    # here (rather than replacing one with the other) does the right thing
+    # for both batteries without hardcoding a per-section split: Battery 1-5
+    # hits its earlier "BFCoke" row first and keeps that; Battery 6 never
+    # sees a "BFCoke" row so its "H/Coke Yield" row becomes the first (and
+    # only) match. Also degrades gracefully if a future file ever omits
+    # Battery 1-5's "BFCoke" row - "H/Coke Yield" is still there as a
+    # fallback instead of losing the parameter entirely.
+    "BFCoke (H/C+N/C)Yld":             "bf_coke_yield",
     "H/Coke Yield(+25mm)":             "bf_coke_yield",
     "COG Yield on dry Coal":           "coke_oven_gas_yield",
     "Dry Coal Charge":                 "dry_coal_charge_oven",
@@ -233,6 +243,9 @@ DAILY_AVG_PARAMS = {"average_blows_per_day"}
 # different units — restricts PARAM_ALIASES's match to the one occurrence
 # that's actually wanted, instead of matching whichever copy comes first.
 PARAM_UNIT_FILTERS = {
+    # Both BF Coke Yield source rows repeat once per section as a "T / Oven"
+    # variant and once as a "% dry coal" variant - keep the % dry coal one.
+    "BFCoke (H/C+N/C)Yld": "dry coal",
     "H/Coke Yield(+25mm)": "dry coal",
     # Restricts the ERW/SWP data alias to its real "%" rows, so it can't match
     # Cold Rolling Mill's unit-less "YIELD FROM HR COILS" sub-header instead.
