@@ -27,7 +27,8 @@
       "GPC3": "Z16",
       "CRSALE": "Z18",
       "Saleable Steel": "O31",
-      "Saleable Semis": "Z19"
+      "Saleable Semis": "Z19",
+      "Thick Plate": "Z20"
     },
     "derived": [
       {

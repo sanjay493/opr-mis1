@@ -100,6 +100,7 @@ def _dpr_config():
         "CRSALE":              "Z18",
         "Saleable Steel":      "O31",
         "Saleable Semis":      "Z19",
+        "Thick Plate":         "Z20",
     })
     no_convert = set(cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
     derived = cfg.get("derived", [
@@ -136,7 +137,9 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       CRSALE               Z18
       Saleable Steel       O31  (CUM column, "PRODUCTION:-(MAIN UNITS)" table)
       Saleable Semis       Z19  (CUM column, "PRODUCTION (SALEABLE STEEL)" table)
-      Finished Steel       O31 − Z19  (derived: saleable steel minus semis, both production-side)
+      Thick Plate          Z20  ("COBB PLT" row — Thick/Cobble Plate)
+      Finished Steel       O31 − Z19  (derived: saleable steel minus semis, both production-side —
+                                        already includes Thick Plate; Z20 is only saved separately)
       CRC&S(1&2)           Z9 + Z10  (derived: sum)
       GP/GC                Z11 + Z12 + Z13  (derived: sum)
     """
@@ -1287,7 +1290,14 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
       SALEABLE STEEL                 → Saleable Steel
     Page 3 breakup table (month-total = 3rd number of the first PRIME/SEC/
     TOTAL group):
-      FIN. STEEL + THICK PLATE       → Finished Steel
+      FIN. STEEL + THICK PLATE       → Finished Steel  (unchanged — Thick
+                                                          Plate stays folded
+                                                          in here too)
+      THICK PLATE                    → Thick Plate       (also saved on its
+                                                            own — matches the
+                                                            "Thick Plate"/Z20
+                                                            item the DPR Mail
+                                                            route saves)
       SLAB                           → Saleable Semis
     """
     import pdfplumber
@@ -1386,14 +1396,15 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
     add("CR III CR(Coil) Sale", crc3_val, crc3_cell)
 
     # Finished Steel / Saleable Semis aren't on page 2 — page 3's breakup
-    # table carries them. Thick Plate is folded into Finished Steel (not
-    # tracked as its own item), so Saleable Semis is SLAB alone.
+    # table carries them. Thick Plate stays folded into Finished Steel (as
+    # before) AND is now also saved under its own item_name.
     fin, cf = p3_month_total("FIN. STEEL")
     thick, ct = p3_month_total("THICK PLATE")
     if fin is not None or thick is not None:
         add("Finished Steel", (fin or 0) + (thick or 0), f"{cf} + {ct}")
     else:
         add("Finished Steel", None, None)
+    add("Thick Plate", thick, ct)
 
     slab, cs1 = p3_month_total("SLAB")
     add("Saleable Semis", slab, cs1)
