@@ -10,21 +10,21 @@ Extraction mapping (all "Cum Actual" / "Stock As on Date" columns):
   1.0 UNITWISE PRODUCTION
     Total Crude Steel   — "SMS (SLAB)" row, Cum Actual (On Date blank → 1st number)
     HRM                 — "HRM" row, Cum Actual
-    Input SS Slab       — "- STAINLESS" row, Stock As on Date
-    Input Carbon Slab   — "- CARBON" row, Stock As on Date
+    Input SS Slab Stock       — "- STAINLESS" row, Stock As on Date
+    Input Carbon Slab Stock   — "- CARBON" row, Stock As on Date
   2.0 SALEABLE PRODUCTION
-    Total Saleable Steel     — "TOTAL" row, Cum Actual
-    Carbon Steel Production  — "HRCS" row, Cum Actual
-    NO1 Production           — "NO1" row, Cum Actual
-    CRSS Production          — "CRSS" row, Cum Actual
-    HRSS Production          — "HRSS" row, Cum Actual (no Target/Stock cols on this row)
-    (Saleable Steel / Finished Steel — same "TOTAL" Cum Actual, existing aliases)
+    Saleable Steel            — "TOTAL" row, Cum Actual
+    Carbon Steel Production   — "HRCS" row, Cum Actual
+    NO1 Production            — "NO1" row, Cum Actual
+    CRSS Production           — "CRSS" row, Cum Actual
+    HRSS Production           — "HRSS" row, Cum Actual (no Target/Stock cols on this row)
+    (Finished Steel — same "TOTAL" Cum Actual, existing alias of Saleable Steel)
   3.0 DESPATCHES
     Finished Carbon Steel Despatch — "HRCS" row, Cum Actual
     Total Saleable Steel Despatch  — "TOTAL" row, Cum Actual
-    Finished Carbon Steel          — "HRCS" row, Stock As on Date
-    Finished Total Steel           — "TOTAL" row, Stock As on Date
-    Finished Stainless Steel       — computed: Finished Total Steel - Finished Carbon Steel
+    Finished Carbon Steel Stock    — "HRCS" row, Stock As on Date
+    Finished Total Steel Stock     — "TOTAL" row, Stock As on Date
+    Finished Stainless Steel Stock — computed: Finished Total Steel Stock - Finished Carbon Steel Stock
 
 Values are in Tonnes in the PDF → stored as '000T (÷ 1000).
 """
@@ -182,9 +182,9 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
 
     # unitwise 6-col layout: [OnDate?, Cum, Target, Rate, StockDate, Stock1st]
     add("HRM", "unitwise", lambda t: t.startswith("HRM"), -5, "HRM Cum Actual")
-    add("Input SS Slab", "unitwise", lambda t: t.startswith("- STAINLESS") or t.startswith("STAINLESS"),
+    add("Input SS Slab Stock", "unitwise", lambda t: t.startswith("- STAINLESS") or t.startswith("STAINLESS"),
         -2, "- STAINLESS Stock As on Date")
-    add("Input Carbon Slab", "unitwise", lambda t: t.startswith("- CARBON") or t.startswith("CARBON"),
+    add("Input Carbon Slab Stock", "unitwise", lambda t: t.startswith("- CARBON") or t.startswith("CARBON"),
         -2, "- CARBON Stock As on Date")
 
     # ── 2.0 SALEABLE PRODUCTION ─────────────────────────────────────────────
@@ -195,7 +195,7 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
         sal_label = "(Saleable TOTAL line not found)"
     sal_tag = f"{cell_tag} · SALEABLE PRODUCTION TOTAL Cum Actual"
 
-    for item in ("Total Saleable Steel", "Saleable Steel", "Finished Steel"):
+    for item in ("Saleable Steel", "Finished Steel"):
         prod_rows.append(_row(item, sal_val, sal_tag, sal_label))
 
     add("Carbon Steel Production", "saleable", lambda t: t.startswith("HRCS"),
@@ -216,21 +216,21 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
         -5, "DESPATCHES HRCS Cum Actual")
     add("Total Saleable Steel Despatch", "despatches", lambda t: t.startswith("TOTAL"),
         -5, "DESPATCHES TOTAL Cum Actual")
-    finished_carbon_val = add("Finished Carbon Steel", "despatches", lambda t: t.startswith("HRCS"),
+    finished_carbon_val = add("Finished Carbon Steel Stock", "despatches", lambda t: t.startswith("HRCS"),
                               -2, "DESPATCHES HRCS Stock As on Date")
-    finished_total_val = add("Finished Total Steel", "despatches", lambda t: t.startswith("TOTAL"),
+    finished_total_val = add("Finished Total Steel Stock", "despatches", lambda t: t.startswith("TOTAL"),
                              -2, "DESPATCHES TOTAL Stock As on Date")
 
-    # Finished Stainless Steel = Finished Total Steel - Finished Carbon Steel
+    # Finished Stainless Steel Stock = Finished Total Steel Stock - Finished Carbon Steel Stock
     if finished_total_val is not None and finished_carbon_val is not None:
         finished_ss_val = finished_total_val - finished_carbon_val
-        prod_rows.append(_row("Finished Stainless Steel", finished_ss_val,
-                              f"{cell_tag} · Finished Total Steel - Finished Carbon Steel",
+        prod_rows.append(_row("Finished Stainless Steel Stock", finished_ss_val,
+                              f"{cell_tag} · Finished Total Steel Stock - Finished Carbon Steel Stock",
                               "(computed)"))
     else:
-        prod_rows.append(_row("Finished Stainless Steel", None,
-                              f"{cell_tag} · Finished Total Steel - Finished Carbon Steel",
-                              "(Finished Total Steel or Finished Carbon Steel missing)"))
+        prod_rows.append(_row("Finished Stainless Steel Stock", None,
+                              f"{cell_tag} · Finished Total Steel Stock - Finished Carbon Steel Stock",
+                              "(Finished Total Steel Stock or Finished Carbon Steel Stock missing)"))
 
     ok = sum(1 for r in prod_rows if r["status"] == "ok")
     print(f"[SSP PDF] {ok}/{len(prod_rows)} rows ok", flush=True, file=sys.stderr)
