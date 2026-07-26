@@ -766,32 +766,36 @@ def _extract_hsm_rows(wb, db_month: str) -> list:
 _CRM_LABEL_COL = 2   # column B — Sheet9/Sheet11/Sheet1 all agree on this
 
 _CRM_ROWS = [
+    # (sheet, row, mon_col, cum_col, unit_name, parameter, unit_str, label_keyword, multiplier)
     # CRM 1&2 (Sheet9) — Tandem Mill-I / Tandem Mill-II Utilisation only.
-    ("Sheet9", 41, 6, 7, "CRM 1&2", "TM-1 Utilisation", "%", "utilis"),
-    ("Sheet9", 51, 6, 7, "CRM 1&2", "TM-2 Utilisation", "%", "utilis"),
+    ("Sheet9", 41, 6, 7, "CRM 1&2", "TM-1 Utilisation", "%", "utilis", 1.0),
+    ("Sheet9", 51, 6, 7, "CRM 1&2", "TM-2 Utilisation", "%", "utilis", 1.0),
     # CRM 3 (Sheet11) — PLTCM Yield/Availability/Utilisation, SPM's "Yield
     # of CR Coil from HR Coil" (the material-in/material-out yield, not its
     # "Yield from Annealed Coil" process yield)/Availability/Utilisation.
-    ("Sheet11", 30, 5, 6, "CRM 3", "PLTCM Yield",             "%", "yield"),
-    ("Sheet11", 36, 5, 6, "CRM 3", "PLTCM Availability",      "%", "availab"),
-    ("Sheet11", 38, 5, 6, "CRM 3", "PLTCM Utilisation",       "%", "utilis"),
-    ("Sheet11", 44, 5, 6, "CRM 3", "SPM Yield of CR Coil",    "%", "yield of cr coil"),
-    ("Sheet11", 48, 5, 6, "CRM 3", "SPM Availability",        "%", "availab"),
-    ("Sheet11", 50, 5, 6, "CRM 3", "SPM Utilisation",         "%", "utilis"),
+    ("Sheet11", 30, 5, 6, "CRM 3", "PLTCM Yield",             "%", "yield", 1.0),
+    ("Sheet11", 36, 5, 6, "CRM 3", "PLTCM Availability",      "%", "availab", 1.0),
+    ("Sheet11", 38, 5, 6, "CRM 3", "PLTCM Utilisation",       "%", "utilis", 1.0),
+    ("Sheet11", 44, 5, 6, "CRM 3", "SPM Yield of CR Coil",    "%", "yield of cr coil", 1.0),
+    ("Sheet11", 48, 5, 6, "CRM 3", "SPM Availability",        "%", "availab", 1.0),
+    ("Sheet11", 50, 5, 6, "CRM 3", "SPM Utilisation",         "%", "utilis", 1.0),
     # CRM 3 — Specific Power Consumption. Row 26 ("POWER CONSUMPN/T OF
     # SAL.STEEL") was used previously, but per direct user correction that's
     # a plant-wide saleable-steel figure, not CRM 3's own — row 24 ("CR
     # SALEABLE (III)"), under the "POWER CONSUMPN. IN KWH/T OF" table, is the
     # actual CRM 3-specific figure.
-    ("Sheet1", 24, 6, 7, "CRM 3", "Specific Power Consumption", "kWh/t", "cr saleable (iii)"),
+    ("Sheet1", 24, 6, 7, "CRM 3", "Specific Power Consumption", "kWh/t", "cr saleable (iii)", 1.0),
 
     # HSM — Sp. Heat/Power Consumption. Previously read from Sheet8 (rows
     # 17/18), which per direct user correction don't hold these figures at
     # all — they're sub-items of Sheet1's plant-wide Heat/Power Consumption
     # tables: "SLAB AT R.H. FURNACE" (Heat) and "HR COIL + THICK PLATE"
-    # (Power), both under the "...CONSUMPN. IN .../T OF" header blocks.
-    ("Sheet1", 13, 6, 7, "HSM", "Heat Consumption",  "kcal/t", "slab at r.h"),
-    ("Sheet1", 21, 6, 7, "HSM", "Power Consumption", "kWh/t",  "hr coil + thick plate"),
+    # (Power), both under the "...CONSUMPN. IN .../T OF" header blocks. The
+    # sheet's own "G.CAL/T" header for the Heat table is per-mille of what
+    # the kcal/t unit needs (per direct user correction) — e.g. a sheet value
+    # of 0.412 is 412 kcal/t — so that row alone gets a x1000 multiplier.
+    ("Sheet1", 13, 6, 7, "HSM", "Heat Consumption",  "kcal/t", "slab at r.h", 1000.0),
+    ("Sheet1", 21, 6, 7, "HSM", "Power Consumption", "kWh/t",  "hr coil + thick plate", 1.0),
 ]
 
 
@@ -803,7 +807,7 @@ def _extract_crm_rows(wb, db_month: str) -> list:
     identity against its column-B label rather than trusting row position
     alone (same approach as _extract_hsm_rows)."""
     out = []
-    for i, (sheet, row, mon_col, cum_col, unit, param, unit_str, keyword) in enumerate(_CRM_ROWS):
+    for i, (sheet, row, mon_col, cum_col, unit, param, unit_str, keyword, mult) in enumerate(_CRM_ROWS):
         if sheet not in wb.sheetnames:
             logger.info("BSL techno: sheet %r not found — skipping %s/%s", sheet, unit, param)
             continue
@@ -820,8 +824,8 @@ def _extract_crm_rows(wb, db_month: str) -> list:
 
         actual_raw = _cell_float(ws, row, mon_col)
         cum_raw    = _cell_float(ws, row, cum_col)
-        actual = round(actual_raw, 4) if actual_raw is not None else None
-        cum    = round(cum_raw,    4) if cum_raw    is not None else None
+        actual = round(actual_raw * mult, 4) if actual_raw is not None else None
+        cum    = round(cum_raw    * mult, 4) if cum_raw    is not None else None
 
         out.append({
             "group_code": "MILL_BSL",
