@@ -18,7 +18,7 @@ _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
-from db import init_db, merge_upsert_techno_data, get_techno_data, get_techno_months, enrich_techno_records_with_db
+from db import init_db, merge_upsert_techno_data, get_techno_data, get_techno_months, enrich_techno_records_with_db, connect as db_connect
 
 router = APIRouter(prefix="/api/techno", tags=["unified-techno"])
 
@@ -379,19 +379,23 @@ async def preview_techno_months(
             from isp_technopara_extractor import IspTechnoExtractor
             extractor = IspTechnoExtractor(tmp.name)
             result = extractor.extract_available_months(upto_month)
-            per_month = {}
-            for rm, records in result["records_by_month"].items():
-                preview_records = [
-                    {"unit": rec["unit"], "techno_json": rec["techno_json"]}
-                    for rec in records
-                ]
-                enrich_techno_records_with_db(preview_records, plant, rm)
-                per_month[rm] = {
-                    "units_extracted": len(preview_records),
-                    "total_params": sum(len(r["techno_json"].get("month", {})) for r in preview_records),
-                    "records": preview_records,
-                }
-            return result, per_month
+            conn = db_connect()
+            try:
+                per_month = {}
+                for rm, records in result["records_by_month"].items():
+                    preview_records = [
+                        {"unit": rec["unit"], "techno_json": rec["techno_json"]}
+                        for rec in records
+                    ]
+                    enrich_techno_records_with_db(preview_records, plant, rm, conn=conn)
+                    per_month[rm] = {
+                        "units_extracted": len(preview_records),
+                        "total_params": sum(len(r["techno_json"].get("month", {})) for r in preview_records),
+                        "records": preview_records,
+                    }
+                return result, per_month
+            finally:
+                conn.close()
 
         result, per_month = await run_in_threadpool(_extract_and_enrich)
 
@@ -443,17 +447,20 @@ async def insert_techno_months(payload: dict):
         (rec.get("unit", "") for m in months for rec in m.get("records", [])),
     )
 
-    # A bulk save is ~10 units x however many months = dozens of individual,
-    # BLOCKING DB writes (merge_upsert_techno_data uses plain pymysql/sqlite3
-    # calls, no async) and can take tens of seconds. Running that directly
-    # in this async endpoint would freeze the single event loop for the
-    # whole duration, starving every other connection this worker holds —
-    # confirmed in practice as the real cause of "socket hang up"/ECONNRESET
-    # from the Next.js dev proxy: the DB writes kept completing successfully
-    # (verified against extraction_log) even as the client-facing connection
-    # was reported reset, because the backend was still "alive", just
-    # unresponsive. run_in_threadpool hands the blocking loop to a worker
-    # thread so the event loop — and thus this connection — stays live.
+    # A bulk save is ~10 units x however many months = dozens of individual
+    # writes. Confirmed by direct measurement: each merge_upsert_techno_data
+    # call opens 4-5 SEPARATE DB connections across its own call chain
+    # (merge_upsert_techno_data -> upsert_techno_data ->
+    # _raw_upsert_techno_data / _maybe_recompute_derived_params /
+    # _log_techno_save -> log_extraction), which for 120 units (12 months x
+    # 10 units) meant 500+ connection round-trips and a ~30 second request —
+    # long enough that the Next.js dev server's proxy reset the connection
+    # before the (successfully completing) response could get back to it,
+    # even after moving this work off the event loop (run_in_threadpool,
+    # below) confirmed the backend itself stayed responsive throughout.
+    # Reuse ONE connection for the whole batch via each function's optional
+    # `conn` parameter (see merge_upsert_techno_data's docstring) — every
+    # other caller of these functions omits `conn` and is unaffected.
     #
     # Also: a catch-all here (matching preview-months) so anything that
     # escapes the per-record try/except below still comes back as a JSON
@@ -461,24 +468,36 @@ async def insert_techno_months(payload: dict):
     # the frontend's res.json() previously choked on).
     def _save_all():
         init_db()
-        saved = {}
-        for m in months:
-            report_month = m["report_month"]
-            saved_count = 0
-            for rec in m.get("records", []):
-                try:
-                    merge_upsert_techno_data(
-                        plant=plant,
-                        report_month=report_month,
-                        unit=rec["unit"],
-                        new_techno_json=rec["techno_json"],
-                        source_file=source_file,
-                    )
-                    saved_count += 1
-                except Exception as e:
-                    print(f"Warning: Could not save {plant}/{report_month}/{rec.get('unit')}: {e}")
-            saved[report_month] = saved_count
-        return saved
+        conn = db_connect()
+        try:
+            saved = {}
+            for m in months:
+                report_month = m["report_month"]
+                saved_count = 0
+                for rec in m.get("records", []):
+                    try:
+                        merge_upsert_techno_data(
+                            plant=plant,
+                            report_month=report_month,
+                            unit=rec["unit"],
+                            new_techno_json=rec["techno_json"],
+                            source_file=source_file,
+                            conn=conn,
+                        )
+                        saved_count += 1
+                    except Exception as e:
+                        print(f"Warning: Could not save {plant}/{report_month}/{rec.get('unit')}: {e}")
+                # One commit per month rather than per unit-write (each
+                # commit is a full fsync on this DB — see
+                # _raw_upsert_techno_data's docstring) — cuts fsync count
+                # ~20x for a 10-unit month while still checkpointing
+                # progress periodically instead of one giant all-or-nothing
+                # transaction for the whole request.
+                conn.commit()
+                saved[report_month] = saved_count
+            return saved
+        finally:
+            conn.close()
 
     try:
         saved = await run_in_threadpool(_save_all)

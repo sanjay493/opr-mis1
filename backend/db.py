@@ -1080,17 +1080,24 @@ def save_techno_target(fy: str, param_id: int, target: Optional[float]):
 
 
 def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: str,
-                   source_type: str, items_extracted: int):
-    """Appends a record to the extraction audit log."""
+                   source_type: str, items_extracted: int, conn=None):
+    """Appends a record to the extraction audit log.
+
+    `conn`: see merge_upsert_techno_data's docstring — when reused, this
+    does NOT commit; the caller owns the transaction boundary (see
+    _raw_upsert_techno_data's docstring for why that matters here)."""
     init_db()
     from datetime import datetime
-    conn = connect()
+    owns_conn = conn is None
+    if owns_conn:
+        conn = connect()
     conn.execute("""
         INSERT INTO extraction_log (logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), plant, report_month, file_name, sheet_name, source_type, items_extracted))
-    conn.commit()
-    conn.close()
+    if owns_conn:
+        conn.commit()
+        conn.close()
 
 
 def get_pdf_item_aliases(plant: str) -> Dict[str, Any]:
@@ -1342,7 +1349,7 @@ def get_techno_sail_consolidated(report_month: str) -> Dict[str, Any]:
 # Techno Data helpers  (techno_data table — all plants)
 # ============================================================================
 
-def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
+def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = '', conn=None):
     """Bare INSERT/UPDATE with no post-save hooks — used by upsert_techno_data
     itself and by _maybe_recompute_derived_params (which must write its
     recomputed values without re-triggering itself).
@@ -1350,9 +1357,26 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
     This is the one function every techno_data write funnels through
     (extraction, manual entry, SAIL rollup, derived-param recompute), so it's
     the single hook point for activity-log old/new capture across all plant
-    techno routers."""
+    techno routers.
+
+    `conn`, if given, is reused instead of opening a fresh connection (and
+    left open for the caller to close) — see merge_upsert_techno_data's
+    docstring for why. Every other caller passes nothing and gets the
+    original open-write-close-per-call behavior, unchanged.
+
+    When `conn` is reused, this does NOT call conn.commit() — the caller
+    owns the transaction boundary and must commit explicitly. This matters:
+    this MySQL instance has innodb_flush_log_at_trx_commit=1 + sync_binlog=1
+    (full fsync-per-commit durability), measured at ~150ms per commit on
+    this machine — a bulk save that committed after every single write (as
+    this function did unconditionally before) spent most of its ~30 second
+    duration on fsyncs, not connection or query overhead. Batching many
+    writes under one commit (see /api/techno/insert-months) cuts that
+    proportionally without touching the server's durability settings."""
     init_db()
-    conn = connect()
+    owns_conn = conn is None
+    if owns_conn:
+        conn = connect()
     old = _row_dict(conn,
         "SELECT techno_json, source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
         (plant, report_month, unit))
@@ -1365,15 +1389,16 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
             source_file = excluded.source_file,
             created_at  = datetime('now')
     """, (plant, report_month, unit, json.dumps(techno_json), source_file))
-    conn.commit()
-    conn.close()
+    if owns_conn:
+        conn.commit()
+        conn.close()
     if old is not None:
         old = {**old, "techno_json": json.loads(old["techno_json"])}
     new = {"techno_json": techno_json, "source_file": source_file}
     activity_context.record(f"techno_data/{plant}/{unit}/{report_month}", old, new)
 
 
-def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = ''):
+def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = '', conn=None):
     """Insert or replace techno data for one plant/unit/month.
 
     SAIL's BF_Shop rollup is no longer auto-refreshed here on every
@@ -1382,13 +1407,15 @@ def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Di
     displayed, computed only when no row already exists in techno_data for
     plant='SAIL'. Call the /sail/calculate endpoint explicitly if you
     deliberately want to publish a calculated SAIL BF_Shop figure into the DB.
+
+    `conn`: see merge_upsert_techno_data's docstring.
     """
-    _raw_upsert_techno_data(plant, report_month, unit, techno_json, source_file)
-    _maybe_recompute_derived_params(plant, report_month, unit)
-    _log_techno_save(plant, report_month, unit, techno_json, source_file)
+    _raw_upsert_techno_data(plant, report_month, unit, techno_json, source_file, conn=conn)
+    _maybe_recompute_derived_params(plant, report_month, unit, conn=conn)
+    _log_techno_save(plant, report_month, unit, techno_json, source_file, conn=conn)
 
 
-def _log_techno_save(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str) -> None:
+def _log_techno_save(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str, conn=None) -> None:
     """Audit-log every techno_data save through the extraction_log table, the
     same table /upload's log panel reads — the /data-entry/techno page had no
     equivalent trail before this, since none of its API routers ever called
@@ -1404,6 +1431,7 @@ def _log_techno_save(plant: str, report_month: str, unit: str, techno_json: Dict
             sheet_name=unit,
             source_type="Techno Data",
             items_extracted=items,
+            conn=conn,
         )
     except Exception as e:
         print(f"[db] techno save logging failed for {plant}/{report_month}/{unit}: {e}")
@@ -1433,24 +1461,29 @@ _TMI_INPUT_KEYS = ("specific_hm_consumption", "specific_scrap_consumption")
 _FUEL_RATE_INPUT_KEYS = ("coke_rate", "cdi")  # nut_coke_rate optional, defaults to 0
 
 
-def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str) -> None:
+def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str, conn=None) -> None:
     """Recompute tmi/fuel_rate for this (plant, report_month, unit) from
     whatever inputs are currently stored, and overwrite the stored value if
     it differs. Writes via _raw_upsert_techno_data (never upsert_techno_data)
     so this cannot re-trigger itself; safe to call unconditionally after
-    every save since it's a no-op once the stored value already matches."""
+    every save since it's a no-op once the stored value already matches.
+
+    `conn`: see merge_upsert_techno_data's docstring."""
     try:
-        data = get_techno_data(plant, report_month, unit).get(unit, {})
+        data = get_techno_data(plant, report_month, unit, conn=conn).get(unit, {})
         if not data:
             return
-        conn = connect()
+        owns_conn = conn is None
+        if owns_conn:
+            conn = connect()
         cur = conn.cursor()
         cur.execute(
             "SELECT source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
             (plant, report_month, unit),
         )
         row = cur.fetchone()
-        conn.close()
+        if owns_conn:
+            conn.close()
         existing_source_file = row[0] if row else ''
 
         updated = {"month": dict(data.get("month", {})), "till_month": dict(data.get("till_month", {}))}
@@ -1472,7 +1505,7 @@ def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str) ->
                     d["fuel_rate"] = new_fuel
                     changed = True
         if changed:
-            _raw_upsert_techno_data(plant, report_month, unit, updated, source_file=existing_source_file)
+            _raw_upsert_techno_data(plant, report_month, unit, updated, source_file=existing_source_file, conn=conn)
     except Exception as e:
         print(f"[db] tmi/fuel_rate recompute failed for {plant}/{report_month}/{unit}: {e}")
 
@@ -1486,18 +1519,36 @@ def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str) ->
 _SAIL_BF_UNITS = ("BF_Shop", "BF-5")
 
 
-def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techno_json: Dict, source_file: str = ''):
+def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techno_json: Dict, source_file: str = '', conn=None):
     """Merge new_techno_json into any existing row (non-null values win; existing non-null kept if new value is null).
-    Use this when multiple source files contribute different parameters to the same plant/unit/month."""
+    Use this when multiple source files contribute different parameters to the same plant/unit/month.
+
+    `conn`: pass an already-open connection to reuse it for this call (and
+    every downstream upsert_techno_data/_raw_upsert_techno_data/
+    _maybe_recompute_derived_params/_log_techno_save/log_extraction call)
+    instead of opening a fresh one — the caller is then responsible for
+    closing it. Every one of those functions defaults to `conn=None` and
+    opens+closes its own connection exactly as before when not given one,
+    so this is purely additive: existing single-call sites are unaffected.
+    Added for bulk saves (dozens-to-hundreds of units in one request, e.g.
+    /api/techno/insert-months' 12-month "backfill" feature) — each unit-save
+    was opening 4-5 separate DB connections (one per SELECT/INSERT across
+    this whole call chain), which measured as the actual cause of a ~30
+    second request duration for a 12-month save; long enough that the
+    Next.js dev server's proxy was resetting the connection before the
+    (successfully completing) response could get back to it."""
     init_db()
-    conn = connect()
+    owns_conn = conn is None
+    if owns_conn:
+        conn = connect()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT techno_json FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
         [plant, report_month, unit],
     )
     row = cursor.fetchone()
-    conn.close()
+    if owns_conn:
+        conn.close()
 
     if row:
         existing = json.loads(row[0])
@@ -1512,7 +1563,7 @@ def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techn
     else:
         merged = new_techno_json
 
-    upsert_techno_data(plant, report_month, unit, merged, source_file)
+    upsert_techno_data(plant, report_month, unit, merged, source_file, conn=(conn if not owns_conn else None))
 
 
 def get_production_actual_value(plant: str, item_name: str, report_month: str) -> Optional[float]:
@@ -1552,24 +1603,36 @@ def enrich_rows_with_db_production(rows: List[Dict[str, Any]], plant: str, repor
     return rows
 
 
-def enrich_techno_records_with_db(records: List[Dict[str, Any]], plant: str, report_month: str) -> List[Dict[str, Any]]:
+def enrich_techno_records_with_db(records: List[Dict[str, Any]], plant: str, report_month: str, conn=None) -> List[Dict[str, Any]]:
     """Attach 'db_json' (current techno_data {month:{}, till_month:{}} for the
     same plant/unit/report_month, or empty dicts if none exists yet) to each
     preview record in-place. Used by techno upload preview endpoints so the UI
     can show DB-vs-extracted side by side, for both month and cumulative
-    values, before the user confirms the insert."""
+    values, before the user confirms the insert.
+
+    `conn`: see merge_upsert_techno_data's docstring — lets a multi-month
+    preview (e.g. /api/techno/preview-months) reuse one connection instead
+    of opening a fresh one per month."""
     if not records:
         return records
-    existing = get_techno_data(plant, report_month)
+    existing = get_techno_data(plant, report_month, conn=conn)
     for r in records:
         r["db_json"] = existing.get(r.get("unit"), {"month": {}, "till_month": {}})
     return records
 
 
-def get_techno_data(plant: str, report_month: str, unit: str = None) -> Dict:
-    """Return {unit: {month: {...}, till_month: {...}}} for a given plant/month."""
+def get_techno_data(plant: str, report_month: str, unit: str = None, conn=None) -> Dict:
+    """Return {unit: {month: {...}, till_month: {...}}} for a given plant/month.
+
+    `conn`: see merge_upsert_techno_data's docstring. When reusing a passed-in
+    connection, its row_factory is saved and restored afterward rather than
+    being permanently switched to sqlite3.Row, since a shared connection may
+    be reused by other callers (plain tuple rows) later in the same batch."""
     init_db()
-    conn = connect()
+    owns_conn = conn is None
+    if owns_conn:
+        conn = connect()
+    prev_factory = conn.row_factory
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1585,7 +1648,10 @@ def get_techno_data(plant: str, report_month: str, unit: str = None) -> Dict:
         )
 
     rows = cursor.fetchall()
-    conn.close()
+    if owns_conn:
+        conn.close()
+    else:
+        conn.row_factory = prev_factory
 
     result = {}
     for row in rows:
