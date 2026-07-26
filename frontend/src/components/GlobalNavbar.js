@@ -51,16 +51,28 @@ export default function GlobalNavbar() {
       icon: '📄',
       submenu: [
         { label: 'OMI Generate', link: '/report', icon: '📈' },
-        { label: 'Production Highlights', link: '/reports/highlights', icon: '✨' },
-        { label: 'Major Production (Month & Till Month)', link: '/reports/major-production', icon: '🏭' },
-        { label: 'New Facilities (Annexure-III)', link: '/reports/new-facilities', icon: '🆕' },
         { label: 'Month-wise Production', link: '/reports/production-fy', icon: '📅' },
         { label: 'Unit-wise Production Query', link: '/reports/production-query', icon: '🔍' },
-        { label: 'Production Records', link: '/records', icon: '📊' },
-        { label: 'JPC Monthly Report', link: '/reports/jpc-report', icon: '📋' },
         { label: 'Plant-wise Techno', link: '/reports/techno-monthly', icon: '⚙️' },
         { label: 'Techno Dashboard', link: '/reports/techno-dashboard', icon: '🔬' },
         { label: 'Techno Verification', link: '/reports/techno-verification', icon: '✅' }
+      ]
+    },
+    {
+      label: 'Highlights & Records',
+      icon: '🏆',
+      submenu: [
+        { label: 'Production Highlights', link: '/reports/highlights', icon: '✨' },
+        { label: 'Major Production (Month & Till Month)', link: '/reports/major-production', icon: '🏭' },
+        { label: 'Production Records', link: '/records', icon: '📊' },
+      ]
+    },
+    {
+      label: 'External Reports',
+      icon: '📮',
+      submenu: [
+        { label: 'New Facilities (Annexure-III)', link: '/reports/new-facilities', icon: '🆕' },
+        { label: 'JPC Monthly Report', link: '/reports/jpc-report', icon: '📋' },
       ]
     },
     {
