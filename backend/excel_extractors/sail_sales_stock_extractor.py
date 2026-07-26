@@ -9,13 +9,25 @@ techno tables already in this app (see page_one_page_report.py).
 
 Table A (Sales) — anchor row starts with 'A.' and contains 'SALES';
 row layout: label (col B) | .. | month ABP (D) | month Actual (E) |
-month %Ful (F, derived — not stored) | month CPLY Actual (G, not
-stored — comes from that month's own report a year later) | month
-growth (H, derived) | cum ABP (I) | cum Actual (J) | cum %Ful (K) |
-cum CPLY Actual (L) | cum growth (M). Only the month's own ABP/Actual
-(D/E) are stored — cumulative and CPLY are derived at generation time
-by summing whatever months are already stored, same convention as
-production_table/production_plan_table.
+month %Ful (F) | month CPLY Actual (G) | month growth (H) | cum ABP
+(I) | cum Actual (J) | cum %Ful (K) | cum CPLY Actual (L) | cum growth
+(M). ALL ten columns are stored verbatim, as a single JSON blob per
+(report_month, item) — this table is a pure archive of what the
+source department reported that month, not a computed view. Two
+reasons this matters:
+  1. We don't have — and can't assume we'll ever backfill — the prior
+     year's own report, so deriving CPLY/growth ourselves from our own
+     stored history would silently go blank instead of showing the
+     figure the department already computed and included.
+  2. The department's own cumulative (Apr-month) figures are
+     provisional and get revised between reports — they are NOT
+     reliably equal to summing each month's own individually-reported
+     Actual. Re-deriving "Apr-Jun" by summing Apr+May+Jun as separately
+     stored would produce a different number than what was actually
+     reported for Jun, silently diverging from the source.
+So: extract exactly what's on the row, store it exactly, and the
+generator (page_one_page_report.py) reads it back with zero
+recalculation.
 
 Table D (Stock - 8 Plants) — anchor row starts with 'D.' and contains
 'STOCK'; row layout: label (col B) | .. | one column per historical
@@ -35,8 +47,19 @@ _SALES_LABELS = [
 ]
 _STOCK_LABELS = ["PLANTS", "STOCKYARDS", "STOCK IN TRANSIT", "TOTAL"]
 
-_SALES_ABP_COL = 4    # D
-_SALES_ACT_COL = 5    # E
+# (json key, 1-based column) — verbatim columns for a Table A row
+_SALES_COLS = [
+    ("month_abp",         4),   # D
+    ("month_actual",      5),   # E
+    ("month_ful",         6),   # F
+    ("month_cply",        7),   # G
+    ("month_growth",      8),   # H
+    ("till_month_abp",    9),   # I
+    ("till_month_actual", 10),  # J
+    ("till_month_ful",    11),  # K
+    ("till_month_cply",   12),  # L
+    ("till_month_growth", 13),  # M
+]
 _STOCK_FIRST_DATA_COL = 4  # D onward
 
 _DATE_RE = re.compile(r'^(\d{1,2})\.(\d{1,2})\.(\d{2})$')
@@ -108,7 +131,12 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     Extract Table A (Sales) + Table D (Stock) from the SAIL 1-page report.
     Returns {"sales_rows": [...], "stock_rows": [...]} — no DB writes.
 
-    sales_rows: [{"item_name", "month_abp", "month_actual", "cell", "status"}]
+    sales_rows: [{"item_name", "data": {month_abp, month_actual, month_ful,
+                  month_cply, month_growth, till_month_abp, till_month_actual,
+                  till_month_ful, till_month_cply, till_month_growth},
+                  "cell", "status"}]
+        Every field in "data" is exactly what's in the source cell — no
+        %Ful/growth/cumulative is computed here (see the module docstring).
     stock_rows: [{"item_name", "snapshot_date" (YYYY-MM-DD), "value", "cell", "status"}]
     """
     grid = _load_grid(file_path)
@@ -125,20 +153,19 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
         label = _norm(_cell(grid, r, 2))
         if label in remaining:
             remaining.remove(label)
-            abp = _clean(_cell(grid, r, _SALES_ABP_COL))
-            act = _clean(_cell(grid, r, _SALES_ACT_COL))
+            data = {key: _clean(_cell(grid, r, col)) for key, col in _SALES_COLS}
             sales_rows.append({
                 "item_name": label.title(),
-                "month_abp": abp,
-                "month_actual": act,
+                "data": data,
                 "cell": f"row {r}",
-                "status": "ok" if (abp is not None or act is not None) else "skip",
+                "status": "ok" if any(v is not None for v in data.values()) else "skip",
             })
         if not remaining:
             break
     for label in remaining:
         sales_rows.append({
-            "item_name": label.title(), "month_abp": None, "month_actual": None,
+            "item_name": label.title(),
+            "data": {key: None for key, _ in _SALES_COLS},
             "cell": "", "status": "not found",
         })
 

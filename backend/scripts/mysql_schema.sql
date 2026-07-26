@@ -51,17 +51,14 @@ CREATE TABLE IF NOT EXISTS stock_table (
     PRIMARY KEY (stock_month, plant_name, item_type, stock_type)
 ) ENGINE=InnoDB;
 
+-- Pure archive of Table A (Sales) exactly as the source department
+-- reports it — data_json holds all 10 figures (month ABP/Actual/%Ful/
+-- CPLY/Growth + the same 5 for Apr-month cumulative), never computed
+-- or re-derived here (see excel_extractors/sail_sales_stock_extractor.py).
 CREATE TABLE IF NOT EXISTS sail_sales_table (
     report_month CHAR(7)      NOT NULL,
     item_name    VARCHAR(64)  NOT NULL,
-    month_actual DOUBLE,
-    PRIMARY KEY (report_month, item_name)
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS sail_sales_plan_table (
-    report_month CHAR(7)      NOT NULL,
-    item_name    VARCHAR(64)  NOT NULL,
-    month_actual DOUBLE,
+    data_json    JSON,
     PRIMARY KEY (report_month, item_name)
 ) ENGINE=InnoDB;
 

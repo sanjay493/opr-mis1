@@ -133,22 +133,18 @@ def init_db():
     """)
 
     # 6b. SAIL sales — Table A of the "1 page report" (LP/FP/PET sales,
-    # exports, etc.). Actual/plan split mirrors production_table's
-    # convention; cumulative and CPLY are derived at generation time by
-    # summing whatever months are already stored, not stored redundantly.
+    # exports, etc.). Pure archive: data_json holds all 10 figures the
+    # source department reports (month ABP/Actual/%Ful/CPLY/Growth, same
+    # 5 for Apr-month cumulative) exactly as given — nothing here is
+    # computed or re-derived, since the department's own cumulative
+    # figures are provisional and revise between reports, and we have no
+    # reliable way to reproduce their CPLY/growth from our own history.
+    # See excel_extractors/sail_sales_stock_extractor.py.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sail_sales_table (
             report_month TEXT,
             item_name    TEXT,
-            month_actual REAL,
-            PRIMARY KEY (report_month, item_name)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sail_sales_plan_table (
-            report_month TEXT,
-            item_name    TEXT,
-            month_actual REAL,
+            data_json    TEXT,
             PRIMARY KEY (report_month, item_name)
         )
     """)

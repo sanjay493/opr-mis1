@@ -2605,7 +2605,8 @@ async def sail_1page_preview(file: UploadFile = File(...), month: str = Form(...
 @app.post("/api/sail-1page/confirm")
 async def sail_1page_confirm(payload: dict):
     """Save user-confirmed Sales/Stock rows: sales_rows -> sail_sales_table
-    (+ sail_sales_plan_table for month_abp), stock_rows -> sail_stock_snapshot_table."""
+    (data_json, verbatim — see sail_sales_stock_extractor.py for why nothing
+    is computed), stock_rows -> sail_stock_snapshot_table."""
     month = payload.get("report_month")
     if not month:
         raise HTTPException(status_code=400, detail="report_month is required")
@@ -2616,22 +2617,15 @@ async def sail_1page_confirm(payload: dict):
         saved_sales = saved_stock = 0
         for r in payload.get("sales_rows", []):
             item = r.get("item_name")
-            if not item:
+            data = r.get("data")
+            if not item or not data or all(v is None for v in data.values()):
                 continue
-            if r.get("month_abp") is not None:
-                cur.execute("""
-                    INSERT INTO sail_sales_plan_table (report_month, item_name, month_actual)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(report_month, item_name) DO UPDATE SET month_actual = excluded.month_actual
-                """, (month, item, r["month_abp"]))
-                saved_sales += 1
-            if r.get("month_actual") is not None:
-                cur.execute("""
-                    INSERT INTO sail_sales_table (report_month, item_name, month_actual)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(report_month, item_name) DO UPDATE SET month_actual = excluded.month_actual
-                """, (month, item, r["month_actual"]))
-                saved_sales += 1
+            cur.execute("""
+                INSERT INTO sail_sales_table (report_month, item_name, data_json)
+                VALUES (?, ?, ?)
+                ON CONFLICT(report_month, item_name) DO UPDATE SET data_json = excluded.data_json
+            """, (month, item, json.dumps(data)))
+            saved_sales += 1
 
         for r in payload.get("stock_rows", []):
             item = r.get("item_name")

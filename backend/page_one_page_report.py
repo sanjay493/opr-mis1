@@ -2,9 +2,14 @@
 SAIL "1 page report" (Report_format/1 page report for Jun26.xlsx format) —
 combines 4 tables into one workbook for a selected report_month:
 
-  A. Sales             — sail_sales_table / sail_sales_plan_table
-                          (extracted from the external Sales report —
-                          see excel_extractors/sail_sales_stock_extractor.py)
+  A. Sales             — sail_sales_table (data_json, verbatim archive —
+                          extracted from the external Sales report, see
+                          excel_extractors/sail_sales_stock_extractor.py;
+                          every figure here — including %Ful/CPLY/Growth/
+                          cumulative — is read back exactly as reported,
+                          never recomputed, since the source department's
+                          own cumulative figures are provisional and don't
+                          reliably equal summing each month's own Actual)
   B. Production         — production_table / production_plan_table
                           (Hot Metal / Crude Steel / Saleable Steel, same
                           source as page4.py's Crude Steel Production page)
@@ -68,11 +73,16 @@ _SALES_ITEMS = [
 ]
 
 
-def _sales_one(cur, table, item, month):
-    tbl = "sail_sales_table" if table == "act" else "sail_sales_plan_table"
-    cur.execute(f"SELECT month_actual FROM {tbl} WHERE report_month=? AND item_name=?", (month, item))
+def _sales_data(cur, item, month):
+    """Raw data_json for one (report_month, item) — every field exactly as
+    the source department reported it, no computation. None if not extracted."""
+    import json
+    cur.execute("SELECT data_json FROM sail_sales_table WHERE report_month=? AND item_name=?", (month, item))
     r = cur.fetchone()
-    return r[0] if r and r[0] is not None else None
+    if not r or not r[0]:
+        return {}
+    data = r[0] if isinstance(r[0], dict) else json.loads(r[0])
+    return data or {}
 
 
 def _sum_months(getter, months):
@@ -85,19 +95,21 @@ def _sum_months(getter, months):
     return round(total, 3) if found else None
 
 
-def _build_sales_rows(cur, month, cply_month, ytd_months, cply_ytd_months):
+def _build_sales_rows(cur, month):
+    """Table A rows, read back verbatim — no CPLY/cumulative lookups or
+    summation across months; this month's own report already carries
+    everything (see sail_sales_stock_extractor.py's module docstring)."""
     rows = []
     for item in _SALES_ITEMS:
-        m_abp = _sales_one(cur, "plan", item, month)
-        m_act = _sales_one(cur, "act", item, month)
-        m_cply = _sales_one(cur, "act", item, cply_month)
-        c_abp = _sum_months(lambda mo: _sales_one(cur, "plan", item, mo), ytd_months)
-        c_act = _sum_months(lambda mo: _sales_one(cur, "act", item, mo), ytd_months)
-        c_cply = _sum_months(lambda mo: _sales_one(cur, "act", item, mo), cply_ytd_months)
+        d = _sales_data(cur, item, month)
         rows.append({
             "label": item, "bold": item.upper().startswith("TOTAL"),
-            "m_abp": m_abp, "m_act": m_act, "m_cply": m_cply,
-            "c_abp": c_abp, "c_act": c_act, "c_cply": c_cply,
+            "m_abp": d.get("month_abp"), "m_act": d.get("month_actual"),
+            "m_ful": d.get("month_ful"), "m_cply": d.get("month_cply"),
+            "m_growth": d.get("month_growth"),
+            "c_abp": d.get("till_month_abp"), "c_act": d.get("till_month_actual"),
+            "c_ful": d.get("till_month_ful"), "c_cply": d.get("till_month_cply"),
+            "c_growth": d.get("till_month_growth"),
         })
     return rows
 
@@ -321,11 +333,11 @@ _THIN = Side(style="thin", color="B0B0B0")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
 
-def _num_cell(ws, row, col, value, bold=False, pct=False):
+def _num_cell(ws, row, col, value, bold=False, pct=False, frac_pct=False):
     c = ws.cell(row=row, column=col)
     if value is not None:
         c.value = value
-        c.number_format = "0.0" if pct else "0.000"
+        c.number_format = "0.0%" if frac_pct else ("0.0" if pct else "0.000")
     c.border = _BORDER
     c.alignment = Alignment(horizontal="right")
     if bold:
@@ -356,7 +368,7 @@ def build_one_page_workbook(report_month: str):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        sales_rows = _build_sales_rows(cur, report_month, cply_month, ytd_months, cply_ytd_months)
+        sales_rows = _build_sales_rows(cur, report_month)
         prod_rows = _build_production_rows(cur, report_month, cply_month, ytd_months, cply_ytd_months)
         techno_rows = _build_techno_rows(report_month)
         stock = _build_stock_table(cur, report_month)
@@ -405,9 +417,28 @@ def build_one_page_workbook(report_month: str):
         _num_cell(ws, row, 11, _gr(c_act, c_cply), bold=bold, pct=True)
         row += 1
 
+    def write_sales_row(r):
+        # Every value here — including %Ful/Growth — is written back exactly
+        # as the source department reported it; nothing is computed (see
+        # sail_sales_stock_extractor.py). %Ful/Growth are stored as raw
+        # fractions (0.81, not 81), so they're formatted as Excel percentages
+        # rather than rescaled.
+        nonlocal row
+        _label_cell(ws, row, 1, r["label"], indent=1, bold=r["bold"])
+        _num_cell(ws, row, 2, r["m_abp"], bold=r["bold"])
+        _num_cell(ws, row, 3, r["m_act"], bold=r["bold"])
+        _num_cell(ws, row, 4, r["m_ful"], bold=r["bold"], frac_pct=True)
+        _num_cell(ws, row, 5, r["m_cply"], bold=r["bold"])
+        _num_cell(ws, row, 6, r["m_growth"], bold=r["bold"], frac_pct=True)
+        _num_cell(ws, row, 7, r["c_abp"], bold=r["bold"])
+        _num_cell(ws, row, 8, r["c_act"], bold=r["bold"])
+        _num_cell(ws, row, 9, r["c_ful"], bold=r["bold"], frac_pct=True)
+        _num_cell(ws, row, 10, r["c_cply"], bold=r["bold"])
+        _num_cell(ws, row, 11, r["c_growth"], bold=r["bold"], frac_pct=True)
+        row += 1
+
     for r in sales_rows:
-        write_metric_row(r["label"], r["m_abp"], r["m_act"], r["m_cply"],
-                         r["c_abp"], r["c_act"], r["c_cply"], indent=1, bold=r["bold"])
+        write_sales_row(r)
 
     row += 1
     _section_header(ws, row, "B. PRODUCTION ['000 T]", 11)

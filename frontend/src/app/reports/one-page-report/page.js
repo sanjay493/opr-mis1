@@ -224,27 +224,49 @@ export default function OnePageReportPage() {
               </div>
             )}
 
-            <div style={{ fontSize: '10.5pt', fontWeight: 700, marginBottom: '8px' }}>Sales</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt', marginBottom: '20px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#e8f0fe' }}>
-                  <th style={{ textAlign: 'left', padding: '6px 10px' }}>Item</th>
-                  <th style={{ textAlign: 'right', padding: '6px 10px' }}>ABP</th>
-                  <th style={{ textAlign: 'right', padding: '6px 10px' }}>Actual</th>
-                  <th style={{ textAlign: 'left', padding: '6px 10px' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.sales_rows.map((r) => (
-                  <tr key={r.item_name} style={{ borderBottom: '1px solid #e8eaed' }}>
-                    <td style={{ padding: '5px 10px' }}>{r.item_name}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'right' }}>{fmt(r.month_abp)}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'right' }}>{fmt(r.month_actual)}</td>
-                    <td style={{ padding: '5px 10px', color: r.status === 'ok' ? '#137333' : '#c5221f' }}>{r.status}</td>
+            <div style={{ fontSize: '10.5pt', fontWeight: 700, marginBottom: '4px' }}>Sales</div>
+            <p style={{ fontSize: '9.5pt', color: '#9aa0a6', marginTop: 0, marginBottom: '8px' }}>
+              Every column is stored exactly as extracted — %Ful, CPLY and Growth are the
+              department&#39;s own reported figures, not recalculated here.
+            </p>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5pt', marginBottom: '20px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#e8f0fe' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 8px' }}>Item</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Month ABP</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Month Actual</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>% Ful</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>CPLY</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>% Gr.</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Cum ABP</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Cum Actual</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Cum % Ful</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Cum CPLY</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Cum % Gr.</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px' }}>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {preview.sales_rows.map((r) => (
+                    <tr key={r.item_name} style={{ borderBottom: '1px solid #e8eaed' }}>
+                      <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{r.item_name}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.month_abp)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.month_actual)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.month_ful)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.month_cply)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.month_growth)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.till_month_abp)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.till_month_actual)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.till_month_ful)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.till_month_cply)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(r.data?.till_month_growth)}</td>
+                      <td style={{ padding: '5px 8px', color: r.status === 'ok' ? '#137333' : '#c5221f' }}>{r.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             <div style={{ fontSize: '10.5pt', fontWeight: 700, marginBottom: '8px' }}>
               Stock ({preview.stock_rows.length} snapshot values)
