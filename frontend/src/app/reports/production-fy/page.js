@@ -46,6 +46,7 @@ export default function ProductionFYPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [downloading, setDownloading] = useState(null); // 'excel' | 'pdf' | null
 
   useEffect(() => {
     fetch(`${API_BASE}/api/production-fys`)
@@ -73,6 +74,33 @@ export default function ProductionFYPage() {
       .catch((e) => setError(`Failed to load production data: ${e.message}`))
       .finally(() => setLoading(false));
   }, [fyStart]);
+
+  const handleDownload = async (kind) => {
+    if (!fyStart) return;
+    setDownloading(kind);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/production-fy/${kind}?fy_start=${fyStart}&mode=${mode}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const fyLabel = fys.find((fy) => fy.fy_start === fyStart)?.label || String(fyStart);
+      a.download = `Production_${fyLabel}_${mode}.${kind === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(`Download failed: ${e.message}`);
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const months = data?.months || [];
 
@@ -172,6 +200,44 @@ export default function ProductionFYPage() {
                 {m === 'actual' ? 'Actual' : 'Plan'}
               </button>
             ))}
+          </div>
+
+          {/* Download buttons */}
+          <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
+            <button
+              onClick={() => handleDownload('excel')}
+              disabled={!fyStart || downloading !== null}
+              style={{
+                padding: '8px 18px',
+                fontSize: '10.5pt',
+                fontWeight: 700,
+                border: '1px solid #1a73e8',
+                borderRadius: '6px',
+                cursor: !fyStart || downloading !== null ? 'not-allowed' : 'pointer',
+                backgroundColor: '#ffffff',
+                color: downloading !== null ? '#9aa0a6' : '#1a73e8',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {downloading === 'excel' ? 'Generating…' : '⬇ Excel'}
+            </button>
+            <button
+              onClick={() => handleDownload('pdf')}
+              disabled={!fyStart || downloading !== null}
+              style={{
+                padding: '8px 18px',
+                fontSize: '10.5pt',
+                fontWeight: 700,
+                border: '1px solid #1a73e8',
+                borderRadius: '6px',
+                cursor: !fyStart || downloading !== null ? 'not-allowed' : 'pointer',
+                backgroundColor: '#ffffff',
+                color: downloading !== null ? '#9aa0a6' : '#1a73e8',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {downloading === 'pdf' ? 'Generating…' : '⬇ PDF'}
+            </button>
           </div>
 
           {loading && <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>Loading…</span>}

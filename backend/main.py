@@ -32,6 +32,7 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           calculate_sail_actuals_strict, _BF_PLANTS as _SAIL_DASHBOARD_PLANTS)
 from page_records import generate_records
 from page_jpc_report import build_jpc_report_bytes
+import page_production_fy_export
 
 def _safe_te_table(month):
     try:
@@ -2479,10 +2480,10 @@ async def list_production_fys():
     }
 
 
-@app.get("/api/production-fy")
-async def get_production_fy(fy_start: int = Query(...)):
+def _production_fy_data(fy_start: int) -> dict:
     """Month-wise production for a financial year: all plants, all items,
-    actual and plan side by side."""
+    actual and plan side by side. Shared by the JSON endpoint and the
+    Excel/PDF export endpoints below."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
     phs = ",".join("?" for _ in months)
@@ -2527,6 +2528,43 @@ async def get_production_fy(fy_start: int = Query(...)):
         "months": months,
         "plants": plants,
     }
+
+
+@app.get("/api/production-fy")
+async def get_production_fy(fy_start: int = Query(...)):
+    return _production_fy_data(fy_start)
+
+
+@app.get("/api/production-fy/excel")
+async def production_fy_excel(fy_start: int = Query(...), mode: str = Query("actual")):
+    if mode not in ("actual", "plan"):
+        raise HTTPException(status_code=400, detail="mode must be 'actual' or 'plan'")
+    data = _production_fy_data(fy_start)
+    content = page_production_fy_export.build_excel_bytes(data, mode)
+    fname = f"Production_{data['fy_label']}_{mode}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.get("/api/production-fy/pdf")
+async def production_fy_pdf(fy_start: int = Query(...), mode: str = Query("actual")):
+    if mode not in ("actual", "plan"):
+        raise HTTPException(status_code=400, detail="mode must be 'actual' or 'plan'")
+    import asyncio, concurrent.futures
+    data = _production_fy_data(fy_start)
+    html = page_production_fy_export.build_pdf_html(data, mode)
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        content = await loop.run_in_executor(pool, page_production_fy_export.render_pdf_bytes, html)
+    fname = f"Production_{data['fy_label']}_{mode}.pdf"
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @app.get("/api/production-query-meta")
