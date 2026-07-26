@@ -236,6 +236,11 @@ _TECHNO_DISPLAY = {
     "Specific Energy Consumption": "ENERGY CONSUMPTION (G Cal/TCS)",
     "BF Productivity": "BF PRODUCTIVITY (T/CuM/Day)",
 }
+_TECHNO_FMT = {
+    "Coke Rate": "0",
+    "Specific Energy Consumption": "0.00",
+    "BF Productivity": "0.00",
+}
 
 
 def _num(v):
@@ -262,7 +267,7 @@ def _build_techno_rows(month):
         m_imp = round((m_cply - m_act) / m_cply * 100, 1) if m_act is not None and m_cply else None
         c_imp = round((c_cply - c_act) / c_cply * 100, 1) if c_act is not None and c_cply else None
         rows.append({
-            "label": _TECHNO_DISPLAY[param], "abp": abp,
+            "label": _TECHNO_DISPLAY[param], "fmt": _TECHNO_FMT[param], "abp": abp,
             "m_act": m_act, "m_cply": m_cply, "m_imp": m_imp,
             "c_act": c_act, "c_cply": c_cply, "c_imp": c_imp,
         })
@@ -333,11 +338,14 @@ _THIN = Side(style="thin", color="B0B0B0")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
 
-def _num_cell(ws, row, col, value, bold=False, pct=False, frac_pct=False):
+def _num_cell(ws, row, col, value, bold=False, pct=False, frac_pct=False, fmt=None):
     c = ws.cell(row=row, column=col)
     if value is not None:
         c.value = value
-        c.number_format = "0.0%" if frac_pct else ("0.0" if pct else "0.000")
+        if fmt is not None:
+            c.number_format = fmt
+        else:
+            c.number_format = "0.0%" if frac_pct else ("0.0" if pct else "0.000")
     c.border = _BORDER
     c.alignment = Alignment(horizontal="right")
     if bold:
@@ -405,15 +413,15 @@ def build_one_page_workbook(report_month: str):
     def write_metric_row(label, m_abp, m_act, m_cply, c_abp, c_act, c_cply, indent=1, bold=False):
         nonlocal row
         _label_cell(ws, row, 1, label, indent=indent, bold=bold)
-        _num_cell(ws, row, 2, m_abp, bold=bold)
-        _num_cell(ws, row, 3, m_act, bold=bold)
+        _num_cell(ws, row, 2, m_abp, bold=bold, fmt="0")
+        _num_cell(ws, row, 3, m_act, bold=bold, fmt="0")
         _num_cell(ws, row, 4, _pct_ful(m_act, m_abp), bold=bold, pct=True)
-        _num_cell(ws, row, 5, m_cply, bold=bold)
+        _num_cell(ws, row, 5, m_cply, bold=bold, fmt="0")
         _num_cell(ws, row, 6, _gr(m_act, m_cply), bold=bold, pct=True)
-        _num_cell(ws, row, 7, c_abp, bold=bold)
-        _num_cell(ws, row, 8, c_act, bold=bold)
+        _num_cell(ws, row, 7, c_abp, bold=bold, fmt="0")
+        _num_cell(ws, row, 8, c_act, bold=bold, fmt="0")
         _num_cell(ws, row, 9, _pct_ful(c_act, c_abp), bold=bold, pct=True)
-        _num_cell(ws, row, 10, c_cply, bold=bold)
+        _num_cell(ws, row, 10, c_cply, bold=bold, fmt="0")
         _num_cell(ws, row, 11, _gr(c_act, c_cply), bold=bold, pct=True)
         row += 1
 
@@ -425,15 +433,15 @@ def build_one_page_workbook(report_month: str):
         # rather than rescaled.
         nonlocal row
         _label_cell(ws, row, 1, r["label"], indent=1, bold=r["bold"])
-        _num_cell(ws, row, 2, r["m_abp"], bold=r["bold"])
-        _num_cell(ws, row, 3, r["m_act"], bold=r["bold"])
+        _num_cell(ws, row, 2, r["m_abp"], bold=r["bold"], fmt="0")
+        _num_cell(ws, row, 3, r["m_act"], bold=r["bold"], fmt="0")
         _num_cell(ws, row, 4, r["m_ful"], bold=r["bold"], frac_pct=True)
-        _num_cell(ws, row, 5, r["m_cply"], bold=r["bold"])
+        _num_cell(ws, row, 5, r["m_cply"], bold=r["bold"], fmt="0")
         _num_cell(ws, row, 6, r["m_growth"], bold=r["bold"], frac_pct=True)
-        _num_cell(ws, row, 7, r["c_abp"], bold=r["bold"])
-        _num_cell(ws, row, 8, r["c_act"], bold=r["bold"])
+        _num_cell(ws, row, 7, r["c_abp"], bold=r["bold"], fmt="0")
+        _num_cell(ws, row, 8, r["c_act"], bold=r["bold"], fmt="0")
         _num_cell(ws, row, 9, r["c_ful"], bold=r["bold"], frac_pct=True)
-        _num_cell(ws, row, 10, r["c_cply"], bold=r["bold"])
+        _num_cell(ws, row, 10, r["c_cply"], bold=r["bold"], fmt="0")
         _num_cell(ws, row, 11, r["c_growth"], bold=r["bold"], frac_pct=True)
         row += 1
 
@@ -473,12 +481,12 @@ def build_one_page_workbook(report_month: str):
     row += 1
     for r in techno_rows:
         _label_cell(ws, row, 1, r["label"], indent=1)
-        _num_cell(ws, row, 2, r["abp"])
-        _num_cell(ws, row, 3, r["m_act"])
-        _num_cell(ws, row, 4, r["m_cply"])
+        _num_cell(ws, row, 2, r["abp"], fmt=r["fmt"])
+        _num_cell(ws, row, 3, r["m_act"], fmt=r["fmt"])
+        _num_cell(ws, row, 4, r["m_cply"], fmt=r["fmt"])
         _num_cell(ws, row, 5, r["m_imp"], pct=True)
-        _num_cell(ws, row, 6, r["c_act"])
-        _num_cell(ws, row, 7, r["c_cply"])
+        _num_cell(ws, row, 6, r["c_act"], fmt=r["fmt"])
+        _num_cell(ws, row, 7, r["c_cply"], fmt=r["fmt"])
         _num_cell(ws, row, 8, r["c_imp"], pct=True)
         row += 1
 
@@ -504,8 +512,8 @@ def build_one_page_workbook(report_month: str):
     for r in stock["rows"]:
         _label_cell(ws, row, 1, r["label"], indent=1, bold=r["bold"])
         for i, v in enumerate(r["values"], start=2):
-            _num_cell(ws, row, i, v, bold=r["bold"])
-        _num_cell(ws, row, var_col, r["var"], bold=r["bold"])
+            _num_cell(ws, row, i, v, bold=r["bold"], fmt="0")
+        _num_cell(ws, row, var_col, r["var"], bold=r["bold"], fmt="0")
         row += 1
 
     row += 1
