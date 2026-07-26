@@ -33,6 +33,7 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
 from page_records import generate_records
 from page_jpc_report import build_jpc_report_bytes
 import page_production_fy_export
+from page_one_page_report import build_one_page_report_bytes
 
 def _safe_te_table(month):
     try:
@@ -2565,6 +2566,108 @@ async def production_fy_pdf(fy_start: int = Query(...), mode: str = Query("actua
         content=content,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# SAIL "1 page report" — Table A (Sales) / Table D (Stock) extraction
+# ---------------------------------------------------------------------------
+
+@app.post("/api/sail-1page/preview")
+async def sail_1page_preview(file: UploadFile = File(...), month: str = Form(...)):
+    """Extract Sales + Stock tables from a SAIL 1-page-report workbook for
+    review. Returns previews only — nothing is written to the DB."""
+    import shutil, tempfile, sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename)[1]
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+        import sail_sales_stock_extractor as _sss_mod
+        return _sss_mod.extract_preview(tmp_path, month)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {type(e).__name__}: {e}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+@app.post("/api/sail-1page/confirm")
+async def sail_1page_confirm(payload: dict):
+    """Save user-confirmed Sales/Stock rows: sales_rows -> sail_sales_table
+    (+ sail_sales_plan_table for month_abp), stock_rows -> sail_stock_snapshot_table."""
+    month = payload.get("report_month")
+    if not month:
+        raise HTTPException(status_code=400, detail="report_month is required")
+
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        saved_sales = saved_stock = 0
+        for r in payload.get("sales_rows", []):
+            item = r.get("item_name")
+            if not item:
+                continue
+            if r.get("month_abp") is not None:
+                cur.execute("""
+                    INSERT INTO sail_sales_plan_table (report_month, item_name, month_actual)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(report_month, item_name) DO UPDATE SET month_actual = excluded.month_actual
+                """, (month, item, r["month_abp"]))
+                saved_sales += 1
+            if r.get("month_actual") is not None:
+                cur.execute("""
+                    INSERT INTO sail_sales_table (report_month, item_name, month_actual)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(report_month, item_name) DO UPDATE SET month_actual = excluded.month_actual
+                """, (month, item, r["month_actual"]))
+                saved_sales += 1
+
+        for r in payload.get("stock_rows", []):
+            item = r.get("item_name")
+            snap = r.get("snapshot_date")
+            val = r.get("value")
+            if not item or not snap or val is None:
+                continue
+            cur.execute("""
+                INSERT INTO sail_stock_snapshot_table (snapshot_date, item_name, value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(snapshot_date, item_name) DO UPDATE SET value = excluded.value
+            """, (snap, item, val))
+            saved_stock += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+    return {"saved_sales": saved_sales, "saved_stock": saved_stock}
+
+
+@app.get("/api/sail-1page-report")
+async def sail_1page_report(month: str = Query(...)):
+    """Download the combined SAIL '1 page report' (.xlsx) — Sales (Table A)
+    and Stock (Table D) from sail_sales_table/sail_stock_snapshot_table
+    (see /api/sail-1page/confirm), Production (Table B) and Techno-Economic
+    Parameters (Table C) computed fresh from production_table/techno data."""
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    try:
+        content = build_one_page_report_bytes(month)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"1-page report generation failed: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="1_page_report_{month}.xlsx"'},
     )
 
 

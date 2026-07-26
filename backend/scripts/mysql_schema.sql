@@ -51,6 +51,27 @@ CREATE TABLE IF NOT EXISTS stock_table (
     PRIMARY KEY (stock_month, plant_name, item_type, stock_type)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS sail_sales_table (
+    report_month CHAR(7)      NOT NULL,
+    item_name    VARCHAR(64)  NOT NULL,
+    month_actual DOUBLE,
+    PRIMARY KEY (report_month, item_name)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS sail_sales_plan_table (
+    report_month CHAR(7)      NOT NULL,
+    item_name    VARCHAR(64)  NOT NULL,
+    month_actual DOUBLE,
+    PRIMARY KEY (report_month, item_name)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS sail_stock_snapshot_table (
+    snapshot_date CHAR(10)    NOT NULL,
+    item_name     VARCHAR(32) NOT NULL,
+    value         DOUBLE,
+    PRIMARY KEY (snapshot_date, item_name)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS ipt_table (
     report_month CHAR(7)     NOT NULL,
     item         VARCHAR(64) NOT NULL,

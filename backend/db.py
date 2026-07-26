@@ -132,6 +132,40 @@ def init_db():
         )
     """)
 
+    # 6b. SAIL sales — Table A of the "1 page report" (LP/FP/PET sales,
+    # exports, etc.). Actual/plan split mirrors production_table's
+    # convention; cumulative and CPLY are derived at generation time by
+    # summing whatever months are already stored, not stored redundantly.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sail_sales_table (
+            report_month TEXT,
+            item_name    TEXT,
+            month_actual REAL,
+            PRIMARY KEY (report_month, item_name)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sail_sales_plan_table (
+            report_month TEXT,
+            item_name    TEXT,
+            month_actual REAL,
+            PRIMARY KEY (report_month, item_name)
+        )
+    """)
+
+    # 6c. SAIL stock snapshot — Table D of the "1 page report" (Plants /
+    # Stockyards / Stock in Transit / Total, '000T). Keyed by the report's
+    # own snapshot date, not report_month — a single upload backfills
+    # several years of history at once (see sail_sales_stock_extractor.py).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sail_stock_snapshot_table (
+            snapshot_date TEXT,               -- 'YYYY-MM-DD'
+            item_name     TEXT,               -- Plants / Stockyards / Stock In Transit / Total
+            value         REAL,
+            PRIMARY KEY (snapshot_date, item_name)
+        )
+    """)
+
     # 7. Inter-Plant Transfer (IPT) plan vs actual, per route per month
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ipt_table (
