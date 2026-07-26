@@ -2275,7 +2275,7 @@ _TECHNO_DB_SCHEMA = {
             # (bof_slag_utilisation — BOF/LD are the same converter route).
             ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons"),          ("SMS", "ld_slag_cons"),          ("General", "bof_slag_utilisation")]),
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
-            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
+            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-3", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
             ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF-6", "hot_blast_temp"), ("BF-7", "hot_blast_temp"), ("BF-8", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
             ("Oxygen Enrichment",   "%",         [("BF-1", "o2_enrichment"), ("BF-2", "o2_enrichment"), ("BF-3", "o2_enrichment"), ("BF-4", "o2_enrichment"), ("BF-5", "o2_enrichment"), ("BF-6", "o2_enrichment"), ("BF-7", "o2_enrichment"), ("BF-8", "o2_enrichment"), ("BF_Shop", "o2_enrichment")]),
             # Plant-wise (shop-level), not furnace-wise - unlike CDI/Hot Blast
