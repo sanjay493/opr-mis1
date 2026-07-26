@@ -6,7 +6,7 @@ import re
 import sqlite3
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -31,6 +31,7 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_major_techno_verification, generate_techno_target_columns,
                           calculate_sail_actuals_strict, _BF_PLANTS as _SAIL_DASHBOARD_PLANTS)
 from page_records import generate_records
+from page_jpc_report import build_jpc_report_bytes
 
 def _safe_te_table(month):
     try:
@@ -2677,6 +2678,25 @@ async def production_query(payload: dict):
                         s[key][month] = round(member_sums[key][(item, month)], 3)
 
     return {"months": months, "series": series}
+
+
+@app.get("/api/jpc-report")
+async def jpc_report(month: str = Query(...)):
+    """Download the monthly JPC report (.xlsx) — Pmix report, spl stl Report,
+    Sinter and MoU report sheets, month Actual vs CPLY Actual, built from
+    production_table. See page_jpc_report.py for exactly which items are
+    populated vs left blank (no DB source yet)."""
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    try:
+        content = build_jpc_report_bytes(month)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"JPC report generation failed: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="JPC_report_{month}.xlsx"'},
+    )
 
 
 @app.get("/api/stock-data")
