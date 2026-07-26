@@ -31,11 +31,54 @@ Values are in Tonnes in the PDF → stored as '000T (÷ 1000).
 import os
 import re
 import sys
+from datetime import date
 
 PLANT = "SSP"
 
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
            "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+
+_DATE_RE = re.compile(r'REPORT\s+FOR\s+(\d{1,2})[/.](\d{1,2})[/.](\d{4})', re.I)
+
+
+def _detect_month_from_pdf_text(full_text: str):
+    """Detect 'YYYY-MM' from the report's own 'DAILY PRODUCTION REPORT FOR
+    DD/MM/YYYY' header line. That date is always the LAST day of the month
+    the cumulative ('Cum Actual') figures belong to (e.g. a report headed
+    30/06/2026 holds June's cumulative data) — it has nothing to do with
+    the filename, which instead carries the date the report was issued
+    (typically the 1st of the *next* month, e.g. 'DPR-01.07.2026.pdf' for
+    June's data). Returns None if not found, since a missing signal
+    shouldn't block extraction, only a genuine mismatch should."""
+    m = _DATE_RE.search(full_text[:400])
+    if not m:
+        return None
+    d, mo, y = (int(g) for g in m.groups())
+    try:
+        date(y, mo, d)
+    except ValueError:
+        return None
+    return f"{y}-{mo:02d}"
+
+
+def _fmt_month(ym: str) -> str:
+    try:
+        y, mo = ym[:4], int(ym[5:7])
+        return f"{_MONTHS[mo - 1].title()} {y}"
+    except Exception:
+        return ym
+
+
+def _assert_month_match(detected, user_month: str) -> None:
+    if detected and detected != user_month:
+        raise ValueError(
+            f"Month mismatch: this SSP DPR's own header shows "
+            f"{_fmt_month(detected)} (the report date is that month's last "
+            f"day), but you selected {_fmt_month(user_month)}. Please "
+            f"select '{_fmt_month(detected)}' in the month picker, or "
+            f"upload the report for {_fmt_month(user_month)}."
+        )
+
 
 _SECTION_ANCHORS = [
     ("unitwise",   re.compile(r'^1\.0\s+UNITWISE', re.I)),
@@ -145,6 +188,10 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
 
     full_text, n_pages = _load_pdf_text(file_path)
     print(f"[SSP PDF] Loaded {n_pages} pages, {len(full_text)} chars", flush=True, file=sys.stderr)
+
+    detected_month = _detect_month_from_pdf_text(full_text)
+    _assert_month_match(detected_month, report_month)
+
     lines = full_text.splitlines()
     sections = _split_sections(lines)
 
@@ -244,6 +291,7 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     return {
         "plant":              PLANT,
         "month":              report_month,
+        "detected_month":     detected_month,
         "source_type":        "SSP Daily Production Report (DPR)",
         "sheets":             f"PDF ({n_pages} page) — SSP DPR",
         "workbook_sheets":    [f"PDF ({n_pages} pages)"],
