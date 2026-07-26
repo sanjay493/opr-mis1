@@ -112,7 +112,7 @@ function BackupRestoreInner() {
               <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
                 <th style={{ padding: '8px' }}>Filename</th>
                 <th style={{ padding: '8px' }}>Size</th>
-                <th style={{ padding: '8px' }}>Modified</th>
+                <th style={{ padding: '8px' }}>Modified (IST)</th>
                 <th style={{ padding: '8px' }}></th>
               </tr>
             </thead>

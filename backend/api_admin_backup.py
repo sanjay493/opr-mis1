@@ -19,9 +19,10 @@ import os
 import re
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -30,6 +31,14 @@ import auth
 from dbengine import DB_ENGINE
 
 router = APIRouter(prefix="/api/admin/backups", tags=["admin-backup"], dependencies=[Depends(auth.require_admin)])
+
+# All backup/restore timestamps (filenames and the modified_at shown in the
+# admin UI) are explicit IST — this app and its operators are India-based,
+# and relying on "the server's OS clock happens to be set to IST" (the
+# previous behaviour: datetime.now() for filenames, but tz=timezone.utc for
+# modified_at, which silently disagreed with each other) breaks the moment
+# either fact stops being true.
+IST = ZoneInfo("Asia/Kolkata")
 
 BACKUP_DIR = Path(os.environ.get(
     "DB_BACKUP_DIR",
@@ -169,7 +178,7 @@ def list_backups():
         files.append({
             "filename": p.name,
             "size_bytes": st.st_size,
-            "modified_at": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+            "modified_at": datetime.fromtimestamp(st.st_mtime, tz=IST).isoformat(),
         })
     files.sort(key=lambda f: f["modified_at"], reverse=True)
     return {"backups": files}
@@ -179,7 +188,7 @@ def list_backups():
 def create_backup(admin: dict = Depends(auth.require_admin)):
     _require_mysql()
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
     filename = f"mis_reports_admin_{stamp}.sql"
     _run_dump(BACKUP_DIR / filename)
     auth.log_activity(admin, "backup", "mis_reports", f"created {filename}")
@@ -194,7 +203,7 @@ def restore_backup(filename: str, admin: dict = Depends(auth.require_admin)):
         raise HTTPException(status_code=404, detail="Backup file not found.")
 
     # Safety net: snapshot current state before overwriting anything.
-    prerestore_stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    prerestore_stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
     prerestore_name = f"mis_reports_prerestore_{prerestore_stamp}.sql"
     _run_dump(BACKUP_DIR / prerestore_name)
 
