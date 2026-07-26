@@ -1435,6 +1435,74 @@ def _block_techno(file_path: str, page_index: dict,
                         })
                     break
 
+        # "Total Caster-Heats per day" — the shop-level total of the CCP's
+        # 4 casting machines' individual "M/c-N Heats per day" rows (those
+        # per-machine rows are deliberately NOT extracted here — only the
+        # total is a meaningful single figure). Mapped to the same
+        # "average_blows_per_day" key other plants (RSP/BSP/ISP) already use
+        # for their SMS shop's average blows/heats per day — DSP's PDF never
+        # reported this parameter before. Verified present with identical
+        # wording/spacing in every DSP report from 2018 onward; absent
+        # (format didn't exist yet) in reports from 2017 and earlier, which
+        # this simply skips (no row appended, same as any other line that
+        # doesn't match).
+        #
+        # Unlike the Yield rows above, this one lives in the PRODUCTION
+        # section (right after "Total Caster APP/Actual"), NOT under "TE
+        # PARAMETERS" — so it's searched in the raw page `text`, not
+        # `te_text`. It grows the same way as every other DSP "FY table" row
+        # (one column per elapsed month, +1 at each quarter-end: [Apr, May,
+        # Jun, Q1, Jul, Aug, Sep, Q2, Oct, Nov, Dec, Q3, Jan, Feb, Mar, Q4,
+        # YTD, prior-year-same-month, prior-year-Q4, prior-FY-total] once the
+        # whole FY has elapsed) — confirmed against the real column headers
+        # in mis0525/mis0825/mis0326.pdf.
+        #
+        # Deliberately NOT using _te_values_techno here: its report_month==3
+        # special case (len(nums) in (19,20)) is for a DIFFERENT DSP page
+        # layout ("MAJOR page" rows) that happens to also reach 19-20 columns
+        # by March — this row's true March columns (verified against
+        # mis0326.pdf's actual header row) are [..., Mar, Q4, YTD, Mar-prior,
+        # Q4-prior, FY-total-prior], i.e. actual=nums[-6]/cum=nums[-4], the
+        # same generic quarter-end formula as every other month — so that
+        # special case would misidentify nums[-4]/nums[-2] (YTD/Q4-prior)
+        # as (actual/cum) instead. Verified: Apr(0)/May(1)/Jun(2)/Q1(3)/
+        # Jul(4)/Aug(5)/Sep(6)/Q2(7)/Oct(8)/Nov(9)/Dec(10)/Q3(11)/Jan(12)/
+        # Feb(13)/Mar(14)/Q4(15)/2025-26(16)/Mar'25(17)/Q4(18)/2024-25(19) —
+        # nums[-6]=index14=Mar actual, nums[-4]=index16=YTD. Matches.
+        is_quarter_end = report_month_num in (3, 6, 9, 12)
+        min_len = 6 if is_quarter_end else 4
+        for ln in text.splitlines():
+            if re.search(r'total\s*caster\s*-?\s*heats\s*per\s*day', ln, re.I):
+                nums = _parse_te_nums(ln)
+                if len(nums) >= min_len:
+                    actual_curr, cum_curr = (nums[-6], nums[-4]) if is_quarter_end else (nums[-4], nums[-3])
+                elif report_month_num == 4 and len(nums) == 3:
+                    # April is the FY's first month, so actual == YTD — most
+                    # reports still carry a trailing prior-FY-total column
+                    # even so (4 columns total, the general formula above
+                    # handles it), but a few early years' reports (confirmed:
+                    # mis0419.pdf) omit that column entirely: [Apr, YTD(=Apr),
+                    # Apr-prior] only. Verified against mis0419.pdf's real
+                    # row ("42.9 42.9 44.8"): actual=cum=42.9, prior=44.8.
+                    actual_curr, cum_curr = nums[-3], nums[-2]
+                else:
+                    actual_curr = cum_curr = None
+                if actual_curr is not None:
+                    rows.append({
+                        "group_code": "MAJOR",
+                        "section":    "Average Blows Per Day",
+                        "parameter":  "DSP SMS",
+                        "unit":       "Ht./day",
+                        "sort_order": 116,
+                        "actual":     actual_curr,
+                        "cum_actual": cum_curr,
+                        "month":      f"{want_mon}'{yy}",
+                        "cell":       f"PDF p{pno} · {want_mon}'{yy}",
+                        "found_via":  "DSP CCP Total Caster-Heats per day",
+                        "status":     "ok",
+                    })
+                break
+
     # ── Coke & Sinter ────────────────────────────────────────────────────
     coke_idx = page_index.get('coke')
     if coke_idx is not None:

@@ -204,6 +204,33 @@ class DspTechnoExtractor:
                 print("[DSP] ERROR: PDF extractor returned no data")
                 return []
 
+            # When report_month wasn't supplied, `fallback_month` above was
+            # just today's date — but extract_preview's growing-FY-table
+            # column-position math (_te_values_techno et al.) and its
+            # row['month'] tagging both key off whatever month they were
+            # CALLED with, not the PDF's real one. pdf_data['pdf_report_month']
+            # is independent of that — extract_preview reads it straight off
+            # the PDF's own first page regardless of what month it was asked
+            # for — so if it disagrees with our guess, re-run extraction
+            # keyed off the real month before touching any row. Without this,
+            # every row from a file whose actual YEAR differs from today's
+            # gets silently dropped below: _derive_unit_and_key's is_prior
+            # check compares the (correctly detected) self.report_month's
+            # year against the (wrongly fallback-tagged) row's year, and for
+            # any such file mismatches on every single row -> 0 units
+            # extracted. Confirmed: every DSP PDF from a year other than the
+            # current one silently returned zero units through this path.
+            detected_month = self.pdf_data.get("pdf_report_month") or ""
+            if not self.report_month and detected_month and detected_month != fallback_month:
+                print(f"[DSP] Detected month {detected_month} differs from fallback "
+                      f"{fallback_month} — re-extracting with the correct month")
+                self.pdf_data = extract_preview(
+                    self.file_path, detected_month, block="techno"
+                )
+                if not self.pdf_data:
+                    print("[DSP] ERROR: PDF extractor returned no data on second pass")
+                    return []
+
             techno_rows = self.pdf_data.get("techno_param_rows", [])
             if not techno_rows:
                 print("[DSP] WARNING: techno_param_rows is empty")

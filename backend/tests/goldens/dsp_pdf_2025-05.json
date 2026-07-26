@@ -126,34 +126,34 @@
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 1 cc billet",
+      "item_name": "BILLET Caster",
       "pdf_label": "i) CC Billet",
-      "status": "unmapped",
-      "unit": "T",
-      "value": 70835.0
+      "status": "ok",
+      "unit": "'000T",
+      "value": 70.835
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 2 cc bloom",
+      "item_name": "Bloom Caster ",
       "pdf_label": "ii) CC Bloom",
-      "status": "unmapped",
-      "unit": "T",
-      "value": 43586.0
+      "status": "ok",
+      "unit": "'000T",
+      "value": 43.586
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 3 brc bloom",
+      "item_name": "BRC",
       "pdf_label": "iii) BRC Bloom",
-      "status": "unmapped",
-      "unit": "T",
-      "value": 55595.0
+      "status": "ok",
+      "unit": "'000T",
+      "value": 55.595
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 4 brc round",
+      "item_name": "Round Production",
       "pdf_label": "iv) BRC Round",
-      "status": "unmapped",
-      "unit": "T",
+      "status": "ok",
+      "unit": "'000T",
       "value": 0.0
     },
     {
@@ -190,43 +190,43 @@
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 1 axle plant",
+      "item_name": "Axle plant",
       "pdf_label": "i) Axle Plant",
-      "status": "unmapped",
-      "unit": "T",
-      "value": 117.0
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.117
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 2 wheel plant",
+      "item_name": "wheel plant",
       "pdf_label": "ii) Wheel Plant",
-      "status": "unmapped",
-      "unit": "T",
-      "value": 1466.0
+      "status": "ok",
+      "unit": "'000T",
+      "value": 1.466
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 1 finished",
+      "item_name": "Finished Steel",
       "pdf_label": "i) Finished",
-      "status": "unmapped",
-      "unit": "T",
-      "value": 110166.0
+      "status": "ok",
+      "unit": "'000T",
+      "value": 110.166
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 2 semis",
+      "item_name": "Saleable Semis",
       "pdf_label": "ii) Semis",
-      "status": "unmapped",
-      "unit": "T",
-      "value": 58553.0
+      "status": "ok",
+      "unit": "'000T",
+      "value": 58.553
     },
     {
       "cell": "PDF p7 · MAY'25 col",
-      "item_name": "(unmapped) 3 total",
+      "item_name": "Saleable Steel",
       "pdf_label": "iii) Total",
-      "status": "unmapped",
-      "unit": "T",
-      "value": 168719.0
+      "status": "ok",
+      "unit": "'000T",
+      "value": 168.719
     }
   ],
   "sheets": "PDF page 7 (PRODUCTION MONTHWISE) + page 11 (SPECIAL STEEL)",
@@ -2077,6 +2077,58 @@
       "sort_order": 116.5,
       "status": "ok",
       "unit": "Kg/TCS"
+    },
+    {
+      "actual": 98.0,
+      "cell": "PDF p26 · MAY'25",
+      "cum_actual": 98.0,
+      "found_via": "DSP CCP Billet Caster Yield",
+      "group_code": "MAJOR",
+      "month": "MAY'25",
+      "parameter": "DSP SMS",
+      "section": "Billet Caster Yield",
+      "sort_order": 117,
+      "status": "ok",
+      "unit": "%"
+    },
+    {
+      "actual": 98.0,
+      "cell": "PDF p26 · MAY'25",
+      "cum_actual": 98.0,
+      "found_via": "DSP CCP Bloom Caster Yield",
+      "group_code": "MAJOR",
+      "month": "MAY'25",
+      "parameter": "DSP SMS",
+      "section": "Bloom Caster Yield",
+      "sort_order": 118,
+      "status": "ok",
+      "unit": "%"
+    },
+    {
+      "actual": 98.0,
+      "cell": "PDF p26 · MAY'25",
+      "cum_actual": 97.9,
+      "found_via": "DSP CCP Bloom cum Round Caster Yield",
+      "group_code": "MAJOR",
+      "month": "MAY'25",
+      "parameter": "DSP SMS",
+      "section": "Bloom cum Round Caster Yield",
+      "sort_order": 119,
+      "status": "ok",
+      "unit": "%"
+    },
+    {
+      "actual": 45.6,
+      "cell": "PDF p26 · MAY'25",
+      "cum_actual": 48.8,
+      "found_via": "DSP CCP Total Caster-Heats per day",
+      "group_code": "MAJOR",
+      "month": "MAY'25",
+      "parameter": "DSP SMS",
+      "section": "Average Blows Per Day",
+      "sort_order": 116,
+      "status": "ok",
+      "unit": "Ht./day"
     },
     {
       "actual": 68.5,
