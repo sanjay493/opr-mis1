@@ -7,6 +7,27 @@ import GlobalNavbar from '@/components/GlobalNavbar';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
+// FastAPI's own validation errors (Pydantic type mismatches, missing
+// fields, etc.) come back as detail: [{loc, msg, type}, ...], not a plain
+// string — `new Error(detail)` on an array stringifies each object via
+// toString(), producing the unreadable "Save failed: [object Object],
+// [object Object]". Join the real .msg (with which field, from .loc, when
+// present) into one readable line instead; a plain string detail (the
+// common HTTPException(...) case elsewhere in this app) passes through
+// unchanged.
+function errText(detail, fallback) {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(e => {
+      if (typeof e === 'string') return e;
+      const field = Array.isArray(e?.loc) ? e.loc.filter(p => p !== 'body').join('.') : '';
+      return field ? `${field}: ${e?.msg || 'invalid value'}` : (e?.msg || 'invalid value');
+    }).join('; ') || fallback;
+  }
+  return fallback;
+}
+
 const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
 
 const MONTHS = [
@@ -474,7 +495,7 @@ function CopyFromPanel({ currentMonth, plant, onCopy }) {
     try {
       const r = await fetch(`${API}/api/techno/manual/entry?plant=${plant}&report_month=${srcMonth}`);
       const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || 'fetch failed');
+      if (!r.ok) throw new Error(errText(d.detail, 'fetch failed'));
       if (!d.has_data) {
         setStatus({ type:'error', text:`No data for ${plant} ${srcMonth}.` });
         return;
@@ -657,7 +678,7 @@ function TechnoManualPageInner() {
     try {
       const r = await fetch(`${API}/api/techno/manual/entry?plant=${plant}&report_month=${reportMonth}`);
       const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || 'fetch failed');
+      if (!r.ok) throw new Error(errText(d.detail, 'fetch failed'));
       const units = d.units || {};
       setUnitData(units);
       setInitData(JSON.parse(JSON.stringify(units)));
@@ -725,7 +746,7 @@ function TechnoManualPageInner() {
       });
       const r = await fetch(`${API}/api/techno/manual/cumulative-preview?${qs}`);
       const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || 'calculation failed');
+      if (!r.ok) throw new Error(errText(d.detail, 'calculation failed'));
       setCumPreview(d);
     } catch (e) {
       setNotice({ type:'error', text:`Cumulative calculation: ${e.message}` });
@@ -802,7 +823,7 @@ function TechnoManualPageInner() {
         }),
       });
       const res = await r.json();
-      if (!r.ok) throw new Error(res.detail || 'save failed');
+      if (!r.ok) throw new Error(errText(res.detail, 'save failed'));
       // Update snapshot so change indicators reset
       setInitData(prev => ({ ...prev, [unit]: JSON.parse(JSON.stringify(unitData[unit])) }));
       setSavedUnits(prev => new Set([...prev, unit]));
@@ -832,7 +853,7 @@ function TechnoManualPageInner() {
           }),
         });
         const res = await r.json();
-        if (!r.ok) throw new Error(res.detail || 'save failed');
+        if (!r.ok) throw new Error(errText(res.detail, 'save failed'));
         setInitData(prev => ({ ...prev, [unit]: JSON.parse(JSON.stringify(unitData[unit])) }));
         setSavedUnits(prev => new Set([...prev, unit]));
         ok++;
@@ -857,7 +878,7 @@ function TechnoManualPageInner() {
     try {
       const r = await fetch(`${API}/api/techno/manual/sail/preview?report_month=${reportMonth}`);
       const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || 'preview failed');
+      if (!r.ok) throw new Error(errText(d.detail, 'preview failed'));
       setSailPreview(d);
     } catch (e) { setNotice({ type:'error', text:`SAIL preview: ${e.message}` }); }
     finally { setSailBusy(false); }
@@ -871,7 +892,7 @@ function TechnoManualPageInner() {
         body: JSON.stringify({ report_month: reportMonth, overwrite_manual: overwriteMan }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || 'calc failed');
+      if (!r.ok) throw new Error(errText(d.detail, 'calc failed'));
       setNotice({ type:'success', text:`SAIL BF_Shop saved — ${d.params_calculated} params.` });
       setSailPreview(null);
       await loadData();

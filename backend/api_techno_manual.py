@@ -10,7 +10,7 @@ Endpoints:
 
 import json
 import sqlite3
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -38,8 +38,20 @@ class SaveRequest(BaseModel):
     plant: str
     report_month: str          # YYYY-MM
     unit: str
-    month_data: Dict[str, Optional[float]] = {}
-    till_month_data: Dict[str, Optional[float]] = {}
+    # Almost every param is a plain float, but a few (e.g. RSP SMS's
+    # tap_to_tap_time, stored as "H:MM"/"HH:MM:SS" duration strings — see
+    # ISP/RSP extractors' _clean_value) are legitimately non-numeric. This
+    # endpoint always sends a WHOLE unit's data at once (merge_upsert
+    # preserves whatever isn't included), so saving any OTHER parameter in
+    # a unit that also has a string-valued field like tap_to_tap_time
+    # re-sends that field's existing value unchanged — a float-only schema
+    # rejected the entire request over a field the user never touched,
+    # surfacing as "Save failed: [object Object]" while editing something
+    # else entirely. Accepting str here doesn't affect any actual float
+    # param: the frontend never puts a non-numeric string in one (see
+    # techno-manual/page.js's number input, parseFloat-or-null).
+    month_data: Dict[str, Optional[Union[float, str]]] = {}
+    till_month_data: Dict[str, Optional[Union[float, str]]] = {}
 
 
 class SailCalcRequest(BaseModel):
