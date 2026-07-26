@@ -677,12 +677,18 @@ _SMS_KEYWORDS = [
 # ---------------------------------------------------------------------------
 _HSM_SHEET     = "Sheet8"
 # Row 35 ("ROLLING HOURS/DAY") was previously registered here too, but it
-# isn't one of the 6 tracked HSM parameters at all, and it also matches the
-# "rolling" keyword — so it silently raced with row 29 ("SLAB ROLLING RATE",
-# the real Rolling Rate figure) for the same param, overwriting whichever one
-# got processed last. Removed. Rows 17/18 (Heat/Power Consumption) were
-# missing entirely — added.
-_HSM_ROWS      = [17, 18, 29, 37, 41, 43]
+# isn't one of the 4 tracked HSM parameters below at all, and it also matches
+# the "rolling" keyword — so it silently raced with row 29 ("SLAB ROLLING
+# RATE", the real Rolling Rate figure) for the same param, overwriting
+# whichever one got processed last. Removed.
+#
+# Heat/Power Consumption used to be read from this sheet (rows 17/18) but
+# per direct user correction those rows don't hold the right figures — HSM's
+# Sp. Heat/Power Consumption are Sheet1 sub-items of BSL's overall Heat/Power
+# Consumption tables ("SLAB AT R.H. FURNACE" / "HR COIL + THICK PLATE"), not
+# anything on Sheet8. See _CRM_ROWS below (despite the name, it now also
+# carries these 2 HSM rows — same fixed-row/label-verified Sheet1 pattern).
+_HSM_ROWS      = [29, 37, 41, 43]
 _HSM_LABEL_COL = 2   # column B
 _HSM_MON_COL   = 6   # column F
 _HSM_CUM_COL   = 7   # column G
@@ -694,8 +700,6 @@ _HSM_KEYWORDS = [
     ("availab", "Availability",      "%"),
     ("utili",   "Utilisation",       "%"),
     ("rolling", "Rolling Rate",      "t/hr"),
-    ("heat",    "Heat Consumption",  "kcal/t"),
-    ("power",   "Power Consumption", "kWh/t"),
 ]
 
 
@@ -774,17 +778,28 @@ _CRM_ROWS = [
     ("Sheet11", 44, 5, 6, "CRM 3", "SPM Yield of CR Coil",    "%", "yield of cr coil"),
     ("Sheet11", 48, 5, 6, "CRM 3", "SPM Availability",        "%", "availab"),
     ("Sheet11", 50, 5, 6, "CRM 3", "SPM Utilisation",         "%", "utilis"),
-    # CRM 3 — Specific Power Consumption. Sourced from Sheet1 (row 26,
-    # "POWER CONSUMPN/T OF SAL.STEEL") rather than the "CM Review" summary
-    # sheet — same underlying figure (CM Review's cell references this one),
-    # Sheet1 is the primary source.
-    ("Sheet1", 26, 6, 7, "CRM 3", "Specific Power Consumption", "kWh/t", "power consumpn"),
+    # CRM 3 — Specific Power Consumption. Row 26 ("POWER CONSUMPN/T OF
+    # SAL.STEEL") was used previously, but per direct user correction that's
+    # a plant-wide saleable-steel figure, not CRM 3's own — row 24 ("CR
+    # SALEABLE (III)"), under the "POWER CONSUMPN. IN KWH/T OF" table, is the
+    # actual CRM 3-specific figure.
+    ("Sheet1", 24, 6, 7, "CRM 3", "Specific Power Consumption", "kWh/t", "cr saleable (iii)"),
+
+    # HSM — Sp. Heat/Power Consumption. Previously read from Sheet8 (rows
+    # 17/18), which per direct user correction don't hold these figures at
+    # all — they're sub-items of Sheet1's plant-wide Heat/Power Consumption
+    # tables: "SLAB AT R.H. FURNACE" (Heat) and "HR COIL + THICK PLATE"
+    # (Power), both under the "...CONSUMPN. IN .../T OF" header blocks.
+    ("Sheet1", 13, 6, 7, "HSM", "Heat Consumption",  "kcal/t", "slab at r.h"),
+    ("Sheet1", 21, 6, 7, "HSM", "Power Consumption", "kWh/t",  "hr coil + thick plate"),
 ]
 
 
 def _extract_crm_rows(wb, db_month: str) -> list:
     """Extract BSL's Cold Rolling Mill sub-machine techno params from
-    Sheet9/Sheet10 (CRM 1&2) and Sheet11 (CRM 3), self-checking each row's
+    Sheet9/Sheet10 (CRM 1&2) and Sheet11 (CRM 3), plus HSM's and CRM 3's
+    Heat/Power Consumption figures from Sheet1 (see _CRM_ROWS — despite the
+    function name, it's not CRM-only anymore), self-checking each row's
     identity against its column-B label rather than trusting row position
     alone (same approach as _extract_hsm_rows)."""
     out = []
