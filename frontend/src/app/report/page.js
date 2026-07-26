@@ -189,8 +189,21 @@ export default function ReportPage() {
   const [selectedMonthName, setSelectedMonthName] = useState(defaultDate.month);
   const [selectedYear, setSelectedYear] = useState(defaultDate.year);
   const [selectedPages, setSelectedPages] = useState(new Set());
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
+
+  // Ctrl+B (Cmd+B on Mac) toggles the sidebar, same convention as most IDEs.
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setSidebarCollapsed((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Use React Query to fetch report data - automatically cached for 10 minutes
   const { data: rawData, isLoading, error } = useReportData(selectedMonth);
@@ -271,18 +284,36 @@ export default function ReportPage() {
 
       <main className="app-container">
       {/* Sidebar Control Panel - Customized for Report Only */}
-      <div className="sidebar no-print">
+      <div className={`sidebar no-print${sidebarCollapsed ? ' collapsed' : ''}`}>
         <div className="sidebar-header">
-          <h1>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary)' }}>
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-              <polyline points="14 2 14 8 20 8" />
+          {!sidebarCollapsed && (
+            <div>
+              <h1>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary)' }}>
+                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                Report Engine
+              </h1>
+              <p>Viewer &amp; Editor</p>
+            </div>
+          )}
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            title={`${sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar (Ctrl+B)`}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                 style={{ transform: sidebarCollapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}>
+              <polyline points="15 18 9 12 15 6" />
             </svg>
-            Report Engine
-          </h1>
-          <p>Viewer & Editor</p>
+          </button>
         </div>
 
+        {!sidebarCollapsed && (
+        <>
         {/* Report Selector */}
         <div className="control-section">
           <h2>Report Configuration</h2>
@@ -454,6 +485,8 @@ export default function ReportPage() {
         <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#5f6368', textAlign: 'center' }}>
           SAIL Informatics Report Portal • v1.0.0
         </div>
+        </>
+        )}
       </div>
 
       {/* Main Preview Area */}
