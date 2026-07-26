@@ -34,6 +34,7 @@ from page_records import generate_records
 from page_jpc_report import build_jpc_report_bytes
 import page_production_fy_export
 from page_one_page_report import build_one_page_report_bytes
+from page_pmix_fy_report import build_pmix_fy_report_bytes
 
 def _safe_te_table(month):
     try:
@@ -2662,6 +2663,24 @@ async def sail_1page_report(month: str = Query(...)):
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="1_page_report_{month}.xlsx"'},
+    )
+
+
+@app.get("/api/pmix-fy-report")
+async def pmix_fy_report(fy_start: int = Query(...)):
+    """Download the year-wise, month-wise Pmix report (.xlsx) for a
+    financial year — Report_format/pmix.xlsx format. Reuses
+    page_jpc_report.compute_pmix_rows() per FY month, so it stays in sync
+    with the JPC report's Pmix sheet."""
+    try:
+        content = build_pmix_fy_report_bytes(fy_start)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pmix FY report generation failed: {e}")
+    fy_label = f"{fy_start}-{str(fy_start + 1)[2:]}"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="Pmix_{fy_label}.xlsx"'},
     )
 
 

@@ -262,64 +262,79 @@ _SAIL_ROLLUP = [
 _FS_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
 
+def compute_pmix_rows(cur, month):
+    """One month's worth of Pmix report rows, in display order — shared by
+    the single-month JPC sheet (called once per month + once per CPLY month,
+    then zipped) and the FY-wide Pmix report (called once per FY month, then
+    grouped into quarters/cumulative). Each row:
+        {"kind": "header"|"data", "label": str, "value": float|None, "bold": bool}
+    """
+    rows = []
+
+    def header(label):
+        rows.append({"kind": "header", "label": label, "value": None, "bold": False})
+
+    def data(label, value, bold=False):
+        rows.append({"kind": "data", "label": label, "value": value, "bold": bold})
+
+    for plant, items in _PLANT_BLOCKS:
+        header(plant)
+        for label, plant_code, item in items:
+            data(label, _one(cur, plant_code, item, month), bold=label.lower().startswith("saleable"))
+
+    header("SAIL")
+    for label, combos in _SAIL_ROLLUP:
+        data(label, _sum(cur, combos, month))
+    sail_5pl_combo = [(p, "Saleable Steel") for p in _FS_PLANTS]
+    data("Saleable steel 5 PL", _sum(cur, sail_5pl_combo, month), bold=True)
+
+    header("Finished Steel")
+    fs_vals = {}
+    for plant in _FS_PLANTS:
+        fs_vals[plant] = _one(cur, plant, "Finished Steel", month)
+        data(plant, fs_vals[plant])
+    fs5 = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month)
+    data("Finished Steel 5PL", fs5, bold=True)
+
+    # ASP
+    asp_sal = _one(cur, "ASP", "Saleable Steel", month)
+    asp_fin = _fs(cur, "ASP", month)
+    data("ASP (Total)", asp_sal, bold=True)
+    data("ASP (Finished)", asp_fin)
+    data("ASP (Semis)", _sub(asp_sal, asp_fin))
+
+    # SSP — HRCS = Carbon Steel Production; Stainless = Saleable - Carbon
+    ssp_sal = _one(cur, "SSP", "Saleable Steel", month)
+    ssp_carb = _one(cur, "SSP", "Carbon Steel Production", month)
+    data("SSP (Finished Carbon Steel)", ssp_carb)
+    data("SSP (Finished Stainless Steel)", _sub(ssp_sal, ssp_carb))
+
+    # VISL
+    visl = _fs(cur, "VISL", month)
+    data("VISL(Finished)", visl)
+
+    sail_set = _FS_PLANTS + ["ASP", "SSP", "VISL"]
+    fst = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month)
+    fst = (fst or 0) + (asp_fin or 0) + (ssp_sal or 0) + (visl or 0)
+    data("Finished Steel (Total)", fst, bold=True)
+
+    sal = _sum(cur, [(p, "Saleable Steel") for p in sail_set], month)
+    data("Semis Total", _sub(sal, fst))
+    data("Saleable Steel (Total)", sal, bold=True)
+
+    return rows
+
+
 def _build_pmix_sheet(ws, cur, month, cply_month):
     row = _sheet_header(ws, f"SAIL Product mix performance: {_mlabel(month)}", month, cply_month)
 
-    for plant, items in _PLANT_BLOCKS:
-        row = _write_plant_hdr(ws, row, plant)
-        for label, plant_code, item in items:
-            act, cply = _one(cur, plant_code, item, month), _one(cur, plant_code, item, cply_month)
-            bold = label.lower().startswith("saleable")
-            row = _write_row(ws, row, label, act, cply, bold=bold)
-
-    row = _write_plant_hdr(ws, row, "SAIL")
-    for label, combos in _SAIL_ROLLUP:
-        act, cply = _sum(cur, combos, month), _sum(cur, combos, cply_month)
-        row = _write_row(ws, row, label, act, cply)
-    sail_5pl_combo = [(p, "Saleable Steel") for p in _FS_PLANTS]
-    act, cply = _sum(cur, sail_5pl_combo, month), _sum(cur, sail_5pl_combo, cply_month)
-    row = _write_row(ws, row, "Saleable steel 5 PL", act, cply, bold=True)
-
-    row = _write_plant_hdr(ws, row, "Finished Steel")
-    fs_vals_m, fs_vals_c = {}, {}
-    for plant in _FS_PLANTS:
-        fs_vals_m[plant] = _one(cur, plant, "Finished Steel", month)
-        fs_vals_c[plant] = _one(cur, plant, "Finished Steel", cply_month)
-        row = _write_row(ws, row, plant, fs_vals_m[plant], fs_vals_c[plant])
-    fs5_m = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month)
-    fs5_c = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], cply_month)
-    row = _write_row(ws, row, "Finished Steel 5PL", fs5_m, fs5_c, bold=True)
-
-    # ASP
-    asp_sal_m, asp_sal_c = _one(cur, "ASP", "Saleable Steel", month), _one(cur, "ASP", "Saleable Steel", cply_month)
-    asp_fin_m, asp_fin_c = _fs(cur, "ASP", month), _fs(cur, "ASP", cply_month)
-    row = _write_row(ws, row, "ASP (Total)", asp_sal_m, asp_sal_c, bold=True)
-    row = _write_row(ws, row, "ASP (Finished)", asp_fin_m, asp_fin_c)
-    row = _write_row(ws, row, "ASP (Semis)", _sub(asp_sal_m, asp_fin_m), _sub(asp_sal_c, asp_fin_c))
-
-    # SSP — HRCS = Carbon Steel Production; Stainless = Saleable - Carbon
-    ssp_sal_m, ssp_sal_c = _one(cur, "SSP", "Saleable Steel", month), _one(cur, "SSP", "Saleable Steel", cply_month)
-    ssp_carb_m = _one(cur, "SSP", "Carbon Steel Production", month)
-    ssp_carb_c = _one(cur, "SSP", "Carbon Steel Production", cply_month)
-    row = _write_row(ws, row, "SSP (Finished Carbon Steel)", ssp_carb_m, ssp_carb_c)
-    row = _write_row(ws, row, "SSP (Finished Stainless Steel)",
-                     _sub(ssp_sal_m, ssp_carb_m), _sub(ssp_sal_c, ssp_carb_c))
-
-    # VISL
-    visl_m, visl_c = _fs(cur, "VISL", month), _fs(cur, "VISL", cply_month)
-    row = _write_row(ws, row, "VISL(Finished)", visl_m, visl_c)
-
-    sail_set = _FS_PLANTS + ["ASP", "SSP", "VISL"]
-    fst_m = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month)
-    fst_m = (fst_m or 0) + (asp_fin_m or 0) + (ssp_sal_m or 0) + (visl_m or 0)
-    fst_c = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], cply_month)
-    fst_c = (fst_c or 0) + (asp_fin_c or 0) + (ssp_sal_c or 0) + (visl_c or 0)
-    row = _write_row(ws, row, "Finished Steel (Total)", fst_m, fst_c, bold=True)
-
-    sal_m = _sum(cur, [(p, "Saleable Steel") for p in sail_set], month)
-    sal_c = _sum(cur, [(p, "Saleable Steel") for p in sail_set], cply_month)
-    row = _write_row(ws, row, "Semis Total", _sub(sal_m, fst_m), _sub(sal_c, fst_c))
-    row = _write_row(ws, row, "Saleable Steel (Total)", sal_m, sal_c, bold=True)
+    m_rows = compute_pmix_rows(cur, month)
+    c_rows = compute_pmix_rows(cur, cply_month)
+    for m_row, c_row in zip(m_rows, c_rows):
+        if m_row["kind"] == "header":
+            row = _write_plant_hdr(ws, row, m_row["label"])
+        else:
+            row = _write_row(ws, row, m_row["label"], m_row["value"], c_row["value"], bold=m_row["bold"])
 
     _autosize(ws, [26, 13, 13, 13])
     ws.freeze_panes = "B5"
