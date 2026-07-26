@@ -340,10 +340,14 @@ _TECHNO_PARAM_MAP = [
     ("Sheet1", 37,  6,    1.0, "MAJOR",       "CDI Rate",              "BSL",                               "kg/Thm"),
     ("Sheet1", 39,  6,    1.0, "IRON_MAKING", "Fuel Rate",             "BSL",                               "Kg/THM"),
     ("Sheet1", 41,  6,    1.0, "MAJOR",       "Coal to Hot Metal",     "BSL",                               "Ratio"),
-    ("Sheet1", 49,  6,    1.0, "MILL_BSL",    "CRM 1&2",               "Yield of HR Coil",                  "%"),
-    ("Sheet1", 51,  6,    1.0, "MILL_BSL",    "CRM 3",                 "Yield of HR Coil",                  "%"),
-    ("Sheet1", 55,  6,    1.0, "SMS",         "Refractory",            "BSL",                               "Kg/TCS"),
-    ("Sheet1", 57,  6,    1.0, "COKE_SINTER", "Water",                 "Water Consumption",                 "m³/T"),
+    # CRM 1&2 / CRM 3 "Yield of HR Coil", Refractory and Water Consumption
+    # used to be hardcoded here at rows 49/51/55/57 — confirmed on Techno
+    # March 2024.xls that the rows shift (a duplicated "GROSS METALLIC INPUT"
+    # sub-row above pushes everything below it down by 2), which silently
+    # mismapped SMS-II's Gross Metallic Input (~1100-1140 Kg/TCS) into
+    # "Yield of HR Coil" (a %) for that month, and likewise shifted
+    # Refractory/Water. Moved to _extract_sheet1_label_search_rows() below,
+    # which searches for each label instead of trusting a fixed row.
     # ── Sheet2 (Coke Ovens), Sheet3 (Sinter Plant), Sheet4, SMS-I/SMS-II ────
     # All extracted by _extract_keyword_block()/_extract_sheet4_iron_making_
     # rows() below instead of hardcoded rows here. Confirmed on real files
@@ -840,6 +844,75 @@ def _extract_crm_rows(wb, db_month: str) -> list:
             "plant":      "BSL",
             "month":      db_month,
             "found_via":  f"hardcoded {sheet} R{row}C{mon_col} (label-matched {label!r} -> {unit}/{param})",
+            "status":     "ok" if (actual is not None or cum is not None) else "skip",
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Sheet1 rows whose position drifts between file versions (confirmed on
+# Techno March 2024.xls, which has an extra "GROSS METALLIC INPUT" sub-row
+# not present in every other file we have, pushing everything below it down
+# by 2 rows) — found by searching column B for the label within a window
+# instead of trusting a fixed row, so a shifted file skips the row (logged)
+# instead of silently mismapping a wrong figure into it.
+# (label_keyword, group_code, section, parameter, unit_str, search_start, search_end)
+# ---------------------------------------------------------------------------
+_SHEET1_LABEL_COL = 2   # column B
+_SHEET1_MON_COL   = 6   # column F
+_SHEET1_CUM_COL   = 7   # column G
+
+_SHEET1_LABEL_SEARCH_ROWS = [
+    ("yield of cr saleable (1", "MILL_BSL",    "CRM 1&2",   "Yield of HR Coil",  "%",       44, 56),
+    ("yield of cr saleable (3", "MILL_BSL",    "CRM 3",     "Yield of HR Coil",  "%",       44, 58),
+    ("overall refractory",      "SMS",         "Refractory","BSL",              "Kg/TCS",  50, 62),
+    ("water consn",             "COKE_SINTER", "Water",     "Water Consumption", "m³/T",    52, 64),
+]
+
+
+def _extract_sheet1_label_search_rows(wb, db_month: str) -> list:
+    """Extract the Sheet1 rows in _SHEET1_LABEL_SEARCH_ROWS, self-checking
+    each by searching for its label within a window rather than trusting a
+    fixed row (same approach as _extract_hsm_rows/_extract_crm_rows)."""
+    if "Sheet1" not in wb.sheetnames:
+        return []
+    ws = wb["Sheet1"]
+    out = []
+    for i, (keyword, group_code, section, parameter, unit_str, start, end) in enumerate(_SHEET1_LABEL_SEARCH_ROWS):
+        found_row, label = None, ""
+        for r in range(start, end + 1):
+            text = str(ws.cell(r, _SHEET1_LABEL_COL).value or "").strip()
+            if keyword in text.lower():
+                found_row, label = r, text
+                break
+        if found_row is None:
+            logger.warning(
+                "BSL techno: Sheet1 label containing %r not found in rows %d-%d — "
+                "verify _SHEET1_LABEL_SEARCH_ROWS in excel_extractor_bsl.py "
+                "still matches the report's wording.",
+                keyword, start, end,
+            )
+            continue
+
+        actual_raw = _cell_float(ws, found_row, _SHEET1_MON_COL)
+        cum_raw    = _cell_float(ws, found_row, _SHEET1_CUM_COL)
+        actual = round(actual_raw, 4) if actual_raw is not None else None
+        cum    = round(cum_raw,    4) if cum_raw    is not None else None
+
+        out.append({
+            "group_code": group_code,
+            "section":    section,
+            "parameter":  parameter,
+            "unit":       unit_str,
+            "actual":     actual,
+            "cum_actual": cum,
+            "sort_order": 600 + i,
+            "cell":       f"Sheet1!{get_column_letter(_SHEET1_MON_COL)}{found_row}/"
+                          f"{get_column_letter(_SHEET1_CUM_COL)}{found_row}",
+            "file_label": label,
+            "plant":      "BSL",
+            "month":      db_month,
+            "found_via":  f"label search rows {start}-{end} for {keyword!r} -> row {found_row}",
             "status":     "ok" if (actual is not None or cum is not None) else "skip",
         })
     return out
@@ -1791,6 +1864,9 @@ def extract_preview(file_path: str, report_month: str) -> dict:
 
     # ── Sheet9/Sheet10/Sheet11 — Cold Rolling Mill sub-machines ─────────────
     rows_out.extend(_extract_crm_rows(wb, db_month))
+
+    # ── Sheet1 rows whose position drifts between file versions ────────────
+    rows_out.extend(_extract_sheet1_label_search_rows(wb, db_month))
 
     ok = sum(1 for r in rows_out if r["status"] == "ok")
     logger.info("BSL techno preview: %d/%d rows ok for %s", ok, len(rows_out), db_month)
