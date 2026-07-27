@@ -12,14 +12,16 @@ _jinja_env = Environment(loader=FileSystemLoader(_TMPL_DIR), autoescape=False)
 def _split_label(label, threshold: int = 20, tail_scale: float = 0.82) -> str:
     """Keep a long, single-line label from wrapping (or getting silently
     clipped by overflow:hidden) by shrinking everything after the first word.
-    Short labels pass through unchanged; a single very long word with no
-    space shrinks in its entirety since there's nothing else to split."""
+    Short labels pass through unchanged. A label with no space to split on
+    (e.g. slash-joined grade names like "MMn/HMn/.../Cr5") is left at normal
+    font size — there's nothing to split, so shrinking the whole label just
+    made it harder to read without solving the overflow risk anyway."""
     label = "" if label is None else str(label)
     if len(label) <= threshold:
         return label
     first, _, rest = label.partition(" ")
     if not rest:
-        return f'<span style="font-size:{tail_scale}em;">{label}</span>'
+        return label
     return f'{first} <span style="font-size:{tail_scale}em;">{rest}</span>'
 
 
