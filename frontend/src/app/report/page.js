@@ -154,7 +154,15 @@ function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
         subtitle: `${newMonth}’${shortYear}`
       };
     }
-    
+
+    // Capital Repair pages (36-40) already carry the correct FY computed
+    // server-side from the report month — running them through the generic
+    // date-shift regex on top of that double-applies the shift and corrupts
+    // the year (and can mangle schedule/period text like "7-15").
+    if (page.page >= 36 && page.page <= 40) {
+      return page;
+    }
+
     const formattedHeaders = page.headers
       ? page.headers.map((h) => replaceTimeStrings(h, newMonth, newYear, oldMonth, oldYear))
       : page.headers;

@@ -1,13 +1,13 @@
 'use client';
 
 // ── style tokens ──────────────────────────────────────────────────────────────
-const CELL = { padding: '2px 5px', border: '1px solid #94a3b8', lineHeight: 1.25, fontSize: 'var(--report-font-size)' };
+const CELL = { padding: '4px 7px', border: '1px solid #94a3b8', lineHeight: 1.25, fontSize: '9.5pt' };
 const CTR  = { ...CELL, textAlign: 'center' };
 const LBL  = { ...CELL, textAlign: 'left' };
 const TH   = {
-  backgroundColor: '#fff', color: '#000', padding: '3px 4px',
+  backgroundColor: '#fff', color: '#000', padding: '4px 7px',
   textAlign: 'center', verticalAlign: 'middle',
-  border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
+  border: '1px solid #334155', fontSize: '9.5pt', lineHeight: 1.2, fontWeight: 600,
 };
 
 export default function CapitalRepairTemplate({ data }) {
