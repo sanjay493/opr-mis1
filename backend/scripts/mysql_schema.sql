@@ -69,6 +69,22 @@ CREATE TABLE IF NOT EXISTS sail_stock_snapshot_table (
     PRIMARY KEY (snapshot_date, item_name)
 ) ENGINE=InnoDB;
 
+-- Capital Repair plan (pages 36-40, Report_format/CR.pdf format). "actual"
+-- is the only field updated from the frontend as each repair executes.
+CREATE TABLE IF NOT EXISTS capital_repair_table (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    plant         VARCHAR(8)   NOT NULL,
+    fy            VARCHAR(8)   NOT NULL,
+    shop          VARCHAR(64),
+    equipment     VARCHAR(64),
+    activity      VARCHAR(255),
+    schedule_days VARCHAR(64),
+    period        VARCHAR(64),
+    actual        VARCHAR(128),
+    sort_order    INT DEFAULT 0,
+    KEY idx_cr_plant_fy (plant, fy)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS ipt_table (
     report_month CHAR(7)     NOT NULL,
     item         VARCHAR(64) NOT NULL,

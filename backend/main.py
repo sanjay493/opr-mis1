@@ -25,6 +25,7 @@ from page_special_steel import generate_special_steel_plant, generate_special_st
 from page_special_steel_trend import generate_special_steel_trend
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
+from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
                           generate_major_techno_from_db, generate_techno_from_db,
@@ -180,6 +181,7 @@ _GATED_ROUTE_TEMPLATES = [
     ("POST", "/api/techno-manual-save"),
     ("POST", "/api/ipt-entry"),
     ("POST", "/api/ipt-delete"),
+    ("POST", "/api/capital-repair-entry"),
     ("POST", "/api/techno-plan"),
     ("POST", "/api/techno-plant-plan"),
     ("POST", "/api/sail-techno-plan"),
@@ -441,6 +443,10 @@ def get_data(month: str = "2025-11"):
                 page.update(_safe_techno(month, pg))
                 page["type"] = "techno_params"
                 page["orientation"] = "landscape" if 31 <= pg <= 35 else "portrait"
+            if pg in CR_PAGES:
+                page.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(month)))
+                page["type"] = "capital_repair"
+                page["orientation"] = "portrait"
 
         # Page 3: overlay the saved Production Narrative + Highlights, if the
         # user has ever saved one for this month (independent of whether
@@ -573,6 +579,10 @@ async def generate_pdf(request: PDFRequest):
             p.update(_safe_techno(request.month, pg))
             p["type"] = "techno_params"
             p["orientation"] = "landscape" if 31 <= pg <= 35 else "portrait"
+        if pg in CR_PAGES:
+            p.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(request.month)))
+            p["type"] = "capital_repair"
+            p["orientation"] = "portrait"
         enriched.append(p)
     # Layout and typography now come from backend layout_config.json only; ignore frontend overrides
     return await build_pdf_response(request, pages_override=enriched, page_layouts=None, font_config=None)
@@ -3367,6 +3377,45 @@ async def delete_ipt_entry_api(payload: dict):
         raise HTTPException(status_code=400, detail="month, item, from_plant, to_plant required")
     db.delete_ipt_entry(month, item, from_plant, to_plant)
     return {"status": "ok", "message": "Deleted."}
+
+
+# ---------------------------------------------------------------------------
+# Capital Repair data entry (pages 36-40) — only the "Actual" column is ever
+# edited; everything else is the fixed yearly repair schedule seeded from
+# Report_format/CR.pdf.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/capital-repair")
+def get_capital_repair_entries(plant: str = Query(...), fy: str = Query(...)):
+    conn = db.connect()
+    cur  = conn.cursor()
+    cur.execute("""
+        SELECT id, shop, equipment, activity, schedule_days, period, actual
+        FROM capital_repair_table
+        WHERE plant=? AND fy=?
+        ORDER BY sort_order ASC, id ASC
+    """, (plant, fy))
+    rows = [
+        {"id": r[0], "shop": r[1], "equipment": r[2], "activity": r[3],
+         "schedule_days": r[4], "period": r[5], "actual": r[6] or ""}
+        for r in cur.fetchall()
+    ]
+    conn.close()
+    return {"plant": plant, "fy": fy, "rows": rows}
+
+
+@app.post("/api/capital-repair-entry")
+async def save_capital_repair_entry(payload: dict):
+    row_id = payload.get("id")
+    if row_id is None:
+        raise HTTPException(status_code=400, detail="id is required")
+    actual = (payload.get("actual") or "").strip()
+    conn = db.connect()
+    cur  = conn.cursor()
+    cur.execute("UPDATE capital_repair_table SET actual=? WHERE id=?", (actual, row_id))
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "message": "Saved."}
 
 
 # Acronym casing for parameter display names derived from techno_json keys.

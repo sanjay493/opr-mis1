@@ -37,6 +37,7 @@ export default function GlobalNavbar() {
         { label: 'Opening Stock', link: '/data-entry/opening-stock', icon: '📦' },
         { label: 'IPT Status', link: '/data-entry/ipt', icon: '↔️' },
         { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
+        { label: 'Capital Repair', link: '/data-entry/capital-repair', icon: '🛠️' },
 
         { type: 'group', groupLabel: 'Annual Targets' },
         { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' },

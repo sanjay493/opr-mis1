@@ -12391,5 +12391,40 @@
     "type": "techno_params",
     "title": "MILL WISE TECHNO-ECONOMIC PARAMETERS - ISP",
     "orientation": "landscape"
+  },
+  {
+    "page": 36,
+    "type": "capital_repair",
+    "title": "MAJOR REPAIR/ CAPITAL REPAIR PLAN OF SAIL 2026-27",
+    "subtitle": "BHILAI STEEL PLANT",
+    "orientation": "portrait"
+  },
+  {
+    "page": 37,
+    "type": "capital_repair",
+    "title": "MAJOR REPAIR/ CAPITAL REPAIR PLAN OF SAIL 2026-27",
+    "subtitle": "DURGAPUR STEEL PLANT",
+    "orientation": "portrait"
+  },
+  {
+    "page": 38,
+    "type": "capital_repair",
+    "title": "MAJOR REPAIR/ CAPITAL REPAIR PLAN OF SAIL 2026-27",
+    "subtitle": "ROURKELA STEEL PLANT",
+    "orientation": "portrait"
+  },
+  {
+    "page": 39,
+    "type": "capital_repair",
+    "title": "MAJOR REPAIR/ CAPITAL REPAIR PLAN OF SAIL 2026-27",
+    "subtitle": "BOKARO STEEL PLANT",
+    "orientation": "portrait"
+  },
+  {
+    "page": 40,
+    "type": "capital_repair",
+    "title": "MAJOR REPAIR/ CAPITAL REPAIR PLAN OF SAIL 2026-27",
+    "subtitle": "IISCO STEEL PLANT",
+    "orientation": "portrait"
   }
 ]

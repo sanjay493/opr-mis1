@@ -14,6 +14,7 @@ import SpecialSteelTemplate from './SpecialSteelTemplate';
 import OpeningStockTemplate from './OpeningStockTemplate';
 import IptStatusTemplate from './IptStatusTemplate';
 import TechnoParamsTemplate from './TechnoParamsTemplate';
+import CapitalRepairTemplate from './CapitalRepairTemplate';
 
 function IndexTemplate({ data, onCellChange }) {
   const { rows = [] } = data || {};
@@ -130,6 +131,8 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <IptStatusTemplate data={pageData} />;
       case 'techno_params':
         return <TechnoParamsTemplate data={pageData} />;
+      case 'capital_repair':
+        return <CapitalRepairTemplate data={pageData} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>

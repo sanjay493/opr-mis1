@@ -42,6 +42,11 @@ const PAGE_LABELS = {
   33: 'Mill Wise Techno – RSP',
   34: 'Mill Wise Techno – BSL',
   35: 'Mill Wise Techno – ISP',
+  36: 'Capital Repair – BSP',
+  37: 'Capital Repair – DSP',
+  38: 'Capital Repair – RSP',
+  39: 'Capital Repair – BSL',
+  40: 'Capital Repair – ISP',
 };
 
 const months = [

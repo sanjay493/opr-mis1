@@ -162,6 +162,29 @@ def init_db():
         )
     """)
 
+    # 6d. Capital Repair plan — page 36-40 (Report_format/CR.pdf format).
+    # The plan columns (shop/equipment/activity/schedule/period) are the
+    # annual CR plan and effectively static for the FY; "actual" is the only
+    # field users update from the frontend as each repair executes (a free-
+    # text date range like "7.6.26-cont.." or "19.4.26-30.4.26" — not a
+    # clean date pair, so kept as text rather than forced into two DATE
+    # columns). schedule_days/period are also free text (source data mixes
+    # "9 days", "1 month", "3+3 (revival)", multi-month ranges, etc.).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS capital_repair_table (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            plant         TEXT,
+            fy            TEXT,               -- '2026-27'
+            shop          TEXT,               -- 'SP-2' / 'BFs' / 'SMS2' / 'Sinter Plant' / ...
+            equipment     TEXT,               -- 'M/c-1' / 'No-4' / 'Conv-A' / 'BAND-3' / ...
+            activity      TEXT,               -- 'Capital Repair' / 'BLT Chute Changing + Shot Creting'
+            schedule_days TEXT,
+            period        TEXT,
+            actual        TEXT,
+            sort_order    INTEGER DEFAULT 0
+        )
+    """)
+
     # 7. Inter-Plant Transfer (IPT) plan vs actual, per route per month
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ipt_table (
