@@ -155,6 +155,7 @@ def _render_pdf_sync(front_html: str, main_html: str, font_family: str = _DEFAUL
         if front_html:
             page = browser.new_page()
             page.set_content(front_html, wait_until="domcontentloaded")
+            page.evaluate("document.fonts.ready")
             front_bytes = page.pdf(
                 format="A4",
                 print_background=True,
@@ -168,6 +169,13 @@ def _render_pdf_sync(front_html: str, main_html: str, font_family: str = _DEFAUL
         if main_html:
             page = browser.new_page()
             page.set_content(main_html, wait_until="domcontentloaded")
+            # Web fonts load asynchronously; without waiting for them, two
+            # separate renders of the same HTML (as the trend-page split
+            # measurement pass and the final render both are) can land text
+            # with slightly different fallback/final font metrics, shifting
+            # row heights just enough to move the real page break away from
+            # the one measured — so both passes need this to agree.
+            page.evaluate("document.fonts.ready")
             main_bytes = page.pdf(
                 format="A4",
                 print_background=True,
@@ -204,6 +212,82 @@ def _render_pdf_sync(front_html: str, main_html: str, font_family: str = _DEFAUL
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()
+
+
+def _measure_trend_page_breaks_sync(trend_page: dict, main_pages: list, template, render_kwargs: dict,
+                                     font_family: str, report_month: str) -> dict:
+    """Render the *entire* main document (all of main_pages, not just the
+    trend section) with a unique marker appended to each trend row's
+    year-label, then inspect the produced PDF to see which physical page
+    each row actually lands on. Returns {(item_index, row_index): page_index}.
+
+    Measuring the trend section in isolation (its own standalone render) does
+    NOT reliably reproduce the same page breaks it gets when embedded after
+    pages 3-6 — verified empirically, root cause not fully pinned down but
+    the effect is real and large enough to move a group across a page
+    boundary. Rendering the same main_pages list here as the final render
+    uses removes that gap; only the trend rows' text differs (the markers),
+    which does not itself shift the breaks (verified separately).
+
+    Table cells use table-layout:fixed and white-space:nowrap (see
+    trend_yearly.html/main.html), so the extra marker text doesn't wrap or
+    change row height either."""
+    import re
+    from pypdf import PdfReader
+
+    marker_re = re.compile(r"@@(\d+)_(\d+)@@")
+    marked_items = []
+    for ii, it in enumerate(trend_page.get("items", [])):
+        new_rows = []
+        for ri, row in enumerate(it.get("rows", [])):
+            r = dict(row)
+            r["year_label"] = f'{row.get("year_label", "")} @@{ii}_{ri}@@'
+            new_rows.append(r)
+        marked_items.append({**it, "rows": new_rows})
+    marked_page = {**trend_page, "items": marked_items}
+    marked_main_pages = [marked_page if p is trend_page else p for p in main_pages]
+
+    html = template.render(pages=marked_main_pages, **render_kwargs)
+    pdf_bytes = _render_pdf_sync("", html, font_family, report_month)
+
+    page_of = {}
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    for pi, p in enumerate(reader.pages):
+        text = p.extract_text() or ""
+        for m in marker_re.finditer(text):
+            page_of[(int(m.group(1)), int(m.group(2)))] = pi
+    return page_of
+
+
+def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
+    """Mutate trend_page's rows in place: within each plant/SAIL group,
+    recompute is_first_in_plant/plant_row_count so the rowspan'd plant-name
+    cell is split at every point page_of shows a page-index change — one
+    merged, vertically-centered label per physical page instead of one for
+    the whole group (which would leave later pages blank when the group
+    spills over). A group with any row missing a measurement is left as a
+    single whole-group merge — the pre-existing, safe default."""
+    for ii, it in enumerate(trend_page.get("items", [])):
+        rows = it.get("rows", [])
+        i = 0
+        while i < len(rows):
+            plant = rows[i]["plant"]
+            j = i
+            while j < len(rows) and rows[j]["plant"] == plant:
+                j += 1
+            pages = [page_of.get((ii, k)) for k in range(i, j)]
+            if all(p is not None for p in pages):
+                seg_start = i
+                for k in range(i, j):
+                    if k > i and pages[k - i] != pages[k - i - 1]:
+                        for m in range(seg_start, k):
+                            rows[m]["is_first_in_plant"] = (m == seg_start)
+                            rows[m]["plant_row_count"] = k - seg_start
+                        seg_start = k
+                for m in range(seg_start, j):
+                    rows[m]["is_first_in_plant"] = (m == seg_start)
+                    rows[m]["plant_row_count"] = j - seg_start
+            i = j
 
 
 async def build_pdf_response(request: PDFRequest, pages_override: list = None, page_layouts: dict = None, font_config=None) -> StreamingResponse:
@@ -305,12 +389,28 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
             colors=_colors,
             **vars,
         )
-        front_html = _template.render(pages=front_pages, **_render_kwargs) if front_pages else ""
-        main_html = _template.render(pages=main_pages, **_render_kwargs) if main_pages else ""
-
         # Run sync Playwright in a thread so it doesn't fight the asyncio event loop
         loop = asyncio.get_event_loop()
         report_month_display = f"{vars['m_name']} {vars['y_str']}"
+
+        # Trend pages (7-12) flow continuously and can spill a plant/SAIL
+        # group across two physical pages. A merged rowspan cell only shows
+        # its label on the page the group started on, leaving the
+        # continuation blank — so measure the real page breaks first (using
+        # the full main_pages document, not an isolated slice — see
+        # _measure_trend_page_breaks_sync) and split the rowspan at that
+        # exact row, one merged/centered label per physical page instead of
+        # one for the whole group.
+        for _tp in main_pages:
+            if _tp.get("type") == "trend_section":
+                _page_of = await loop.run_in_executor(
+                    None, _measure_trend_page_breaks_sync,
+                    _tp, main_pages, _template, _render_kwargs, fc.family, report_month_display,
+                )
+                _apply_trend_page_splits(_tp, _page_of)
+
+        front_html = _template.render(pages=front_pages, **_render_kwargs) if front_pages else ""
+        main_html = _template.render(pages=main_pages, **_render_kwargs) if main_pages else ""
         pdf_bytes = await loop.run_in_executor(None, _render_pdf_sync, front_html, main_html, fc.family, report_month_display)
 
         return StreamingResponse(
