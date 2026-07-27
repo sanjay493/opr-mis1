@@ -1625,6 +1625,13 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         section["rows"].append(sail_row)
         sections_with_sail.append(section)
 
+    # Display-only rename: internal param_name matching above (SAIL specs,
+    # plan lookup, decimal formatting) stays keyed on "Coal to Hot Metal";
+    # only the header shown on page 27 changes.
+    for section in sections_with_sail:
+        if section["label"] == "Coal to Hot Metal":
+            section["label"] = "Coal to Hot Metal Ratio"
+
     sections = sections_with_sail
 
     return {

@@ -644,7 +644,7 @@ def _line_chart_svg(x_labels: list, fy_point_count: int, series: dict,
         x = xs(i)
         weight = 'font-weight="bold" ' if i < fy_point_count else ''
         lines.append(f'<text x="{x:.1f}" y="{mt + ch + 13:.1f}" text-anchor="middle" '
-                     f'font-size="7.5" font-family="Arial,sans-serif" {weight}'
+                     f'font-size="9.5" font-family="Arial,sans-serif" {weight}'
                      f'fill="#334155">{label}</text>')
 
     # Value-label y positions, nudged apart per x-position so two plants
@@ -686,12 +686,12 @@ def _line_chart_svg(x_labels: list, fy_point_count: int, series: dict,
             segments.append(seg)
         for s in segments:
             path = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y, _, _ in s)
-            lines.append(f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2.4"/>')
+            lines.append(f'<path d="{path}" fill="none" stroke="{color}" stroke-width="3.6"/>')
             for x, y, v, i in s:
-                lines.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.6" fill="{color}"/>')
+                lines.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.2" fill="{color}"/>')
                 ly = label_y_at.get((plant, i), y - 6)
                 lines.append(f'<text x="{x:.1f}" y="{ly:.1f}" text-anchor="middle" '
-                             f'font-size="6.5" font-weight="bold" font-family="Arial,sans-serif" '
+                             f'font-size="8.5" font-weight="bold" font-family="Arial,sans-serif" '
                              f'fill="{color}">{v:.3f}</text>')
 
     lines.append("</svg>")
