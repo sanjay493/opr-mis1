@@ -29,7 +29,7 @@ _PIG_IRON_CFG = {
 }
 
 _FINISHED_STEEL_CFG = {
-    "display": "FINISHED STEEL",
+    "display": "FINISHED STEEL (5 ISPs & 3 SSPs)",
     "unit": "'000 T",
     "db_item": "Finished Steel",
     "is_nos": False,
@@ -311,12 +311,20 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     fy_months_cur = _fy_months(cur_fy)
     rows = []
 
+    # Finished Steel's current-FY Plan/Actual rows always live-sum the 8
+    # plants (never the manually-saved Page 3 'SAIL' snapshot, which goes
+    # stale the moment plant data is added/revised after that save) — no
+    # Conversion adjustment added here, unlike Page 3/4's "incl. Conv." row.
+    # Historical FY rows keep preferring the stored SAIL record as before.
+    force_live_current = (db_item == "Finished Steel")
+
     for label, plant_list in groups:
         group_rows = []
         use_sail_direct = show_all and label == "SAIL"
+        use_sail_direct_current = use_sail_direct and not force_live_current
 
         # Plan row
-        if use_sail_direct:
+        if use_sail_direct_current:
             plan_vals = _sail_or_sum(sail_plan_direct, plan_data, plant_list, fy_months_cur)
         else:
             plan_vals = _agg_months(plan_data, plant_list, fy_months_cur)
@@ -328,7 +336,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
             })
 
         # Actual current FY
-        if use_sail_direct:
+        if use_sail_direct_current:
             act_cur = _sail_or_sum(sail_act_direct, act_data, plant_list, fy_months_cur, cap=report_month)
         else:
             act_cur = _agg_months(act_data, plant_list, fy_months_cur, cap=report_month)
