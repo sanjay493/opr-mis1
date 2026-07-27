@@ -34,6 +34,7 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
 from page_records import generate_records
 from page_jpc_report import build_jpc_report_bytes
 import page_production_fy_export
+import page_production_query_export
 from page_one_page_report import build_one_page_report_bytes
 from page_pmix_fy_report import build_pmix_fy_report_bytes
 
@@ -2750,17 +2751,12 @@ async def production_query_items(plants: str = Query(...)):
     return {"items": items}
 
 
-@app.post("/api/production-query")
-async def production_query(payload: dict):
+def _production_query_data(start: str, end: str, units: list) -> dict:
     """Month-wise plan (APP) and actual for user-selected plant/unit pairs.
-    Payload: {"start": "2026-04", "end": "2026-06",
-              "units": [{"plant": "BSP", "item": "BF#8"}, ...]}
+    units: [{"plant": "BSP", "item": "BF#8"}, ...]
     Response: {months, series: [{plant, item, plan: {m: v}, actual: {m: v}}]}
-    Values are rounded to 3 decimals."""
-    start = str(payload.get("start", ""))
-    end = str(payload.get("end", ""))
-    if not re.fullmatch(r"\d{4}-\d{2}", start) or not re.fullmatch(r"\d{4}-\d{2}", end):
-        raise HTTPException(status_code=400, detail="start/end must be YYYY-MM")
+    Values are rounded to 3 decimals. Shared by the JSON endpoint and the
+    Excel/PDF export endpoints below."""
     if start > end:
         start, end = end, start
 
@@ -2776,7 +2772,7 @@ async def production_query(payload: dict):
 
     wanted = []
     seen = set()
-    for u in payload.get("units", []):
+    for u in units:
         plant = str(u.get("plant", "")).strip()
         item = normalize_item_name(str(u.get("item", "")).strip())
         if plant and item and (plant, item) not in seen:
@@ -2843,6 +2839,73 @@ async def production_query(payload: dict):
                         s[key][month] = round(member_sums[key][(item, month)], 3)
 
     return {"months": months, "series": series}
+
+
+def _validate_query_range(payload: dict):
+    start = str(payload.get("start", ""))
+    end = str(payload.get("end", ""))
+    if not re.fullmatch(r"\d{4}-\d{2}", start) or not re.fullmatch(r"\d{4}-\d{2}", end):
+        raise HTTPException(status_code=400, detail="start/end must be YYYY-MM")
+    return start, end
+
+
+@app.post("/api/production-query")
+async def production_query(payload: dict):
+    """Month-wise plan (APP) and actual for user-selected plant/unit pairs.
+    Payload: {"start": "2026-04", "end": "2026-06",
+              "units": [{"plant": "BSP", "item": "BF#8"}, ...]}"""
+    start, end = _validate_query_range(payload)
+    return _production_query_data(start, end, payload.get("units", []))
+
+
+@app.post("/api/production-query/excel")
+async def production_query_excel(payload: dict):
+    """Excel download of the ad-hoc production query result, aggregated per
+    payload['view'] ('month' | 'quarter' | 'year', default 'month')."""
+    import traceback as tb
+    start, end = _validate_query_range(payload)
+    view = str(payload.get("view", "month"))
+    if view not in ("month", "quarter", "year"):
+        raise HTTPException(status_code=400, detail="view must be 'month', 'quarter' or 'year'")
+    try:
+        data = _production_query_data(start, end, payload.get("units", []))
+        content = page_production_query_export.build_excel_bytes(data, view)
+    except Exception as e:
+        detail = f"Production query Excel export failed: {type(e).__name__}: {e}\n{tb.format_exc()}"
+        print(detail)
+        raise HTTPException(status_code=500, detail=detail)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="Production_Query_{start}_to_{end}.xlsx"'},
+    )
+
+
+@app.post("/api/production-query/pdf")
+async def production_query_pdf(payload: dict):
+    """PDF download of the ad-hoc production query result, aggregated per
+    payload['view'] ('month' | 'quarter' | 'year', default 'month')."""
+    import asyncio, concurrent.futures
+    import traceback as tb
+    start, end = _validate_query_range(payload)
+    view = str(payload.get("view", "month"))
+    if view not in ("month", "quarter", "year"):
+        raise HTTPException(status_code=400, detail="view must be 'month', 'quarter' or 'year'")
+    try:
+        data = _production_query_data(start, end, payload.get("units", []))
+        html = page_production_query_export.build_pdf_html(data, view)
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            content = await loop.run_in_executor(pool, page_production_query_export.render_pdf_bytes, html)
+    except Exception as e:
+        detail = f"Production query PDF export failed: {type(e).__name__}: {e}\n{tb.format_exc()}"
+        print(detail)
+        raise HTTPException(status_code=500, detail=detail)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Production_Query_{start}_to_{end}.pdf"'},
+    )
 
 
 @app.get("/api/jpc-report")

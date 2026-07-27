@@ -31,6 +31,50 @@ function cumulative(itemName, values, months) {
   return isRateItem(itemName) ? sum / nums.length : sum;
 }
 
+// FY quarter convention used throughout the report: Q1=Apr-Jun, Q2=Jul-Sep,
+// Q3=Oct-Dec, Q4=Jan-Mar (Jan-Mar belongs to the FY that started the previous April).
+const QUARTER_OF_MONTH = { 4: 1, 5: 1, 6: 1, 7: 2, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3, 1: 4, 2: 4, 3: 4 };
+
+function fyStartOf(ym) {
+  const [y, m] = ym.split('-').map((n) => parseInt(n, 10));
+  return m >= 4 ? y : y - 1;
+}
+
+function quarterNumOf(ym) {
+  return QUARTER_OF_MONTH[parseInt(ym.split('-')[1], 10)];
+}
+
+function fyLabel(fyStart) {
+  return `${fyStart}-${String((fyStart + 1) % 100).padStart(2, '0')}`;
+}
+
+// Group a chronological list of "YYYY-MM" strings into display periods for
+// the given view. 'month': one bucket per month. 'quarter'/'year': grouped
+// by FY quarter / FY — mirrors backend's bucket_months() in
+// page_production_query_export.py so on-screen totals match the exports.
+function bucketMonths(months, view) {
+  if (view === 'month') {
+    return months.map((m) => ({ label: monthLabel(m), months: [m] }));
+  }
+  const keyOf = view === 'quarter'
+    ? (m) => `${fyStartOf(m)}-Q${quarterNumOf(m)}`
+    : (m) => String(fyStartOf(m));
+  const labelOf = view === 'quarter'
+    ? (m) => `Q${quarterNumOf(m)} ${fyLabel(fyStartOf(m))}`
+    : (m) => fyLabel(fyStartOf(m));
+  const buckets = [];
+  let curKey = null;
+  for (const m of months) {
+    const k = keyOf(m);
+    if (k !== curKey) {
+      buckets.push({ label: labelOf(m), months: [] });
+      curKey = k;
+    }
+    buckets[buckets.length - 1].months.push(m);
+  }
+  return buckets;
+}
+
 const cellBase = {
   padding: '7px 10px',
   fontSize: '10pt',
@@ -55,9 +99,11 @@ export default function ProductionQueryPage() {
   const [selectedUnits, setSelectedUnits] = useState([]); // [{plant, item}] in click order
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
+  const [viewMode, setViewMode] = useState('month'); // 'month' | 'quarter' | 'year'
   const [data, setData] = useState(null);            // { months, series }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [downloading, setDownloading] = useState(null); // 'excel' | 'pdf' | null
 
   // Load plants + available months
   useEffect(() => {
@@ -136,11 +182,76 @@ export default function ProductionQueryPage() {
       .finally(() => setLoading(false));
   };
 
+  const handleDownload = async (kind) => {
+    if (selectedUnits.length === 0 || !startMonth || !endMonth) return;
+    setDownloading(kind);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/production-query/${kind}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start: startMonth, end: endMonth, units: selectedUnits, view: viewMode }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Production_Query_${startMonth}_to_${endMonth}.${kind === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(`Download failed: ${e.message}`);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   // Month options, oldest → newest, for the range dropdowns
   const monthOptions = [...(meta?.months || [])].sort();
 
+  // Quarter/Year range options, derived from the same available months —
+  // each option's `first`/`last` are the month bounds to feed startMonth/
+  // endMonth with when the user picks a quarter or FY instead of a month.
+  const quarterOptions = (() => {
+    const map = new Map();
+    for (const m of monthOptions) {
+      const key = `${fyStartOf(m)}-Q${quarterNumOf(m)}`;
+      if (!map.has(key)) {
+        map.set(key, { key, label: `Q${quarterNumOf(m)} ${fyLabel(fyStartOf(m))}`, first: m, last: m });
+      } else {
+        map.get(key).last = m;
+      }
+    }
+    return [...map.values()];
+  })();
+
+  const yearOptions = (() => {
+    const map = new Map();
+    for (const m of monthOptions) {
+      const fy = fyStartOf(m);
+      if (!map.has(fy)) {
+        map.set(fy, { key: String(fy), label: fyLabel(fy), first: m, last: m });
+      } else {
+        map.get(fy).last = m;
+      }
+    }
+    return [...map.values()];
+  })();
+
+  const startQuarterKey = startMonth ? `${fyStartOf(startMonth)}-Q${quarterNumOf(startMonth)}` : '';
+  const endQuarterKey = endMonth ? `${fyStartOf(endMonth)}-Q${quarterNumOf(endMonth)}` : '';
+  const startYearKey = startMonth ? String(fyStartOf(startMonth)) : '';
+  const endYearKey = endMonth ? String(fyStartOf(endMonth)) : '';
+
   const months = data?.months || [];
   const series = data?.series || [];
+  const periods = bucketMonths(months, viewMode);
 
   const selectStyle = {
     padding: '8px 12px',
@@ -172,7 +283,7 @@ export default function ProductionQueryPage() {
             Unit-wise Production Query
           </h1>
           <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            Pick plants, units and a month range — get month-wise APP &amp; Actual with cumulative (&#39;000 T unless stated)
+            Pick plants, units and a range — view month-wise, quarter-wise or year-wise APP &amp; Actual with cumulative, and download as Excel or PDF (&#39;000 T unless stated)
           </p>
         </div>
 
@@ -259,24 +370,115 @@ export default function ProductionQueryPage() {
             </div>
           )}
 
-          {/* Month range + fetch */}
+          {/* View mode */}
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ fontSize: '11pt', fontWeight: 600, color: '#202124', marginBottom: '8px' }}>View</div>
+            <div style={{
+              display: 'inline-flex',
+              border: '1px solid #dadce0',
+              borderRadius: '6px',
+              overflow: 'hidden',
+              backgroundColor: '#ffffff',
+            }}>
+              {[['month', 'Month-wise'], ['quarter', 'Quarter-wise'], ['year', 'Year-wise']].map(([v, lbl]) => (
+                <button
+                  key={v}
+                  onClick={() => setViewMode(v)}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '10.5pt',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: viewMode === v ? '#1a73e8' : 'transparent',
+                    color: viewMode === v ? '#ffffff' : '#5f6368',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Range + fetch */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>From</label>
-              <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} style={selectStyle}>
-                {monthOptions.map((m) => (
-                  <option key={m} value={m}>{monthLabel(m)}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>To</label>
-              <select value={endMonth} onChange={(e) => setEndMonth(e.target.value)} style={selectStyle}>
-                {monthOptions.map((m) => (
-                  <option key={m} value={m}>{monthLabel(m)}</option>
-                ))}
-              </select>
-            </div>
+            {viewMode === 'month' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>From</label>
+                  <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} style={selectStyle}>
+                    {monthOptions.map((m) => (
+                      <option key={m} value={m}>{monthLabel(m)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>To</label>
+                  <select value={endMonth} onChange={(e) => setEndMonth(e.target.value)} style={selectStyle}>
+                    {monthOptions.map((m) => (
+                      <option key={m} value={m}>{monthLabel(m)}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            {viewMode === 'quarter' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>From</label>
+                  <select
+                    value={startQuarterKey}
+                    onChange={(e) => setStartMonth(quarterOptions.find((q) => q.key === e.target.value)?.first || startMonth)}
+                    style={selectStyle}
+                  >
+                    {quarterOptions.map((q) => (
+                      <option key={q.key} value={q.key}>{q.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>To</label>
+                  <select
+                    value={endQuarterKey}
+                    onChange={(e) => setEndMonth(quarterOptions.find((q) => q.key === e.target.value)?.last || endMonth)}
+                    style={selectStyle}
+                  >
+                    {quarterOptions.map((q) => (
+                      <option key={q.key} value={q.key}>{q.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            {viewMode === 'year' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>From</label>
+                  <select
+                    value={startYearKey}
+                    onChange={(e) => setStartMonth(yearOptions.find((y) => y.key === e.target.value)?.first || startMonth)}
+                    style={selectStyle}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={y.key} value={y.key}>FY {y.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>To</label>
+                  <select
+                    value={endYearKey}
+                    onChange={(e) => setEndMonth(yearOptions.find((y) => y.key === e.target.value)?.last || endMonth)}
+                    style={selectStyle}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={y.key} value={y.key}>FY {y.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
             <button
               onClick={fetchData}
               disabled={selectedUnits.length === 0 || loading}
@@ -298,6 +500,44 @@ export default function ProductionQueryPage() {
               <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>
                 {selectedUnits.length} unit{selectedUnits.length > 1 ? 's' : ''} selected
               </span>
+            )}
+            {data && series.length > 0 && (
+              <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
+                <button
+                  onClick={() => handleDownload('excel')}
+                  disabled={downloading !== null}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '10.5pt',
+                    fontWeight: 700,
+                    border: '1px solid #1a73e8',
+                    borderRadius: '6px',
+                    cursor: downloading !== null ? 'not-allowed' : 'pointer',
+                    backgroundColor: '#ffffff',
+                    color: downloading !== null ? '#9aa0a6' : '#1a73e8',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {downloading === 'excel' ? 'Generating…' : '⬇ Excel'}
+                </button>
+                <button
+                  onClick={() => handleDownload('pdf')}
+                  disabled={downloading !== null}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '10.5pt',
+                    fontWeight: 700,
+                    border: '1px solid #1a73e8',
+                    borderRadius: '6px',
+                    cursor: downloading !== null ? 'not-allowed' : 'pointer',
+                    backgroundColor: '#ffffff',
+                    color: downloading !== null ? '#9aa0a6' : '#1a73e8',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {downloading === 'pdf' ? 'Generating…' : '⬇ PDF'}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -343,7 +583,7 @@ export default function ProductionQueryPage() {
                     borderRight: '1px solid #dadce0',
                     verticalAlign: 'bottom',
                   }}>
-                    Month
+                    {viewMode === 'month' ? 'Month' : viewMode === 'quarter' ? 'Quarter' : 'Year'}
                   </th>
                   {series.map((s) => (
                     <th key={`${s.plant}|${s.item}`} colSpan={2} style={{
@@ -382,10 +622,10 @@ export default function ProductionQueryPage() {
                 </tr>
               </thead>
               <tbody>
-                {months.map((m, idx) => {
+                {periods.map((period, idx) => {
                   const zebra = idx % 2 === 1 ? '#f8f9fa' : '#ffffff';
                   return (
-                    <tr key={m}>
+                    <tr key={period.label}>
                       <td style={{
                         ...cellBase,
                         position: 'sticky',
@@ -396,31 +636,35 @@ export default function ProductionQueryPage() {
                         color: '#202124',
                         borderRight: '1px solid #dadce0',
                       }}>
-                        {monthLabel(m)}
+                        {period.label}
                       </td>
-                      {series.map((s) => (
-                        <React.Fragment key={`${s.plant}|${s.item}`}>
-                          <td style={{
-                            ...cellBase,
-                            textAlign: 'right',
-                            backgroundColor: zebra,
-                            color: s.plan[m] == null ? '#bdc1c6' : '#202124',
-                            fontVariantNumeric: 'tabular-nums',
-                            borderLeft: '1px solid #dadce0',
-                          }}>
-                            {fmt(s.plan[m])}
-                          </td>
-                          <td style={{
-                            ...cellBase,
-                            textAlign: 'right',
-                            backgroundColor: zebra,
-                            color: s.actual[m] == null ? '#bdc1c6' : '#202124',
-                            fontVariantNumeric: 'tabular-nums',
-                          }}>
-                            {fmt(s.actual[m])}
-                          </td>
-                        </React.Fragment>
-                      ))}
+                      {series.map((s) => {
+                        const periodPlan = cumulative(s.item, s.plan, period.months);
+                        const periodActual = cumulative(s.item, s.actual, period.months);
+                        return (
+                          <React.Fragment key={`${s.plant}|${s.item}`}>
+                            <td style={{
+                              ...cellBase,
+                              textAlign: 'right',
+                              backgroundColor: zebra,
+                              color: periodPlan == null ? '#bdc1c6' : '#202124',
+                              fontVariantNumeric: 'tabular-nums',
+                              borderLeft: '1px solid #dadce0',
+                            }}>
+                              {fmt(periodPlan)}
+                            </td>
+                            <td style={{
+                              ...cellBase,
+                              textAlign: 'right',
+                              backgroundColor: zebra,
+                              color: periodActual == null ? '#bdc1c6' : '#202124',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}>
+                              {fmt(periodActual)}
+                            </td>
+                          </React.Fragment>
+                        );
+                      })}
                     </tr>
                   );
                 })}
