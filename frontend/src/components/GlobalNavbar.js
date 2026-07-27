@@ -7,6 +7,7 @@ import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
 
 export default function GlobalNavbar() {
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [expandedGroup, setExpandedGroup] = useState(null);
   const { user, logout } = useAuth();
   const router = useRouter();
 
@@ -20,31 +21,45 @@ export default function GlobalNavbar() {
     {
       label: 'Data Entry',
       icon: '📋',
-      submenu: [
-        { label: 'Data Entry Hub', link: '/data-entry', icon: '📋' },
-
-        { type: 'group', groupLabel: 'Manual Entry' },
-        { label: 'Production Data Entry', link: '/data-entry/production', icon: '📊' },
-        { label: 'Special Steel Manual Entry (ISP)', link: '/data-entry/special-steel', icon: '🔩' },
-        { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
-        { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' },
-
-        { type: 'group', groupLabel: 'Uploads & Extraction' },
-        { label: 'Production, Stock & Special Steel Upload', link: '/upload', icon: '📤' },
-        { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },
-
-        { type: 'group', groupLabel: 'Stock & Transfers' },
-        { label: 'Opening Stock', link: '/data-entry/opening-stock', icon: '📦' },
-        { label: 'IPT Status', link: '/data-entry/ipt', icon: '↔️' },
-        { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
-        { label: 'Capital Repair', link: '/data-entry/capital-repair', icon: '🛠️' },
-
-        { type: 'group', groupLabel: 'Annual Targets' },
-        { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' },
-        { label: 'TE Targets (Pages 28-30)', link: '/data-entry/techno-page-targets', icon: '🎯' },
-
-        { type: 'group', groupLabel: 'Dashboards' },
-        { label: 'Techno Summary', link: '/data-entry/techno-summary', icon: '📈' },
+      groups: [
+        {
+          groupLabel: 'Manual Entry',
+          children: [
+            { label: 'Production Data Entry', link: '/data-entry/production', icon: '📊' },
+            { label: 'Special Steel Manual Entry (ISP)', link: '/data-entry/special-steel', icon: '🔩' },
+            { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
+            { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' },
+          ]
+        },
+        {
+          groupLabel: 'Uploads & Extraction',
+          children: [
+            { label: 'Production, Stock & Special Steel Upload', link: '/upload', icon: '📤' },
+            { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },
+          ]
+        },
+        {
+          groupLabel: 'Stock & Transfers',
+          children: [
+            { label: 'Opening Stock', link: '/data-entry/opening-stock', icon: '📦' },
+            { label: 'IPT Status', link: '/data-entry/ipt', icon: '↔️' },
+            { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
+            { label: 'Capital Repair', link: '/data-entry/capital-repair', icon: '🛠️' },
+          ]
+        },
+        {
+          groupLabel: 'Annual Targets',
+          children: [
+            { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' },
+            { label: 'TE Targets (Pages 28-30)', link: '/data-entry/techno-page-targets', icon: '🎯' },
+          ]
+        },
+        {
+          groupLabel: 'Dashboards',
+          children: [
+            { label: 'Techno Summary', link: '/data-entry/techno-summary', icon: '📈' },
+          ]
+        },
       ]
     },
     {
@@ -135,12 +150,18 @@ export default function GlobalNavbar() {
             alignItems: 'center',
             marginLeft: '48px'
           }}>
-            {navItems.map((item, idx) => (
-              <div key={idx} style={{ position: 'relative', paddingBottom: item.submenu ? '8px' : '0' }}
-                onMouseEnter={() => item.submenu && setOpenDropdown(idx)}
-                onMouseLeave={() => item.submenu && setOpenDropdown(null)}
+            {navItems.map((item, idx) => {
+              const hasDropdown = !!(item.submenu || item.groups);
+              return (
+              <div key={idx} style={{ position: 'relative', paddingBottom: hasDropdown ? '8px' : '0' }}
+                onMouseEnter={() => hasDropdown && setOpenDropdown(idx)}
+                onMouseLeave={() => {
+                  if (!hasDropdown) return;
+                  setOpenDropdown(null);
+                  setExpandedGroup(null);
+                }}
               >
-                {item.submenu ? (
+                {hasDropdown ? (
                   <div
                     style={{
                       cursor: 'pointer',
@@ -200,7 +221,7 @@ export default function GlobalNavbar() {
                   </Link>
                 )}
 
-                {/* Dropdown Menu */}
+                {/* Dropdown Menu — flat submenu (Reports, Highlights, etc.) */}
                 {item.submenu && openDropdown === idx && (
                   <div style={{
                     position: 'absolute',
@@ -269,8 +290,101 @@ export default function GlobalNavbar() {
                     })}
                   </div>
                 )}
+
+                {/* Dropdown Menu — collapsible groups (Data Entry): only the
+                    hovered/clicked group's children are shown; every other
+                    group stays collapsed to just its header. */}
+                {item.groups && openDropdown === idx && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '0',
+                    backgroundColor: '#f8f9fa',
+                    border: '1px solid #dadce0',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    overflowY: 'auto',
+                    maxHeight: 'calc(100vh - 100px)',
+                    minWidth: '300px',
+                    boxShadow: '0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)'
+                  }}
+                  >
+                    {item.groups.map((group, gIdx) => {
+                      const isExpanded = expandedGroup === gIdx;
+                      return (
+                        <div key={gIdx}
+                          onMouseEnter={() => setExpandedGroup(gIdx)}
+                          style={{ borderTop: gIdx > 0 ? '1px solid #e8eaed' : 'none' }}
+                        >
+                          <div
+                            onClick={() => setExpandedGroup(isExpanded ? null : gIdx)}
+                            style={{
+                              padding: '10px 18px',
+                              fontSize: '9.5pt',
+                              fontWeight: 700,
+                              color: isExpanded ? '#1a73e8' : '#5f6368',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                              backgroundColor: isExpanded ? '#e8f0fe' : '#eef1f4',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <span>{group.groupLabel}</span>
+                            <svg
+                              width="11" height="11" viewBox="0 0 24 24" fill="none"
+                              stroke="currentColor" strokeWidth="3"
+                              style={{
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.15s ease',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                          </div>
+                          {isExpanded && group.children.map((subitem, subidx) => {
+                            const isLast = subidx === group.children.length - 1;
+                            return (
+                              <Link key={subidx} href={subitem.link} style={{ textDecoration: 'none' }}>
+                                <div style={{
+                                  padding: '13px 18px 13px 26px',
+                                  borderBottom: isLast ? 'none' : '1px solid #e8eaed',
+                                  color: '#202124',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  fontSize: '12pt',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'rgba(26, 115, 232, 0.1)';
+                                  e.currentTarget.style.color = '#1a73e8';
+                                  e.currentTarget.style.paddingLeft = '30px';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                  e.currentTarget.style.color = '#202124';
+                                  e.currentTarget.style.paddingLeft = '26px';
+                                }}
+                                >
+                                  <span style={{ fontSize: '14px' }}>{subitem.icon}</span>
+                                  {subitem.label}
+                                </div>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ))}
+            );})}
           </div>
 
           {/* Account menu */}
