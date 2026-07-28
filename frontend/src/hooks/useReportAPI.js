@@ -21,21 +21,48 @@ const fetchWithTimeout = (url, options = {}, timeoutMs = 30000) => {
   });
 };
 
-// Fetch report data for a specific month
-export function useReportData(month) {
+// Fetch report data for every page of a month in one shot. Slow (~20-40s —
+// each page's own DB calls run serially server-side), so the report viewer
+// only calls this on demand (PDF export, which needs every page at once);
+// see useReportPage for the fast per-page fetch preview navigation uses.
+export function useReportData(month, options = {}) {
   return useQuery({
     queryKey: ['report', month],
     queryFn: async () => {
       const response = await fetchWithTimeout(
-        `${API_BASE_URL}/api/data?month=${encodeURIComponent(month)}`
+        `${API_BASE_URL}/api/data?month=${encodeURIComponent(month)}`,
+        {},
+        60000 // full report spans ~40 pages' worth of DB calls — needs more room than the 30s default
       );
       if (!response.ok) {
         throw new Error('Failed to fetch report data');
       }
       return response.json();
     },
-    enabled: !!month,
+    enabled: !!month && options.enabled !== false,
     staleTime: 0, // always fetch fresh — techno/MIS data changes via separate save flows
+  });
+}
+
+// Fetch a single page's report data — each page only depends on its own DB
+// calls server-side, so this is typically well under a second even though
+// the full-month fetch above takes 20-40s. Used for the report preview so
+// switching months/pages doesn't wait on every page to compute.
+export function useReportPage(month, pageNumber, options = {}) {
+  return useQuery({
+    queryKey: ['report-page', month, pageNumber],
+    queryFn: async () => {
+      const response = await fetchWithTimeout(
+        `${API_BASE_URL}/api/data?month=${encodeURIComponent(month)}&page_number=${pageNumber}`
+      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch report page');
+      }
+      const data = await response.json();
+      return data[0];
+    },
+    enabled: !!month && !!pageNumber && options.enabled !== false,
+    staleTime: 0,
   });
 }
 

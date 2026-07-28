@@ -310,7 +310,12 @@ def get_layout_config():
 # ---------------------------------------------------------------------------
 
 @app.get("/api/data")
-def get_data(month: str = "2025-11"):
+def get_data(month: str = "2025-11", page_number: Optional[int] = None):
+    """page_number: when given, scopes the whole computation to that one
+    page instead of all ~40 — each page's data only depends on its own DB
+    calls, so the other pages' (often expensive) generators never run. Used
+    by the frontend to show the active page quickly instead of waiting on
+    every page to finish before rendering any of them."""
     if not os.path.exists(FRONTEND_DATA_PATH):
         raise HTTPException(status_code=404, detail="Template data source not found.")
     try:
@@ -319,6 +324,17 @@ def get_data(month: str = "2025-11"):
             with open(FRONTEND_DATA_PATH, "r", encoding="utf-8-sig") as f:
                 pages_config = json.load(f)
             pages_config = blank_out_page_data(pages_config)
+
+        if page_number is not None:
+            if page_number == 24:
+                # Page 24 doesn't exist in the template (see the "Page 24"
+                # comment below) — it's always synthesized fresh.
+                pages_config = [{"page": 24}]
+            else:
+                pages_config = [p for p in pages_config if p.get("page") == page_number]
+                if not pages_config:
+                    raise HTTPException(status_code=404,
+                                         detail=f"Page {page_number} not found for {month}")
 
         conn = db.connect()
         cursor = conn.cursor()
@@ -417,14 +433,18 @@ def get_data(month: str = "2025-11"):
         _ml = _dt_obj.strftime("%b'%y")
         _cl = _dt.datetime(_dt_obj.year - 1, _dt_obj.month, 1).strftime("%b'%y")
         _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL"}
-        # Page 24: was "merged into page 23" (stale DB-cached rows from before
-        # that merge); now repurposed as the Special Steel trend/performance
-        # analysis page (line + bar charts). Strip any stale copy, then insert
-        # a fresh placeholder right after page 23 if one isn't already there.
-        pages_config = [p for p in pages_config if p.get("page") != 24]
-        _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
-        if _idx23 is not None:
-            pages_config.insert(_idx23 + 1, {"page": 24})
+        if page_number is None:
+            # Page 24: was "merged into page 23" (stale DB-cached rows from
+            # before that merge); now repurposed as the Special Steel
+            # trend/performance analysis page (line + bar charts). Strip any
+            # stale copy, then insert a fresh placeholder right after page 23
+            # if one isn't already there. (In single-page mode, page_number==24
+            # already synthesized its own {"page": 24} shell above — skipped
+            # here since page 23 isn't in the filtered list to anchor off of.)
+            pages_config = [p for p in pages_config if p.get("page") != 24]
+            _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
+            if _idx23 is not None:
+                pages_config.insert(_idx23 + 1, {"page": 24})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:

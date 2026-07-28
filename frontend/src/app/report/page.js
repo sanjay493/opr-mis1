@@ -1,9 +1,9 @@
 ﻿'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import PageRenderer from '../../components/PageRenderer';
-import { useReportData, useGeneratePDF } from '@/hooks/useReportAPI';
+import { useReportData, useReportPage, useGeneratePDF } from '@/hooks/useReportAPI';
 
 // Edit these labels to change what appears in the Page Selector dropdown
 const PAGE_LABELS = {
@@ -48,6 +48,11 @@ const PAGE_LABELS = {
   39: 'Capital Repair – BSL',
   40: 'Capital Repair – ISP',
 };
+
+// Page list/count is fixed regardless of report month, so the page selector
+// and PDF checklist can render from this immediately — they don't need to
+// wait on any report data to load.
+const ALL_PAGE_NUMBERS = Object.keys(PAGE_LABELS).map(Number).sort((a, b) => a - b);
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -195,28 +200,36 @@ const getDefaultDate = () => {
   };
 };
 
+// Applies the page===4/5/6 type overrides the raw API response needs before
+// display. Shared by the per-page fast path and the full-fetch export path.
+function normalizePageTypes(pages) {
+  return pages.map((p) => {
+    if (p.page === 4) return { ...p, type: 'page4_table' };
+    if (p.page === 5 || p.page === 6) return { ...p, type: 'performance_summary_table' };
+    return p;
+  });
+}
+
 export default function ReportPage() {
   const defaultDate = getDefaultDate();
+  // Pages load lazily, one at a time, as the user views/edits/exports them —
+  // this accumulates whatever has been fetched so far for the CURRENT
+  // selectedMonth (wiped and rebuilt whenever the month changes).
   const [pagesData, setPagesData] = useState([]);
-  // Which report month pagesData actually reflects — set together with
-  // pagesData itself so the two can never drift apart independently.
-  const [pagesDataMonth, setPagesDataMonth] = useState(null);
   const [activePageNum, setActivePageNum] = useState(1);
   const [selectedMonthName, setSelectedMonthName] = useState(defaultDate.month);
   const [selectedYear, setSelectedYear] = useState(defaultDate.year);
-  const [selectedPages, setSelectedPages] = useState(new Set());
+  const [selectedPages, setSelectedPages] = useState(new Set(ALL_PAGE_NUMBERS));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isPreparingExport, setIsPreparingExport] = useState(false);
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
-  // True in the gap between changing the month/year selector and the
-  // matching report data actually arriving — pagesData still holds the
-  // PREVIOUS month's pages during that window (React Query's `data` for a
-  // new query key only updates once the fetch resolves), so exporting here
-  // would silently send the old month's page content under the new month's
-  // label. Pages 1-12 aren't recomputed server-side in /api/generate-pdf —
-  // it renders exactly what's submitted for those — so this used to produce
-  // a PDF mixing two different report months.
-  const isReportDataStale = pagesDataMonth !== selectedMonth;
+  // Guards the async export flow below against a month change landing mid-
+  // flight (the full-fetch it awaits can take 20-40s) — without this, a
+  // slow fetch for month A resolving after the user has already switched to
+  // month B would inject month A's pages into month B's pagesData.
+  const selectedMonthRef = useRef(selectedMonth);
+  useEffect(() => { selectedMonthRef.current = selectedMonth; }, [selectedMonth]);
 
   // Ctrl+B (Cmd+B on Mac) toggles the sidebar, same convention as most IDEs.
   useEffect(() => {
@@ -230,34 +243,49 @@ export default function ReportPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Use React Query to fetch report data - automatically cached for 10 minutes
-  const { data: rawData, isLoading, error } = useReportData(selectedMonth);
+  // Switching months invalidates every previously-loaded page.
+  useEffect(() => {
+    setPagesData([]);
+  }, [selectedMonth]);
+
+  // Default the PDF export selection to "all pages" whenever the month changes.
+  useEffect(() => {
+    setSelectedPages(new Set(ALL_PAGE_NUMBERS));
+  }, [selectedMonth]);
+
+  const isActivePageLoaded = pagesData.some((p) => p.page === activePageNum);
+
+  // Fast path: only the page currently on screen. Each page's data only
+  // depends on its own DB calls server-side (~1s typical), so this is what
+  // makes switching months/pages responsive instead of waiting 20-40s for
+  // every page. Disabled once the page is already in pagesData so revisiting
+  // an already-loaded (and possibly locally-edited) page never refetches
+  // over it.
+  const { data: activePageRaw, error: activePageError } =
+    useReportPage(selectedMonth, activePageNum, { enabled: !isActivePageLoaded });
+
+  // Slow path: every page at once. Not fetched automatically — only pulled
+  // on demand when exporting a page that hasn't been viewed yet (see
+  // handleBackendExport below).
+  const { refetch: refetchFullData } = useReportData(selectedMonth, { enabled: false });
+
   const { mutate: generatePDF, isPending: isGeneratingPDF } = useGeneratePDF();
 
-  // Format data when it loads
+  // Merge the active page into pagesData once it arrives. Skipped if already
+  // present (see the `enabled` guard above for why that matters).
   useEffect(() => {
-    if (rawData) {
-      const normalized = rawData.map((p) => {
-        if (p.page === 4) return { ...p, type: 'page4_table' };
-        if (p.page === 5 || p.page === 6) return { ...p, type: 'performance_summary_table' };
-        return p;
-      });
-      const formatted = getFormattedPagesData(normalized, selectedMonthName, selectedYear, 'November', '2025');
-      setPagesData(formatted);
-      // selectedMonth is recomputed fresh each render from the same
-      // selectedMonthName/selectedYear this effect already depends on, so
-      // it's guaranteed to match what formatted was just built for.
-      setPagesDataMonth(`${selectedYear}-${MONTH_NUM[selectedMonthName]}`);
-    }
-  }, [rawData, selectedMonthName, selectedYear]);
-
-  // Default the PDF export selection to "all pages" whenever a new report loads
-  useEffect(() => {
-    setSelectedPages(new Set(pagesData.map((p) => p.page)));
-  }, [pagesData]);
+    if (!activePageRaw) return;
+    setPagesData((prev) => {
+      if (prev.some((p) => p.page === activePageRaw.page)) return prev;
+      const [formatted] = getFormattedPagesData(
+        normalizePageTypes([activePageRaw]), selectedMonthName, selectedYear, 'November', '2025'
+      );
+      return [...prev, formatted];
+    });
+  }, [activePageRaw, selectedMonthName, selectedYear]);
 
   const activePage = useMemo(
-    () => pagesData.find((p) => p.page === activePageNum) || pagesData[0],
+    () => pagesData.find((p) => p.page === activePageNum),
     [pagesData, activePageNum]
   );
 
@@ -270,7 +298,7 @@ export default function ReportPage() {
     });
   };
 
-  const selectAllPages = () => setSelectedPages(new Set(pagesData.map((p) => p.page)));
+  const selectAllPages = () => setSelectedPages(new Set(ALL_PAGE_NUMBERS));
   const selectNoPages = () => setSelectedPages(new Set());
 
   const handleCellChange = (updatedPageData) => {
@@ -279,12 +307,37 @@ export default function ReportPage() {
     );
   };
 
-  const handleBackendExport = () => {
-    if (isReportDataStale) {
-      alert('Report data for the selected month is still loading — please wait a moment and try again.');
-      return;
+  const handleBackendExport = async () => {
+    const exportMonth = selectedMonth;
+    let dataForExport = pagesData;
+
+    const missing = [...selectedPages].filter((n) => !pagesData.some((p) => p.page === n));
+    if (missing.length > 0) {
+      setIsPreparingExport(true);
+      try {
+        const { data: fullRawData } = await refetchFullData();
+        // The month may have changed while this (slow, 20-40s) fetch was in
+        // flight — its result belongs to exportMonth, not necessarily
+        // whatever's on screen now, so only fold it into live pagesData
+        // state if the two still match. Either way, the export itself below
+        // still uses the correct exportMonth data via dataForExport.
+        if (fullRawData) {
+          const formatted = getFormattedPagesData(
+            normalizePageTypes(fullRawData), selectedMonthName, selectedYear, 'November', '2025'
+          );
+          const alreadyLoaded = new Set(pagesData.map((p) => p.page));
+          const merged = [...pagesData, ...formatted.filter((p) => !alreadyLoaded.has(p.page))];
+          dataForExport = merged;
+          if (selectedMonthRef.current === exportMonth) {
+            setPagesData(merged);
+          }
+        }
+      } finally {
+        setIsPreparingExport(false);
+      }
     }
-    const pagesToExport = pagesData.filter((p) => selectedPages.has(p.page));
+
+    const pagesToExport = dataForExport.filter((p) => selectedPages.has(p.page));
     if (pagesToExport.length === 0) {
       alert('Select at least one page to export.');
       return;
@@ -381,20 +434,20 @@ export default function ReportPage() {
         <div className="control-section">
           <h2>Page Selector</h2>
           <div className="form-group">
-            <label>Navigate Report Pages ({pagesData.length} total)</label>
+            <label>Navigate Report Pages ({ALL_PAGE_NUMBERS.length} total)</label>
             <select
               className="form-control"
               value={activePageNum}
               onChange={(e) => setActivePageNum(Number(e.target.value))}
             >
-              {pagesData.map((page) => (
-                <option key={page.page} value={page.page}>
-                  {page.page}. {PAGE_LABELS[page.page] || page.title || 'Page ' + page.page}
+              {ALL_PAGE_NUMBERS.map((pageNum) => (
+                <option key={pageNum} value={pageNum}>
+                  {pageNum}. {PAGE_LABELS[pageNum] || 'Page ' + pageNum}
                 </option>
               ))}
             </select>
           </div>
-          
+
           <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
             <button
               className="btn btn-secondary"
@@ -407,8 +460,8 @@ export default function ReportPage() {
             <button
               className="btn btn-secondary"
               style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => Math.min(pagesData.length, prev + 1))}
-              disabled={activePageNum === pagesData.length}
+              onClick={() => setActivePageNum((prev) => Math.min(ALL_PAGE_NUMBERS.length, prev + 1))}
+              disabled={activePageNum === ALL_PAGE_NUMBERS.length}
             >
               Next
             </button>
@@ -465,9 +518,9 @@ export default function ReportPage() {
               padding: '4px 8px',
             }}
           >
-            {pagesData.map((page) => (
+            {ALL_PAGE_NUMBERS.map((pageNum) => (
               <label
-                key={page.page}
+                key={pageNum}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -479,15 +532,15 @@ export default function ReportPage() {
               >
                 <input
                   type="checkbox"
-                  checked={selectedPages.has(page.page)}
-                  onChange={() => togglePageSelection(page.page)}
+                  checked={selectedPages.has(pageNum)}
+                  onChange={() => togglePageSelection(pageNum)}
                 />
-                {page.page}. {PAGE_LABELS[page.page] || page.title || 'Page ' + page.page}
+                {pageNum}. {PAGE_LABELS[pageNum] || 'Page ' + pageNum}
               </label>
             ))}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#5f6368', marginTop: '6px' }}>
-            {selectedPages.size} of {pagesData.length} pages selected
+            {selectedPages.size} of {ALL_PAGE_NUMBERS.length} pages selected
           </div>
         </div>
 
@@ -497,13 +550,13 @@ export default function ReportPage() {
           <button
             className="btn btn-secondary"
             onClick={handleBackendExport}
-            disabled={isGeneratingPDF || isReportDataStale || isLoading}
+            disabled={isGeneratingPDF || isPreparingExport}
             style={{ borderColor: 'var(--primary)', color: '#1a73e8' }}
           >
             {isGeneratingPDF ? (
               'Compiling PDF Backend...'
-            ) : isReportDataStale || isLoading ? (
-              'Loading report data...'
+            ) : isPreparingExport ? (
+              'Preparing export…'
             ) : (
               <>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -526,7 +579,7 @@ export default function ReportPage() {
 
       {/* Main Preview Area */}
       <div className="preview-area">
-        {isLoading || isReportDataStale ? (
+        {!activePage ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#5f6368', fontSize: '1.2rem', fontWeight: '500' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
               <style>{`
@@ -535,7 +588,7 @@ export default function ReportPage() {
                 }
               `}</style>
               <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid #dadce0', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-              Loading database report data...
+              {activePageError ? `Failed to load page ${activePageNum}` : `Loading page ${activePageNum}...`}
             </div>
           </div>
         ) : (
@@ -543,7 +596,7 @@ export default function ReportPage() {
             pageData={activePage}
             onCellChange={handleCellChange}
             selectedMonth={selectedMonth}
-            totalPages={pagesData.length}
+            totalPages={ALL_PAGE_NUMBERS.length}
           />
         )}
       </div>
