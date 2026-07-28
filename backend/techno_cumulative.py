@@ -388,7 +388,11 @@ def compute_cumulative_from_values(
                "(parameter not configured for production weighting in CUMULATIVE_RULES)."))
         for m in months:
             if m in values:
-                rows.append({"month": m, "value": values[m], "weight": None, "product": None})
+                # Show whatever weight was actually resolved (even though it
+                # goes unused in a simple average) so the breakdown doesn't
+                # falsely flag months as "missing" production when only some
+                # OTHER month in the range is what triggered the fallback.
+                rows.append({"month": m, "value": values[m], "weight": weights.get(m), "product": None})
         result = round(sum(values.values()) / len(values), 4)
         steps.append(
             f"Cumulative = ({' + '.join(str(values[m]) for m in months if m in values)}) "
