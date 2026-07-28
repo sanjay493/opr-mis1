@@ -2,9 +2,7 @@
                 <h2>{{ page.title }}: {{ short_m }}'{{ short_y }}</h2>
             </div>
 
-            {# ── Production narrative ── #}
-            <p class="page3-section-heading" style="margin-bottom:1px;">Production:</p>
-            <p class="page3-section-heading" style="margin-top:0;margin-bottom:2px;">{{ short_m }}'{{ short_y }}:</p>
+            {# ── Production narrative (auto-generated from production_table) ── #}
             {% if page.production_narrative %}
             <p class="page3-narrative">{{ page.production_narrative }}</p>
             {% endif %}

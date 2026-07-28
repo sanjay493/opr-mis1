@@ -2,6 +2,32 @@
 import React from 'react';
 
 // ---------------------------------------------------------------------------
+// Production narrative sentence — mirrors backend/report_utils.py's
+// build_production_narrative() so the live preview and the server-rendered
+// PDF (which uses whatever production_narrative was last written here)
+// always agree.
+// ---------------------------------------------------------------------------
+function buildProductionNarrative(productionTable) {
+  const findRow = (item) => (productionTable || []).find(r => r.item === item);
+  const fmtMT = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? (n / 1000).toFixed(3) : '—';
+  };
+  const fmtPctOfApp = (v) => (v === undefined || v === null || v === '') ? '—' : `${v}%`;
+
+  const hotMetalRow   = findRow('Hot Metal');
+  const crudeSteelRow = findRow('Crude Steel');
+  const saleableRow   = findRow('Saleable Steel');
+
+  return (
+    `Hot Metal production during the month was ${fmtMT(hotMetalRow?.values?.[1])} MT ` +
+    `(${fmtPctOfApp(hotMetalRow?.values?.[3])} of APP), Crude Steel production was ` +
+    `${fmtMT(crudeSteelRow?.values?.[1])} MT (${fmtPctOfApp(crudeSteelRow?.values?.[3])} of APP) and ` +
+    `Saleable Steel production was ${fmtMT(saleableRow?.values?.[1])} MT (${fmtPctOfApp(saleableRow?.values?.[3])} of APP).`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Bar chart colours  (match screenshot palette)
 // ---------------------------------------------------------------------------
 const C_FY      = '#FFC000';  // gold   – past FY actuals
@@ -197,7 +223,14 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
     updatedProd[rowIndex] = { ...updatedProd[rowIndex] };
     updatedProd[rowIndex].values = [...updatedProd[rowIndex].values];
     updatedProd[rowIndex].values[valIndex] = newVal;
-    onCellChange({ ...data, production_table: updatedProd });
+    onCellChange({
+      ...data,
+      production_table: updatedProd,
+      // Keep in sync so a PDF exported right after a manual edit (without
+      // reloading) still reflects it — the PDF template renders this field
+      // as-is rather than recomputing it from production_table.
+      production_narrative: buildProductionNarrative(updatedProd),
+    });
   };
 
   const handleTeChange = (rowIndex, valIndex, newVal) => {
@@ -209,18 +242,6 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
   };
 
   const highlightLines = Array.isArray(highlights) ? highlights : (highlights ? [highlights] : []);
-
-  // -- Production narrative sentence, computed from production_table (dynamic per report month) --
-  const findProdRow = (item) => production_table.find(r => r.item === item);
-  const fmtMT = (v) => {
-    const n = parseFloat(v);
-    return Number.isFinite(n) ? (n / 1000).toFixed(3) : '—';
-  };
-  const fmtPctOfApp = (v) => (v === undefined || v === null || v === '') ? '—' : `${v}%`;
-
-  const hotMetalRow    = findProdRow('Hot Metal');
-  const crudeSteelRow  = findProdRow('Crude Steel');
-  const saleableRow    = findProdRow('Saleable Steel');
 
   const textareaStyle = {
     width: '100%',
@@ -241,9 +262,7 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
 
       {/* ── Production narrative (auto-generated from production_table) ── */}
       <div style={{ fontSize: '0.9em', lineHeight: '1.4' }}>
-        Hot Metal production during the month was {fmtMT(hotMetalRow?.values?.[1])} MT ({fmtPctOfApp(hotMetalRow?.values?.[3])} of APP),
-        {' '}Crude Steel production was {fmtMT(crudeSteelRow?.values?.[1])} MT ({fmtPctOfApp(crudeSteelRow?.values?.[3])} of APP)
-        {' '}and Saleable Steel production was {fmtMT(saleableRow?.values?.[1])} MT ({fmtPctOfApp(saleableRow?.values?.[3])} of APP).
+        {buildProductionNarrative(production_table)}
       </div>
 
       {/* ── Production table ── */}

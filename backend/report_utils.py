@@ -73,6 +73,40 @@ def compute_item_row(month: str, item_name: str) -> list:
     ]
 
 
+def build_production_narrative(production_table: List[Dict[str, Any]]) -> str:
+    """Page 3's top narrative sentence, computed from the same production_table
+    rows/indices as the ACT (1) and %FUL (3) columns shown just below it —
+    mirrors SummaryTemplate.js's client-side version so the live preview and
+    the server-rendered PDF template always agree."""
+    def find_row(item_name):
+        return next((r for r in production_table if r.get("item") == item_name), None)
+
+    def cell(row, idx):
+        vals = (row or {}).get("values") or []
+        return vals[idx] if len(vals) > idx else None
+
+    def fmt_mt(val):
+        try:
+            return f"{float(val) / 1000:.3f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    def fmt_pct(val):
+        return "—" if val in (None, "") else f"{val}%"
+
+    hot_metal    = find_row("Hot Metal")
+    crude_steel  = find_row("Crude Steel")
+    saleable     = find_row("Saleable Steel")
+
+    return (
+        f"Hot Metal production during the month was {fmt_mt(cell(hot_metal, 1))} MT "
+        f"({fmt_pct(cell(hot_metal, 3))} of APP), Crude Steel production was "
+        f"{fmt_mt(cell(crude_steel, 1))} MT ({fmt_pct(cell(crude_steel, 3))} of APP) and "
+        f"Saleable Steel production was {fmt_mt(cell(saleable, 1))} MT "
+        f"({fmt_pct(cell(saleable, 3))} of APP)."
+    )
+
+
 def blank_out_page_data(pages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Blanks out mock/dummy numeric data and highlights from the template pages config."""
     blanked = []

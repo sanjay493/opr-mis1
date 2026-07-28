@@ -14,7 +14,7 @@ from pathlib import Path
 
 import db
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, Page3NarrativeRequest
-from report_utils import compute_item_row, blank_out_page_data
+from report_utils import compute_item_row, build_production_narrative, blank_out_page_data
 from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
@@ -349,6 +349,7 @@ def get_data(month: str = "2025-11", page_number: Optional[int] = None):
                 if page.get("page") == 3 or page.get("type") == "summary":
                     for row in page.get("production_table", []):
                         row["values"] = compute_item_row(month, row.get("item"))
+                    page["production_narrative"] = build_production_narrative(page.get("production_table", []))
                     page["highlights"] = generate_page3_highlights(month)
                     te_result = _safe_te_table(month)
                     # Handle both dict and list returns (for backwards compatibility)
