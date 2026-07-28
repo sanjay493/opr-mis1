@@ -1,7 +1,5 @@
     <div class="page7-13-section-page pg-{{ page.page }}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
-        {% if page.dept_badge %}
-        <div class="dept-badge side-{{ page.dept_badge.side }} grp-{{ page.dept_badge.group }}">Operations Directorate</div>
-        {% endif %}
+        <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
         {% for item in page['items'] %}
         <div class="page7-13-item-block">
             <table class="page7-13-yearly-table">
