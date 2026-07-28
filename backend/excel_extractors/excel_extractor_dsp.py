@@ -307,6 +307,12 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
                     block: str = 'all', column_shift: int = 0) -> dict:
     """DSP preview: delegates to pdf_extractor_dsp for .pdf, else MCR-I text.
 
+    Two different PDFs can show up for DSP: the monthly OMI report
+    (pdf_extractor_dsp.py — has a 'PRODUCTION MONTHWISE' page) and the daily
+    Plant Control summary 'pcontrep.pdf' (pdf_extractor_dsp_pcontrep.py — a
+    PDF export of the same underlying report the MCR-I text file comes
+    from). Sniff which one it is before picking an extractor.
+
     Args:
         column_shift: Column offset for data extraction (-1 for Sep'25 left-shifted layout)
     """
@@ -314,6 +320,10 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
     suffix = _os.path.splitext(file_path)[1].lower()
 
     if suffix == '.pdf':
+        import pdf_extractor_dsp_pcontrep
+        if pdf_extractor_dsp_pcontrep.looks_like_pcontrep(file_path):
+            return pdf_extractor_dsp_pcontrep.extract_preview(
+                file_path, report_month, aliases=aliases, block=block)
         import pdf_extractor_dsp
         return pdf_extractor_dsp.extract_preview(
             file_path, report_month, aliases=aliases, block=block)
