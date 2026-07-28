@@ -93,6 +93,51 @@ def get_rule(param_key: str):
     return CUMULATIVE_RULES.get(param_key, ("average", None))
 
 
+def production_cumulative_from_table(plant: str, unit: str, report_month: str) -> Dict:
+    """April→report_month production for `unit`, summed straight from
+    production_table — 'production' is never stored in techno_data (see
+    api_mcr_techno.py's _SKIP_CUMULATIVE_KEYS: the production-entry page is
+    the one authoritative source, and duplicating a cumulative here risked
+    drifting out of sync with it), which meant the "Calculate Cumulative"
+    step window simply omitted a production row for each unit rather than
+    showing the real figure. This fills that row for DISPLAY ONLY, reusing
+    the same production_table lookups the weighted rules already use for
+    their weights — never written back into
+    techno_data (callers must keep excluding "production" from the actual
+    till_month write)."""
+    plant = plant.upper()
+    months = _db.get_ytd_months(report_month)
+
+    if unit in SHOP_UNITS:
+        item = PLANT_WEIGHT_ITEMS["hm"] if unit.startswith("BF") else PLANT_WEIGHT_ITEMS["crude_steel"]
+        monthly = _plant_production(plant, item, months)
+        source = f"total {plant} '{item}' production ('000 t, production data)"
+    else:
+        monthly = _unit_production(plant, unit, months)
+        source = (f"{unit} monthly production ('000 t — production data, else "
+                  f"the unit's techno 'production' param)")
+
+    rows = [{"month": m, "value": monthly[m], "weight": None, "product": None}
+            for m in months if m in monthly]
+    missing = [m for m in months if m not in monthly]
+    warnings = ([f"No production found for: {', '.join(missing)} — excluded from the sum."]
+                if missing else [])
+    result = round(sum(monthly.values()), 3) if monthly else None
+    steps = [f"Source: {source}."]
+    if monthly:
+        steps.append(
+            f"Cumulative = {' + '.join(str(monthly[m]) for m in months if m in monthly)} = {result}")
+    else:
+        steps.append("No monthly production found in production_table — cumulative unavailable.")
+
+    return {
+        "plant": plant, "unit": unit, "param_key": "production",
+        "report_month": report_month, "fy_months": months,
+        "method": "sum", "weight_basis": None, "weight_item": source,
+        "rows": rows, "result": result, "steps": steps, "warnings": warnings,
+    }
+
+
 def _plant_production(plant: str, item: str, months) -> Dict[str, float]:
     """{month: production} for a plant-level item from production_table."""
     conn = _db.connect()

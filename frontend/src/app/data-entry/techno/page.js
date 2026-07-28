@@ -194,8 +194,11 @@ function BulkCumulativeModal({ preview, onConfirm, onClose, busy, confirmLabel, 
                                     <tr key={r.month}>
                                       <td style={{ padding: '3px 10px' }}>{r.month}</td>
                                       <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(r.value)}</td>
-                                      <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace', color: r.weight == null ? '#dc2626' : '#202124' }}>
-                                        {r.weight == null ? 'missing' : fmt(r.weight)}
+                                      <td style={{
+                                        padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace',
+                                        color: r.weight == null ? (d.method === 'sum' ? '#5f6368' : '#dc2626') : '#202124',
+                                      }}>
+                                        {r.weight == null ? (d.method === 'sum' ? '—' : 'missing') : fmt(r.weight)}
                                       </td>
                                       <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{r.product != null ? fmt(r.product) : '—'}</td>
                                     </tr>

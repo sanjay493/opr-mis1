@@ -40,7 +40,7 @@ from db import (  # noqa: E402
     enrich_techno_records_with_db,
 )
 from api_unified_techno import validate_units_for_plant, _validate_month  # noqa: E402
-from techno_cumulative import compute_cumulative_preview  # noqa: E402
+from techno_cumulative import compute_cumulative_preview, production_cumulative_from_table  # noqa: E402
 
 router = APIRouter(prefix="/api/mcr-techno", tags=["mcr-techno"])
 
@@ -51,7 +51,10 @@ router = APIRouter(prefix="/api/mcr-techno", tags=["mcr-techno"])
 # production figures and cumulative. Computing/saving a till_month for
 # "production" here would just be a redundant, unused number that could
 # visually conflict with production_table's own totals, so it's excluded
-# from both the preview breakdown and the write.
+# from the till_month write. It's still shown in the step-window "details"
+# breakdown below, though — production_cumulative_from_table() sources that
+# entry straight from production_table (not computed/saved here) so the
+# window doesn't just have a hole where "production" should be.
 _SKIP_CUMULATIVE_KEYS = {"production"}
 
 _EXTRACTORS = {
@@ -188,6 +191,32 @@ async def calc_cumulative(payload: dict):
         # Unsaved production from the same payload serves as this month's
         # weight for the unit-wise weighted rules (e.g. furnace coke rate).
         current_production = month_vals.get("production")
+        # "production" itself is never written to till_month (see
+        # _SKIP_CUMULATIVE_KEYS), but the step window still shows it,
+        # sourced from production_table rather than computed/saved here.
+        # Not gated on this unit's own techno_data having a "production"
+        # month value — shop-level aggregates (BF_Shop, SMS) never do (only
+        # their individual furnaces/converters report production directly),
+        # even though production_table has a perfectly good total for them.
+        # Skip adding the row only when nothing was actually found, so
+        # units genuinely unrelated to production_table (e.g. a pure
+        # quality-metric unit) don't get a clutter "no data" entry.
+        try:
+            prod_result = production_cumulative_from_table(plant, unit, report_month)
+            if prod_result["rows"]:
+                details.append({
+                    "unit": unit,
+                    "param_key": "production",
+                    "method": prod_result["method"],
+                    "weight_item": prod_result["weight_item"],
+                    "rows": prod_result["rows"],
+                    "steps": prod_result["steps"],
+                    "warnings": prod_result["warnings"],
+                    "result": prod_result["result"],
+                    "previous_till_month": None,
+                })
+        except ValueError as e:
+            warnings.append(f"{unit} · production: {e}")
         for key, val in month_vals.items():
             if val is None or key in _SKIP_CUMULATIVE_KEYS:
                 continue
@@ -273,6 +302,27 @@ async def calc_cumulative_all(payload: dict):
         current_production = month_vals.get("production")
         if not isinstance(current_production, (int, float)):
             current_production = None
+        # "production" is never written to till_month (see
+        # _SKIP_CUMULATIVE_KEYS), but the step window still shows it,
+        # sourced from production_table rather than computed/saved here.
+        # Not gated on this unit's own techno_data having a "production"
+        # month value — see the matching comment in calc_cumulative() above.
+        try:
+            prod_result = production_cumulative_from_table(plant, unit, report_month)
+            if prod_result["rows"]:
+                details.append({
+                    "unit": unit,
+                    "param_key": "production",
+                    "method": prod_result["method"],
+                    "weight_item": prod_result["weight_item"],
+                    "rows": prod_result["rows"],
+                    "steps": prod_result["steps"],
+                    "warnings": prod_result["warnings"],
+                    "result": prod_result["result"],
+                    "previous_till_month": None,
+                })
+        except ValueError as e:
+            warnings.append(f"{unit} · production: {e}")
         changed = False
         for key, val in month_vals.items():
             if not isinstance(val, (int, float)):
