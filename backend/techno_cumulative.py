@@ -71,6 +71,11 @@ PLANT_WEIGHT_ITEMS = {"hm": "Hot Metal", "crude_steel": "Total Crude Steel"}
 SHOP_UNITS = {"BF_Shop", "SMS", "SMS-1", "SMS-2", "SMS-3", "SMS-I", "SMS-II",
               "General"}
 
+# Techno unit names that don't match their production_table item_name
+# outright (checked across DSP/BSP, both of which report this unit as
+# "Merchant Mill" in techno_data but "MM" in production_table).
+UNIT_ITEM_ALIASES = {"Merchant Mill": "MM"}
+
 # Plants whose single registered BF *is* the whole shop (plant_registry.py:
 # "single BF: furnace == shop" — currently just ISP's BF-5). Their furnace's
 # production_table row is never populated separately from the plant-level
@@ -158,8 +163,9 @@ def _unit_production(plant: str, unit: str, months,
     """{month: production ('000 t)} for a unit.
 
     Primary source: furnace-wise rows in production_table (item_name equal to
-    the unit name — 'BF-1' or the 'BF#8' spelling), which the monthly
-    production uploads populate for the whole FY. Months not covered there
+    the unit name — 'BF-1' or the 'BF#8' spelling — or its UNIT_ITEM_ALIASES
+    entry, e.g. 'Merchant Mill' -> 'MM'), which the monthly production
+    uploads populate for the whole FY. Months not covered there
     fall back to the unit's own techno 'production' parameter (tonnes,
     converted to '000 t so both sources weigh consistently). For a
     single-furnace plant (SINGLE_BF_PLANTS — e.g. ISP's BF-5), the furnace IS
@@ -172,6 +178,8 @@ def _unit_production(plant: str, unit: str, months,
     candidates = [unit]
     if unit.startswith("BF-"):
         candidates.append("BF#" + unit[3:])
+    if unit in UNIT_ITEM_ALIASES:
+        candidates.append(UNIT_ITEM_ALIASES[unit])
 
     conn = _db.connect()
     cur = conn.cursor()
