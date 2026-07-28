@@ -198,6 +198,9 @@ const getDefaultDate = () => {
 export default function ReportPage() {
   const defaultDate = getDefaultDate();
   const [pagesData, setPagesData] = useState([]);
+  // Which report month pagesData actually reflects — set together with
+  // pagesData itself so the two can never drift apart independently.
+  const [pagesDataMonth, setPagesDataMonth] = useState(null);
   const [activePageNum, setActivePageNum] = useState(1);
   const [selectedMonthName, setSelectedMonthName] = useState(defaultDate.month);
   const [selectedYear, setSelectedYear] = useState(defaultDate.year);
@@ -205,6 +208,15 @@ export default function ReportPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
+  // True in the gap between changing the month/year selector and the
+  // matching report data actually arriving — pagesData still holds the
+  // PREVIOUS month's pages during that window (React Query's `data` for a
+  // new query key only updates once the fetch resolves), so exporting here
+  // would silently send the old month's page content under the new month's
+  // label. Pages 1-12 aren't recomputed server-side in /api/generate-pdf —
+  // it renders exactly what's submitted for those — so this used to produce
+  // a PDF mixing two different report months.
+  const isReportDataStale = pagesDataMonth !== selectedMonth;
 
   // Ctrl+B (Cmd+B on Mac) toggles the sidebar, same convention as most IDEs.
   useEffect(() => {
@@ -232,6 +244,10 @@ export default function ReportPage() {
       });
       const formatted = getFormattedPagesData(normalized, selectedMonthName, selectedYear, 'November', '2025');
       setPagesData(formatted);
+      // selectedMonth is recomputed fresh each render from the same
+      // selectedMonthName/selectedYear this effect already depends on, so
+      // it's guaranteed to match what formatted was just built for.
+      setPagesDataMonth(`${selectedYear}-${MONTH_NUM[selectedMonthName]}`);
     }
   }, [rawData, selectedMonthName, selectedYear]);
 
@@ -264,6 +280,10 @@ export default function ReportPage() {
   };
 
   const handleBackendExport = () => {
+    if (isReportDataStale) {
+      alert('Report data for the selected month is still loading — please wait a moment and try again.');
+      return;
+    }
     const pagesToExport = pagesData.filter((p) => selectedPages.has(p.page));
     if (pagesToExport.length === 0) {
       alert('Select at least one page to export.');
@@ -477,11 +497,13 @@ export default function ReportPage() {
           <button
             className="btn btn-secondary"
             onClick={handleBackendExport}
-            disabled={isGeneratingPDF}
+            disabled={isGeneratingPDF || isReportDataStale || isLoading}
             style={{ borderColor: 'var(--primary)', color: '#1a73e8' }}
           >
             {isGeneratingPDF ? (
               'Compiling PDF Backend...'
+            ) : isReportDataStale || isLoading ? (
+              'Loading report data...'
             ) : (
               <>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -504,7 +526,7 @@ export default function ReportPage() {
 
       {/* Main Preview Area */}
       <div className="preview-area">
-        {isLoading ? (
+        {isLoading || isReportDataStale ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#5f6368', fontSize: '1.2rem', fontWeight: '500' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
               <style>{`

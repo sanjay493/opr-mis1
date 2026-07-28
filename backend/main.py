@@ -1,6 +1,7 @@
 import os
 import json
 import csv
+import copy
 import io
 import re
 import sqlite3
@@ -30,7 +31,8 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
                           generate_major_techno_from_db, generate_techno_from_db,
                           generate_major_techno_verification, generate_techno_target_columns,
-                          calculate_sail_actuals_strict, _BF_PLANTS as _SAIL_DASHBOARD_PLANTS)
+                          calculate_sail_actuals_strict, techno_month_table_font_size,
+                          _BF_PLANTS as _SAIL_DASHBOARD_PLANTS)
 from page_records import generate_records
 from page_jpc_report import build_jpc_report_bytes
 import page_production_fy_export
@@ -523,6 +525,8 @@ def save_page3_narrative(request: Page3NarrativeRequest):
 async def generate_pdf(request: PDFRequest):
     import datetime as _dt
     enriched = []
+    dynamic_page_layouts = {}
+    _static_pages_cfg = load_layout_config()["pages"]
     _pages_list = [page.dict() for page in request.pages]
     # Page 24: ensure the trend/performance analysis page is present even for
     # requests built from a page list saved before this page existed.
@@ -580,13 +584,34 @@ async def generate_pdf(request: PDFRequest):
             p.update(_safe_techno(request.month, pg))
             p["type"] = "techno_params"
             p["orientation"] = "landscape" if 31 <= pg <= 35 else "portrait"
+            # Pages 28-30 add one column per YTD month (3 in June, up to 12
+            # in March) — wide enough late in the FY to overflow the
+            # printable page at the static config size. Since Chromium's
+            # print-to-PDF then shrinks the *whole document* to fit that
+            # one page (Playwright's page.pdf() doesn't set
+            # prefer_css_page_size), an overflow here was dragging pages
+            # 4-6 (and everything else) down with it. Shrinking this
+            # table's own font as month count grows keeps it self-contained.
+            if 28 <= pg <= 30:
+                n_months = len(p.get("month_labels", []))
+                base_entry = _static_pages_cfg.get(str(pg), {})
+                base_size = base_entry.get("table", {}).get("td", 9.0)
+                font_size = techno_month_table_font_size(n_months, base=base_size)
+                if font_size < base_size:
+                    entry = copy.deepcopy(base_entry)
+                    tbl = entry.setdefault("table", {})
+                    tbl["th"] = tbl["thead"] = font_size
+                    tbl["td"] = tbl["tbody"] = font_size
+                    dynamic_page_layouts[str(pg)] = entry
         if pg in CR_PAGES:
             p.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(request.month)))
             p["type"] = "capital_repair"
             p["orientation"] = "portrait"
         enriched.append(p)
-    # Layout and typography now come from backend layout_config.json only; ignore frontend overrides
-    return await build_pdf_response(request, pages_override=enriched, page_layouts=None, font_config=None)
+    # Layout/typography come from backend layout_config.json, plus the
+    # dynamic techno month-table font sizes computed just above; frontend
+    # overrides are otherwise ignored.
+    return await build_pdf_response(request, pages_override=enriched, page_layouts=dynamic_page_layouts or None, font_config=None)
 
 
 # ---------------------------------------------------------------------------

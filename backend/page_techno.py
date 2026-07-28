@@ -50,6 +50,31 @@ TECHNO_PAGES = {
     35: ("MILL_ISP",    "MILL WISE TECHNO-ECONOMIC PARAMETERS", "IISCO Steel Plant"),
 }
 
+
+def techno_month_table_font_size(n_months: int, base: float = 9.0) -> float:
+    """Pages 28-30 (Coke/Sinter, Iron Making, SMS Shop) add one column per
+    YTD month, growing from 3 (June) to 12 (March) across the FY. At the
+    full 12-month width the table overflows the printable page at the
+    static `base` size from layout_config.json — and since Playwright's
+    page.pdf() call doesn't set prefer_css_page_size, Chromium's response
+    to an overflowing page is to shrink the *entire* print job to fit, not
+    just that page, so every other page in the same PDF comes out visibly
+    smaller too (verified by comparing real March vs June reports: March's
+    12-month techno pages were dragging pages 4-6 down with them).
+    Shrinking this table's own font as month count grows keeps it
+    self-contained so that never triggers.
+
+    Anchored empirically: `base` (9pt) fits at 3 months; ~7pt is what
+    Chromium's own fit-to-page computed as necessary at 12 months in that
+    comparison. Interpolated linearly between those two points, with a
+    small safety margin folded into the slope so 12 months lands a bit
+    under 7pt rather than right at the boundary."""
+    if n_months <= 3:
+        return base
+    size = base - 0.25 * (n_months - 3)
+    return round(max(size, 6.5), 2)
+
+
 # ---------------------------------------------------------------------------
 # SAIL weighted-average constants  (string-based, no param_ids)
 # ---------------------------------------------------------------------------

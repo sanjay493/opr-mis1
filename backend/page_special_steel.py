@@ -11,10 +11,126 @@ Each page carries two period sets side-by-side:
   • Month    : current month vs CPLY month
   • Cumulative: Apr→current month vs CPLY same range (Apr last-year → CPLY month)
 """
+import re
 import math
 import datetime as _dt
 import sqlite3
 import db
+
+
+# ── grade clubbing ──────────────────────────────────────────────────────────
+# Some product groups (esp. RSP's "New PM PLATES" / "HR PLATES SSL") list so
+# many near-duplicate quality-grade spec variants that the page spills onto
+# a second sheet. GRADE_CLUBS lets a few of them be displayed as one combined
+# row (figures summed) instead of hardcoding the combined text per case.
+#
+# Keyed by (plant, product group). Each entry is a club: either a plain list
+# of the raw quality_grade values (from special_steel_orders) to combine —
+# in the order they should appear in the merged label — or a dict
+# {"grades": [...], "label": "..."} when the auto-merge below doesn't read
+# cleanly (e.g. grades from genuinely different standards where a
+# shared-prefix/suffix merge would be misleading; verified this happens for
+# several real grade pairs, so don't skip the review — see auto_club_label
+# docstring). Members not present in a given month/YTD just contribute zero,
+# same as an ungrouped grade with no data that period.
+GRADE_CLUBS = {
+    ("RSP", "New PM PLATES"): [
+        ["IS2041/SA516", "IS2041R355/SA537CL1"],
+        ["ASME SA387 GR11 CL2 (N & T)", "ASME SA387 GR12 CL2 (N & T)"],
+    ],
+    ("RSP", "HR PLATES SSL"): [
+        ["IS5986ISH500LAHFQ450", "IS5986ISH540R-FRM410"],
+    ],
+ ("DSP", "CC BILLET"): [
+        ["C18MNCRC1", "C18HMNV50"],
+    ],
+}
+
+_CLUB_TOKEN_RE = re.compile(r'\s+|[A-Za-z0-9]+|[^\sA-Za-z0-9]')
+_CLUB_SUBTOKEN_RE = re.compile(r'\d+|[A-Za-z]+')
+
+
+def _auto_club_label_pair(g1: str, g2: str, min_subtoken_prefix: int = 4) -> str:
+    """Merge two quality-grade strings into one label: shared prefix +
+    '/'-joined differing parts + shared suffix, e.g.
+    'ASME SA387 GR11 CL2 (N & T)' + 'ASME SA387 GR12 CL2 (N & T)'
+    -> 'ASME SA387 GR11/GR12 CL2 (N & T)'.
+
+    Tokenizes on whitespace/alnum-run/punctuation boundaries so a shared
+    prefix or suffix only absorbs *whole* codes (never splits a spec number
+    like GR11/GR12 into a shared "GR1" + differing "1"/"2" — that reads as
+    ambiguous). The one exception: when two whole tokens differ but one is a
+    literal prefix of the other with at least `min_subtoken_prefix` shared
+    leading letters/digits (e.g. "IS2041" is a prefix of "IS2041R355"), that
+    shared lead is still folded into the prefix, since it's the same case as
+    your worked IS2041 example.
+
+    This is a formatting convenience for GRADE_CLUBS entries that don't
+    specify an explicit "label" — it is NOT a similarity detector. Run on
+    arbitrary grade pairs it will happily produce nonsense (e.g. merging two
+    unrelated ASTM standards into one confusing row), which is exactly why
+    GRADE_CLUBS lists members explicitly rather than clubbing automatically."""
+    t1, t2 = _CLUB_TOKEN_RE.findall(g1), _CLUB_TOKEN_RE.findall(g2)
+    n1, n2 = len(t1), len(t2)
+
+    i = 0
+    while i < n1 and i < n2 and t1[i] == t2[i]:
+        i += 1
+    j = 0
+    while j < (n1 - i) and j < (n2 - i) and t1[n1 - 1 - j] == t2[n2 - 1 - j]:
+        j += 1
+
+    prefix = "".join(t1[:i])
+    suffix = "".join(t1[n1 - j:]) if j else ""
+    mid1, mid2 = t1[i:n1 - j], t2[i:n2 - j]
+
+    extra1 = extra2 = ""
+    if mid1 and mid2:
+        a, b = mid1[0], mid2[0]
+        if a != b and a.isalnum() and b.isalnum():
+            sa, sb = _CLUB_SUBTOKEN_RE.findall(a), _CLUB_SUBTOKEN_RE.findall(b)
+            k = 0
+            subpfx = ""
+            while k < len(sa) and k < len(sb) and sa[k] == sb[k]:
+                subpfx += sa[k]
+                k += 1
+            if subpfx and len(subpfx) >= min_subtoken_prefix:
+                prefix += subpfx
+                extra1, extra2 = a[len(subpfx):], b[len(subpfx):]
+                mid1, mid2 = mid1[1:], mid2[1:]
+
+    remainder1 = extra1 + "".join(mid1)
+    remainder2 = extra2 + "".join(mid2)
+    if not remainder1 and not remainder2:
+        return prefix + suffix
+
+    sep = " " if (remainder1 and prefix and prefix[-1:].isalnum() and remainder1[0].isalnum()) else ""
+    return f"{prefix}{sep}{remainder1}/{remainder2}{suffix}"
+
+
+def _auto_club_label(grades: list) -> str:
+    """Fold _auto_club_label_pair across 3+ grades left to right."""
+    label = grades[0]
+    for g in grades[1:]:
+        label = _auto_club_label_pair(label, g)
+    return label
+
+
+def _resolve_clubs(plant: str, product: str) -> tuple:
+    """Return (grade_to_club_index, club_specs) for this (plant, product),
+    where club_specs[i] = (member_grades, display_label)."""
+    raw = GRADE_CLUBS.get((plant, product), [])
+    grade_to_club = {}
+    club_specs = []
+    for idx, entry in enumerate(raw):
+        members = entry["grades"] if isinstance(entry, dict) else entry
+        label = entry.get("label") if isinstance(entry, dict) else None
+        if not label:
+            label = _auto_club_label(members) if len(members) > 1 else members[0]
+        club_specs.append((members, label))
+        for g in members:
+            grade_to_club[g] = idx
+    return grade_to_club, club_specs
 
 
 # ── month-label helpers ───────────────────────────────────────────────────────
@@ -222,12 +338,39 @@ def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
     g_cum_ord = g_cum_act = g_cum_cply = 0.0
     has_cply = has_cum_cply = False
 
+    # See GRADE_CLUBS — some quality grades are combined into one displayed
+    # row (figures summed) instead of one row per grade, to keep dense
+    # product groups from spilling onto a second page.
+    grade_to_club, club_specs = _resolve_clubs(plant, product_group)
+    emitted_clubs = set()
+
     for qg, sec in all_grades:
-        o, a   = cur_map.get((qg, sec), (0, 0))
-        o, a   = o or 0, a or 0
-        c      = cply_map.get((qg, sec))
-        co, ca = ytd_map.get((qg, sec), (0, 0))
-        cc     = cytd_map.get((qg, sec))
+        club_idx = grade_to_club.get(qg) if not sec else None
+        if club_idx is not None:
+            if club_idx in emitted_clubs:
+                continue
+            emitted_clubs.add(club_idx)
+            members, label = club_specs[club_idx]
+            o = a = co = ca = 0.0
+            c_parts, cc_parts = [], []
+            for g in members:
+                mo, ma = cur_map.get((g, ""), (0, 0))
+                o += mo or 0; a += ma or 0
+                mco, mca = ytd_map.get((g, ""), (0, 0))
+                co += mco or 0; ca += mca or 0
+                mc = cply_map.get((g, ""))
+                if mc is not None: c_parts.append(mc)
+                mcc = cytd_map.get((g, ""))
+                if mcc is not None: cc_parts.append(mcc)
+            c  = sum(c_parts) if c_parts else None
+            cc = sum(cc_parts) if cc_parts else None
+        else:
+            o, a   = cur_map.get((qg, sec), (0, 0))
+            o, a   = o or 0, a or 0
+            c      = cply_map.get((qg, sec))
+            co, ca = ytd_map.get((qg, sec), (0, 0))
+            cc     = cytd_map.get((qg, sec))
+            label  = f"{qg} {sec}".strip() if sec else qg
 
         # Hide rows with no activity in current month, YTD, or either CPLY period
         if (o == 0 and a == 0 and
@@ -240,7 +383,6 @@ def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
         if c  is not None: g_cply     += c;  has_cply     = True
         if cc is not None: g_cum_cply += cc; has_cum_cply = True
 
-        label = f"{qg} {sec}".strip() if sec else qg
         rows.append(_grade(label, o, a, c, co, ca, cc))
 
     if total_label:
