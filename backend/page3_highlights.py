@@ -12,25 +12,31 @@ Only one monthly total per item is fetched from the DB; every period
 that in Python, so a single query does for all of it (and Conversion only
 has to be merged in once).
 
-Every item/period combination that's a record is scored by how prestigious
-the record is — annual best-ever ranks highest, then an all-time monthly
-record (any month), then half-yearly, then quarterly, then merely "best for
-this calendar month name" (weakest, since it doesn't have to beat other
-months) — and only the top MAX_HIGHLIGHTS candidates are kept, so the
-section never runs longer than that regardless of how many items/periods
-happen to be records this month. Quarter/half/FY are only even checked when
-`month` is that period's closing month (Jun/Sep/Dec/Mar for quarters,
-Sep/Mar for halves, Mar for FY).
+Records are grouped into "sections" — one per period type that applies this
+month (annual / all-time-monthly / half-yearly / quarterly / same-month),
+each keeping every item that qualified for it. Page 3 has a fixed amount of
+room for this block, so sections are added highest-priority first (annual
+best-ever > all-time monthly record > half-yearly > quarterly > merely
+"best for this calendar month name", the last being weakest since it
+doesn't have to beat other months) up to a line budget, and whichever
+lowest-priority sections don't fit are dropped rather than truncated
+mid-list — every included section still shows all of its items. Quarter/
+half/FY sections are only even considered when `month` is that period's
+closing month (Jun/Sep/Dec/Mar for quarters, Sep/Mar for halves, Mar for
+FY).
 """
 import datetime as _dt
 
 import db
 from constants import ALL_PLANTS
 
-MAX_HIGHLIGHTS = 2
+# Headline + bullet lines combined, across every section included. Tune this
+# to whatever actually fits in Page 3's fixed layout alongside the
+# production table / TE table / charts below it.
+MAX_HIGHLIGHT_LINES = 6
 
-# Lower = more prestigious record, wins a spot over a higher-numbered tier
-# when there are more candidates than MAX_HIGHLIGHTS.
+# Lower = more prestigious record, included before a higher-numbered tier
+# when the line budget can't fit every qualifying section.
 _TIER_ANNUAL     = 1
 _TIER_MONTH_EVER = 2
 _TIER_HALF       = 3
@@ -203,19 +209,34 @@ def generate_page3_highlights(month: str) -> list:
                 f"SAIL achieved best {_fy_label(fy_start)} production for following",
                 lambda fy: _fy_label(fy))
 
-        # Stable sort — within a tier, candidates keep the item order they
-        # were generated in (Hot Metal, Crude Steel, Saleable Steel, Finished
-        # Steel), so ties are broken deterministically.
-        candidates.sort(key=lambda c: c['tier'])
-        selected = candidates[:MAX_HIGHLIGHTS]
+        # Group into whole sections (tier + headline) — "best fit all
+        # sections" means a section that applies this month shows ALL of its
+        # qualifying items, never just a slice of them.
+        sections = {}
+        order = []
+        for c in candidates:
+            key = (c['tier'], c['headline'])
+            if key not in sections:
+                sections[key] = []
+                order.append(key)
+            sections[key].append(c['line'])
+        order.sort(key=lambda k: k[0])  # tier ascending = priority order
 
+        # Fit as many whole sections as the line budget allows, highest
+        # priority first; whatever doesn't fit is dropped from the least-
+        # priority end. The first (highest-priority) section is always kept
+        # even if it alone exceeds the budget — better to run slightly over
+        # than to show nothing.
         lines = []
-        last_headline = None
-        for c in selected:
-            if c['headline'] != last_headline:
-                lines.append(f"{c['headline']}:-")
-                last_headline = c['headline']
-            lines.append(c['line'])
+        total = 0
+        for tier, headline in order:
+            section_lines = sections[(tier, headline)]
+            cost = 1 + len(section_lines)  # headline + its bullet lines
+            if lines and total + cost > MAX_HIGHLIGHT_LINES:
+                break
+            lines.append(f"{headline}:-")
+            lines.extend(section_lines)
+            total += cost
         return lines
     finally:
         conn.close()
