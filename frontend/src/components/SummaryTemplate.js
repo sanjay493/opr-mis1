@@ -403,9 +403,6 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
       {/* ── SAIL Bar Charts 2×2: Coke Rate, CDI, BF Productivity, S.E.C. ── */}
       {chart_data?.params?.length > 0 && (
         <div style={{ marginTop: '12px' }}>
-          <div style={{ fontWeight: '700', fontSize: '0.95em', marginBottom: '6px' }}>
-            Historical Performance &amp; Trends (Last 3 FY + Plan + Current Month):
-          </div>
           <ChartGrid chartData={chart_data} />
         </div>
       )}
