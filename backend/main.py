@@ -15,6 +15,7 @@ from pathlib import Path
 import db
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, Page3NarrativeRequest
 from report_utils import compute_item_row, blank_out_page_data
+from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
 from page7_13 import generate_trend_page_rows, generate_combined_trend_items, TREND_PAGES
@@ -332,6 +333,7 @@ def get_data(month: str = "2025-11"):
                 if page.get("page") == 3 or page.get("type") == "summary":
                     for row in page.get("production_table", []):
                         row["values"] = compute_item_row(month, row.get("item"))
+                    page["highlights"] = generate_page3_highlights(month)
                     te_result = _safe_te_table(month)
                     # Handle both dict and list returns (for backwards compatibility)
                     if isinstance(te_result, dict) and 'te_table' in te_result:
@@ -450,16 +452,6 @@ def get_data(month: str = "2025-11"):
                 page.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(month)))
                 page["type"] = "capital_repair"
                 page["orientation"] = "portrait"
-
-        # Page 3: overlay the saved Production Narrative + Highlights, if the
-        # user has ever saved one for this month (independent of whether
-        # actuals/plans exist, and of page_configs).
-        saved_narrative = db.get_page3_narrative(month)
-        if saved_narrative is not None:
-            for page in pages_config:
-                if page.get("page") == 3 or page.get("type") == "summary":
-                    page["production_narrative"] = saved_narrative["production_narrative"]
-                    page["highlights"] = saved_narrative["highlights"]
 
         return pages_config
     except Exception as e:

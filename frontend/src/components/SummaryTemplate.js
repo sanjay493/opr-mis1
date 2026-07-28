@@ -1,6 +1,5 @@
 'use client';
-import React, { useState } from 'react';
-import { useSavePage3Narrative } from '@/hooks/useReportAPI';
+import React from 'react';
 
 // ---------------------------------------------------------------------------
 // Bar chart colours  (match screenshot palette)
@@ -165,7 +164,6 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
     te_table = [],
     highlights = [],
     chart_data,
-    production_narrative = '',
   } = data || {};
 
   const monthsOrder = [
@@ -210,31 +208,19 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
     onCellChange({ ...data, te_table: updatedTe });
   };
 
-  const handleNarrativeChange = (newVal) =>
-    onCellChange({ ...data, production_narrative: newVal });
+  const highlightLines = Array.isArray(highlights) ? highlights : (highlights ? [highlights] : []);
 
-  const handleHighlightsChange = (newVal) =>
-    onCellChange({ ...data, highlights: newVal.split('\n') });
-
-  const highlightsText = Array.isArray(highlights) ? highlights.join('\n') : (highlights || '');
-
-  // -- Production Narrative + Highlights persistence (keyed by report month) --
-  const { mutate: saveNarrative, isPending: isSavingNarrative } = useSavePage3Narrative();
-  const [narrativeSaveStatus, setNarrativeSaveStatus] = useState(null); // null | 'saved' | 'error'
-
-  const handleSaveNarrative = () => {
-    if (!selectedMonth) return;
-    saveNarrative(
-      { month: selectedMonth, production_narrative, highlights },
-      {
-        onSuccess: () => {
-          setNarrativeSaveStatus('saved');
-          setTimeout(() => setNarrativeSaveStatus(null), 3000);
-        },
-        onError: () => setNarrativeSaveStatus('error'),
-      }
-    );
+  // -- Production narrative sentence, computed from production_table (dynamic per report month) --
+  const findProdRow = (item) => production_table.find(r => r.item === item);
+  const fmtMT = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? (n / 1000).toFixed(3) : '—';
   };
+  const fmtPctOfApp = (v) => (v === undefined || v === null || v === '') ? '—' : `${v}%`;
+
+  const hotMetalRow    = findProdRow('Hot Metal');
+  const crudeSteelRow  = findProdRow('Crude Steel');
+  const saleableRow    = findProdRow('Saleable Steel');
 
   const textareaStyle = {
     width: '100%',
@@ -253,17 +239,11 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
 
-      {/* ── Production narrative (editable) ── */}
-      <div>
-        <div style={{ fontWeight: '700', fontSize: '0.95em' }}>Production:</div>
-        <div style={{ fontWeight: '700', fontSize: '0.9em' }}>{shortMonth}&#39;{shortYear}:</div>
-        <textarea
-          style={{ ...textareaStyle, marginTop: '2px' }}
-          rows={3}
-          value={production_narrative}
-          onChange={e => handleNarrativeChange(e.target.value)}
-          placeholder="Enter production narrative..."
-        />
+      {/* ── Production narrative (auto-generated from production_table) ── */}
+      <div style={{ fontSize: '0.9em', lineHeight: '1.4' }}>
+        Hot Metal production during the month was {fmtMT(hotMetalRow?.values?.[1])} MT ({fmtPctOfApp(hotMetalRow?.values?.[3])} of APP),
+        {' '}Crude Steel production was {fmtMT(crudeSteelRow?.values?.[1])} MT ({fmtPctOfApp(crudeSteelRow?.values?.[3])} of APP)
+        {' '}and Saleable Steel production was {fmtMT(saleableRow?.values?.[1])} MT ({fmtPctOfApp(saleableRow?.values?.[3])} of APP).
       </div>
 
       {/* ── Production table ── */}
@@ -364,46 +344,19 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
         </div>
       </div>
 
-      {/* ── Highlights (editable textarea) ── */}
-      <div>
-        <div style={{ fontWeight: '700', fontSize: '0.95em' }}>Highlights:</div>
-        <textarea
-          style={{ ...textareaStyle, marginTop: '2px' }}
-          rows={4}
-          value={highlightsText}
-          onChange={e => handleHighlightsChange(e.target.value)}
-          placeholder="Enter highlights..."
-        />
-      </div>
-
-      {/* ── Save narrative + highlights, linked to the reporting month ── */}
-      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <button
-          type="button"
-          onClick={handleSaveNarrative}
-          disabled={isSavingNarrative || !selectedMonth}
-          style={{
-            fontSize: '0.78em',
-            padding: '4px 10px',
-            borderRadius: '4px',
-            border: '1px solid #1a73e8',
-            color: isSavingNarrative ? '#94a3b8' : '#1a73e8',
-            borderColor: isSavingNarrative ? '#94a3b8' : '#1a73e8',
-            background: 'transparent',
-            cursor: isSavingNarrative ? 'default' : 'pointer',
-          }}
-        >
-          {isSavingNarrative ? 'Saving…' : 'Save Narrative & Highlights'}
-        </button>
-        {narrativeSaveStatus === 'saved' && (
-          <span style={{ fontSize: '0.78em', color: '#059669' }}>
-            &#10003; Saved for {selectedMonth}
-          </span>
-        )}
-        {narrativeSaveStatus === 'error' && (
-          <span style={{ fontSize: '0.78em', color: '#dc2626' }}>Save failed — try again</span>
-        )}
-      </div>
+      {/* ── Highlights (auto-generated production records for the month) ── */}
+      {highlightLines.length > 0 && (
+        <div>
+          <div style={{ fontWeight: '700', fontSize: '0.95em' }}>Highlights:</div>
+          <div style={{ fontSize: '0.9em', lineHeight: '1.4', marginTop: '2px' }}>
+            {highlightLines.map((line, idx) => (
+              <div key={idx} style={{ fontWeight: line.endsWith(':-') ? '600' : '400' }}>
+                {line}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── SAIL Performance Summary Table ── */}
       <div>
