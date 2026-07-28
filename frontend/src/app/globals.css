@@ -697,6 +697,12 @@ select.form-control {
   font-family: 'Arial Narrow', Arial, sans-serif !important;
 }
 
+/* ─── Page 3 – SAIL Performance Summary: compact to fit on one page ─── */
+.a4-page.pg-3 {
+  --page-margin-top: 3mm;
+  --page-margin-bottom: 2mm;
+}
+
 /* ─── Page 21 – RSP Special Steel: compact to fit on one page ─── */
 .a4-page.pg-21 {
   --page-margin-top: 3mm;
