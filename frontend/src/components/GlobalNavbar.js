@@ -154,7 +154,11 @@ export default function GlobalNavbar() {
               const hasDropdown = !!(item.submenu || item.groups);
               return (
               <div key={idx} style={{ position: 'relative', paddingBottom: hasDropdown ? '8px' : '0' }}
-                onMouseEnter={() => hasDropdown && setOpenDropdown(idx)}
+                onMouseEnter={() => {
+                  if (!hasDropdown) return;
+                  setOpenDropdown(idx);
+                  if (item.groups) setExpandedGroup(0);
+                }}
                 onMouseLeave={() => {
                   if (!hasDropdown) return;
                   setOpenDropdown(null);
@@ -291,96 +295,111 @@ export default function GlobalNavbar() {
                   </div>
                 )}
 
-                {/* Dropdown Menu — collapsible groups (Data Entry): only the
-                    hovered/clicked group's children are shown; every other
-                    group stays collapsed to just its header. */}
+                {/* Dropdown Menu — grouped flyout (Data Entry): group headers
+                    sit in a fixed-position left column that never moves or
+                    resizes, so hovering any of them is reliable regardless
+                    of mouse path. The active group's children render in a
+                    separate right-hand panel instead of inline below the
+                    header — an inline accordion here previously pushed
+                    every group below the expanded one further down the
+                    page as its children appeared, so a mouse moving in a
+                    straight line toward a lower group would have the
+                    target shift out from under it mid-move before the
+                    hover could register. */}
                 {item.groups && openDropdown === idx && (
                   <div style={{
                     position: 'absolute',
                     top: '100%',
                     left: '0',
+                    display: 'flex',
+                    alignItems: 'flex-start',
                     backgroundColor: '#f8f9fa',
                     border: '1px solid #dadce0',
                     borderRadius: '8px',
                     overflow: 'hidden',
-                    overflowY: 'auto',
-                    maxHeight: 'calc(100vh - 100px)',
-                    minWidth: '300px',
                     boxShadow: '0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)'
                   }}
                   >
-                    {item.groups.map((group, gIdx) => {
-                      const isExpanded = expandedGroup === gIdx;
-                      return (
-                        <div key={gIdx}
-                          onMouseEnter={() => setExpandedGroup(gIdx)}
-                          style={{ borderTop: gIdx > 0 ? '1px solid #e8eaed' : 'none' }}
-                        >
-                          <div
-                            onClick={() => setExpandedGroup(isExpanded ? null : gIdx)}
+                    {/* Left: fixed list of group headers */}
+                    <div style={{
+                      minWidth: '230px',
+                      borderRight: '1px solid #e8eaed',
+                      overflowY: 'auto',
+                      maxHeight: 'calc(100vh - 100px)',
+                    }}>
+                      {item.groups.map((group, gIdx) => {
+                        const isActive = expandedGroup === gIdx;
+                        return (
+                          <div key={gIdx}
+                            onMouseEnter={() => setExpandedGroup(gIdx)}
                             style={{
-                              padding: '10px 18px',
+                              padding: '13px 18px',
                               fontSize: '9.5pt',
                               fontWeight: 700,
-                              color: isExpanded ? '#1a73e8' : '#5f6368',
+                              color: isActive ? '#1a73e8' : '#5f6368',
                               textTransform: 'uppercase',
                               letterSpacing: '0.04em',
-                              backgroundColor: isExpanded ? '#e8f0fe' : '#eef1f4',
+                              backgroundColor: isActive ? '#e8f0fe' : 'transparent',
+                              borderBottom: '1px solid #e8eaed',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'space-between',
-                              transition: 'all 0.15s ease',
+                              transition: 'background-color 0.15s ease, color 0.15s ease',
                             }}
                           >
                             <span>{group.groupLabel}</span>
                             <svg
                               width="11" height="11" viewBox="0 0 24 24" fill="none"
                               stroke="currentColor" strokeWidth="3"
-                              style={{
-                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.15s ease',
-                                flexShrink: 0,
-                              }}
+                              style={{ flexShrink: 0 }}
                             >
-                              <polyline points="6 9 12 15 18 9"></polyline>
+                              <polyline points="9 6 15 12 9 18"></polyline>
                             </svg>
                           </div>
-                          {isExpanded && group.children.map((subitem, subidx) => {
-                            const isLast = subidx === group.children.length - 1;
-                            return (
-                              <Link key={subidx} href={subitem.link} style={{ textDecoration: 'none' }}>
-                                <div style={{
-                                  padding: '13px 18px 13px 26px',
-                                  borderBottom: isLast ? 'none' : '1px solid #e8eaed',
-                                  color: '#202124',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '10px',
-                                  fontSize: '12pt',
-                                  transition: 'all 0.2s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'rgba(26, 115, 232, 0.1)';
-                                  e.currentTarget.style.color = '#1a73e8';
-                                  e.currentTarget.style.paddingLeft = '30px';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'transparent';
-                                  e.currentTarget.style.color = '#202124';
-                                  e.currentTarget.style.paddingLeft = '26px';
-                                }}
-                                >
-                                  <span style={{ fontSize: '14px' }}>{subitem.icon}</span>
-                                  {subitem.label}
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+
+                    {/* Right: children of whichever group is active */}
+                    <div style={{
+                      minWidth: '300px',
+                      overflowY: 'auto',
+                      maxHeight: 'calc(100vh - 100px)',
+                    }}>
+                      {(item.groups[expandedGroup] || item.groups[0]).children.map((subitem, subidx, arr) => {
+                        const isLast = subidx === arr.length - 1;
+                        return (
+                          <Link key={subidx} href={subitem.link} style={{ textDecoration: 'none' }}>
+                            <div style={{
+                              padding: '13px 18px',
+                              borderBottom: isLast ? 'none' : '1px solid #e8eaed',
+                              color: '#202124',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              fontSize: '12pt',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(26, 115, 232, 0.1)';
+                              e.currentTarget.style.color = '#1a73e8';
+                              e.currentTarget.style.paddingLeft = '22px';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.color = '#202124';
+                              e.currentTarget.style.paddingLeft = '18px';
+                            }}
+                            >
+                              <span style={{ fontSize: '14px' }}>{subitem.icon}</span>
+                              {subitem.label}
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
