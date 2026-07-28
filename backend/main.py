@@ -14,7 +14,7 @@ from pathlib import Path
 
 import db
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, Page3NarrativeRequest
-from report_utils import compute_item_row, build_production_narrative, blank_out_page_data
+from report_utils import compute_item_row, build_production_narrative, get_dept_badge, blank_out_page_data
 from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
@@ -474,6 +474,12 @@ def get_data(month: str = "2025-11", page_number: Optional[int] = None):
                 page["type"] = "capital_repair"
                 page["orientation"] = "portrait"
 
+        # Corner badge (group + side) is a pure function of the page number —
+        # no DB dependency — so it's set unconditionally for every page,
+        # independent of the has_actuals/has_plans branch above.
+        for page in pages_config:
+            page["dept_badge"] = get_dept_badge(page.get("page"))
+
         return pages_config
     except Exception as e:
         import traceback
@@ -549,6 +555,10 @@ async def generate_pdf(request: PDFRequest):
             _pages_list.insert(_idx23 + 1, {"page": 24})
     for p in _pages_list:
         pg = p.get("page", 0)
+        # Pure function of page number — recomputed fresh rather than trusted
+        # from the submitted payload, since PageData doesn't declare this
+        # field and Pydantic would silently drop it on the way in.
+        p["dept_badge"] = get_dept_badge(pg)
         if pg == 3 or p.get("type") == "summary":
             p["te_table"] = _safe_te_table(request.month)
         if pg == 13:

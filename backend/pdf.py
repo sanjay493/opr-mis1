@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from jinja2 import Environment, FileSystemLoader
 from models import PDFRequest
+from report_utils import get_dept_badge
 
 _TMPL_DIR = os.path.join(os.path.dirname(__file__), 'page_templates')
 _jinja_env = Environment(loader=FileSystemLoader(_TMPL_DIR), autoescape=False)
@@ -356,6 +357,7 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
                     "page": first_pg,
                     "items": all_items,
                     "page_range": f"{first_pg}-{last_pg}",
+                    "dept_badge": get_dept_badge(first_pg),
                 })
             else:
                 pages_to_render.append(p)

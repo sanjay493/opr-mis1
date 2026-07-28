@@ -323,6 +323,7 @@ select.form-control {
 
 /* Realistic A4 Page */
 .a4-page {
+  position: relative;
   width: 210mm;
   min-height: 297mm;
   background-color: white;
@@ -341,6 +342,55 @@ select.form-control {
   min-height: 210mm;
   padding: var(--page-margin-top) 20mm var(--page-margin-bottom) 20mm;
 }
+
+/* ─── Corner department badge (pages 3+) ────────────────────
+   Capsule anchored flush to the top edge and to whichever side its
+   `side-*` modifier picks — zero top/side margin by construction, since an
+   absolutely-positioned child's 0-offsets align with its containing
+   block's padding edge, ignoring .a4-page's own padding. Flat end sits on
+   the page edge; rounded end points inward. Color is fixed per group
+   (see .dept-badge.grp-N below) — same badge color always means the same
+   report section. */
+.dept-badge {
+  position: absolute;
+  top: 0;
+  z-index: 5;
+  font-family: var(--font-sans);
+  font-size: 6.5pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1;
+  padding: 4px 10px;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.dept-badge.side-right {
+  right: 0;
+  border-radius: 999px 0 0 999px;
+  padding-left: 12px;
+  padding-right: 7px;
+}
+.dept-badge.side-left {
+  left: 0;
+  border-radius: 0 999px 999px 0;
+  padding-left: 7px;
+  padding-right: 12px;
+}
+
+/* Categorical palette (validated: dataviz skill six-check gate) — fixed
+   order, never reorder without re-validating. Text color is chosen per
+   swatch for WCAG contrast (some hues read better with dark text). */
+.dept-badge.grp-1 { background: #2a78d6; color: #ffffff; } /* blue    — Summary (3-6) */
+.dept-badge.grp-2 { background: #eb6834; color: #0b0b0b; } /* orange  — Trends (7-12) */
+.dept-badge.grp-3 { background: #1baf7a; color: #0b0b0b; } /* aqua    — Concast/Process (13-14) */
+.dept-badge.grp-4 { background: #eda100; color: #0b0b0b; } /* yellow  — Category/Segment (15-18) */
+.dept-badge.grp-5 { background: #e87ba4; color: #0b0b0b; } /* magenta — Special Steel (19-24) */
+.dept-badge.grp-6 { background: #008300; color: #ffffff; } /* green   — Stock/IPT (25-26) */
+.dept-badge.grp-7 { background: #4a3aa7; color: #ffffff; } /* violet  — Techno Params (27-30) */
+.dept-badge.grp-8 { background: #e34948; color: #0b0b0b; } /* red     — Mill Techno (31-35) */
+.dept-badge.grp-9 { background: #0a9698; color: #0b0b0b; } /* teal    — Capital Repair (36-40) */
 
 
 /* Report Styles inside A4 Page */

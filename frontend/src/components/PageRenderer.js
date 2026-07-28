@@ -149,8 +149,17 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
   const displayPageNumber = (pageData.page || 0) - 2;
   const displayTotalPages = (totalPages || 48) - 2;
 
+  const deptBadge = pageData.dept_badge;
+
   return (
     <div className={`a4-page${isLandscape ? ' landscape' : ''}${pageData.page ? ` pg-${pageData.page}` : ''}`}>
+      {/* Corner department badge (pages 3+; group/side computed server-side) */}
+      {deptBadge && (
+        <div className={`dept-badge side-${deptBadge.side} grp-${deptBadge.group}`}>
+          Operations Directorate
+        </div>
+      )}
+
       {/* Header (hidden on cover/index pages for cleaner design) */}
       {showHeaderFooter && (
         <div className="report-header">

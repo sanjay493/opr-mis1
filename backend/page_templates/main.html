@@ -130,11 +130,46 @@
         }
 
         .page {
+            position: relative;
             page-break-after: always;
             break-after: page;
             page-break-inside: avoid;
             padding: 3mm 0;
         }
+
+        /* ─── Corner department badge (pages 3+) ─────────────────────────
+           Mirrors frontend/src/app/globals.css's .dept-badge — capsule
+           flush to the top edge and to whichever side its side-* modifier
+           picks (0-offset on an absolutely-positioned child aligns with
+           its containing block's padding edge, ignoring .page's own
+           padding). Flat end on the page edge, rounded end pointing
+           inward. Color fixed per group — same color always means the
+           same report section; never reorder without re-validating
+           (dataviz skill six-check gate). */
+        .dept-badge {
+            position: absolute;
+            top: 0;
+            z-index: 5;
+            font-family: var(--font-primary);
+            font-size: 6.5pt;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            line-height: 1;
+            padding: 4px 10px;
+        }
+        .dept-badge.side-right { right: 0; border-radius: 999px 0 0 999px; padding-left: 12px; padding-right: 7px; }
+        .dept-badge.side-left  { left: 0;  border-radius: 0 999px 999px 0; padding-left: 7px;  padding-right: 12px; }
+        .dept-badge.grp-1 { background: #2a78d6; color: #ffffff; } /* blue    — Summary (3-6) */
+        .dept-badge.grp-2 { background: #eb6834; color: #0b0b0b; } /* orange  — Trends (7-12) */
+        .dept-badge.grp-3 { background: #1baf7a; color: #0b0b0b; } /* aqua    — Concast/Process (13-14) */
+        .dept-badge.grp-4 { background: #eda100; color: #0b0b0b; } /* yellow  — Category/Segment (15-18) */
+        .dept-badge.grp-5 { background: #e87ba4; color: #0b0b0b; } /* magenta — Special Steel (19-24) */
+        .dept-badge.grp-6 { background: #008300; color: #ffffff; } /* green   — Stock/IPT (25-26) */
+        .dept-badge.grp-7 { background: #4a3aa7; color: #ffffff; } /* violet  — Techno Params (27-30) */
+        .dept-badge.grp-8 { background: #e34948; color: #0b0b0b; } /* red     — Mill Techno (31-35) */
+        .dept-badge.grp-9 { background: #0a9698; color: #0b0b0b; } /* teal    — Capital Repair (36-40) */
 
         .page:last-child {
             page-break-after: auto;
@@ -517,6 +552,7 @@
         }
 
         .page7-13-section-page {
+            position: relative;
             page: content-layout;
             page-break-before: always;
             break-before: page;
@@ -640,6 +676,9 @@
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
     <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair') %} content-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+        {% if page.dept_badge %}
+        <div class="dept-badge side-{{ page.dept_badge.side }} grp-{{ page.dept_badge.group }}">Operations Directorate</div>
+        {% endif %}
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
         {% else %}

@@ -1,5 +1,41 @@
 import db
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+
+# Page-number ranges -> corner-badge color group, matching the report's
+# section boundaries in frontend/src/app/report/page.js's PAGE_LABELS.
+# Group order also fixes which validated categorical hue each gets (see
+# frontend/src/app/globals.css's .dept-badge.grp-N) — never reorder without
+# re-validating the palette (dataviz skill: fixed hue order is the CVD-safety
+# mechanism).
+_DEPT_BADGE_GROUPS = [
+    (3, 6, 1),    # SAIL Performance Summary / Production Performance
+    (7, 12, 2),   # Month-Wise Production Trend
+    (13, 14, 3),  # Concast / Production by Process
+    (15, 18, 4),  # Category Wise / Segment Wise
+    (19, 24, 5),  # Special Steel
+    (25, 26, 6),  # Opening Stock / IPT Status
+    (27, 30, 7),  # Techno-Economic Parameters
+    (31, 35, 8),  # Mill-Wise Techno-Economic Parameters
+    (36, 40, 9),  # Capital Repair
+]
+
+
+def get_dept_badge(page_num: Optional[int]) -> Optional[Dict[str, Any]]:
+    """Corner-badge group + side for a page, or None for pages 1-2 (cover/
+    index are front matter — no header/footer/badge, matching the existing
+    convention) and any page number outside the known ranges.
+
+    Side follows book-binding convention: odd pages are recto (right-hand
+    when bound) and even pages are verso (left-hand) — so odd -> top-right,
+    even -> top-left, alternating every page.
+    """
+    if not isinstance(page_num, int) or page_num < 3:
+        return None
+    for lo, hi, group in _DEPT_BADGE_GROUPS:
+        if lo <= page_num <= hi:
+            return {"group": group, "side": "right" if page_num % 2 == 1 else "left"}
+    return None
 
 
 def compute_item_row(month: str, item_name: str) -> list:
