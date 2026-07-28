@@ -33,7 +33,7 @@ from constants import ALL_PLANTS
 # Headline + bullet lines combined, across every section included. Tune this
 # to whatever actually fits in Page 3's fixed layout alongside the
 # production table / TE table / charts below it.
-MAX_HIGHLIGHT_LINES = 6
+MAX_HIGHLIGHT_LINES = 8
 
 # Lower = more prestigious record, included before a higher-numbered tier
 # when the line budget can't fit every qualifying section.
@@ -223,17 +223,20 @@ def generate_page3_highlights(month: str) -> list:
         order.sort(key=lambda k: k[0])  # tier ascending = priority order
 
         # Fit as many whole sections as the line budget allows, highest
-        # priority first; whatever doesn't fit is dropped from the least-
-        # priority end. The first (highest-priority) section is always kept
-        # even if it alone exceeds the budget — better to run slightly over
-        # than to show nothing.
+        # priority first. A section that doesn't fit is skipped (not a hard
+        # stop) so a smaller lower-priority section can still use whatever
+        # room is left — e.g. an annual section can leave enough space for
+        # quarterly even though the (larger) monthly/half-yearly sections in
+        # between didn't fit. The first (highest-priority) section is always
+        # kept even if it alone exceeds the budget — better to run slightly
+        # over than to show nothing.
         lines = []
         total = 0
         for tier, headline in order:
             section_lines = sections[(tier, headline)]
             cost = 1 + len(section_lines)  # headline + its bullet lines
             if lines and total + cost > MAX_HIGHLIGHT_LINES:
-                break
+                continue
             lines.append(f"{headline}:-")
             lines.extend(section_lines)
             total += cost
