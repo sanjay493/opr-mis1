@@ -33,7 +33,7 @@ from constants import ALL_PLANTS
 # Headline + bullet lines combined, across every section included. Tune this
 # to whatever actually fits in Page 3's fixed layout alongside the
 # production table / TE table / charts below it.
-MAX_HIGHLIGHT_LINES = 8
+MAX_HIGHLIGHT_LINES = 9
 
 # Lower = more prestigious record, included before a higher-numbered tier
 # when the line budget can't fit every qualifying section.
