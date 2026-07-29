@@ -40,6 +40,8 @@ import page_production_fy_export
 import page_production_query_export
 from page_one_page_report import build_one_page_report_bytes
 from page_pmix_fy_report import build_pmix_fy_report_bytes
+import techno_period
+import page_techno_custom_export
 
 def _safe_te_table(month):
     try:
@@ -2477,7 +2479,13 @@ PRODUCTION_FY_PLANT_ORDER = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'V
 async def techno_major_monthly(month: str = Query(...)):
     """Plant-wise MAJOR techno parameters for one month — the same values and
     definitions as page 27 of the PDF report, reshaped to
-    (parameter → plant rows with for-the-month / till-the-month values)."""
+    (parameter → plant rows with for-the-month / till-the-month values).
+
+    `months`/`fy1`/`fy2`/`fy3` (full YTD-month array + the last-3-FY totals)
+    are additive fields alongside the pre-existing `month`/`till_month`/etc.
+    — kept so an older consumer reading only the original fields is
+    unaffected, while the new Techno Custom Report's Standard mode can show
+    every column page 27 itself does."""
     data = generate_major_techno_from_db(month)
     month_labels = data.get("month_labels") or []
     sections = []
@@ -2493,15 +2501,23 @@ async def techno_major_monthly(month: str = Query(...)):
                 "till_month": r.get("cum"),
                 "cply":       r.get("cply"),
                 "cum_cply":   r.get("cum_cply"),
+                "months":     months,
+                "fy1":        r.get("fy1"),
+                "fy2":        r.get("fy2"),
+                "fy3":        r.get("fy3"),
             })
         sections.append({"parameter": sec.get("label"), "rows": rows})
     return {
         "month": month,
         "month_label":    month_labels[-1] if month_labels else month,
+        "month_labels":   month_labels,
         "cum_label":      data.get("cum_label", ""),
         "cply_label":     data.get("cply_label", ""),
         "cum_cply_label": data.get("cum_cply_label", ""),
         "target_label":   data.get("target_label", ""),
+        "fy1_label":      data.get("fy1_label", ""),
+        "fy2_label":      data.get("fy2_label", ""),
+        "fy3_label":      data.get("fy3_label", ""),
         "sections": sections,
     }
 
@@ -2514,6 +2530,130 @@ async def techno_major_verification(month: str = Query(...)):
     plus the SAIL rollup — flags a deviation whenever the two differ after
     rounding to that parameter's normal display precision."""
     return generate_major_techno_verification(month)
+
+
+def _techno_period_payload(payload: dict):
+    """Shared validation for the Custom Period endpoints below.
+    Payload: {"plants": ["BSP", ..., "SAIL"], "params": ["Coke Rate", ...],
+              "periods": [{"label": "Q2 FY26-27", "months": ["2026-07", ...]}]}
+    `params` empty/omitted = all 12 major parameters."""
+    plants = [str(p).strip().upper() for p in payload.get("plants", []) if str(p).strip()]
+    if not plants:
+        raise HTTPException(status_code=400, detail="At least one plant (or SAIL) is required")
+    valid_plants = set(techno_period.PLANTS) | {"SAIL"}
+    bad_plants = [p for p in plants if p not in valid_plants]
+    if bad_plants:
+        raise HTTPException(status_code=400, detail=f"Unknown plant(s): {', '.join(bad_plants)}")
+
+    params = [str(p).strip() for p in payload.get("params", []) if str(p).strip()] or None
+    if params:
+        bad_params = [p for p in params if p not in techno_period.MAJOR_TECHNO_PARAM_NAMES]
+        if bad_params:
+            raise HTTPException(status_code=400, detail=f"Unknown parameter(s): {', '.join(bad_params)}")
+
+    periods = payload.get("periods", [])
+    if not periods:
+        raise HTTPException(status_code=400, detail="At least one period is required")
+    for p in periods:
+        label = str(p.get("label", "")).strip()
+        months = [str(m).strip() for m in p.get("months", []) if str(m).strip()]
+        if not label or not months:
+            raise HTTPException(status_code=400, detail="Each period needs a label and at least one month")
+        p["label"], p["months"] = label, months
+
+    return plants, params, periods
+
+
+@app.post("/api/techno-custom-period")
+async def techno_custom_period(payload: dict):
+    """Custom Period mode of the Techno Custom Report: on-the-fly quarter /
+    half-year / arbitrary-month-range figures for the same 12 major techno
+    parameters page 27 shows, computed fresh (weighted average / harmonic
+    mean / plain average, whichever the parameter's rule says) using Hot
+    Metal or Crude Steel production during THAT period as the weight — see
+    techno_period.py. The frontend resolves quarter/half/custom month lists
+    client-side and posts the raw month lists here."""
+    plants, params, periods = _techno_period_payload(payload)
+    return techno_period.build_period_report(plants, params, periods)
+
+
+@app.post("/api/techno-custom-period/excel")
+async def techno_custom_period_excel(payload: dict):
+    plants, params, periods = _techno_period_payload(payload)
+    try:
+        data = techno_period.build_period_report(plants, params, periods)
+        content = page_techno_custom_export.build_period_excel_bytes(data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno custom-period Excel export failed: {type(e).__name__}: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="Techno_Custom_Period.xlsx"'},
+    )
+
+
+@app.post("/api/techno-custom-period/pdf")
+async def techno_custom_period_pdf(payload: dict):
+    import asyncio, concurrent.futures
+    plants, params, periods = _techno_period_payload(payload)
+    try:
+        data = techno_period.build_period_report(plants, params, periods)
+        html = page_techno_custom_export.build_period_pdf_html(data)
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            content = await loop.run_in_executor(pool, page_techno_custom_export.render_pdf_bytes, html)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno custom-period PDF export failed: {type(e).__name__}: {e}")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="Techno_Custom_Period.pdf"'},
+    )
+
+
+def _techno_custom_standard_payload(payload: dict):
+    month = str(payload.get("month", "")).strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    plants = [str(p).strip().upper() for p in payload.get("plants", []) if str(p).strip()] or None
+    params = [str(p).strip() for p in payload.get("params", []) if str(p).strip()] or None
+    return month, plants, params
+
+
+@app.post("/api/techno-custom-standard/excel")
+async def techno_custom_standard_excel(payload: dict):
+    month, plants, params = _techno_custom_standard_payload(payload)
+    try:
+        data = generate_major_techno_from_db(month)
+        data = page_techno_custom_export.filter_major_techno(data, plants, params)
+        content = page_techno_custom_export.build_standard_excel_bytes(data, month)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno custom-standard Excel export failed: {type(e).__name__}: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="Techno_Custom_Standard_{month}.xlsx"'},
+    )
+
+
+@app.post("/api/techno-custom-standard/pdf")
+async def techno_custom_standard_pdf(payload: dict):
+    import asyncio, concurrent.futures
+    month, plants, params = _techno_custom_standard_payload(payload)
+    try:
+        data = generate_major_techno_from_db(month)
+        data = page_techno_custom_export.filter_major_techno(data, plants, params)
+        html = page_techno_custom_export.build_standard_pdf_html(data, month)
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            content = await loop.run_in_executor(pool, page_techno_custom_export.render_pdf_bytes, html)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno custom-standard PDF export failed: {type(e).__name__}: {e}")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Techno_Custom_Standard_{month}.pdf"'},
+    )
 
 
 @app.get("/api/production-fys")

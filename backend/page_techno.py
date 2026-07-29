@@ -1029,6 +1029,71 @@ def generate_summary_chart_html(chart_data: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Shared plant/shop topology + the 12 "major" techno-parameter registry used
+# by page 27 (generate_major_techno_from_db, below) — also the single source
+# of truth imported by techno_period.py's custom-report aggregation engine,
+# so that report doesn't re-hardcode a 4th copy of this list (it was already
+# duplicated 3x inline within this function alone before this extraction).
+# ---------------------------------------------------------------------------
+
+PLANT_ORDER = _BF_PLANTS
+
+# BF shop-level units: BF_Shop (RSP/BSP/BSL/DSP aggregate) or BF-5 (ISP single BF)
+BF_UNITS = ["BF_Shop", "BF-5"]
+
+# SMS unit mapping and shop counts for SAIL weighting
+SMS_UNIT_MAP = {
+    "BSP": ["SMS-2", "SMS-3"],
+    "DSP": ["SMS"],
+    "RSP": ["SMS-1", "SMS-2"],
+    "BSL": ["SMS-I", "SMS-II"],
+    "ISP": ["SMS"],
+}
+SMS_N_SHOPS = {"BSP": 2, "DSP": 1, "RSP": 2, "BSL": 2, "ISP": 1}
+
+# param display name -> (techno_data key, candidate units, weight basis
+# ("hm"/"cs"), harmonic?, zero_fill_plants). BF-level + Specific Energy
+# Consumption params.
+BF_SAIL_SPECS = {
+    "Coal to Hot Metal":           ("coal_to_hm",                  ["General", "BF_Shop"], "hm", False, None),
+    "Coke Rate":                   ("coke_rate",                   BF_UNITS,               "hm", False, None),
+    "Nut Coke Rate":               ("nut_coke_rate",               BF_UNITS,               "hm", False, None),
+    "CDI Rate":                    ("cdi",                         BF_UNITS,               "hm", False, None),
+    "Fuel Rate":                   ("fuel_rate",                   BF_UNITS,               "hm", False, None),
+    "Sinter in Burden":            ("sinter_in_burden",            BF_UNITS,               "hm", False, None),
+    "Pellet in Burden":            ("pellet_in_burden",            BF_UNITS,               "hm", False, {"DSP"}),
+    "BF Productivity":             ("bf_productivity",             BF_UNITS,               "hm", True,  None),
+    "Specific Energy Consumption": ("specific_energy_consumption", ["General"],             "cs", False, None),
+}
+
+# param display name -> (techno_data key or None, is_tmi). SMS-level params.
+SMS_PARAM_KEYS = {
+    "Hot Metal Consumption": ("specific_hm_consumption", False),
+    "Scrap Consumption":     ("specific_scrap_consumption", False),
+    "TMI":                   (None, True),
+}
+
+# Alternate key names used by different plants for the same parameter.
+# Primary key -> [legacy/alternate keys] for backward compat with old DB rows.
+KEY_ALIASES = {
+    "sinter_in_burden":           ["sinter% in burden"],
+    "pellet_in_burden":           ["pellet% in burden"],
+    "cdi":                        ["cdi_rate"],
+    "specific_energy_consumption": ["sp_energy", "specific_energy"],
+    # BF quality (old BSL: si_in_hm/s_in_hm/hot_metal_temp; RSP/ISP: si%_in_hm/s%_in_hm)
+    "silicon_in_hm":              ["si_in_hm", "si%_in_hm"],
+    "sulphur_in_hm":              ["s_in_hm", "s%_in_hm"],
+    "hot_blast_temp":             ["blast_temperature"],
+    "avg_hot_metal_temperature":  ["hot_metal_temp"],
+    # SMS (old DSP: hot_metal_consumption/scrap_consumption)
+    "specific_hm_consumption":    ["hot_metal_consumption"],
+    "specific_scrap_consumption": ["scrap_consumption"],
+    # Coke Ovens (old RSP/ISP: cog_yield; old DSP: dry_coal_charge_per_oven/dry_coal_charge)
+    "coke_oven_gas_yield":        ["cog_yield"],
+    "dry_coal_charge_oven":       ["dry_coal_charge", "dry_coal_charge_per_oven"],
+}
+
+# ---------------------------------------------------------------------------
 # MAJOR page from techno_data table (replaces legacy techno_actuals path)
 # ---------------------------------------------------------------------------
 
@@ -1137,14 +1202,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         )
 
     # SMS unit mapping and shop counts for SAIL weighting
-    _sms_unit_map = {
-        "BSP": ["SMS-2", "SMS-3"],
-        "DSP": ["SMS"],
-        "RSP": ["SMS-1", "SMS-2"],
-        "BSL": ["SMS-I", "SMS-II"],
-        "ISP": ["SMS"],
-    }
-    _sms_n_shops = {"BSP": 2, "DSP": 1, "RSP": 2, "BSL": 2, "ISP": 1}
+    _sms_unit_map = SMS_UNIT_MAP
+    _sms_n_shops = SMS_N_SHOPS
 
     # Per-shop Crude Steel production (production_table's per-caster items) -
     # the true weight for SMS specific-consumption params, as opposed to
@@ -1239,7 +1298,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                     den += _w
         return num / den if den > 0 else None
 
-    _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+    _PLANT_ORDER = PLANT_ORDER
 
     # Include plants that have data in current month OR any past-FY march month, plus plants with targets
     _relevant_months = {report_month, fy1_march, fy2_march, fy3_march}
@@ -1257,23 +1316,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
 
     # Alternate key names used by different plants for the same parameter
     # Primary key → [legacy/alternate keys] for backward compat with old DB rows
-    _KEY_ALIASES = {
-        "sinter_in_burden":           ["sinter% in burden"],
-        "pellet_in_burden":           ["pellet% in burden"],
-        "cdi":                        ["cdi_rate"],
-        "specific_energy_consumption": ["sp_energy", "specific_energy"],
-        # BF quality (old BSL: si_in_hm/s_in_hm/hot_metal_temp; RSP/ISP: si%_in_hm/s%_in_hm)
-        "silicon_in_hm":              ["si_in_hm", "si%_in_hm"],
-        "sulphur_in_hm":              ["s_in_hm", "s%_in_hm"],
-        "hot_blast_temp":             ["blast_temperature"],
-        "avg_hot_metal_temperature":  ["hot_metal_temp"],
-        # SMS (old DSP: hot_metal_consumption/scrap_consumption)
-        "specific_hm_consumption":    ["hot_metal_consumption"],
-        "specific_scrap_consumption": ["scrap_consumption"],
-        # Coke Ovens (old RSP/ISP: cog_yield; old DSP: dry_coal_charge_per_oven/dry_coal_charge)
-        "coke_oven_gas_yield":        ["cog_yield"],
-        "dry_coal_charge_oven":       ["dry_coal_charge", "dry_coal_charge_per_oven"],
-    }
+    _KEY_ALIASES = KEY_ALIASES
 
     def _gv(plant, rm, unit, key, period="month"):
         d = store.get((plant, rm), {}).get(unit, {}).get(period, {})
@@ -1406,7 +1449,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         return {"label": param_name, "rows": rows}
 
     # BF shop-level units: BF_Shop (RSP/BSP/BSL/DSP aggregate) or BF-5 (ISP single BF)
-    _BF_UNITS = ["BF_Shop", "BF-5"]
+    _BF_UNITS = BF_UNITS
 
     # SMS unit scan order — covers RSP/BSP (SMS-1/2/3), ISP/DSP (SMS), BSL (SMS-I/II)
     _SMS_UNIT_ORDER = ["SMS-1", "SMS-2", "SMS-3", "SMS", "SMS-I", "SMS-II"]
@@ -1582,11 +1625,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
                 sail_plan_value = val
 
         # Build SAIL row — populate actuals for SMS params from weighted-average computation
-        _SMS_PARAM_KEYS = {
-            "Hot Metal Consumption": ("specific_hm_consumption", False),
-            "Scrap Consumption":     ("specific_scrap_consumption", False),
-            "TMI":                   (None, True),
-        }
+        _SMS_PARAM_KEYS = SMS_PARAM_KEYS
         # BF-level params: weighted average by plant Hot Metal production;
         # BF Productivity: harmonic mean by HM; Specific Energy Consumption:
         # weighted average by plant Crude Steel production.
@@ -1595,17 +1634,7 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         # reported" (see _bf_sail docstring). Only Pellet in Burden has one
         # today — DSP's burden mix is sinter + iron ore, no pellets, and its
         # PDF report never carries a pellet figure at all.
-        _BF_SAIL_SPECS = {
-            "Coal to Hot Metal":           ("coal_to_hm",                  ["General", "BF_Shop"], "hm", False, None),
-            "Coke Rate":                   ("coke_rate",                   _BF_UNITS,               "hm", False, None),
-            "Nut Coke Rate":               ("nut_coke_rate",               _BF_UNITS,               "hm", False, None),
-            "CDI Rate":                    ("cdi",                         _BF_UNITS,               "hm", False, None),
-            "Fuel Rate":                   ("fuel_rate",                   _BF_UNITS,               "hm", False, None),
-            "Sinter in Burden":            ("sinter_in_burden",            _BF_UNITS,               "hm", False, None),
-            "Pellet in Burden":            ("pellet_in_burden",            _BF_UNITS,               "hm", False, {"DSP"}),
-            "BF Productivity":             ("bf_productivity",             _BF_UNITS,               "hm", True,  None),
-            "Specific Energy Consumption": ("specific_energy_consumption", ["General"],             "cs", False, None),
-        }
+        _BF_SAIL_SPECS = BF_SAIL_SPECS
         if param_name in _SMS_PARAM_KEYS:
             _sk, _is_tmi = _SMS_PARAM_KEYS[param_name]
             sail_row = {
