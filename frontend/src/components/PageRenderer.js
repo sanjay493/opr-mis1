@@ -89,7 +89,7 @@ function IndexTemplate({ data, onCellChange }) {
   );
 }
 
-export default function PageRenderer({ pageData, onCellChange, selectedMonth, totalPages }) {
+export default function PageRenderer({ pageData, onCellChange, selectedMonth, totalPages, displayPageNumber }) {
   if (!pageData) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>
@@ -151,8 +151,13 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
   const isLandscape = pageData.orientation === 'landscape';
   // Header/footer only appear from page 3 onward (cover + index are front
   // matter); numbering restarts at 1 there, matching the generated PDF.
+  // displayPageNumber comes from the parent's PAGE_DISPLAY_NUMBER map (see
+  // report/page.js) rather than a `pageData.page - 2` formula here, since
+  // sentinel pages (e.g. "MIS at a Glance" at internal id 2.5) make the
+  // page-id sequence non-consecutive — there's no closed-form arithmetic
+  // from id to display position anymore.
   const showHeaderFooter = (pageData.page || 0) > 2;
-  const displayPageNumber = (pageData.page || 0) - 2;
+  const resolvedDisplayPageNumber = displayPageNumber ?? (pageData.page || 0) - 2;
   const displayTotalPages = (totalPages || 48) - 2;
 
   const deptBadge = pageData.dept_badge;
@@ -188,7 +193,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
       {showHeaderFooter && (
         <div className="report-footer">
           <div>Prepared by: MIS Group</div>
-          <div>Page {displayPageNumber} of {displayTotalPages}</div>
+          <div>Page {resolvedDisplayPageNumber} of {displayTotalPages}</div>
         </div>
       )}
     </div>

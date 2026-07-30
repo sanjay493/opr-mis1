@@ -72,15 +72,16 @@ function TechnoTiles({ techno }) {
   );
 }
 
-function SpecialSteelPanel({ specialSteel }) {
+function ValueAddedSteelPanel({ specialSteel }) {
   return (
-    <div style={{ flex: 1.05, border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '7px 9px' }}>
-      <div style={{ fontSize: '9pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
-        Special Steel Performance (SAIL)
+    <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '5px 8px' }}>
+      <div style={{ fontSize: '9pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
+        Value Added Steel Performance (SAIL)
       </div>
       <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
-        <div style={{ flex: 1 }} dangerouslySetInnerHTML={{ __html: specialSteel.bar_svg || '' }} />
-        <div style={{ flex: 1, fontSize: '7.5pt', lineHeight: 1.85 }}>
+        <div style={{ flex: 1.5 }} dangerouslySetInnerHTML={{ __html: specialSteel.five_year_svg || '' }} />
+        <div style={{ flex: 0.85 }} dangerouslySetInnerHTML={{ __html: specialSteel.quarter_svg || '' }} />
+        <div style={{ flex: 0.55, fontSize: '7.5pt', lineHeight: 1.6, paddingLeft: 4 }}>
           <div>%Fulfilment: <b>{specialSteel.pct_ful || '—'}%</b></div>
           <div>vs CPLY: <GrowthText value={specialSteel.pct_growth} good={specialSteel.growth_good} /></div>
           <div>ABP FY: <b>{specialSteel.abp_fy || '—'}</b></div>
@@ -91,33 +92,12 @@ function SpecialSteelPanel({ specialSteel }) {
   );
 }
 
-function CapitalRepairPanel({ capitalRepair }) {
-  return (
-    <div style={{ flex: 1, border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '7px 9px' }}>
-      <div style={{ fontSize: '9pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
-        Capital Repair — Days Under Repair (FY)
-      </div>
-      {capitalRepair.map((pl) => (
-        <div key={pl.plant} style={{ marginBottom: 5 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7.4pt', marginBottom: 1 }}>
-            <span style={{ fontWeight: 700 }}>{pl.plant}</span>
-            <span style={{ color: C.textSecondary }}>{pl.completed_days}/{pl.total_days} days{pl.pct !== null && pl.pct !== undefined ? ` (${pl.pct}%)` : ''}</span>
-          </div>
-          <div style={{ background: C.borderDivider, borderRadius: 3, height: 6, overflow: 'hidden' }}>
-            <div style={{ width: `${pl.pct || 0}%`, height: '100%', background: C.accentBlue }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function AtAGlanceTemplate({ data }) {
   if (!data) return null;
   const {
     title, month_label: monthLabel,
     production = [], ytd_trend: ytdTrend = {}, techno = [], special_steel: specialSteel = {},
-    capital_repair: capitalRepair = [], trend = {},
+    trend = {},
   } = data;
 
   return (
@@ -142,9 +122,8 @@ export default function AtAGlanceTemplate({ data }) {
       </div>
       <TechnoTiles techno={techno} />
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-        <SpecialSteelPanel specialSteel={specialSteel} />
-        <CapitalRepairPanel capitalRepair={capitalRepair} />
+      <div style={{ marginBottom: 10 }}>
+        <ValueAddedSteelPanel specialSteel={specialSteel} />
       </div>
 
       <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>

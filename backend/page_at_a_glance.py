@@ -1,14 +1,15 @@
 """
-MIS at a Glance — infographic-style snapshot page inserted right after the
-Cover page (see AT_A_GLANCE_PAGE_ID in main.py). Composites headline numbers
-already computed elsewhere in the report — production, techno-economic,
-special steel, capital repair — into one visual dashboard, plus a short
-production trend line, so a reader gets the month's story in one page before
-diving into the detailed 40-page report.
+MIS at a Glance — infographic-style snapshot page, the first numbered page
+of the report (see AT_A_GLANCE_PAGE_ID in main.py). Composites headline
+numbers already computed elsewhere in the report — production,
+techno-economic, value added (special) steel — into one visual dashboard,
+plus a short production trend line, so a reader gets the month's story in
+one page before diving into the detailed report.
 
-Not part of the fixed 1-40 page numbering — see main.py's comment next to
-AT_A_GLANCE_PAGE_ID for why (also individually browsable on-screen — see
-get_data()'s page_number handling and PageRenderer.js's 'at_a_glance' case).
+Sentinel page id (not part of the static 1-40 page list) — see main.py's
+comment next to AT_A_GLANCE_PAGE_ID for why (also individually browsable
+on-screen — see get_data()'s page_number handling and PageRenderer.js's
+'at_a_glance' case).
 """
 import datetime as _dt
 import re as _re
@@ -17,7 +18,9 @@ import db
 from report_utils import compute_item_row
 from page_techno import generate_at_a_glance_te_table
 from page_special_steel import generate_special_steel_sail
-from page_capital_repair import generate_capital_repair, fy_from_month, CR_PAGES
+from page_special_steel_trend import (
+    _last_n_fys, _fy_months, _current_fy_rate, _saleable_steel, _sum_actual,
+)
 
 _PROD_ITEMS = ["Hot Metal", "Crude Steel", "Finished Steel", "Saleable Steel"]
 
@@ -179,54 +182,6 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, vw: int = 480, vh:
     return "\n".join(lines)
 
 
-# ── SVG: two-bar comparison (Orders vs Actual) ───────────────────────────────
-
-def _two_bar_svg(label_a: str, val_a, label_b: str, val_b, title: str = "",
-                  vw: int = 220, vh: int = 150) -> str:
-    ml, mr, mt, mb = 14, 14, 20, 22
-    cw, ch = vw - ml - mr, vh - mt - mb
-
-    vals = [v for v in (val_a, val_b) if v is not None]
-    yhi = max(vals) * 1.2 if vals else 10.0
-    yhi = max(yhi, 5.0)
-
-    slot = cw / 2
-    bar_w = slot * 0.55
-    colors = ["#94a3b8", "#0284c7"]
-
-    lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
-             f'style="width:100%;height:auto;display:block;">']
-    if title:
-        lines.append(f'<text x="{vw / 2:.0f}" y="11" text-anchor="middle" font-size="8" '
-                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
-    lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
-                 f'stroke="#374151" stroke-width="0.7"/>')
-
-    for i, (label, v) in enumerate([(label_a, val_a), (label_b, val_b)]):
-        x = ml + i * slot + (slot - bar_w) / 2
-        color = colors[i]
-        if v is None:
-            by, bh = mt + ch - 3, 3
-            lines.append(f'<rect x="{x:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh}" '
-                         f'fill="none" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2,1.5"/>')
-        else:
-            bh = max(2.0, ch * v / yhi)
-            by = mt + ch - bh
-            lines.append(f'<rect x="{x:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh:.1f}" '
-                         f'fill="{color}" rx="1.5"/>')
-            if bh >= 16:
-                ty, fill = by + bh / 2 + 3, _contrast_text(color)
-            else:
-                ty, fill = by - 4, color
-            lines.append(f'<text x="{x + bar_w / 2:.1f}" y="{ty:.1f}" text-anchor="middle" '
-                         f'font-size="7.5" font-weight="bold" font-family="Arial,sans-serif" '
-                         f'fill="{fill}">{v:,.0f}</text>')
-        lines.append(f'<text x="{x + bar_w / 2:.1f}" y="{mt + ch + 12:.1f}" text-anchor="middle" '
-                     f'font-size="7.5" font-weight="bold" font-family="Arial,sans-serif" '
-                     f'fill="#1e293b">{label}</text>')
-
-    lines.append("</svg>")
-    return "\n".join(lines)
 
 
 # ── SVG: grouped bar chart — one group per production item, one bar per FY ──
@@ -446,110 +401,202 @@ def _techno_section(report_month: str) -> list:
     return out
 
 
+_VA_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+_VA_BAR_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
+_VA_LINE_COLOR = "#334155"
+
+
+def _va_period_saleable_total(cur, months) -> float:
+    """SAIL Saleable Steel ('000T) summed across these months — the
+    denominator for a Value Added Steel % of Saleable Steel figure over any
+    period (FY or quarter), not just a single report month."""
+    total, has = 0.0, False
+    for m in months:
+        for p in _VA_PLANTS:
+            v = _saleable_steel(cur, m, p)
+            if v is not None:
+                total += v
+                has = True
+    return total if has else None
+
+
+def _va_period_value(cur, months):
+    """(qty_tonnes, pct_of_saleable) for SAIL Value Added (Special) Steel
+    over these months, or (None, None) if nothing's been reported yet."""
+    qty, has = _sum_actual(cur, months, "SAIL")
+    if not has:
+        return None, None
+    saleable_000T = _va_period_saleable_total(cur, months)
+    pct = qty / (saleable_000T * 1000) * 100 if saleable_000T else None
+    return qty, pct
+
+
+def _quarter_bounds(report_month: str):
+    """(start_ym, end_ym) of the Apr-Jun/Jul-Sep/Oct-Dec/Jan-Mar quarter
+    containing report_month."""
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    qs = ((m - 1) // 3) * 3 + 1
+    return f"{y}-{qs:02d}", f"{y}-{qs + 2:02d}"
+
+
+def _just_ended_quarter(report_month: str):
+    """The most recently CONCLUDED quarter as of report_month: the quarter
+    containing report_month itself if report_month is its last month,
+    otherwise the quarter before it."""
+    start, end = _quarter_bounds(report_month)
+    if end == report_month:
+        return start, end
+    y, m = int(start[:4]), int(start[5:7])
+    pm = m - 3
+    py = y - 1 if pm <= 0 else y
+    pm = pm + 12 if pm <= 0 else pm
+    return f"{py}-{pm:02d}", f"{py}-{pm + 2:02d}"
+
+
+def _quarter_months(start_ym: str, end_ym: str) -> list:
+    y, m0 = int(start_ym[:4]), int(start_ym[5:7])
+    m1 = int(end_ym[5:7])
+    return [f"{y}-{mm:02d}" for mm in range(m0, m1 + 1)]
+
+
+def _quarter_label(start_ym: str, end_ym: str) -> str:
+    s = _dt.datetime.strptime(start_ym, "%Y-%m").strftime("%b")
+    e = _dt.datetime.strptime(end_ym, "%Y-%m").strftime("%b'%y")
+    return f"{s}-{e}"
+
+
+def _fmt_int(v) -> str:
+    return f"{v:,.0f}"
+
+
+def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
+                            bar_colors: list, title: str,
+                            vw: int = 470, vh: int = 250) -> str:
+    """Grouped bar (% of Saleable Steel) + line (Qty, MT) combo, on two
+    independent scales: the % axis auto-scales with generous headroom so
+    bars only ever occupy the lower ~60% of the chart, and the qty line is
+    deliberately mapped into a fixed band near the top (~4%-26% of chart
+    height) — so on any real data the line draws clear above the bar tops,
+    per spec, rather than because the two series happen to be comparable."""
+    ml, mr, mt, mb = 10, 10, 30, 34
+    cw, ch = vw - ml - mr, vh - mt - mb
+
+    pct_present = [v for v in pct_vals if v is not None]
+    pct_yhi = max(5.0, (max(pct_present) if pct_present else 10.0) * 1.6)
+
+    qty_present = [v for v in qty_vals if v is not None]
+    qty_lo = min(qty_present) * 0.85 if qty_present else 0.0
+    qty_hi = max(qty_present) * 1.08 if qty_present else 1.0
+    if qty_hi <= qty_lo:
+        qty_hi = qty_lo + 1.0
+
+    line_top, line_bot = mt + ch * 0.04, mt + ch * 0.26
+
+    def line_y(v):
+        return line_bot - (line_bot - line_top) * (v - qty_lo) / (qty_hi - qty_lo)
+
+    n = len(categories)
+    slot_w = cw / n
+    bar_w = max(18.0, slot_w * 0.4)
+
+    lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
+             f'style="width:100%;height:auto;display:block;">']
+    lines.append(f'<text x="{vw / 2:.0f}" y="12" text-anchor="middle" font-size="8.5" '
+                 f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
+    lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
+                 f'stroke="#374151" stroke-width="0.7"/>')
+
+    pts = []
+    x = ml
+    for i, cat in enumerate(categories):
+        color = bar_colors[i % len(bar_colors)]
+        cx = x + slot_w / 2
+        pv = pct_vals[i]
+        if pv is None:
+            by = mt + ch - 3
+            lines.append(f'<rect x="{cx - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="3" '
+                         f'fill="none" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2,1.5"/>')
+        else:
+            bh = max(2.0, ch * pv / pct_yhi)
+            by = mt + ch - bh
+            lines.append(f'<rect x="{cx - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh:.1f}" '
+                         f'fill="{color}" rx="2"/>')
+            lines.append(f'<text x="{cx:.1f}" y="{by - 4:.1f}" text-anchor="middle" font-size="7.6" '
+                         f'font-weight="bold" font-family="Arial,sans-serif" fill="{color}">{pv:.1f}%</text>')
+        lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 13:.1f}" text-anchor="middle" font-size="7.5" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{cat}</text>')
+        qv = qty_vals[i]
+        if qv is not None:
+            pts.append((cx, line_y(qv), qv))
+        x += slot_w
+
+    if len(pts) >= 2:
+        d = "M " + " L ".join(f"{px:.1f} {py:.1f}" for px, py, _ in pts)
+        lines.append(f'<path d="{d}" fill="none" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
+    for px, py, qv in pts:
+        lines.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.4" fill="{_VA_LINE_COLOR}"/>')
+        lines.append(f'<text x="{px:.1f}" y="{py - 5:.1f}" text-anchor="middle" font-size="6.6" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="{_VA_LINE_COLOR}">{_fmt_int(qv)}</text>')
+
+    # legend
+    ly = 24
+    lines.append(f'<rect x="{ml}" y="{ly - 6}" width="9" height="7" fill="{bar_colors[0]}"/>')
+    lines.append(f'<text x="{ml + 12}" y="{ly}" font-size="6.6" font-family="Arial,sans-serif" '
+                 f'fill="#334155">% of Saleable Steel</text>')
+    lx2 = ml + 100
+    lines.append(f'<line x1="{lx2}" y1="{ly - 3}" x2="{lx2 + 12}" y2="{ly - 3}" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
+    lines.append(f'<text x="{lx2 + 15}" y="{ly}" font-size="6.6" font-family="Arial,sans-serif" '
+                 f'fill="#334155">Qty (MT)</text>')
+
+    lines.append("</svg>")
+    return "\n".join(lines)
+
+
 def _special_steel_section(report_month: str, month_label: str) -> dict:
     sail = generate_special_steel_sail(report_month)
     total = next((r for r in sail.get("rows", []) if r.get("type") == "sail-total"), {})
-    orders, actual = _num(total.get("orders")), _num(total.get("actual"))
     pct_growth = total.get("pct_growth", "")
+
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        fys = _last_n_fys(report_month, 5)
+        fy_cats, fy_pct, fy_qty = [], [], []
+        for j, fy in enumerate(fys):
+            is_current = j == len(fys) - 1
+            months = db.get_ytd_months(report_month) if is_current else _fy_months(fy)
+            qty, pct = _va_period_value(cur, months)
+            if is_current:
+                qty = _current_fy_rate(cur, report_month, "SAIL")
+                qty = qty * 1000 if qty is not None else None  # '000T -> T
+            fy_cats.append(f"FY{fy}" + (" (YTD rate)" if is_current else ""))
+            fy_pct.append(pct)
+            fy_qty.append(qty)
+
+        q_start, q_end = _just_ended_quarter(report_month)
+        cply_start = f"{int(q_start[:4]) - 1}-{q_start[5:7]}"
+        cply_end = f"{int(q_end[:4]) - 1}-{q_end[5:7]}"
+        q_cats, q_pct, q_qty = [], [], []
+        for start, end in [(cply_start, cply_end), (q_start, q_end)]:
+            qty, pct = _va_period_value(cur, _quarter_months(start, end))
+            q_cats.append(_quarter_label(start, end))
+            q_pct.append(pct)
+            q_qty.append(qty)
+    finally:
+        conn.close()
+
     return {
-        "orders": total.get("orders", ""), "actual": total.get("actual", ""),
         "pct_ful": total.get("pct_ful", ""),
         "pct_growth": pct_growth, "growth_good": None if pct_growth == "" else int(pct_growth) >= 0,
         "abp_fy": total.get("abp_fy", ""),
         "special_pct": sail.get("special_pct", {}).get("current", ""),
-        "bar_svg": _two_bar_svg("Orders", orders, "Actual", actual,
-                                 title=f"Special Steel — {month_label} (T)"),
+        "five_year_svg": _value_added_combo_svg(
+            fy_cats, fy_pct, fy_qty, _VA_BAR_COLORS,
+            "Value Added Steel — Last 5 Years", vw=560, vh=250),
+        "quarter_svg": _value_added_combo_svg(
+            q_cats, q_pct, q_qty, [_VA_BAR_COLORS[0], _VA_BAR_COLORS[3]],
+            "Value Added Steel — Quarter Just Ended vs CPLY", vw=300, vh=250),
     }
-
-
-_CR_GRACE_DAYS = 1.5  # e.g. a 10-day plan finishing on day 11.5 still counts as on time
-
-_CR_DATE_RANGE_RE = _re.compile(
-    r"(\d{1,2})\.(\d{1,2})\.(\d{2})\s*-\s*(\d{1,2})\.(\d{1,2})\.(\d{2})"
-)
-
-
-def _parse_planned_days(schedule_days) -> float:
-    """schedule_days is free text like '9 days', '45 days', '5 Months', or
-    '7 days/20 days' (one DB row is treated as one repair job for these
-    counts regardless of how many numbers its schedule text happens to
-    mention — see the module's own note that this field is inherently messy
-    free text). '+'-joined figures (e.g. '1+10+2*') are additive phases of
-    the SAME job and are summed; '/'-joined figures (e.g. '7 days/20 days')
-    are alternative windows we can't disambiguate against the single
-    `actual` field, so only the first is used."""
-    if not schedule_days:
-        return None
-    s = schedule_days.strip()
-    m = _re.search(r"(\d+(?:\.\d+)?)\s*Month", s, _re.I)
-    if m:
-        return float(m.group(1)) * 30
-    if "+" in s:
-        nums = _re.findall(r"\d+(?:\.\d+)?", s)
-        return sum(float(n) for n in nums) if nums else None
-    m = _re.search(r"(\d+(?:\.\d+)?)", s)
-    return float(m.group(1)) if m else None
-
-
-def _parse_actual_status(actual):
-    """-> (status, duration_days). status is one of:
-    "not_started" (actual blank), "in_progress" (open-ended, e.g.
-    "7.6.26-cont.."), "completed" (a full D.M.YY-D.M.YY range), or
-    "unknown" (present but not in a recognized format)."""
-    if not actual or not actual.strip():
-        return "not_started", None
-    s = actual.strip()
-    m = _CR_DATE_RANGE_RE.match(s)
-    if m:
-        d1, mo1, y1, d2, mo2, y2 = (int(g) for g in m.groups())
-        try:
-            start = _dt.date(2000 + y1, mo1, d1)
-            end = _dt.date(2000 + y2, mo2, d2)
-        except ValueError:
-            return "unknown", None
-        return "completed", (end - start).days + 1
-    if _re.search(r"cont", s, _re.I):
-        return "in_progress", None
-    return "unknown", None
-
-
-def _capital_repair_section(report_month: str) -> list:
-    """Per plant: repair JOB counts (completed vs. total planned for the FY —
-    one capital_repair_table row = one job), split further into on-time vs.
-    delayed (a completed job counts as on time if its actual duration is
-    within _CR_GRACE_DAYS of its planned days), plus the average overrun
-    across the delayed ones."""
-    fy = fy_from_month(report_month)
-    out = []
-    for plant in CR_PAGES.values():  # BSP, DSP, RSP, BSL, ISP — page order 36-40
-        cr = generate_capital_repair(plant, fy)
-        rows = [r for sec in cr.get("sections", []) for r in sec.get("rows", [])]
-        total = len(rows)
-        completed = on_time = delayed = 0
-        overrun_days = []
-        for r in rows:
-            status, duration = _parse_actual_status(r.get("actual"))
-            if status != "completed":
-                continue
-            completed += 1
-            planned = _parse_planned_days(r.get("schedule_days"))
-            if planned is None or duration is None:
-                continue
-            if duration <= planned + _CR_GRACE_DAYS:
-                on_time += 1
-            else:
-                delayed += 1
-                overrun_days.append(duration - planned)
-        out.append({
-            "plant": plant,
-            "completed": completed,
-            "total": total,
-            "pct": round(completed / total * 100) if total else None,
-            "on_time": on_time,
-            "delayed": delayed,
-            "avg_delay_days": round(sum(overrun_days) / len(overrun_days), 1) if overrun_days else None,
-        })
-    return out
 
 
 def _trend_section(report_month: str) -> dict:
@@ -580,6 +627,5 @@ def generate_at_a_glance(report_month: str) -> dict:
         "ytd_trend": _ytd_trend_section(report_month),
         "techno": _techno_section(report_month),
         "special_steel": _special_steel_section(report_month, month_short),
-        "capital_repair": _capital_repair_section(report_month),
         "trend": _trend_section(report_month),
     }

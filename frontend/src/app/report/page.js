@@ -56,6 +56,17 @@ const PAGE_LABELS = {
 // wait on any report data to load.
 const ALL_PAGE_NUMBERS = Object.keys(PAGE_LABELS).map(Number).sort((a, b) => a - b);
 
+// Internal page ids include sentinel decimals (e.g. 2.5 for "MIS at a
+// Glance", 3.5 for "Key Parameters") so they can be inserted between real
+// pages without renumbering the rest of the report — but showing "2.5. MIS
+// at a Glance" in the UI is confusing since the actual printed PDF numbers
+// these pages 1, 2, 3, 4... in plain sequence (Chromium's own page counter,
+// driven by physical page order, not by this id). This map gives every
+// page id its plain sequential display position so the selector/checklist
+// show the same continuous numbering the PDF does, while `value=`/routing
+// everywhere else keeps using the real internal id.
+const PAGE_DISPLAY_NUMBER = Object.fromEntries(ALL_PAGE_NUMBERS.map((n, i) => [n, i + 1]));
+
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -444,7 +455,7 @@ export default function ReportPage() {
             >
               {ALL_PAGE_NUMBERS.map((pageNum) => (
                 <option key={pageNum} value={pageNum}>
-                  {pageNum}. {PAGE_LABELS[pageNum] || 'Page ' + pageNum}
+                  {PAGE_DISPLAY_NUMBER[pageNum]}. {PAGE_LABELS[pageNum] || 'Page ' + pageNum}
                 </option>
               ))}
             </select>
@@ -543,7 +554,7 @@ export default function ReportPage() {
                   checked={selectedPages.has(pageNum)}
                   onChange={() => togglePageSelection(pageNum)}
                 />
-                {pageNum}. {PAGE_LABELS[pageNum] || 'Page ' + pageNum}
+                {PAGE_DISPLAY_NUMBER[pageNum]}. {PAGE_LABELS[pageNum] || 'Page ' + pageNum}
               </label>
             ))}
           </div>
@@ -596,7 +607,7 @@ export default function ReportPage() {
                 }
               `}</style>
               <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid #dadce0', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-              {activePageError ? `Failed to load page ${activePageNum}` : `Loading page ${activePageNum}...`}
+              {activePageError ? `Failed to load page ${PAGE_DISPLAY_NUMBER[activePageNum]}` : `Loading page ${PAGE_DISPLAY_NUMBER[activePageNum]}...`}
             </div>
           </div>
         ) : (
@@ -605,6 +616,7 @@ export default function ReportPage() {
             onCellChange={handleCellChange}
             selectedMonth={selectedMonth}
             totalPages={ALL_PAGE_NUMBERS.length}
+            displayPageNumber={PAGE_DISPLAY_NUMBER[activePageNum] - 2}
           />
         )}
       </div>

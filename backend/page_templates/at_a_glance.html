@@ -49,42 +49,22 @@
             {% endfor %}
           </div>
 
-          {# ── Special Steel + Capital Repair, side by side ── #}
-          <div style="display:flex;gap:10px;margin-bottom:7px;">
-            <div style="flex:1.05;border:1px solid {{ colors.border_light }};border-radius:4px;padding:5px 8px;">
-              <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:4px;">Special Steel Performance (SAIL)</div>
-              <div style="display:flex;gap:9px;align-items:center;">
-                <div style="flex:1;">{{ page.special_steel.bar_svg }}</div>
-                <div style="flex:1;font-size:7.5pt;line-height:1.6;">
-                  <div>%Fulfilment: <b>{{ page.special_steel.pct_ful if page.special_steel.pct_ful else '—' }}%</b></div>
-                  <div>vs CPLY:
-                    {% if page.special_steel.growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ page.special_steel.pct_growth }}%</b>
-                    {% elif page.special_steel.growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ page.special_steel.pct_growth }}%</b>
-                    {% else %}<b>—</b>{% endif %}
-                  </div>
-                  <div>ABP FY: <b>{{ page.special_steel.abp_fy if page.special_steel.abp_fy else '—' }}</b></div>
-                  <div>% of Saleable Steel: <b>{{ page.special_steel.special_pct if page.special_steel.special_pct else '—' }}%</b></div>
+          {# ── Value Added Steel (formerly "Special Steel") ── #}
+          <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:5px 8px;margin-bottom:7px;">
+            <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:4px;">Value Added Steel Performance (SAIL)</div>
+            <div style="display:flex;gap:9px;align-items:center;">
+              <div style="flex:1.5;">{{ page.special_steel.five_year_svg }}</div>
+              <div style="flex:0.85;">{{ page.special_steel.quarter_svg }}</div>
+              <div style="flex:0.55;font-size:7.5pt;line-height:1.6;padding-left:4px;">
+                <div>%Fulfilment: <b>{{ page.special_steel.pct_ful if page.special_steel.pct_ful else '—' }}%</b></div>
+                <div>vs CPLY:
+                  {% if page.special_steel.growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ page.special_steel.pct_growth }}%</b>
+                  {% elif page.special_steel.growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ page.special_steel.pct_growth }}%</b>
+                  {% else %}<b>—</b>{% endif %}
                 </div>
+                <div>ABP FY: <b>{{ page.special_steel.abp_fy if page.special_steel.abp_fy else '—' }}</b></div>
+                <div>% of Saleable Steel: <b>{{ page.special_steel.special_pct if page.special_steel.special_pct else '—' }}%</b></div>
               </div>
-            </div>
-
-            <div style="flex:1;border:1px solid {{ colors.border_light }};border-radius:4px;padding:5px 8px;">
-              <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:4px;">Capital Repair — SAIL (FY)</div>
-              {% for pl in page.capital_repair %}
-              <div style="margin-bottom:3px;">
-                <div style="display:flex;justify-content:space-between;font-size:7.4pt;margin-bottom:1px;">
-                  <span style="font-weight:700;">{{ pl.plant }}</span>
-                  <span style="color:{{ colors.text_secondary }};">{{ pl.completed }}/{{ pl.total }} repairs{{ ' (' ~ pl.pct ~ '%)' if pl.pct is not none else '' }}</span>
-                </div>
-                <div style="background:{{ colors.border_divider }};border-radius:3px;height:5px;overflow:hidden;margin-bottom:1px;">
-                  <div style="width:{{ pl.pct if pl.pct is not none else 0 }}%;height:100%;background:{{ colors.misc_accent_blue }};"></div>
-                </div>
-                <div style="font-size:6.6pt;line-height:1.3;">
-                  <span style="color:{{ colors.text_variance_green }};font-weight:700;">On time: {{ pl.on_time }}</span>
-                  {% if pl.delayed %}<span style="color:{{ colors.text_secondary }};">&nbsp;·&nbsp;</span><span style="color:{{ colors.text_variance_red }};font-weight:700;">Delayed: {{ pl.delayed }}{% if pl.avg_delay_days is not none %} (avg +{{ '%.1f'|format(pl.avg_delay_days) }} d){% endif %}</span>{% endif %}
-                </div>
-              </div>
-              {% endfor %}
             </div>
           </div>
 
