@@ -464,6 +464,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                     page["chart_data"] = _safe_chart_data(month)
                 if page.get("page") == 4 or page.get("type") == "page4_table":
                     page["rows"] = generate_page4_rows(month)
+                    page["type"] = "page4_table"
                 if page.get("page") == 5:
                     page["rows"] = generate_page5_rows(month)
                     page["type"] = "performance_summary_table"
@@ -713,6 +714,9 @@ async def generate_pdf(request: PDFRequest):
             p["te_table"] = _safe_te_table(request.month)
         if pg == 2:
             p["rows"] = _index_rows()
+        if pg == 4 or p.get("type") == "page4_table":
+            p["rows"] = generate_page4_rows(request.month)
+            p["type"] = "page4_table"
         if pg == 13:
             concast = generate_concast_data(request.month)
             p["monthly"] = concast["monthly"]

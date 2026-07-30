@@ -65,7 +65,7 @@
               {% set _v = 'border-left:1px solid ' ~ colors.border_black ~ ';border-right:1px solid ' ~ colors.border_black ~ ';' %}
               {% set _bt = ('border-top:1px solid ' ~ colors.border_black ~ ';')    if loop.first else '' %}
               {% set _bb = ('border-bottom:1px solid ' ~ colors.border_black ~ ';') if loop.last  else '' %}
-              {% set _box = ('border-top:2px solid ' ~ colors.border_black ~ ';border-bottom:2px solid ' ~ colors.border_black ~ ';font-weight:700;') if _bold_row else (_bt ~ _bb) %}
+              {% set _box = ('border-top:1px solid ' ~ colors.border_black ~ ';border-bottom:1px solid ' ~ colors.border_black ~ ';font-weight:700;') if _bold_row else (_bt ~ _bb) %}
               {% set _td = _v ~ _box %}
               {% set _row_bg = ('background:' ~ colors.highlight_achieved_band_bg ~ ';') if _sail else (('background:' ~ colors.highlight_bold_row_bg ~ ';') if row.bold else '') %}
               <tr style="{{ _row_bg }}">

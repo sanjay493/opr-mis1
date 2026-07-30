@@ -1,31 +1,40 @@
 """
-Special Steel — Trend & Performance Analysis (Page 24).
+Special Steel (Value Added Steel) — Trend & Performance Analysis (Page 24).
 
-Three visuals, per plant (BSP/DSP/RSP/BSL/ISP) plus a SAIL aggregate:
-  1. Line chart  — monthly Special Steel % of Saleable Steel, last 3 FY + current FY.
-  2. Bar chart   — annual Special Steel production ('000T): last 3 FY actuals plus
-                   the current (partial) FY's rate, annualized from days elapsed
-                   so far — not a plain YTD total.
-  3. Bar chart   — current month's Special Steel production ('000T).
+Three visuals, per plant (BSP/DSP/RSP/BSL/ISP) plus a SAIL aggregate, each
+entity getting its own independently-scaled mini bar chart (SAIL's total is
+~5-10x any single plant's, so sharing one axis would flatten every plant bar
+to a sliver):
+  1. Annual despatch — 6 blocks (BSP/DSP/RSP top row, BSL/ISP/SAIL bottom
+     row), each with 4 bars: the last 3 closed FYs' actuals plus the current
+     (partial) FY's likely rate, annualized from days elapsed so far — not a
+     plan or a plain YTD total.
+  2. For-the-month despatch — one bar per entity.
+  3. Till-the-month (YTD) despatch — one bar per entity.
+Every bar: rounded ("half-circle") top, the despatch quantity labeled
+inside in bold 12pt, and that period's Special Steel % of Saleable Steel
+labeled above the bar top. FY (or entity) labeled below.
 
-special_steel_orders only has data from 2025-04 onward (see db.py), so the two
-oldest FYs are currently empty for every entity. Rather than special-case that,
-every lookup here is "sum what exists, and say so if nothing does" — an FY/entity
-with zero matching rows renders as a blank/"No data" bar instead of a misleading
-0, so populating the older months later makes the chart fill in on its own.
+special_steel_orders only has data from 2025-04 onward (see db.py), so the
+two oldest FYs are currently empty for every entity. Rather than
+special-case that, every lookup here is "sum what exists, and say so if
+nothing does" — an FY/entity with zero matching rows renders as a blank/N-A
+bar instead of a misleading 0, so populating the older months later makes
+the chart fill in on its own.
 """
 import calendar
 import datetime as _dt
-import sqlite3
 import db
 
 _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 _SSPS = "SSPs"
 _ENTITIES = _PLANTS + ["SAIL"]
+# Display order for the 6 annual blocks: BSP/DSP/RSP top row, BSL/ISP/SAIL
+# bottom row (per spec) - not the same order as _ENTITIES above.
+_BLOCK_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
 
-# Same house palette as the page-3 techno bar charts (page_techno.py _C_FY/_C_TARGET/
-# _C_MONTHLY = gold/green/blue) extended to a full 6-series Office-style set so each
-# plant keeps one consistent color across both the line chart and the month bar chart.
+# Same house palette as the page-3 techno bar charts, one fixed color per
+# entity so it stays consistent across the month/till-month charts.
 _COLORS = {
     "BSP": "#4472C4",
     "DSP": "#ED7D31",
@@ -34,9 +43,9 @@ _COLORS = {
     "ISP": "#5B9BD5",
     "SAIL": "#70AD47",
 }
-# Annual bar chart: same bar (one entity) across 4 periods, so color encodes
-# "how recent" instead — historical FYs shade from light to full gold, and the
-# current FY's bar is green since it's a projected rate, not a closed actual.
+# Annual chart: same entity across 4 periods, so color encodes "how recent"
+# instead — historical FYs shade from light to full gold, current FY (a
+# projected rate, not a closed actual) is green.
 _FY_BAR_COLORS = ["#FFE699", "#FFD966", "#FFC000", "#70AD47"]
 
 
@@ -94,26 +103,28 @@ def _saleable_steel(cur, month, plant):
     return r[0] if r and r[0] is not None else None  # '000T
 
 
-def _entity_saleable(cur, month, entity) -> float:
+def _period_saleable(cur, months: list, entity: str):
+    """SAIL/plant Saleable Steel ('000T) summed across these months."""
     plants = _PLANTS if entity == "SAIL" else [entity]
-    vals = [v for p in plants if (v := _saleable_steel(cur, month, p)) is not None]
-    return sum(vals) if vals else None
+    total, has = 0.0, False
+    for m in months:
+        for p in plants:
+            v = _saleable_steel(cur, m, p)
+            if v is not None:
+                total += v
+                has = True
+    return total if has else None
 
 
-def _month_pct(cur, month, entity):
-    special_T, has = _sum_actual(cur, [month], entity)
+def _period_value_pct(cur, months: list, entity: str):
+    """(qty_tonnes, pct_of_saleable) for this entity's Special Steel despatch
+    over these months, or (None, None) if nothing's been reported yet."""
+    qty, has = _sum_actual(cur, months, entity)
     if not has:
-        return None
-    saleable_000T = _entity_saleable(cur, month, entity)
-    if not saleable_000T:
-        return None
-    return special_T / (saleable_000T * 1000) * 100
-
-
-def _fy_annual_total(cur, fy_label, entity):
-    """(value_000T or None). None means no rows at all for this FY/entity yet."""
-    total, has = _sum_actual(cur, _fy_months(fy_label), entity)
-    return (total / 1000.0) if has else None
+        return None, None
+    saleable_000T = _period_saleable(cur, months, entity)
+    pct = qty / (saleable_000T * 1000) * 100 if saleable_000T else None
+    return qty, pct
 
 
 def _current_fy_rate(cur, report_month, entity):
@@ -127,12 +138,10 @@ def _current_fy_rate(cur, report_month, entity):
     return (total / elapsed_days * days_in_fy) / 1000.0
 
 
-# ── formatting / color helpers ─────────────────────────────────────────────────
+# ── formatting helpers ──────────────────────────────────────────────────────
 
-def _fmt(v, dp=1):
-    if v is None:
-        return None
-    return f"{v:.{dp}f}"
+def _fmt_int(v) -> str:
+    return f"{v:,.0f}"
 
 
 def _contrast_text(hex_color: str) -> str:
@@ -146,228 +155,81 @@ def _fy_short(fy_label: str) -> str:
     return f"FY{fy_label}"
 
 
-# ── SVG: monthly % line chart ──────────────────────────────────────────────────
+# ── SVG: half-circle-top bar path ──────────────────────────────────────────
 
-def _line_chart_svg(months: list, series: dict, fy_boundaries: list) -> str:
-    vw, vh = 980, 340
-    ml, mr, mt, mb = 40, 10, 22, 34
+def _rounded_bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
+    r = max(0.0, min(r, w / 2, h))
+    if r <= 0.05:
+        return f'M{x:.1f},{y + h:.1f} L{x:.1f},{y:.1f} L{x + w:.1f},{y:.1f} L{x + w:.1f},{y + h:.1f} Z'
+    return (f'M{x:.1f},{y + h:.1f} '
+            f'L{x:.1f},{y + r:.1f} '
+            f'A{r:.1f},{r:.1f} 0 0 1 {x + r:.1f},{y:.1f} '
+            f'L{x + w - r:.1f},{y:.1f} '
+            f'A{r:.1f},{r:.1f} 0 0 1 {x + w:.1f},{y + r:.1f} '
+            f'L{x + w:.1f},{y + h:.1f} Z')
+
+
+# ── SVG: one bar group (N bars, one x-axis, shared y-scale) ────────────────
+# Used for both the 6 per-entity annual blocks (4 bars: 3 FY + current) and
+# the month/till-month charts (6 bars: one per entity) — same visual spec
+# either way: half-circle top, despatch qty in bold 12pt centered inside the
+# bar, that period's % of Saleable Steel above the bar top, x-axis label
+# below.
+
+def _bar_group_svg(bars: list, title: str, vw: int = 240, vh: int = 200) -> str:
+    """bars: [(x_label, qty_tonnes_or_None, pct_or_None, color), ...]"""
+    ml, mr, mt, mb = 12, 10, 30, 24
     cw, ch = vw - ml - mr, vh - mt - mb
 
-    all_vals = [v for s in series.values() for v in s if v is not None]
-    yhi = max(all_vals) if all_vals else 10.0
-    yhi = max(5.0, yhi * 1.15)
-    ylo = 0.0
+    qty_vals = [b[1] for b in bars if b[1] is not None]
+    yhi = max(qty_vals) * 1.35 if qty_vals else 10.0
+    yhi = max(yhi, 5.0)
 
-    n = len(months)
-    step = cw / max(n - 1, 1)
-
-    def xs(i):
-        return ml + i * step
-
-    def ys(v):
-        return mt + ch * (1.0 - (v - ylo) / (yhi - ylo))
-
-    lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
-             f'style="width:100%;height:auto;display:block;">']
-
-    # gridlines + y-axis labels (5 bands)
-    for k in range(5):
-        v = ylo + (yhi - ylo) * k / 4
-        gy = ys(v)
-        lines.append(f'<line x1="{ml}" y1="{gy:.1f}" x2="{vw - mr}" y2="{gy:.1f}" '
-                      f'stroke="#e2e8f0" stroke-width="0.6"/>')
-        lines.append(f'<text x="{ml - 4}" y="{gy + 2.5:.1f}" text-anchor="end" '
-                      f'font-size="7" font-family="Arial,sans-serif" fill="#64748b">{v:.0f}%</text>')
-
-    # FY boundary markers
-    for idx, label in fy_boundaries:
-        bx = xs(idx)
-        lines.append(f'<line x1="{bx:.1f}" y1="{mt}" x2="{bx:.1f}" y2="{mt + ch}" '
-                      f'stroke="#94a3b8" stroke-width="0.7" stroke-dasharray="2,2"/>')
-        lines.append(f'<text x="{bx:.1f}" y="{mt + ch + 12}" text-anchor="middle" '
-                      f'font-size="7" font-weight="bold" font-family="Arial,sans-serif" '
-                      f'fill="#334155">{label}</text>')
-
-    # baseline
-    lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
-                  f'stroke="#374151" stroke-width="0.8"/>')
-
-    for entity in _ENTITIES:
-        color = _COLORS[entity]
-        vals = series[entity]
-        segs, cur_seg = [], []
-        for i, v in enumerate(vals):
-            if v is None:
-                if len(cur_seg) > 1:
-                    segs.append(cur_seg)
-                cur_seg = []
-            else:
-                cur_seg.append((xs(i), ys(v)))
-        if len(cur_seg) > 1:
-            segs.append(cur_seg)
-        for seg in segs:
-            d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in seg)
-            lines.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.4"/>')
-        # small end-dot on the last plotted point so a lone/short segment is still visible
-        last_pt = next((seg[-1] for seg in reversed(segs)), None)
-        if last_pt:
-            lines.append(f'<circle cx="{last_pt[0]:.1f}" cy="{last_pt[1]:.1f}" r="1.8" fill="{color}"/>')
-
-    # legend
-    lx = ml
-    ly = 12
-    for entity in _ENTITIES:
-        color = _COLORS[entity]
-        lines.append(f'<rect x="{lx}" y="{ly - 6}" width="10" height="3" fill="{color}"/>')
-        lines.append(f'<text x="{lx + 13}" y="{ly - 3}" font-size="7.5" font-weight="bold" '
-                      f'font-family="Arial,sans-serif" fill="#1e293b">{entity}</text>')
-        lx += 13 + len(entity) * 5 + 14
-
-    lines.append("</svg>")
-    return "\n".join(lines)
-
-
-# ── SVG: grouped annual bar chart (3 FY actuals + current FY rate) ─────────────
-#
-# SAIL's annual total is ~5-10x any single plant's (it's the sum of all of
-# them), so it needs its own call/scale — plotting it alongside individual
-# plants on one axis would compress every plant bar to a sliver. Callers pass
-# an explicit `entities` list: once for the 5 plants together, once for SAIL
-# alone, each getting a y-scale that fits its own data.
-
-def _annual_bar_svg(fys: list, values: dict, entities: list, title: str,
-                     vw: int = 470, vh: int = 250) -> str:
-    ml, mr, mt, mb = 30, 8, 28, 36
-    cw, ch = vw - ml - mr, vh - mt - mb
-
-    all_vals = [v for ent in entities for (_, v, _r) in values[ent] if v is not None]
-    yhi = max(all_vals) if all_vals else 10.0
-    yhi = max(5.0, yhi * 1.22)
-
-    n_groups = len(entities)
-    group_w = cw / n_groups
-    n_bars = len(fys)
-    bar_gap = 2.0
-    bar_w = max(6.0, (group_w - 8) / n_bars - bar_gap)
-    fs = min(7.0, max(5.2, bar_w * 0.62))
-
-    lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
-             f'style="width:100%;height:auto;display:block;">']
-    lines.append(f'<text x="{vw / 2:.0f}" y="12" text-anchor="middle" font-size="9" '
-                 f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
-    lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
-                 f'stroke="#374151" stroke-width="0.7"/>')
-
-    gx = ml
-    for ent in entities:
-        bx = gx + 4
-        for j, (fy, v, is_rate) in enumerate(values[ent]):
-            color = _FY_BAR_COLORS[j]
-            x = bx + j * (bar_w + bar_gap)
-            cx = x + bar_w / 2
-            if v is None:
-                bh = 3
-                by = mt + ch - bh
-                lines.append(f'<rect x="{x:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh}" '
-                             f'fill="none" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2,1.5"/>')
-                lines.append(f'<text x="{cx:.1f}" y="{by - 3:.1f}" text-anchor="middle" '
-                             f'font-size="5.6" font-family="Arial,sans-serif" fill="#94a3b8">N/A</text>')
-            else:
-                bh = max(2.0, ch * v / yhi)
-                by = mt + ch - bh
-                lines.append(f'<rect x="{x:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh:.1f}" '
-                             f'fill="{color}" rx="1"/>')
-                val_str = _fmt(v, 0)
-                # Horizontal label only — centered inside the bar when there's
-                # room for the text's own height, otherwise just above it
-                # (matching the bar's fill color, same fallback page 3 uses).
-                if bh >= 11:
-                    ty = by + bh / 2 + fs * 0.35
-                    lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" '
-                                 f'font-size="{fs:.1f}" font-weight="bold" font-family="Arial,sans-serif" '
-                                 f'fill="{_contrast_text(color)}">{val_str}</text>')
-                else:
-                    ty = by - 3
-                    lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" '
-                                 f'font-size="{fs:.1f}" font-weight="bold" font-family="Arial,sans-serif" '
-                                 f'fill="{color}">{val_str}</text>')
-        lx = gx + group_w / 2
-        ly = mt + ch + 11
-        lines.append(f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="middle" font-size="7.5" '
-                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{ent}</text>')
-        gx += group_w
-
-    # legend: FY labels + current-year rate note
-    lx = ml
-    ly = mt + ch + 24
-    for j, fy in enumerate(fys):
-        label = _fy_short(fy) + (" (rate)" if j == len(fys) - 1 else "")
-        lines.append(f'<rect x="{lx}" y="{ly - 6}" width="9" height="7" fill="{_FY_BAR_COLORS[j]}"/>')
-        lines.append(f'<text x="{lx + 12}" y="{ly}" font-size="6.6" font-family="Arial,sans-serif" '
-                     f'fill="#334155">{label}</text>')
-        lx += 12 + len(label) * 4.4 + 10
-
-    lines.append("</svg>")
-    return "\n".join(lines)
-
-
-# ── SVG: current-month bar chart ───────────────────────────────────────────────
-
-def _month_bar_svg(month_label: str, values: dict) -> str:
-    vw, vh = 470, 300
-    ml, mr, mt, mb = 30, 8, 30, 26
-    cw, ch = vw - ml - mr, vh - mt - mb
-
-    vals = [v for v in values.values() if v is not None]
-    yhi = max(vals) if vals else 10.0
-    yhi = max(5.0, yhi * 1.2)
-
-    n = len(_ENTITIES)
+    n = len(bars)
     slot_w = cw / n
-    bar_w = max(10.0, slot_w * 0.6)
+    bar_w = max(14.0, slot_w * 0.55)
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
-    lines.append(f'<text x="{vw / 2:.0f}" y="12" text-anchor="middle" font-size="9" '
-                 f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">'
-                 f"Special Steel Production — {month_label} ('000T)</text>")
+    if title:
+        lines.append(f'<text x="{vw / 2:.0f}" y="12" text-anchor="middle" font-size="9" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
 
-    x = ml
-    for ent in _ENTITIES:
-        color = _COLORS[ent]
-        v = values.get(ent)
-        bx = x + (slot_w - bar_w) / 2
-        if v is None:
-            bh = 3
-            by = mt + ch - bh
-            lines.append(f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh}" '
+    for i, (label, qty, pct, color) in enumerate(bars):
+        cx = ml + i * slot_w + slot_w / 2
+        if qty is None:
+            by, bh = mt + ch - 3, 3
+            lines.append(f'<rect x="{cx - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh}" '
                          f'fill="none" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2,1.5"/>')
-            lines.append(f'<text x="{bx + bar_w / 2:.1f}" y="{by - 4:.1f}" text-anchor="middle" '
+            lines.append(f'<text x="{cx:.1f}" y="{by - 4:.1f}" text-anchor="middle" '
                          f'font-size="6.5" font-family="Arial,sans-serif" fill="#94a3b8">N/A</text>')
         else:
-            bh = max(2.0, ch * v / yhi)
+            bh = max(2.0, ch * qty / yhi)
             by = mt + ch - bh
-            lines.append(f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh:.1f}" '
-                         f'fill="{color}" rx="1.5"/>')
-            txt_color = _contrast_text(color)
-            val_str = _fmt(v, 1)
-            if bh >= 16:
-                ty = by + bh / 2 + 3
-                lines.append(f'<text x="{bx + bar_w / 2:.1f}" y="{ty:.1f}" text-anchor="middle" '
-                             f'font-size="8" font-weight="bold" font-family="Arial,sans-serif" '
-                             f'fill="{txt_color}">{val_str}</text>')
+            path = _rounded_bar_path(cx - bar_w / 2, by, bar_w, bh, bar_w / 2)
+            lines.append(f'<path d="{path}" fill="{color}"/>')
+            if pct is not None:
+                lines.append(f'<text x="{cx:.1f}" y="{by - 5:.1f}" text-anchor="middle" font-size="7.6" '
+                             f'font-weight="bold" font-family="Arial,sans-serif" fill="{color}">{pct:.1f}%</text>')
+            val_str = _fmt_int(qty)
+            fill = _contrast_text(color)
+            if 12 * len(val_str) * 0.62 <= bar_w - 4:
+                # Horizontal, centered — fits within the bar's own width.
+                ty = by + bh / 2 + 4.2
+                lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" font-size="12" '
+                             f'font-weight="bold" font-family="Arial,sans-serif" fill="{fill}">{val_str}</text>')
             else:
-                ty = by - 4
-                lines.append(f'<text x="{bx + bar_w / 2:.1f}" y="{ty:.1f}" text-anchor="middle" '
-                             f'font-size="7" font-weight="bold" font-family="Arial,sans-serif" '
-                             f'fill="{color}">{val_str}</text>')
-        lx = x + slot_w / 2
-        ly = mt + ch + 12
-        lines.append(f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="middle" font-size="8" '
-                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{ent}</text>')
-        x += slot_w
+                # Too wide for a narrow bar at 12pt — rotate vertical
+                # (bottom-to-top), centered on the bar's own midpoint, same
+                # technique as the at-a-glance production-trend bars.
+                ty = by + bh / 2
+                lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" dominant-baseline="middle" '
+                             f'transform="rotate(-90 {cx:.1f} {ty:.1f})" font-size="12" font-weight="bold" '
+                             f'font-family="Arial,sans-serif" fill="{fill}">{val_str}</text>')
+        lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 13:.1f}" text-anchor="middle" font-size="7.5" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -377,50 +239,46 @@ def _month_bar_svg(month_label: str, values: dict) -> str:
 
 def generate_special_steel_trend(report_month: str) -> dict:
     fys = _last_n_fys(report_month, 4)
-    all_months = []
-    for fy in fys:
-        all_months.extend(_fy_months(fy))
+    ytd_months = db.get_ytd_months(report_month)
 
     conn = db.connect()
     cur = conn.cursor()
     try:
-        series_pct = {ent: [] for ent in _ENTITIES}
-        for m in all_months:
-            for ent in _ENTITIES:
-                series_pct[ent].append(_month_pct(cur, m, ent) if m <= report_month else None)
+        annual_svgs = {}
+        for ent in _BLOCK_ORDER:
+            bars = []
+            for fy in fys[:-1]:
+                qty, pct = _period_value_pct(cur, _fy_months(fy), ent)
+                bars.append((_fy_short(fy), qty, pct, _FY_BAR_COLORS[len(bars)]))
+            cur_fy = fys[-1]
+            _, cur_pct = _period_value_pct(cur, ytd_months, ent)
+            cur_rate = _current_fy_rate(cur, report_month, ent)
+            cur_qty = cur_rate * 1000 if cur_rate is not None else None
+            bars.append((f"{_fy_short(cur_fy)} (Likely)", cur_qty, cur_pct, _FY_BAR_COLORS[3]))
+            annual_svgs[ent] = _bar_group_svg(bars, ent, vw=240, vh=200)
 
-        fy_boundaries = []
-        for fy in fys:
-            idx = all_months.index(_fy_months(fy)[0])
-            fy_boundaries.append((idx, _fy_short(fy)))
-
-        annual = {ent: [] for ent in _ENTITIES}
-        for fy in fys[:-1]:
-            for ent in _ENTITIES:
-                annual[ent].append((fy, _fy_annual_total(cur, fy, ent), False))
-        cur_fy = fys[-1]
-        for ent in _ENTITIES:
-            annual[ent].append((cur_fy, _current_fy_rate(cur, report_month, ent), True))
-
-        month_vals = {ent: None for ent in _ENTITIES}
-        for ent in _ENTITIES:
-            t, has = _sum_actual(cur, [report_month], ent)
-            month_vals[ent] = (t / 1000.0) if has else None
+        month_bars, ytd_bars = [], []
+        for ent in _BLOCK_ORDER:
+            qty, pct = _period_value_pct(cur, [report_month], ent)
+            month_bars.append((ent, qty, pct, _COLORS[ent]))
+            qty, pct = _period_value_pct(cur, ytd_months, ent)
+            ytd_bars.append((ent, qty, pct, _COLORS[ent]))
     finally:
         conn.close()
 
     dt = _dt.datetime.strptime(report_month, "%Y-%m")
     month_label = dt.strftime("%b'%y")
+    cum_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b'%y") + "-" + month_label
 
     return {
         "type": "special_steel_trend",
         "title": "SPECIAL STEEL — TREND & PERFORMANCE ANALYSIS",
-        "line_chart_svg": _line_chart_svg(all_months, series_pct, fy_boundaries),
-        "annual_bar_plants_svg": _annual_bar_svg(
-            fys, annual, _PLANTS, "Annual Special Steel Production — Plants ('000T)",
-            vw=980, vh=300),
-        "annual_bar_sail_svg": _annual_bar_svg(
-            fys, annual, ["SAIL"], "SAIL ('000T)", vw=300, vh=300),
-        "month_bar_svg": _month_bar_svg(month_label, month_vals),
+        "annual_svgs": [annual_svgs[e] for e in _BLOCK_ORDER],
+        "month_svg": _bar_group_svg(
+            month_bars, f"Special Steel Despatch — {month_label} (T, % of Saleable Steel)",
+            vw=700, vh=220),
+        "till_month_svg": _bar_group_svg(
+            ytd_bars, f"Special Steel Despatch — {cum_label} YTD (T, % of Saleable Steel)",
+            vw=700, vh=220),
         "fy_range_label": f"{_fy_short(fys[0])} to {_fy_short(fys[-1])}",
     }

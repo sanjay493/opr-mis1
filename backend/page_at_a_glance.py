@@ -592,10 +592,10 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
         "special_pct": sail.get("special_pct", {}).get("current", ""),
         "five_year_svg": _value_added_combo_svg(
             fy_cats, fy_pct, fy_qty, _VA_BAR_COLORS,
-            "Value Added Steel — Last 5 Years", vw=560, vh=250),
+            "Value Added Steel — Last 5 Years", vw=560, vh=205),
         "quarter_svg": _value_added_combo_svg(
             q_cats, q_pct, q_qty, [_VA_BAR_COLORS[0], _VA_BAR_COLORS[3]],
-            "Value Added Steel — Quarter Just Ended vs CPLY", vw=300, vh=250),
+            "Value Added Steel — Quarter Just Ended vs CPLY", vw=300, vh=205),
     }
 
 

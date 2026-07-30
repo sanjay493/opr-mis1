@@ -198,7 +198,6 @@ _FIXED_PRECISION_PARAMS = {
     "BF Coke Yield":        1,
     # 2 decimal places
     "Sinter Productivity":  2,
-    "LD Slag Usage":        2,
     "Fe-Mn Consumption":    2,
     "Fe-Si Consumption":    2,
     "Si-Mn Consumption":    2,
@@ -2372,10 +2371,6 @@ _TECHNO_DB_SCHEMA = {
     29: {
         "type": "param",
         "sections": [
-            # RSP/ISP report this under their Sinter Plant unit(s); BSL under
-            # its SMS unit; DSP under "General" with its own key name
-            # (bof_slag_utilisation — BOF/LD are the same converter route).
-            ("LD Slag Usage",       "kg/t",      [("SP-1", "ld_slag_cons"),          ("SP-2", "ld_slag_cons"),          ("SP-3", "ld_slag_cons"),          ("SP", "ld_slag_cons"),          ("SMS", "ld_slag_cons"),          ("General", "bof_slag_utilisation")]),
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
             ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-3", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
             ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF-6", "hot_blast_temp"), ("BF-7", "hot_blast_temp"), ("BF-8", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
