@@ -843,6 +843,208 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
   );
 }
 
+// ── Coal Consumption & CO2/Water/PM EPI extractor ────────────────────────────
+// Unlike every ExtractRow above, one uploaded PDF here covers all 5 plants
+// (BSP/DSP/RSP/BSL/ISP) at once plus their shared FY annual target, so this
+// is a standalone component (no `plant` prop) rather than another
+// ExtractRow instance — /api/coal-co2/preview and /insert return/accept a
+// `plants: [...]` array instead of one plant's `records`.
+const _COAL_CO2_PARAM_ROWS = [
+  { key: 'sp_co2_emission', label: 'Sp. CO2 Emission', targetLabel: 'Sp. CO2 Emission' },
+  { key: 'sp_water_consumption', label: 'Sp. Water Consumption', targetLabel: 'Sp. Water Consumption' },
+  { key: 'sp_pm_emission', label: 'Sp. PM Emission', targetLabel: 'Sp. PM Emission' },
+  { key: 'indigenous_pcc', label: 'Indigenous PCC' },
+  { key: 'indigenous_mcc', label: 'Indigenous MCC' },
+  { key: 'imported_hard_coal', label: 'Imported Hard Coal' },
+  { key: 'imported_soft_coal', label: 'Imported Soft Coal' },
+];
+
+function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
+  const [file, setFile] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
+  const inputRef = React.useRef();
+
+  React.useEffect(() => {
+    setFile(null);
+    setStatus(null);
+    setPreview(null);
+    if (inputRef.current) inputRef.current.value = '';
+  }, [reportMonth]);
+
+  const handlePreview = async () => {
+    if (!file) return;
+    setBusy(true);
+    setStatus(null);
+    setPreview(null);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('report_month', reportMonth);
+    try {
+      const res = await fetch(`${apiBase}/api/coal-co2/preview`, { method: 'POST', body: form });
+      const json = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(json.detail || 'Preview failed');
+      setPreview(json);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doSave = async (confirmReplace) => {
+    const res = await fetch(`${apiBase}/api/coal-co2/insert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        report_month: preview.report_month,
+        source_file: preview.source_file,
+        plants: preview.plants,
+        targets: preview.targets,
+        ...(confirmReplace ? { confirm_replace: true } : {}),
+      }),
+    });
+    return { res, json: await parseJsonResponse(res) };
+  };
+
+  const handleConfirmSave = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      let { res, json } = await doSave(false);
+      if (res.status === 409) {
+        if (!window.confirm(`${json.detail}\n\nReplace the existing values?`)) {
+          setBusy(false);
+          return;
+        }
+        ({ res, json } = await doSave(true));
+      }
+      if (!res.ok) throw new Error(json.detail || 'Save failed');
+      setStatus({
+        type: 'success',
+        text: `✓ Saved ${json.plants_saved.length} plants for ${json.report_month}`
+          + (json.targets_saved.length ? ` + FY targets for ${json.targets_saved.length}` : ''),
+      });
+      setPreview(null);
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = '';
+      onSuccess();
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancel = () => { setPreview(null); setStatus(null); };
+
+  const fmt = (v) => (v === null || v === undefined ? '—' : v);
+  const cellStyle = { padding: '4px 8px', fontSize: 12.5, textAlign: 'right', borderBottom: '1px solid #f1f3f4' };
+  const labelCellStyle = { padding: '4px 8px', fontSize: 12.5, borderBottom: '1px solid #f1f3f4', color: '#374151' };
+
+  return (
+    <div style={{
+      marginBottom: 16, padding: '12px 14px',
+      background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#166534', marginBottom: 4 }}>
+        Coal Consumption &amp; CO2/Water/PM EPI Report — all 5 plants at once
+      </div>
+      <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
+        One "Major Environmental Performance Indicators (EPIs)" PDF covers BSP/DSP/RSP/BSL/ISP for {reportMonth},
+        plus their shared FY annual target. Saved into the same techno_data table (unit=&quot;General&quot;) as the rest of this page.
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <input ref={inputRef} type="file" accept=".pdf"
+          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
+          style={{ fontSize: 13, flex: 1, minWidth: 200 }}
+          suppressHydrationWarning
+        />
+        {!preview && (
+          <button onClick={handlePreview} disabled={!file || busy}
+            style={{
+              padding: '7px 18px', background: busy ? '#5f6368' : '#16a34a',
+              color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+              cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
+            }}
+          >
+            {busy ? 'Extracting…' : 'Preview'}
+          </button>
+        )}
+        {preview && (
+          <>
+            <button onClick={handleConfirmSave} disabled={busy}
+              style={{
+                padding: '7px 18px', background: busy ? '#5f6368' : '#16a34a',
+                color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              {busy ? 'Saving…' : 'Confirm & Save'}
+            </button>
+            <button onClick={handleCancel} disabled={busy}
+              style={{
+                padding: '7px 14px', background: '#fff', color: '#5f6368',
+                border: '1px solid #dadce0', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10 }}><StatusMsg status={status} /></div>
+
+      {preview && (
+        <div style={{ marginTop: 6 }}>
+          {preview.has_existing && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+            }}>
+              ⚠ {preview.report_month} already has values for {preview.existing_conflicts.map(c => c.plant).join(', ')} —
+              saving will ask to confirm overwriting them.
+            </div>
+          )}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden' }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa' }}>
+                  <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Parameter</th>
+                  {PLANTS.map(p => <th key={p} style={{ ...cellStyle, fontWeight: 700 }}>{p}</th>)}
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>FY Target (SAIL)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {_COAL_CO2_PARAM_ROWS.map(row => {
+                  const sailTarget = row.targetLabel
+                    ? preview.targets?.SAIL?.[row.targetLabel]?.value
+                    : null;
+                  return (
+                    <tr key={row.key}>
+                      <td style={labelCellStyle}>{row.label}</td>
+                      {PLANTS.map(p => {
+                        const rec = preview.plants.find(r => r.plant === p);
+                        const v = rec?.techno_json?.month?.[row.key];
+                        return <td key={p} style={cellStyle}>{fmt(v)}</td>;
+                      })}
+                      <td style={cellStyle}>{fmt(sailTarget)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Techno Data Panel — works for all 5 plants ───────────────────────────────
 // ── "Last saved" log — same extraction_log table /upload reads, filtered to
 // this plant's techno_data writes so it shows when each unit/month was last
@@ -1360,6 +1562,10 @@ function TechnoDataEntryInner() {
   const [month, setMonth] = useState(def.month);
   const [year, setYear] = useState(def.year);
   const [plant, setPlant] = useState('RSP');
+  // Bumped after a Coal/CO2 EPI save (which can touch any/all plants) to
+  // force TechnoDataPanel to refetch, since that component owns its own
+  // load effect keyed on [plant, reportMonth] with no exposed refresh hook.
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
   const reportMonth = useMemo(() => formatMonth(year, month), [year, month]);
 
@@ -1414,7 +1620,10 @@ function TechnoDataEntryInner() {
           </span>
         </div>
 
-        <TechnoDataPanel plant={plant} reportMonth={reportMonth} apiBase={API_BASE_URL} />
+        <CoalCo2ExtractRow reportMonth={reportMonth} apiBase={API_BASE_URL}
+          onSuccess={() => setDataRefreshKey(k => k + 1)} />
+
+        <TechnoDataPanel key={dataRefreshKey} plant={plant} reportMonth={reportMonth} apiBase={API_BASE_URL} />
       </div>
     </div>
   );

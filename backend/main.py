@@ -26,6 +26,7 @@ from page_segment_wise import generate_segment_wise
 from page_special_steel import generate_special_steel_plant, generate_special_steel_sail
 from page_special_steel_trend import generate_special_steel_trend
 from page_at_a_glance import generate_at_a_glance
+from page_key_parameters import generate_key_parameters
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
 from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month
@@ -77,6 +78,62 @@ def _safe_techno(month, pg):
         return {}
     except Exception:
         return {}
+
+# Index (page 2) content baseline, as it read BEFORE "MIS at a Glance" and
+# "Key Parameters" existed as numbered pages (i.e. when "Production
+# performance summary" was the first numbered page, "Page 1"). Kept as a
+# plain (title, page_range) baseline rather than edited in place, since
+# _index_rows() below derives the current numbering from it on every call —
+# see that function's docstring for why this can't just be a static value
+# in mis_data.json.
+_INDEX_BASE_ROWS = [
+    ("Production performance summary", "1"),
+    ("Production main Items", "2"),
+    ("Plant wise production", "3-4"),
+    ("Month-wise Production", "5-16"),
+    ("Concast Production, Production by process", "17"),
+    ("Category-wise Production of saleable steel", "18"),
+    ("Special Steel Production", "19-23"),
+    ("Inventory of ingots, bloom/billet, slab, pig iron & saleable steel at plants and stockyards", "24"),
+    ("Inter Plant Transfers", "25"),
+    ("Techno-economic performance (Major parameters)", "26"),
+    ("Month-wise techno-economic performance", "27-34"),
+    ("Major Environmental Performance Indicators (EPIs)", "35"),
+    ("Coking Coal Receipts & Stock", "36-37"),
+    ("Power Generation", "38"),
+    ("Capital Repairs", "39-43"),
+    ("Average detention per wagon/ commodity-wise detention", "44-47"),
+]
+
+
+def _shift_page_range(page_range: str, delta: int) -> str:
+    """"3-4" -> "5-6" for delta=2; "35" -> "37"."""
+    return "-".join(str(int(p) + delta) for p in page_range.split("-"))
+
+
+def _index_rows() -> list:
+    """Page 2's (Index/Contents) row list, computed fresh on every request
+    rather than read from the static per-month page_configs blob that
+    main.py otherwise loads page 2 from. That blob is a full JSON snapshot
+    saved PER MONTH (db.save_page_config), so editing mis_data.json's page-2
+    rows would only affect months not yet saved — every already-generated
+    month would keep showing stale page numbers forever. Recomputing here
+    instead means the Index is always correct for any month, independent of
+    when it was first saved.
+
+    "MIS at a Glance" and "Key Parameters" are inserted as the new pages 1
+    and 3 (see AT_A_GLANCE_PAGE_ID / KEY_PARAMS_PAGE_ID above); the former
+    first-numbered-page "Production performance summary" becomes page 2
+    (+1), and everything after it shifts by +2 (two new pages ahead of it
+    now, not one)."""
+    rows = [
+        {"sno": "1", "title": "MIS at a Glance", "page_range": "1"},
+        {"sno": "2", "title": _INDEX_BASE_ROWS[0][0], "page_range": "2"},
+        {"sno": "3", "title": "Key Parameters — Quarterly Performance", "page_range": "3"},
+    ]
+    for i, (title, page_range) in enumerate(_INDEX_BASE_ROWS[1:], start=4):
+        rows.append({"sno": str(i), "title": title, "page_range": _shift_page_range(page_range, 2)})
+    return rows
 from pdf import build_pdf_response
 from layout_loader import load_layout_config
 from api_rsp_techno import router as rsp_techno_router
@@ -86,6 +143,7 @@ from api_dsp_techno import router as dsp_techno_router
 from api_unified_techno import router as unified_techno_router
 from api_techno_manual import router as techno_manual_router
 from api_mcr_techno import router as mcr_techno_router
+from api_coal_co2_techno import router as coal_co2_techno_router
 from api_todo import router as todo_router
 from api_worklog import router as worklog_router
 from api_auth import router as auth_router
@@ -108,20 +166,27 @@ _IM_AVG_TO_MAJOR = {}
 # resynthesized fresh on every render.
 TREND_PAGE_ID = 1024
 
-# "MIS at a Glance" infographic snapshot — sits between the Cover page and
-# the Index, so it needs the same front-matter treatment those two get (no
-# header/footer, no Chromium page-numbering, no corner dept-badge). pdf.py's
-# front/main page split is `page <= 2`, and report_utils.get_dept_badge()
-# only badges int page numbers >= 3 — a *float* page id that's still <= 2
-# rides both of those existing rules for free, instead of needing a big
-# sentinel int (like TREND_PAGE_ID) plus special-case overrides. Unlike the
-# trend page above, it DOES have a PAGE_LABELS entry (key "1.5", which sorts
-# numerically between 1 and 2) so it's individually browsable on-screen too —
-# see get_data()'s page_number handling and PageRenderer.js's 'at_a_glance'
-# case. get_data()'s page_number query param is typed float (not int)
-# specifically so this can be requested; every comparison against it is a
-# plain numeric one, so real int page numbers 1-40 are unaffected.
-AT_A_GLANCE_PAGE_ID = 1.5
+# "MIS at a Glance" infographic snapshot — sits right after the Index (i.e.
+# it's the first NUMBERED page, "Page 1"), so unlike its original position
+# (between Cover and Index) it now DOES get pdf.py's normal header/footer
+# and Chromium page-numbering: pdf.py's front/main page split is `page <=
+# 2`, and 2.5 > 2 puts it in the numbered main flow. It still gets no
+# corner dept-badge, for free — report_utils.get_dept_badge() only badges
+# *int* page numbers >= 3, and a float always fails that isinstance check
+# regardless of its value. Sentinel id kept as a float (not a big int like
+# TREND_PAGE_ID) specifically so it keeps sorting between real pages 2 and 3
+# in PAGE_LABELS/the on-screen navigator. get_data()'s page_number query
+# param is typed float (not int) specifically so this can be requested;
+# every comparison against it is a plain numeric one, so real int page
+# numbers 1-40 are unaffected.
+AT_A_GLANCE_PAGE_ID = 2.5
+
+# "Key Parameters" quarterly summary table (Report_format/key_parameters.jpeg)
+# — sits right after "SAIL Performance Summary" (page 3 internally, "Page 2"
+# displayed), becoming "Page 3". Same sentinel-float treatment as
+# AT_A_GLANCE_PAGE_ID above (numbered main flow, no dept-badge, browsable
+# on-screen via PAGE_LABELS).
+KEY_PARAMS_PAGE_ID = 3.5
 
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
@@ -293,6 +358,7 @@ app.include_router(dsp_techno_router)
 app.include_router(unified_techno_router)
 app.include_router(techno_manual_router)
 app.include_router(mcr_techno_router)
+app.include_router(coal_co2_techno_router)
 app.include_router(todo_router)
 app.include_router(worklog_router)
 app.include_router(auth_router)
@@ -360,11 +426,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config = blank_out_page_data(pages_config)
 
         if page_number is not None:
-            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID):
-                # Page 24 (SAIL), the trend sentinel page, and the "at a
-                # glance" sentinel page don't exist in the template (see the
-                # "Always regenerate special steel pages" comment below) —
-                # always synthesized fresh.
+            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID):
+                # Page 24 (SAIL), the trend sentinel page, the "at a
+                # glance" sentinel page, and the "key parameters" sentinel
+                # page don't exist in the template (see the "Always
+                # regenerate special steel pages" comment below) — always
+                # synthesized fresh.
                 pages_config = [{"page": page_number}]
             else:
                 pages_config = [p for p in pages_config if p.get("page") == page_number]
@@ -471,23 +538,29 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
         _cl = _dt.datetime(_dt_obj.year - 1, _dt_obj.month, 1).strftime("%b'%y")
         _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
         if page_number is None:
-            # Neither page 24 (SAIL), the trend sentinel page, nor the "at a
-            # glance" sentinel page exist in the template — all three are
-            # always synthesized fresh. Strip any stale copy, then insert
-            # fresh placeholders right after page 23 (SAIL/trend) and right
-            # after page 1 (at a glance). (In single-page mode, page_number
-            # in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID) already synthesized
-            # its own shell above — skipped here since page 1/23 aren't in
-            # the filtered list to anchor off of.)
+            # None of page 24 (SAIL), the trend sentinel page, the "at a
+            # glance" sentinel page, or the "key parameters" sentinel page
+            # exist in the template — all four are always synthesized fresh.
+            # Strip any stale copy, then insert fresh placeholders right
+            # after page 23 (SAIL/trend), right after page 2/Index (at a
+            # glance, so it becomes the first NUMBERED page, "Page 1"), and
+            # right after page 3/Summary (key parameters, "Page 3"). (In
+            # single-page mode, page_number in (24, TREND_PAGE_ID,
+            # AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID) already synthesized
+            # its own shell above — skipped here since pages 2/3/23 aren't
+            # in the filtered list to anchor off of.)
             pages_config = [p for p in pages_config
-                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID)]
+                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID)]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
                 pages_config.insert(_idx23 + 2, {"page": TREND_PAGE_ID})
-            _idx1 = next((i for i, p in enumerate(pages_config) if p.get("page") == 1), None)
-            if _idx1 is not None:
-                pages_config.insert(_idx1 + 1, {"page": AT_A_GLANCE_PAGE_ID})
+            _idx2 = next((i for i, p in enumerate(pages_config) if p.get("page") == 2), None)
+            if _idx2 is not None:
+                pages_config.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
+            _idx3 = next((i for i, p in enumerate(pages_config) if p.get("page") == 3), None)
+            if _idx3 is not None:
+                pages_config.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -510,6 +583,11 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == AT_A_GLANCE_PAGE_ID:
                 page.update(generate_at_a_glance(month))
                 page["type"] = "at_a_glance"
+            if pg == KEY_PARAMS_PAGE_ID:
+                page.update(generate_key_parameters(month))
+                page["type"] = "key_parameters"
+            if pg == 2:
+                page["rows"] = _index_rows()
             if pg == 25:
                 page.update(generate_opening_stock(month))
                 page["type"] = "opening_stock"
@@ -612,12 +690,19 @@ async def generate_pdf(request: PDFRequest):
         _idx24 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 24), None)
         if _idx24 is not None:
             _pages_list.insert(_idx24 + 1, {"page": TREND_PAGE_ID})
-    # "MIS at a Glance" sentinel page: always inserted right after the Cover
-    # page (page 1), same unconditional-insert pattern as above.
+    # "MIS at a Glance" sentinel page: always inserted right after the Index
+    # (page 2), so it becomes the first NUMBERED page ("Page 1") — same
+    # unconditional-insert pattern as above.
     if not any(p.get("page") == AT_A_GLANCE_PAGE_ID for p in _pages_list):
-        _idx1 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 1), None)
-        if _idx1 is not None:
-            _pages_list.insert(_idx1 + 1, {"page": AT_A_GLANCE_PAGE_ID})
+        _idx2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 2), None)
+        if _idx2 is not None:
+            _pages_list.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
+    # "Key Parameters" sentinel page: always inserted right after "SAIL
+    # Performance Summary" (page 3), so it becomes "Page 3".
+    if not any(p.get("page") == KEY_PARAMS_PAGE_ID for p in _pages_list):
+        _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 3), None)
+        if _idx3 is not None:
+            _pages_list.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
     for p in _pages_list:
         pg = p.get("page", 0)
         # Pure function of page number — recomputed fresh rather than trusted
@@ -626,6 +711,8 @@ async def generate_pdf(request: PDFRequest):
         p["dept_badge"] = get_dept_badge(pg)
         if pg == 3 or p.get("type") == "summary":
             p["te_table"] = _safe_te_table(request.month)
+        if pg == 2:
+            p["rows"] = _index_rows()
         if pg == 13:
             concast = generate_concast_data(request.month)
             p["monthly"] = concast["monthly"]
@@ -668,6 +755,9 @@ async def generate_pdf(request: PDFRequest):
         if pg == AT_A_GLANCE_PAGE_ID:
             p.update(generate_at_a_glance(request.month))
             p["type"] = "at_a_glance"
+        if pg == KEY_PARAMS_PAGE_ID:
+            p.update(generate_key_parameters(request.month))
+            p["type"] = "key_parameters"
         if pg == 25:
             p.update(generate_opening_stock(request.month))
             p["type"] = "opening_stock"

@@ -16,6 +16,7 @@ import OpeningStockTemplate from './OpeningStockTemplate';
 import IptStatusTemplate from './IptStatusTemplate';
 import TechnoParamsTemplate from './TechnoParamsTemplate';
 import CapitalRepairTemplate from './CapitalRepairTemplate';
+import KeyParametersTemplate from './KeyParametersTemplate';
 
 function IndexTemplate({ data, onCellChange }) {
   const { rows = [] } = data || {};
@@ -136,6 +137,8 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <TechnoParamsTemplate data={pageData} />;
       case 'capital_repair':
         return <CapitalRepairTemplate data={pageData} />;
+      case 'key_parameters':
+        return <KeyParametersTemplate data={pageData} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>
@@ -172,7 +175,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'at_a_glance' && pageData.type !== 'summary' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && pageData.type !== 'special_steel' && pageData.type !== 'opening_stock' && pageData.type !== 'ipt_status' && pageData.type !== 'techno_params' && pageData.type !== 'capital_repair' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'at_a_glance' && pageData.type !== 'summary' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && pageData.type !== 'special_steel' && pageData.type !== 'opening_stock' && pageData.type !== 'ipt_status' && pageData.type !== 'techno_params' && pageData.type !== 'capital_repair' && pageData.type !== 'key_parameters' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}

@@ -8,9 +8,10 @@ import { useReportData, useReportPage, useGeneratePDF } from '@/hooks/useReportA
 // Edit these labels to change what appears in the Page Selector dropdown
 const PAGE_LABELS = {
    1: 'Cover Page',
-   1.5: 'MIS at a Glance',
    2: 'Index / Contents',
+   2.5: 'MIS at a Glance',
    3: 'SAIL Performance Summary',
+   3.5: 'Key Parameters',
    4: 'Production Performance vs APP (Month)',
    5: 'Plant-Wise Production Performance',
    6: 'Plant-Wise Production (Month & YTD)',

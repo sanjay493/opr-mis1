@@ -169,7 +169,8 @@ def _fmt_param(v, param_name):
         return ""
 
     # Determine decimal places based on parameter
-    if param_name in ("BF Productivity", "Specific Energy Consumption"):
+    if param_name in ("BF Productivity", "Specific Energy Consumption",
+                       "Sp. CO2 Emission", "Sp. Water Consumption", "Sp. PM Emission"):
         decimal_places = 2
     elif param_name == "Coal to Hot Metal":
         decimal_places = 3
@@ -226,21 +227,12 @@ def _fmt2(v, param_label=None):
 # Page 3 summary TE table
 # ---------------------------------------------------------------------------
 
-def generate_summary_te_table(report_month: str) -> list:
-    """Generate the te_table for the SAIL Performance Summary page (page 3).
-
-    Values are taken from the page-27 MAJOR TECHNO table's SAIL rows so that
-    page 3 always matches page 27 by construction. Columns per row:
-    [Target FY, report-month actual, CPLY month, YTD cum, CPLY YTD cum].
-    """
-    # (page-27 section label, display unit on page 3)
-    wanted = [
-        ("Coke Rate",                   "kg/thm"),
-        ("CDI Rate",                    "kg/thm"),
-        ("Fuel Rate",                   "kg/thm"),
-        ("BF Productivity",             "t/m3/day"),
-        ("Specific Energy Consumption", "Gcal/tcs"),
-    ]
+def _sail_row_table(report_month: str, wanted: list) -> list:
+    """Shared by generate_summary_te_table (page 3) and
+    generate_at_a_glance_te_table (page 1.5) - pulls each requested
+    parameter's SAIL row out of the page-27 MAJOR TECHNO table so both pages
+    always match page 27 by construction. Columns per row:
+    [Target FY, report-month actual, CPLY month, YTD cum, CPLY YTD cum]."""
     try:
         major = generate_major_techno_from_db(report_month)
 
@@ -266,12 +258,46 @@ def generate_summary_te_table(report_month: str) -> list:
                 ],
             })
         return result
+    except Exception:
+        return [{"parameter": name, "unit": unit, "values": ["", "", "", "", ""]} for name, unit in wanted]
+
+
+def generate_summary_te_table(report_month: str) -> list:
+    """Generate the te_table for the SAIL Performance Summary page (page 3)."""
+    # (page-27 section label, display unit on page 3)
+    wanted = [
+        ("Coke Rate",                   "kg/thm"),
+        ("CDI Rate",                    "kg/thm"),
+        ("Fuel Rate",                   "kg/thm"),
+        ("BF Productivity",             "t/m3/day"),
+        ("Specific Energy Consumption", "Gcal/tcs"),
+    ]
+    try:
+        return _sail_row_table(report_month, wanted)
 
     except Exception as e:
         # Return empty structure if error (will show empty table)
         import traceback
         traceback.print_exc()
         return []
+
+
+def generate_at_a_glance_te_table(report_month: str) -> list:
+    """Techno-economic snapshot for the "MIS at a Glance" page (1.5) - same
+    SAIL-row extraction as generate_summary_te_table, but its own param list
+    so page 3's te_table isn't affected by what this page shows."""
+    wanted = [
+        ("Coke Rate",                   "kg/thm"),
+        ("CDI Rate",                    "kg/thm"),
+        ("Fuel Rate",                   "kg/thm"),
+        ("BF Productivity",             "t/m3/day"),
+        ("Specific Energy Consumption", "Gcal/tcs"),
+        ("Sinter in Burden",            "%"),
+        ("Pellet in Burden",            "%"),
+        ("TMI",                         "kg/tcs"),
+        ("Sp. CO2 Emission",            "T/tcs"),
+    ]
+    return _sail_row_table(report_month, wanted)
 
 
 # ---------------------------------------------------------------------------
@@ -1064,6 +1090,18 @@ BF_SAIL_SPECS = {
     "Pellet in Burden":            ("pellet_in_burden",            BF_UNITS,               "hm", False, {"DSP"}),
     "BF Productivity":             ("bf_productivity",             BF_UNITS,               "hm", True,  None),
     "Specific Energy Consumption": ("specific_energy_consumption", ["General"],             "cs", False, None),
+    # Environmental Performance Indicators (EMD's monthly EPI report, see
+    # techno_project/coal_co2_epi_extractor.py) - whole-plant figures, same
+    # "General" unit and Crude-Steel weighting as Specific Energy
+    # Consumption above, not a per-BF-unit measurement. Note these keys are
+    # distinct from the older, differently-sourced (and not always
+    # populated across all 5 plants) "specific_co2_emissions" /
+    # "specific_water_consumption" keys some plants' own self-reported
+    # extractors also write - the two aren't interchangeable and are
+    # deliberately not aliased together.
+    "Sp. CO2 Emission":            ("sp_co2_emission",             ["General"],             "cs", False, None),
+    "Sp. Water Consumption":       ("sp_water_consumption",        ["General"],             "cs", False, None),
+    "Sp. PM Emission":             ("sp_pm_emission",              ["General"],             "cs", False, None),
 }
 
 # param display name -> (techno_data key or None, is_tmi). SMS-level params.
@@ -1605,6 +1643,9 @@ def generate_major_techno_from_db(report_month: str) -> dict:
         sms_section ("Scrap Consumption",           "kg/tcs",     "specific_scrap_consumption"),
         sms_section ("TMI",                         "kg/tcs",     None,  tmi=True),
         unit_section("Specific Energy Consumption", "Gcal/tcs",   "General",   "specific_energy_consumption"),
+        unit_section("Sp. CO2 Emission",             "T/tcs",      "General",   "sp_co2_emission"),
+        unit_section("Sp. Water Consumption",        "m³/tcs",     "General",   "sp_water_consumption"),
+        unit_section("Sp. PM Emission",              "kg/tcs",     "General",   "sp_pm_emission"),
     ]
 
     # Add SAIL row to each section

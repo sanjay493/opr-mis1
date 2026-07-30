@@ -15,7 +15,7 @@ import re as _re
 
 import db
 from report_utils import compute_item_row
-from page_techno import generate_summary_te_table
+from page_techno import generate_at_a_glance_te_table
 from page_special_steel import generate_special_steel_sail
 from page_capital_repair import generate_capital_repair, fy_from_month, CR_PAGES
 
@@ -27,15 +27,26 @@ _PROD_ITEMS = ["Hot Metal", "Crude Steel", "Finished Steel", "Saleable Steel"]
 _YTD_DB_ITEM = {"Crude Steel": "Total Crude Steel"}
 
 # Rate/consumption metrics are "good" when they go down; productivity is
-# "good" when it goes up.
-_TE_LOWER_IS_BETTER = {"Coke Rate", "Fuel Rate", "Specific Energy Consumption"}
-_TE_PARAMS = ["Coke Rate", "Fuel Rate", "BF Productivity", "Specific Energy Consumption"]
+# "good" when it goes up. Sinter/Pellet in Burden are mix-ratio params with
+# no universal "better" direction, so they're left out of this set (default:
+# above target reads as good) same as BF Productivity.
+_TE_LOWER_IS_BETTER = {"Coke Rate", "Fuel Rate", "Specific Energy Consumption", "TMI", "Sp. CO2 Emission"}
+_TE_PARAMS = [
+    "Coke Rate", "Fuel Rate", "BF Productivity", "Specific Energy Consumption",
+    "CDI Rate", "Sinter in Burden", "Pellet in Burden", "TMI", "Sp. CO2 Emission",
+]
 
-# FY bar shading: 3 historical FYs light->dark blue, current (partial) FY in
-# green — same "current year reads differently" convention page_special_steel
-# _trend.py's _annual_bar_svg uses (there, gold shades + green; here, blue
-# shades + green, to match this page's blue banner instead).
-_YTD_BAR_COLORS = ["#bfdbfe", "#60a5fa", "#0284c7", "#059669"]
+# techno_data unit='General' keys this page sums across plants (BSP, DSP,
+# RSP, BSL, ISP) to compute "Imported Coking Coal in Blend" - a sum-of-
+# quantities ratio, not a weighted average, so it doesn't go through
+# page_techno.py's SAIL-rollup machinery like the params above.
+_COAL_BLEND_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+
+# FY bar colors: fixed categorical order (blue / orange / aqua / yellow),
+# validated with the dataviz palette script for adjacent-pair CVD + normal-
+# vision separation — see scripts/validate_palette.js. The "(YTD)" legend
+# suffix (not color) marks the current partial year.
+_YTD_BAR_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
 
 # Two-series trend line colors.
 _TREND_SERIES = [("Saleable Steel", "#0284c7"), ("Finished Steel", "#f97316")]
@@ -220,9 +231,23 @@ def _two_bar_svg(label_a: str, val_a, label_b: str, val_b, title: str = "",
 
 # ── SVG: grouped bar chart — one group per production item, one bar per FY ──
 
+def _bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
+    """Bar outline with a half-circular top cap (radius r, clamped to fit)
+    and a flat bottom — the "capsule top" bar shape."""
+    r = max(0.0, min(r, w / 2, h))
+    if r <= 0.05:
+        return f'M{x:.1f},{y + h:.1f} L{x:.1f},{y:.1f} L{x + w:.1f},{y:.1f} L{x + w:.1f},{y + h:.1f} Z'
+    return (f'M{x:.1f},{y + h:.1f} '
+            f'L{x:.1f},{y + r:.1f} '
+            f'A{r:.1f},{r:.1f} 0 0 1 {x + r:.1f},{y:.1f} '
+            f'L{x + w - r:.1f},{y:.1f} '
+            f'A{r:.1f},{r:.1f} 0 0 1 {x + w:.1f},{y + r:.1f} '
+            f'L{x + w:.1f},{y + h:.1f} Z')
+
+
 def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
-                        vw: int = 980, vh: int = 230) -> str:
-    ml, mr, mt, mb = 34, 10, 22, 40
+                        vw: int = 980, vh: int = 250) -> str:
+    ml, mr, mt, mb = 34, 10, 28, 50
     cw, ch = vw - ml - mr, vh - mt - mb
 
     all_vals = [v for item in items for (_, v) in data[item] if v is not None]
@@ -230,30 +255,39 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
     yhi = max(yhi, 5.0)
 
     n_groups = len(items)
-    group_w = cw / n_groups
     n_bars = len(fy_labels)
-    bar_gap = 3.0
-    bar_w = max(8.0, (group_w - 14) / n_bars - bar_gap)
-    fs = min(7.5, max(5.5, bar_w * 0.62))
+    group_gap = 26.0          # whitespace between item groups
+    side_pad = 6.0            # padding inside a group before/after its bar cluster
+    bar_gap = 3.5             # gap between the FY bars within one group
+    bar_shrink = 0.6          # slim the bars down from their natural fit width
+
+    group_w = (cw - group_gap * (n_groups - 1)) / n_groups
+    raw_w = (group_w - 2 * side_pad - bar_gap * (n_bars - 1)) / n_bars
+    bar_w = max(5.0, raw_w * bar_shrink)
+    cluster_w = n_bars * bar_w + (n_bars - 1) * bar_gap
+    cluster_pad = (group_w - cluster_w) / 2
+
+    fs = 11.0        # item name / growth labels
+    data_fs = 14.0   # in-bar data value labels — larger, read against the bar's own fill
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
 
-    lx, ly = ml, 12
+    lx, ly = ml, 14
     for j, fy_label in enumerate(fy_labels):
         note = " (YTD)" if j == len(fy_labels) - 1 else ""
         label = f"FY{fy_label}{note}"
-        lines.append(f'<rect x="{lx}" y="{ly - 6}" width="9" height="7" fill="{_YTD_BAR_COLORS[j]}"/>')
-        lines.append(f'<text x="{lx + 12}" y="{ly}" font-size="6.8" font-family="Arial,sans-serif" '
+        lines.append(f'<rect x="{lx}" y="{ly - 7}" width="10" height="8" rx="2" fill="{_YTD_BAR_COLORS[j]}"/>')
+        lines.append(f'<text x="{lx + 13}" y="{ly}" font-size="8" font-family="Arial,sans-serif" '
                      f'fill="#334155">{label}</text>')
-        lx += 12 + len(label) * 4.4 + 12
+        lx += 13 + len(label) * 5.0 + 14
 
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
 
     gx = ml
     for item in items:
-        bx = gx + 7
+        bx = gx + cluster_pad
         for j, (_, v) in enumerate(data[item]):
             color = _YTD_BAR_COLORS[j]
             x = bx + j * (bar_w + bar_gap)
@@ -267,28 +301,32 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
             else:
                 bh = max(2.0, ch * v / yhi)
                 by = mt + ch - bh
-                lines.append(f'<rect x="{x:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh:.1f}" '
-                             f'fill="{color}" rx="1"/>')
+                lines.append(f'<path d="{_bar_path(x, by, bar_w, bh, bar_w / 2)}" fill="{color}"/>')
                 val_str = f"{v:,.0f}"
-                if bh >= 14:
-                    ty, fill = by + bh / 2 + fs * 0.35, _contrast_text(color)
+                # Centered inside the bar when it's tall enough for the label
+                # to fully fit; short bars fall back to just above (dark ink,
+                # since that sits on the page background, not the fill).
+                fits_inside = bh >= data_fs * len(val_str) * 0.62 + 10
+                if fits_inside:
+                    ty, tfill = by + bh / 2, _contrast_text(color)
                 else:
-                    ty, fill = by - 3, color
-                lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" '
-                             f'font-size="{fs:.1f}" font-weight="bold" font-family="Arial,sans-serif" '
-                             f'fill="{fill}">{val_str}</text>')
+                    ty, tfill = by - 8, "#1e293b"
+                lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" dominant-baseline="middle" '
+                             f'transform="rotate(-90 {cx:.1f} {ty:.1f})" '
+                             f'font-size="{data_fs:.1f}" font-weight="bold" font-family="Arial,sans-serif" '
+                             f'fill="{tfill}">{val_str}</text>')
         lxc = gx + group_w / 2
-        lyc = mt + ch + 13
-        lines.append(f'<text x="{lxc:.1f}" y="{lyc:.1f}" text-anchor="middle" font-size="8" '
+        lyc = mt + ch + 20
+        lines.append(f'<text x="{lxc:.1f}" y="{lyc:.1f}" text-anchor="middle" font-size="{fs:.1f}" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{item}</text>')
         g = growth.get(item, {})
         if g.get("pct") is not None:
             arrow = "▲" if g["good"] else "▼"
             gcolor = "#059669" if g["good"] else "#b91c1c"
-            lines.append(f'<text x="{lxc:.1f}" y="{lyc + 11:.1f}" text-anchor="middle" font-size="7.5" '
+            lines.append(f'<text x="{lxc:.1f}" y="{lyc + 16:.1f}" text-anchor="middle" font-size="{fs:.1f}" '
                          f'font-weight="bold" font-family="Arial,sans-serif" fill="{gcolor}">'
                          f'{arrow} {abs(g["pct"]):.1f}%</text>')
-        gx += group_w
+        gx += group_w + group_gap
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -341,8 +379,44 @@ def _ytd_trend_section(report_month: str) -> dict:
     }
 
 
+def _imported_coal_blend_pct(report_month: str):
+    """SAIL 'Imported Coking Coal in Blend' % for report_month = imported
+    (Hard + Soft) / total coking coal (Indigenous PCC + MCC + Imported Hard
+    + Soft), summed across the 5 plants - a sum-of-quantities ratio, so
+    plant-level quantities are summed first and the % taken once at the
+    end (not averaged per-plant), matching how the source EPI report's own
+    SAIL blend % is derived."""
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        ph = ",".join("?" * len(_COAL_BLEND_PLANTS))
+        cur.execute(
+            f"SELECT plant, techno_json FROM techno_data "
+            f"WHERE report_month=? AND unit='General' AND plant IN ({ph})",
+            [report_month, *_COAL_BLEND_PLANTS],
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    import json as _json
+    indigenous = imported = 0.0
+    found = False
+    for _plant, tj in rows:
+        m = _json.loads(tj).get("month", {})
+        pcc, mcc = m.get("indigenous_pcc"), m.get("indigenous_mcc")
+        hard, soft = m.get("imported_hard_coal"), m.get("imported_soft_coal")
+        if None in (pcc, mcc, hard, soft):
+            continue
+        found = True
+        indigenous += pcc + mcc
+        imported += hard + soft
+    total = indigenous + imported
+    return round(imported / total * 100, 1) if found and total > 0 else None
+
+
 def _techno_section(report_month: str) -> list:
-    te = {row["parameter"]: row for row in generate_summary_te_table(report_month)}
+    te = {row["parameter"]: row for row in generate_at_a_glance_te_table(report_month)}
     out = []
     for name in _TE_PARAMS:
         row = te.get(name)
@@ -360,6 +434,14 @@ def _techno_section(report_month: str) -> list:
             "target": target, "month_actual": month_actual,
             "delta_pct": None if delta is None else round(delta, 1),
             "good": None if delta is None else delta >= 0,
+        })
+
+    blend_pct = _imported_coal_blend_pct(report_month)
+    if blend_pct is not None:
+        out.append({
+            "parameter": "Imported Coking Coal in Blend", "unit": "%",
+            "target": "", "month_actual": f"{blend_pct:.1f}",
+            "delta_pct": None, "good": None,
         })
     return out
 
@@ -380,40 +462,92 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
     }
 
 
-def _parse_schedule_days(schedule_days, period) -> float:
-    """schedule_days is free text like '9 days', '45 days', or '7 days each'
-    (the last meaning that many days per period listed in `period`, e.g.
-    "Apr'26, Jan'27" -> two separate repair windows of 7 days apiece)."""
+_CR_GRACE_DAYS = 1.5  # e.g. a 10-day plan finishing on day 11.5 still counts as on time
+
+_CR_DATE_RANGE_RE = _re.compile(
+    r"(\d{1,2})\.(\d{1,2})\.(\d{2})\s*-\s*(\d{1,2})\.(\d{1,2})\.(\d{2})"
+)
+
+
+def _parse_planned_days(schedule_days) -> float:
+    """schedule_days is free text like '9 days', '45 days', '5 Months', or
+    '7 days/20 days' (one DB row is treated as one repair job for these
+    counts regardless of how many numbers its schedule text happens to
+    mention — see the module's own note that this field is inherently messy
+    free text). '+'-joined figures (e.g. '1+10+2*') are additive phases of
+    the SAME job and are summed; '/'-joined figures (e.g. '7 days/20 days')
+    are alternative windows we can't disambiguate against the single
+    `actual` field, so only the first is used."""
     if not schedule_days:
-        return 0.0
-    m = _re.search(r"(\d+(?:\.\d+)?)", schedule_days)
-    if not m:
-        return 0.0
-    days = float(m.group(1))
-    if "each" in schedule_days.lower():
-        n_periods = len([p for p in (period or "").split(",") if p.strip()]) or 1
-        days *= n_periods
-    return days
+        return None
+    s = schedule_days.strip()
+    m = _re.search(r"(\d+(?:\.\d+)?)\s*Month", s, _re.I)
+    if m:
+        return float(m.group(1)) * 30
+    if "+" in s:
+        nums = _re.findall(r"\d+(?:\.\d+)?", s)
+        return sum(float(n) for n in nums) if nums else None
+    m = _re.search(r"(\d+(?:\.\d+)?)", s)
+    return float(m.group(1)) if m else None
+
+
+def _parse_actual_status(actual):
+    """-> (status, duration_days). status is one of:
+    "not_started" (actual blank), "in_progress" (open-ended, e.g.
+    "7.6.26-cont.."), "completed" (a full D.M.YY-D.M.YY range), or
+    "unknown" (present but not in a recognized format)."""
+    if not actual or not actual.strip():
+        return "not_started", None
+    s = actual.strip()
+    m = _CR_DATE_RANGE_RE.match(s)
+    if m:
+        d1, mo1, y1, d2, mo2, y2 = (int(g) for g in m.groups())
+        try:
+            start = _dt.date(2000 + y1, mo1, d1)
+            end = _dt.date(2000 + y2, mo2, d2)
+        except ValueError:
+            return "unknown", None
+        return "completed", (end - start).days + 1
+    if _re.search(r"cont", s, _re.I):
+        return "in_progress", None
+    return "unknown", None
 
 
 def _capital_repair_section(report_month: str) -> list:
-    """Days under repair (scheduled vs. actually-started/completed, going by
-    whether `actual` has been filled in), not job counts — a plant with a
-    few very long jobs and one with many short ones aren't comparable by job
-    count alone."""
+    """Per plant: repair JOB counts (completed vs. total planned for the FY —
+    one capital_repair_table row = one job), split further into on-time vs.
+    delayed (a completed job counts as on time if its actual duration is
+    within _CR_GRACE_DAYS of its planned days), plus the average overrun
+    across the delayed ones."""
     fy = fy_from_month(report_month)
     out = []
     for plant in CR_PAGES.values():  # BSP, DSP, RSP, BSL, ISP — page order 36-40
         cr = generate_capital_repair(plant, fy)
         rows = [r for sec in cr.get("sections", []) for r in sec.get("rows", [])]
-        total_days = sum(_parse_schedule_days(r.get("schedule_days"), r.get("period")) for r in rows)
-        completed_days = sum(_parse_schedule_days(r.get("schedule_days"), r.get("period"))
-                              for r in rows if (r.get("actual") or "").strip())
+        total = len(rows)
+        completed = on_time = delayed = 0
+        overrun_days = []
+        for r in rows:
+            status, duration = _parse_actual_status(r.get("actual"))
+            if status != "completed":
+                continue
+            completed += 1
+            planned = _parse_planned_days(r.get("schedule_days"))
+            if planned is None or duration is None:
+                continue
+            if duration <= planned + _CR_GRACE_DAYS:
+                on_time += 1
+            else:
+                delayed += 1
+                overrun_days.append(duration - planned)
         out.append({
             "plant": plant,
-            "completed_days": round(completed_days),
-            "total_days": round(total_days),
-            "pct": round(completed_days / total_days * 100) if total_days else None,
+            "completed": completed,
+            "total": total,
+            "pct": round(completed / total * 100) if total else None,
+            "on_time": on_time,
+            "delayed": delayed,
+            "avg_delay_days": round(sum(overrun_days) / len(overrun_days), 1) if overrun_days else None,
         })
     return out
 
@@ -440,7 +574,7 @@ def generate_at_a_glance(report_month: str) -> dict:
 
     return {
         "type": "at_a_glance",
-        "title": "SAIL OMI — Report at a Glance",
+        "title": "SAIL Performance — Report at a Glance",
         "month_label": month_label,
         "production": _production_section(report_month),
         "ytd_trend": _ytd_trend_section(report_month),

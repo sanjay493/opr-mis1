@@ -1,0 +1,32 @@
+        <div style="padding:6px;font-family:'Roboto',sans-serif;font-size:8pt;">
+          <div style="text-align:center;font-weight:700;font-size:11pt;color:{{ colors.text_heading_dark }};margin-bottom:6px;">{{ page.title }}</div>
+          <table style="width:100%;border-collapse:collapse;border:1px solid {{ colors.border_black }};font-size:8pt;">
+            <colgroup>
+              <col style="width:30%"/><col style="width:10%"/>
+              {% for p in page.plants %}<col/>{% endfor %}
+            </colgroup>
+            <thead>
+              <tr>
+                <th style="padding:3px 5px;border:1px solid {{ colors.border_black }};text-align:left;">Parameter</th>
+                <th style="padding:3px 5px;border:1px solid {{ colors.border_black }};">UoM</th>
+                {% for p in page.plants %}
+                <th style="padding:3px 5px;border:1px solid {{ colors.border_black }};">{{ p }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in page.rows %}
+              <tr style="{{ 'background:' ~ colors.highlight_default_row_bg ~ ';' if loop.index is even else '' }}">
+                <td style="padding:2px 5px;border:1px solid {{ colors.border_black }};text-align:left;">{{ row.parameter }}</td>
+                <td style="padding:2px 5px;border:1px solid {{ colors.border_black }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ row.unit }}</td>
+                {% for p in page.plants %}
+                <td style="padding:2px 5px;border:1px solid {{ colors.border_black }};text-align:center;">{{ row.plant_values[p] if row.plant_values[p] is not none else '—' }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <div style="font-size:6.5pt;color:{{ colors.text_secondary }};margin-top:4px;">
+            Figures for {{ page.title.split('—')[1] if '—' in page.title else '' }}. "—" = not reported / not applicable for this plant.
+          </div>
+        </div>
