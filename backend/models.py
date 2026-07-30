@@ -93,3 +93,14 @@ class SpecialSteelSaveRequest(BaseModel):
     plant: str
     month: str
     rows: List[SpecialSteelRow]
+
+
+class SpecialSteelAbpEntry(BaseModel):
+    plant_name: str
+    report_month: str
+    abp_qty: Optional[float] = None
+
+
+class SpecialSteelAbpSaveRequest(BaseModel):
+    financial_year: str
+    entries: List[SpecialSteelAbpEntry]

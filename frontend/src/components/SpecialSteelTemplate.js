@@ -173,7 +173,9 @@ function SailRow({ row }) {
   return (
     <tr style={s}>
       <td style={{ ...LBL, ...s, fontWeight: row.type === 'sail-total' ? 700 : 'inherit' }}>{row.label}</td>
-      <td style={{ ...NUM, ...s }}>{row.abp}</td>
+      <td style={{ ...NUM, ...s }}>{row.abp_fy}</td>
+      <td style={{ ...NUM, ...s }}>{row.abp_month}</td>
+      <td style={{ ...NUM, ...s }}>{row.abp_ytd}</td>
       <td style={{ ...NUM, ...s }}>{row.orders}</td>
       <td style={{ ...NUM, ...s }}>{row.actual}</td>
       <td style={{ ...NUM, ...s }}>{row.pct_ful}</td>
@@ -193,7 +195,7 @@ function SailTable({ data }) {
     title, unit = 'Tonnes', rows = [],
     saleable_production = {}, special_pct = {},
     month_label = '', cply_label = '',
-    cum_label = '', cum_cply_label = '',
+    cum_label = '', cum_cply_label = '', fy_label = '',
   } = data;
 
   return (
@@ -209,17 +211,19 @@ function SailTable({ data }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
                       tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
-          <col style={{ width: '13%' }} />
-          <col style={{ width: '8%' }} />
-          <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '5.5%' }} />
-          <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
-          <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '5.5%' }} />
-          <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '6%' }} /><col style={{ width: '6%' }} /><col style={{ width: '6.5%' }} />
+          <col style={{ width: '6.5%' }} /><col style={{ width: '6.5%' }} /><col style={{ width: '5%' }} />
+          <col style={{ width: '5.5%' }} /><col style={{ width: '4.5%' }} />
+          <col style={{ width: '6.5%' }} /><col style={{ width: '6.5%' }} /><col style={{ width: '5%' }} />
+          <col style={{ width: '5.5%' }} /><col style={{ width: '4.5%' }} />
         </colgroup>
         <thead>
           <tr>
             <th rowSpan={2} style={{ ...TH_S, textAlign: 'left' }}>Plants</th>
-            <th rowSpan={2} style={TH_S}>ABP<br/>26-27</th>
+            <th rowSpan={2} style={TH_S}>ABP<br/>{fy_label}</th>
+            <th rowSpan={2} style={TH_S}>ABP<br/>{month_label}</th>
+            <th rowSpan={2} style={TH_S}>ABP<br/>{cum_label}</th>
             <th colSpan={3} style={TH_S}>{month_label}</th>
             <th rowSpan={2} style={TH_S}>{cply_label}<br/>Actual</th>
             <th rowSpan={2} style={TH_S}>%Gr<br/>{cply_label}</th>
@@ -239,10 +243,12 @@ function SailTable({ data }) {
         <tbody>
           {rows.map((row, i) => <SailRow key={i} row={row} />)}
 
-          <tr style={{ height: 3 }}><td colSpan={12} style={{ border: 'none', padding: 0 }} /></tr>
+          <tr style={{ height: 3 }}><td colSpan={14} style={{ border: 'none', padding: 0 }} /></tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
             <td style={{ ...LBL, fontWeight: 600 }}>Saleable Steel production</td>
-            <td style={NUM}>{saleable_production.abp}</td>
+            <td style={NUM}>{saleable_production.abp_fy}</td>
+            <td style={NUM}>{saleable_production.abp_month}</td>
+            <td style={NUM}>{saleable_production.abp_ytd}</td>
             <td style={NUM}></td>
             <td style={NUM}>{saleable_production.current}</td>
             <td style={NUM}></td>
@@ -256,6 +262,8 @@ function SailTable({ data }) {
           </tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
             <td style={{ ...LBL, fontWeight: 600 }}>Special Steel % of Saleable Steel</td>
+            <td style={NUM}></td>
+            <td style={NUM}></td>
             <td style={NUM}></td>
             <td style={NUM}></td>
             <td style={NUM}>{special_pct.current}</td>
@@ -279,14 +287,6 @@ function SailTable({ data }) {
 
 export default function SpecialSteelTemplate({ data }) {
   if (!data) return null;
-  if (data.variant === 'isp_sail_combined') {
-    return (
-      <>
-        <DetailTable data={data.isp || {}} />
-        <SailTable data={data.sail || {}} />
-      </>
-    );
-  }
   if (data.variant === 'sail_summary') return <SailTable data={data} />;
   return <DetailTable data={data} />;
 }

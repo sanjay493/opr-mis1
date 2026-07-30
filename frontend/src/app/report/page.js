@@ -8,6 +8,7 @@ import { useReportData, useReportPage, useGeneratePDF } from '@/hooks/useReportA
 // Edit these labels to change what appears in the Page Selector dropdown
 const PAGE_LABELS = {
    1: 'Cover Page',
+   1.5: 'MIS at a Glance',
    2: 'Index / Contents',
    3: 'SAIL Performance Summary',
    4: 'Production Performance vs APP (Month)',
@@ -452,16 +453,22 @@ export default function ReportPage() {
             <button
               className="btn btn-secondary"
               style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => Math.max(1, prev - 1))}
-              disabled={activePageNum === 1}
+              onClick={() => setActivePageNum((prev) => {
+                const idx = ALL_PAGE_NUMBERS.indexOf(prev);
+                return ALL_PAGE_NUMBERS[Math.max(0, idx - 1)];
+              })}
+              disabled={ALL_PAGE_NUMBERS.indexOf(activePageNum) <= 0}
             >
               Previous
             </button>
             <button
               className="btn btn-secondary"
               style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => Math.min(ALL_PAGE_NUMBERS.length, prev + 1))}
-              disabled={activePageNum === ALL_PAGE_NUMBERS.length}
+              onClick={() => setActivePageNum((prev) => {
+                const idx = ALL_PAGE_NUMBERS.indexOf(prev);
+                return ALL_PAGE_NUMBERS[Math.min(ALL_PAGE_NUMBERS.length - 1, idx + 1)];
+              })}
+              disabled={ALL_PAGE_NUMBERS.indexOf(activePageNum) === ALL_PAGE_NUMBERS.length - 1}
             >
               Next
             </button>

@@ -52,6 +52,7 @@ export default function GlobalNavbar() {
           children: [
             { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' },
             { label: 'TE Targets (Pages 28-30)', link: '/data-entry/techno-page-targets', icon: '🎯' },
+            { label: 'Special Steel ABP (Page 24)', link: '/data-entry/special-steel-abp', icon: '🎯' },
           ]
         },
         {

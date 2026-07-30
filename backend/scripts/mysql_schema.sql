@@ -30,6 +30,17 @@ CREATE TABLE IF NOT EXISTS page_configs (
     PRIMARY KEY (report_month, page_number)
 ) ENGINE=InnoDB;
 
+-- Special Steel ABP (Annual Business Plan) — one monthly target per plant,
+-- entered for all 12 months of a FY at once via the Special Steel ABP Entry
+-- page. plant_name matches special_steel_orders' values (the 5 integrated
+-- plants + the 'SSPs' aggregate row), not the broader plant list.
+CREATE TABLE IF NOT EXISTS special_steel_abp_table (
+    report_month CHAR(7)     NOT NULL,
+    plant_name   VARCHAR(32) NOT NULL,
+    abp_qty      DOUBLE,
+    PRIMARY KEY (report_month, plant_name)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS special_steel_orders (
     report_month    CHAR(7)      NOT NULL,
     plant_name      VARCHAR(32)  NOT NULL,

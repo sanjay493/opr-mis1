@@ -1,11 +1,14 @@
 """
-Special Steel Report — pages 19-23.
+Special Steel Report — pages 19-24.
 
-Pages 19-22: Plant detail (BSP/DSP/RSP/BSL) — Quality/Grade-wise orders & actual.
-Page 23:     ISP mill-wise + SAIL consolidated combined on one page.
+Pages 19-23: Plant detail (BSP/DSP/RSP/BSL/ISP) — Quality/Grade-wise orders & actual.
+Page 24:     SAIL consolidated, plant-wise.
 
 Data source: special_steel_orders table
   (report_month, plant_name, product, quality_grade, sort_order, order_qty, actual_despatch)
+ABP (Annual Business Plan) source: special_steel_abp_table for the per-plant
+rows (report_month, plant_name, abp_qty), production_plan_table for the
+"Saleable Steel production" summary row (existing ABP-plan infrastructure).
 
 Each page carries two period sets side-by-side:
   • Month    : current month vs CPLY month
@@ -279,6 +282,29 @@ def _get_prod_ytd(cur, ytd_months, plant, item):
         FROM production_table
         WHERE report_month IN ({ph}) AND plant_name=? AND item_name=?
     """, (*ytd_months, plant, item))
+    r = cur.fetchone()
+    return r[0] if r and r[0] else None
+
+
+def _get_abp(cur, month, plant):
+    """One month's Special Steel ABP target for a plant (special_steel_abp_table)."""
+    cur.execute(
+        "SELECT abp_qty FROM special_steel_abp_table"
+        " WHERE report_month=? AND plant_name=?",
+        (month, plant))
+    r = cur.fetchone()
+    return r[0] if r and r[0] is not None else None
+
+def _get_abp_sum(cur, months, plant):
+    """Sum of a plant's Special Steel ABP targets over a set of months
+    (e.g. a full FY for the 'ABP of FY' column, or Apr..report_month for
+    the 'till the month' YTD column)."""
+    ph = ",".join("?" * len(months))
+    cur.execute(f"""
+        SELECT COALESCE(SUM(abp_qty),0)
+        FROM special_steel_abp_table
+        WHERE report_month IN ({ph}) AND plant_name=?
+    """, (*months, plant))
     r = cur.fetchone()
     return r[0] if r and r[0] else None
 
@@ -741,6 +767,8 @@ def generate_special_steel_sail(report_month: str) -> dict:
     cply_month      = db.get_cply_month(report_month)
     ytd_months      = db.get_ytd_months(report_month)
     cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
+    fy_months       = db.get_fy_months(report_month)
+    fy_label        = db.get_fy_for_month(report_month)[2:]  # '2026-27' -> '26-27'
 
     conn = db.connect()
     cur  = conn.cursor()
@@ -750,6 +778,7 @@ def generate_special_steel_sail(report_month: str) -> dict:
         ph_ytd  = ",".join("?" * len(ytd_months))
         ph_cytd = ",".join("?" * len(cply_ytd_months))
         sail_o = sail_a = sail_c = sail_co = sail_ca = sail_cc = 0.0
+        sail_abp_fy = sail_abp_month = sail_abp_ytd = 0.0
 
         for plant in plants:
             cur.execute("""
@@ -776,10 +805,16 @@ def generate_special_steel_sail(report_month: str) -> dict:
             """, (*cply_ytd_months, plant))
             cc = (cur.fetchone() or [0])[0]
 
+            abp_fy    = _get_abp_sum(cur, fy_months, plant)
+            abp_month = _get_abp(cur, report_month, plant)
+            abp_ytd   = _get_abp_sum(cur, ytd_months, plant)
+
             sail_o += o; sail_a += a; sail_c += c
             sail_co += co; sail_ca += ca; sail_cc += cc
+            sail_abp_fy += abp_fy or 0; sail_abp_month += abp_month or 0; sail_abp_ytd += abp_ytd or 0
             rows.append({
-                "type": "plant", "label": plant, "abp": "",
+                "type": "plant", "label": plant,
+                "abp_fy": _fmt(abp_fy), "abp_month": _fmt(abp_month), "abp_ytd": _fmt(abp_ytd),
                 "orders": _fmt(o), "actual": _fmt(a),
                 "pct_ful": _pct(a, o), "cply": _fmt(c), "pct_growth": _growth(a, c),
                 "cum_orders": _fmt(co), "cum_actual": _fmt(ca),
@@ -809,8 +844,14 @@ def generate_special_steel_sail(report_month: str) -> dict:
         """, (*cply_ytd_months,))
         ssps_cc = (cur.fetchone() or [0])[0]
 
+        ssps_abp_fy    = _get_abp_sum(cur, fy_months, "SSPs")
+        ssps_abp_month = _get_abp(cur, report_month, "SSPs")
+        ssps_abp_ytd   = _get_abp_sum(cur, ytd_months, "SSPs")
+        sail_abp_fy += ssps_abp_fy or 0; sail_abp_month += ssps_abp_month or 0; sail_abp_ytd += ssps_abp_ytd or 0
+
         rows.append({
-            "type": "plant", "label": "SSPs", "abp": "-",
+            "type": "plant", "label": "SSPs",
+            "abp_fy": _fmt(ssps_abp_fy), "abp_month": _fmt(ssps_abp_month), "abp_ytd": _fmt(ssps_abp_ytd),
             "orders": "-" if not ssps_o else _fmt(ssps_o),
             "actual": _fmt(ssps_a), "pct_ful": "",
             "cply": _fmt(ssps_c), "pct_growth": _growth(ssps_a, ssps_c),
@@ -823,7 +864,8 @@ def generate_special_steel_sail(report_month: str) -> dict:
         sail_cat = sail_ca + ssps_ca; sail_cct = sail_cc + ssps_cc
         rows.append({
             "type": "sail-total", "label": "SAIL",
-            "abp": "", "orders": _fmt(sail_o),
+            "abp_fy": _fmt(sail_abp_fy), "abp_month": _fmt(sail_abp_month), "abp_ytd": _fmt(sail_abp_ytd),
+            "orders": _fmt(sail_o),
             "actual": _fmt(sail_at), "pct_ful": _pct(sail_at, sail_o),
             "cply": _fmt(sail_ct), "pct_growth": _growth(sail_at, sail_ct),
             "cum_orders": _fmt(sail_co), "cum_actual": _fmt(sail_cat),
@@ -837,6 +879,15 @@ def generate_special_steel_sail(report_month: str) -> dict:
         ss_cum  = sum(v * 1000 for p in plants for v in [_get_prod_ytd(cur, ytd_months,      p, "Saleable Steel")] if v)
         ss_ccum = sum(v * 1000 for p in plants for v in [_get_prod_ytd(cur, cply_ytd_months, p, "Saleable Steel")] if v)
 
+        # Saleable Steel production ABP: existing production_plan_table ABP-plan
+        # data (same source as page 3's Production Performance Summary), not
+        # special_steel_abp_table — this row is overall saleable steel, not
+        # special steel specifically.
+        ss_abp_month = db.get_sail_production_plan(report_month, "Saleable Steel")
+        ss_abp_month = ss_abp_month * 1000 if ss_abp_month else None
+        ss_abp_fy    = sum(v * 1000 for m in fy_months for v in [db.get_sail_production_plan(m, "Saleable Steel")] if v)
+        ss_abp_ytd   = sum(v * 1000 for m in ytd_months for v in [db.get_sail_production_plan(m, "Saleable Steel")] if v)
+
         return {
             "title":   "SPECIAL STEEL PERFORMANCE OF SAIL",
             "unit":    "Tonnes",
@@ -844,10 +895,13 @@ def generate_special_steel_sail(report_month: str) -> dict:
             "variant": "sail_summary",
             "rows":    rows,
             "density": _compute_density(rows),
+            "fy_label":       fy_label,
             "cum_label":      _cum_label(ytd_months),
             "cum_cply_label": _cum_label(cply_ytd_months),
             "saleable_production": {
-                "abp":            "",
+                "abp_fy":         _fmt(ss_abp_fy),
+                "abp_month":      _fmt(ss_abp_month),
+                "abp_ytd":        _fmt(ss_abp_ytd),
                 "current":        _fmt(ss_cur),
                 "cply":           _fmt(ss_cply),
                 "pct_growth":     _growth(ss_cur, ss_cply),
@@ -864,24 +918,3 @@ def generate_special_steel_sail(report_month: str) -> dict:
         }
     finally:
         conn.close()
-
-
-def generate_special_steel_isp_sail(report_month: str) -> dict:
-    """Page 23 combined: ISP mill-wise + SAIL summary on one page."""
-    dt = _dt.datetime.strptime(report_month, "%Y-%m")
-    ml = dt.strftime("%b'%y")
-    cl = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
-
-    isp  = generate_special_steel_plant(report_month, "ISP")
-    sail = generate_special_steel_sail(report_month)
-    isp["month_label"]  = ml;  isp["cply_label"]  = cl
-    sail["month_label"] = ml;  sail["cply_label"] = cl
-
-    return {
-        "variant":     "isp_sail_combined",
-        "title":       "SPECIAL STEEL PERFORMANCE — ISP & SAIL",
-        "month_label": ml,
-        "cply_label":  cl,
-        "isp":         isp,
-        "sail":        sail,
-    }

@@ -56,6 +56,7 @@
   "text_white":          "#ffffff",
   "text_dark_gray":      "#333333",
   "text_variance_green": "#064e3b",
+  "text_variance_red":   "#9a3412",
   "text_variance_blue":  "#1e40af",
   "text_plant_cell":     "#1e3a5f",
   "text_heading_dark":   "#1e293b",

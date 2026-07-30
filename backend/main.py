@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 import db
-from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, Page3NarrativeRequest
+from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest
 from report_utils import compute_item_row, build_production_narrative, get_dept_badge, blank_out_page_data
 from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
@@ -23,8 +23,9 @@ from page17_concast import generate_concast_data
 from page_prod_by_process import generate_prod_by_process
 from page_catwise_saleable import generate_catwise_saleable
 from page_segment_wise import generate_segment_wise
-from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, generate_special_steel_isp_sail
+from page_special_steel import generate_special_steel_plant, generate_special_steel_sail
 from page_special_steel_trend import generate_special_steel_trend
+from page_at_a_glance import generate_at_a_glance
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
 from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month
@@ -97,6 +98,30 @@ db.init_db()
 # With recent consolidation of BF params, they share param_ids between groups.
 # This mapping is empty since params are now linked via many-to-many group membership.
 _IM_AVG_TO_MAJOR = {}
+
+# Special Steel trend/performance-analysis page (line + bar charts) has no
+# slot of its own in the fixed 1-40 page numbering (see PAGE_LABELS in
+# frontend/src/app/report/page.js) — it's inserted as an extra physical page
+# right after page 24 (SAIL), using a sentinel id well outside 1-40 so it
+# never collides with a real page number. Like page 24 used to be, it is
+# never persisted — always stripped from any cached pages_config and
+# resynthesized fresh on every render.
+TREND_PAGE_ID = 1024
+
+# "MIS at a Glance" infographic snapshot — sits between the Cover page and
+# the Index, so it needs the same front-matter treatment those two get (no
+# header/footer, no Chromium page-numbering, no corner dept-badge). pdf.py's
+# front/main page split is `page <= 2`, and report_utils.get_dept_badge()
+# only badges int page numbers >= 3 — a *float* page id that's still <= 2
+# rides both of those existing rules for free, instead of needing a big
+# sentinel int (like TREND_PAGE_ID) plus special-case overrides. Unlike the
+# trend page above, it DOES have a PAGE_LABELS entry (key "1.5", which sorts
+# numerically between 1 and 2) so it's individually browsable on-screen too —
+# see get_data()'s page_number handling and PageRenderer.js's 'at_a_glance'
+# case. get_data()'s page_number query param is typed float (not int)
+# specifically so this can be requested; every comparison against it is a
+# plain numeric one, so real int page numbers 1-40 are unaffected.
+AT_A_GLANCE_PAGE_ID = 1.5
 
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
@@ -198,6 +223,7 @@ _GATED_ROUTE_TEMPLATES = [
     ("POST", "/api/techno-page-targets"),
     ("POST", "/api/techno-sms-targets"),
     ("POST", "/api/techno-recalculate-sail-weighted"),
+    ("POST", "/api/special-steel-abp"),
 ]
 
 
@@ -312,12 +338,18 @@ def get_layout_config():
 # ---------------------------------------------------------------------------
 
 @app.get("/api/data")
-def get_data(month: str = "2025-11", page_number: Optional[int] = None):
+def get_data(month: str = "2025-11", page_number: Optional[float] = None):
     """page_number: when given, scopes the whole computation to that one
     page instead of all ~40 — each page's data only depends on its own DB
     calls, so the other pages' (often expensive) generators never run. Used
     by the frontend to show the active page quickly instead of waiting on
-    every page to finish before rendering any of them."""
+    every page to finish before rendering any of them.
+
+    Typed float (not int) so AT_A_GLANCE_PAGE_ID (1.5, a sentinel outside
+    the fixed 1-40 numbering — see its comment above) can be requested too;
+    every comparison against page_number below (`==`, `in`) is a plain
+    numeric comparison, which Python treats 24 and 24.0 as equal for, so
+    real int page numbers 1-40 are unaffected."""
     if not os.path.exists(FRONTEND_DATA_PATH):
         raise HTTPException(status_code=404, detail="Template data source not found.")
     try:
@@ -328,10 +360,12 @@ def get_data(month: str = "2025-11", page_number: Optional[int] = None):
             pages_config = blank_out_page_data(pages_config)
 
         if page_number is not None:
-            if page_number == 24:
-                # Page 24 doesn't exist in the template (see the "Page 24"
-                # comment below) — it's always synthesized fresh.
-                pages_config = [{"page": 24}]
+            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID):
+                # Page 24 (SAIL), the trend sentinel page, and the "at a
+                # glance" sentinel page don't exist in the template (see the
+                # "Always regenerate special steel pages" comment below) —
+                # always synthesized fresh.
+                pages_config = [{"page": page_number}]
             else:
                 pages_config = [p for p in pages_config if p.get("page") == page_number]
                 if not pages_config:
@@ -435,19 +469,25 @@ def get_data(month: str = "2025-11", page_number: Optional[int] = None):
         _dt_obj = _dt.datetime.strptime(month, "%Y-%m")
         _ml = _dt_obj.strftime("%b'%y")
         _cl = _dt.datetime(_dt_obj.year - 1, _dt_obj.month, 1).strftime("%b'%y")
-        _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL"}
+        _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
         if page_number is None:
-            # Page 24: was "merged into page 23" (stale DB-cached rows from
-            # before that merge); now repurposed as the Special Steel
-            # trend/performance analysis page (line + bar charts). Strip any
-            # stale copy, then insert a fresh placeholder right after page 23
-            # if one isn't already there. (In single-page mode, page_number==24
-            # already synthesized its own {"page": 24} shell above — skipped
-            # here since page 23 isn't in the filtered list to anchor off of.)
-            pages_config = [p for p in pages_config if p.get("page") != 24]
+            # Neither page 24 (SAIL), the trend sentinel page, nor the "at a
+            # glance" sentinel page exist in the template — all three are
+            # always synthesized fresh. Strip any stale copy, then insert
+            # fresh placeholders right after page 23 (SAIL/trend) and right
+            # after page 1 (at a glance). (In single-page mode, page_number
+            # in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID) already synthesized
+            # its own shell above — skipped here since page 1/23 aren't in
+            # the filtered list to anchor off of.)
+            pages_config = [p for p in pages_config
+                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID)]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
+                pages_config.insert(_idx23 + 2, {"page": TREND_PAGE_ID})
+            _idx1 = next((i for i, p in enumerate(pages_config) if p.get("page") == 1), None)
+            if _idx1 is not None:
+                pages_config.insert(_idx1 + 1, {"page": AT_A_GLANCE_PAGE_ID})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -456,11 +496,20 @@ def get_data(month: str = "2025-11", page_number: Optional[int] = None):
                 ss = generate_special_steel_plant(month, _SPECIAL_PLANTS[pg])
                 page.update(ss)
                 page["type"] = "special_steel"
-            if pg == 23:
-                page.update(generate_special_steel_isp_sail(month))
-                page["type"] = "special_steel"
             if pg == 24:
+                page["month_label"] = _ml
+                page["cply_label"]  = _cl
+                page.update(generate_special_steel_sail(month))
+                page["type"] = "special_steel"
+            if pg == TREND_PAGE_ID:
                 page.update(generate_special_steel_trend(month))
+                # Outside all _DEPT_BADGE_GROUPS ranges (sentinel id), so it
+                # gets no badge from get_dept_badge() below — assign the same
+                # Special Steel group (5) it had while still numbered 24.
+                page["dept_badge"] = {"group": 5}
+            if pg == AT_A_GLANCE_PAGE_ID:
+                page.update(generate_at_a_glance(month))
+                page["type"] = "at_a_glance"
             if pg == 25:
                 page.update(generate_opening_stock(month))
                 page["type"] = "opening_stock"
@@ -478,9 +527,12 @@ def get_data(month: str = "2025-11", page_number: Optional[int] = None):
 
         # Corner badge (group + side) is a pure function of the page number —
         # no DB dependency — so it's set unconditionally for every page,
-        # independent of the has_actuals/has_plans branch above.
+        # independent of the has_actuals/has_plans branch above. The trend
+        # sentinel page already got its badge assigned explicitly above
+        # (its id is intentionally outside every _DEPT_BADGE_GROUPS range,
+        # so get_dept_badge() would otherwise wipe it back to None here).
         for page in pages_config:
-            page["dept_badge"] = get_dept_badge(page.get("page"))
+            page["dept_badge"] = page.get("dept_badge") or get_dept_badge(page.get("page"))
 
         return pages_config
     except Exception as e:
@@ -549,12 +601,23 @@ async def generate_pdf(request: PDFRequest):
     dynamic_page_layouts = {}
     _static_pages_cfg = load_layout_config()["pages"]
     _pages_list = [page.dict() for page in request.pages]
-    # Page 24: ensure the trend/performance analysis page is present even for
-    # requests built from a page list saved before this page existed.
+    # Page 24 (SAIL) and the trend/performance-analysis sentinel page: ensure
+    # both are present even for requests built from a page list saved before
+    # either existed in its current form.
     if not any(p.get("page") == 24 for p in _pages_list):
         _idx23 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 23), None)
         if _idx23 is not None:
             _pages_list.insert(_idx23 + 1, {"page": 24})
+    if not any(p.get("page") == TREND_PAGE_ID for p in _pages_list):
+        _idx24 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 24), None)
+        if _idx24 is not None:
+            _pages_list.insert(_idx24 + 1, {"page": TREND_PAGE_ID})
+    # "MIS at a Glance" sentinel page: always inserted right after the Cover
+    # page (page 1), same unconditional-insert pattern as above.
+    if not any(p.get("page") == AT_A_GLANCE_PAGE_ID for p in _pages_list):
+        _idx1 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 1), None)
+        if _idx1 is not None:
+            _pages_list.insert(_idx1 + 1, {"page": AT_A_GLANCE_PAGE_ID})
     for p in _pages_list:
         pg = p.get("page", 0)
         # Pure function of page number — recomputed fresh rather than trusted
@@ -573,7 +636,7 @@ async def generate_pdf(request: PDFRequest):
             p["monthly_prev"] = pbp["monthly_prev"]
             p["ytd"]          = pbp["ytd"]
             p["ytd_prev"]     = pbp["ytd_prev"]
-        if pg in (15, 16, 17, 18, 19, 20, 21, 22, 23, 24):
+        if pg in (15, 16, 17, 18, 19, 20, 21, 22, 23, 24, TREND_PAGE_ID):
             dt = _dt.datetime.strptime(request.month, "%Y-%m")
             p["month_label"] = dt.strftime("%b'%y")
             p["cply_label"]  = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
@@ -589,16 +652,22 @@ async def generate_pdf(request: PDFRequest):
         if pg == 18:
             p["type"]        = "segment_wise"
             p["rows"]        = generate_segment_wise(request.month)["rows"]
-        _SP = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL"}
+        _SP = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
         if pg in _SP:
             ss = generate_special_steel_plant(request.month, _SP[pg])
             p.update(ss); p["type"] = "special_steel"
-        if pg == 23:
-            p.update(generate_special_steel_isp_sail(request.month))
-            p["type"] = "special_steel"
         if pg == 24:
+            p.update(generate_special_steel_sail(request.month))
+            p["type"] = "special_steel"
+        if pg == TREND_PAGE_ID:
             p.update(generate_special_steel_trend(request.month))
             p["type"] = "special_steel_trend"
+            # Outside all _DEPT_BADGE_GROUPS ranges (sentinel id) — assign
+            # the same Special Steel corner-badge group it had at page 24.
+            p["dept_badge"] = {"group": 5}
+        if pg == AT_A_GLANCE_PAGE_ID:
+            p.update(generate_at_a_glance(request.month))
+            p["type"] = "at_a_glance"
         if pg == 25:
             p.update(generate_opening_stock(request.month))
             p["type"] = "opening_stock"
@@ -678,6 +747,56 @@ def save_special_steel_manual(request: SpecialSteelSaveRequest):
             section=r.section,
         )
     return {"status": "success", "saved": len(request.rows)}
+
+
+# Rows the Special Steel SAIL table (page 24) actually shows ABP columns for
+# — the 5 integrated plants + the 'SSPs' aggregate row, matching
+# special_steel_orders.plant_name values.
+SPECIAL_STEEL_ABP_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SSPs"]
+
+
+@app.get("/api/special-steel-abp")
+def get_special_steel_abp(financial_year: str = Query(...)):
+    """Return existing Special Steel ABP entries for all 12 months of a FY,
+    for pre-filling the ABP Entry grid: {plant_name: {report_month: abp_qty}}."""
+    fy_start_year = int(financial_year.split("-")[0])
+    months = db.get_fy_months(f"{fy_start_year}-04")
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        ph = ",".join("?" * len(months))
+        cur.execute(f"""
+            SELECT plant_name, report_month, abp_qty
+            FROM special_steel_abp_table
+            WHERE report_month IN ({ph})
+        """, tuple(months))
+        by_plant = {p: {} for p in SPECIAL_STEEL_ABP_PLANTS}
+        for plant_name, report_month, abp_qty in cur.fetchall():
+            by_plant.setdefault(plant_name, {})[report_month] = abp_qty
+    finally:
+        conn.close()
+    return {"financial_year": financial_year, "months": months, "entries": by_plant}
+
+
+@app.post("/api/special-steel-abp")
+def save_special_steel_abp(request: SpecialSteelAbpSaveRequest):
+    """Upsert a batch of Special Steel ABP entries (plant x month) for a FY."""
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        saved = 0
+        for e in request.entries:
+            cur.execute("""
+                INSERT INTO special_steel_abp_table (report_month, plant_name, abp_qty)
+                VALUES (?, ?, ?)
+                ON CONFLICT(report_month, plant_name)
+                DO UPDATE SET abp_qty = excluded.abp_qty
+            """, (e.report_month, e.plant_name, e.abp_qty))
+            saved += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "success", "saved": saved}
 
 
 # ---------------------------------------------------------------------------

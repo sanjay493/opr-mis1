@@ -1,0 +1,111 @@
+        {# ── MIS at a Glance — infographic snapshot, right after the Cover page ── #}
+        <div style="padding:2px 4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.8pt;color:{{ colors.text_primary }};">
+
+          {# Banner #}
+          <div style="background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};padding:12px 16px;border-radius:5px;margin-bottom:10px;">
+            <div style="font-size:17pt;font-weight:700;">{{ page.title }}</div>
+            <div style="font-size:10.5pt;font-weight:500;opacity:0.92;">{{ page.month_label }}</div>
+          </div>
+
+          {# ── Production KPI tiles ── #}
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:5px;">Production Performance — Month ('000 T)</div>
+          <div style="display:flex;gap:7px;margin-bottom:10px;">
+            {% for row in page.production %}
+            <div style="flex:1;border:1px solid {{ colors.border_light }};border-left:4px solid {{ colors.misc_accent_blue }};border-radius:4px;padding:7px 9px;">
+              <div style="font-size:7.6pt;color:{{ colors.text_secondary }};text-transform:uppercase;font-weight:600;">{{ row.item }}</div>
+              <div style="font-size:15pt;font-weight:700;color:{{ colors.text_primary }};line-height:1.3;">{{ row.month_act if row.month_act else '—' }}</div>
+              <div style="font-size:7.4pt;color:{{ colors.text_secondary }};">%Ful: <b style="color:{{ colors.text_primary }};">{{ row.month_pct_ful if row.month_pct_ful else '—' }}%</b></div>
+              <div style="font-size:7.4pt;color:{{ colors.text_secondary }};">vs CPLY:
+                {% if row.growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ row.pct_growth_cply }}%</b>
+                {% elif row.growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ row.pct_growth_cply }}%</b>
+                {% else %}<b>—</b>{% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          {# ── YTD comparison table ── #}
+          <table class="report-table" style="width:100%;margin-top:0;margin-bottom:10px;">
+            <thead>
+              <tr>
+                <th style="text-align:left;">Item — YTD ('000 T)</th>
+                <th>CPLY YTD Actual</th>
+                <th>This FY YTD Actual</th>
+                <th>%Growth (YoY)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in page.production %}
+              <tr>
+                <td class="label-cell">{{ row.item }}</td>
+                <td>{{ row.ytd_cply_act if row.ytd_cply_act else '—' }}</td>
+                <td style="font-weight:700;">{{ row.ytd_act if row.ytd_act else '—' }}</td>
+                <td style="font-weight:600;{% if row.ytd_growth_good == true %}color:{{ colors.text_variance_green }};{% elif row.ytd_growth_good == false %}color:{{ colors.text_variance_red }};{% endif %}">
+                  {{ (row.ytd_pct_growth ~ '%') if row.ytd_pct_growth else '—' }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          {# ── Techno-Economic snapshot ── #}
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:5px;">Techno-Economic Snapshot — SAIL</div>
+          <div style="display:flex;gap:7px;margin-bottom:10px;">
+            {% for t in page.techno %}
+            {% if t.good == true %}{% set tbg = colors.highlight_achieved_band_bg %}
+            {% elif t.good == false %}{% set tbg = colors.highlight_shortfall_band_bg %}
+            {% else %}{% set tbg = colors.highlight_default_row_bg %}{% endif %}
+            <div style="flex:1;background:{{ tbg }};border-radius:4px;padding:6px 8px;">
+              <div style="font-size:7.6pt;font-weight:700;color:{{ colors.text_heading_dark }};">{{ t.parameter }}</div>
+              <div style="font-size:6.8pt;color:{{ colors.text_secondary }};font-style:italic;">{{ t.unit }}</div>
+              <div style="font-size:11pt;font-weight:700;color:{{ colors.text_primary }};">{{ t.month_actual if t.month_actual else '—' }}</div>
+              <div style="font-size:7pt;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</div>
+              {% if t.delta_pct is not none %}
+              <div style="font-size:7.4pt;font-weight:700;color:{{ colors.text_variance_green if t.good else colors.text_variance_red }};">{{ '%+.1f'|format(t.delta_pct) }}% vs target</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+
+          {# ── Special Steel + Capital Repair, side by side ── #}
+          <div style="display:flex;gap:10px;margin-bottom:10px;">
+            <div style="flex:1.05;border:1px solid {{ colors.border_light }};border-radius:4px;padding:7px 9px;">
+              <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:5px;">Special Steel Performance (SAIL)</div>
+              <div style="display:flex;gap:9px;align-items:center;">
+                <div style="flex:1;">{{ page.special_steel.bar_svg }}</div>
+                <div style="flex:1;font-size:7.5pt;line-height:1.85;">
+                  <div>%Fulfilment: <b>{{ page.special_steel.pct_ful if page.special_steel.pct_ful else '—' }}%</b></div>
+                  <div>vs CPLY:
+                    {% if page.special_steel.growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ page.special_steel.pct_growth }}%</b>
+                    {% elif page.special_steel.growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ page.special_steel.pct_growth }}%</b>
+                    {% else %}<b>—</b>{% endif %}
+                  </div>
+                  <div>ABP FY: <b>{{ page.special_steel.abp_fy if page.special_steel.abp_fy else '—' }}</b></div>
+                  <div>% of Saleable Steel: <b>{{ page.special_steel.special_pct if page.special_steel.special_pct else '—' }}%</b></div>
+                </div>
+              </div>
+            </div>
+
+            <div style="flex:1;border:1px solid {{ colors.border_light }};border-radius:4px;padding:7px 9px;">
+              <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:5px;">Capital Repair Status — Current FY</div>
+              {% for pl in page.capital_repair %}
+              <div style="margin-bottom:5px;">
+                <div style="display:flex;justify-content:space-between;font-size:7.4pt;margin-bottom:1px;">
+                  <span style="font-weight:700;">{{ pl.plant }}</span>
+                  <span style="color:{{ colors.text_secondary }};">{{ pl.completed }}/{{ pl.total }}{{ ' (' ~ pl.pct ~ '%)' if pl.pct is not none else '' }}</span>
+                </div>
+                <div style="background:{{ colors.border_divider }};border-radius:3px;height:6px;overflow:hidden;">
+                  <div style="width:{{ pl.pct if pl.pct is not none else 0 }}%;height:100%;background:{{ colors.misc_accent_blue }};"></div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# ── Trend strip ── #}
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:5px;">Saleable Steel Production Trend — Last 6 Months ('000 T)</div>
+          <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:5px 9px;">
+            {{ page.trend.svg }}
+          </div>
+
+        </div>
