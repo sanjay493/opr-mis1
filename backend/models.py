@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 
 class FontConfig(BaseModel):
@@ -36,7 +36,11 @@ class TeRow(BaseModel):
 
 
 class PageData(BaseModel):
-    page: int
+    # int for the fixed 1-40 pages; float only for the "MIS at a Glance"
+    # sentinel (page 1.5 — see AT_A_GLANCE_PAGE_ID in main.py), which the
+    # frontend now round-trips through this model like any other page since
+    # it's selectable on-screen and included in PDF export requests.
+    page: Union[int, float]
     title: str
     subtitle: Optional[str] = ""
     type: str

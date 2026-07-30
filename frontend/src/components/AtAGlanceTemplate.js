@@ -16,7 +16,6 @@ const C = {
   shortfallBg: '#fed7aa',
   defaultRowBg: 'transparent',
   borderLight: '#cbd5e1',
-  borderMedium: '#94a3b8',
   borderDivider: '#e2e8f0',
 };
 
@@ -43,30 +42,10 @@ function ProductionTiles({ production }) {
   );
 }
 
-function YtdTable({ production }) {
-  const th = { padding: '5px 4px', border: `1px solid ${C.borderMedium}`, textAlign: 'center', fontWeight: 700, fontSize: '7.5pt' };
-  const td = { padding: '4px 4px', border: `1px solid ${C.borderLight}`, textAlign: 'right', fontSize: '7.5pt' };
+function YtdTrendChart({ ytdTrend }) {
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
-      <thead>
-        <tr>
-          <th style={{ ...th, textAlign: 'left' }}>Item — YTD (&apos;000 T)</th>
-          <th style={th}>CPLY YTD Actual</th>
-          <th style={th}>This FY YTD Actual</th>
-          <th style={th}>%Growth (YoY)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {production.map((row) => (
-          <tr key={row.item}>
-            <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>{row.item}</td>
-            <td style={td}>{row.ytd_cply_act || '—'}</td>
-            <td style={{ ...td, fontWeight: 700 }}>{row.ytd_act || '—'}</td>
-            <td style={{ ...td, fontWeight: 600 }}><GrowthText value={row.ytd_pct_growth} good={row.ytd_growth_good} /></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '6px 9px', marginBottom: 10 }}
+         dangerouslySetInnerHTML={{ __html: (ytdTrend && ytdTrend.svg) || '' }} />
   );
 }
 
@@ -116,13 +95,13 @@ function CapitalRepairPanel({ capitalRepair }) {
   return (
     <div style={{ flex: 1, border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '7px 9px' }}>
       <div style={{ fontSize: '9pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
-        Capital Repair Status — Current FY
+        Capital Repair — Days Under Repair (FY)
       </div>
       {capitalRepair.map((pl) => (
         <div key={pl.plant} style={{ marginBottom: 5 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7.4pt', marginBottom: 1 }}>
             <span style={{ fontWeight: 700 }}>{pl.plant}</span>
-            <span style={{ color: C.textSecondary }}>{pl.completed}/{pl.total}{pl.pct !== null && pl.pct !== undefined ? ` (${pl.pct}%)` : ''}</span>
+            <span style={{ color: C.textSecondary }}>{pl.completed_days}/{pl.total_days} days{pl.pct !== null && pl.pct !== undefined ? ` (${pl.pct}%)` : ''}</span>
           </div>
           <div style={{ background: C.borderDivider, borderRadius: 3, height: 6, overflow: 'hidden' }}>
             <div style={{ width: `${pl.pct || 0}%`, height: '100%', background: C.accentBlue }} />
@@ -137,7 +116,7 @@ export default function AtAGlanceTemplate({ data }) {
   if (!data) return null;
   const {
     title, month_label: monthLabel,
-    production = [], techno = [], special_steel: specialSteel = {},
+    production = [], ytd_trend: ytdTrend = {}, techno = [], special_steel: specialSteel = {},
     capital_repair: capitalRepair = [], trend = {},
   } = data;
 
@@ -153,7 +132,10 @@ export default function AtAGlanceTemplate({ data }) {
       </div>
       <ProductionTiles production={production} />
 
-      <YtdTable production={production} />
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
+        Production Trend — Last 4 Years ({ytdTrend.period_label || ''} each year, &apos;000 T)
+      </div>
+      <YtdTrendChart ytdTrend={ytdTrend} />
 
       <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
         Techno-Economic Snapshot — SAIL
@@ -166,7 +148,7 @@ export default function AtAGlanceTemplate({ data }) {
       </div>
 
       <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
-        Saleable Steel Production Trend — Last 6 Months (&apos;000 T)
+        Saleable Steel &amp; Finished Steel Production Trend — Last 6 Months (&apos;000 T)
       </div>
       <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '5px 9px' }}
            dangerouslySetInnerHTML={{ __html: trend.svg || '' }} />
