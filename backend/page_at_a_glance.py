@@ -582,7 +582,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
         lines.append(f'<path d="{d}" fill="none" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
     for px, py, qv in pts:
         lines.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.4" fill="{_VA_LINE_COLOR}"/>')
-        lines.append(f'<text x="{px:.1f}" y="{py - 5:.1f}" text-anchor="middle" font-size="6.6" '
+        lines.append(f'<text x="{px:.1f}" y="{py - 8:.1f}" text-anchor="middle" font-size="11" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="{_VA_LINE_COLOR}">{_fmt_million(qv)}</text>')
 
     # legend
@@ -639,14 +639,14 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
         "pct_growth": pct_growth, "growth_good": None if pct_growth == "" else int(pct_growth) >= 0,
         "abp_fy": total.get("abp_fy", ""),
         "special_pct": sail.get("special_pct", {}).get("current", ""),
-        "month_title": f"Value Added Steel — For the Month ({month_label})",
+        "month_title": f"For the Month ({month_label})",
         "month_qty": month_qty,
         "five_year_svg": _value_added_combo_svg(
             fy_cats, fy_pct, fy_qty, [_VA_ORANGE] * len(fy_cats),
-            "Value Added Steel — Last 5 Years", vw=560, vh=222),
+            "Last 5 Years", vw=560, vh=222),
         "quarter_svg": _value_added_combo_svg(
             q_cats, q_pct, q_qty, [_VA_BAR_COLORS[0], _VA_BAR_COLORS[3]],
-            "Value Added Steel — Quarter Just Ended vs CPLY", vw=300, vh=222),
+            "Quarter Just Ended vs CPLY", vw=300, vh=222),
     }
 
 

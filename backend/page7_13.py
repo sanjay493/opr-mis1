@@ -219,17 +219,34 @@ def _num(s):
     return float(s) if s not in (None, "") else None
 
 
-def _tag_best_flags(group_rows: list, fy_lbl_cur: str) -> None:
+def _tag_best_flags(group_rows: list) -> None:
     """
-    Mark each row's `cell_flags` (17 entries, '' | 'best_ever' | 'fy_best')
-    in place:
-      - 'best_ever': the single highest month, the single highest quarter,
+    Mark each row's `cell_flags` (17 entries, '' | 'best_ever' | 'best_month'
+    | 'row_best_month' | 'row_best_quarter') in place:
+      - 'best_ever' : the single highest month, the single highest quarter,
         and the single highest FY total, each across every actual (non-plan)
         year shown for this plant/group — an all-time record.
-      - 'fy_best'  : within the CURRENT FY's row only, its own best month
-        and best quarter so far — "best of this year", which may or may not
-        also be an all-time record (best_ever wins if both apply to the
-        same cell).
+      - 'best_month': per individual column — each calendar month (Apr, May,
+        ... Mar) and each quarter (Q1..Q4) separately — the highest value
+        ever recorded in THAT specific column across all actual years shown,
+        e.g. the best April on record, the best Q3 on record, etc. (Total
+        has only one column, so its record is already the 'best_ever' total
+        tagged above — no separate pass needed.) A column already carrying
+        'best_ever' keeps that flag instead, but note a 'best_ever' cell is
+        *always* also that column's record by definition (the single
+        highest value across every month/quarter is necessarily ≥ every
+        other value in its own column) — the frontend/PDF styling relies on
+        this and draws the same outline for 'best_ever' cells as for
+        'best_month' cells, layering the amber fill on top.
+      - 'row_best_month'/'row_best_quarter': for EVERY actual row (every FY
+        shown, not just the current one), that row's own best month among
+        its 12 months, and its own best quarter among its 4 quarters —
+        "this year's standout for that slot", evaluated independently per
+        row. This may not be that calendar column's historical record, so
+        it's styled with its own fill color (separate for month vs.
+        quarter) layered on the same dark outline as the other tiers —
+        'best_ever'/'best_month' win outright if both apply to the same
+        cell (checked via the cell already being non-empty).
     Plan rows are excluded from ranking (they're a target, not an actual).
     """
     for r in group_rows:
@@ -253,15 +270,24 @@ def _tag_best_flags(group_rows: list, fy_lbl_cur: str) -> None:
         if row is not None:
             row["cell_flags"][idx] = "best_ever"
 
-    cur_row = next((r for r in actual_rows if r["year_label"] == fy_lbl_cur), None)
-    if cur_row is not None:
-        for idxs in (_MONTH_IDX, _QTR_IDX):
-            vals = [(i, _num(cur_row["values"][i])) for i in idxs]
+    # Per-column record: best April ever, best May ever, ... best Q1 ever,
+    # best Q2 ever, etc., independent of how that column stacks up against
+    # its neighbours.
+    for idx in _MONTH_IDX + _QTR_IDX:
+        row, _ = best_cell([idx])
+        if row is not None and row["cell_flags"][idx] != "best_ever":
+            row["cell_flags"][idx] = "best_month"
+
+    # Each row's own best month / own best quarter — every displayed FY,
+    # not just the current one.
+    for r in actual_rows:
+        for idxs, flag in ((_MONTH_IDX, "row_best_month"), (_QTR_IDX, "row_best_quarter")):
+            vals = [(i, _num(r["values"][i])) for i in idxs]
             vals = [(i, v) for i, v in vals if v is not None]
             if vals:
                 i, _v = max(vals, key=lambda t: t[1])
-                if cur_row["cell_flags"][i] != "best_ever":
-                    cur_row["cell_flags"][i] = "fy_best"
+                if r["cell_flags"][i] == "":
+                    r["cell_flags"][i] = flag
 
 
 def _generate_rows_for_config(report_month: str, config: dict) -> list:
@@ -421,7 +447,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         if not group_rows:
             continue
 
-        _tag_best_flags(group_rows, fy_lbl_cur)
+        _tag_best_flags(group_rows)
 
         n = len(group_rows)
         for i, r in enumerate(group_rows):

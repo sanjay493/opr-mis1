@@ -30,9 +30,9 @@
   "highlight_bold_row_bg":      "#eef2f6",
   "highlight_default_row_bg":   "transparent",
   "highlight_best_ever_bg":     "#fde68a",
-  "highlight_best_ever_border": "#b45309",
-  "highlight_fy_best_bg":       "#bfdbfe",
-  "highlight_fy_best_border":   "#1d4ed8",
+  "highlight_row_best_month_bg":   "#bfdbfe",
+  "highlight_row_best_quarter_bg": "#99f6e4",
+  "highlight_best_month_border": "#0f172a",
 
   "_doc_techno_cat": "MIS at a Glance Techno-Economic Snapshot tile backgrounds — one per parameter category (what the parameter IS, not whether it's over/under target), so a reader can visually group Coke/Fuel/CDI Rate as fuel & reductants, etc. at a glance.",
 
