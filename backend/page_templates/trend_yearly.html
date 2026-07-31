@@ -41,28 +41,26 @@
                         {% for i in range(0, 3) %}
                         <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('best-month' if cf[i] == 'best_month' else '') }}">{{ v[i] }}</td>
                         {% endfor %}
-                        <td class="qtr-cell {{ 'best-ever' if cf[3] == 'best_ever' else ('best-month' if cf[3] == 'best_month' else ('row-best-quarter' if cf[3] == 'row_best_quarter' else '')) }}">{{ v[3] }}</td>
+                        <td class="qtr-cell {{ 'best-ever' if cf[3] == 'best_ever' else ('best-month' if cf[3] == 'best_month' else '') }}">{{ v[3] }}</td>
                         {% for i in range(4, 7) %}
                         <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('best-month' if cf[i] == 'best_month' else '') }}">{{ v[i] }}</td>
                         {% endfor %}
-                        <td class="qtr-cell {{ 'best-ever' if cf[7] == 'best_ever' else ('best-month' if cf[7] == 'best_month' else ('row-best-quarter' if cf[7] == 'row_best_quarter' else '')) }}">{{ v[7] }}</td>
+                        <td class="qtr-cell {{ 'best-ever' if cf[7] == 'best_ever' else ('best-month' if cf[7] == 'best_month' else '') }}">{{ v[7] }}</td>
                         {% for i in range(8, 11) %}
                         <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('best-month' if cf[i] == 'best_month' else '') }}">{{ v[i] }}</td>
                         {% endfor %}
-                        <td class="qtr-cell {{ 'best-ever' if cf[11] == 'best_ever' else ('best-month' if cf[11] == 'best_month' else ('row-best-quarter' if cf[11] == 'row_best_quarter' else '')) }}">{{ v[11] }}</td>
+                        <td class="qtr-cell {{ 'best-ever' if cf[11] == 'best_ever' else ('best-month' if cf[11] == 'best_month' else '') }}">{{ v[11] }}</td>
                         {% for i in range(12, 15) %}
                         <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('best-month' if cf[i] == 'best_month' else '') }}">{{ v[i] }}</td>
                         {% endfor %}
-                        <td class="qtr-cell {{ 'best-ever' if cf[15] == 'best_ever' else ('best-month' if cf[15] == 'best_month' else ('row-best-quarter' if cf[15] == 'row_best_quarter' else '')) }}">{{ v[15] }}</td>
+                        <td class="qtr-cell {{ 'best-ever' if cf[15] == 'best_ever' else ('best-month' if cf[15] == 'best_month' else '') }}">{{ v[15] }}</td>
                         <td class="total-cell {{ 'best-ever' if cf[16] == 'best_ever' else '' }}">{{ v[16] }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
             <div class="page7-13-legend">
-                <span class="swatch" style="background:{{ colors.highlight_best_ever_bg }};border:2pt solid {{ colors.highlight_best_month_border }};"></span>Best Ever (month / quarter / annual record)
+                <span class="swatch" style="background:{{ colors.highlight_best_ever_bg }};"></span>Best Ever (month / quarter / annual record)
                 &nbsp;&nbsp;
                 <span class="swatch" style="background:transparent;border:1pt solid {{ colors.highlight_best_month_border_light }};"></span>Best for that Calendar Month/Quarter (e.g. best April, best Q3, on record)
-                &nbsp;&nbsp;
-                <span class="swatch" style="background:{{ colors.highlight_row_best_quarter_bg }};border:2pt solid {{ colors.highlight_best_month_border }};"></span>Row's Best Quarter (that FY's own best quarter)
             </div>

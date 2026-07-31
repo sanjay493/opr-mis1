@@ -179,11 +179,18 @@ def _agg_ytd(cur, plants: list, months: list):
 #     5 main plants' 'Saleable Semis' item (page5_6.py's Category-Wise
 #     Saleable Steel page uses the same item for the same purpose).
 #
-# Two splits have no independent DB actual and are taken as the remainder of
-# a measured total minus its measured sibling (clamped >= 0): "feed to
-# rolling mills" = Crude Steel total − Semis for Sale, and "direct sale
+# One split has no independent DB actual and is taken as the remainder of a
+# measured total minus its measured sibling (clamped >= 0): "direct sale
 # semis" = Semis for Sale − Conversion. Everything else below is a real
 # reported actual, not a derived estimate.
+#
+# There is no "feed to rolling mills" item in this project's data, so it is
+# NOT shown as a node — an earlier version inferred it as Crude Steel total
+# minus Semis for Sale, which silently folds every other unmeasured loss/
+# routing into that one number and reads as a real figure when it isn't.
+# Crude Steel instead links straight to Finished Steel (Mills) using the
+# real Finished Steel actual, without claiming to know the intermediate
+# tonnage.
 _FIVE_VISL = _FIVE + ["VISL"]
 _FS_SAIL_SET = _FIVE + ["ASP", "SSP", "VISL"]
 
@@ -223,7 +230,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300) -> str:
     height when they don't fully account for it (real process loss/yield,
     surfaced as unfilled bar rather than silently shrinking the node to match
     only what the split figures can explain)."""
-    ml, mr, mt, mb = 92, 92, 30, 10
+    ml, mr, mt, mb = 92, 92, 46, 10
     cw, ch = vw - ml - mr, vh - mt - mb
 
     incoming, outgoing = _node_totals(nodes, links)
@@ -233,7 +240,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300) -> str:
     columns = sorted({n["column"] for n in nodes})
     by_col = {c: [n for n in nodes if n["column"] == c] for c in columns}
 
-    node_gap = 26.0
+    node_gap = 40.0
     scale = None
     for ns in by_col.values():
         total = sum(sizes[n["id"]] for n in ns)
@@ -288,9 +295,9 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300) -> str:
                     f'rx="2.5" fill="{color}"/>')
         cx = g["x"] + g["w"] / 2
         val_str = f'{sizes[nid] * 1000:,.0f} T'  # '000T -> T
-        svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 15:.1f}" text-anchor="middle" font-size="7.3" '
+        svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 32:.1f}" text-anchor="middle" font-size="12" '
                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
-        svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 5:.1f}" text-anchor="middle" font-size="7" '
+        svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 14:.1f}" text-anchor="middle" font-size="12" '
                     f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
 
     svg.append("</svg>")
@@ -310,7 +317,6 @@ def _flow_sankey_svg(cur, report_month: str) -> str:
     bof_ytd, eaf_ytd, cs_ytd = bof_ytd or 0.0, eaf_ytd or 0.0, cs_ytd or 0.0
 
     semis_ytd = _semis_ytd(cur, ytd_months)
-    feed_mills_ytd = max(0.0, cs_ytd - semis_ytd)
     direct_sale_ytd = max(0.0, semis_ytd - conv_ytd)
 
     nodes = [
@@ -319,7 +325,6 @@ def _flow_sankey_svg(cur, report_month: str) -> str:
         {"id": "pig",    "label": "Pig Iron",                "column": 1, "color": "#94a3b8"},
         {"id": "cs",     "label": "Crude Steel",             "column": 1, "color": "#1baf7a"},
         {"id": "semis",  "label": "Semis for Sale",          "column": 2, "color": "#eb6834"},
-        {"id": "mills",  "label": "Feed to Rolling Mills",   "column": 2, "color": "#1baf7a"},
         {"id": "dsale",  "label": "Direct Sale (Semis)",     "column": 3, "color": "#94a3b8"},
         {"id": "conv",   "label": "Conversion Agent",        "column": 3, "color": "#e87ba4"},
         {"id": "fsmill", "label": "Finished Steel (Mills)",  "column": 3, "color": "#1baf7a"},
@@ -330,8 +335,7 @@ def _flow_sankey_svg(cur, report_month: str) -> str:
         {"source": "hm",     "target": "cs",     "value": bof_ytd},
         {"source": "eaf",    "target": "cs",     "value": eaf_ytd},
         {"source": "cs",     "target": "semis",  "value": semis_ytd},
-        {"source": "cs",     "target": "mills",  "value": feed_mills_ytd},
-        {"source": "mills",  "target": "fsmill", "value": fs_ytd},
+        {"source": "cs",     "target": "fsmill", "value": fs_ytd},
         {"source": "semis",  "target": "dsale",  "value": direct_sale_ytd},
         {"source": "semis",  "target": "conv",   "value": conv_ytd},
         {"source": "fsmill", "target": "fstot",  "value": fs_ytd},

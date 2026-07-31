@@ -218,8 +218,8 @@ def _num(s):
 
 def _tag_best_flags(group_rows: list) -> None:
     """
-    Mark each row's `cell_flags` (17 entries, '' | 'best_ever' | 'best_month'
-    | 'row_best_quarter') in place:
+    Mark each row's `cell_flags` (17 entries, '' | 'best_ever' | 'best_month')
+    in place:
       - 'best_ever' : the single highest month, the single highest quarter,
         and the single highest FY total, each across every actual (non-plan)
         year shown for this plant/group — an all-time record.
@@ -232,18 +232,7 @@ def _tag_best_flags(group_rows: list) -> None:
         'best_ever' keeps that flag instead, but note a 'best_ever' cell is
         *always* also that column's record by definition (the single
         highest value across every month/quarter is necessarily ≥ every
-        other value in its own column) — the frontend/PDF styling relies on
-        this and draws the same outline for 'best_ever' cells as for
-        'best_month' cells, layering the amber fill on top.
-      - 'row_best_quarter': for EVERY actual row (every FY shown, not just
-        the current one), that row's own best quarter among its 4 quarters
-        — "this year's standout for that slot". This may not be that
-        calendar column's historical record, so it's styled with its own
-        fill color layered on the same dark outline as the other tiers —
-        'best_ever'/'best_month' win outright if both apply to the same
-        cell (checked via the cell already being non-empty). (There is no
-        row-best-month equivalent — the per-month version of this was
-        removed as too noisy at 12 columns; quarters, at 4, stay useful.)
+        other value in its own column).
     Plan rows are excluded from ranking (they're a target, not an actual).
     """
     for r in group_rows:
@@ -274,15 +263,6 @@ def _tag_best_flags(group_rows: list) -> None:
         row, _ = best_cell([idx])
         if row is not None and row["cell_flags"][idx] != "best_ever":
             row["cell_flags"][idx] = "best_month"
-
-    # Each row's own best quarter — every displayed FY, not just the current one.
-    for r in actual_rows:
-        vals = [(i, _num(r["values"][i])) for i in _QTR_IDX]
-        vals = [(i, v) for i, v in vals if v is not None]
-        if vals:
-            i, _v = max(vals, key=lambda t: t[1])
-            if r["cell_flags"][i] == "":
-                r["cell_flags"][i] = "row_best_quarter"
 
 
 def _generate_rows_for_config(report_month: str, config: dict) -> list:

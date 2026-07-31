@@ -16,7 +16,7 @@ function deriveLabels(selectedMonth) {
 }
 
 const th = {
-  padding: '2px 3px',
+  padding: '4px 4px',
   fontSize: 'var(--report-font-size)',
   lineHeight: 1.15,
   textAlign: 'center',
@@ -25,7 +25,7 @@ const th = {
 };
 
 const td = (extra = {}) => ({
-  padding: '2px 3px',
+  padding: '4px 4px',
   fontSize: 'var(--report-font-size)',
   lineHeight: 1.15,
   textAlign: 'right',

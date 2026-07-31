@@ -532,26 +532,17 @@
         .page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid {{ colors.border_heavy }}; }
         .page7-13-yearly-table td.qtr-cell   { background: {{ colors.highlight_qtr_col_bg }}; font-weight: 600; }
         .page7-13-yearly-table td.total-cell { background: {{ colors.highlight_total_col_bg }}; font-weight: 700; }
-        /* Record flags, layered: a dark outline marks the two stronger
-           tiers — best-ever (all-time record) and row-best-quarter (a
-           row's own best-so-far, every displayed FY not just current) —
-           each also getting a background fill (amber / teal). best-month
-           (this column's record, but not any row's own peak / not the
-           single all-time best) is the weakest signal and gets only a
-           light thin border, no fill — a dark outline there read as too
-           heavy for something that isn't this year's or an all-time
-           record. !important wins over qtr-cell/total-cell/plan-row/
-           sail-row/fp-row backgrounds since a record can land on any of
-           those. */
+        /* Two record flags: best-ever (all-time record, month/quarter/
+           annual) is a background fill only — no border, so it doesn't
+           compete with the plan/SAIL/5 Plants row backgrounds it can land
+           on top of. best-month (this column's own record, but not the
+           single all-time best) is the weaker signal and gets only a
+           light thin border, no fill. !important wins over qtr-cell/
+           total-cell/plan-row/sail-row/fp-row backgrounds since a record
+           can land on any of those. */
         .page7-13-yearly-table td.best-ever {
             background: {{ colors.highlight_best_ever_bg }} !important;
             font-weight: 700; color: {{ colors.text_black }};
-            border: 2pt solid {{ colors.highlight_best_month_border }} !important;
-        }
-        .page7-13-yearly-table td.row-best-quarter {
-            background: {{ colors.highlight_row_best_quarter_bg }} !important;
-            font-weight: 700; color: {{ colors.text_black }};
-            border: 2pt solid {{ colors.highlight_best_month_border }} !important;
         }
         .page7-13-yearly-table td.best-month {
             font-weight: 700; color: {{ colors.text_black }};
@@ -591,8 +582,8 @@
 
         /* ─── Page 14 – Production by Process ───────────────── */
         .page14-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; margin-bottom: 10pt; }
-        .page14-table th { font-size: 8pt; padding: 2px 3px; line-height: 1.1; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_medium }}; background-color: {{ colors.table_header_bg }}; }
-        .page14-table td { font-size: 8.5pt; padding: 2px 3px; line-height: 1.1; text-align: right; border: 1px solid {{ colors.border_light }}; }
+        .page14-table th { font-size: 8pt; padding: 4px 4px; line-height: 1.1; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_medium }}; background-color: {{ colors.table_header_bg }}; }
+        .page14-table td { font-size: 8.5pt; padding: 4px 4px; line-height: 1.1; text-align: right; border: 1px solid {{ colors.border_light }}; }
         .page14-table td.plant-col { text-align: left; font-weight: 600; }
         .page14-table tr.agg-row td { font-weight: 700; background-color: {{ colors.highlight_target_band_bg }} !important; }
         .page14-table tr.sail-row td { font-weight: 700; background-color: {{ colors.highlight_achieved_band_bg }} !important; }
