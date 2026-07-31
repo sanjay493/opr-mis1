@@ -69,10 +69,13 @@ def _safe_chart_data(month):
     except Exception:
         return {}
 
+_MAJOR_TECHNO_EXCLUDE = {"Sp. CO2 Emission", "Sp. Water Consumption", "Sp. PM Emission"}
+
+
 def _safe_techno(month, pg):
     try:
         if pg == 27:
-            return generate_major_techno_from_db(month)
+            return generate_major_techno_from_db(month, exclude_labels=_MAJOR_TECHNO_EXCLUDE)
         elif 28 <= pg <= 35:
             return generate_techno_from_db(month, pg)
         return {}
@@ -505,6 +508,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                     page["monthly_prev"] = pbp["monthly_prev"]
                     page["ytd"]          = pbp["ytd"]
                     page["ytd_prev"]     = pbp["ytd_prev"]
+                    page["sankey_svg"]   = pbp["sankey_svg"]
                 if pg in (15, 16, 17, 18):
                     import datetime as _dt
                     dt = _dt.datetime.strptime(month, "%Y-%m")
@@ -727,6 +731,7 @@ async def generate_pdf(request: PDFRequest):
             p["monthly_prev"] = pbp["monthly_prev"]
             p["ytd"]          = pbp["ytd"]
             p["ytd_prev"]     = pbp["ytd_prev"]
+            p["sankey_svg"]   = pbp["sankey_svg"]
         if pg in (15, 16, 17, 18, 19, 20, 21, 22, 23, 24, TREND_PAGE_ID):
             dt = _dt.datetime.strptime(request.month, "%Y-%m")
             p["month_label"] = dt.strftime("%b'%y")

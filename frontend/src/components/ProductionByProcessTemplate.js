@@ -119,6 +119,7 @@ export default function ProductionByProcessTemplate({ data, selectedMonth }) {
     monthly_prev = [],
     ytd          = [],
     ytd_prev     = [],
+    sankey_svg   = '',
   } = data || {};
 
   const { shortM, shortY, shortPrevY } = deriveLabels(selectedMonth);
@@ -148,6 +149,16 @@ export default function ProductionByProcessTemplate({ data, selectedMonth }) {
         periodCur={`Apr-${shortM}'${shortY}`}
         periodPrev={`Apr-${shortM}'${shortPrevY}`}
       />
+
+      {sankey_svg && (
+        <div style={{ marginTop: '8pt' }}>
+          <div style={{ fontSize: '9pt', fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', marginBottom: 3 }}>
+            Hot Metal to Saleable Steel Flow — SAIL, Till Apr-{shortM}&apos;{shortY}
+          </div>
+          <div style={{ border: '1px solid #cbd5e1', borderRadius: 4, padding: '2px 6px' }}
+               dangerouslySetInnerHTML={{ __html: sankey_svg }} />
+        </div>
+      )}
     </div>
   );
 }

@@ -1134,11 +1134,16 @@ KEY_ALIASES = {
 # MAJOR page from techno_data table (replaces legacy techno_actuals path)
 # ---------------------------------------------------------------------------
 
-def generate_major_techno_from_db(report_month: str) -> dict:
+def generate_major_techno_from_db(report_month: str, exclude_labels: set = None) -> dict:
     """
     Generate page 27 (MAJOR TECHNO-ECONOMIC PARAMETERS) from techno_data.
     FY columns use the till_month value from the March row of each past FY,
     which represents the full-year cumulative.
+
+    exclude_labels: section labels to drop from the returned sections list —
+    used by page 27's own display only (see main.py's _safe_techno), so
+    other callers (_sail_row_table for page 3/at-a-glance, the Techno Custom
+    Report export) keep seeing every computed section regardless.
     Also includes 2026-27 plan from techno_plant_plan table.
     """
     import json as _json
@@ -1727,6 +1732,8 @@ def generate_major_techno_from_db(report_month: str) -> dict:
             section["label"] = "Coal to Hot Metal Ratio"
 
     sections = sections_with_sail
+    if exclude_labels:
+        sections = [s for s in sections if s.get("label") not in exclude_labels]
 
     return {
         "title":          "MAJOR TECHNO-ECONOMIC PARAMETERS",

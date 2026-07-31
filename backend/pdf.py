@@ -208,12 +208,14 @@ def _apply_dept_badges(main_bytes: bytes, dept_badges: dict, browser, font_famil
     reader = PdfReader(io.BytesIO(main_bytes))
     n = len(reader.pages)
 
-    marker_re = re.compile(r"@@PGSTART_(\d+)@@")
+    marker_re = re.compile(r"@@PGSTART_(\d+(?:\.\d+)?)@@")
     start_of = {}
     for k in range(n):
         text = reader.pages[k].extract_text() or ""
         for m in marker_re.finditer(text):
-            rp = int(m.group(1))
+            rp = float(m.group(1))
+            if rp == int(rp):
+                rp = int(rp)
             if rp not in start_of:
                 start_of[rp] = k
 

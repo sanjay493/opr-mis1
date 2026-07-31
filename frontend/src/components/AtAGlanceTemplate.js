@@ -19,6 +19,17 @@ const C = {
   borderDivider: '#e2e8f0',
 };
 
+// Techno-Economic Snapshot tile backgrounds by category — mirrors the
+// techno_cat_*_bg entries in backend/colors_config.json.
+const TECHNO_CAT_BG = {
+  techno_cat_fuel_bg: '#fde2c8',
+  techno_cat_energy_bg: '#fff3c4',
+  techno_cat_process_bg: '#cfe8ff',
+  techno_cat_burden_bg: '#d9f2d0',
+  techno_cat_environment_bg: '#cdf0ea',
+  techno_cat_blend_bg: '#e5e0f5',
+};
+
 function GrowthText({ value, good }) {
   if (good === null || good === undefined || !value) return <b>—</b>;
   return <b style={{ color: good ? C.textVarianceGreen : C.textVarianceRed }}>{good ? `+${value}` : value}%</b>;
@@ -53,7 +64,7 @@ function TechnoTiles({ techno }) {
   return (
     <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
       {techno.map((t) => {
-        const bg = t.good === true ? C.achievedBg : t.good === false ? C.shortfallBg : C.defaultRowBg;
+        const bg = (t.bg_key && TECHNO_CAT_BG[t.bg_key]) || C.defaultRowBg;
         return (
           <div key={t.parameter} style={{ flex: 1, background: bg, borderRadius: 4, padding: '6px 8px' }}>
             <div style={{ fontSize: '7.6pt', fontWeight: 700, color: C.textHeadingDark }}>{t.parameter}</div>
@@ -80,8 +91,10 @@ function ValueAddedSteelPanel({ specialSteel }) {
       </div>
       <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
         <div style={{ flex: 1.5 }} dangerouslySetInnerHTML={{ __html: specialSteel.five_year_svg || '' }} />
-        <div style={{ flex: 0.85 }} dangerouslySetInnerHTML={{ __html: specialSteel.quarter_svg || '' }} />
-        <div style={{ flex: 0.55, fontSize: '7.5pt', lineHeight: 1.6, paddingLeft: 4 }}>
+        <div style={{ flex: 0.85, borderLeft: `1px solid ${C.borderDivider}`, paddingLeft: 9 }} dangerouslySetInnerHTML={{ __html: specialSteel.quarter_svg || '' }} />
+        <div style={{ flex: 0.55, fontSize: '7.5pt', lineHeight: 1.6, paddingLeft: 9, borderLeft: `1px solid ${C.borderDivider}` }}>
+          <div style={{ fontSize: '8pt', fontWeight: 700, color: C.textHeadingDark, marginBottom: 2 }}>{specialSteel.month_title}</div>
+          <div>Qty (Value Added Steel): <b>{specialSteel.month_qty || '—'} T</b></div>
           <div>%Fulfilment: <b>{specialSteel.pct_ful || '—'}%</b></div>
           <div>vs CPLY: <GrowthText value={specialSteel.pct_growth} good={specialSteel.growth_good} /></div>
           <div>ABP FY: <b>{specialSteel.abp_fy || '—'}</b></div>

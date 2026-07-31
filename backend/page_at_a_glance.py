@@ -39,6 +39,24 @@ _TE_PARAMS = [
     "CDI Rate", "Sinter in Burden", "Pellet in Burden", "TMI", "Sp. CO2 Emission",
 ]
 
+# Tile background groups the tile by what the parameter actually IS (fuel &
+# reductants / energy / process efficiency / burden mix / environment /
+# import blend), not by whether it's over/under target — that comparison is
+# already carried by the delta_pct text color, so the tile fill is free to
+# encode identity instead. Keys are colors_config.json entries.
+_TE_CATEGORY_BG = {
+    "Coke Rate": "techno_cat_fuel_bg",
+    "Fuel Rate": "techno_cat_fuel_bg",
+    "CDI Rate": "techno_cat_fuel_bg",
+    "Specific Energy Consumption": "techno_cat_energy_bg",
+    "BF Productivity": "techno_cat_process_bg",
+    "Sinter in Burden": "techno_cat_burden_bg",
+    "Pellet in Burden": "techno_cat_burden_bg",
+    "TMI": "techno_cat_burden_bg",
+    "Sp. CO2 Emission": "techno_cat_environment_bg",
+    "Imported Coking Coal in Blend": "techno_cat_blend_bg",
+}
+
 # techno_data unit='General' keys this page sums across plants (BSP, DSP,
 # RSP, BSL, ISP) to compute "Imported Coking Coal in Blend" - a sum-of-
 # quantities ratio, not a weighted average, so it doesn't go through
@@ -148,22 +166,27 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, vw: int = 480, vh:
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.8"/>')
 
-    for name, vals in series.items():
+    # Each series' data labels sit on a fixed side of its own line (above for
+    # the first series, below for the second) rather than both hugging their
+    # points — with two lines this close together, labels anchored to the
+    # same side collide/overlap wherever the lines cross or run parallel.
+    for si, (name, vals) in enumerate(series.items()):
         color = colors.get(name, "#0284c7")
         pts = [(xs(i), ys(v)) for i, v in enumerate(vals) if v is not None]
         if len(pts) > 1:
             d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in pts)
             lines.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.6"/>')
+        label_dy = -6 if si == 0 else 12
         for i, v in enumerate(vals):
             if v is None:
                 continue
             x, y = xs(i), ys(v)
             lines.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2" fill="{color}"/>')
-        last = next(((i, v) for i, v in reversed(list(enumerate(vals))) if v is not None), None)
-        if last:
-            i, v = last
-            x, y = xs(i), ys(v)
-            lines.append(f'<text x="{x:.1f}" y="{y - 6:.1f}" text-anchor="middle" font-size="7" '
+            # The first point sits exactly on the y-axis, so a centered label
+            # extends left into the gridline value labels — start it to the
+            # right of the point instead; every other point stays centered.
+            anchor, tx = ("start", x + 3) if i == 0 else ("middle", x)
+            lines.append(f'<text x="{tx:.1f}" y="{y + label_dy:.1f}" text-anchor="{anchor}" font-size="6.5" '
                          f'font-weight="bold" font-family="Arial,sans-serif" fill="{color}">{v:.0f}</text>')
 
     for i, label in enumerate(labels):
@@ -304,7 +327,7 @@ def _production_section(report_month: str) -> list:
 def _ytd_trend_section(report_month: str) -> dict:
     """Last-4-FY grouped bar chart: for each production item, YTD (Apr through
     the report month, replayed on each of the last 4 FYs) side by side, plus
-    the overall growth from the oldest FY shown to the current one."""
+    the growth from the immediately preceding FY to the current one."""
     n_months = len(db.get_ytd_months(report_month))
     fy_starts = _last4_fy_starts(report_month)
     fy_labels = [_fy_label(fs) for fs in fy_starts]
@@ -315,9 +338,9 @@ def _ytd_trend_section(report_month: str) -> dict:
         vals = [db.get_sail_production_ytd_actual(_ytd_months_for_fy(fs, n_months), db_item)
                 for fs in fy_starts]
         data[item] = list(zip(fy_labels, vals))
-        oldest, current = vals[0], vals[-1]
-        if oldest and current is not None:
-            pct = (current - oldest) / oldest * 100
+        prev, current = vals[-2], vals[-1]
+        if prev and current is not None:
+            pct = (current - prev) / prev * 100
             growth[item] = {"pct": round(pct, 1), "good": pct >= 0}
         else:
             growth[item] = {"pct": None, "good": None}
@@ -389,6 +412,7 @@ def _techno_section(report_month: str) -> list:
             "target": target, "month_actual": month_actual,
             "delta_pct": None if delta is None else round(delta, 1),
             "good": None if delta is None else delta >= 0,
+            "bg_key": _TE_CATEGORY_BG.get(name, "highlight_default_row_bg"),
         })
 
     blend_pct = _imported_coal_blend_pct(report_month)
@@ -397,12 +421,14 @@ def _techno_section(report_month: str) -> list:
             "parameter": "Imported Coking Coal in Blend", "unit": "%",
             "target": "", "month_actual": f"{blend_pct:.1f}",
             "delta_pct": None, "good": None,
+            "bg_key": _TE_CATEGORY_BG.get("Imported Coking Coal in Blend", "highlight_default_row_bg"),
         })
     return out
 
 
 _VA_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 _VA_BAR_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
+_VA_ORANGE = "#eb6834"
 _VA_LINE_COLOR = "#334155"
 
 
@@ -469,16 +495,31 @@ def _fmt_int(v) -> str:
     return f"{v:,.0f}"
 
 
+def _fmt_million(v) -> str:
+    """Tonnes -> Million T, 2 decimal places, for the value-added qty line."""
+    return f"{v / 1_000_000:.2f}"
+
+
+def _split_cat_label(cat: str):
+    """Category axis labels like 'FY2026-27 (YTD rate)' split into a main
+    line and a smaller parenthetical sub-line, so the main label can run at
+    the requested 11pt without the annotation forcing it to shrink to fit."""
+    if " (" in cat:
+        main, rest = cat.split(" (", 1)
+        return main, "(" + rest
+    return cat, None
+
+
 def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
                             bar_colors: list, title: str,
                             vw: int = 470, vh: int = 250) -> str:
-    """Grouped bar (% of Saleable Steel) + line (Qty, MT) combo, on two
+    """Grouped bar (% of Saleable Steel) + line (Qty, Million T) combo, on two
     independent scales: the % axis auto-scales with generous headroom so
     bars only ever occupy the lower ~60% of the chart, and the qty line is
     deliberately mapped into a fixed band near the top (~4%-26% of chart
     height) — so on any real data the line draws clear above the bar tops,
     per spec, rather than because the two series happen to be comparable."""
-    ml, mr, mt, mb = 10, 10, 30, 34
+    ml, mr, mt, mb = 10, 10, 30, 40
     cw, ch = vw - ml - mr, vh - mt - mb
 
     pct_present = [v for v in pct_vals if v is not None]
@@ -497,7 +538,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
 
     n = len(categories)
     slot_w = cw / n
-    bar_w = max(18.0, slot_w * 0.4)
+    bar_w = max(34.0, slot_w * 0.4)
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
@@ -519,12 +560,18 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
         else:
             bh = max(2.0, ch * pv / pct_yhi)
             by = mt + ch - bh
-            lines.append(f'<rect x="{cx - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh:.1f}" '
-                         f'fill="{color}" rx="2"/>')
-            lines.append(f'<text x="{cx:.1f}" y="{by - 4:.1f}" text-anchor="middle" font-size="7.6" '
-                         f'font-weight="bold" font-family="Arial,sans-serif" fill="{color}">{pv:.1f}%</text>')
-        lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 13:.1f}" text-anchor="middle" font-size="7.5" '
-                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{cat}</text>')
+            lines.append(f'<path d="{_bar_path(cx - bar_w / 2, by, bar_w, bh, bar_w / 2)}" fill="{color}"/>')
+            val_str = f"{pv:.1f}%"
+            ty = by + bh / 2
+            lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" dominant-baseline="middle" '
+                         f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                         f'fill="{_contrast_text(color)}">{val_str}</text>')
+        main_cat, sub_cat = _split_cat_label(cat)
+        lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 16:.1f}" text-anchor="middle" font-size="11" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{main_cat}</text>')
+        if sub_cat:
+            lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 27:.1f}" text-anchor="middle" font-size="7.5" '
+                         f'font-family="Arial,sans-serif" fill="#64748b">{sub_cat}</text>')
         qv = qty_vals[i]
         if qv is not None:
             pts.append((cx, line_y(qv), qv))
@@ -536,7 +583,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     for px, py, qv in pts:
         lines.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.4" fill="{_VA_LINE_COLOR}"/>')
         lines.append(f'<text x="{px:.1f}" y="{py - 5:.1f}" text-anchor="middle" font-size="6.6" '
-                     f'font-weight="bold" font-family="Arial,sans-serif" fill="{_VA_LINE_COLOR}">{_fmt_int(qv)}</text>')
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="{_VA_LINE_COLOR}">{_fmt_million(qv)}</text>')
 
     # legend
     ly = 24
@@ -546,7 +593,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     lx2 = ml + 100
     lines.append(f'<line x1="{lx2}" y1="{ly - 3}" x2="{lx2 + 12}" y2="{ly - 3}" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
     lines.append(f'<text x="{lx2 + 15}" y="{ly}" font-size="6.6" font-family="Arial,sans-serif" '
-                 f'fill="#334155">Qty (MT)</text>')
+                 f'fill="#334155">Qty (Million T)</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -556,6 +603,8 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
     sail = generate_special_steel_sail(report_month)
     total = next((r for r in sail.get("rows", []) if r.get("type") == "sail-total"), {})
     pct_growth = total.get("pct_growth", "")
+    month_qty_raw = total.get("actual", "")
+    month_qty = _fmt_int(float(month_qty_raw)) if month_qty_raw not in ("", None) else ""
 
     conn = db.connect()
     cur = conn.cursor()
@@ -590,12 +639,14 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
         "pct_growth": pct_growth, "growth_good": None if pct_growth == "" else int(pct_growth) >= 0,
         "abp_fy": total.get("abp_fy", ""),
         "special_pct": sail.get("special_pct", {}).get("current", ""),
+        "month_title": f"Value Added Steel — For the Month ({month_label})",
+        "month_qty": month_qty,
         "five_year_svg": _value_added_combo_svg(
-            fy_cats, fy_pct, fy_qty, _VA_BAR_COLORS,
-            "Value Added Steel — Last 5 Years", vw=560, vh=205),
+            fy_cats, fy_pct, fy_qty, [_VA_ORANGE] * len(fy_cats),
+            "Value Added Steel — Last 5 Years", vw=560, vh=222),
         "quarter_svg": _value_added_combo_svg(
             q_cats, q_pct, q_qty, [_VA_BAR_COLORS[0], _VA_BAR_COLORS[3]],
-            "Value Added Steel — Quarter Just Ended vs CPLY", vw=300, vh=205),
+            "Value Added Steel — Quarter Just Ended vs CPLY", vw=300, vh=222),
     }
 
 

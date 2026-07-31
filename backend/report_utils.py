@@ -21,15 +21,31 @@ _DEPT_BADGE_GROUPS = [
 ]
 
 
-def get_dept_badge(page_num: Optional[int]) -> Optional[Dict[str, Any]]:
+def get_dept_badge(page_num) -> Optional[Dict[str, Any]]:
     """Corner-badge group + side for a page, or None for pages 1-2 (cover/
     index are front matter — no header/footer/badge, matching the existing
     convention) and any page number outside the known ranges.
 
-    Side follows book-binding convention: odd pages are recto (right-hand
-    when bound) and even pages are verso (left-hand) — so odd -> top-right,
-    even -> top-left, alternating every page.
+    Side follows book-binding convention: recto (right-hand when bound) vs
+    verso (left-hand), alternating every page starting with the first page
+    after the Index — not from a plain odd/even split of the raw page
+    number, since the "MIS at a Glance" (2.5) and "Key Parameters" (3.5)
+    sentinel pages sit between the Index and the old page 3 without
+    renumbering it, which shifts page 3's position in the printed sequence
+    from 1st to 2nd (odd -> even) even though its own id is still odd.
+    Every page from 4 onward keeps the same position it always had (the two
+    sentinels together add exactly the two slots page 3 lost), so only
+    page 3 itself needs a hardcoded override below.
     """
+    if page_num in (2.5, 3.5):
+        # Same color as the "SAIL Performance Summary" group (1) they sit
+        # right alongside - front-of-report summary content, not (yet) a
+        # section of its own. 2.5 is the first page after the Index (right);
+        # 3.5 falls right after (former-1st, now 2nd) page 3, so it's back
+        # to right too (3 took the left slot instead).
+        return {"group": 1, "side": "right"}
+    if page_num == 3:
+        return {"group": 1, "side": "left"}
     if not isinstance(page_num, int) or page_num < 3:
         return None
     for lo, hi, group in _DEPT_BADGE_GROUPS:
