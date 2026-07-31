@@ -17,6 +17,22 @@ const PLAN_BG = '#dbeafe';   // light blue  — plan row
 const SAIL_BG = '#dcfce7';   // light green — SAIL / aggregate row
 const FP_BG   = '#fef9c3';   // light yellow — 5 Plants aggregate
 
+// Best-ever (all-time record) vs FY-best (this year's best so far) cell
+// highlight — keep these in sync with colors_config.json's
+// highlight_best_ever_bg/border and highlight_fy_best_bg/border (the PDF
+// path reads that file; this preview can't, so the hex is duplicated here
+// same as PLAN_BG/SAIL_BG/FP_BG above).
+const BEST_EVER_BG     = '#fde68a';
+const BEST_EVER_BORDER = '#b45309';
+const FY_BEST_BG       = '#bfdbfe';
+const FY_BEST_BORDER   = '#1d4ed8';
+
+function bestFlagStyle(flag) {
+  if (flag === 'best_ever') return { background: BEST_EVER_BG, border: `1px solid ${BEST_EVER_BORDER}`, fontWeight: '700' };
+  if (flag === 'fy_best')   return { background: FY_BEST_BG, border: `1px solid ${FY_BEST_BORDER}`, fontWeight: '700' };
+  return null;
+}
+
 const AGGREGATES = new Set(['SAIL', '5 Plants']);
 
 function rowColors(row) {
@@ -70,6 +86,10 @@ function TrendTable({ rows, item_display, unit }) {
         <tbody>
           {rows.map((row, idx) => {
             const v = row.values || [];
+            const cf = row.cell_flags || [];
+            const cellStyle  = i => ({ ...CELL,  ...bestFlagStyle(cf[i]) });
+            const qcellStyle = i => ({ ...QCELL, ...bestFlagStyle(cf[i]) });
+            const tcellStyle = i => ({ ...TCELL, ...bestFlagStyle(cf[i]) });
             const { bg, fw } = rowColors(row);
             const isAggregate = AGGREGATES.has(row.plant);
             const topBorder = row.is_first_in_plant ? '2px solid #64748b' : undefined;
@@ -94,28 +114,35 @@ function TrendTable({ rows, item_display, unit }) {
                   </td>
                 )}
                 <td style={{ ...YCELL, fontWeight: row.is_plan ? '700' : '400' }}>{row.year_label}</td>
-                <td style={CELL}>{v[0]}</td>
-                <td style={CELL}>{v[1]}</td>
-                <td style={CELL}>{v[2]}</td>
-                <td style={QCELL}>{v[3]}</td>
-                <td style={CELL}>{v[4]}</td>
-                <td style={CELL}>{v[5]}</td>
-                <td style={CELL}>{v[6]}</td>
-                <td style={QCELL}>{v[7]}</td>
-                <td style={CELL}>{v[8]}</td>
-                <td style={CELL}>{v[9]}</td>
-                <td style={CELL}>{v[10]}</td>
-                <td style={QCELL}>{v[11]}</td>
-                <td style={CELL}>{v[12]}</td>
-                <td style={CELL}>{v[13]}</td>
-                <td style={CELL}>{v[14]}</td>
-                <td style={QCELL}>{v[15]}</td>
-                <td style={TCELL}>{v[16]}</td>
+                <td style={cellStyle(0)}>{v[0]}</td>
+                <td style={cellStyle(1)}>{v[1]}</td>
+                <td style={cellStyle(2)}>{v[2]}</td>
+                <td style={qcellStyle(3)}>{v[3]}</td>
+                <td style={cellStyle(4)}>{v[4]}</td>
+                <td style={cellStyle(5)}>{v[5]}</td>
+                <td style={cellStyle(6)}>{v[6]}</td>
+                <td style={qcellStyle(7)}>{v[7]}</td>
+                <td style={cellStyle(8)}>{v[8]}</td>
+                <td style={cellStyle(9)}>{v[9]}</td>
+                <td style={cellStyle(10)}>{v[10]}</td>
+                <td style={qcellStyle(11)}>{v[11]}</td>
+                <td style={cellStyle(12)}>{v[12]}</td>
+                <td style={cellStyle(13)}>{v[13]}</td>
+                <td style={cellStyle(14)}>{v[14]}</td>
+                <td style={qcellStyle(15)}>{v[15]}</td>
+                <td style={tcellStyle(16)}>{v[16]}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
+        <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: BEST_EVER_BG, border: `1px solid ${BEST_EVER_BORDER}` }} />
+        Best Ever (month / quarter / annual record)
+        &nbsp;&nbsp;
+        <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: FY_BEST_BG, border: `1px solid ${FY_BEST_BORDER}` }} />
+        FY Best (this year's best month / quarter so far)
+      </div>
     </div>
   );
 }

@@ -209,6 +209,61 @@ def _is_blank(values: list) -> bool:
     return all(values[i] in ("", "0") for i in monthly_idx)
 
 
+# Column indices into a row's 17-value list.
+_MONTH_IDX = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]
+_QTR_IDX   = [3, 7, 11, 15]
+_TOTAL_IDX = 16
+
+
+def _num(s):
+    return float(s) if s not in (None, "") else None
+
+
+def _tag_best_flags(group_rows: list, fy_lbl_cur: str) -> None:
+    """
+    Mark each row's `cell_flags` (17 entries, '' | 'best_ever' | 'fy_best')
+    in place:
+      - 'best_ever': the single highest month, the single highest quarter,
+        and the single highest FY total, each across every actual (non-plan)
+        year shown for this plant/group — an all-time record.
+      - 'fy_best'  : within the CURRENT FY's row only, its own best month
+        and best quarter so far — "best of this year", which may or may not
+        also be an all-time record (best_ever wins if both apply to the
+        same cell).
+    Plan rows are excluded from ranking (they're a target, not an actual).
+    """
+    for r in group_rows:
+        r["cell_flags"] = [""] * 17
+
+    actual_rows = [r for r in group_rows if not r["is_plan"]]
+    if not actual_rows:
+        return
+
+    def best_cell(idxs):
+        best_val, best_row, best_idx = None, None, None
+        for r in actual_rows:
+            for i in idxs:
+                v = _num(r["values"][i])
+                if v is not None and (best_val is None or v > best_val):
+                    best_val, best_row, best_idx = v, r, i
+        return best_row, best_idx
+
+    for idxs in (_MONTH_IDX, _QTR_IDX, [_TOTAL_IDX]):
+        row, idx = best_cell(idxs)
+        if row is not None:
+            row["cell_flags"][idx] = "best_ever"
+
+    cur_row = next((r for r in actual_rows if r["year_label"] == fy_lbl_cur), None)
+    if cur_row is not None:
+        for idxs in (_MONTH_IDX, _QTR_IDX):
+            vals = [(i, _num(cur_row["values"][i])) for i in idxs]
+            vals = [(i, v) for i, v in vals if v is not None]
+            if vals:
+                i, _v = max(vals, key=lambda t: t[1])
+                if cur_row["cell_flags"][i] != "best_ever":
+                    cur_row["cell_flags"][i] = "fy_best"
+
+
 def _generate_rows_for_config(report_month: str, config: dict) -> list:
     """
     Core row-builder for a single item config dict.
@@ -365,6 +420,8 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
 
         if not group_rows:
             continue
+
+        _tag_best_flags(group_rows, fy_lbl_cur)
 
         n = len(group_rows)
         for i, r in enumerate(group_rows):

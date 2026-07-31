@@ -532,6 +532,24 @@
         .page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid {{ colors.border_heavy }}; }
         .page7-13-yearly-table td.qtr-cell   { background: {{ colors.highlight_qtr_col_bg }}; font-weight: 600; }
         .page7-13-yearly-table td.total-cell { background: {{ colors.highlight_total_col_bg }}; font-weight: 700; }
+        /* All-time record for this plant/group (highest month, quarter, or
+           FY total across every year shown) vs. this FY's own best-so-far
+           month/quarter — kept visually distinct so a reader can tell a
+           genuine record from merely "best of this year". !important wins
+           over qtr-cell/total-cell/plan-row/sail-row/fp-row backgrounds
+           since a record can land on any of those. */
+        .page7-13-yearly-table td.best-ever {
+            background: {{ colors.highlight_best_ever_bg }} !important;
+            font-weight: 700; color: {{ colors.text_black }};
+            border: 1pt solid {{ colors.highlight_best_ever_border }};
+        }
+        .page7-13-yearly-table td.fy-best {
+            background: {{ colors.highlight_fy_best_bg }} !important;
+            font-weight: 700; color: {{ colors.text_black }};
+            border: 1pt solid {{ colors.highlight_fy_best_border }};
+        }
+        .page7-13-legend { font-size: 8pt; color: {{ colors.text_secondary }}; margin-top: 4px; }
+        .page7-13-legend .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: middle; }
         .page7-13-yearly-table thead tr.item-heading-row th {
             background: {{ colors.table_header_bg }}; border-bottom: 2px solid {{ colors.text_primary }}; border-top: none;
             padding: 0 0 4px 0; vertical-align: bottom;

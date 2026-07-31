@@ -33,6 +33,7 @@
                 <tbody>
                     {% for row in item.rows %}
                     {% set v = row['values'] %}
+                    {% set cf = row['cell_flags'] or ([''] * 17) %}
                     {% set plant = row['plant'] %}
                     {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
                     <tr class="{{ row_cls }}">
@@ -41,19 +42,32 @@
                         <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{{ plant }}</td>
                         {% endif %}
                         <td class="year-cell" style="{{ 'font-weight:700;' if row['is_plan'] else '' }}">{{ row['year_label'] }}</td>
-                        <td>{{ v[0] }}</td><td>{{ v[1] }}</td><td>{{ v[2] }}</td>
-                        <td class="qtr-cell">{{ v[3] }}</td>
-                        <td>{{ v[4] }}</td><td>{{ v[5] }}</td><td>{{ v[6] }}</td>
-                        <td class="qtr-cell">{{ v[7] }}</td>
-                        <td>{{ v[8] }}</td><td>{{ v[9] }}</td><td>{{ v[10] }}</td>
-                        <td class="qtr-cell">{{ v[11] }}</td>
-                        <td>{{ v[12] }}</td><td>{{ v[13] }}</td><td>{{ v[14] }}</td>
-                        <td class="qtr-cell">{{ v[15] }}</td>
-                        <td class="total-cell">{{ v[16] }}</td>
+                        {% for i in range(0, 3) %}
+                        <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('fy-best' if cf[i] == 'fy_best' else '') }}">{{ v[i] }}</td>
+                        {% endfor %}
+                        <td class="qtr-cell {{ 'best-ever' if cf[3] == 'best_ever' else ('fy-best' if cf[3] == 'fy_best' else '') }}">{{ v[3] }}</td>
+                        {% for i in range(4, 7) %}
+                        <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('fy-best' if cf[i] == 'fy_best' else '') }}">{{ v[i] }}</td>
+                        {% endfor %}
+                        <td class="qtr-cell {{ 'best-ever' if cf[7] == 'best_ever' else ('fy-best' if cf[7] == 'fy_best' else '') }}">{{ v[7] }}</td>
+                        {% for i in range(8, 11) %}
+                        <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('fy-best' if cf[i] == 'fy_best' else '') }}">{{ v[i] }}</td>
+                        {% endfor %}
+                        <td class="qtr-cell {{ 'best-ever' if cf[11] == 'best_ever' else ('fy-best' if cf[11] == 'fy_best' else '') }}">{{ v[11] }}</td>
+                        {% for i in range(12, 15) %}
+                        <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('fy-best' if cf[i] == 'fy_best' else '') }}">{{ v[i] }}</td>
+                        {% endfor %}
+                        <td class="qtr-cell {{ 'best-ever' if cf[15] == 'best_ever' else ('fy-best' if cf[15] == 'fy_best' else '') }}">{{ v[15] }}</td>
+                        <td class="total-cell {{ 'best-ever' if cf[16] == 'best_ever' else ('fy-best' if cf[16] == 'fy_best' else '') }}">{{ v[16] }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            <div class="page7-13-legend">
+                <span class="swatch" style="background:{{ colors.highlight_best_ever_bg }};border:1pt solid {{ colors.highlight_best_ever_border }};"></span>Best Ever (month / quarter / annual record)
+                &nbsp;&nbsp;
+                <span class="swatch" style="background:{{ colors.highlight_fy_best_bg }};border:1pt solid {{ colors.highlight_fy_best_border }};"></span>FY Best (this year's best month / quarter so far)
+            </div>
         </div>
         {% endfor %}
     </div>

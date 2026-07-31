@@ -137,6 +137,10 @@ const PARAM_TEMPLATES = {
     'coal_to_hm',
     'specific_water_consumption','water_consumption',
     'specific_co2_emissions',
+    // Key Parameters page (page 5) — no other source yet, filled here
+    'hm_to_pcm_sandpit_drypit',
+    'capex','labour_productivity','avg_rake_detention_time',
+    'cog_recovery','bfg_recovery','ldg_recovery',
   ],
 };
 
@@ -221,6 +225,14 @@ const _LABEL_MAP = {
   // Sinter
   dsp_sp_1:                             'DSP SP-1 Productivity (T/m²/hr)',
   dsp_sp_2:                             'DSP SP-2 Productivity (T/m²/hr)',
+  // Key Parameters page (page 5)
+  hm_to_pcm_sandpit_drypit:             'HM Sent to PCM/Sand Pit/Dry Pit (\'000 T)',
+  capex:                                'CAPEX (Rs Cr)',
+  labour_productivity:                  'Labour Productivity (T/Man-yr)',
+  avg_rake_detention_time:              'Avg. Rake Detention Time (Hrs)',
+  cog_recovery:                         'Recovery of COG (Nm³/T)',
+  bfg_recovery:                         'Recovery of BFG (Nm³/THM)',
+  ldg_recovery:                         'Recovery of LDG (Nm³/TCS)',
 };
 
 function labelOf(key) {
