@@ -17,7 +17,6 @@ Each page carries two period sets side-by-side:
 import re
 import math
 import datetime as _dt
-import sqlite3
 import db
 
 
@@ -603,7 +602,8 @@ def _gen_isp(cur, month, cply_month, ytd_months, cply_ytd_months):
         tot_o += o; tot_a += a; tot_co += co; tot_ca += ca
         if c  is not None: tot_c  += c
         if cc is not None: tot_cc += cc
-        rows.append(_grade(mill, o, a, c, co, ca, cc))
+        rows.append(_hdr(mill))
+        rows.append(_grade("TOTAL", o, a, c, co, ca, cc))
 
     rows.append(_total("TOTAL SPECIAL STEEL",
                        tot_o, tot_a, tot_c or None, "grand-total",

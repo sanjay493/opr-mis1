@@ -3,9 +3,7 @@ Utilities for fetching production data from production_table
 Handles furnace-wise and plant-level HM production lookups
 """
 
-import sqlite3
 from typing import Optional
-from db import DB_PATH
 
 
 def get_hm_production_for_furnace(plant: str, furnace: str, report_month: str) -> Optional[float]:

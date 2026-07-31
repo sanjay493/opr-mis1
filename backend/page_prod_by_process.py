@@ -6,7 +6,6 @@ Shows BOF / EAF / CC / CS per plant for:
 Unit: Tonnes  (DB stores '000 T — multiply × 1000)
 """
 import math
-import sqlite3
 import db
 from page4 import _p4_ytd_sum, _p4_conv_actuals
 

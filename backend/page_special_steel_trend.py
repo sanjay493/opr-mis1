@@ -24,6 +24,7 @@ the chart fill in on its own.
 """
 import calendar
 import datetime as _dt
+import math
 import db
 
 _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
@@ -235,6 +236,101 @@ def _bar_group_svg(bars: list, title: str, vw: int = 240, vh: int = 200) -> str:
     return "\n".join(lines)
 
 
+# ── SVG: donut (5 plants' share of the SAIL total) + side legend ───────────
+# Used for the month/till-month charts instead of a 6th bar-group (bar
+# chart, one bar per entity) — those two charts sat right under each other
+# showing the same 6 bars twice with different numbers, which read as
+# repetitive, and SAIL (the sum of the other 5) shared one y-axis with the
+# individual plants despite being 5-10x any one of them, flattening the
+# plant bars. A donut sidesteps both: SAIL becomes the whole (center total)
+# rather than a 6th slice competing on the same axis, and proportions read
+# clearly regardless of the magnitude gap between plants. Each plant's own
+# Special Steel % of Saleable Steel is a different metric (a ratio, not a
+# share of this total) so it can't be encoded in the donut itself — it's
+# listed in the side legend instead.
+
+def _donut_svg(entities: list, title: str, vw: int = 700, vh: int = 220) -> str:
+    """entities: [(label, qty_or_None, pct_saleable_or_None, color), ...] —
+    the 5 plants. SAIL is implicit as the center total (sum of these five),
+    not a 6th slice — a slice equal to the sum of the other five would just
+    be "the whole" again, not a meaningful part of it."""
+    total = sum(qty for _, qty, _, _ in entities if qty)
+    cx, cy, r_out, r_in = 110.0, vh / 2 + 4, 82.0, 46.0
+
+    lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
+             f'style="width:100%;height:auto;display:block;">']
+    if title:
+        lines.append(f'<text x="{vw / 2:.0f}" y="12" text-anchor="middle" font-size="9" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
+
+    if total <= 0:
+        lines.append(f'<circle cx="{cx}" cy="{cy}" r="{r_out}" fill="none" stroke="#cbd5e1" '
+                     f'stroke-width="1" stroke-dasharray="3,2"/>')
+        lines.append(f'<text x="{cx}" y="{cy + 3:.1f}" text-anchor="middle" font-size="8" '
+                     f'font-family="Arial,sans-serif" fill="#94a3b8">N/A</text>')
+    else:
+        def polar(r, deg):
+            a = math.radians(deg)
+            return cx + r * math.sin(a), cy - r * math.cos(a)
+
+        angle = 0.0
+        for label, qty, pct, color in entities:
+            share = (qty or 0) / total
+            if share <= 0:
+                continue
+            sweep = share * 360.0
+            a0, a1 = angle, angle + sweep
+            large = 1 if sweep > 180 else 0
+            x1o, y1o = polar(r_out, a0); x2o, y2o = polar(r_out, a1)
+            x1i, y1i = polar(r_in, a1);  x2i, y2i = polar(r_in, a0)
+            path = (f'M {x1o:.2f} {y1o:.2f} A {r_out} {r_out} 0 {large} 1 {x2o:.2f} {y2o:.2f} '
+                    f'L {x1i:.2f} {y1i:.2f} A {r_in} {r_in} 0 {large} 0 {x2i:.2f} {y2i:.2f} Z')
+            lines.append(f'<path d="{path}" fill="{color}" stroke="#ffffff" stroke-width="2"/>')
+            # Inline % label only for slices roomy enough to hold one legibly
+            # — tiny slivers get their number from the legend instead
+            # (selective direct labels, not one on every mark).
+            if sweep >= 22:
+                lx, ly = polar((r_out + r_in) / 2, (a0 + a1) / 2)
+                lines.append(f'<text x="{lx:.1f}" y="{ly + 3:.1f}" text-anchor="middle" font-size="9" '
+                             f'font-weight="bold" font-family="Arial,sans-serif" '
+                             f'fill="{_contrast_text(color)}">{share * 100:.0f}%</text>')
+            angle = a1
+
+        lines.append(f'<text x="{cx}" y="{cy - 3:.1f}" text-anchor="middle" font-size="14" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_fmt_int(total)}</text>')
+        lines.append(f'<text x="{cx}" y="{cy + 11:.1f}" text-anchor="middle" font-size="7.5" '
+                     f'font-family="Arial,sans-serif" fill="#64748b">SAIL, T</text>')
+
+    # Side legend: swatch, entity, quantity, share of this total, and each
+    # entity's own (unrelated) Special Steel % of Saleable Steel.
+    lx0, ly0, row_h = 230, 46, 26
+    lines.append(f'<text x="{lx0}" y="{ly0 - 14}" font-size="7" font-weight="bold" '
+                 f'font-family="Arial,sans-serif" fill="#64748b">PLANT</text>')
+    lines.append(f'<text x="{lx0 + 250}" y="{ly0 - 14}" font-size="7" font-weight="bold" '
+                 f'text-anchor="end" font-family="Arial,sans-serif" fill="#64748b">DESPATCH (T)</text>')
+    lines.append(f'<text x="{lx0 + 340}" y="{ly0 - 14}" font-size="7" font-weight="bold" '
+                 f'text-anchor="end" font-family="Arial,sans-serif" fill="#64748b">SHARE</text>')
+    lines.append(f'<text x="{lx0 + 440}" y="{ly0 - 14}" font-size="7" font-weight="bold" '
+                 f'text-anchor="end" font-family="Arial,sans-serif" fill="#64748b">% OF SALEABLE STEEL</text>')
+    for i, (label, qty, pct, color) in enumerate(entities):
+        y = ly0 + i * row_h
+        lines.append(f'<rect x="{lx0}" y="{y - 9:.1f}" width="10" height="10" rx="1.5" fill="{color}"/>')
+        lines.append(f'<text x="{lx0 + 15}" y="{y:.1f}" font-size="9.5" font-weight="bold" '
+                     f'font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
+        qty_str = _fmt_int(qty) if qty is not None else "N/A"
+        lines.append(f'<text x="{lx0 + 250}" y="{y:.1f}" text-anchor="end" font-size="9" '
+                     f'font-family="Arial,sans-serif" fill="#334155">{qty_str}</text>')
+        share_str = f"{(qty or 0) / total * 100:.1f}%" if total > 0 and qty else "—"
+        lines.append(f'<text x="{lx0 + 340}" y="{y:.1f}" text-anchor="end" font-size="9" '
+                     f'font-family="Arial,sans-serif" fill="#334155">{share_str}</text>')
+        pct_str = f"{pct:.1f}%" if pct is not None else "—"
+        lines.append(f'<text x="{lx0 + 440}" y="{y:.1f}" text-anchor="end" font-size="9" '
+                     f'font-family="Arial,sans-serif" fill="#334155">{pct_str}</text>')
+
+    lines.append("</svg>")
+    return "\n".join(lines)
+
+
 # ── public API ──────────────────────────────────────────────────────────────
 
 def generate_special_steel_trend(report_month: str) -> dict:
@@ -257,12 +353,12 @@ def generate_special_steel_trend(report_month: str) -> dict:
             bars.append((f"{_fy_short(cur_fy)} (Likely)", cur_qty, cur_pct, _FY_BAR_COLORS[3]))
             annual_svgs[ent] = _bar_group_svg(bars, ent, vw=240, vh=200)
 
-        month_bars, ytd_bars = [], []
-        for ent in _BLOCK_ORDER:
+        month_slices, ytd_slices = [], []
+        for ent in _PLANTS:
             qty, pct = _period_value_pct(cur, [report_month], ent)
-            month_bars.append((ent, qty, pct, _COLORS[ent]))
+            month_slices.append((ent, qty, pct, _COLORS[ent]))
             qty, pct = _period_value_pct(cur, ytd_months, ent)
-            ytd_bars.append((ent, qty, pct, _COLORS[ent]))
+            ytd_slices.append((ent, qty, pct, _COLORS[ent]))
     finally:
         conn.close()
 
@@ -274,11 +370,11 @@ def generate_special_steel_trend(report_month: str) -> dict:
         "type": "special_steel_trend",
         "title": "SPECIAL STEEL — TREND & PERFORMANCE ANALYSIS",
         "annual_svgs": [annual_svgs[e] for e in _BLOCK_ORDER],
-        "month_svg": _bar_group_svg(
-            month_bars, f"Special Steel Despatch — {month_label} (T, % of Saleable Steel)",
+        "month_svg": _donut_svg(
+            month_slices, f"Special Steel Despatch — {month_label} (Plant Share of SAIL)",
             vw=700, vh=220),
-        "till_month_svg": _bar_group_svg(
-            ytd_bars, f"Special Steel Despatch — {cum_label} YTD (T, % of Saleable Steel)",
+        "till_month_svg": _donut_svg(
+            ytd_slices, f"Special Steel Despatch — {cum_label} YTD (Plant Share of SAIL)",
             vw=700, vh=220),
         "fy_range_label": f"{_fy_short(fys[0])} to {_fy_short(fys[-1])}",
     }

@@ -18,29 +18,25 @@ const SAIL_BG = '#dcfce7';   // light green — SAIL / aggregate row
 const FP_BG   = '#fef9c3';   // light yellow — 5 Plants aggregate
 
 // Cell highlight for the record flags — keep these in sync with
-// colors_config.json's highlight_best_ever_bg, highlight_row_best_month_bg,
-// highlight_row_best_quarter_bg and highlight_best_month_border (the PDF
-// path reads that file; this preview can't, so the hex is duplicated here
-// same as PLAN_BG/SAIL_BG/FP_BG above). The dark outline is the universal
-// "record holder for this column" marker — every flagged cell gets it,
-// including best_ever/row_best_* (a best_ever cell is mathematically
-// always its own column's record too). The background fill layers on top
-// to show the stronger category: amber for an all-time record; blue for a
-// row's own best month so far (every displayed FY, not just current);
-// teal for a row's own best quarter so far — kept a separate color from
-// month so the two don't read as the same signal. A plain 'best_month'
-// cell (this column's historical record, but not any row's own peak and
-// not the single all-time best) gets the outline with no fill.
+// colors_config.json's highlight_best_ever_bg, highlight_row_best_quarter_bg,
+// highlight_best_month_border and highlight_best_month_border_light (the
+// PDF path reads that file; this preview can't, so the hex is duplicated
+// here same as PLAN_BG/SAIL_BG/FP_BG above). The dark outline marks the two
+// stronger tiers (best_ever, row_best_quarter — an all-time record and a
+// row's own best-so-far, each also getting a background fill). 'best_month'
+// (this column's historical record, but not any row's own peak and not the
+// single all-time best) is the weakest signal and gets no fill, just a
+// light thin border — a dark outline there read as too heavy for something
+// that isn't the current year's or an all-time record.
 const BEST_EVER_BG        = '#fde68a';
-const ROW_BEST_MONTH_BG   = '#bfdbfe';
 const ROW_BEST_QUARTER_BG = '#99f6e4';
 const RECORD_BORDER       = '#0f172a';
+const LIGHT_BORDER        = '#94a3b8';
 
 function bestFlagStyle(flag) {
   const border = `2px solid ${RECORD_BORDER}`;
   if (flag === 'best_ever')         return { background: BEST_EVER_BG, border, fontWeight: '700' };
-  if (flag === 'best_month')        return { border, fontWeight: '700' };
-  if (flag === 'row_best_month')    return { background: ROW_BEST_MONTH_BG, border, fontWeight: '700' };
+  if (flag === 'best_month')        return { border: `1px solid ${LIGHT_BORDER}`, fontWeight: '700' };
   if (flag === 'row_best_quarter')  return { background: ROW_BEST_QUARTER_BG, border, fontWeight: '700' };
   return null;
 }
@@ -152,11 +148,8 @@ function TrendTable({ rows, item_display, unit }) {
         <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: BEST_EVER_BG, border: `2px solid ${RECORD_BORDER}` }} />
         Best Ever (month / quarter / annual record)
         &nbsp;&nbsp;
-        <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: 'transparent', border: `2px solid ${RECORD_BORDER}` }} />
+        <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: 'transparent', border: `1px solid ${LIGHT_BORDER}` }} />
         Best for that Calendar Month/Quarter (e.g. best April, best Q3, on record)
-        &nbsp;&nbsp;
-        <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: ROW_BEST_MONTH_BG, border: `2px solid ${RECORD_BORDER}` }} />
-        Row's Best Month (that FY's own best month)
         &nbsp;&nbsp;
         <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: ROW_BEST_QUARTER_BG, border: `2px solid ${RECORD_BORDER}` }} />
         Row's Best Quarter (that FY's own best quarter)

@@ -3,10 +3,9 @@ Utilities for JSON-based techno data extraction and calculation
 Handles furnace-wise data, HM production weighting, and plant consolidation
 """
 
-import sqlite3
 import json
 from typing import Dict, List, Any, Optional, Tuple
-from db import DB_PATH, insert_techno_furnace_data, insert_techno_plant_data, get_techno_furnace_data
+from db import insert_techno_furnace_data, insert_techno_plant_data, get_techno_furnace_data
 from production_utils import get_hm_production_for_furnace, get_plant_hm_production
 
 

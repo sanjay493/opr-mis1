@@ -31,7 +31,6 @@ Weight source per month:
   weighting a subset of months.
 """
 
-import sqlite3
 from typing import Dict, Optional
 
 import db as _db

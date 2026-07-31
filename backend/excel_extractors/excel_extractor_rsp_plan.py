@@ -1,13 +1,10 @@
 import openpyxl
 import logging
-import sqlite3
 import os
 from typing import Optional
 import db
 
 logger = logging.getLogger("excel_extractor_plan")
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
 
 def clean_val(val) -> Optional[float]:
     if val is None or str(val).strip().lower() in ("nan", "###", "-", "#div/0!"):

@@ -1,12 +1,9 @@
 import re
 import logging
-import sqlite3
 import os
 from typing import Optional
 
 logger = logging.getLogger("excel_extractor")
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
 
 MONTH_NAMES = {
     "01": "January", "02": "February", "03": "March", "04": "April",

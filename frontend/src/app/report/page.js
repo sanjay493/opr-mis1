@@ -322,32 +322,42 @@ export default function ReportPage() {
 
   const handleBackendExport = async () => {
     const exportMonth = selectedMonth;
-    let dataForExport = pagesData;
+    let dataForExport;
 
-    const missing = [...selectedPages].filter((n) => !pagesData.some((p) => p.page === n));
-    if (missing.length > 0) {
-      setIsPreparingExport(true);
-      try {
-        const { data: fullRawData } = await refetchFullData();
-        // The month may have changed while this (slow, 20-40s) fetch was in
-        // flight — its result belongs to exportMonth, not necessarily
-        // whatever's on screen now, so only fold it into live pagesData
-        // state if the two still match. Either way, the export itself below
-        // still uses the correct exportMonth data via dataForExport.
-        if (fullRawData) {
-          const formatted = getFormattedPagesData(
-            normalizePageTypes(fullRawData), selectedMonthName, selectedYear, 'November', '2025'
-          );
-          const alreadyLoaded = new Set(pagesData.map((p) => p.page));
-          const merged = [...pagesData, ...formatted.filter((p) => !alreadyLoaded.has(p.page))];
-          dataForExport = merged;
-          if (selectedMonthRef.current === exportMonth) {
-            setPagesData(merged);
-          }
-        }
-      } finally {
-        setIsPreparingExport(false);
+    setIsPreparingExport(true);
+    try {
+      // Always re-fetch the full page list rather than trusting pagesData's
+      // own array order for sequencing. pagesData accumulates pages in
+      // whichever order the user happened to view them in (or in whatever
+      // order a previous export left it in) — not document order — so
+      // spreading it first (or using it directly when nothing was
+      // "missing") put whatever was already loaded at the front of the
+      // exported PDF regardless of its real page number (e.g. pages 24/25
+      // landing right after the Index because they'd been individually
+      // viewed earlier). The full fetch is always correctly ordered
+      // server-side, so it's the only reliable source of export order;
+      // pagesData is still consulted below, but only to carry forward
+      // local edits not yet saved, never for sequencing.
+      const { data: fullRawData } = await refetchFullData();
+      if (!fullRawData) {
+        alert('Failed to load report data for export.');
+        return;
       }
+      // The month may have changed while this (slow, 20-40s) fetch was in
+      // flight — its result belongs to exportMonth, not necessarily
+      // whatever's on screen now, so only fold it into live pagesData
+      // state if the two still match. Either way, the export itself below
+      // still uses the correct exportMonth data via dataForExport.
+      const formatted = getFormattedPagesData(
+        normalizePageTypes(fullRawData), selectedMonthName, selectedYear, 'November', '2025'
+      );
+      const localByPage = new Map(pagesData.map((p) => [p.page, p]));
+      dataForExport = formatted.map((p) => localByPage.get(p.page) || p);
+      if (selectedMonthRef.current === exportMonth) {
+        setPagesData(dataForExport);
+      }
+    } finally {
+      setIsPreparingExport(false);
     }
 
     const pagesToExport = dataForExport.filter((p) => selectedPages.has(p.page));

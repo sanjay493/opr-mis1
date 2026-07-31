@@ -25,7 +25,6 @@ Column selection for a report month:
   • highest / lowest SAIL total-inventory months in between
   • Var. column = (1st of next month) − (1st Apr of same FY)
 """
-import sqlite3
 import db
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]

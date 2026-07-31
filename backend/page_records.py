@@ -5,7 +5,6 @@ Computed for the SAIL group aggregates ('sail5', 'all8') and for every
 individual plant/unit (keyed by plant code, e.g. 'BSP', 'ASP').
 Used by the /api/production-records endpoint.
 """
-import sqlite3
 import db
 from page_production_fy_export import is_rate_item
 

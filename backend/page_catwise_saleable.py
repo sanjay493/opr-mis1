@@ -3,7 +3,6 @@ Category Wise Production of Saleable Steel — pages 15, 16, 17.
 Unit: '000 Tonnes. Monthly + Apr-Month cumulative data vs CPLY.
 """
 import math
-import sqlite3
 import db
 
 # ── helpers ──────────────────────────────────────────────────────────────────

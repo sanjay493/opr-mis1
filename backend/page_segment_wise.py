@@ -4,7 +4,6 @@ Shows FLAT / PET / LONG breakdown across all 5 ISPs.
 Unit: '000 Tonnes.
 """
 import math
-import sqlite3
 import db
 
 

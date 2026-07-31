@@ -1,13 +1,10 @@
 import openpyxl
 import logging
-import sqlite3
 import os
 from typing import Optional
 import db
 
 logger = logging.getLogger("excel_extractor_plan")
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
 
 _MONTH_NAMES = {
     1: "January", 2: "February", 3: "March", 4: "April",

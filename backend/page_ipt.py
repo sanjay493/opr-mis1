@@ -9,7 +9,6 @@ Cumulative = SUM across FY months Apr → report month.
 Routes shown = union of routes having any record in the FY so far,
 so a route transferred only in earlier months still appears.
 """
-import sqlite3
 import db
 
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

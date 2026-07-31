@@ -25,7 +25,6 @@ SAIL row computation (MAJOR page + Summary page te_table):
   Specific Energy Consumption:
       weighted average of plant values, weight = plant Crude Steel production
 """
-import sqlite3
 from decimal import Decimal, ROUND_HALF_UP
 import db
 from techno_cumulative import compute_cumulative_preview, compute_cumulative_from_values

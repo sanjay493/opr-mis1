@@ -24,7 +24,6 @@ import calendar
 import logging
 import os
 import re
-import sqlite3
 from typing import Optional, List, Dict, Any
 
 import openpyxl
@@ -39,9 +38,6 @@ except ImportError:
     _XLRD_AVAILABLE = False
 
 logger = logging.getLogger("excel_extractor")
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "mis_reports.db")
-
 
 # ---------------------------------------------------------------------------
 # Excel 97-2003 (.xls) compatibility shim

@@ -4,7 +4,6 @@ Two tables on one page: Monthly and YTD (Apr-to-month).
 Unit displayed: Tonnes  (DB stores '000 T → multiply × 1000, round to integer)
 """
 import math
-import sqlite3
 import db
 
 # ── per-plant DB item specs ──────────────────────────────────────────────────

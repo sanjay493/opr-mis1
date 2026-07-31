@@ -1,5 +1,4 @@
 import calendar
-import sqlite3
 import db
 from constants import FIVE_PLANTS as _5P
 
