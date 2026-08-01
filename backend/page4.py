@@ -172,10 +172,16 @@ def _p4_ytd_nos_plan(cur, months, plant, db_item, five_plants, sail_set):
     return tw / td if td > 0 else None
 
 
+_DECIMAL_PLANTS = {"ASP", "SSP", "VISL"}
+
+
 def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set):
     """Compute the 13 display values for one page-4 row."""
     def fmt(v):
         return "" if v is None else str(round(v))
+
+    def fmt_act(v):
+        return _fmt3(v) if plant in _DECIMAL_PLANTS else fmt(v)
 
     def var(a, p):
         return "" if (a is None or p is None) else str(round(a - p))
@@ -208,16 +214,16 @@ def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set
     return [
         fmt(ann),                   # 0  Annual APP
         fmt(plan_m),                # 1  Monthly APP
-        fmt(act_m),                 # 2  Monthly Actual
+        fmt_act(act_m),             # 2  Monthly Actual
         var(act_m, plan_m),         # 3  Monthly Var
         pct(act_m, plan_m),         # 4  Monthly % Ful.
-        fmt(act_cply),              # 5  CPLY Monthly Actual
+        fmt_act(act_cply),          # 5  CPLY Monthly Actual
         gr(act_m, act_cply),        # 6  % Growth CPLY
         fmt(plan_ytd),              # 7  YTD APP
-        fmt(act_ytd),               # 8  YTD Actual
+        fmt_act(act_ytd),           # 8  YTD Actual
         var(act_ytd, plan_ytd),     # 9  YTD Var
         pct(act_ytd, plan_ytd),     # 10 YTD % Ful.
-        fmt(act_ytd_cply),          # 11 YTD CPLY Actual
+        fmt_act(act_ytd_cply),      # 11 YTD CPLY Actual
         gr(act_ytd, act_ytd_cply),  # 12 % Growth YTD CPLY
     ]
 
