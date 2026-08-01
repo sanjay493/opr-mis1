@@ -166,6 +166,108 @@ function DetailTable({ data }) {
 }
 
 
+// ── isp_summary table (page 23) ───────────────────────────────────────────────
+// ISP's source data arrives as one consolidated figure per mill, with no
+// quality/grade split — so unlike the other four plants' DetailTable, there's
+// just a single 'Product' label column here, no separate Quality/Grade column.
+
+function IspRow({ row }) {
+  const s = ROW_STYLES[row.type] || {};
+  return (
+    <tr style={s}>
+      <td style={{ ...LBL, ...s }}>{row.label}</td>
+      <td style={{ ...NUM, ...s }}>{row.orders}</td>
+      <td style={{ ...NUM, ...s }}>{row.actual}</td>
+      <td style={{ ...NUM, ...s }}>{row.pct_ful}</td>
+      <td style={{ ...NUM, ...s }}>{row.cply}</td>
+      <td style={{ ...NUM, ...s }}>{row.pct_growth}</td>
+      <td style={{ ...NUM, ...s }}>{row.cum_orders}</td>
+      <td style={{ ...NUM, ...s }}>{row.cum_actual}</td>
+      <td style={{ ...NUM, ...s }}>{row.cum_pct_ful}</td>
+      <td style={{ ...NUM, ...s }}>{row.cum_cply}</td>
+      <td style={{ ...NUM, ...s }}>{row.cum_pct_growth}</td>
+    </tr>
+  );
+}
+
+function IspTable({ data }) {
+  const {
+    title, unit = 'Tonnes', rows = [],
+    saleable_production = {}, special_pct = {},
+    month_label = '', cply_label = '',
+    cum_label = '', cum_cply_label = '',
+  } = data;
+
+  const COLS = 11;
+
+  return (
+    <div style={{ padding: '4px 6px', fontFamily: FONT }}>
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>
+        {title}
+      </div>
+      <div style={{ textAlign: 'right', fontSize: '0.65rem', marginBottom: 2 }}>Unit: {unit}</div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
+                      tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
+        <colgroup>
+          <col style={{ width: '24%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '8%' }} /><col style={{ width: '6%' }} />
+          <col style={{ width: '7.5%' }} /><col style={{ width: '5.5%' }} />
+          <col style={{ width: '8%' }} /><col style={{ width: '8%' }} /><col style={{ width: '6%' }} />
+          <col style={{ width: '7.5%' }} /><col style={{ width: '5.5%' }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th rowSpan={2} style={{ ...TH_S, textAlign: 'left' }}>Product</th>
+            <th colSpan={3} style={TH_S}>{month_label}</th>
+            <th rowSpan={2} style={TH_S}>{cply_label}<br/>Actual</th>
+            <th rowSpan={2} style={TH_S}>%Gr<br/>{cply_label}</th>
+            <th colSpan={3} style={TH_C}>{cum_label}</th>
+            <th rowSpan={2} style={TH_C}>{cum_cply_label}<br/>Actual</th>
+            <th rowSpan={2} style={TH_C}>%Gr<br/>{cum_cply_label}</th>
+          </tr>
+          <tr>
+            <th style={TH_S}>Order</th>
+            <th style={TH_S}>Actual</th>
+            <th style={TH_S}>%Ful</th>
+            <th style={TH_C}>Order</th>
+            <th style={TH_C}>Actual</th>
+            <th style={TH_C}>%Ful</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => <IspRow key={i} row={row} />)}
+
+          <tr style={{ height: 3 }}><td colSpan={COLS} style={{ border: 'none', padding: 0 }} /></tr>
+          <tr style={{ backgroundColor: '#e0f2fe' }}>
+            <td style={{ ...LBL, fontWeight: 600 }}>Saleable Steel Production</td>
+            <td style={NUM} colSpan={2}>{saleable_production.current}</td>
+            <td style={NUM}></td>
+            <td style={NUM}>{saleable_production.cply}</td>
+            <td style={NUM}></td>
+            <td style={NUM} colSpan={2}>{saleable_production.cum_current}</td>
+            <td style={NUM}></td>
+            <td style={NUM}>{saleable_production.cum_cply}</td>
+            <td style={NUM}>{saleable_production.cum_pct_growth}</td>
+          </tr>
+          <tr style={{ backgroundColor: '#e0f2fe' }}>
+            <td style={{ ...LBL, fontWeight: 600 }}>Special Steel % of Saleable Steel</td>
+            <td style={NUM} colSpan={2}>{special_pct.current}</td>
+            <td style={NUM}></td>
+            <td style={NUM}>{special_pct.cply}</td>
+            <td style={NUM}></td>
+            <td style={NUM} colSpan={2}>{special_pct.cum_current}</td>
+            <td style={NUM}></td>
+            <td style={NUM}>{special_pct.cum_cply}</td>
+            <td style={NUM}></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+
 // ── sail_summary table ────────────────────────────────────────────────────────
 
 function SailRow({ row }) {
@@ -174,8 +276,6 @@ function SailRow({ row }) {
     <tr style={s}>
       <td style={{ ...LBL, ...s, fontWeight: row.type === 'sail-total' ? 700 : 'inherit' }}>{row.label}</td>
       <td style={{ ...NUM, ...s }}>{row.abp_fy}</td>
-      <td style={{ ...NUM, ...s }}>{row.abp_month}</td>
-      <td style={{ ...NUM, ...s }}>{row.abp_ytd}</td>
       <td style={{ ...NUM, ...s }}>{row.orders}</td>
       <td style={{ ...NUM, ...s }}>{row.actual}</td>
       <td style={{ ...NUM, ...s }}>{row.pct_ful}</td>
@@ -211,19 +311,17 @@ function SailTable({ data }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #1e293b',
                       tableLayout: 'fixed', fontSize: 'var(--report-font-size)' }}>
         <colgroup>
-          <col style={{ width: '12%' }} />
-          <col style={{ width: '6%' }} /><col style={{ width: '6%' }} /><col style={{ width: '6.5%' }} />
-          <col style={{ width: '6.5%' }} /><col style={{ width: '6.5%' }} /><col style={{ width: '5%' }} />
-          <col style={{ width: '5.5%' }} /><col style={{ width: '4.5%' }} />
-          <col style={{ width: '6.5%' }} /><col style={{ width: '6.5%' }} /><col style={{ width: '5%' }} />
-          <col style={{ width: '5.5%' }} /><col style={{ width: '4.5%' }} />
+          <col style={{ width: '14%' }} />
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '7.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '5.5%' }} />
+          <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
+          <col style={{ width: '7.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '5.5%' }} />
+          <col style={{ width: '6%' }} /><col style={{ width: '5%' }} />
         </colgroup>
         <thead>
           <tr>
             <th rowSpan={2} style={{ ...TH_S, textAlign: 'left' }}>Plants</th>
             <th rowSpan={2} style={TH_S}>ABP<br/>{fy_label}</th>
-            <th rowSpan={2} style={TH_S}>ABP<br/>{month_label}</th>
-            <th rowSpan={2} style={TH_S}>ABP<br/>{cum_label}</th>
             <th colSpan={3} style={TH_S}>{month_label}</th>
             <th rowSpan={2} style={TH_S}>{cply_label}<br/>Actual</th>
             <th rowSpan={2} style={TH_S}>%Gr<br/>{cply_label}</th>
@@ -243,12 +341,10 @@ function SailTable({ data }) {
         <tbody>
           {rows.map((row, i) => <SailRow key={i} row={row} />)}
 
-          <tr style={{ height: 3 }}><td colSpan={14} style={{ border: 'none', padding: 0 }} /></tr>
+          <tr style={{ height: 3 }}><td colSpan={12} style={{ border: 'none', padding: 0 }} /></tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
             <td style={{ ...LBL, fontWeight: 600 }}>Saleable Steel production</td>
             <td style={NUM}>{saleable_production.abp_fy}</td>
-            <td style={NUM}>{saleable_production.abp_month}</td>
-            <td style={NUM}>{saleable_production.abp_ytd}</td>
             <td style={NUM}></td>
             <td style={NUM}>{saleable_production.current}</td>
             <td style={NUM}></td>
@@ -262,8 +358,6 @@ function SailTable({ data }) {
           </tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
             <td style={{ ...LBL, fontWeight: 600 }}>Special Steel % of Saleable Steel</td>
-            <td style={NUM}></td>
-            <td style={NUM}></td>
             <td style={NUM}></td>
             <td style={NUM}></td>
             <td style={NUM}>{special_pct.current}</td>
@@ -288,5 +382,6 @@ function SailTable({ data }) {
 export default function SpecialSteelTemplate({ data }) {
   if (!data) return null;
   if (data.variant === 'sail_summary') return <SailTable data={data} />;
+  if (data.variant === 'isp_summary') return <IspTable data={data} />;
   return <DetailTable data={data} />;
 }

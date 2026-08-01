@@ -13,7 +13,8 @@
            than before for readability without look busy. #}
         {% set vb  = colors.border_medium %}
         {% set vbc = colors.border_cumulative_col %}
-        {# ── Page 23 = ISP (plant_detail/isp_summary), Page 24 = SAIL (sail_summary) — rendered standalone below ── #}
+        {# ── Page 23 = ISP (isp_summary, its own branch below — one row per mill,
+           no Quality/Grade column), Page 24 = SAIL (sail_summary) ── #}
         {% set pad = page.density.pad %}{% set lfs = page.density.label_fs %}
         {% set tfs = page.density.table_fs %}{% set lh = page.density.lh %}{% set split_at = page.density.split_at %}{% set tail_scale = page.density.tail_scale %}
         <div style="padding:2px 6px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;">
@@ -24,21 +25,21 @@
           <div style="text-align:right;font-size:6.8pt;margin-bottom:1px;">Unit: Tonnes</div>
 
           {% if page.variant == 'sail_summary' %}
-          {# ── SAIL consolidated table — 14 cols (ABP split into FY/Month/Till-month) ── #}
+          {# ── SAIL consolidated table — 12 cols. Only the FY ABP column is shown:
+             ISP and DSP don't carry a monthly special-steel plan, only an FY one,
+             so the Month/Till-month ABP columns were dropped. ── #}
           <table style="width:100%;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
-              <col style="width:12%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6.5%"/>
-              <col style="width:6.5%"/><col style="width:6.5%"/><col style="width:5%"/>
-              <col style="width:5.5%"/><col style="width:4.5%"/>
-              <col style="width:6.5%"/><col style="width:6.5%"/><col style="width:5%"/>
-              <col style="width:5.5%"/><col style="width:4.5%"/>
+              <col style="width:14%"/><col style="width:7%"/>
+              <col style="width:7.5%"/><col style="width:7.5%"/><col style="width:5.5%"/>
+              <col style="width:6%"/><col style="width:5%"/>
+              <col style="width:7.5%"/><col style="width:7.5%"/><col style="width:5.5%"/>
+              <col style="width:6%"/><col style="width:5%"/>
             </colgroup>
             <thead>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
                 <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};text-align:left;">Plants</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">ABP<br/>{{ page.fy_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">ABP<br/>{{ page.month_label }}</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">ABP<br/>{{ page.cum_label }}</th>
                 <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.month_label }}</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.cply_label }}<br/>Actual</th>
                 <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Gr<br/>{{ page.cply_label }}</th>
@@ -64,8 +65,6 @@
             <tr style="{{ rowbg }}font-weight:{{ '700' if is_tot else '400' }};">
               <td style="padding:{{ pad }};{{ b1 }}text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.abp_fy }}</td>
-              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.abp_month }}</td>
-              <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.abp_ytd }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.orders }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.actual }}</td>
               <td style="padding:{{ pad }};{{ b1 }}text-align:right;">{{ row.pct_ful }}</td>
@@ -78,12 +77,10 @@
               <td style="padding:{{ pad }};{{ b2 }}text-align:right;">{{ row.cum_pct_growth }}</td>
             </tr>
             {% endfor %}
-            <tr style="height:2px;"><td colspan="14" style="border:none;padding:0;"></td></tr>
+            <tr style="height:2px;"><td colspan="12" style="border:none;padding:0;"></td></tr>
             <tr style="font-weight:600;">
               <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;">Saleable Steel production</td>
               <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.abp_fy }}</td>
-              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.abp_month }}</td>
-              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.abp_ytd }}</td>
               <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;"></td>
               <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.current }}</td>
               <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
@@ -97,7 +94,7 @@
             </tr>
             <tr style="background:{{ colors.highlight_info_band_bg }};font-weight:600;">
               <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
-              <td colspan="4" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.current }}</td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.current }}</td>
               <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
               <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.cply }}</td>
               <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
@@ -110,8 +107,99 @@
             </tbody>
           </table>
 
+          {% elif page.variant == 'isp_summary' %}
+          {# ── ISP table — 11 cols. ISP's source data arrives as one consolidated
+             figure per mill, no grade split, so there's a single 'Product' label
+             column instead of plant_detail's Product + Quality/Grade pair. ── #}
+          <table style="width:100%;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
+            <colgroup>
+              <col style="width:22%"/>
+              <col style="width:8%"/><col style="width:8%"/><col style="width:6%"/>
+              <col style="width:7.5%"/><col style="width:5.5%"/>
+              <col style="width:8%"/><col style="width:8%"/><col style="width:6%"/>
+              <col style="width:7.5%"/><col style="width:5.5%"/>
+            </colgroup>
+            <thead>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};text-align:left;">Product</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.month_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Gr<br/>{{ page.cply_label }}</th>
+                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ page.cum_label }}</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">{{ page.cum_cply_label }}<br/>Actual</th>
+                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Gr<br/>{{ page.cum_cply_label }}</th>
+              </tr>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Order</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">%Ful</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Order</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">Actual</th>
+                <th style="padding:2px 3px;border:1px solid {{ colors.border_green }};background:{{ colors.table_header_bg }};">%Ful</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for row in page.rows %}
+              {% if row.type == 'separator' %}
+              <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
+              {% elif row.type == 'grand-total' %}
+              <tr style="background:{{ colors.highlight_achieved_band_bg }};font-weight:700;">
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;overflow:hidden;">{{ row.label | split_label(split_at, tail_scale) }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.orders }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.actual }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.pct_ful }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.cply }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ row.pct_growth }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_orders }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_actual }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_ful }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ row.cum_pct_growth }}</td>
+              </tr>
+              {% endif %}
+            {% endfor %}
+            <tr style="height:2px;"><td colspan="11" style="border:none;padding:0;"></td></tr>
+            <tr style="font-weight:600;">
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Saleable Steel Production</td>
+              <td colspan="2" style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};text-align:right;">{{ page.saleable_production.cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vb }};border-right:1px solid {{ vb }};"></td>
+              <td colspan="2" style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_current }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_cply }}</td>
+              <td style="padding:{{ pad }};border-left:1px solid {{ vbc }};border-right:1px solid {{ vbc }};text-align:right;">{{ page.saleable_production.cum_pct_growth }}</td>
+            </tr>
+            <tr style="background:{{ colors.highlight_info_band_bg }};font-weight:600;">
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:left;font-size:{{ lfs }};white-space:nowrap;">Special Steel % of Saleable Steel</td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};text-align:right;">{{ page.special_pct.cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vb }};"></td>
+              <td colspan="2" style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ page.special_pct.cum_current }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};text-align:right;">{{ page.special_pct.cum_cply }}</td>
+              <td style="padding:{{ pad }};border:1px solid {{ vbc }};"></td>
+            </tr>
+            </tbody>
+          </table>
+
           {% else %}
-          {# ── Plant detail / ISP table — 12 cols (Product + Quality/Grade) ── #}
+          {# ── Plant detail table (BSP/DSP/RSP/BSL) — 12 cols (Product + Quality/Grade) ── #}
           <table style="width:100%;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:{{ tfs }};line-height:{{ lh }};">
             <colgroup>
               <col style="width:7.5%"/>
