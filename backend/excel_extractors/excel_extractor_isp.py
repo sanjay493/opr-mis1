@@ -425,24 +425,46 @@ _PROD_COL_MAP = {
     "12": "AL", "01": "AR", "02": "AV", "03": "AZ",
 }
 _PROD_NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
-_PROD_CELLS = {
+
+# Item display order — used both for STABLE and label-searched items below.
+_PROD_ITEM_ORDER = [
+    "COB#10", "COB#11", "Oven Pushing (nos/day)", "Total Sinter", "Hot Metal",
+    "Pig Iron", "SMS CCM-1&2", "SMS CCM-3", "Total Crude Steel", "WRMILL",
+    "BARMILL", "USMILL", "Finished Steel", "Saleable 150 Billets",
+    "200 Blooms", "Saleable Semis", "Saleable Steel",
+]
+
+# Confirmed identical (same row number) across every 'Maj Production Summ'
+# vintage sampled, 2022 through 2026 — safe as a fixed offset.
+_PROD_STABLE_CELLS = {
     "COB#10":               6,
     "COB#11":               7,
     "Oven Pushing (nos/day)":  8,
     "Total Sinter":         16,
     "Hot Metal":            17,
-    "Pig Iron":             26,
-    "SMS CCM-1&2":              19,
-    "SMS CCM-3":                20,
     "Total Crude Steel":    18,
-    "WRMILL":               30,
-    "BARMILL":              31,
-    "USMILL":               32,
-    "Finished Steel":       33,
-    "Saleable 150 Billets": 34,
-    "200 Blooms":           35,
-    "Saleable Semis":       36,
-    "Saleable Steel":       37,
+}
+
+# Everything after 'CRUDE STEEL' shifts across report vintages — e.g. the
+# 'Caster #(1+2)'/'Caster #3' rows were added ~FY25, pushing every row below
+# them down by 2 in files that have them vs. files that don't (confirmed:
+# present from Mar'25 on, absent Mar'22-Mar'24) — so these are located by
+# their own label text per workbook (_resolve_prod_row_map) instead of a
+# fixed row number, which is what silently pulled "Saleable Steel" from the
+# wrong row when extracting an older (e.g. Mar'24) file. Label text is
+# matched as an upper-cased, whitespace-collapsed substring, tolerant of the
+# trailing spaces / minor punctuation that vary between vintages.
+_PROD_LABEL_SEARCH = {
+    "SMS CCM-1&2":          "CASTER #(1+2",
+    "SMS CCM-3":            "CASTER #3",
+    "Pig Iron":             "TOTAL EQUIVALENT PIG IRON",
+    "WRMILL":               "WR MILL",
+    "BARMILL":              "BAR MILL",
+    "USMILL":               "US MILL",
+    "Finished Steel":       "FINISHED STEEL",
+    "Saleable 150 Billets": "150X150",
+    "200 Blooms":           "200X280",
+    "Saleable Semis":       "SALEABLE SEMIS",
 }
 # Reliable, always-populated-when-reported anchor item — used to decide
 # whether a candidate FY month's column actually has data yet (vs. an
@@ -466,10 +488,61 @@ def _fy_month_sequence(upto_month: str) -> list:
     return months
 
 
-def _monthly_report_rows_for_col(ws, col: str, sinter_ws=None, sinter_rows=None):
+def _find_label_row_in_range(ws, label: str, start_row: int, end_row: int, col: int = 2):
+    """First row in [start_row, end_row] whose column-`col` text contains
+    `label` (case-insensitive, whitespace-collapsed substring match)."""
+    for r in range(start_row, end_row + 1):
+        text = " ".join(str(ws.cell(row=r, column=col).value or "").strip().upper().split())
+        if label in text:
+            return r
+    return None
+
+
+def _resolve_prod_row_map(ws) -> dict:
+    """{item_name: row_num_or_None} for 'Maj Production Summ', combining the
+    fixed stable rows with a per-workbook label search for the rows that
+    shift across report vintages (see _PROD_LABEL_SEARCH). Computed once per
+    workbook — the row layout is the same for every month column in it."""
+    row_map = dict(_PROD_STABLE_CELLS)
+
+    crude_steel_row = row_map.get("Total Crude Steel") or 18
+    # Bound the search at the next major section ("SAL STEEL PRODN
+    # (CATEGORY WISE)") so label text can't accidentally match a row in an
+    # unrelated section further down the sheet.
+    category_wise_row = _find_label_row_in_range(ws, "CATEGORY WISE", crude_steel_row + 1, crude_steel_row + 60)
+    search_end = (category_wise_row - 1) if category_wise_row else (crude_steel_row + 40)
+
+    for item_name, label in _PROD_LABEL_SEARCH.items():
+        row_map[item_name] = _find_label_row_in_range(ws, label, crude_steel_row + 1, search_end)
+
+    # Saleable Steel's own grand-total row is labeled "TOTAL SALEABLE STEEL"
+    # in newer files, but just a bare "TOTAL" (immediately after Saleable
+    # Semis) in vintages up to ~Mar'24 — bare "TOTAL" alone is too generic to
+    # search for sheet-wide (it also matches "TOTAL CRUDE STEEL" etc.), so
+    # it's only accepted right after the already-located Saleable Semis row.
+    saleable_row = _find_label_row_in_range(ws, "TOTAL SALEABLE STEEL", crude_steel_row + 1, search_end)
+    if saleable_row is None and row_map.get("Saleable Semis"):
+        next_row = row_map["Saleable Semis"] + 1
+        text = " ".join(str(ws.cell(row=next_row, column=2).value or "").strip().upper().split())
+        if "TOTAL" in text:
+            saleable_row = next_row
+    row_map["Saleable Steel"] = saleable_row
+
+    return row_map
+
+
+def _monthly_report_rows_for_col(ws, col: str, row_map: dict, sinter_ws=None, sinter_rows=None):
     """production_rows for one 'Maj Production Summ' month column."""
     rows = []
-    for item_name, row_num in _PROD_CELLS.items():
+    for item_name in _PROD_ITEM_ORDER:
+        row_num = row_map.get(item_name)
+        if row_num is None:
+            rows.append({
+                "item_name": f"(not found) {item_name}", "value": None,
+                "cell": "", "unit": "nos/d" if item_name in _PROD_NO_CONVERT else "'000T",
+                "status": "unmapped",
+            })
+            continue
         cell_ref = f"{col}{row_num}"
         val = clean_val(ws[cell_ref].value)
         if val is not None and item_name not in _PROD_NO_CONVERT:
@@ -520,7 +593,8 @@ def _preview_monthly_report_rows(wb, report_month: str):
         sinter_ws = wb["SINTER"]
         sinter_rows = _find_label_rows(sinter_ws, "M/C #", count=2)
 
-    rows = _monthly_report_rows_for_col(ws, col, sinter_ws, sinter_rows)
+    row_map = _resolve_prod_row_map(ws)
+    rows = _monthly_report_rows_for_col(ws, col, row_map, sinter_ws, sinter_rows)
     return rows, db_report_month
 
 
@@ -541,14 +615,15 @@ def _preview_monthly_report_all_months(wb, upto_month: str):
         sinter_ws = wb["SINTER"]
         sinter_rows = _find_label_rows(sinter_ws, "M/C #", count=2)
 
-    anchor_row = _PROD_CELLS[_PROD_MONTH_HAS_DATA_ANCHOR]
+    row_map = _resolve_prod_row_map(ws)
+    anchor_row = _PROD_STABLE_CELLS[_PROD_MONTH_HAS_DATA_ANCHOR]
     rows = []
     for rm in _fy_month_sequence(db_report_month):
         month_num = rm[5:7]
         col = _PROD_COL_MAP[month_num]
         if clean_val(ws[f"{col}{anchor_row}"].value) is None:
             continue  # not yet reported in this workbook — skip, not an error
-        for r in _monthly_report_rows_for_col(ws, col, sinter_ws, sinter_rows):
+        for r in _monthly_report_rows_for_col(ws, col, row_map, sinter_ws, sinter_rows):
             r["report_month"] = rm
             rows.append(r)
 
