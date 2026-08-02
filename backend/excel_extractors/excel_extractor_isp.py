@@ -427,9 +427,12 @@ _PROD_COL_MAP = {
 _PROD_NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
 
 # Item display order — used both for STABLE and label-searched items below.
+# SMS Caster-1/2/1+2/3 are NOT in this list — they're read from the 'SMS'
+# sheet instead (_sms_caster_rows_for_month), appended after this list's
+# items are built. See that function's docstring for why.
 _PROD_ITEM_ORDER = [
     "COB#10", "COB#11", "Oven Pushing (nos/day)", "Total Sinter", "Hot Metal",
-    "Pig Iron", "SMS CCM-1&2", "SMS CCM-3", "Total Crude Steel", "WRMILL",
+    "Pig Iron", "Total Crude Steel", "WRMILL",
     "BARMILL", "USMILL", "Finished Steel", "Saleable 150 Billets",
     "200 Blooms", "Saleable Semis", "Saleable Steel",
 ]
@@ -446,17 +449,19 @@ _PROD_STABLE_CELLS = {
 }
 
 # Everything after 'CRUDE STEEL' shifts across report vintages — e.g. the
-# 'Caster #(1+2)'/'Caster #3' rows were added ~FY25, pushing every row below
-# them down by 2 in files that have them vs. files that don't (confirmed:
-# present from Mar'25 on, absent Mar'22-Mar'24) — so these are located by
-# their own label text per workbook (_resolve_prod_row_map) instead of a
-# fixed row number, which is what silently pulled "Saleable Steel" from the
-# wrong row when extracting an older (e.g. Mar'24) file. Label text is
-# matched as an upper-cased, whitespace-collapsed substring, tolerant of the
-# trailing spaces / minor punctuation that vary between vintages.
+# 'Caster #(1+2)'/'Caster #3' rows were added to THIS sheet ~FY25, pushing
+# every row below them down by 2 in files that have them vs. files that
+# don't (confirmed: present from Mar'25 on, absent Mar'22-Mar'24) — so these
+# are located by their own label text per workbook (_resolve_prod_row_map)
+# instead of a fixed row number, which is what silently pulled "Saleable
+# Steel" from the wrong row when extracting an older (e.g. Mar'24) file.
+# Label text is matched as an upper-cased, whitespace-collapsed substring,
+# tolerant of the trailing spaces / minor punctuation that vary between
+# vintages. (SMS CCM-1&2/CCM-3 used to be looked up here too, but those rows
+# are simply ABSENT from this sheet before ~FY25 — they're read from the
+# 'SMS' sheet instead, see _sms_caster_rows_for_month, which has a stable
+# row layout across every vintage tested.)
 _PROD_LABEL_SEARCH = {
-    "SMS CCM-1&2":          "CASTER #(1+2",
-    "SMS CCM-3":            "CASTER #3",
     "Pig Iron":             "TOTAL EQUIVALENT PIG IRON",
     "WRMILL":               "WR MILL",
     "BARMILL":              "BAR MILL",
@@ -573,6 +578,60 @@ def _monthly_report_rows_for_col(ws, col: str, row_map: dict, sinter_ws=None, si
     return rows
 
 
+# SMS Caster production — read from the 'SMS' sheet (BOF-CCP), not 'Maj
+# Production Summ' (where the combined 1+2/3 totals are simply absent before
+# ~FY25). The SMS sheet's own row layout ALSO shifts across vintages though
+# (e.g. Mar'23's "Caster #1 (Total)" is at row 34, not row 31 like Mar'24-26
+# — a 3-row insertion earlier in the sheet) — same failure mode as 'Maj
+# Production Summ', so these are label-searched per workbook too rather than
+# trusting a fixed row. Label TEXT itself is stable across every vintage
+# tested (2023-2026), only the row number moves. Cross-checked against a
+# file with both sheets: SMS!Caster #1+#2 (Total) and SMS!Caster #3 (Total)
+# match 'Maj Production Summ''s old SMS CCM-1&2/CCM-3 values exactly (3dp).
+_SMS_CASTER_LABELS = [
+    ("SMS Caster-1", "CASTER #1 (TOTAL)"),
+    ("SMS Caster-2", "CASTER #2 (TOTAL)"),
+    ("SMS CCM-1&2",  "CASTER #1+#2 (TOTAL)"),
+    ("SMS CCM-3",    "CASTER #3 (TOTAL)"),
+]
+
+
+def _sms_caster_rows_for_month(wb, month_num: str, year_2d: str) -> list:
+    """production_rows for SMS Caster-1/2/1+2/3, for one month, from the
+    'SMS' sheet's own ACT column — found dynamically via the same "Apr'25
+    ABP / ACT" header layout B-FCE/SINTER/etc already use (_find_act_col),
+    not the fixed column map 'Maj Production Summ' uses. Row numbers are
+    also resolved dynamically (see _SMS_CASTER_LABELS) so a vintage-specific
+    row shift fails safe ("not found") instead of silently reading the
+    wrong line."""
+    if "SMS" not in wb.sheetnames:
+        return []
+    ws = wb["SMS"]
+    ac = _find_act_col(ws, month_num, year_2d, 3, 4)
+    if ac is None:
+        return []
+    col = get_column_letter(ac)
+
+    rows = []
+    for item_name, label in _SMS_CASTER_LABELS:
+        row_num = _find_label_row_in_range(ws, label, 1, 100)
+        if row_num is None:
+            rows.append({
+                "item_name": f"(not found) {item_name}", "value": None,
+                "cell": "", "unit": "'000T", "status": "unmapped",
+            })
+            continue
+        val = clean_val(ws.cell(row=row_num, column=ac).value)
+        if val is not None:
+            val = round(val / 1000.0, 3)
+        rows.append({
+            "item_name": item_name, "value": val,
+            "cell": f"SMS!{col}{row_num}", "unit": "'000T",
+            "status": "ok" if val is not None else "no value",
+        })
+    return rows
+
+
 def _preview_monthly_report_rows(wb, report_month: str):
     """Returns (production_rows, db_report_month) for a Final Monthly Report
     workbook, for the single selected month."""
@@ -595,6 +654,7 @@ def _preview_monthly_report_rows(wb, report_month: str):
 
     row_map = _resolve_prod_row_map(ws)
     rows = _monthly_report_rows_for_col(ws, col, row_map, sinter_ws, sinter_rows)
+    rows += _sms_caster_rows_for_month(wb, month_num, db_report_month[2:4])
     return rows, db_report_month
 
 
@@ -623,7 +683,9 @@ def _preview_monthly_report_all_months(wb, upto_month: str):
         col = _PROD_COL_MAP[month_num]
         if clean_val(ws[f"{col}{anchor_row}"].value) is None:
             continue  # not yet reported in this workbook — skip, not an error
-        for r in _monthly_report_rows_for_col(ws, col, row_map, sinter_ws, sinter_rows):
+        month_rows = _monthly_report_rows_for_col(ws, col, row_map, sinter_ws, sinter_rows)
+        month_rows += _sms_caster_rows_for_month(wb, month_num, rm[2:4])
+        for r in month_rows:
             r["report_month"] = rm
             rows.append(r)
 
@@ -1410,11 +1472,29 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list, all_mo
                 logger.warning(f"ISP (old vintage): Maj Techno Summ extraction failed: {e}")
 
         prod_rows = []
+        prod_sheet_used = None
         if "Maj Prod Summ" in sheet_names:
             try:
                 prod_rows = _old_prod_summ_rows(wb, "Maj Prod Summ", month_num, year_2d)
+                prod_sheet_used = "Maj Prod Summ"
             except Exception as e:
                 logger.warning(f"ISP (old vintage): Maj Prod Summ extraction failed: {e}")
+        elif "Maj Production Summ" in sheet_names:
+            # Some files trigger old_vintage detection (they still carry the
+            # legacy 'NET RAW MATERIALS CONSUMPTION RATE' label on B-FCE) but
+            # already use the modern 'Maj Production Summ' sheet name/layout
+            # (e.g. Mar'23) — the dead-end 'Maj Prod Summ' lookup above never
+            # matches for these, silently returning zero production rows.
+            # Route to the same row/label-resolving logic the modern path
+            # uses instead.
+            try:
+                if all_months:
+                    prod_rows, _ = _preview_monthly_report_all_months(wb, report_month)
+                else:
+                    prod_rows, _ = _preview_monthly_report_rows(wb, report_month)
+                prod_sheet_used = "Maj Production Summ"
+            except Exception as e:
+                logger.warning(f"ISP (old vintage): Maj Production Summ extraction failed: {e}")
 
         logger.info(f"ISP Summarised (old vintage): {ok_count} techno, "
                     f"{len(prod_rows)} production values for {db_report_month}.")
@@ -1425,7 +1505,7 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list, all_mo
             "sheets":            f"{bf_sheet}, SINTER, SMS, WRM, BM, USM"
                                  + (f", {coke_sheet}" if coke_sheet else "")
                                  + (", Maj Techno Summ" if "Maj Techno Summ" in sheet_names else "")
-                                 + (", Maj Prod Summ" if prod_rows else ""),
+                                 + (f", {prod_sheet_used}" if prod_sheet_used else ""),
             "workbook_sheets":   sheet_names,
             "production_rows":   prod_rows,
             "techno_rows":       techno_rows,
