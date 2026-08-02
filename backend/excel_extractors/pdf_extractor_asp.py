@@ -1,15 +1,43 @@
 """
 ASP PDF extractor — handles two monthly report types:
 
-1. REP*.pdf  (OMI Daily/Monthly Production Report, e.g. REP010526.pdf)
+1. REP*.pdf  (OMI Daily Performance Summary Report, e.g. REP010526.pdf)
    Detected by: "CRUDE STEEL" + ("CONCAST" or "INGOT") in text, or filename starts with REP.
-   Extracts: Total Crude Steel, Ingot Steel, Total Caster (Concast),
-             Saleable Steel, Closing Stock.
+   Report month auto-detected from its "...REPORT FOR DD/MM/YYYY" line (that
+   date is always the last day of the month being reported). Each item lives
+   in a fixed-column row — [Label][Unit] [OnDateABP] [OnDateACT] [MonthlyABP]
+   [CumAct] [CumAct-dup] [Rate%] [CPLY] ... — sharing the page with an
+   unrelated equipment-delay table that spills onto the same lines further
+   right, and with a "<ITEM> ACTUAL (T) <12 months of history>" row that
+   shares the item's own name. Extracts, matched by exact row-label (not
+   substring, to avoid both of those traps) and picking the run's 4th
+   number (see _rep_resolve_actual() for how a rare disagreement between the
+   normally-duplicate 4th/5th columns is resolved):
+     Total Crude Steel, Ingot Steel, Total Caster (Concast label varies:
+     "TOTAL CC" / "TOTAL CC SLAB" / "CONCAST PRODN" depending on report
+     vintage), Saleable Steel.
+   Closing Stock lives in a separate single-value row ("TOTAL PLANT ST.
+   <value>"), extracted by regex — carefully distinguished from the
+   unrelated "TOTAL PLANT STOCK <12 months of history>" row that precedes
+   or follows it.
 
-2. FL*.pdf   (Finished Steel Production Report, e.g. FL26-27 MAY'26.pdf)
+2. FL*.pdf   (Finished Steel "FLASH" Production Report, e.g. FL26-27 MAY'26.pdf)
    Detected by: "BARS" + "FS PRD" in text, or filename starts with FL.
-   Extracts: BARS Mill, FS PRD, Plate Mill individually, plus a computed
-             "Finished Steel" total (sum of the three).
+   Fixed-width monthly table — report month auto-detected from the table's
+   own "DETAILS <MON>'<YY> ..." header row (more reliable than the "FLASH :"
+   banner line above it, which is occasionally garbled by an overlapping
+   text layer in some source PDFs). For BOTH that report month and the
+   immediately preceding month — its own dedicated "Actual" column further
+   right in the same table, no second file needed — extracts:
+     ING      (Production for Finishing section) → Ingot Steel
+     BILLETS  (Saleable Production section)      → Billets
+     BARS     (Saleable Production section)      → BARS
+     PL MILL  (Saleable Production section)      → PLATES
+     TOTAL    (Saleable Production section)      → Saleable Steel
+   Column values are matched by x-position against a reference row
+   ("LIQ.PRD", always fully populated) rather than by list index, so a
+   row with its own blank %Ach/CPLY cells doesn't shift later columns
+   out from under the Actual/Prev-Actual picks.
 
 All raw tonnage values (T) are converted to '000T before returning.
 extract_preview() returns rows in the standard format — no DB writes.
@@ -22,87 +50,60 @@ PLANT = "ASP"
 _MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
            "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
-# ── REP report: keyword → (item_name in production_table, search_alternatives)
-_REP_ITEMS = [
-    # keyword (lowercase)    item_name                 alternatives
-    ("crude steel",          "Total Crude Steel",      ["total crude","CRUDE"]),
-    ("concast",              "Total Caster",           ["cc steel", "continuous cast"]),
-    ("ingot",                "Ingot Steel",            ["ingot steel"]),
-    ("saleable steel",       "Saleable Steel",         ["saleable"]),
-    ("closing stock",        "Closing Stock",          ["total stock", "stock"]),
-]
+# ── REP report: item_name → acceptable (row-start token sequences), tried in
+# order. Matching the row-start exactly (not "keyword anywhere in line") is
+# what keeps this off the "<ITEM> ACTUAL (T) <history>" row and the small
+# performance-summary box in the page header, both of which contain the same
+# keywords as substrings elsewhere on the page.
+_REP_LABEL_PATTERNS = {
+    "Total Crude Steel": [["CRUDE", "T"], ["CRUDE", "STEEL", "T"]],
+    "Total Caster": [
+        ["TOTAL", "CC", "T"], ["TOTAL", "CC", "SLAB", "T"], ["CONCAST", "PRODN"],
+        ["CC", "SLAB", "T"],   # fallback for when the primary label's text is missing from the PDF's text layer
+    ],
+    "Ingot Steel":       [["INGOT", "PRODUCTION", "T"]],
+    "Saleable Steel":    [["SALEABLE", "STEEL", "T"]],
+}
+# "ST" not immediately followed by "OCK" — separates the single current-value
+# "TOTAL PLANT ST. <value>" row from the unrelated same-prefix
+# "TOTAL PLANT STOCK <12 months of history>" row.
+_REP_CLOSING_STOCK_RE = re.compile(r'\bTOTAL\s+PLANT\s+ST(?!OCK)\.?\s*(-?\d[\d,]*(?:\.\d+)?)', re.I)
+_REP_DATE_RE = re.compile(r'\bFOR\s*(\d{1,2})/(\d{1,2})/(\d{2,4})\b')
 
-# ── FL report: keyword → item_name
+# ── FL report: (label words, item_name, is_exact_total)
 _FL_ITEMS = [
-    ("bars",    "BARS Mill"),
-    ("fs prd",  "FS PRD"),
-    ("pl mill", "Plate Mill"),
+    (("ING",),          "Ingot Steel",   False),
+    (("BILLETS",),      "Billets",       False),
+    (("BARS",),         "BARS",          False),
+    (("PL", "MILL"),    "PLATES",        False),
+    (("TOTAL",),        "Saleable Steel", True),   # exact "TOTAL" row only — not "TOTAL CC SL"
 ]
 
-
-def _nums_from_line(line: str):
-    """Return all positive floats found in *line*, excluding year-like values (2000-2099)."""
-    result = []
-    for tok in re.findall(r'\d[\d,]*(?:\.\d+)?', line):
-        try:
-            v = float(tok.replace(',', ''))
-        except ValueError:
-            continue
-        if 2000 <= v <= 2099:
-            continue          # year token — skip
-        if v <= 0:
-            continue
-        result.append(v)
-    return result
+_FL_MONTH_TO_NUM = {
+    "JAN": 1, "FEB": 2, "MAR": 3, "MARCH": 3, "APR": 4, "APRIL": 4,
+    "MAY": 5, "JUN": 6, "JUNE": 6, "JUL": 7, "JULY": 7, "AUG": 8,
+    "SEP": 9, "SEPT": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+}
+_FL_DETAILS_MONTH_RE = re.compile(r"^([A-Za-z]+)'(\d{2,4})$")
+_NUM_RE = re.compile(r'^-?\d[\d,]*(?:\.\d+)?$')
 
 
-def _nums_all(line: str):
-    """Return ALL numbers from *line* including zeros/negatives, preserving column order.
-
-    Used for FL column-indexed extraction where zeros mean 'no production that month'
-    and must be kept to maintain column alignment.
-    Excludes year-like values (2000-2099).
-    """
-    result = []
-    for tok in re.findall(r'-?\d[\d,]*(?:\.\d+)?', line):
-        try:
-            v = float(tok.replace(',', ''))
-        except ValueError:
-            continue
-        if 2000 <= abs(v) <= 2099:
-            continue      # year token — skip
-        result.append(v)
-    return result
+def _fmt_month(ym: str) -> str:
+    try:
+        y, mo = ym[:4], int(ym[5:7])
+        return f"{_MONTHS[mo - 1].title()} {y}"
+    except Exception:
+        return ym
 
 
-def _best_value(line: str, min_val: float = 50.0):
-    """Largest number on the line that is >= min_val.
-
-    Used for REP PDFs where the largest number is the MTD/FY total we want.
-    """
-    candidates = [v for v in _nums_from_line(line) if v >= min_val]
-    return max(candidates) if candidates else None
-
-
-def _find_keyword_line(lines, *keywords):
-    """Return the first line whose lowercase text contains ALL keywords."""
-    for ln in lines:
-        low = ln.lower()
-        if all(kw in low for kw in keywords):
-            return ln
-    return None
-
-
-def _find_any_keyword_line(lines, primary, alternatives):
-    """Return (matched_line, keyword_used) for primary or first matching alternative."""
-    result = _find_keyword_line(lines, primary)
-    if result:
-        return result, primary
-    for alt in alternatives:
-        result = _find_keyword_line(lines, *alt.split())
-        if result:
-            return result, alt
-    return None, primary
+def _assert_month_match(detected, user_month: str, report_kind: str) -> None:
+    if detected and user_month and detected != user_month:
+        raise ValueError(
+            f"Month mismatch: this {report_kind}'s own header shows "
+            f"{_fmt_month(detected)}, but you selected {_fmt_month(user_month)}. "
+            f"Please select '{_fmt_month(detected)}' in the month picker, "
+            f"or upload the report for {_fmt_month(user_month)}."
+        )
 
 
 def _detect_report_type(full_text: str, filename: str = "") -> str:
@@ -146,136 +147,289 @@ def _load_pdf_text(file_path: str):
         raise ValueError(f"Cannot open PDF '{os.path.basename(file_path)}': {exc}") from exc
 
 
-def _parse_rep(lines, want_mon, yy, n_pages):
-    """Extract production items from a REP-type PDF."""
+def _detect_rep_report_month(full_text: str):
+    """The '...REPORT FOR DD/MM/YYYY' date is always the last day of the
+    month being reported (e.g. 'FOR 30/04/2026' is the April 2026 report,
+    filed the next day) — not the following month. Returns 'YYYY-MM' or None."""
+    m = _REP_DATE_RE.search(full_text)
+    if not m:
+        return None
+    _, mo, yr = m.groups()
+    month = int(mo)
+    if not (1 <= month <= 12):
+        return None
+    year = int(yr) if len(yr) == 4 else 2000 + int(yr)
+    return f"{year}-{month:02d}"
+
+
+def _rep_match_row(line: str, patterns):
+    """If *line* starts with one of *patterns* (a list of token sequences),
+    return (all_tokens, label_token_count) for the first pattern that fits."""
+    toks = line.split()
+    for pat in patterns:
+        if len(toks) > len(pat) and [t.upper() for t in toks[:len(pat)]] == pat:
+            return toks, len(pat)
+    return None, None
+
+
+def _rep_find_row(lines, patterns):
+    for ln in lines:
+        toks, label_len = _rep_match_row(ln, patterns)
+        if toks is not None:
+            return ln, toks, label_len
+    return None, None, None
+
+
+def _rep_resolve_actual(nums):
+    """nums are a REP production row's numbers in column order: [OnDateABP,
+    OnDateACT, MonthlyABP, CumAct, CumAct(dup), Rate%, CPLY, ...trailing
+    junk from an unrelated table sharing the line]. Returns the month's
+    Cumulative Actual (the 4th number), which is what we store.
+
+    The 4th and 5th numbers are normally identical (a duplicated column in
+    the source report's export) but occasionally diverge; when they do,
+    prefer whichever is closer to MonthlyABP × Rate% ÷ 100, since that's
+    self-consistent with the row's own recorded % achievement."""
+    if len(nums) < 4:
+        return None
+    a = nums[3]
+    b = nums[4] if len(nums) > 4 else None
+    if b is None or a == b or len(nums) <= 5:
+        return a
+    monthly_abp, rate_pct = nums[2], nums[5]
+    if not monthly_abp:
+        return a
+    implied = monthly_abp * rate_pct / 100.0
+    return b if abs(b - implied) < abs(a - implied) else a
+
+
+def _parse_rep(lines, full_text, want_mon, yy, n_pages):
+    """Extract production items from a REP-type PDF. See module docstring
+    for the row-matching and column-resolution approach."""
     rows = []
-    for primary, item_name, alts in _REP_ITEMS:
-        ln, kw_used = _find_any_keyword_line(lines, primary, alts)
-        if ln is not None:
-            val = _best_value(ln, min_val=50.0)
-            if val is not None:
-                stored = round(val / 1000.0, 3)
-                rows.append({
-                    "item_name": item_name,
-                    "value":     stored,
-                    "unit":      "'000T",
-                    "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy}",
-                    "pdf_label": ln.strip()[:70],
-                    "status":    "ok",
-                })
-            else:
-                rows.append({
-                    "item_name": f"(no value) {item_name}",
-                    "value":     None,
-                    "unit":      "T",
-                    "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy}",
-                    "pdf_label": ln.strip()[:70],
-                    "status":    "unmapped",
-                })
+    for item_name, patterns in _REP_LABEL_PATTERNS.items():
+        ln, toks, label_len = _rep_find_row(lines, patterns)
+        if ln is None:
+            rows.append({
+                "item_name": f"(not found) {item_name}", "value": None, "unit": "T",
+                "cell": f"PDF ({n_pages}p) · {want_mon}'{yy}",
+                "pdf_label": "/".join(patterns[0]), "status": "unmapped",
+            })
+            continue
+        nums = [float(t.replace(",", "")) for t in toks[label_len:] if _NUM_RE.match(t)]
+        val = _rep_resolve_actual(nums)
+        if val is not None:
+            rows.append({
+                "item_name": item_name, "value": round(val / 1000.0, 3), "unit": "'000T",
+                "cell": f"PDF ({n_pages}p) · {want_mon}'{yy} (cumulative actual)",
+                "pdf_label": ln.strip()[:70], "status": "ok",
+            })
         else:
             rows.append({
-                "item_name": f"(not found) {item_name}",
-                "value":     None,
-                "unit":      "T",
-                "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy}",
-                "pdf_label": primary,
-                "status":    "unmapped",
-            })
-    return rows
-
-
-def _parse_fl(lines, want_mon, yy, n_pages):
-    """Extract finished-steel mill items from a FL-type PDF.
-
-    FL report column structure (fixed layout, same month header for all rows):
-        [Shop name]  [Plan]  [Actual]  [other columns ...]
-        BARS           40      199       0   125   0  ...
-        FS PRD        400      323      81   183  ...
-        PL MILL       200      175      88   211  ...
-
-    Column 1 = label, Column 2 = Plan, Column 3 = Actual (what we want).
-    → Pick the 2nd number (index 1, 0-based) from each keyword line.
-    """
-    rows = []
-    found_vals = {}
-
-    for keyword, item_name in _FL_ITEMS:
-        ln = _find_keyword_line(lines, keyword)
-        if ln is not None:
-            # _nums_all preserves zeros to keep column positions intact
-            nums = _nums_all(ln)
-            # Need at least [plan, actual] = 2 numbers; actual is at index 1
-            if len(nums) >= 2:
-                val = nums[1]   # 2nd number = Actual (3rd column counting label)
-                if val > 0:
-                    stored = round(val / 1000.0, 3)
-                    found_vals[item_name] = stored
-                    rows.append({
-                        "item_name": item_name,
-                        "value":     stored,
-                        "unit":      "'000T",
-                        "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy} col3(actual)",
-                        "pdf_label": ln.strip()[:70],
-                        "status":    "ok",
-                    })
-                else:
-                    rows.append({
-                        "item_name": f"(zero/neg) {item_name}",
-                        "value":     val,
-                        "unit":      "T",
-                        "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy} col3(actual)",
-                        "pdf_label": ln.strip()[:70],
-                        "status":    "unmapped",
-                    })
-            elif len(nums) == 1:
-                # Only one number found — take it as-is (might be just actual, no plan)
-                val = nums[0]
-                stored = round(val / 1000.0, 3)
-                found_vals[item_name] = stored
-                rows.append({
-                    "item_name": item_name,
-                    "value":     stored,
-                    "unit":      "'000T",
-                    "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy} col2(only)",
-                    "pdf_label": ln.strip()[:70],
-                    "status":    "ok",
-                })
-            else:
-                rows.append({
-                    "item_name": f"(no value) {item_name}",
-                    "value":     None,
-                    "unit":      "T",
-                    "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy}",
-                    "pdf_label": ln.strip()[:70],
-                    "status":    "unmapped",
-                })
-        else:
-            rows.append({
-                "item_name": f"(not found) {item_name}",
-                "value":     None,
-                "unit":      "T",
-                "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy}",
-                "pdf_label": keyword,
-                "status":    "unmapped",
+                "item_name": f"(no value) {item_name}", "value": None, "unit": "T",
+                "cell": f"PDF ({n_pages}p) · {want_mon}'{yy}",
+                "pdf_label": ln.strip()[:70], "status": "unmapped",
             })
 
-    # Compute Finished Steel = sum of all found mill items
-    ok_vals = list(found_vals.values())
-    if ok_vals:
-        total_fs = round(sum(ok_vals), 3)
-        component_labels = " + ".join(
-            f"{k}={v}" for k, v in found_vals.items()
-        )
+    m = _REP_CLOSING_STOCK_RE.search(full_text)
+    if m:
+        stock_val = float(m.group(1).replace(",", ""))
         rows.append({
-            "item_name": "Finished Steel",
-            "value":     total_fs,
-            "unit":      "'000T",
-            "cell":      f"PDF ({n_pages}p) · {want_mon}'{yy} (computed)",
-            "pdf_label": component_labels,
-            "status":    "ok",
+            "item_name": "Closing Stock", "value": round(stock_val / 1000.0, 3), "unit": "'000T",
+            "cell": f"PDF ({n_pages}p) · {want_mon}'{yy}",
+            "pdf_label": "TOTAL PLANT ST.", "status": "ok",
         })
-
+    else:
+        rows.append({
+            "item_name": "(not found) Closing Stock", "value": None, "unit": "T",
+            "cell": f"PDF ({n_pages}p) · {want_mon}'{yy}",
+            "pdf_label": "TOTAL PLANT ST.", "status": "unmapped",
+        })
     return rows
+
+
+def _load_pdf_word_rows(file_path: str):
+    """Open PDF with pdfplumber, return (rows, n_pages).
+
+    rows is every printed line of every page, in reading order, as a list of
+    word-dicts ({'text', 'x0', ...}) sorted left-to-right — needed (instead
+    of plain extract_text() lines) so FL items can be matched to the report
+    month / previous month columns by x-position rather than list index.
+    Words are grouped by pdfplumber's rounded 'top' coordinate, which is
+    robust against the ~1px jitter between words printed on the same line.
+    """
+    import pdfplumber
+
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            n = len(pdf.pages)
+            rows = []
+            for pg in pdf.pages:
+                by_top = {}
+                for w in pg.extract_words():
+                    by_top.setdefault(round(w["top"]), []).append(w)
+                for key in sorted(by_top.keys()):
+                    rows.append(sorted(by_top[key], key=lambda w: w["x0"]))
+            return rows, n
+    except Exception as exc:
+        raise ValueError(f"Cannot open PDF '{os.path.basename(file_path)}': {exc}") from exc
+
+
+def _fl_row_text(row) -> str:
+    return " ".join(w["text"] for w in row)
+
+
+def _fl_is_separator_row(row) -> bool:
+    txt = "".join(w["text"] for w in row)
+    return bool(txt) and set(txt) <= set("=")
+
+
+def _fl_section_blocks(rows):
+    """Split the table into blocks between '====' separator rows."""
+    sep_idx = [i for i, r in enumerate(rows) if _fl_is_separator_row(r)]
+    blocks = []
+    for a, b in zip(sep_idx, sep_idx[1:]):
+        if b - a > 1:
+            blocks.append(rows[a + 1:b])
+    return blocks
+
+
+def _fl_find_block(blocks, keyword: str):
+    """First block whose own header (its first row) contains *keyword*."""
+    for blk in blocks:
+        if blk and keyword in _fl_row_text(blk[0]).upper():
+            return blk
+    return None
+
+
+def _fl_row_numbers(row, label_word_count: int):
+    """(value, x0) for every numeric token after the row's label words."""
+    out = []
+    for w in row[label_word_count:]:
+        if _NUM_RE.match(w["text"]):
+            out.append((float(w["text"].replace(",", "")), w["x0"]))
+    return out
+
+
+def _fl_calibrate_columns(rows):
+    """Locate the 'LIQ.PRD' reference row (first data row, always present
+    and fully populated) and return the x0 of its 2nd and 4th numeric
+    columns — i.e. Actual (report month) and Actual (previous month).
+    Every FL row shares the same left-to-right column sequence (Plan, Act,
+    %Ach, PrevAct, LYAct, ...), so matching by x-position against these two
+    reference columns is safe even when a target row's OWN %Ach/CPLY cell
+    is blank and would otherwise shift a naive list-index lookup."""
+    for row in rows:
+        if row and row[0]["text"].upper().startswith("LIQ"):
+            nums = _fl_row_numbers(row, 1)
+            if len(nums) >= 4:
+                return nums[1][1], nums[3][1]
+    return None, None
+
+
+def _fl_find_item_row(block, label_words, exact_total: bool):
+    if block is None:
+        return None
+    upper_label = [w.upper() for w in label_words]
+    for row in block:
+        if len(row) <= len(label_words):
+            continue
+        if [w["text"].upper() for w in row[:len(label_words)]] != upper_label:
+            continue
+        if exact_total and not _NUM_RE.match(row[len(label_words)]["text"]):
+            continue   # e.g. "TOTAL CC SL" — not the bare "TOTAL" row
+        return row
+    return None
+
+
+def _fl_nearest(nums, target_x: float, tol: float = 40.0):
+    best, best_d = None, None
+    for val, x in nums:
+        d = abs(x - target_x)
+        if d <= tol and (best_d is None or d < best_d):
+            best, best_d = val, d
+    return best
+
+
+def _detect_fl_report_month(rows):
+    """Read the FL table's own 'DETAILS <MON>'<YY|YYYY> ...' header row —
+    its 2nd word is always the report month. Returns 'YYYY-MM' or None."""
+    for row in rows:
+        if row and row[0]["text"].upper() == "DETAILS" and len(row) >= 2:
+            m = _FL_DETAILS_MONTH_RE.match(row[1]["text"])
+            if not m:
+                continue
+            mon = _FL_MONTH_TO_NUM.get(m.group(1).upper())
+            if mon is None:
+                continue
+            yy = m.group(2)
+            year = int(yy) if len(yy) == 4 else 2000 + int(yy)
+            return f"{year}-{mon:02d}"
+    return None
+
+
+def _fl_prev_month(report_month: str) -> str:
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    return f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
+
+
+def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
+    """Extract ING / BILLETS / BARS / PL MILL / TOTAL for both the report
+    month and the previous month from an FL-type PDF. See module docstring
+    for the item → item_name mapping and the column-calibration approach."""
+    act_x, prev_x = _fl_calibrate_columns(rows)
+    if act_x is None:
+        raise ValueError(
+            "Could not locate the FL report's 'LIQ.PRD' reference row — "
+            "unexpected table layout, cannot calibrate columns."
+        )
+
+    blocks = _fl_section_blocks(rows)
+    finishing_block = _fl_find_block(blocks, "FINISHING")
+    saleable_block  = _fl_find_block(blocks, "SALEABLE")
+    section_for = {
+        "Ingot Steel":    finishing_block,
+        "Billets":        saleable_block,
+        "BARS":           saleable_block,
+        "PLATES":         saleable_block,
+        "Saleable Steel": saleable_block,
+    }
+
+    out_rows = []
+    for label_words, item_name, exact_total in _FL_ITEMS:
+        block = section_for[item_name]
+        row = _fl_find_item_row(block, label_words, exact_total)
+        pdf_label = " ".join(label_words)
+        if row is None:
+            for ym in (report_month, prev_month):
+                out_rows.append({
+                    "item_name": f"(not found) {item_name}", "value": None, "unit": "T",
+                    "cell": f"PDF ({n_pages}p) · FL row not found",
+                    "pdf_label": pdf_label, "status": "unmapped", "report_month": ym,
+                })
+            continue
+
+        nums = _fl_row_numbers(row, len(label_words))
+        act_val  = _fl_nearest(nums, act_x)
+        prev_val = _fl_nearest(nums, prev_x)
+        row_text = _fl_row_text(row)[:70]
+        for ym, val, tag in (
+            (report_month, act_val, f"{_fmt_month(report_month)} Actual"),
+            (prev_month,   prev_val, f"{_fmt_month(prev_month)} Actual"),
+        ):
+            if val is not None:
+                out_rows.append({
+                    "item_name": item_name, "value": round(val / 1000.0, 3), "unit": "'000T",
+                    "cell": f"PDF ({n_pages}p) · {tag}",
+                    "pdf_label": row_text, "status": "ok", "report_month": ym,
+                })
+            else:
+                out_rows.append({
+                    "item_name": f"(no value) {item_name}", "value": None, "unit": "T",
+                    "cell": f"PDF ({n_pages}p) · {tag}",
+                    "pdf_label": row_text, "status": "unmapped", "report_month": ym,
+                })
+    return out_rows
 
 
 def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
@@ -288,12 +442,8 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     """
     import sys
 
-    y, m    = int(report_month[:4]), int(report_month[5:7])
-    want_mon = _MONTHS[m - 1]
-    yy       = str(y)[2:]
-
     fname = os.path.basename(file_path)
-    print(f"[ASP PDF] extract_preview: file={fname}  month={want_mon}'{yy}",
+    print(f"[ASP PDF] extract_preview: file={fname}  month={report_month}",
           flush=True, file=sys.stderr)
 
     full_text, n_pages = _load_pdf_text(file_path)
@@ -309,23 +459,38 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
             "Expected a REP*.pdf (crude steel) or FL*.pdf (finished steel) report."
         )
 
-    lines = full_text.splitlines()
+    out_month = report_month
 
     if report_type == "REP":
-        prod_rows   = _parse_rep(lines, want_mon, yy, n_pages)
-        source_type = "ASP OMI Production Report (REP)"
-        sheets      = f"PDF ({n_pages} pages) — Crude Steel & Stock"
+        detected = _detect_rep_report_month(full_text)
+        print(f"[ASP PDF] REP detected month: {detected}", flush=True, file=sys.stderr)
+        _assert_month_match(detected, report_month, "REP report")
+        out_month = detected or report_month
+        y, m      = int(out_month[:4]), int(out_month[5:7])
+        want_mon  = _MONTHS[m - 1]
+        yy        = str(y)[2:]
+        lines       = full_text.splitlines()
+        prod_rows   = _parse_rep(lines, full_text, want_mon, yy, n_pages)
+        source_type = "ASP OMI Daily Performance Summary Report (REP)"
+        sheets      = f"PDF ({n_pages} pages) — Crude Steel, Ingot, Concast, Saleable Steel & Stock"
     else:
-        prod_rows   = _parse_fl(lines, want_mon, yy, n_pages)
-        source_type = "ASP Finished Steel Report (FL)"
-        sheets      = f"PDF ({n_pages} pages) — Finished Steel by Mill"
+        word_rows, n_pages = _load_pdf_word_rows(file_path)
+        detected = _detect_fl_report_month(word_rows)
+        print(f"[ASP PDF] FL detected month: {detected}", flush=True, file=sys.stderr)
+        _assert_month_match(detected, report_month, "FL report")
+        out_month  = detected or report_month
+        prev_month = _fl_prev_month(out_month)
+        prod_rows   = _parse_fl_two_month(word_rows, out_month, prev_month, n_pages)
+        source_type = "ASP Finished Steel FLASH Report (FL)"
+        sheets      = (f"PDF ({n_pages} pages) — Ingot/Billets/Bars/Plates/Saleable Steel "
+                       f"({_fmt_month(out_month)} + {_fmt_month(prev_month)})")
 
     ok = sum(1 for r in prod_rows if r["status"] == "ok")
     print(f"[ASP PDF] {report_type}: {ok}/{len(prod_rows)} rows ok", flush=True, file=sys.stderr)
 
     return {
         "plant":              PLANT,
-        "month":              report_month,
+        "month":              out_month,
         "source_type":        source_type,
         "sheets":             sheets,
         "workbook_sheets":    [f"PDF ({n_pages} pages)"],

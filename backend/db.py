@@ -1650,22 +1650,37 @@ def get_production_actual_value(plant: str, item_name: str, report_month: str) -
 
 def enrich_rows_with_db_production(rows: List[Dict[str, Any]], plant: str, report_month: str) -> List[Dict[str, Any]]:
     """Attach 'db_value' (current production_table value, or None) to each
-    preview row in-place, keyed by its item_name. Used by upload preview
-    endpoints so the UI can show DB-vs-extracted side by side before insert."""
+    preview row in-place, keyed by (the row's own report_month, item_name).
+    Used by upload preview endpoints so the UI can show DB-vs-extracted side
+    by side before insert.
+
+    Multi-month previews (ASP's FL report-month + previous-month pair, BSL's
+    all-months FY preview) carry their own per-row `report_month`, which can
+    differ from the top-level *report_month* argument — falling back to a
+    single lookup keyed by item_name alone (the previous version of this
+    function) compared every row against the SAME month's DB value, so a
+    previous-month row's "In DB" figure silently showed the report month's
+    value instead of its own. That makes an already-successful previous-month
+    insert look like it never took effect, even though production_table was
+    updated correctly."""
     if not rows:
         return rows
     init_db()
+    months = {r.get("report_month") or report_month for r in rows}
     conn = connect()
     cursor = conn.cursor()
+    placeholders = ",".join("?" * len(months))
     cursor.execute(
-        "SELECT item_name, month_actual FROM production_table WHERE plant_name=? AND report_month=?",
-        (plant, report_month),
+        f"SELECT report_month, item_name, month_actual FROM production_table "
+        f"WHERE plant_name=? AND report_month IN ({placeholders})",
+        (plant, *months),
     )
-    current = {item: val for item, val in cursor.fetchall()}
+    current = {(rm, item): val for rm, item, val in cursor.fetchall()}
     conn.close()
     for r in rows:
         item = r.get("item_name") or r.get("pdf_label")
-        r["db_value"] = current.get(item) if item else None
+        rm = r.get("report_month") or report_month
+        r["db_value"] = current.get((rm, item)) if item else None
     return rows
 
 

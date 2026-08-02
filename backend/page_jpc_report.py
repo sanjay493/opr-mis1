@@ -354,7 +354,12 @@ def _build_special_steel_sheet(ws, cur, month, cply_month):
     asp_sal_c = _one(cur, "ASP", "Saleable Steel", cply_month)
     asp_fin_m = _one(cur, "ASP", "Finished Steel", month)
     asp_fin_c = _one(cur, "ASP", "Finished Steel", cply_month)
-    row = _write_row(ws, row, "Semis (billet, Bloom, Ingots)", None, None)  # no reliable source — see notes
+    # Semis = Ingot Steel + Billets (FL report's Saleable Production, both
+    # semis-stage products — see pdf_extractor_asp.py's FL extraction).
+    semis_combo = [("ASP", "Ingot Steel"), ("ASP", "Billets")]
+    semis_m = _sum(cur, semis_combo, month)
+    semis_c = _sum(cur, semis_combo, cply_month)
+    row = _write_row(ws, row, "Semis (billet, Bloom, Ingots)", semis_m, semis_c)
     row = _write_row(ws, row, "Others (RCS, squares, Forgings)", others_m, others_c)
     row = _write_row(ws, row, "Plates", plates_m, plates_c)
     row = _write_row(ws, row, "Plant Total Saleable Steel", asp_sal_m, asp_sal_c, bold=True)
