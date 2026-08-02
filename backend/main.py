@@ -38,6 +38,7 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           _BF_PLANTS as _SAIL_DASHBOARD_PLANTS)
 from page_records import generate_records
 from page_jpc_report import build_jpc_report_bytes
+from page_finished_steel_report import build_finished_steel_report_csv
 import page_production_fy_export
 import page_production_query_export
 from page_one_page_report import build_one_page_report_bytes
@@ -1294,7 +1295,7 @@ async def extract_preview_endpoint(
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     result = await loop.run_in_executor(
                         pool,
-                        lambda: excel_extractor_isp.extract_preview(tmp_path, month)
+                        lambda: excel_extractor_isp.extract_preview(tmp_path, month, all_months=all_months_bool)
                     )
         elif plant_name == "BSP":
             _ext = os.path.splitext(file.filename or "")[1].lower()
@@ -3063,6 +3064,14 @@ async def sail_1page_confirm(payload: dict):
             """, (snap, item, val))
             saved_stock += 1
 
+        note = payload.get("sales_note")
+        if note:
+            cur.execute("""
+                INSERT INTO sail_sales_note_table (report_month, note)
+                VALUES (?, ?)
+                ON CONFLICT(report_month) DO UPDATE SET note = excluded.note
+            """, (month, note))
+
         conn.commit()
     finally:
         conn.close()
@@ -3316,6 +3325,22 @@ async def production_query_pdf(payload: dict):
         content=content,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="Production_Query_{start}_to_{end}.pdf"'},
+    )
+
+
+@app.get("/api/finished-steel-report")
+async def finished_steel_report():
+    """Download Finished Steel, month-wise and unit(plant)-wise (.csv) —
+    every report_month's production_table 'Finished Steel' figure per plant,
+    plus the SAIL total column. See page_finished_steel_report.py."""
+    try:
+        content = build_finished_steel_report_csv()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Finished Steel report generation failed: {e}")
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="finished_steel_month_plant_wise.csv"'},
     )
 
 

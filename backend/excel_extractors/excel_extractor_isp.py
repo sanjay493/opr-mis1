@@ -413,70 +413,81 @@ def _preview_morning_report_rows(wb):
     return rows, db_report_month
 
 
-def _preview_monthly_report_rows(wb, report_month: str):
-    """Returns (production_rows, db_report_month) for a Final Monthly Report workbook."""
-    if not report_month:
-        raise ValueError(
-            "report_month is required for ISP Final Monthly Report. "
-            "Set the month selector before uploading."
-        )
+# ── 'Maj Production Summ' sheet: every FY month is its own fixed column,
+# April through March — the same "one workbook, every elapsed month" layout
+# isp_technopara_extractor.py's B-FCE sheet uses for techno (see
+# _fy_month_sequence / _preview_monthly_report_all_months below), so a later
+# cumulative upload (e.g. the FY-end March file) can backfill every earlier
+# month in one pass, same as techno's /preview-months already does.
+_PROD_COL_MAP = {
+    "04": "F",  "05": "H",  "06": "L",  "07": "P",
+    "08": "T",  "09": "X",  "10": "AD", "11": "AH",
+    "12": "AL", "01": "AR", "02": "AV", "03": "AZ",
+}
+_PROD_NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
+_PROD_CELLS = {
+    "COB#10":               6,
+    "COB#11":               7,
+    "Oven Pushing (nos/day)":  8,
+    "Total Sinter":         16,
+    "Hot Metal":            17,
+    "Pig Iron":             26,
+    "SMS CCM-1&2":              19,
+    "SMS CCM-3":                20,
+    "Total Crude Steel":    18,
+    "WRMILL":               30,
+    "BARMILL":              31,
+    "USMILL":               32,
+    "Finished Steel":       33,
+    "Saleable 150 Billets": 34,
+    "200 Blooms":           35,
+    "Saleable Semis":       36,
+    "Saleable Steel":       37,
+}
+# Reliable, always-populated-when-reported anchor item — used to decide
+# whether a candidate FY month's column actually has data yet (vs. an
+# empty not-yet-reported month further along the same fixed column layout).
+_PROD_MONTH_HAS_DATA_ANCHOR = "Hot Metal"
 
-    db_report_month, month_num = _parse_report_month(report_month)
+_PROD_MONTH_ORDER = ["04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03"]
 
-    col_map = {
-        "04": "F",  "05": "H",  "06": "L",  "07": "P",
-        "08": "T",  "09": "X",  "10": "AD", "11": "AH",
-        "12": "AL", "01": "AR", "02": "AV", "03": "AZ",
-    }
-    col = col_map.get(month_num)
-    if not col:
-        raise ValueError(f"Month column mapping not found for month code '{month_num}'.")
 
-    ws = wb["Maj Production Summ"]
-    NO_CONVERT = {"COB#10", "COB#11", "Oven Pushing (nos/day)"}
+def _fy_month_sequence(upto_month: str) -> list:
+    """April..upto_month (inclusive) in FY order, as 'YYYY-MM' strings — same
+    definition as isp_technopara_extractor.py's helper of the same name."""
+    y, m = upto_month.split("-")
+    y, m = int(y), int(m)
+    fy_start_year = y if m >= 4 else y - 1
+    upto_idx = _PROD_MONTH_ORDER.index(f"{m:02d}")
+    months = []
+    for mo in _PROD_MONTH_ORDER[:upto_idx + 1]:
+        yr = fy_start_year + 1 if mo in ("01", "02", "03") else fy_start_year
+        months.append(f"{yr}-{mo}")
+    return months
 
-    production_cells = {
-        "COB#10":               6,
-        "COB#11":               7,
-        "Oven Pushing (nos/day)":  8,
-        "Total Sinter":         16,
-        "Hot Metal":            17,
-        "Pig Iron":             26,
-        "SMS CCM-1&2":              19,
-        "SMS CCM-3":                20,
-        "Total Crude Steel":    18,
-        "WRMILL":               30,
-        "BARMILL":              31,
-        "USMILL":               32,
-        "Finished Steel":       33,
-        "Saleable 150 Billets": 34,
-        "200 Blooms":           35,
-        "Saleable Semis":       36,
-        "Saleable Steel":       37,
-    }
 
+def _monthly_report_rows_for_col(ws, col: str, sinter_ws=None, sinter_rows=None):
+    """production_rows for one 'Maj Production Summ' month column."""
     rows = []
-    for item_name, row_num in production_cells.items():
+    for item_name, row_num in _PROD_CELLS.items():
         cell_ref = f"{col}{row_num}"
         val = clean_val(ws[cell_ref].value)
-        if val is not None and item_name not in NO_CONVERT:
+        if val is not None and item_name not in _PROD_NO_CONVERT:
             val = round(val / 1000.0, 3)
         rows.append({
             "item_name": item_name,
             "value":     val,
             "cell":      cell_ref,
-            "unit":      "nos/d" if item_name in NO_CONVERT else "'000T",
+            "unit":      "nos/d" if item_name in _PROD_NO_CONVERT else "'000T",
             "status":    "ok" if val is not None else "no value",
         })
 
     # See _extract_monthly_report for why this is looked up by label on the
     # separate 'SINTER' tab instead of a fixed row on 'Maj Production Summ'.
-    if "SINTER" in wb.sheetnames:
-        ws_sinter = wb["SINTER"]
-        mc_rows = _find_label_rows(ws_sinter, "M/C #", count=2)
-        for item_name, row_num in zip(("SP M/c-1", "SP M/c-2"), mc_rows):
+    if sinter_ws is not None and sinter_rows:
+        for item_name, row_num in zip(("SP M/c-1", "SP M/c-2"), sinter_rows):
             cell_ref = f"{col}{row_num}"
-            val = clean_val(ws_sinter[cell_ref].value)
+            val = clean_val(sinter_ws[cell_ref].value)
             if val is not None:
                 val = round(val / 1000.0, 3)
             rows.append({
@@ -486,6 +497,60 @@ def _preview_monthly_report_rows(wb, report_month: str):
                 "unit":      "'000T",
                 "status":    "ok" if val is not None else "no value",
             })
+    return rows
+
+
+def _preview_monthly_report_rows(wb, report_month: str):
+    """Returns (production_rows, db_report_month) for a Final Monthly Report
+    workbook, for the single selected month."""
+    if not report_month:
+        raise ValueError(
+            "report_month is required for ISP Final Monthly Report. "
+            "Set the month selector before uploading."
+        )
+
+    db_report_month, month_num = _parse_report_month(report_month)
+    col = _PROD_COL_MAP.get(month_num)
+    if not col:
+        raise ValueError(f"Month column mapping not found for month code '{month_num}'.")
+
+    ws = wb["Maj Production Summ"]
+    sinter_ws, sinter_rows = None, None
+    if "SINTER" in wb.sheetnames:
+        sinter_ws = wb["SINTER"]
+        sinter_rows = _find_label_rows(sinter_ws, "M/C #", count=2)
+
+    rows = _monthly_report_rows_for_col(ws, col, sinter_ws, sinter_rows)
+    return rows, db_report_month
+
+
+def _preview_monthly_report_all_months(wb, upto_month: str):
+    """Returns (production_rows, db_report_month) covering every FY month
+    from April through upto_month whose 'Maj Production Summ' column
+    actually has data — lets one upload (e.g. the FY-end March file, or any
+    later cumulative file) backfill every earlier month in one pass, mirroring
+    isp_technopara_extractor.py's extract_available_months() for techno.
+    Each row carries its own 'report_month' key (same convention as
+    pdf_extractor_asp.py's two-month FL extraction) so /api/confirm-extraction
+    can save them all from one preview without a month-by-month re-upload."""
+    db_report_month, _ = _parse_report_month(upto_month)
+
+    ws = wb["Maj Production Summ"]
+    sinter_ws, sinter_rows = None, None
+    if "SINTER" in wb.sheetnames:
+        sinter_ws = wb["SINTER"]
+        sinter_rows = _find_label_rows(sinter_ws, "M/C #", count=2)
+
+    anchor_row = _PROD_CELLS[_PROD_MONTH_HAS_DATA_ANCHOR]
+    rows = []
+    for rm in _fy_month_sequence(db_report_month):
+        month_num = rm[5:7]
+        col = _PROD_COL_MAP[month_num]
+        if clean_val(ws[f"{col}{anchor_row}"].value) is None:
+            continue  # not yet reported in this workbook — skip, not an error
+        for r in _monthly_report_rows_for_col(ws, col, sinter_ws, sinter_rows):
+            r["report_month"] = rm
+            rows.append(r)
 
     return rows, db_report_month
 
@@ -1128,7 +1193,7 @@ def _old_prod_summ_rows(wb, prod_sheet, month_num, year_2d) -> list:
     return rows
 
 
-def _preview_summarized_monthly(wb, report_month: str, sheet_names: list) -> dict:
+def _preview_summarized_monthly(wb, report_month: str, sheet_names: list, all_months: bool = False) -> dict:
     """Extract ISP techno parameters from the Summarized Monthly Report.
 
     Sheet groups and their header rows:
@@ -1519,7 +1584,10 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list) -> dic
     prod_rows = []
     if "Maj Production Summ" in sheet_names:
         try:
-            prod_rows, _ = _preview_monthly_report_rows(wb, report_month)
+            if all_months:
+                prod_rows, _ = _preview_monthly_report_all_months(wb, report_month)
+            else:
+                prod_rows, _ = _preview_monthly_report_rows(wb, report_month)
         except Exception as e:
             logger.warning(f"ISP: could not extract production from 'Maj Production Summ': {e}")
 
@@ -1604,13 +1672,21 @@ def _fmt_ym(ym: str) -> str:
     return f"{mn.get(ym[5:7], ym[5:7])} {ym[:4]}"
 
 
-def extract_preview(file_path: str, report_month: str) -> dict:
+def extract_preview(file_path: str, report_month: str, all_months: bool = False) -> dict:
     """ISP preview: production or techno rows depending on file type. No DB writes.
 
     Detects file type by sheet names:
       DAILYREPORT1       → Morning Report (production_rows + stock_rows)
       Maj Production Summ → Final Monthly Report (production_rows)
-      B-FCE              → Summarized Monthly Report (techno_rows)
+      B-FCE              → Summarized Monthly Report (techno_rows; also
+                            production_rows when all_months, since this
+                            workbook carries the 'Maj Production Summ' sheet too)
+
+    all_months=True (only meaningful for the two 'Maj Production Summ'-
+    bearing types above) extracts every FY month from April through
+    report_month that the file's fixed column layout actually has data for,
+    each row tagged with its own 'report_month' — see
+    _preview_monthly_report_all_months().
     """
     wb = openpyxl.load_workbook(file_path, data_only=True)
     sheet_names = wb.sheetnames
@@ -1661,10 +1737,13 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     # "CO") — require Maj Techno Summ alongside so a bare "BF" sheet in some
     # unrelated workbook can't false-positive.
     if "B-FCE" in sheet_names or ("BF" in sheet_names and "Maj Techno Summ" in sheet_names):
-        return _preview_summarized_monthly(wb, report_month, sheet_names)
+        return _preview_summarized_monthly(wb, report_month, sheet_names, all_months=all_months)
 
     if "Maj Production Summ" in sheet_names:
-        rows, db_report_month = _preview_monthly_report_rows(wb, report_month)
+        if all_months and report_month:
+            rows, db_report_month = _preview_monthly_report_all_months(wb, report_month)
+        else:
+            rows, db_report_month = _preview_monthly_report_rows(wb, report_month)
         return {
             "plant":             "ISP",
             "month":             db_report_month,

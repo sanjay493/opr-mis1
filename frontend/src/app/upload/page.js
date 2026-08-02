@@ -476,6 +476,13 @@ function UploadPageInner() {
   const [bslProdAllMonths, setBslProdAllMonths] = useState(null);
   const [bslBusy, setBslBusy] = useState(false);
 
+  // ISP Final/Summarized Monthly Report (.xlsx) — all-months bulk preview state.
+  // Both workbook types carry a fixed column per FY month on 'Maj Production
+  // Summ', so a later cumulative upload (e.g. the FY-end March file)
+  // backfills every earlier month in one pass — same idea as BSL above.
+  const [ispProdAllMonths, setIspProdAllMonths] = useState(null);
+  const [ispBusy, setIspBusy] = useState(false);
+
   // DSP PDF three-step state (independent from the generic technoPreview flow)
   const [dspProdResult, setDspProdResult] = useState(null);
   const [dspProdRows, setDspProdRows] = useState([]);
@@ -1058,6 +1065,88 @@ function UploadPageInner() {
     }
   };
 
+  // ── ISP Final/Summarized Monthly Report — extract every FY month at once ──
+  const isIspXlsx = technoPlant === 'ISP' && technoFile?.name?.toLowerCase().endsWith('.xlsx');
+
+  const handleIspExtractAllMonths = async () => {
+    if (!technoFile) { alert('Please select the ISP .xlsx file first.'); return; }
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    setIspBusy(true);
+    setIspProdAllMonths(null);
+    setLogs([]);
+    addLog('info', `ISP: extracting all FY months up to ${targetPeriod} from ${technoFile.name}...`);
+    const formData = new FormData();
+    formData.append('file', technoFile);
+    formData.append('plant_name', 'ISP');
+    formData.append('month', targetPeriod);
+    formData.append('all_months', 'true');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
+      const rawText = await res.text();
+      let result;
+      try { result = JSON.parse(rawText); } catch (_) { throw new Error(rawText.substring(0, 300)); }
+      if (!res.ok) throw new Error(result.detail || 'extraction failed');
+      const allMonthsMap = {};
+      (result.production_rows || []).forEach((r) => {
+        const key = r.item_name || r.pdf_label;
+        if (!allMonthsMap[key]) {
+          allMonthsMap[key] = { item_name: r.item_name, pdf_label: r.pdf_label, status: r.status, unit: r.unit, months: {} };
+        }
+        allMonthsMap[key].months[r.report_month] = r.value;
+      });
+      setIspProdAllMonths({ ...result, grouped_rows: Object.values(allMonthsMap), single_rows: result.production_rows });
+      const totalRows = (result.production_rows || []).length;
+      const ok = (result.production_rows || []).filter((r) => r.status === 'ok').length;
+      addLog('success', `✓ ISP ALL months extracted: ${ok}/${totalRows} values across the FY (${result.source_type})`);
+    } catch (err) {
+      addLog('error', `ISP all-months extraction failed: ${err.message}`);
+      alert(`Extraction failed: ${err.message}`);
+    } finally {
+      setIspBusy(false);
+    }
+  };
+
+  const handleIspAllMonthsInsert = async () => {
+    if (!ispProdAllMonths) return;
+    const okRows = (ispProdAllMonths.single_rows || []).filter((r) => r.status === 'ok');
+    if (!okRows.length) { alert('No rows to insert.'); return; }
+    setIspBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/confirm-extraction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: ispProdAllMonths.month,
+          plant: 'ISP',
+          source_type: ispProdAllMonths.source_type,
+          sheets: ispProdAllMonths.sheets || '',
+          file_name: technoFile?.name || '',
+          production_rows: okRows,
+          item_overrides: [],
+          techno_rows: [],
+          techno_param_rows: [],
+          special_steel_rows: [],
+        }),
+      });
+      const text = await res.text();
+      let result;
+      try { result = JSON.parse(text); } catch { throw new Error(text.slice(0, 300) || `Server error ${res.status}`); }
+      if (!res.ok) throw new Error(result.detail || 'insert failed');
+      addLog('success', result.message);
+      alert(result.message);
+      setIspProdAllMonths(null);
+      setTechnoFile(null);
+      const fi = document.getElementById('techno-file-input');
+      if (fi) fi.value = '';
+      fetchExtractionLog();
+    } catch (err) {
+      addLog('error', `ISP insert failed: ${err.message}`);
+      alert(`Insert failed: ${err.message}`);
+    } finally {
+      setIspBusy(false);
+    }
+  };
+
   // ── DSP PDF three-step helpers ──────────────────────────────────────────
   const isDspPdf = technoPlant === 'DSP' && technoFile?.name?.toLowerCase().endsWith('.pdf');
 
@@ -1520,6 +1609,23 @@ function UploadPageInner() {
                                  backgroundColor: '#06b6d4', border: '1px solid #06b6d4', color: '#fff',
                                  cursor: bslBusy ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
                   {bslBusy ? 'Extracting All Months...' : '🔄 Extract All 12 Months (FY)'}
+                </button>
+              </div>
+            )}
+
+            {/* ── ISP Final/Summarized Monthly Report — extract whole FY at once ── */}
+            {isIspXlsx && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #dadce0' }}>
+                <div style={{ fontSize: '8pt', color: '#5f6368', marginBottom: 6 }}>
+                  &apos;Maj Production Summ&apos; carries one column per FY month, so a later
+                  cumulative file (e.g. the FY-end March report) backfills every earlier
+                  month up to {technoMonthName} {technoYear} in one go:
+                </div>
+                <button type="button" onClick={handleIspExtractAllMonths} disabled={ispBusy}
+                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                 backgroundColor: '#06b6d4', border: '1px solid #06b6d4', color: '#fff',
+                                 cursor: ispBusy ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                  {ispBusy ? 'Extracting All Months...' : '🔄 Extract All FY Months'}
                 </button>
               </div>
             )}
@@ -2024,6 +2130,41 @@ function UploadPageInner() {
                 the database — review the grid, then click &quot;Insert Production&quot; to write all 12 months at once.
                 &quot;Finished Steel&quot; is computed as Saleable Steel − Saleable Semis (Slab); &quot;GP/GC&quot; is
                 GP Sheet + GC Sheet. Legacy items <code>CRC&amp;S(1&amp;2)</code> / <code>CRC(3)</code> are never written by this route.
+              </div>
+            </div>
+          )}
+
+          {ispProdAllMonths && (
+            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #06b6d4', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
+                  ISP — {ispProdAllMonths.source_type}&nbsp;
+                  <span style={{ fontSize: '8pt', color: '#5f6368', fontWeight: 400 }}>
+                    ALL MONTHS
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setIspProdAllMonths(null)}
+                          disabled={ispBusy}
+                          style={{ background: 'none', border: '1px solid #5f6368', borderRadius: 4,
+                                   color: '#5f6368', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                    Discard
+                  </button>
+                  <button onClick={handleIspAllMonthsInsert}
+                          disabled={ispBusy}
+                          style={{ backgroundColor: '#06b6d4', border: '1px solid #06b6d4', borderRadius: 4,
+                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+                    {ispBusy ? 'Processing...' : `Insert Production (${(ispProdAllMonths.single_rows || []).filter(r => r.status === 'ok').length} values)`}
+                  </button>
+                </div>
+              </div>
+              <AllMonthsProductionTable rows={ispProdAllMonths.grouped_rows} />
+              <div style={{ fontSize: '8pt', color: '#5f6368', marginTop: 12, padding: 10, backgroundColor: '#ffffff', borderRadius: 4 }}>
+                <strong>ℹ️ All Months Mode:</strong> Every value above is shown before anything is written to
+                the database — review the grid, then click &quot;Insert Production&quot; to write all months at once.
+                A month is only included if this workbook&apos;s own &apos;Maj Production Summ&apos; column for
+                it actually has data (checked via Hot Metal) — an FY month the file hasn&apos;t reached yet is
+                silently skipped, not shown as zero.
               </div>
             </div>
           )}

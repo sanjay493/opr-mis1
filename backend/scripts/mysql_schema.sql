@@ -80,6 +80,15 @@ CREATE TABLE IF NOT EXISTS sail_stock_snapshot_table (
     PRIMARY KEY (snapshot_date, item_name)
 ) ENGINE=InnoDB;
 
+-- Asterisked remark under Table A (Sales), e.g. "*Jul25 & Apr-Jul25 fig
+-- incl NSL sales: 98 & 482 respectively" — extracted alongside
+-- sail_sales_table and reprinted verbatim under Table A in the generated
+-- report (see excel_extractors/sail_sales_stock_extractor.py).
+CREATE TABLE IF NOT EXISTS sail_sales_note_table (
+    report_month CHAR(7)  NOT NULL PRIMARY KEY,
+    note         TEXT
+) ENGINE=InnoDB;
+
 -- Capital Repair plan (pages 36-40, Report_format/CR.pdf format). "actual"
 -- is the only field updated from the frontend as each repair executes.
 CREATE TABLE IF NOT EXISTS capital_repair_table (

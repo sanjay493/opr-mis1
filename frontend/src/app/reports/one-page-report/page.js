@@ -116,6 +116,7 @@ export default function OnePageReportPage() {
           report_month: srcMonth,
           sales_rows: preview.sales_rows,
           stock_rows: preview.stock_rows,
+          sales_note: preview.sales_note,
         }),
       });
       const body = await res.json();
@@ -229,6 +230,11 @@ export default function OnePageReportPage() {
               Every column is stored exactly as extracted — %Ful, CPLY and Growth are the
               department&#39;s own reported figures, not recalculated here.
             </p>
+            {preview.sales_note && (
+              <p style={{ fontSize: '9.5pt', fontStyle: 'italic', color: '#5f6368', marginTop: 0, marginBottom: '8px' }}>
+                {preview.sales_note}
+              </p>
+            )}
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5pt', marginBottom: '20px' }}>
                 <thead>

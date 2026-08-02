@@ -29,16 +29,33 @@ So: extract exactly what's on the row, store it exactly, and the
 generator (page_one_page_report.py) reads it back with zero
 recalculation.
 
-Table D (Stock - 8 Plants) — anchor row starts with 'D.' and contains
-'STOCK'; row layout: label (col B) | .. | one column per historical
-snapshot date (e.g. '1.4.21', '01.06.26') | a trailing 'Var. w.r.t.
-...' column (not a real date, skipped). Every date column present is
-extracted (not just the latest) so a single file backfills history —
-the same file that reports June's figures also carries 1.4.21 through
-1.4.25 as reference columns.
+Table D (Stock - 8 Plants) — anchor row starts with a single letter +
+'.' (the section letter varies by report vintage — seen as both 'D.'
+and 'B.') and contains 'STOCK'; row layout: label | .. | one column
+per historical snapshot date (e.g. '1.4.21', '01.06.26') | a trailing
+'Var. w.r.t. ...' column (not a real date, skipped). Every date column
+present is extracted (not just the latest) so a single file backfills
+history — the same file that reports June's figures also carries
+1.4.21 through 1.4.25 as reference columns.
+
+Two report layouts are in circulation and this module auto-detects
+which one it's looking at rather than hardcoding column positions:
+  - "4-section" layout (A. Sales, B. Production, C. Techno, D. Stock):
+    item label sits one column right of the anchor (col B when the
+    anchor is in col A), with an empty column before data starts.
+  - "2-section" layout (A. Sales, B. Stock only, newer "as on <date>"
+    workbooks): item label sits in the SAME column as the anchor, and
+    data starts immediately in the next column.
+Rather than branch on a layout flag, each row's label is looked up in
+column A first, then column B — whichever holds the known label text
+wins — and the first Sales data column is located by searching the
+anchor row for the literal header 'ABP' instead of assuming a fixed
+column. The ten Sales fields and the Stock date columns are then read
+as a fixed run of columns from that anchor, since column ORDER is
+consistent across both layouts even though the starting column isn't.
 """
 import re
-from datetime import date
+from datetime import date, datetime
 
 _SALES_LABELS = [
     "LP SALES", "FP SALES", "PET SALES", "TOTAL : HOME SALES",
@@ -47,20 +64,14 @@ _SALES_LABELS = [
 ]
 _STOCK_LABELS = ["PLANTS", "STOCKYARDS", "STOCK IN TRANSIT", "TOTAL"]
 
-# (json key, 1-based column) — verbatim columns for a Table A row
-_SALES_COLS = [
-    ("month_abp",         4),   # D
-    ("month_actual",      5),   # E
-    ("month_ful",         6),   # F
-    ("month_cply",        7),   # G
-    ("month_growth",      8),   # H
-    ("till_month_abp",    9),   # I
-    ("till_month_actual", 10),  # J
-    ("till_month_ful",    11),  # K
-    ("till_month_cply",   12),  # L
-    ("till_month_growth", 13),  # M
+# json keys in on-sheet column order, starting from wherever the 'ABP'
+# header is found in the Sales anchor row (see module docstring)
+_SALES_FIELD_ORDER = [
+    "month_abp", "month_actual", "month_ful", "month_cply", "month_growth",
+    "till_month_abp", "till_month_actual", "till_month_ful",
+    "till_month_cply", "till_month_growth",
 ]
-_STOCK_FIRST_DATA_COL = 4  # D onward
+_MAX_SCAN_COL = 30
 
 _DATE_RE = re.compile(r'^(\d{1,2})\.(\d{1,2})\.(\d{2})$')
 
@@ -107,15 +118,39 @@ def _cell(grid, row_1b, col_1b):
     return None if v == "" else v
 
 
-def _find_anchor(grid, prefix, contains):
+_SECTION_LETTER_RE = re.compile(r'^[A-Z]\.')
+
+
+def _find_anchor(grid, contains):
     for r in range(1, len(grid) + 1):
         text = _norm(_cell(grid, r, 1))
-        if text.startswith(prefix) and contains in text:
+        if _SECTION_LETTER_RE.match(text) and contains in text:
             return r
     return None
 
 
+def _find_row_label(grid, r, remaining):
+    """Item labels sit in col A (2-section layout) or col B (4-section
+    layout) depending on report vintage — try both. Matched by prefix,
+    not exact equality, since some months append annotations onto the
+    label itself (e.g. 'TOTAL : HOME SALES incl NSL'); no two labels in
+    _SALES_LABELS/_STOCK_LABELS share a prefix, so this stays unambiguous.
+    Returns the canonical label (from `remaining`), not the raw cell text."""
+    for col in (1, 2):
+        text = _norm(_cell(grid, r, col))
+        if not text:
+            continue
+        for candidate in remaining:
+            if text.startswith(candidate):
+                return candidate
+    return None
+
+
 def _parse_snapshot_date(header_text):
+    if isinstance(header_text, datetime):
+        return header_text.date()
+    if isinstance(header_text, date):
+        return header_text
     m = _DATE_RE.match(str(header_text or "").strip())
     if not m:
         return None
@@ -142,57 +177,84 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     grid = _load_grid(file_path)
 
     sales_rows = []
-    sales_anchor = _find_anchor(grid, "A.", "SALES")
+    sales_anchor = _find_anchor(grid, "SALES")
     if sales_anchor is None:
         raise ValueError(
-            "Sales table not found — expected a row starting with 'A.' and "
-            "containing 'SALES' (e.g. \"A.    SALES ['000 T]\")."
+            "Sales table not found — expected a row starting with a "
+            "section letter (e.g. 'A.') and containing 'SALES' (e.g. "
+            "\"A.    SALES ['000 T]\")."
         )
+    abp_col = None
+    for c in range(2, _MAX_SCAN_COL):
+        if _norm(_cell(grid, sales_anchor, c)) == "ABP":
+            abp_col = c
+            break
+    if abp_col is None:
+        raise ValueError(
+            "Sales table found but no 'ABP' column header on that row — "
+            "cannot locate the data columns."
+        )
+    sales_cols = [(key, abp_col + i) for i, key in enumerate(_SALES_FIELD_ORDER)]
+
     remaining = list(_SALES_LABELS)
+    last_sales_row = sales_anchor
     for r in range(sales_anchor + 1, min(sales_anchor + 15, len(grid)) + 1):
-        label = _norm(_cell(grid, r, 2))
-        if label in remaining:
+        label = _find_row_label(grid, r, remaining)
+        if label is not None:
             remaining.remove(label)
-            data = {key: _clean(_cell(grid, r, col)) for key, col in _SALES_COLS}
+            data = {key: _clean(_cell(grid, r, col)) for key, col in sales_cols}
             sales_rows.append({
                 "item_name": label.title(),
                 "data": data,
                 "cell": f"row {r}",
                 "status": "ok" if any(v is not None for v in data.values()) else "skip",
             })
+            last_sales_row = r
         if not remaining:
+            break
+
+    # An asterisked remark (e.g. "*Jul25 & Apr-Jul25 fig incl NSL sales: 98 &
+    # 482 respectively") sometimes follows the Sales table, in whichever
+    # column happens to be free on that row — position varies by report
+    # vintage same as everything else here, so just scan for a cell
+    # starting with '*' in the few rows right after the last Sales row.
+    sales_note = None
+    for r in range(last_sales_row + 1, min(last_sales_row + 3, len(grid)) + 1):
+        for c in range(1, _MAX_SCAN_COL):
+            text = str(_cell(grid, r, c) or "").strip()
+            if text.startswith("*"):
+                sales_note = text
+                break
+        if sales_note:
             break
     for label in remaining:
         sales_rows.append({
             "item_name": label.title(),
-            "data": {key: None for key, _ in _SALES_COLS},
+            "data": {key: None for key in _SALES_FIELD_ORDER},
             "cell": "", "status": "not found",
         })
 
     stock_rows = []
-    stock_anchor = _find_anchor(grid, "D.", "STOCK")
+    stock_anchor = _find_anchor(grid, "STOCK")
     if stock_anchor is None:
         raise ValueError(
-            "Stock table not found — expected a row starting with 'D.' and "
-            "containing 'STOCK' (e.g. \"D.    STOCK  - 8 PLANTS ['000 T]\")."
+            "Stock table not found — expected a row starting with a "
+            "section letter (e.g. 'D.' or 'B.') and containing 'STOCK' "
+            "(e.g. \"D.    STOCK  - 8 PLANTS ['000 T]\")."
         )
     header_row = stock_anchor
     date_cols = []
-    c = _STOCK_FIRST_DATA_COL
-    while True:
-        header_text = _cell(grid, header_row, c)
-        if header_text is None:
+    for c in range(2, _MAX_SCAN_COL):
+        snap = _parse_snapshot_date(_cell(grid, header_row, c))
+        if snap is not None:
+            date_cols.append((c, snap))
+        elif date_cols:
             break
-        snap = _parse_snapshot_date(header_text)
-        if snap is None:
-            break
-        date_cols.append((c, snap))
-        c += 1
 
     remaining = list(_STOCK_LABELS)
     for r in range(stock_anchor + 1, min(stock_anchor + 10, len(grid)) + 1):
-        label = _norm(_cell(grid, r, 2))
-        if label in remaining:
+        label = _find_row_label(grid, r, remaining)
+        if label is not None:
             remaining.remove(label)
             for col, snap in date_cols:
                 val = _clean(_cell(grid, r, col))
@@ -224,4 +286,5 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
         "source_type": "SAIL 1-Page Report (Sales & Stock)",
         "sales_rows": sales_rows,
         "stock_rows": stock_rows,
+        "sales_note": sales_note,
     }

@@ -9,7 +9,11 @@ combines 4 tables into one workbook for a selected report_month:
                           cumulative — is read back exactly as reported,
                           never recomputed, since the source department's
                           own cumulative figures are provisional and don't
-                          reliably equal summing each month's own Actual)
+                          reliably equal summing each month's own Actual;
+                          sail_sales_note_table carries the asterisked
+                          remark that sometimes follows the table, e.g.
+                          "*Jul25 & Apr-Jul25 fig incl NSL sales: 98 & 482
+                          respectively", reprinted verbatim underneath)
   B. Production         — production_table / production_plan_table
                           (Hot Metal / Crude Steel / Saleable Steel, same
                           source as page4.py's Crude Steel Production page)
@@ -26,7 +30,7 @@ import calendar
 from datetime import date
 
 import openpyxl
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, Color
 from openpyxl.utils import get_column_letter
 
 import db
@@ -53,15 +57,19 @@ def _cum_label(month: str) -> str:
 
 
 def _gr(cur_v, prev_v):
+    """Fraction (0.18, not 18) — cells use Excel's '0%' number format for
+    display, same convention as the verbatim Sales figures (see
+    sail_sales_stock_extractor.py)."""
     if cur_v is None or prev_v is None or prev_v == 0:
         return None
-    return round((cur_v - prev_v) / abs(prev_v) * 100, 1)
+    return (cur_v - prev_v) / abs(prev_v)
 
 
 def _pct_ful(actual, abp):
+    """Fraction (0.81, not 81) — see _gr."""
     if actual is None or abp is None or abp == 0:
         return None
-    return round(actual / abp * 100, 1)
+    return actual / abp
 
 
 # ── Table A: Sales ───────────────────────────────────────────────────────
@@ -112,6 +120,14 @@ def _build_sales_rows(cur, month):
             "c_growth": d.get("till_month_growth"),
         })
     return rows
+
+
+def _sales_note(cur, month):
+    """Asterisked remark extracted alongside Table A (e.g. NSL-inclusion
+    caveat on the CPLY figures) — reprinted verbatim under the table."""
+    cur.execute("SELECT note FROM sail_sales_note_table WHERE report_month=?", (month,))
+    r = cur.fetchone()
+    return r[0] if r and r[0] else None
 
 
 # ── Table B: Production ─────────────────────────────────────────────────
@@ -241,6 +257,15 @@ _TECHNO_FMT = {
     "Specific Energy Consumption": "0.00",
     "BF Productivity": "0.00",
 }
+# Coke Rate / Energy Consumption are consumption-rate params — lower is
+# better. BF Productivity is a throughput param — higher is better. The
+# "% imp." sign must flip accordingly, or a real productivity gain would
+# print as a negative "improvement".
+_TECHNO_HIGHER_IS_BETTER = {
+    "Coke Rate": False,
+    "Specific Energy Consumption": False,
+    "BF Productivity": True,
+}
 
 
 def _num(v):
@@ -262,10 +287,14 @@ def _build_techno_rows(month):
         m_cply = _num(vals[2]) if len(vals) > 2 else None
         c_act = _num(vals[3]) if len(vals) > 3 else None
         c_cply = _num(vals[4]) if len(vals) > 4 else None
-        # Lower is better for these rate/consumption params, so "% imp." is
-        # (CPLY - Actual)/CPLY — a decrease shows as a positive improvement.
-        m_imp = round((m_cply - m_act) / m_cply * 100, 1) if m_act is not None and m_cply else None
-        c_imp = round((c_cply - c_act) / c_cply * 100, 1) if c_act is not None and c_cply else None
+        # "% imp." sign depends on whether the param is lower-is-better
+        # (Coke Rate, Energy Consumption) or higher-is-better (BF
+        # Productivity) — see _TECHNO_HIGHER_IS_BETTER. Values are fractions
+        # (0.03, not 3) — cells use Excel's '0%' format, same convention as
+        # _gr/_pct_ful.
+        sign = 1 if _TECHNO_HIGHER_IS_BETTER[param] else -1
+        m_imp = sign * (m_act - m_cply) / m_cply if m_act is not None and m_cply else None
+        c_imp = sign * (c_act - c_cply) / c_cply if c_act is not None and c_cply else None
         rows.append({
             "label": _TECHNO_DISPLAY[param], "fmt": _TECHNO_FMT[param], "abp": abp,
             "m_act": m_act, "m_cply": m_cply, "m_imp": m_imp,
@@ -326,46 +355,126 @@ def _build_stock_table(cur, month):
 
 
 # ── Excel writer ─────────────────────────────────────────────────────────
+#
+# Styling mirrors Report_format/1 page report for <Mon><YY>.xlsx cell-for-
+# cell (column layout, row layout, fonts, fill colors, borders, number
+# formats) so the generated workbook is visually indistinguishable from the
+# department's own template:
+#   col A = anchor/margin, col B = item label, col C = spacer,
+#   cols D-M = the 10 ABP/Actual/%Ful/CPLY/%Gr (month block + cum block)
+#   data columns for Tables A & B; Table C uses D-J (7 cols), Table D uses
+#   D onward (one per snapshot date) + a trailing "Var. w.r.t." column.
+# Row numbers match the template's own row numbers (title at row 2, Table A
+# at rows 4-15, Table B at rows 17-36, Table C at rows 40-43, Table D at
+# rows 45-49, closing note at row 51) so a reader familiar with the
+# original immediately recognizes the layout.
+#
+# Fill colors are the template's own theme colors (Book Antiqua/Office
+# 2007-2010 theme: dk2=1F497D for header bands, accent3=9BBB59 for
+# grand-total highlight rows), not flat hex guesses, so they render as the
+# exact same shade Excel would compute.
 
-_TITLE_FONT = Font(bold=True, size=13)
-_SEC_FONT = Font(bold=True, size=10.5)
-_SEC_FILL = PatternFill("solid", fgColor="1A73E8")
-_SEC_FONT_WHITE = Font(bold=True, size=10.5, color="FFFFFF")
-_HDR_FONT = Font(bold=True, size=9)
-_HDR_FILL = PatternFill("solid", fgColor="D9E6F5")
-_BOLD = Font(bold=True, size=9)
-_THIN = Side(style="thin", color="B0B0B0")
-_BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
+_FONT_TITLE = Font(name="Arial", size=24, bold=True)
+_FONT_ASOF = Font(name="Arial", size=12, bold=True)
+_FONT_UNIT = Font(name="Arial", size=14, italic=True)
+_FONT_HDR = Font(name="Book Antiqua", size=14, bold=True)        # group/anchor/column headers, item labels
+_FONT_DATA = Font(name="Book Antiqua", size=16, bold=True)       # data values
+_FONT_NOTE = Font(name="Times New Roman", size=16)               # "*...incl NSL..." remark
+_FONT_FINAL_NOTE = Font(name="Book Antiqua", size=14, bold=True)  # "Note: All figures are provisional"
+
+_HDR_FILL = PatternFill("solid", fgColor=Color(theme=3, tint=0.7999816888943144))
+_TOTAL_LABEL_FILL = PatternFill("solid", fgColor=Color(theme=6, tint=0.5999938962981048))
+_TOTAL_DATA_FILL = PatternFill("solid", fgColor=Color(theme=6, tint=0.7999816888943144))
+
+_THIN = Side(style="thin", color="000000")
+_MEDIUM = Side(style="medium", color="000000")
+_BOX_THIN = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
+
+_FMT_INT = "0"
+_FMT_PCT = "0%"
+
+# Data column order shared by Table A (Sales) and Table B (Production) —
+# month block then cum block, cols D-M (4-13).
+_METRIC_COLS = [
+    ("abp", _FMT_INT), ("act", _FMT_INT), ("ful", _FMT_PCT),
+    ("cply", _FMT_INT), ("growth", _FMT_PCT),
+]
 
 
-def _num_cell(ws, row, col, value, bold=False, pct=False, frac_pct=False, fmt=None):
+def _hdr_cell(ws, row, col, text, merge_to=None, wrap=False):
+    c = ws.cell(row=row, column=col, value=text)
+    c.font = _FONT_HDR
+    c.fill = _HDR_FILL
+    c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=wrap)
+    c.border = _BOX_THIN
+    if merge_to:
+        ws.merge_cells(start_row=row, start_column=col, end_row=row, end_column=merge_to)
+    return c
+
+
+def _anchor_cell(ws, row, text):
+    c = ws.cell(row=row, column=1, value=text)
+    c.font = _FONT_HDR
+    c.fill = _HDR_FILL
+    c.border = _BOX_THIN
+    return c
+
+
+def _item_label(ws, row, text, indent=0, total=False, merge_to=None):
+    c = ws.cell(row=row, column=2, value=text)
+    c.font = _FONT_HDR
+    c.alignment = Alignment(horizontal="left", indent=indent, wrap_text=bool(merge_to))
+    if total:
+        c.fill = _TOTAL_LABEL_FILL
+    if merge_to:
+        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=merge_to)
+    return c
+
+
+def _data_cell(ws, row, col, value, fmt=_FMT_INT, total=False):
     c = ws.cell(row=row, column=col)
     if value is not None:
         c.value = value
-        if fmt is not None:
-            c.number_format = fmt
-        else:
-            c.number_format = "0.0%" if frac_pct else ("0.0" if pct else "0.000")
-    c.border = _BORDER
-    c.alignment = Alignment(horizontal="right")
-    if bold:
-        c.font = _BOLD
+        c.number_format = fmt
+    c.font = _FONT_DATA
+    c.alignment = Alignment(horizontal="center")
+    c.border = _BOX_THIN
+    if total:
+        c.fill = _TOTAL_DATA_FILL
+    return c
 
 
-def _label_cell(ws, row, col, text, indent=0, bold=False):
-    c = ws.cell(row=row, column=col, value=text)
-    c.alignment = Alignment(horizontal="left", indent=indent)
-    c.border = _BORDER
-    if bold:
-        c.font = _BOLD
+def _write_metric_block(ws, row, m_abp, m_act, m_ful, m_cply, m_growth,
+                         c_abp, c_act, c_ful, c_cply, c_growth, total=False):
+    values = [m_abp, m_act, m_ful, m_cply, m_growth, c_abp, c_act, c_ful, c_cply, c_growth]
+    for i, (v, (_, fmt)) in enumerate(zip(values, _METRIC_COLS * 2)):
+        _data_cell(ws, row, 4 + i, v, fmt=fmt, total=total)
 
 
-def _section_header(ws, row, text, span):
-    for col in range(1, span + 1):
-        c = ws.cell(row=row, column=col)
-        c.fill = _SEC_FILL
-        c.border = _BORDER
-    ws.cell(row=row, column=1, value=text).font = _SEC_FONT_WHITE
+def _group_header_row(ws, row, month_label, cply_label, cum_label, cply_cum_label):
+    """The 2-row header above Tables A & B: this row groups D:F under the
+    report month, I:K under the cumulative period, with the CPLY/growth
+    columns (G, H, L, M) standing alone alongside each group."""
+    _hdr_cell(ws, row, 4, month_label, merge_to=6)
+    _hdr_cell(ws, row, 7, cply_label)
+    _hdr_cell(ws, row, 8, "Growth over")
+    _hdr_cell(ws, row, 9, cum_label, merge_to=11)
+    _hdr_cell(ws, row, 12, cply_cum_label)
+    _hdr_cell(ws, row, 13, "Growth over")
+
+
+def _column_header_row(ws, row, anchor_text):
+    _anchor_cell(ws, row, anchor_text)
+    for col, text in zip(range(4, 14),
+                          ["ABP", "Actual", "% Ful", "Actual", "% Gr.",
+                           "ABP", "Actual", "% Ful", "Actual", "% Gr."]):
+        _hdr_cell(ws, row, col, text)
+
+
+_COL_WIDTHS = {
+    "A": 6.11, "B": 38.44, "C": 33.0, "D": 10.44, "E": 12.44, "F": 13.0,
+    "G": 12.44, "H": 17.11, "I": 19.0, "J": 12.33, "K": 14.44, "L": 19.0, "M": 22.0,
+}
 
 
 def build_one_page_workbook(report_month: str):
@@ -377,152 +486,131 @@ def build_one_page_workbook(report_month: str):
     cur = conn.cursor()
     try:
         sales_rows = _build_sales_rows(cur, report_month)
+        sales_note = _sales_note(cur, report_month)
         prod_rows = _build_production_rows(cur, report_month, cply_month, ytd_months, cply_ytd_months)
         techno_rows = _build_techno_rows(report_month)
         stock = _build_stock_table(cur, report_month)
     finally:
         conn.close()
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = f"{_mlabel(report_month)} PS CMO"
-
-    ws.cell(row=1, column=1,
-            value=f"PERFORMANCE: {_mlabel(report_month)} and {_cum_label(report_month)}"
-            ).font = _TITLE_FONT
-    ws.cell(row=2, column=1, value="Unit: '000 T").font = Font(italic=True, size=9)
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    as_on = date(y + (1 if m == 12 else 0), (m % 12) + 1, 1)
 
     cply_label = _mlabel(cply_month)
     cply_cum_label = _cum_label(cply_month)
     cum_label = _cum_label(report_month)
 
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{_mlabel(report_month)} PS CMO"
+    ws.sheet_view.showGridLines = False
+    ws.page_setup.orientation = "landscape"
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+    for letter, width in _COL_WIDTHS.items():
+        ws.column_dimensions[letter].width = width
+
+    # Row 1: "#As on <date>"; Row 2: title (merged A:H); Row 3: unit
+    ws.cell(row=1, column=12, value="#As on ").font = _FONT_ASOF
+    ws.cell(row=1, column=12).alignment = Alignment(horizontal="right")
+    c = ws.cell(row=1, column=13, value=as_on)
+    c.font = _FONT_ASOF
+    c.number_format = "d-mmm-yy"
+    ws.merge_cells("A2:H2")
+    c = ws.cell(row=2, column=1,
+                value=f"PERFORMANCE: {_mlabel(report_month)} and {_cum_label(report_month)}")
+    c.font = _FONT_TITLE
+    c.alignment = Alignment(horizontal="center")
+    ws.cell(row=3, column=13, value="Unit:'000 T").font = _FONT_UNIT
+    ws.row_dimensions[2].height = 37.5
+    ws.row_dimensions[3].height = 19.5
+
     row = 4
-    _section_header(ws, row, "A. SALES ['000 T]", 11)
+    _group_header_row(ws, row, _mlabel(report_month), cply_label, cum_label, cply_cum_label)
     row += 1
-    # month block: cols 2-6 (ABP, Actual, %Ful, CPLY, %Gr); cum block: cols 7-11
-    for col, text in enumerate(["Item", f"{_mlabel(report_month)} ABP", f"{_mlabel(report_month)} Actual",
-                                 "% Ful", f"{cply_label} Actual", "% Gr.",
-                                 f"{cum_label} ABP", f"{cum_label} Actual", "% Ful",
-                                 f"{cply_cum_label} Actual", "% Gr."], start=1):
-        c = ws.cell(row=row, column=col, value=text)
-        c.font = _HDR_FONT
-        c.fill = _HDR_FILL
-        c.alignment = Alignment(horizontal="center", wrap_text=True)
+    _column_header_row(ws, row, "A.    SALES ['000 T]")
     row += 1
 
-    def write_metric_row(label, m_abp, m_act, m_cply, c_abp, c_act, c_cply, indent=1, bold=False):
-        nonlocal row
-        _label_cell(ws, row, 1, label, indent=indent, bold=bold)
-        _num_cell(ws, row, 2, m_abp, bold=bold, fmt="0")
-        _num_cell(ws, row, 3, m_act, bold=bold, fmt="0")
-        _num_cell(ws, row, 4, _pct_ful(m_act, m_abp), bold=bold, pct=True)
-        _num_cell(ws, row, 5, m_cply, bold=bold, fmt="0")
-        _num_cell(ws, row, 6, _gr(m_act, m_cply), bold=bold, pct=True)
-        _num_cell(ws, row, 7, c_abp, bold=bold, fmt="0")
-        _num_cell(ws, row, 8, c_act, bold=bold, fmt="0")
-        _num_cell(ws, row, 9, _pct_ful(c_act, c_abp), bold=bold, pct=True)
-        _num_cell(ws, row, 10, c_cply, bold=bold, fmt="0")
-        _num_cell(ws, row, 11, _gr(c_act, c_cply), bold=bold, pct=True)
-        row += 1
-
-    def write_sales_row(r):
+    for r in sales_rows:
         # Every value here — including %Ful/Growth — is written back exactly
         # as the source department reported it; nothing is computed (see
         # sail_sales_stock_extractor.py). %Ful/Growth are stored as raw
         # fractions (0.81, not 81), so they're formatted as Excel percentages
         # rather than rescaled.
-        nonlocal row
-        _label_cell(ws, row, 1, r["label"], indent=1, bold=r["bold"])
-        _num_cell(ws, row, 2, r["m_abp"], bold=r["bold"], fmt="0")
-        _num_cell(ws, row, 3, r["m_act"], bold=r["bold"], fmt="0")
-        _num_cell(ws, row, 4, r["m_ful"], bold=r["bold"], frac_pct=True)
-        _num_cell(ws, row, 5, r["m_cply"], bold=r["bold"], fmt="0")
-        _num_cell(ws, row, 6, r["m_growth"], bold=r["bold"], frac_pct=True)
-        _num_cell(ws, row, 7, r["c_abp"], bold=r["bold"], fmt="0")
-        _num_cell(ws, row, 8, r["c_act"], bold=r["bold"], fmt="0")
-        _num_cell(ws, row, 9, r["c_ful"], bold=r["bold"], frac_pct=True)
-        _num_cell(ws, row, 10, r["c_cply"], bold=r["bold"], fmt="0")
-        _num_cell(ws, row, 11, r["c_growth"], bold=r["bold"], frac_pct=True)
+        _item_label(ws, row, r["label"], total=r["bold"])
+        _write_metric_block(ws, row, r["m_abp"], r["m_act"], r["m_ful"], r["m_cply"], r["m_growth"],
+                             r["c_abp"], r["c_act"], r["c_ful"], r["c_cply"], r["c_growth"], total=r["bold"])
         row += 1
 
-    for r in sales_rows:
-        write_sales_row(r)
+    if sales_note:
+        c = ws.cell(row=row, column=3, value=sales_note)
+        c.font = _FONT_NOTE
+        c.alignment = Alignment(horizontal="left", vertical="top")
+        row += 1
 
+    row += 1  # blank spacer (template row 16)
+    _group_header_row(ws, row, _mlabel(report_month), cply_label, cum_label, cply_cum_label)
     row += 1
-    _section_header(ws, row, "B. PRODUCTION ['000 T]", 11)
+    _column_header_row(ws, row, "B.    PRODUCTION  ['000 T]")
     row += 1
-    for col, text in enumerate(["Item", f"{_mlabel(report_month)} ABP", f"{_mlabel(report_month)} Actual",
-                                 "% Ful", f"{cply_label} Actual", "% Gr.",
-                                 f"{cum_label} ABP", f"{cum_label} Actual", "% Ful",
-                                 f"{cply_cum_label} Actual", "% Gr."], start=1):
-        c = ws.cell(row=row, column=col, value=text)
-        c.font = _HDR_FONT
-        c.fill = _HDR_FILL
-        c.alignment = Alignment(horizontal="center", wrap_text=True)
-    row += 1
+
     for r in prod_rows:
         if r.get("header"):
-            _section_header(ws, row, r["label"], 11)
+            c = ws.cell(row=row, column=2, value=r["label"])
+            c.font = _FONT_HDR
             row += 1
             continue
-        write_metric_row(r["label"], r["m_abp"], r["m_act"], r["m_cply"],
-                         r["c_abp"], r["c_act"], r["c_cply"],
-                         indent=r.get("indent", 1), bold=r.get("bold", False))
+        total = r["label"] == "SAIL (Total)"
+        _item_label(ws, row, r["label"], indent=r.get("indent", 1), total=total)
+        m_ful = _pct_ful(r["m_act"], r["m_abp"])
+        m_growth = _gr(r["m_act"], r["m_cply"])
+        c_ful = _pct_ful(r["c_act"], r["c_abp"])
+        c_growth = _gr(r["c_act"], r["c_cply"])
+        _write_metric_block(ws, row, r["m_abp"], r["m_act"], m_ful, r["m_cply"], m_growth,
+                             r["c_abp"], r["c_act"], c_ful, r["c_cply"], c_growth, total=total)
+        row += 1
 
-    row += 1
-    _section_header(ws, row, "C. TECHNO-ECONOMIC PARAMETERS", 8)
-    row += 1
-    for col, text in enumerate(["Item", "ABP", f"{_mlabel(report_month)}", f"{cply_label}", "% imp.",
-                                 f"{cum_label}", f"{cply_cum_label}", "% imp."], start=1):
-        c = ws.cell(row=row, column=col, value=text)
-        c.font = _HDR_FONT
-        c.fill = _HDR_FILL
-        c.alignment = Alignment(horizontal="center", wrap_text=True)
+    row += 3  # 3 blank spacer rows (template rows 37-39)
+    _anchor_cell(ws, row, "C.    TECHNO-ECONOMIC PARAMETERS")
+    for col, text in zip(range(4, 11), ["ABP", _mlabel(report_month), cply_label, "% imp.",
+                                         cum_label, cply_cum_label, "% imp."]):
+        _hdr_cell(ws, row, col, text)
     row += 1
     for r in techno_rows:
-        _label_cell(ws, row, 1, r["label"], indent=1)
-        _num_cell(ws, row, 2, r["abp"], fmt=r["fmt"])
-        _num_cell(ws, row, 3, r["m_act"], fmt=r["fmt"])
-        _num_cell(ws, row, 4, r["m_cply"], fmt=r["fmt"])
-        _num_cell(ws, row, 5, r["m_imp"], pct=True)
-        _num_cell(ws, row, 6, r["c_act"], fmt=r["fmt"])
-        _num_cell(ws, row, 7, r["c_cply"], fmt=r["fmt"])
-        _num_cell(ws, row, 8, r["c_imp"], pct=True)
+        _item_label(ws, row, r["label"], merge_to=3)
+        _data_cell(ws, row, 4, r["abp"], fmt=r["fmt"])
+        _data_cell(ws, row, 5, r["m_act"], fmt=r["fmt"])
+        _data_cell(ws, row, 6, r["m_cply"], fmt=r["fmt"])
+        _data_cell(ws, row, 7, r["m_imp"], fmt=_FMT_PCT)
+        _data_cell(ws, row, 8, r["c_act"], fmt=r["fmt"])
+        _data_cell(ws, row, 9, r["c_cply"], fmt=r["fmt"])
+        _data_cell(ws, row, 10, r["c_imp"], fmt=_FMT_PCT)
         row += 1
 
-    row += 1
+    row += 1  # blank spacer (template row 44)
     n_date_cols = len(stock["dates"])
-    _section_header(ws, row, "D. STOCK - 8 PLANTS ['000 T]", n_date_cols + 2)
-    row += 1
-    ws.cell(row=row, column=1, value="Item").font = _HDR_FONT
-    ws.cell(row=row, column=1).fill = _HDR_FILL
-    for i, d in enumerate(stock["dates"], start=2):
-        c = ws.cell(row=row, column=i, value=d.strftime("%d.%m.%y"))
-        c.font = _HDR_FONT
-        c.fill = _HDR_FILL
-        c.alignment = Alignment(horizontal="center")
-    var_col = n_date_cols + 2
+    var_col = 4 + n_date_cols
+    _anchor_cell(ws, row, "D.    STOCK  - 8 PLANTS ['000 T]")
+    for i, d in enumerate(stock["dates"]):
+        _hdr_cell(ws, row, 4 + i, d.strftime("%d.%m.%y"))
     fy_d = stock["fy_start_date"]
-    var_header = f"Var. w.r.t. {fy_d.day}.{fy_d.month}.{fy_d.strftime('%y')}"
-    c = ws.cell(row=row, column=var_col, value=var_header)
-    c.font = _HDR_FONT
-    c.fill = _HDR_FILL
-    c.alignment = Alignment(horizontal="center", wrap_text=True)
+    _hdr_cell(ws, row, var_col, f"Var. w.r.t. {fy_d.day}.{fy_d.month}.{fy_d.strftime('%y')}", wrap=True)
     row += 1
     for r in stock["rows"]:
-        _label_cell(ws, row, 1, r["label"], indent=1, bold=r["bold"])
-        for i, v in enumerate(r["values"], start=2):
-            _num_cell(ws, row, i, v, bold=r["bold"], fmt="0")
-        _num_cell(ws, row, var_col, r["var"], bold=r["bold"], fmt="0")
+        _item_label(ws, row, r["label"], total=False)
+        for i, v in enumerate(r["values"]):
+            _data_cell(ws, row, 4 + i, v, fmt=_FMT_INT)
+        _data_cell(ws, row, var_col, r["var"], fmt=_FMT_INT)
         row += 1
 
-    row += 1
-    ws.cell(row=row, column=1, value="Note: All figures are provisional").font = Font(italic=True, size=8)
+    row += 1  # blank spacer (template row 50)
+    ws.cell(row=row, column=2, value="Note: All figures are provisional").font = _FONT_FINAL_NOTE
 
-    ws.column_dimensions["A"].width = 30
-    for i in range(2, 12):
-        ws.column_dimensions[get_column_letter(i)].width = 11
-    ws.freeze_panes = "B5"
+    for r in range(4, row + 1):
+        ws.row_dimensions[r].height = 21
+
+    ws.freeze_panes = "D6"
+    ws.print_area = f"A1:{get_column_letter(var_col)}{row}"
 
     return wb
 

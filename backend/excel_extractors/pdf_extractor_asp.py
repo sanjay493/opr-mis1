@@ -32,12 +32,19 @@ ASP PDF extractor — handles two monthly report types:
      ING      (Production for Finishing section) → Ingot Steel
      BILLETS  (Saleable Production section)      → Billets
      BARS     (Saleable Production section)      → BARS
+     FS PRD.  (Saleable Production section)      → FS PRD
      PL MILL  (Saleable Production section)      → PLATES
      TOTAL    (Saleable Production section)      → Saleable Steel
    Column values are matched by x-position against a reference row
    ("LIQ.PRD", always fully populated) rather than by list index, so a
    row with its own blank %Ach/CPLY cells doesn't shift later columns
    out from under the Actual/Prev-Actual picks.
+
+   Finished Steel = BARS + FS PRD + PL MILL (computed here, per month, only
+   when all three are found — this report has no "FORGINGS" line in its
+   Saleable Production section, unlike the DAILY FLASH Excel source handled
+   by excel_extractor_asp.py, whose own Finished Steel = BARS+FORGINGS+PLATES
+   is a different formula for a different source file).
 
 All raw tonnage values (T) are converted to '000T before returning.
 extract_preview() returns rows in the standard format — no DB writes.
@@ -75,9 +82,12 @@ _FL_ITEMS = [
     (("ING",),          "Ingot Steel",   False),
     (("BILLETS",),      "Billets",       False),
     (("BARS",),         "BARS",          False),
+    (("FS", "PRD."),    "FS PRD",        False),
     (("PL", "MILL"),    "PLATES",        False),
     (("TOTAL",),        "Saleable Steel", True),   # exact "TOTAL" row only — not "TOTAL CC SL"
 ]
+# Finished Steel = sum of these three (see module docstring)
+_FL_FINISHED_STEEL_PARTS = ["BARS", "FS PRD", "PLATES"]
 
 _FL_MONTH_TO_NUM = {
     "JAN": 1, "FEB": 2, "MAR": 3, "MARCH": 3, "APR": 4, "APRIL": 4,
@@ -374,8 +384,9 @@ def _fl_prev_month(report_month: str) -> str:
 
 
 def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
-    """Extract ING / BILLETS / BARS / PL MILL / TOTAL for both the report
-    month and the previous month from an FL-type PDF. See module docstring
+    """Extract ING / BILLETS / BARS / FS PRD. / PL MILL / TOTAL for both the
+    report month and the previous month from an FL-type PDF, then derive
+    Finished Steel = BARS + FS PRD + PL MILL for each. See module docstring
     for the item → item_name mapping and the column-calibration approach."""
     act_x, prev_x = _fl_calibrate_columns(rows)
     if act_x is None:
@@ -391,11 +402,13 @@ def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
         "Ingot Steel":    finishing_block,
         "Billets":        saleable_block,
         "BARS":           saleable_block,
+        "FS PRD":         saleable_block,
         "PLATES":         saleable_block,
         "Saleable Steel": saleable_block,
     }
 
     out_rows = []
+    parts_by_month = {report_month: {}, prev_month: {}}  # item_name -> value, for Finished Steel
     for label_words, item_name, exact_total in _FL_ITEMS:
         block = section_for[item_name]
         row = _fl_find_item_row(block, label_words, exact_total)
@@ -418,17 +431,30 @@ def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
             (prev_month,   prev_val, f"{_fmt_month(prev_month)} Actual"),
         ):
             if val is not None:
+                out_val = round(val / 1000.0, 3)
                 out_rows.append({
-                    "item_name": item_name, "value": round(val / 1000.0, 3), "unit": "'000T",
+                    "item_name": item_name, "value": out_val, "unit": "'000T",
                     "cell": f"PDF ({n_pages}p) · {tag}",
                     "pdf_label": row_text, "status": "ok", "report_month": ym,
                 })
+                if item_name in _FL_FINISHED_STEEL_PARTS:
+                    parts_by_month[ym][item_name] = out_val
             else:
                 out_rows.append({
                     "item_name": f"(no value) {item_name}", "value": None, "unit": "T",
                     "cell": f"PDF ({n_pages}p) · {tag}",
                     "pdf_label": row_text, "status": "unmapped", "report_month": ym,
                 })
+
+    for ym in (report_month, prev_month):
+        parts = parts_by_month[ym]
+        if all(p in parts for p in _FL_FINISHED_STEEL_PARTS):
+            fs_val = round(sum(parts[p] for p in _FL_FINISHED_STEEL_PARTS), 3)
+            out_rows.append({
+                "item_name": "Finished Steel", "value": fs_val, "unit": "'000T",
+                "cell": f"PDF ({n_pages}p) · {_fmt_month(ym)} [computed: BARS+FS PRD+PL MILL]",
+                "pdf_label": "BARS + FS PRD. + PL MILL", "status": "ok", "report_month": ym,
+            })
     return out_rows
 
 

@@ -70,6 +70,7 @@ export default function GlobalNavbar() {
         { label: 'OMI Generate', link: '/report', icon: '📈' },
         { label: 'Month-wise Production', link: '/reports/production-fy', icon: '📅' },
         { label: 'Unit-wise Production Query', link: '/reports/production-query', icon: '🔍' },
+        { label: 'Finished Steel (Month & Unit-wise)', link: '/reports/finished-steel', icon: '📦' },
         { label: 'Plant-wise Techno', link: '/reports/techno-monthly', icon: '⚙️' },
         { label: 'Techno Dashboard', link: '/reports/techno-dashboard', icon: '🔬' },
         { label: 'Techno Verification', link: '/reports/techno-verification', icon: '✅' }

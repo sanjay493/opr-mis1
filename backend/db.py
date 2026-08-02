@@ -162,6 +162,18 @@ def init_db():
         )
     """)
 
+    # 6c-note. Asterisked remark under Table A (Sales) of the "1 page
+    # report", e.g. "*Jul25 & Apr-Jul25 fig incl NSL sales: 98 & 482
+    # respectively" — extracted alongside sail_sales_table (see
+    # sail_sales_stock_extractor.py) and reprinted verbatim under Table A
+    # in the generated report.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sail_sales_note_table (
+            report_month TEXT PRIMARY KEY,
+            note         TEXT
+        )
+    """)
+
     # 6c. SAIL stock snapshot — Table D of the "1 page report" (Plants /
     # Stockyards / Stock in Transit / Total, '000T). Keyed by the report's
     # own snapshot date, not report_month — a single upload backfills
