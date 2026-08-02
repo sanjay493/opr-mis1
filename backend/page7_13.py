@@ -200,6 +200,35 @@ def _sail_or_sum(sail_direct: dict, data_by_plant: dict, plant_list: list,
     return result
 
 
+def _live_sum_or_sail_fallback(sail_direct: dict, data_by_plant: dict, plant_list: list,
+                               month_list: list, cap: str = None) -> list:
+    """
+    Inverse priority of _sail_or_sum: for each month, prefer a LIVE sum of
+    every constituent plant when ALL of them have data for that month (the
+    self-consistent, always-current figure) — falls back to the separately
+    stored SAIL-level DB value only when the live sum would be partial
+    (some plant hasn't reported that month yet). Used for Finished Steel,
+    whose manually-saved SAIL snapshot goes stale the moment any
+    constituent plant's own figure is added or revised afterwards — see
+    force_live_current in _generate_rows_for_config. Falling back (rather
+    than showing a silently-partial sum) matters for older months where
+    per-plant Finished Steel tracking was incomplete: the historically
+    recorded SAIL total is more complete than summing whichever 2-3 plants
+    happened to have data.
+    """
+    result = []
+    for mo in month_list:
+        if cap and mo > cap:
+            result.append(None)
+            continue
+        pv = [data_by_plant.get(p, {}).get(mo) for p in plant_list]
+        if all(v is not None for v in pv):
+            result.append(sum(pv))
+        else:
+            result.append(sail_direct.get(mo))
+    return result
+
+
 def _is_blank(values: list) -> bool:
     """True when all 12 monthly values are empty or zero (no meaningful production)."""
     monthly_idx = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]
@@ -367,23 +396,33 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     fy_months_cur = _fy_months(cur_fy)
     rows = []
 
-    # Finished Steel's current-FY Plan/Actual rows always live-sum the 8
-    # plants (never the manually-saved Page 3 'SAIL' snapshot, which goes
-    # stale the moment plant data is added/revised after that save) — no
-    # Conversion adjustment added here, unlike Page 3/4's "incl. Conv." row.
-    # Historical FY rows keep preferring the stored SAIL record as before.
-    force_live_current = (db_item == "Finished Steel")
+    # Finished Steel's SAIL row prefers a LIVE sum of the 8 plants over the
+    # manually-saved Page 3 'SAIL' snapshot — that snapshot goes stale the
+    # moment any constituent plant's own figure is added or revised
+    # afterwards (confirmed drifting by ~14-42 '000T on several recent
+    # months). Applies to every FY shown, not just the current one — a
+    # closed historical FY's stored total can be just as stale if a plant's
+    # figure was corrected after the fact. _live_sum_or_sail_fallback still
+    # falls back to the stored value per-month when the live sum would be
+    # partial (some plant hasn't reported that month), so older months with
+    # incomplete per-plant tracking keep their historically recorded total
+    # instead of silently showing a partial sum. No Conversion adjustment
+    # added here, unlike Page 3/4's "incl. Conv." row.
+    prefer_live_sum = (db_item == "Finished Steel")
 
     for label, plant_list in groups:
         group_rows = []
         use_sail_direct = show_all and label == "SAIL"
-        use_sail_direct_current = use_sail_direct and not force_live_current
+
+        def _resolve(direct, data, months, cap=None):
+            if not use_sail_direct:
+                return _agg_months(data, plant_list, months, cap=cap)
+            if prefer_live_sum:
+                return _live_sum_or_sail_fallback(direct, data, plant_list, months, cap=cap)
+            return _sail_or_sum(direct, data, plant_list, months, cap=cap)
 
         # Plan row
-        if use_sail_direct_current:
-            plan_vals = _sail_or_sum(sail_plan_direct, plan_data, plant_list, fy_months_cur)
-        else:
-            plan_vals = _agg_months(plan_data, plant_list, fy_months_cur)
+        plan_vals = _resolve(sail_plan_direct, plan_data, fy_months_cur)
         plan_values = _compute_row(plan_vals, is_nos)
         if show_all or not _is_blank(plan_values):
             group_rows.append({
@@ -392,10 +431,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
             })
 
         # Actual current FY
-        if use_sail_direct_current:
-            act_cur = _sail_or_sum(sail_act_direct, act_data, plant_list, fy_months_cur, cap=report_month)
-        else:
-            act_cur = _agg_months(act_data, plant_list, fy_months_cur, cap=report_month)
+        act_cur = _resolve(sail_act_direct, act_data, fy_months_cur, cap=report_month)
         act_cur_values = _compute_row(act_cur, is_nos)
         if show_all or not _is_blank(act_cur_values):
             group_rows.append({
@@ -407,10 +443,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         for fy_start in hist_fys:
             fy_mo  = _fy_months(fy_start)
             fy_lbl = f"{fy_start}-{(fy_start + 1) % 100:02d}"
-            if use_sail_direct:
-                act_vals = _sail_or_sum(sail_act_direct, act_data, plant_list, fy_mo)
-            else:
-                act_vals = _agg_months(act_data, plant_list, fy_mo)
+            act_vals = _resolve(sail_act_direct, act_data, fy_mo)
             values = _compute_row(act_vals, is_nos)
             if not show_all and _is_blank(values):
                 continue
