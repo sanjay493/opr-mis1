@@ -26,7 +26,8 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 import db
-from page_jpc_report import compute_pmix_rows, _one
+from constants import FIVE_PLANTS as _5P
+from page_jpc_report import compute_pmix_rows, _one, _one_of, _sum, _fs, _mou_value
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -47,6 +48,11 @@ def _fy_months(fy_start: int):
 def _sum_opt(vals):
     nums = [v for v in vals if v is not None]
     return round(sum(nums), 3) if nums else None
+
+
+def _avg_opt(vals):
+    nums = [v for v in vals if v is not None]
+    return round(sum(nums) / len(nums), 3) if nums else None
 
 
 _TITLE_FONT = Font(bold=True, size=13)
@@ -86,6 +92,134 @@ def _plant_hdr(ws, row, label, n_cols):
     ws.cell(row=row, column=1, value=label).font = _PLANT_FONT
 
 
+# ── Sheet 1: "ACT <FY>" — plant-wise monthwise production summary,
+# matching Report_format/PMix26-27.xlsx's "ACT 26-27" sheet ────────────────
+
+# (label, db_item, plant_rows) — plant_rows uses "5 Plants" as the
+# aggregate-row key (resolved to "SAIL - 5PL" for display) so _mou_value()
+# from page_jpc_report.py (already built for the MoU report sheet) can be
+# reused as-is: same rollup rules (Hot Metal/Pig Iron pull in VISL only;
+# Crude Steel/Saleable Steel/Finished Steel also pull in ASP/SSP/VISL).
+_ACT_ROWS_5PL_ONLY = _5P + ["5 Plants"]
+_ACT_ROWS_FULL = _5P + ["5 Plants", "ASP", "SSP", "VISL", "SAIL"]
+_ACT_ROWS_HM_PI = _5P + ["5 Plants", "VISL", "SAIL"]
+
+_ACT_ITEMS = [
+    ("Oven Pushing\n(nos./day)", "Oven Pushing (nos/day)", _ACT_ROWS_5PL_ONLY, True),
+    ("Sinter",                   "Total Sinter",            _ACT_ROWS_5PL_ONLY, False),
+    ("Hot Metal",                "Hot Metal",               _ACT_ROWS_HM_PI,    False),
+    ("Crude Steel",              "Total Crude Steel",       _ACT_ROWS_FULL,     False),
+    ("Pig Iron",                 "Pig Iron",                _ACT_ROWS_HM_PI,    False),
+    ("Saleable Steel",           "Saleable Steel",          _ACT_ROWS_FULL,     False),
+    ("Saleable Production",      None,                      _ACT_ROWS_FULL,     False),   # = Saleable Steel + Pig Iron
+    ("Finished Steel Production","Finished Steel",          _ACT_ROWS_FULL,     False),
+]
+
+_ACT_PLANT_LABEL = {"5 Plants": "SAIL - 5PL"}
+
+
+def _act_plant_value(cur, label, db_item, plant, month):
+    if label.startswith("Oven Pushing"):
+        # Two raw spellings exist across plants/months ("Oven Pushing (nos/day)"
+        # vs "Oven Pushing(nos/d)") — production_table isn't normalized at the
+        # row level, only main.py's /api/production-fy query normalizes it.
+        if plant == "5 Plants":
+            # Summed across plants (a combined ovens/day figure for the same
+            # month is meaningful), unlike the quarter/cum columns below
+            # which average a single row's own rate across months.
+            total, found = 0.0, False
+            for p in _5P:
+                v = _one_of(cur, p, ["Oven Pushing (nos/day)", "Oven Pushing(nos/d)"], month)
+                if v is not None:
+                    total += v
+                    found = True
+            return round(total, 3) if found else None
+        return _one_of(cur, plant, ["Oven Pushing (nos/day)", "Oven Pushing(nos/d)"], month)
+    if db_item is None:   # Saleable Production = Saleable Steel + Pig Iron
+        ss = _mou_value(cur, "Saleable Steel", plant, month)
+        pi = _mou_value(cur, "Pig Iron", plant, month)
+        if ss is None and pi is None:
+            return None
+        return round((ss or 0) + (pi or 0), 3)
+    return _mou_value(cur, db_item, plant, month)
+
+
+def build_act_fy_sheet(ws, cur, fy_start: int, months: list):
+    fy_label = f"{fy_start}-{str(fy_start + 1)[2:]}"
+    n_cols = 2 + 12 + 4 + 1   # item + plant + 12 months + 4 quarters + cum
+
+    ws.cell(row=1, column=1, value="Operations Directorate").font = Font(size=10)
+    ws.cell(row=2, column=1, value=f"Actual Monthwise Production: {fy_label}").font = _TITLE_FONT
+    ws.cell(row=2, column=n_cols, value="Unit: '000 T (rates: nos/day)").font = _UNIT_FONT
+
+    header_row = 3
+    for col, text in ((1, "Items"), (2, "Plant")):
+        c = ws.cell(row=header_row, column=col, value=text)
+        c.font = _HDR_FONT
+        c.fill = _HDR_FILL
+    for i, m in enumerate(months, start=3):
+        c = ws.cell(row=header_row, column=i, value=_mlabel(m))
+        c.font = _HDR_FONT
+        c.fill = _HDR_FILL
+        c.alignment = Alignment(horizontal="center")
+    for i, label in enumerate(_QTR_LABELS, start=15):
+        c = ws.cell(row=header_row, column=i, value=label)
+        c.font = _HDR_FONT
+        c.fill = _HDR_FILL
+        c.alignment = Alignment(horizontal="center")
+    c = ws.cell(row=header_row, column=19, value=f"{fy_label}\nCum")
+    c.font = _HDR_FONT
+    c.fill = _HDR_FILL
+    c.alignment = Alignment(horizontal="center", wrap_text=True)
+
+    row = header_row + 1
+    for item_label, db_item, plant_rows, is_rate in _ACT_ITEMS:
+        first = True
+        for plant in plant_rows:
+            display_plant = _ACT_PLANT_LABEL.get(plant, plant)
+            vals = [_act_plant_value(cur, item_label, db_item, plant, m) for m in months]
+            _label_cell(ws, row, 1, item_label if first else "")
+            _label_cell(ws, row, 2, display_plant, bold=(plant in ("5 Plants", "SAIL")))
+            for i, v in enumerate(vals, start=3):
+                _num_cell(ws, row, i, v, bold=(plant in ("5 Plants", "SAIL")))
+            quarters = [vals[0:3], vals[3:6], vals[6:9], vals[9:12]]
+            agg = _avg_opt if is_rate else _sum_opt
+            q_aggs = [agg(q) for q in quarters]
+            for i, qa in enumerate(q_aggs, start=15):
+                _num_cell(ws, row, i, qa, bold=(plant in ("5 Plants", "SAIL")))
+            cum = _avg_opt(vals) if is_rate else _sum_opt(q_aggs)
+            _num_cell(ws, row, 19, cum, bold=(plant in ("5 Plants", "SAIL")))
+            row += 1
+            first = False
+
+    # Conversion / SAIL incl. conversion — SAIL-level only, appended after
+    # the Finished Steel Production block (matches the sample's layout).
+    conversion_vals = [_one(cur, "SAIL", "Conversion", m) for m in months]
+    fs_sail_vals = [_mou_value(cur, "Finished Steel", "SAIL", m) for m in months]
+    inc_conv_vals = [
+        None if (fs is None and cv is None) else round((fs or 0) + (cv or 0), 3)
+        for fs, cv in zip(fs_sail_vals, conversion_vals)
+    ]
+    for label, vals, bold in (("Conversion", conversion_vals, False),
+                              ("SAIL inc. conversion", inc_conv_vals, True)):
+        _label_cell(ws, row, 1, "")
+        _label_cell(ws, row, 2, label, bold=bold)
+        for i, v in enumerate(vals, start=3):
+            _num_cell(ws, row, i, v, bold=bold)
+        quarters = [vals[0:3], vals[3:6], vals[6:9], vals[9:12]]
+        q_sums = [_sum_opt(q) for q in quarters]
+        for i, qs in enumerate(q_sums, start=15):
+            _num_cell(ws, row, i, qs, bold=bold)
+        _num_cell(ws, row, 19, _sum_opt(q_sums), bold=bold)
+        row += 1
+
+    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["B"].width = 12
+    for i in range(3, n_cols + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 10
+    ws.freeze_panes = "C4"
+
+
 def build_pmix_fy_workbook(fy_start: int):
     fy_label = f"{fy_start}-{str(fy_start + 1)[2:]}"
     months = _fy_months(fy_start)
@@ -98,6 +232,11 @@ def build_pmix_fy_workbook(fy_start: int):
         conversion = {m: _one(cur, "SAIL", "Conversion", m) for m in months}
         rsp_hsm2 = {m: _one(cur, "RSP", "HSM-2 Total HR Coil", m) for m in months}
         bsl_hsm = {m: _one(cur, "BSL", "HSM Total HR Coil", m) for m in months}
+
+        wb = openpyxl.Workbook()
+        ws_act = wb.active
+        ws_act.title = f"ACT {fy_label}"
+        build_act_fy_sheet(ws_act, cur, fy_start, months)
     finally:
         conn.close()
 
@@ -107,9 +246,7 @@ def build_pmix_fy_workbook(fy_start: int):
         fst_row = next((r for r in rows_by_month[m] if r["label"] == "Finished Steel (Total)"), None)
         fst_by_month[m] = fst_row["value"] if fst_row else None
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = f"Pmix'{fy_label[2:]} ACT"
+    ws = wb.create_sheet(f"Pmix'{fy_label[2:]} ACT")
 
     ws.cell(row=1, column=1, value="Operations Directorate").font = Font(size=10)
     ws.cell(row=2, column=1, value=f"Product mix Performance: {fy_label}").font = _TITLE_FONT

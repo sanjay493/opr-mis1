@@ -1347,7 +1347,7 @@ async def extract_preview_endpoint(
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 result = await loop.run_in_executor(
                     pool,
-                    lambda: _bsl_mod.extract_preview(tmp_path, month)
+                    lambda: _bsl_mod.extract_preview(tmp_path, month, all_months=all_months_bool)
                 )
         else:
             import excel_extractor_rsp
@@ -1411,12 +1411,17 @@ async def confirm_extraction(payload: dict):
         cur = conn.cursor()
         try:
             for r in payload.get("production_rows", []):
+                # Per-row report_month (used by all-months/bulk-FY extraction
+                # previews, e.g. BSL's Table 2.1 yearly PDF) overrides the
+                # top-level month; every single-month extractor's rows simply
+                # don't carry this key, so they fall back to `month` as before.
+                row_month = r.get("report_month") or month
                 cur.execute("""
                     INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
                     VALUES (?, ?, ?, ?)
                     ON CONFLICT(report_month, plant_name, item_name)
                     DO UPDATE SET month_actual = excluded.month_actual
-                """, (month, plant, normalize_item_name(r.get("item_name")), r.get("value")))
+                """, (row_month, plant, normalize_item_name(r.get("item_name")), r.get("value")))
                 if r.get("value") is not None:
                     saved_prod += 1
 

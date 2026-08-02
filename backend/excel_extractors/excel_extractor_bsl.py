@@ -1520,6 +1520,217 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
     }
 
 
+_SALEABLE_STEEL_FY_TITLE_RE = re.compile(r'Table No\.\s*2\.1', re.I)
+
+_FY_MONTH_ROW_RE = re.compile(
+    r"^(APR|MAY|JUN|JULY|JUL|AUG|SEP|OCT|NOV|DEC|JAN|FEB|MAR)('?(\d{2}))?\s+(.+)$"
+)
+_FY_MONTH_NUM = {
+    "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "JULY": 7, "AUG": 8, "SEP": 9,
+    "OCT": 10, "NOV": 11, "DEC": 12, "JAN": 1, "FEB": 2, "MAR": 3,
+}
+_FY_TABLE_COLS = [
+    "Slab", "ThickPlate", "HRCoil", "HRPlate", "HRSheet",
+    "CRM_I_II", "CRM_III", "CRTotal", "CRSheet",
+    "GPCRM_I_II", "GPCRM_III", "GPSheet", "GCSheet", "GPGCTotal",
+    "CRSaleable", "TotalSaleableSteel",
+]
+_FY_MONTH_NAMES = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
+
+# Items this extractor writes, and — per the confirmed mapping below — the
+# two legacy item names it deliberately does NOT write (CRC&S(1&2), CRC(3):
+# duplicate figures from the old Main Products PDF route, being retired).
+_FY_ITEM_ORDER = [
+    "Thick Plate", "HSM HR Coil (Sale)", "HSM HR Plate", "HR Sheet",
+    "CR I/II CR(Coil) Sale", "CR Sheets", "CR III CR(Coil) Sale",
+    "GP/GC", "GPC3", "CRSALE", "Saleable Semis", "Saleable Steel", "Finished Steel",
+]
+
+
+def _fy_start_from_month(report_month: str) -> int:
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    return y if m >= 4 else y - 1
+
+
+def _parse_saleable_steel_fy_table(full_text: str):
+    """Parse the 'SALEABLE STEEL ... Table No. 2.1' PRODUCTION SUMMARY page
+    into {month_idx (0=Apr..11=Mar): {col_name: value_in_tonnes}}, plus
+    {month_idx: 2-digit-year} for whichever rows carried a "'YY" suffix
+    (always APR and JAN in a normal report). Quarter-subtotal rows ("1ST
+    QTR."), the annual recap row ("2025-26 ..."), and prior-year recap rows
+    are all skipped automatically — their first token never matches a month
+    name, so the row regex simply doesn't match those lines."""
+    by_month_idx = {}
+    seen_years = {}
+    for line in full_text.splitlines():
+        m = _FY_MONTH_ROW_RE.match(line.strip())
+        if not m:
+            continue
+        mon_key, _, yr_suffix, rest = m.groups()
+        mon_num = _FY_MONTH_NUM.get(mon_key)
+        if mon_num is None:
+            continue
+        nums = re.findall(r'-?\d[\d,]*(?:\.\d+)?', rest)
+        if len(nums) < len(_FY_TABLE_COLS):
+            continue
+        vals = [float(n.replace(',', '')) for n in nums[:len(_FY_TABLE_COLS)]]
+        month_idx = (mon_num - 4) % 12   # Apr=0 .. Mar=11
+        if month_idx in by_month_idx:
+            continue   # first occurrence wins (defends against a recap table reusing month labels)
+        by_month_idx[month_idx] = dict(zip(_FY_TABLE_COLS, vals))
+        if yr_suffix:
+            seen_years[month_idx] = int(yr_suffix)
+    return by_month_idx, seen_years
+
+
+def _derive_saleable_steel_fy_items(cols: dict, month_label: str = "") -> dict:
+    """PDF column → production_table item_name, in Tonnes → '000T. Confirmed
+    against a real BSL FY25-26 Table 2.1 page, cell-by-cell:
+      Thick Plate            → Thick Plate
+      HR Coil                → HSM HR Coil (Sale)
+      HR Plate                → HSM HR Plate
+      HR Sheet                → HR Sheet
+      CR Coil, CRM-I/II       → CR I/II CR(Coil) Sale
+      CR Sheet                → CR Sheets   (only — NOT "New CR Sheet", an
+                                              unrelated item left untouched)
+      CR Coil, CRM-III        → CR III CR(Coil) Sale
+      GP Sheet + GC Sheet     → GP/GC        (the CRM-I/II GP product)
+      GP Coil, CRM-III        → GPC3
+      CR Saleable             → CRSALE       (both CRM mills' finished
+                                              product total — cross-checked
+                                              below against its own
+                                              components; see the note there)
+      Slab                    → Saleable Semis
+      Total Saleable Steel    → Saleable Steel
+      (computed)              → Finished Steel = Saleable Steel - Saleable Semis
+
+    CRSALE cross-check: the PDF's own "CR Saleable" column always equals
+    CR I/II CR(Coil) Sale + CR III CR(Coil) Sale + CR Sheets + New CR Sheet
+    (0 — this table carries no separate "new" CR sheet split) + GP/GC + GPC3
+    + the always-zero GP Coil CRM-I/II column — i.e. both CRM mills' saleable
+    output summed across coil, sheet and GP/GC. Verified against a real
+    FY25-26 Table 2.1 page for all 12 months. Logged (not raised) on
+    mismatch — a future year's layout drifting shouldn't block extraction,
+    but should be visible.
+    """
+    slab = round(cols["Slab"] / 1000.0, 3)
+    total_saleable = round(cols["TotalSaleableSteel"] / 1000.0, 3)
+    gp_gc = round((cols["GPSheet"] + cols["GCSheet"]) / 1000.0, 3)
+
+    expected_crsale = (cols["CRM_I_II"] + cols["CRM_III"] + cols["CRSheet"]
+                       + cols["GPCRM_I_II"] + cols["GPCRM_III"] + cols["GPSheet"] + cols["GCSheet"])
+    if abs(expected_crsale - cols["CRSaleable"]) > 1.0:   # 1 tonne tolerance
+        logger.warning(
+            "BSL Saleable Steel FY PDF: CR Saleable cross-check mismatch for %s — "
+            "PDF says %.3f T, components (CR I/II + CR III + CR Sheet + GP/GC + GPC3) sum to %.3f T",
+            month_label, cols["CRSaleable"], expected_crsale,
+        )
+
+    return {
+        "Thick Plate": round(cols["ThickPlate"] / 1000.0, 3),
+        "HSM HR Coil (Sale)": round(cols["HRCoil"] / 1000.0, 3),
+        "HSM HR Plate": round(cols["HRPlate"] / 1000.0, 3),
+        "HR Sheet": round(cols["HRSheet"] / 1000.0, 3),
+        "CR I/II CR(Coil) Sale": round(cols["CRM_I_II"] / 1000.0, 3),
+        "CR Sheets": round(cols["CRSheet"] / 1000.0, 3),
+        "CR III CR(Coil) Sale": round(cols["CRM_III"] / 1000.0, 3),
+        "GP/GC": gp_gc,
+        "GPC3": round(cols["GPCRM_III"] / 1000.0, 3),
+        "CRSALE": round(cols["CRSaleable"] / 1000.0, 3),
+        "Saleable Semis": slab,
+        "Saleable Steel": total_saleable,
+        "Finished Steel": round(total_saleable - slab, 3),
+    }
+
+
+def extract_preview_saleable_steel_fy_pdf(file_path: str, report_month: str, all_months: bool = False) -> dict:
+    """Extract BSL's year-wise 'SALEABLE STEEL ... Table No. 2.1' PRODUCTION
+    SUMMARY PDF (Corporate MIS page, one row per month across a full
+    financial year). `report_month` anchors which FY to read — any month
+    within that FY works, since the whole table is parsed regardless.
+    `all_months=True` returns all 12 months' rows (each row carries its own
+    `report_month`) for a one-shot FY backfill; otherwise only the single
+    selected month's rows are returned, matching every other extractor's
+    contract.
+    """
+    import pdfplumber
+
+    fname = os.path.basename(file_path)
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            n_pages = len(pdf.pages)
+            full_text = "\n".join((pg.extract_text() or "") for pg in pdf.pages)
+    except Exception as exc:
+        raise ValueError(f"Cannot open PDF '{fname}': {exc}") from exc
+
+    by_month_idx, seen_years = _parse_saleable_steel_fy_table(full_text)
+    if not by_month_idx:
+        raise ValueError(
+            "No monthly rows found. Verify this is a BSL 'SALEABLE STEEL ... "
+            "Table No. 2.1' PRODUCTION SUMMARY page (12 month rows, Apr-Mar)."
+        )
+
+    fy_start = _fy_start_from_month(report_month)
+    detected_fy_start = None
+    if 0 in seen_years:
+        detected_fy_start = 2000 + seen_years[0]
+    elif 9 in seen_years:
+        detected_fy_start = 2000 + seen_years[9] - 1
+    if detected_fy_start is not None and detected_fy_start != fy_start:
+        raise ValueError(
+            f"This report's own APR/JAN row labels show FY {detected_fy_start}-"
+            f"{str(detected_fy_start + 1)[2:]}, but you selected a month in FY "
+            f"{fy_start}-{str(fy_start + 1)[2:]}. Pick a month within FY "
+            f"{detected_fy_start}-{str(detected_fy_start + 1)[2:]}, or upload the right file."
+        )
+
+    def ym_for(idx):
+        return f"{fy_start}-{idx + 4:02d}" if idx <= 8 else f"{fy_start + 1}-{idx - 8:02d}"
+
+    months_to_emit = list(range(12)) if all_months else [(int(report_month[5:7]) - 4) % 12]
+    cell_tag = f"PDF ({n_pages}p) · Table 2.1 FY{fy_start}-{str(fy_start + 1)[2:]}"
+
+    rows = []
+    for idx in months_to_emit:
+        ym = ym_for(idx)
+        mon_label = _FY_MONTH_NAMES[idx]
+        cols = by_month_idx.get(idx)
+        if cols is None:
+            for item_name in _FY_ITEM_ORDER:
+                rows.append({
+                    "item_name": f"(not found) {item_name}", "value": None, "unit": "'000T",
+                    "cell": f"{cell_tag} · {mon_label} row not found", "report_month": ym,
+                    "pdf_label": f"({mon_label} row not found)", "status": "unmapped",
+                })
+            continue
+        derived = _derive_saleable_steel_fy_items(cols, month_label=f"{mon_label} (FY{fy_start})")
+        for item_name in _FY_ITEM_ORDER:
+            rows.append({
+                "item_name": item_name, "value": derived[item_name], "unit": "'000T",
+                "cell": f"{cell_tag} · {mon_label}", "report_month": ym,
+                "pdf_label": mon_label, "status": "ok",
+            })
+
+    ok = sum(1 for r in rows if r["status"] == "ok")
+    logger.info("BSL Saleable Steel FY PDF: %d/%d rows ok (FY%s, all_months=%s)",
+                ok, len(rows), fy_start, all_months)
+
+    return {
+        "plant": "BSL",
+        "month": report_month,
+        "detected_month": None,
+        "source_type": "BSL Saleable Steel — Table 2.1 (Year-wise PRODUCTION SUMMARY)",
+        "sheets": f"PDF ({n_pages}p) — Table 2.1",
+        "workbook_sheets": [f"PDF ({n_pages} pages) — Table 2.1"],
+        "report_type": "Table 2.1 FY Summary",
+        "production_rows": rows,
+        "special_steel_rows": [],
+        "special_steel_note": "",
+        "techno_rows": [],
+        "techno_param_rows": [],
+    }
+
+
 def _extract_delhi_report_stock(wb, db_month: str) -> list:
     """Extract next-month opening stock from 'Delhi Report' sheet.
 
@@ -1663,7 +1874,7 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
     }
 
 
-def extract_preview(file_path: str, report_month: str) -> dict:
+def extract_preview(file_path: str, report_month: str, all_months: bool = False) -> dict:
     """
     Extract BSL data — auto-detects file type:
 
@@ -1677,6 +1888,12 @@ def extract_preview(file_path: str, report_month: str) -> dict:
       → production_rows populated with the same 19 production items as the
         DPR Mail path, read straight from the finalised monthly report
         rather than a cumulative month-end DPR cell dump.
+
+    • Saleable Steel — Table No. 2.1 (.pdf) — Corporate MIS year-wise
+      PRODUCTION SUMMARY page, one row per FY month (Apr-Mar) plus
+      quarter/prior-year recap rows (skipped). `all_months=True` returns
+      every month in the FY anchored by `report_month` instead of just the
+      one selected — see extract_preview_saleable_steel_fy_pdf().
 
     • DPR Mail Month-End Report (.xlsx, sheet 'DPR')
       → production_rows populated with ~19 production items.
@@ -1696,6 +1913,8 @@ def extract_preview(file_path: str, report_month: str) -> dict:
                 _probe_text = "\n".join((pg.extract_text() or "") for pg in _pdf.pages[:4])
         except Exception as exc:
             raise ValueError(f"Cannot open PDF: {exc}") from exc
+        if _SALEABLE_STEEL_FY_TITLE_RE.search(_probe_text):
+            return extract_preview_saleable_steel_fy_pdf(file_path, report_month, all_months=all_months)
         if _MAIN_PRODUCTS_TITLE_RE.search(_probe_text):
             return extract_preview_main_products_pdf(file_path, report_month)
         return extract_preview_bf_pdf(file_path, report_month)

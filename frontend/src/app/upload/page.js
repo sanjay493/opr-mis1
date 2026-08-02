@@ -472,6 +472,10 @@ function UploadPageInner() {
   const [aspProdRows, setAspProdRows] = useState([]);
   const [aspBusy, setAspBusy] = useState(false);
 
+  // BSL Saleable Steel FY PDF (Table 2.1) — all-months bulk preview state
+  const [bslProdAllMonths, setBslProdAllMonths] = useState(null);
+  const [bslBusy, setBslBusy] = useState(false);
+
   // DSP PDF three-step state (independent from the generic technoPreview flow)
   const [dspProdResult, setDspProdResult] = useState(null);
   const [dspProdRows, setDspProdRows] = useState([]);
@@ -972,6 +976,88 @@ function UploadPageInner() {
     }
   };
 
+  // ── BSL Saleable Steel FY PDF (Table 2.1) all-months helpers ────────────
+  const isBslPdf = technoPlant === 'BSL' && technoFile?.name?.toLowerCase().endsWith('.pdf');
+
+  const handleBslExtractAllMonths = async () => {
+    if (!technoFile) { alert('Please select the BSL PDF file first.'); return; }
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    setBslBusy(true);
+    setBslProdAllMonths(null);
+    setLogs([]);
+    addLog('info', `BSL: extracting all FY months anchored at ${targetPeriod} from ${technoFile.name}...`);
+    const formData = new FormData();
+    formData.append('file', technoFile);
+    formData.append('plant_name', 'BSL');
+    formData.append('month', targetPeriod);
+    formData.append('all_months', 'true');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/extract-preview`, { method: 'POST', body: formData });
+      const rawText = await res.text();
+      let result;
+      try { result = JSON.parse(rawText); } catch (_) { throw new Error(rawText.substring(0, 300)); }
+      if (!res.ok) throw new Error(result.detail || 'extraction failed');
+      const allMonthsMap = {};
+      (result.production_rows || []).forEach((r) => {
+        const key = r.item_name || r.pdf_label;
+        if (!allMonthsMap[key]) {
+          allMonthsMap[key] = { item_name: r.item_name, pdf_label: r.pdf_label, status: r.status, unit: r.unit, months: {} };
+        }
+        allMonthsMap[key].months[r.report_month] = r.value;
+      });
+      setBslProdAllMonths({ ...result, grouped_rows: Object.values(allMonthsMap), single_rows: result.production_rows });
+      const totalRows = (result.production_rows || []).length;
+      const ok = (result.production_rows || []).filter((r) => r.status === 'ok').length;
+      addLog('success', `✓ BSL ALL months extracted: ${ok}/${totalRows} values across the FY (${result.source_type})`);
+    } catch (err) {
+      addLog('error', `BSL all-months extraction failed: ${err.message}`);
+      alert(`Extraction failed: ${err.message}`);
+    } finally {
+      setBslBusy(false);
+    }
+  };
+
+  const handleBslAllMonthsInsert = async () => {
+    if (!bslProdAllMonths) return;
+    const okRows = (bslProdAllMonths.single_rows || []).filter((r) => r.status === 'ok');
+    if (!okRows.length) { alert('No rows to insert.'); return; }
+    setBslBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/confirm-extraction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: bslProdAllMonths.month,
+          plant: 'BSL',
+          source_type: bslProdAllMonths.source_type,
+          sheets: bslProdAllMonths.sheets || '',
+          file_name: technoFile?.name || '',
+          production_rows: okRows,
+          item_overrides: [],
+          techno_rows: [],
+          techno_param_rows: [],
+          special_steel_rows: [],
+        }),
+      });
+      const text = await res.text();
+      let result;
+      try { result = JSON.parse(text); } catch { throw new Error(text.slice(0, 300) || `Server error ${res.status}`); }
+      if (!res.ok) throw new Error(result.detail || 'insert failed');
+      addLog('success', result.message);
+      alert(result.message);
+      setBslProdAllMonths(null);
+      setTechnoFile(null);
+      const fi = document.getElementById('techno-file-input');
+      if (fi) fi.value = '';
+      fetchExtractionLog();
+    } catch (err) {
+      addLog('error', `BSL insert failed: ${err.message}`);
+      alert(`Insert failed: ${err.message}`);
+    } finally {
+      setBslBusy(false);
+    }
+  };
+
   // ── DSP PDF three-step helpers ──────────────────────────────────────────
   const isDspPdf = technoPlant === 'DSP' && technoFile?.name?.toLowerCase().endsWith('.pdf');
 
@@ -1359,7 +1445,7 @@ function UploadPageInner() {
                     : technoPlant === 'BSP'
                     ? "File type auto-detected from content: flash-<mon>YY.pdf → BSP Flash Monthly PDF — full production (incl. furnace-wise BF#1/4/5/6/7), ~80 techno params (coke yield, sinter, BF, SMS-2/3, all mills, energy) + closing stock, month auto-detected from cover. BSPMIS*.xls → PPC MIS Month-End (sheet S1) — production + opening stock (closing stock saved as next month). BSP MIS 2_coff_print*.xls/.xlsx → furnace-wise Hot Metal production (tentative; BF-1/4/5/6/7/8, column D CUM, month from row 2). BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → techno params (Sheet1, month from A3). OISCO_<Mon>'YY.xlsx → OISCO techno params (month from C3)."
                     : technoPlant === 'BSL'
-                    ? 'DPR XLSX: BSL_DPR_DDMMYYYY.xlsx (sheet DPR) — 19 production items, month auto-detected from O1. | Techno XLS: TECHNO <MON><YYYY>.XLS — 14+ techno params, set month above. | Corp SS XLSX: grade-wise Order Qty & Despatch, month auto-detected. | BF PDF: BSL_BlastFurnace_DDMMYYYY.pdf — furnace-wise HM production (BF-1/2/4/5) into production_table; the other 13 techno params for this PDF are entered via /data-entry/techno. | Main Products PDF: the plant\'s month-end PDF bundle (e.g. "Rev <Mon><YY> (n).pdf") — auto-detected from its "PRODUCTION OF MAIN PRODUCTS" page. Extracts the same 19 production items as the DPR path (Sinter, Hot Metal, Pig Iron, SMS-1/2, Crude Steel, HR Coil/Plate/Sheet, CR Coil/Sheet, GP/GC, Saleable Steel, Finished Steel, Saleable Semis) straight from the finalised report; month auto-detected from the page header.'
+                    ? 'DPR XLSX: BSL_DPR_DDMMYYYY.xlsx (sheet DPR) — 19 production items, month auto-detected from O1. | Techno XLS: TECHNO <MON><YYYY>.XLS — 14+ techno params, set month above. | Corp SS XLSX: grade-wise Order Qty & Despatch, month auto-detected. | BF PDF: BSL_BlastFurnace_DDMMYYYY.pdf — furnace-wise HM production (BF-1/2/4/5) into production_table; the other 13 techno params for this PDF are entered via /data-entry/techno. | Main Products PDF: the plant\'s month-end PDF bundle (e.g. "Rev <Mon><YY> (n).pdf") — auto-detected from its "PRODUCTION OF MAIN PRODUCTS" page. Extracts the same 19 production items as the DPR path (Sinter, Hot Metal, Pig Iron, SMS-1/2, Crude Steel, HR Coil/Plate/Sheet, CR Coil/Sheet, GP/GC, Saleable Steel, Finished Steel, Saleable Semis) straight from the finalised report; month auto-detected from the page header. | Saleable Steel — Table 2.1 PDF: the Corporate MIS year-wise PRODUCTION SUMMARY page (auto-detected from "Table No. 2.1") — Thick Plate, HSM HR Coil/Plate, HR Sheet, CR I/II & III Coil, CR Sheets, GP/GC, GPC3, Saleable Semis (Slab), Saleable Steel, and computed Finished Steel, for every month of the FY selected above. Set any month in the target FY, then use "Extract All 12 Months (FY)" below to preview and insert the whole year in one go.'
                     : technoPlant === 'ASP'
                     ? "asp.xlsx → reads cells F10/F11/F13/F21/L26 (Crude Steel, Concast, Ingot, Saleable, Stock). Month auto-detected from E3. REP*.pdf → same items via keyword search. FL*.pdf → BARS+FS PRD+PL MILL → Finished Steel (col3=Actual)."
                     : technoPlant === 'SSP'
@@ -1421,6 +1507,22 @@ function UploadPageInner() {
                 </button>
               )}
             </form>
+
+            {/* ── BSL Saleable Steel FY PDF (Table 2.1) — extract whole FY at once ── */}
+            {isBslPdf && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #dadce0' }}>
+                <div style={{ fontSize: '8pt', color: '#5f6368', marginBottom: 6 }}>
+                  If this is a year-wise &quot;SALEABLE STEEL — Table 2.1&quot; PRODUCTION SUMMARY PDF,
+                  extract all 12 months of the FY selected above in one go:
+                </div>
+                <button type="button" onClick={handleBslExtractAllMonths} disabled={bslBusy}
+                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                 backgroundColor: '#06b6d4', border: '1px solid #06b6d4', color: '#fff',
+                                 cursor: bslBusy ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                  {bslBusy ? 'Extracting All Months...' : '🔄 Extract All 12 Months (FY)'}
+                </button>
+              </div>
+            )}
 
             {/* ── Month Mismatch Warning Dialog ────────────────────── */}
             {dspMonthMismatch && (
@@ -1654,6 +1756,7 @@ function UploadPageInner() {
                   <li><strong>BSL — DPR Mail (.xlsx):</strong> Sheet <strong>DPR</strong>. Month from <strong>O1</strong>. Auto-detected.</li>
                   <li><strong>BSL — Production of Main Products (.pdf):</strong> The plant&apos;s month-end PDF bundle (e.g. <em>Rev &lt;Mon&gt;&lt;YY&gt; (n).pdf</em>) — auto-detected by its <strong>&quot;PRODUCTION OF MAIN PRODUCTS&quot;</strong> page title, distinguishing it from the BF Performance PDF above. Reads the same 19 production items as the DPR path (Oven Pushing, Sinter, Hot Metal, Pig Iron, SMS-1 CCM-1, SMS-2 CCM-1&amp;2, Crude Steel, HSM HR Coil (total &amp; saleable), HSM HR Plate, HR Sheet, CRC(3), CRC&amp;S(1&amp;2), GPC3, GP/GC, CRSALE, Saleable Steel, Finished Steel, Saleable Semis) from the finalised monthly figures — Finished Steel and Saleable Semis come from the report&apos;s page 3 breakup table. Month auto-detected from the page header (e.g. &quot;JUNE 2026&quot;).</li>
                   <li><strong>BSL — Corporate Office Special Steel (.xlsx):</strong> Use <strong>Extraction with Preview → Insert</strong> (plant: BSL). Auto-detected by Sheet1 + "SPECIAL STEEL" title. Month from cell <strong>I2</strong>. Products: HR COIL / HR PLATE / HR SHEET / CR COIL/SHEET/GP GC / SLAB. Order Qty = col G (ORDER AVAILABLE TOTAL); Actual = col I (Despatch Till Date, monthly). Saves to <strong>special_steel_orders</strong>; shown on report page 22.</li>
+                  <li><strong>BSL — Saleable Steel Table 2.1 (.pdf):</strong> Corporate MIS year-wise PRODUCTION SUMMARY page — auto-detected by its <strong>&quot;Table No. 2.1&quot;</strong> title, distinguishing it from the BF Performance and Main Products PDFs above. One row per FY month (Apr-Mar); quarter subtotals and prior-year recap rows are skipped automatically. Maps Thick Plate, HR Coil→<strong>HSM HR Coil (Sale)</strong>, HR Plate→<strong>HSM HR Plate</strong>, HR Sheet, CR Coil CRM-I/II→<strong>CR I/II CR(Coil) Sale</strong>, CR Sheet→<strong>CR Sheets</strong>, CR Coil CRM-III→<strong>CR III CR(Coil) Sale</strong>, GP Sheet+GC Sheet→<strong>GP/GC</strong>, GP Coil CRM-III→<strong>GPC3</strong>, Slab→<strong>Saleable Semis</strong>, Total Saleable Steel→<strong>Saleable Steel</strong>, plus computed Finished Steel (= Saleable Steel − Saleable Semis). Does <em>not</em> write the legacy <strong>CRC&amp;S(1&amp;2)</strong>/<strong>CRC(3)</strong> items. Pick any month within the target FY, then use <strong>&quot;Extract All 12 Months (FY)&quot;</strong> to preview and insert the whole year at once — every value is shown before anything is written to the DB.</li>
                   <li><strong>DSP — MCR-I (.xls):</strong> Tab-separated text file (<em>mcr1_*.xls</em>). Month from header row. Auto-detected. 21 items extracted.</li>
                   <li><strong>ASP — asp.xlsx</strong> (Preview &amp; Insert, plant: ASP): Reads cells <strong>F10</strong> (Crude Steel), <strong>F11</strong> (Concast), <strong>F12</strong> (Ingot), <strong>F20</strong> (Saleable Steel), <strong>L25</strong> (Stock). Month <strong>auto-detected from E3</strong> (e.g. 30/04/2026 → Apr&apos;26). Sheet: <em>md cell</em>.</li>
                   <li><strong>ASP — REP*.pdf</strong> (Preview &amp; Insert, plant: ASP): Same items as xlsx via keyword search. Set month manually.</li>
@@ -1887,6 +1990,41 @@ function UploadPageInner() {
                 <EditableProductionTable plant="DSP" rows={dspProdRows}
                   onToggle={toggleDspProdRow} onEditName={editDspProdName} />
               )}
+            </div>
+          )}
+
+          {/* BSL Saleable Steel FY PDF (Table 2.1) — all-months preview panel */}
+          {bslProdAllMonths && (
+            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #06b6d4', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
+                  BSL — Table 2.1&nbsp;
+                  <span style={{ fontSize: '8pt', color: '#5f6368', fontWeight: 400 }}>
+                    ALL MONTHS · {bslProdAllMonths.source_type}
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setBslProdAllMonths(null)}
+                          disabled={bslBusy}
+                          style={{ background: 'none', border: '1px solid #5f6368', borderRadius: 4,
+                                   color: '#5f6368', fontSize: '8.5pt', padding: '5px 12px', cursor: 'pointer' }}>
+                    Discard
+                  </button>
+                  <button onClick={handleBslAllMonthsInsert}
+                          disabled={bslBusy}
+                          style={{ backgroundColor: '#06b6d4', border: '1px solid #06b6d4', borderRadius: 4,
+                                   color: '#fff', fontSize: '8.5pt', fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+                    {bslBusy ? 'Processing...' : `Insert Production (${(bslProdAllMonths.single_rows || []).filter(r => r.status === 'ok').length} values)`}
+                  </button>
+                </div>
+              </div>
+              <AllMonthsProductionTable rows={bslProdAllMonths.grouped_rows} />
+              <div style={{ fontSize: '8pt', color: '#5f6368', marginTop: 12, padding: 10, backgroundColor: '#ffffff', borderRadius: 4 }}>
+                <strong>ℹ️ All Months Mode:</strong> Every value above is shown before anything is written to
+                the database — review the grid, then click &quot;Insert Production&quot; to write all 12 months at once.
+                &quot;Finished Steel&quot; is computed as Saleable Steel − Saleable Semis (Slab); &quot;GP/GC&quot; is
+                GP Sheet + GC Sheet. Legacy items <code>CRC&amp;S(1&amp;2)</code> / <code>CRC(3)</code> are never written by this route.
+              </div>
             </div>
           )}
 
