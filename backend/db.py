@@ -174,6 +174,25 @@ def init_db():
         )
     """)
 
+    # 6c-do. Plant-wise remarks for the Monthly DO Letter's Annexure-A
+    # (Crude Steel) / Annexure-B (Finished Steel) tables, e.g. RSP's power-
+    # interruption note explaining a Crude Steel shortfall. Entered ahead of
+    # time (any day in the month, or after) so the letter — due on the 1st
+    # of the following month — already has them when generated. Keyed by
+    # (report_month, item_name, plant_name); item_name is 'Crude Steel' or
+    # 'Finished Steel' (matches the two Annexure tables, not production_
+    # table's own 'Total Crude Steel'/'Finished Steel' item names, since a
+    # remark is about the letter's narrative, not a specific DB figure).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS do_letter_remark_table (
+            report_month TEXT,
+            item_name    TEXT,   -- 'Crude Steel' | 'Finished Steel'
+            plant_name   TEXT,
+            remark       TEXT,
+            PRIMARY KEY (report_month, item_name, plant_name)
+        )
+    """)
+
     # 6c. SAIL stock snapshot — Table D of the "1 page report" (Plants /
     # Stockyards / Stock in Transit / Total, '000T). Keyed by the report's
     # own snapshot date, not report_month — a single upload backfills

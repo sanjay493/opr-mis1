@@ -39,6 +39,7 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
 from page_records import generate_records
 from page_jpc_report import build_jpc_report_bytes
 from page_finished_steel_report import build_finished_steel_report_csv
+from page_do_letter import build_do_letter_docx_bytes, build_do_annexure_xlsx_bytes
 import page_production_fy_export
 import page_production_query_export
 from page_one_page_report import build_one_page_report_bytes
@@ -3342,6 +3343,107 @@ async def finished_steel_report():
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="finished_steel_month_plant_wise.csv"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Monthly D.O. Letter — "Monthly performance of SAIL" + Annexure A/B (Crude
+# Steel / Finished Steel, plant-wise) + the companion Ministry "Monthly DO
+# Annexure" workbook. See page_do_letter.py.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/do-letter/docx")
+async def do_letter_docx(month: str = Query(...)):
+    """Download the Monthly D.O. Letter (.docx) for `month` (reports that
+    month's performance — the letter itself is due the 1st of the
+    following month). Format-matched against the reference template."""
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    try:
+        content = build_do_letter_docx_bytes(month)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"D.O. Letter generation failed: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="DO_{month}_Monthly_Performance.docx"'},
+    )
+
+
+@app.get("/api/do-letter/annexure-xlsx")
+async def do_letter_annexure_xlsx(month: str = Query(...)):
+    """Download the Monthly DO Annexure workbook (.xlsx) for `month` — Part
+    A rows 1-2 (Crude/Finished Steel) populated from the DB; everything else
+    (no data source here) stays exactly as the template shows."""
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    try:
+        content = build_do_annexure_xlsx_bytes(month)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DO Annexure generation failed: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="Monthly_DO_Annexure_{month}.xlsx"'},
+    )
+
+
+@app.get("/api/do-letter/remarks")
+async def get_do_letter_remarks(month: str = Query(...)):
+    """Remarks already entered for `month`'s Annexure-A/B tables, grouped by
+    item — {"Crude Steel": {plant: remark}, "Finished Steel": {plant: remark}}."""
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT item_name, plant_name, remark FROM do_letter_remark_table WHERE report_month=?",
+            (month,),
+        )
+        out = {"Crude Steel": {}, "Finished Steel": {}}
+        for item_name, plant_name, remark in cur.fetchall():
+            out.setdefault(item_name, {})[plant_name] = remark or ""
+        return out
+    finally:
+        conn.close()
+
+
+@app.post("/api/do-letter/remarks")
+async def save_do_letter_remarks(payload: dict):
+    """Upsert one or more remarks ahead of the 1st-of-month letter run.
+    Body: {"report_month": "2026-07", "remarks": [{"item_name": "Crude Steel",
+    "plant_name": "RSP", "remark": "..."}]}. An empty remark string deletes
+    the row (so a cleared textbox doesn't leave a stale empty row behind)."""
+    report_month = payload.get("report_month", "")
+    if not re.fullmatch(r"\d{4}-\d{2}", report_month):
+        raise HTTPException(status_code=400, detail="report_month must be YYYY-MM")
+    entries = payload.get("remarks", [])
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        saved = 0
+        for e in entries:
+            item_name = str(e.get("item_name", "")).strip()
+            plant_name = str(e.get("plant_name", "")).strip()
+            remark = str(e.get("remark", "")).strip()
+            if not item_name or not plant_name:
+                continue
+            if remark:
+                cur.execute("""
+                    INSERT INTO do_letter_remark_table (report_month, item_name, plant_name, remark)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(report_month, item_name, plant_name) DO UPDATE SET remark = excluded.remark
+                """, (report_month, item_name, plant_name, remark))
+            else:
+                cur.execute(
+                    "DELETE FROM do_letter_remark_table WHERE report_month=? AND item_name=? AND plant_name=?",
+                    (report_month, item_name, plant_name),
+                )
+            saved += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return {"saved": saved}
 
 
 @app.get("/api/jpc-report")

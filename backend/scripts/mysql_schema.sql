@@ -89,6 +89,17 @@ CREATE TABLE IF NOT EXISTS sail_sales_note_table (
     note         TEXT
 ) ENGINE=InnoDB;
 
+-- Plant-wise remarks for the Monthly DO Letter's Annexure-A (Crude Steel) /
+-- Annexure-B (Finished Steel) tables — entered ahead of time so the letter
+-- (due the 1st of the following month) already has them when generated.
+CREATE TABLE IF NOT EXISTS do_letter_remark_table (
+    report_month CHAR(7)     NOT NULL,
+    item_name    VARCHAR(32) NOT NULL,   -- 'Crude Steel' | 'Finished Steel'
+    plant_name   VARCHAR(8)  NOT NULL,
+    remark       TEXT,
+    PRIMARY KEY (report_month, item_name, plant_name)
+) ENGINE=InnoDB;
+
 -- Capital Repair plan (pages 36-40, Report_format/CR.pdf format). "actual"
 -- is the only field updated from the frontend as each repair executes.
 CREATE TABLE IF NOT EXISTS capital_repair_table (

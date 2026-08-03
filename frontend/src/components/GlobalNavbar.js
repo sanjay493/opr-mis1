@@ -90,6 +90,7 @@ export default function GlobalNavbar() {
       icon: '📮',
       submenu: [
         { label: 'New Facilities (Annexure-III)', link: '/reports/new-facilities', icon: '🆕' },
+        { label: 'Monthly DO Letter', link: '/reports/do-letter', icon: '✉️' },
         { label: 'JPC Monthly Report', link: '/reports/jpc-report', icon: '📋' },
         { label: '1-Page Report', link: '/reports/one-page-report', icon: '📃' },
         { label: 'Pmix Report (Year-wise)', link: '/reports/pmix-fy', icon: '📈' },
