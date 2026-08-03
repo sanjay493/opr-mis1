@@ -136,6 +136,7 @@ export default function DoLetterPage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
       <GlobalNavbar />
       <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px' }}>
         <div style={{ marginBottom: '24px' }}>
@@ -203,7 +204,7 @@ export default function DoLetterPage() {
                       <textarea
                         value={remarks[item]?.[plant] || ''}
                         onChange={(e) => setRemark(item, plant, e.target.value)}
-                        rows={2}
+                        rows={4}
                         placeholder="No remark"
                         style={{
                           width: '100%', padding: '8px 10px', fontSize: '10pt',
