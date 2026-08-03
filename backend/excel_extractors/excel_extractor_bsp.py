@@ -29,6 +29,7 @@ from typing import Optional, List, Dict, Any
 import openpyxl
 from openpyxl.utils import get_column_letter
 
+import db
 from extraction_utils import calculate_tmi_consumption
 
 try:
@@ -1183,6 +1184,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
     production_rows: List[Dict[str, Any]] = []
     found = set()
     mm_values: Dict[str, Optional[float]] = {}
+    extra_values: Dict[str, Optional[float]] = {}
     for r in range(1, ws.max_row + 1):
         label = str(ws.cell(r, 2).value or "").strip().upper()   # column B
         if label in _MIS2_FURNACE_LABELS and label not in found:
@@ -1225,6 +1227,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
             else:
                 item_val = round(val / 1000.0, 3) if val is not None else None
                 item_unit = "'000T"
+            extra_values[item_name] = item_val
             production_rows.append({
                 "item_name": item_name,
                 "value":     item_val,
@@ -1269,6 +1272,45 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
             "pdf_label": "MM (derived)",
             "status":    "ok",
         })
+
+    # "SP-3 M/C-1" — this report only ever prints M/C-2's own figure (see
+    # _MIS2_EXTRA_LABELS above); M/C-1 has no row of its own anywhere in
+    # either BSP file. Derived as SP-3's plant total (already in
+    # production_table from the PPC MIS upload — see "SP-3" in
+    # _ppc_mis_config) minus the M/C-2 figure just read here. Skipped (not
+    # guessed) if that month's SP-3 total isn't in the DB yet, e.g. this
+    # MIS-2 file was uploaded before that month's PPC MIS file.
+    mc2_val = extra_values.get("SP-3 M/C-2")
+    if mc2_val is not None:
+        sp3_total = None
+        try:
+            _conn = db.connect()
+            _cur = _conn.cursor()
+            _cur.execute(
+                "SELECT month_actual FROM production_table "
+                "WHERE report_month=? AND plant_name='BSP' AND item_name='SP-3'",
+                (db_month,),
+            )
+            _row = _cur.fetchone()
+            _conn.close()
+            sp3_total = _row[0] if _row and _row[0] is not None else None
+        except Exception:
+            sp3_total = None
+
+        if sp3_total is not None:
+            production_rows.append({
+                "item_name": "SP-3 M/C-1",
+                "value":     round(sp3_total - mc2_val, 3),
+                "unit":      "'000T",
+                "cell":      "derived: SP-3 (production_table) - SP-3 M/C-2",
+                "pdf_label": "SP-3 M/C-1 (derived)",
+                "status":    "ok",
+            })
+        else:
+            production_rows.append({
+                "item_name": "SP-3 M/C-1", "value": None, "unit": "'000T",
+                "cell": "", "pdf_label": "SP-3 M/C-1 (derived)", "status": "skip",
+            })
 
     ok = sum(1 for r in production_rows if r["status"] == "ok")
     logger.info("BSP MIS-2 furnace preview: %d/%d furnace rows ok for %s",
