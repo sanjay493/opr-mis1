@@ -297,6 +297,7 @@ export default function TechnoCustomReportPage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
       <GlobalNavbar />
       <div style={{ maxWidth: '1500px', margin: '0 auto', padding: '32px' }}>
 
