@@ -169,6 +169,7 @@ def _ppc_mis_config() -> Dict[str, tuple]:
 
     default_rc = {
         "COB#1-8":             (3,  5,  False),
+        "COB#9-10":            (4,  5,  False),
         "Oven Pushing (nos/day)": (5,  5,  False),
         "SP-2":                (7,  5,  True),
         "SP-3":                (8,  5,  True),
@@ -253,6 +254,14 @@ _PPC_GUARDED_ITEMS = {
     "RSM_RAIL":          (17, 0, "RSM"),
     "URM_RAIL":          (21, 0, "URM"),
     "COB#1-8":           (3,  0, "BATT"),
+    # Coke Oven Batteries 9-10 (a 3rd battery group alongside #1-8 and #11 —
+    # see the ABP plan sheet's own 3 separate COB rows) got a dedicated row
+    # inserted just below COB#1-8 only once those batteries were
+    # commissioned — older reports have no such row (guard correctly skips
+    # them, since the batteries didn't exist yet), which is also why
+    # "Oven Pushing(nos/d)" below it needs a stable-label search rather than
+    # a fixed row: this insertion is exactly what pushed it down by one row.
+    "COB#9-10":          (4,  0, "BATT"),
     "RSMPRIME":          (37, 2, "RSM"),
     "URMPRIME":          (37, 7, "URM"),
     "Pig Iron":          (60, 12, "PIG IRON"),
