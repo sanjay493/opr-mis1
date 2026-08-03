@@ -138,6 +138,28 @@ def _sms_joined(plant, key, techno, dp):
     return "/".join(vals) if vals else None
 
 
+# LDG (BOF/LD Gas Yield) — same per-plant SMS shop list as TMI
+# (_SMS_UNIT_MAP, slash-joined when a plant reports more than one shop), but
+# the stored key name varies by plant: BSP calls it "ld_gas_recovery", DSP
+# "bof_gas_yield". RSP/ISP/BSL don't track this parameter in techno_data
+# yet — blank until a dedicated source is extracted.
+_LDG_KEY_BY_PLANT = {
+    "BSP": "ld_gas_recovery",
+    "DSP": "bof_gas_yield",
+}
+
+
+def _ldg_val(plant, techno, dp):
+    key = _LDG_KEY_BY_PLANT.get(plant)
+    if not key:
+        return None
+    vals = []
+    for u in _SMS_UNIT_MAP.get(plant, []):
+        v = techno.get((plant, u), {}).get(key)
+        vals.append(f"{_round(v, dp):.{dp}f}" if v is not None else "—")
+    return "/".join(vals) if vals else None
+
+
 def _prod_val(plant, item_names, production, dp):
     for item in item_names:
         v = production.get((plant, item))
@@ -204,7 +226,7 @@ _ROWS = [
     ("HBT",                 "°C",       "bf", "hot_blast_temp", 0, {}),
     ("O2 Enrichment",       "%",        "bf", "o2_enrichment", 2, {}),
     ("Not Dry Casts",       "%",        "bf", "not_dry_cast", 2, {}),
-    ("Coke Ash",            "%",        "coke_ash", "ash_in_coke", 2, {}),
+    ("Coke Ash",            "%",        "coke_unit", "ash_in_coke", 2, {}),
     ("Sinter Fe",           "%",        "bf", "tfe_in_sinter", 2, {}),
     ("BF Slag Rate",        "kg/THM",   "bf", "slag_rate", 0, {}),
     ("HM Sent to PCM/Sand Pit/Dry Pit", "'000 T", "general", "hm_to_pcm_sandpit_drypit", 1, {"label_rowspan": 2}),
@@ -224,9 +246,12 @@ _ROWS = [
     ("Value Added Products %", "%",        "special", None, 0, {}),
 
     ("Recovery of Process Gases", "", _SECTION, None, 0, {}),
-    ("COG", "Nm³/T",    "general", "cog_recovery", 0, {}),
-    ("BFG", "Nm³/THM",  "general", "bfg_recovery", 0, {}),
-    ("LDG", "Nm³/TCS",  "general", "ldg_recovery", 0, {}),
+    # cog_recovery/bfg_recovery/ldg_recovery below were placeholder keys no
+    # extractor ever writes -- these rows were always blank. Mapped to the
+    # actual stored parameters instead:
+    ("COG", "Nm³/T",    "coke_unit", "coke_oven_gas_yield", 0, {}),
+    ("BFG", "Nm³/THM",  "bf", "bf_gas_yield", 0, {}),
+    ("LDG", "Nm³/TCS",  "ldg", None, 0, {}),
 ]
 
 
@@ -264,8 +289,13 @@ def generate_key_parameters(report_month: str) -> dict:
                 v = _sms_joined(plant, spec, techno, dp)
             elif kind == "coal_blend":
                 v = _coal_blend_pct(plant, spec, techno, dp)
-            elif kind == "coke_ash":
+            elif kind == "coke_unit":
+                # Any parameter scoped to the coke-oven unit (Coke Ash, COG)
+                # — stored under whichever of COB/Coke Ovens/COB-old/COB-new
+                # this plant's extractor used.
                 v = _first_present_val(plant, _COKE_UNITS, spec, techno, dp)
+            elif kind == "ldg":
+                v = _ldg_val(plant, techno, dp)
             elif kind == "bf_sum":
                 a = _bf_val(plant, spec[0], techno, dp)
                 b = _bf_val(plant, spec[1], techno, dp)
