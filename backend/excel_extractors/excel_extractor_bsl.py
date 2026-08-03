@@ -1731,6 +1731,194 @@ def extract_preview_saleable_steel_fy_pdf(file_path: str, report_month: str, all
     }
 
 
+# ---------------------------------------------------------------------------
+# Annual Book — PRODUCTION SUMMARY (Table 2.1) + FURNACEWISE PRODUCTION
+# (Table 7.3), one row per FY month like the Saleable Steel FY PDF above.
+# ---------------------------------------------------------------------------
+
+# Table 7.3's own number (unlike Table 2.1, not reused by any other BSL PDF
+# this app already supports) — checked before the generic Table 2.1 probe so
+# this file (whose page 1 is ALSO titled "... Table No. 2.1 (Contd.)", a
+# different sub-table from the Saleable Steel one) isn't misrouted there.
+_ANNUAL_BOOK_TITLE_RE = re.compile(r'Table No\.\s*7\.3', re.I)
+
+# Same month-row shape as the Saleable Steel FY table, but this source
+# sometimes trails the abbreviation with a period ("JUN.", "JUL.") and
+# sometimes doesn't ("APR'25", "MAY") — \.? makes that optional.
+_ANNUAL_BOOK_MONTH_ROW_RE = re.compile(
+    r"^(APR|MAY|JUN|JULY|JUL|AUG|SEP|OCT|NOV|DEC|JAN|FEB|MAR)\.?('?(\d{2}))?\s+(.+)$"
+)
+
+# PRODUCTION SUMMARY (page 1) column order, left to right after PERIOD.
+_ANNUAL_BOOK_SUMMARY_COLS = [
+    "OvenPushingAvgDay", "OvenPushingTotal", "GrossCoke", "BFCoke", "Sinter",
+    "HotMetal", "PigIron", "SteelToFoundry", "CastSlabSMSNew", "CastSlabSMSII",
+    "CrudeSteel",
+]
+# col_name → (item_name, convert_to_000T). item_name=None means "not written"
+# (OvenPushingTotal isn't one of the requested items; Avg./day is, under the
+# same item_name/no-convert convention the DPR/Main-Products routes use).
+# Cast Slab (SMS New)/(SMS II) reuse the exact item names the Main Products
+# PDF route already writes for the same two figures (SMS-1 CCM-1 /
+# SMS-2 CCM-1&2) — verified: Total Crude Steel = SMS-1 CCM-1 + SMS-2 CCM-1&2
+# on every sampled month, same identity the Main Products route documents.
+_ANNUAL_BOOK_SUMMARY_ITEMS = {
+    "OvenPushingAvgDay": ("Oven Pushing (nos/day)", False),
+    "OvenPushingTotal":  (None, False),
+    "GrossCoke":         ("Gross Coke", True),
+    "BFCoke":            ("BF Coke", True),
+    "Sinter":            ("Total Sinter", True),
+    "HotMetal":          ("Hot Metal", True),
+    "PigIron":           ("Pig Iron", True),
+    "SteelToFoundry":    ("Steel to Foundry", True),
+    "CastSlabSMSNew":    ("SMS-1 CCM-1", True),
+    "CastSlabSMSII":     ("SMS-2 CCM-1&2", True),
+    "CrudeSteel":        ("Total Crude Steel", True),
+}
+
+# FURNACEWISE PRODUCTION: each furnace contributes 4 columns (Basic Gr., Fdy.
+# Gr., Off Gr., Total) — only the Total column (furnace-wise Hot Metal) is
+# wanted, at item_name "BF-<n>", matching extract_preview_bf_pdf's existing
+# convention (plant_name stays 'BSL'; furnace number becomes the item_name).
+# Page 2 has furnaces 1-3, page 3 has furnaces 4-5 + a trailing Granulated
+# Slag column (not extracted — no item_name convention for it yet).
+_ANNUAL_BOOK_FURNACE_PAGE2 = ["BF-1", "BF-2", "BF-3"]
+_ANNUAL_BOOK_FURNACE_PAGE3 = ["BF-4", "BF-5"]
+
+
+def _parse_annual_book_month_rows(text: str, n_cols: int):
+    """{month_idx (0=Apr..11=Mar): [n_cols floats]} from one page's text.
+    Quarter-subtotal ("1ST QTR."), annual recap ("2025-26 ..."), and
+    prior-year recap rows are skipped automatically — their first token
+    never matches a month abbreviation, so the row regex just doesn't match."""
+    by_month_idx = {}
+    for line in text.splitlines():
+        m = _ANNUAL_BOOK_MONTH_ROW_RE.match(line.strip())
+        if not m:
+            continue
+        mon_key, _, _, rest = m.groups()
+        mon_num = _FY_MONTH_NUM.get(mon_key)
+        if mon_num is None:
+            continue
+        nums = re.findall(r'-?\d[\d,]*(?:\.\d+)?', rest)
+        if len(nums) < n_cols:
+            continue
+        vals = [float(n.replace(',', '')) for n in nums[:n_cols]]
+        month_idx = (mon_num - 4) % 12   # Apr=0 .. Mar=11
+        if month_idx in by_month_idx:
+            continue   # first occurrence wins (defends against a recap table reusing month labels)
+        by_month_idx[month_idx] = vals
+    return by_month_idx
+
+
+def extract_preview_annual_book_pdf(file_path: str, report_month: str, all_months: bool = False) -> dict:
+    """Extract BSL's Annual Book 3-page extract: PRODUCTION SUMMARY (Table
+    2.1 — Oven Pushing, Gross/BF Coke, Sinter, Hot Metal, Pig Iron, Steel to
+    Foundry, Cast Slab SMS New/II, Crude Steel) and FURNACEWISE PRODUCTION
+    (Table 7.3, split across pages 2-3 — Hot Metal per furnace's own Total
+    column). `report_month` anchors which FY to read — any month within
+    that FY works, since the whole table is parsed regardless. `all_months=
+    True` returns every month in the FY (each row carries its own
+    `report_month`) for a one-shot FY backfill, same contract as
+    extract_preview_saleable_steel_fy_pdf."""
+    import pdfplumber
+
+    fname = os.path.basename(file_path)
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            n_pages = len(pdf.pages)
+            pages_text = [pg.extract_text() or "" for pg in pdf.pages]
+    except Exception as exc:
+        raise ValueError(f"Cannot open PDF '{fname}': {exc}") from exc
+
+    summary_text = pages_text[0] if n_pages >= 1 else ""
+    furnace_text_23 = "\n".join(pages_text[1:3]) if n_pages >= 2 else ""
+
+    by_month_summary = _parse_annual_book_month_rows(summary_text, len(_ANNUAL_BOOK_SUMMARY_COLS))
+    by_month_f23  = _parse_annual_book_month_rows(pages_text[1], 12) if n_pages >= 2 else {}
+    by_month_f45  = _parse_annual_book_month_rows(pages_text[2], 9)  if n_pages >= 3 else {}
+
+    if not by_month_summary:
+        raise ValueError(
+            "No monthly rows found on page 1. Verify this is the BSL Annual "
+            "Book 3-page extract (PRODUCTION SUMMARY — MAIN PRODUCTS, Table "
+            "No. 2.1, followed by FURNACEWISE PRODUCTION, Table No. 7.3)."
+        )
+
+    fy_start = _fy_start_from_month(report_month)
+
+    def ym_for(idx):
+        return f"{fy_start}-{idx + 4:02d}" if idx <= 8 else f"{fy_start + 1}-{idx - 8:02d}"
+
+    months_to_emit = list(range(12)) if all_months else [(int(report_month[5:7]) - 4) % 12]
+    cell_tag = f"PDF ({n_pages}p) · FY{fy_start}-{str(fy_start + 1)[2:]}"
+
+    rows = []
+    for idx in months_to_emit:
+        ym = ym_for(idx)
+        mon_label = _FY_MONTH_NAMES[idx]
+
+        cols = by_month_summary.get(idx)
+        if cols is None:
+            for col_name in _ANNUAL_BOOK_SUMMARY_COLS:
+                item_name, _ = _ANNUAL_BOOK_SUMMARY_ITEMS[col_name]
+                if item_name is None:
+                    continue
+                rows.append({
+                    "item_name": f"(not found) {item_name}", "value": None, "unit": "'000T",
+                    "cell": f"{cell_tag} · {mon_label} row not found", "report_month": ym,
+                    "pdf_label": f"({mon_label} row not found)", "status": "unmapped",
+                })
+        else:
+            for col_name, val in zip(_ANNUAL_BOOK_SUMMARY_COLS, cols):
+                item_name, convert = _ANNUAL_BOOK_SUMMARY_ITEMS[col_name]
+                if item_name is None:
+                    continue
+                out_val = round(val / 1000.0, 3) if convert else val
+                rows.append({
+                    "item_name": item_name, "value": out_val,
+                    "unit": "nos/day" if not convert else "'000T",
+                    "cell": f"{cell_tag} · {mon_label}", "report_month": ym,
+                    "pdf_label": col_name, "status": "ok",
+                })
+
+        for furnace_names, by_month_f, total_offset, n_cols in (
+            (_ANNUAL_BOOK_FURNACE_PAGE2, by_month_f23, 3, 4),
+            (_ANNUAL_BOOK_FURNACE_PAGE3, by_month_f45, 3, 4),
+        ):
+            fvals = by_month_f.get(idx)
+            for i, item_name in enumerate(furnace_names):
+                total = fvals[i * n_cols + total_offset] if fvals else None
+                ok = isinstance(total, (int, float)) and total > 0
+                rows.append({
+                    "item_name": item_name if ok else f"(no value) {item_name}",
+                    "value": round(total / 1000.0, 3) if ok else None,
+                    "unit": "'000T",
+                    "cell": f"{cell_tag} · {mon_label} · {item_name} Total col",
+                    "report_month": ym, "pdf_label": f"{item_name} Total",
+                    "status": "ok" if ok else "no value",
+                })
+
+    ok = sum(1 for r in rows if r["status"] == "ok")
+    logger.info("BSL Annual Book PDF: %d/%d rows ok (FY%s, all_months=%s)",
+                ok, len(rows), fy_start, all_months)
+
+    return {
+        "plant": "BSL",
+        "month": report_month,
+        "detected_month": None,
+        "source_type": "BSL Annual Book (Production Summary + Furnacewise Production)",
+        "sheets": f"PDF ({n_pages}p) — Table 2.1 + Table 7.3",
+        "workbook_sheets": [f"PDF ({n_pages} pages) — Table 2.1 + Table 7.3"],
+        "report_type": "Annual Book FY Summary",
+        "production_rows": rows,
+        "special_steel_rows": [],
+        "special_steel_note": "",
+        "techno_rows": [],
+        "techno_param_rows": [],
+    }
+
+
 def _extract_delhi_report_stock(wb, db_month: str) -> list:
     """Extract next-month opening stock from 'Delhi Report' sheet.
 
@@ -1895,6 +2083,14 @@ def extract_preview(file_path: str, report_month: str, all_months: bool = False)
       every month in the FY anchored by `report_month` instead of just the
       one selected — see extract_preview_saleable_steel_fy_pdf().
 
+    • Annual Book 3-page extract (.pdf) — PRODUCTION SUMMARY (Table No. 2.1,
+      MAIN PRODUCTS: Oven Pushing, Gross/BF Coke, Sinter, Hot Metal, Pig
+      Iron, Steel to Foundry, Cast Slab SMS New/II, Crude Steel) +
+      FURNACEWISE PRODUCTION (Table No. 7.3, pages 2-3: Hot Metal per
+      furnace's own Total column, item_name BF-1/2/3/4/5). Same year-wide,
+      `all_months`-capable shape as Saleable Steel above — see
+      extract_preview_annual_book_pdf().
+
     • DPR Mail Month-End Report (.xlsx, sheet 'DPR')
       → production_rows populated with ~19 production items.
 
@@ -1913,6 +2109,12 @@ def extract_preview(file_path: str, report_month: str, all_months: bool = False)
                 _probe_text = "\n".join((pg.extract_text() or "") for pg in _pdf.pages[:4])
         except Exception as exc:
             raise ValueError(f"Cannot open PDF: {exc}") from exc
+        if _ANNUAL_BOOK_TITLE_RE.search(_probe_text):
+            # Checked before the Table 2.1 probe below — this file's own
+            # page 1 is ALSO titled "... Table No. 2.1 (Contd.)" (a
+            # different sub-table, MAIN PRODUCTS not SALEABLE STEEL), so it
+            # would otherwise be misrouted to the Saleable Steel parser.
+            return extract_preview_annual_book_pdf(file_path, report_month, all_months=all_months)
         if _SALEABLE_STEEL_FY_TITLE_RE.search(_probe_text):
             return extract_preview_saleable_steel_fy_pdf(file_path, report_month, all_months=all_months)
         if _MAIN_PRODUCTS_TITLE_RE.search(_probe_text):
