@@ -83,6 +83,7 @@ export default function GlobalNavbar() {
         { label: 'Production Highlights', link: '/reports/highlights', icon: '✨' },
         { label: 'Major Production (Month & Till Month)', link: '/reports/major-production', icon: '🏭' },
         { label: 'Production Records', link: '/records', icon: '📊' },
+        { label: 'Monthly Records Matrix', link: '/reports/records-matrix', icon: '🗓️' },
       ]
     },
     {
