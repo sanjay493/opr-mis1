@@ -265,13 +265,27 @@ def build_pdf_html(data: dict, view: str) -> str:
 
 
 def render_pdf_bytes(html: str) -> bytes:
-    """Synchronous — call via a threadpool executor from async code."""
+    """Synchronous — call via a threadpool executor from async code.
+
+    Retries once and always closes the browser (even on failure) — a launch
+    or render error that skips browser.close() leaks the whole Chromium
+    process; those zombies accumulate across repeated failures and make
+    subsequent launches slower and more likely to fail too, which is exactly
+    what made this look like an intermittent 500 to callers."""
     from playwright.sync_api import sync_playwright
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        page = browser.new_page()
-        page.set_content(html, wait_until="domcontentloaded")
-        pdf_bytes = page.pdf(format="A4", landscape=True, print_background=True,
-                             margin={"top": "12mm", "right": "10mm", "bottom": "12mm", "left": "10mm"})
-        browser.close()
-    return pdf_bytes
+
+    last_exc = None
+    for _attempt in range(2):
+        try:
+            with sync_playwright() as pw:
+                browser = pw.chromium.launch()
+                try:
+                    page = browser.new_page()
+                    page.set_content(html, wait_until="domcontentloaded", timeout=30000)
+                    return page.pdf(format="A4", landscape=True, print_background=True,
+                                     margin={"top": "12mm", "right": "10mm", "bottom": "12mm", "left": "10mm"})
+                finally:
+                    browser.close()
+        except Exception as e:
+            last_exc = e
+    raise last_exc
