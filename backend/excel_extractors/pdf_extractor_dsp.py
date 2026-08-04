@@ -349,7 +349,52 @@ def _parse_te_nums(line):
 
 
 
-def _te_values_techno(nums, report_month_num=None):
+def _prior_quarter_subtotal_present(lines, want_mon):
+    """Whether this growing-FY-table's header repeats a quarter-subtotal
+    column on the prior-year side too, or omits it.
+
+    Real DSP reports are inconsistent about this: Jun'25 and Sep'25 both
+    show "... Q1 2025-26 Jun.'24 Q1 2024-25" / "... Q2 2025-26 Sep.'24 Q2
+    2024-25" (prior side = [prior_month, prior_Q, prior_FY_ref], 3 tokens),
+    while Dec'25 shows "... Q3 2025-26 Nov.'24 2024-25" (prior side =
+    [prior_month, prior_FY_ref], only 2 tokens — no prior-Q). Dec's prior-
+    month column is also mislabeled "Nov" instead of "Dec" in that same
+    header, which is why this locates the prior side via the FY-year token
+    (e.g. "2025-26") rather than via a second occurrence of want_mon's own
+    label — that label can't be trusted to repeat correctly.
+
+    Returns True/False when a growing-table header for want_mon is found,
+    None if no such header line was found in `lines` (caller should fall
+    back to the historically-assumed True in that case).
+    """
+    mon3 = want_mon[:3].upper()
+    for ln in lines[:25]:
+        toks = ln.split()
+        if not toks or toks[0].upper() != "ITEM":
+            continue
+        cleaned = []
+        for t in toks:
+            m = re.match(r'^([A-Za-z]+)', t)
+            cleaned.append(m.group(1).upper() if m else t.upper())
+        positions = [i for i, t in enumerate(cleaned) if t[:3] == mon3]
+        if not positions:
+            continue
+        current_idx = positions[0]
+        fy_idx = None
+        for i in range(current_idx + 1, len(cleaned)):
+            if re.match(r'^\d{4}-\d{2}$', cleaned[i]):
+                fy_idx = i
+                break
+        if fy_idx is None:
+            continue
+        prior_side = cleaned[fy_idx + 1:]
+        if not prior_side:
+            continue
+        return len(prior_side) >= 3
+    return None
+
+
+def _te_values_techno(nums, report_month_num=None, has_prior_q=True):
     """Extract techno values from a techno row (handles variable column count).
 
     Every DSP techno-page row — whether it's a small fixed page (MAJOR/SMS/
@@ -359,27 +404,40 @@ def _te_values_techno(nums, report_month_num=None):
     Jun/Sep/Dec/Mar) ends in the same trailing shape once you count from the
     right:
         [..., current_month, (current_Q, only at quarter-end), YTD_so_far,
-         prior_year_same_month, (prior_Q, only at quarter-end), prior_year_ref]
+         prior_year_same_month, (prior_Q — only some quarter-end reports),
+         prior_year_ref]
     So a single pair of negative-offset formulas — one for quarter-end
-    months (Jun/Sep/Dec/Mar, which insert the extra current_Q/prior_Q
-    columns) and one for every other month — correctly locates
-    actual/cum/prior regardless of how many leading columns (Norm, elapsed
-    months, elapsed quarters) have accumulated. This replaces what used to
-    be five separate length-keyed branches (4/5/6/7/>=14 columns) that were
-    all — once worked out — the exact same formula in disguise; the old
-    dispatch had a gap for lengths 8-13 (roughly Jun-Oct) that silently
-    dropped every growing-table parameter for those months.
+    months (Jun/Sep/Dec/Mar) and one for every other month — correctly
+    locates actual/cum/prior regardless of how many leading columns (Norm,
+    elapsed months, elapsed quarters) have accumulated. This replaces what
+    used to be five separate length-keyed branches (4/5/6/7/>=14 columns)
+    that were all — once worked out — the exact same formula in disguise;
+    the old dispatch had a gap for lengths 8-13 (roughly Jun-Oct) that
+    silently dropped every growing-table parameter for those months.
 
-    Verified against real DSP monthly reports: YTD (nums[-3] or nums[-4] at
-    quarter-end) matches the arithmetic average of that FY's elapsed monthly
-    values for Jan/Feb/Mar/Aug reports; quarter subtotals match avg() of
-    their 3 months. Quarter-end handling itself is verified for March only
-    (no Jun/Sep/Dec sample was available) — re-check against a Jun, Sep, or
-    Dec report if one becomes available.
+    Verified against real DSP monthly reports: YTD matches the arithmetic
+    average of that FY's elapsed monthly values for Jan/Feb/Mar/Aug/May/Jun/
+    Sep/Oct/Nov/Dec reports; quarter subtotals match avg() of their 3
+    months. Quarter-end handling is now verified against real Jun/Sep/Dec
+    reports (previously only March had a real sample) — cross-checked
+    column-by-column against each report's own header AND against the same
+    parameter's value as it reappears in a *later* month's growing table
+    (e.g. December's own Apr-Dec columns must agree with what Jun/Sep/Oct/
+    Nov's own independent reports say for those same months — confirmed for
+    Silicon in HM on all three furnaces).
+
+    This is where `has_prior_q` (see _prior_quarter_subtotal_present)
+    matters: Jun'25 and Sep'25 both carry a prior-year quarter-subtotal
+    column that Dec'25 omits, which shifts actual_current/cum_current/
+    actual_prior together by one column at quarter-end. Guessing this
+    instead of detecting it from the header was the original bug — it
+    silently pulled the PRIOR month's value (e.g. November for a December
+    report) into the CURRENT month's slot for whichever shape didn't match
+    the guess.
 
     report_month_num: Month number (1-12).
     - Quarter-end months (Mar/Jun/Sep/Dec) get an extra current-quarter
-      column right after the current month, shifting actual/cum back by 2.
+      column right after the current month.
     - Prior-year cumulative (cum_prior) is only a complete FY at March —
       every other month's trailing "prior_year_ref" column is a partial-year
       figure, so cum_prior is None everywhere except March.
@@ -398,14 +456,22 @@ def _te_values_techno(nums, report_month_num=None):
         return actual_current, cum_current, actual_prior, cum_prior
 
     is_quarter_end = report_month_num in (3, 6, 9, 12)
-    min_len = 6 if is_quarter_end else 4
+    quarter_end_with_prior_q = is_quarter_end and has_prior_q
+    if is_quarter_end:
+        min_len = 6 if has_prior_q else 5
+    else:
+        min_len = 4
     if len(nums) < min_len:
         return None, None, None, None
 
-    if is_quarter_end:
+    if quarter_end_with_prior_q:
         actual_current = nums[-6]
         cum_current    = nums[-4]
         actual_prior   = nums[-3]
+    elif is_quarter_end:
+        actual_current = nums[-5]
+        cum_current    = nums[-3]
+        actual_prior   = nums[-2]
     else:
         actual_current = nums[-4]
         cum_current    = nums[-3]
@@ -586,11 +652,13 @@ _BF_SHOP_PARAMS = [
 
 def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, month_diff=0, offset=4, report_month_num=None):
     rows = []
+    _hpq = _prior_quarter_subtotal_present(lines, want_mon)
+    has_prior_q = True if _hpq is None else _hpq
     for keyword, label, unit, sort in param_list:
         for ln in lines:
             if keyword in ln.lower():
                 nums = _parse_te_nums(ln)
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, has_prior_q)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
@@ -635,6 +703,8 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
     # crude benzol appears on two lines: Lit./TDC (skip) then Kg/TDC (use next line)
     _crude_benzol_kw = "crude benzol"
     lines_list = list(lines)
+    _hpq = _prior_quarter_subtotal_present(lines_list, want_mon)
+    has_prior_q = True if _hpq is None else _hpq
 
     for keyword, group_code, section, row_label, unit, sort in param_defs:
         found = False
@@ -662,7 +732,7 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
                 actual_prior = None
                 cum_prior    = None
             else:
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, has_prior_q)
 
             if actual_curr is not None:
                 rows.append({
@@ -1160,11 +1230,14 @@ def _parse_bf_page1(lines, pno, want_mon, yy, report_month_num):
     _FF_MARKERS = [("furnace-ii", "BF-2"), ("furnace-iii", "BF-3"), ("furnace-iv", "BF-4")]
     _BF_MARKERS = [("b.f.-ii",   "BF-2"), ("b.f.-iii",   "BF-3"), ("b.f.-iv",   "BF-4")]
 
+    _hpq = _prior_quarter_subtotal_present(lines, want_mon)
+    has_prior_q = True if _hpq is None else _hpq
+
     def _append_row(group_code, section, param_label, param_unit, param_sort, ln):
         nums = _parse_te_nums(ln)
         if len(nums) < 3:
             return
-        actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+        actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, has_prior_q)
         if actual_curr is not None:
             rows.append({
                 "group_code": group_code, "section": section,
@@ -1269,7 +1342,7 @@ def _parse_bf_page1(lines, pno, want_mon, yy, report_month_num):
             if furnace_name:
                 nums = _parse_te_nums(ln)
                 if len(nums) >= 4:
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, has_prior_q)
                     # Skip zero/None (furnace not operating)
                     if actual_curr is not None and actual_curr > 0:
                         rows.append({
@@ -1407,6 +1480,8 @@ def _block_techno(file_path: str, page_index: dict,
         text = page_texts[ccp_idx]
         pno  = ccp_idx + 1
         te_text = "\n".join(_slice_text(text, "TE PARAMETERS", []))
+        _ccp_hpq = _prior_quarter_subtotal_present(text.splitlines(), want_mon)
+        ccp_has_prior_q = True if _ccp_hpq is None else _ccp_hpq
         for block_marker, next_marker, sort in (
             ("Billet Caster",         "Bloom Caster",           117),
             ("Bloom Caster",          "Bloom cum Round Caster", 118),
@@ -1418,7 +1493,7 @@ def _block_techno(file_path: str, page_index: dict,
                 if "yield" in ln.lower():
                     nums = _parse_te_nums(ln)
                     actual_curr, cum_curr, _, _ = _te_values_techno(
-                        nums, report_month_num)
+                        nums, report_month_num, ccp_has_prior_q)
                     if actual_curr is not None:
                         rows.append({
                             "group_code": "MAJOR",
@@ -1470,12 +1545,21 @@ def _block_techno(file_path: str, page_index: dict,
         # Feb(13)/Mar(14)/Q4(15)/2025-26(16)/Mar'25(17)/Q4(18)/2024-25(19) —
         # nums[-6]=index14=Mar actual, nums[-4]=index16=YTD. Matches.
         is_quarter_end = report_month_num in (3, 6, 9, 12)
-        min_len = 6 if is_quarter_end else 4
+        quarter_end_with_prior_q = is_quarter_end and ccp_has_prior_q
+        if is_quarter_end:
+            min_len = 6 if ccp_has_prior_q else 5
+        else:
+            min_len = 4
         for ln in text.splitlines():
             if re.search(r'total\s*caster\s*-?\s*heats\s*per\s*day', ln, re.I):
                 nums = _parse_te_nums(ln)
                 if len(nums) >= min_len:
-                    actual_curr, cum_curr = (nums[-6], nums[-4]) if is_quarter_end else (nums[-4], nums[-3])
+                    if quarter_end_with_prior_q:
+                        actual_curr, cum_curr = nums[-6], nums[-4]
+                    elif is_quarter_end:
+                        actual_curr, cum_curr = nums[-5], nums[-3]
+                    else:
+                        actual_curr, cum_curr = nums[-4], nums[-3]
                 elif report_month_num == 4 and len(nums) == 3:
                     # April is the FY's first month, so actual == YTD — most
                     # reports still carry a trailing prior-FY-total column
@@ -1515,6 +1599,8 @@ def _block_techno(file_path: str, page_index: dict,
     if sint_idx is not None:
         sint_text = page_texts[sint_idx]
         sint_pno  = sint_idx + 1
+        _sint_hpq = _prior_quarter_subtotal_present(sint_text.splitlines(), want_mon)
+        sint_has_prior_q = True if _sint_hpq is None else _sint_hpq
 
         for label, marker, stop in [("DSP SP-1", "OLD MACHINE", ["NEW MACHINE"]),
                                      ("DSP SP-2", "NEW MACHINE", [])]:
@@ -1522,7 +1608,7 @@ def _block_techno(file_path: str, page_index: dict,
                 if "productivity" in ln.lower():
                     nums = _parse_te_nums(ln)
                     # Use _te_values_techno (fixed-column structure, same as all techno pages)
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, sint_has_prior_q)
                     if actual_curr is not None:
                         sort_base = 31 if label == "DSP SP-1" else 32
                         rows.append({
@@ -1567,6 +1653,8 @@ def _block_techno(file_path: str, page_index: dict,
     if bf_idx is not None:
         bf_text = page_texts[bf_idx]
         bf_pno  = bf_idx + 1
+        _bf_hpq = _prior_quarter_subtotal_present(bf_text.splitlines(), want_mon)
+        bf_has_prior_q = True if _bf_hpq is None else _bf_hpq
 
         cdi_lines = _slice_text(bf_text, "CDI RATE", ["FUEL RATE", "SINTER IN BURDEN"])
         _fce_markers = ("furnace-ii", "furnace-iii", "furnace-iv")
@@ -1578,7 +1666,7 @@ def _block_techno(file_path: str, page_index: dict,
             for ln in cdi_lines:
                 if furnace_marker in ln.lower():
                     nums = _parse_te_nums(ln)
-                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                    actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, bf_has_prior_q)
                     if actual_curr is not None:
                         # Current year row
                         rows.append({
@@ -1615,7 +1703,7 @@ def _block_techno(file_path: str, page_index: dict,
         for ln in cdi_lines:
             if not any(m in ln.lower() for m in _fce_markers):
                 nums = _parse_te_nums(ln)
-                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, bf_has_prior_q)
                 if actual_curr is not None:
                     # Current year row
                     rows.append({
@@ -1680,7 +1768,7 @@ def _block_techno(file_path: str, page_index: dict,
                     if furnace_marker in ln.lower():
                         nums = _parse_te_nums(ln)
                         if len(nums) >= 4:
-                            actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                            actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, bf_has_prior_q)
                             if actual_curr is not None:
                                 # Current year
                                 rows.append({
@@ -1720,7 +1808,7 @@ def _block_techno(file_path: str, page_index: dict,
                 if "shop" in ln.lower():
                     nums = _parse_te_nums(ln)
                     if len(nums) >= 4:
-                        actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                        actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, bf_has_prior_q)
                         if actual_curr is not None:
                             # Current year
                             rows.append({
@@ -1760,7 +1848,7 @@ def _block_techno(file_path: str, page_index: dict,
                 if param_keyword in ln.lower():
                     nums = _parse_te_nums(ln)
                     if len(nums) >= 4:
-                        actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num)
+                        actual_curr, cum_curr, actual_prior, cum_prior = _te_values_techno(nums, report_month_num, bf_has_prior_q)
                         if actual_curr is not None:
                             # Current year
                             rows.append({
