@@ -493,16 +493,28 @@ export default function TechnoCustomReportPage() {
                   Or pick specific months for a custom period
                 </div>
                 <div style={{
-                  display: 'flex', flexDirection: 'column', gap: '6px',
+                  display: 'flex', flexDirection: 'column', gap: '10px',
                   maxHeight: '160px', overflowY: 'auto', border: '1px solid #dadce0',
                   borderRadius: '6px', padding: '10px', backgroundColor: '#f8f9fa',
                 }}>
                   {fyOptions.map((fy) => (
-                    <div key={fy} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <div key={fy} style={{ display: 'flex', alignItems: 'center', gap: '10px', rowGap: '6px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '9.5pt', fontWeight: 700, color: '#174ea6', minWidth: '60px' }}>{fyLabel(fy)}</span>
                       {(monthsByFy[fy] || []).map((m) => (
-                        <label key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '9.5pt', cursor: 'pointer' }}>
-                          <input type="checkbox" checked={customMonths.includes(m)} onChange={() => toggleCustomMonth(m)} style={{ cursor: 'pointer' }} />
+                        <label
+                          key={m}
+                          onClick={(e) => { e.preventDefault(); toggleCustomMonth(m); }}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '9.5pt',
+                            cursor: 'pointer', userSelect: 'none', padding: '3px 4px', margin: '-3px -4px',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={customMonths.includes(m)}
+                            onChange={() => {}}
+                            style={{ cursor: 'pointer', width: '14px', height: '14px', pointerEvents: 'none' }}
+                          />
                           {monthLabel(m)}
                         </label>
                       ))}
