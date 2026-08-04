@@ -158,9 +158,13 @@ async def extract_techno(
         tmp.write(content)
         tmp.close()
 
-        # Initialize extractor and extract data
+        # Initialize extractor and extract data. DSP's PDF extraction alone
+        # takes 15-35+ seconds (large scanned-heavy pdfplumber parsing) —
+        # run_in_threadpool so this doesn't block the event loop for that
+        # whole time, same as the bulk preview-months/insert-months
+        # endpoints below already do for the same reason.
         extractor = ExtractorClass(tmp.name, report_month=report_month)
-        records = extractor.extract()
+        records = await run_in_threadpool(extractor.extract)
 
         if not records:
             raise HTTPException(
@@ -239,7 +243,7 @@ async def preview_techno(
         tmp.close()
 
         extractor = ExtractorClass(tmp.name, report_month=report_month)
-        records = extractor.extract()
+        records = await run_in_threadpool(extractor.extract)
 
         if not records:
             raise HTTPException(
