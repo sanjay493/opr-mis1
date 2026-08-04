@@ -6,6 +6,7 @@ import io
 import re
 import sqlite3
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from typing import List, Optional
@@ -2798,16 +2799,27 @@ async def techno_custom_period(payload: dict):
     mean / plain average, whichever the parameter's rule says) using Hot
     Metal or Crude Steel production during THAT period as the weight — see
     techno_period.py. The frontend resolves quarter/half/custom month lists
-    client-side and posts the raw month lists here."""
+    client-side and posts the raw month lists here.
+
+    build_period_report does one DB round-trip per (plant, month, unit)
+    candidate — a wide selection (e.g. all plants x all 12 params x Q1-Q4 +
+    H1-H2 of one FY) has been measured at ~40s. run_in_threadpool so that
+    doesn't block the event loop for the whole duration (matches
+    preview-months/insert-months below), and wrap in try/except like the
+    export endpoints so a failure returns a real error instead of an
+    unhandled 500."""
     plants, params, periods = _techno_period_payload(payload)
-    return techno_period.build_period_report(plants, params, periods)
+    try:
+        return await run_in_threadpool(techno_period.build_period_report, plants, params, periods)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno custom-period report failed: {type(e).__name__}: {e}")
 
 
 @app.post("/api/techno-custom-period/excel")
 async def techno_custom_period_excel(payload: dict):
     plants, params, periods = _techno_period_payload(payload)
     try:
-        data = techno_period.build_period_report(plants, params, periods)
+        data = await run_in_threadpool(techno_period.build_period_report, plants, params, periods)
         content = page_techno_custom_export.build_period_excel_bytes(data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Techno custom-period Excel export failed: {type(e).__name__}: {e}")
@@ -2823,7 +2835,7 @@ async def techno_custom_period_pdf(payload: dict):
     import asyncio, concurrent.futures
     plants, params, periods = _techno_period_payload(payload)
     try:
-        data = techno_period.build_period_report(plants, params, periods)
+        data = await run_in_threadpool(techno_period.build_period_report, plants, params, periods)
         html = page_techno_custom_export.build_period_pdf_html(data)
         loop = asyncio.get_event_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:

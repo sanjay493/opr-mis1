@@ -121,8 +121,27 @@ def _weighted_combine(method: str, items: List[tuple]):
     return round(sum(vals) / len(vals), 4), "average"
 
 
+def _get_month_data(dcache: Optional[dict], plant: str, month: str) -> Dict:
+    """All units' techno_data for one (plant, month) — cached across the
+    whole build_period_report call so overlapping periods (H1 covers the
+    exact same months as Q1+Q2) and every one of the 12 params never
+    re-query the same (plant, month) row twice. Measured impact: a 6-plant,
+    12-param, Q1-Q4+H1+H2 request went from ~40s (one DB round-trip per
+    plant/month/candidate-unit, several hundred of them) to a couple of
+    seconds — the difference between succeeding and hitting Next.js's own
+    ~30s proxy timeout (which shows up to the frontend as a bare "HTTP 500"
+    with no detail, since it's the proxy giving up, not the backend
+    responding with one)."""
+    key = (plant, month)
+    if dcache is None:
+        return _db.get_techno_data(plant, month)
+    if key not in dcache:
+        dcache[key] = _db.get_techno_data(plant, month)
+    return dcache[key]
+
+
 def _plant_month_values(plant: str, param_key: str, src_units: List[str],
-                         months: List[str]) -> Dict[str, tuple]:
+                         months: List[str], _dcache: Optional[dict] = None) -> Dict[str, tuple]:
     """{month: (value, unit_used)} for a "unit"-kind param — tries each
     candidate unit in `src_units` in order, PER MONTH (a plant's value can
     legitimately resolve from a different candidate unit in different
@@ -131,8 +150,9 @@ def _plant_month_values(plant: str, param_key: str, src_units: List[str],
     aliases = [param_key] + _pt.KEY_ALIASES.get(param_key, [])
     out = {}
     for m in months:
+        month_data = _get_month_data(_dcache, plant, m)
         for u in src_units:
-            ud = _db.get_techno_data(plant, m, u).get(u, {}).get("month", {})
+            ud = month_data.get(u, {}).get("month", {})
             v = None
             for k in aliases:
                 v = ud.get(k)
@@ -147,11 +167,12 @@ def _plant_month_values(plant: str, param_key: str, src_units: List[str],
     return out
 
 
-def _sms_month_value(plant: str, shop: str, month: str, param_name: str) -> Optional[float]:
+def _sms_month_value(plant: str, shop: str, month: str, param_name: str,
+                      _dcache: Optional[dict] = None) -> Optional[float]:
     """One SMS-shop's value for `param_name` in a single month — handles
     TMI's HM+Scrap fallback and DSP's alternate key spellings, mirroring
     page_techno.py's sms_section/_tmi helpers."""
-    ud = _db.get_techno_data(plant, month, shop).get(shop, {}).get("month", {})
+    ud = _get_month_data(_dcache, plant, month).get(shop, {}).get("month", {})
 
     def pick(aliases):
         for k in aliases:
@@ -211,7 +232,8 @@ def _shop_period_weights(plant: str, shop: str, months: List[str]) -> Dict[str, 
 
 
 def plant_period_value(plant: str, param_def: Dict, months: List[str],
-                        _cache: Optional[dict] = None) -> Dict:
+                        _cache: Optional[dict] = None,
+                        _dcache: Optional[dict] = None) -> Dict:
     """One plant's aggregated value for `param_def` over an arbitrary
     `months` list — the single-level (within-plant, month-to-plant) weighted/
     harmonic/sum/average combine, generalizing
@@ -232,7 +254,7 @@ def plant_period_value(plant: str, param_def: Dict, months: List[str],
         for shop in shops:
             shop_weights = None
             for m in months:
-                v = _sms_month_value(plant, shop, m, param_def["name"])
+                v = _sms_month_value(plant, shop, m, param_def["name"], _dcache=_dcache)
                 if v is None:
                     continue
                 if shop_weights is None:
@@ -256,7 +278,7 @@ def plant_period_value(plant: str, param_def: Dict, months: List[str],
         return result
 
     # kind == "unit"
-    monthly = _plant_month_values(plant, key, param_def["src_units"], months)
+    monthly = _plant_month_values(plant, key, param_def["src_units"], months, _dcache=_dcache)
     if not monthly:
         result = {"value": None, "display": "", "method_used": method,
                    "unit_used": [], "warnings": ["No data in this period."]}
@@ -298,7 +320,8 @@ def plant_period_value(plant: str, param_def: Dict, months: List[str],
 
 
 def sail_period_value(param_def: Dict, months: List[str],
-                       _cache: Optional[dict] = None) -> Dict:
+                       _cache: Optional[dict] = None,
+                       _dcache: Optional[dict] = None) -> Dict:
     """SAIL-wide rollup: plant_period_value() for each of the 5 plants,
     weighted by that plant's own HM/CS production summed over `months` —
     mirrors page_techno._bf_sail/_sms_sail's plant-level weighting. Unlike
@@ -311,7 +334,7 @@ def sail_period_value(param_def: Dict, months: List[str],
     zero_fill = param_def.get("zero_fill_plants") or set()
     items = []
     for plant in PLANTS:
-        pv = plant_period_value(plant, param_def, months, _cache=_cache)
+        pv = plant_period_value(plant, param_def, months, _cache=_cache, _dcache=_dcache)
         val = pv["value"]
         if val is None:
             if plant not in zero_fill:
@@ -357,6 +380,10 @@ def build_period_report(plants: List[str], params: Optional[List[str]],
     """
     wanted = set(params) if params else None
     cache: dict = {}
+    # Raw techno_data cache, keyed (plant, month) — shared across every
+    # param/plant/period in this one request so Q1..Q4 and the H1/H2 that
+    # duplicate their months never re-query the same row. See _get_month_data.
+    dcache: dict = {}
     sections = []
     for pdef in MAJOR_TECHNO_PARAMS:
         if wanted is not None and pdef["display_name"] not in wanted:
@@ -367,9 +394,9 @@ def build_period_report(plants: List[str], params: Optional[List[str]],
             for period in periods:
                 months = period["months"]
                 if plant == "SAIL":
-                    values[period["label"]] = sail_period_value(pdef, months, _cache=cache)
+                    values[period["label"]] = sail_period_value(pdef, months, _cache=cache, _dcache=dcache)
                 else:
-                    values[period["label"]] = plant_period_value(plant, pdef, months, _cache=cache)
+                    values[period["label"]] = plant_period_value(plant, pdef, months, _cache=cache, _dcache=dcache)
             rows.append({"plant": plant, "values": values})
         sections.append({
             "parameter": pdef["display_name"], "unit": pdef["unit_str"], "rows": rows,
