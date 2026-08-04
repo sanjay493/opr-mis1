@@ -11,6 +11,7 @@ import csv
 import io
 
 import db
+from constants import ALL_PLANTS as _SAIL_8
 
 _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP", "ASP", "SSP", "VISL", "SAIL"]
 
@@ -32,6 +33,16 @@ def build_finished_steel_report_csv() -> bytes:
     pivot = {}
     for month, plant, value in rows:
         pivot.setdefault(month, {})[plant] = value
+
+    # SAIL's stored row is a separately-saved snapshot that goes stale
+    # whenever a constituent plant's own figure is corrected or added after
+    # the fact — mirrors page7_13.py's _live_sum_or_sail_fallback. Prefer a
+    # live sum of the 8 plants for months where all of them have data;
+    # otherwise leave the stored SAIL value (or blank) as-is.
+    for month, by_plant in pivot.items():
+        plant_vals = [by_plant.get(p) for p in _SAIL_8]
+        if all(v is not None for v in plant_vals):
+            by_plant["SAIL"] = sum(plant_vals)
 
     buf = io.StringIO()
     buf.write("﻿")  # BOM so Excel reads UTF-8 correctly

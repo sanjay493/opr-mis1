@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 import db
+from constants import ALL_PLANTS as _FS_SAIL_8
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest
 from report_utils import compute_item_row, build_production_narrative, get_dept_badge, blank_out_page_data
 from page3_highlights import generate_page3_highlights
@@ -2943,6 +2944,24 @@ def _production_fy_data(fy_start: int) -> dict:
             entry = data.setdefault(plant, {}).setdefault(item, {"actual": {}, "plan": {}})
             entry[key][month] = value
     conn.close()
+
+    # Finished Steel's SAIL row is a separately-stored snapshot that goes
+    # stale whenever a constituent plant's own figure is corrected or added
+    # after the fact — mirrors page7_13.py's _live_sum_or_sail_fallback.
+    # Prefer a live sum of the 8 plants for months where all of them have
+    # data; otherwise leave the stored SAIL value (or blank) untouched, since
+    # a silently-partial sum would be less complete than the historical
+    # snapshot for older/incomplete months. Only touches an FY that already
+    # has a SAIL row (or a fully-computable live sum for at least one month)
+    # — doesn't spawn a SAIL section out of nothing for an FY that has none.
+    _fs_live = {}
+    for m in months:
+        plant_vals = [data.get(p, {}).get("Finished Steel", {}).get("actual", {}).get(m) for p in _FS_SAIL_8]
+        if all(v is not None for v in plant_vals):
+            _fs_live[m] = sum(plant_vals)
+    if "SAIL" in data or _fs_live:
+        sail_fs = data.setdefault("SAIL", {}).setdefault("Finished Steel", {"actual": {}, "plan": {}})
+        sail_fs["actual"].update(_fs_live)
 
     def plant_key(p):
         try:
