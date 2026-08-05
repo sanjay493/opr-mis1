@@ -188,13 +188,19 @@ class BspOiscoExtractor:
 
         data_col, cum_col = _find_data_and_cum_col(ws, month_num)
 
-        # Check if file month matches selected month (warn if extracting prior month)
+        # Block when the file's own title-declared month disagrees with the
+        # user-selected month — same guard bsp_extractor.py's BSP-3-page-Tech
+        # extractor applies via _assert_bsp_month_match (see commit #29).
+        # This used to only print()  a server-side warning, invisible to the
+        # user, so a wrong-month OISCO file would silently save under the
+        # selected month with no indication anything was off.
         file_month_num = _detect_month_from_title(ws)
         if file_month_num and file_month_num != month_num:
-            print(
-                f"[BSP-OiscoExtractor] Warning: file title month={file_month_num} "
-                f"but extracting month={month_num}. "
-                "Cumulative in file is till file month, not extraction month."
+            raise ValueError(
+                f"Month mismatch: the uploaded file's title indicates "
+                f"month {_MONTH_NUM_TO_ABBR.get(file_month_num, file_month_num)}, but you selected "
+                f"month {_MONTH_NUM_TO_ABBR.get(month_num, month_num)} ({report_month}). "
+                f"Please select the matching month, or upload the correct file."
             )
 
         records = []
