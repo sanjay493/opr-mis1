@@ -102,6 +102,29 @@ function CalcStepsDetail({ detail }) {
   );
 }
 
+function ExportButtons({ onDownload, downloading, disabled }) {
+  return (
+    <div style={{ display: 'flex', gap: '10px' }}>
+      {['excel', 'pdf'].map((kind) => (
+        <button
+          key={kind}
+          onClick={() => onDownload(kind)}
+          disabled={disabled || downloading !== null}
+          style={{
+            padding: '8px 18px', fontSize: '10.5pt', fontWeight: 700,
+            border: '1px solid #1a73e8', borderRadius: '6px',
+            cursor: disabled || downloading !== null ? 'not-allowed' : 'pointer',
+            backgroundColor: '#ffffff',
+            color: disabled || downloading !== null ? '#9aa0a6' : '#1a73e8',
+          }}
+        >
+          {downloading === kind ? 'Generating…' : `⬇ ${kind === 'excel' ? 'Excel' : 'PDF'}`}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function TechnoVerificationPage() {
   const def = getDefaultPeriod();
   const [monthName, setMonthName] = useState(def.monthName);
@@ -111,6 +134,7 @@ export default function TechnoVerificationPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null); // "sectionLabel::rowLabel" or null
+  const [downloading, setDownloading] = useState(null);
 
   const reportMonth = `${year}-${MONTH_NUM[monthName]}`;
 
@@ -128,6 +152,30 @@ export default function TechnoVerificationPage() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [reportMonth]);
+
+  const handleDownload = async (kind) => {
+    setDownloading(kind);
+    try {
+      const res = await fetch(`${API_BASE}/api/techno-major-verification/${kind}?month=${reportMonth}`);
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.detail || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const objUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `Techno_Verification_${reportMonth}.${kind === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(objUrl);
+    } catch (e) {
+      setError(`Download failed: ${e.message}`);
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const selStyle = {
     padding: '8px 12px', fontSize: '11pt', border: '1px solid #dadce0',
@@ -176,6 +224,7 @@ export default function TechnoVerificationPage() {
 
           {loading && <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>Loading…</span>}
           <span style={{ marginLeft: 'auto', fontSize: '10.5pt', color: '#5f6368' }}>{reportMonth}</span>
+          <ExportButtons onDownload={handleDownload} downloading={downloading} disabled={!data?.sections?.length} />
         </div>
 
         {error && (

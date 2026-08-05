@@ -48,6 +48,7 @@ from page_one_page_report import build_one_page_report_bytes
 from page_pmix_fy_report import build_pmix_fy_report_bytes
 import techno_period
 import page_techno_custom_export
+import page_techno_verification_export
 
 def _safe_te_table(month):
     try:
@@ -2758,6 +2759,38 @@ async def techno_major_verification(month: str = Query(...)):
     plus the SAIL rollup — flags a deviation whenever the two differ after
     rounding to that parameter's normal display precision."""
     return generate_major_techno_verification(month)
+
+
+@app.get("/api/techno-major-verification/excel")
+async def techno_major_verification_excel(month: str = Query(...)):
+    try:
+        data = generate_major_techno_verification(month)
+        content = page_techno_verification_export.build_excel_bytes(data, month)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno verification Excel export failed: {type(e).__name__}: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="Techno_Verification_{month}.xlsx"'},
+    )
+
+
+@app.get("/api/techno-major-verification/pdf")
+async def techno_major_verification_pdf(month: str = Query(...)):
+    import asyncio, concurrent.futures
+    try:
+        data = generate_major_techno_verification(month)
+        html = page_techno_verification_export.build_pdf_html(data, month)
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            content = await loop.run_in_executor(pool, page_techno_verification_export.render_pdf_bytes, html)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno verification PDF export failed: {type(e).__name__}: {e}")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Techno_Verification_{month}.pdf"'},
+    )
 
 
 def _techno_period_payload(payload: dict):
