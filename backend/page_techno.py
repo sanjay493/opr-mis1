@@ -2051,11 +2051,15 @@ def generate_major_techno_verification(report_month: str) -> dict:
                 calculated = detail["result"] if detail else None
                 if reported is None and calculated is None:
                     continue
+                months_vals = _months_row(plant, unit, src_key)
                 rows.append({
                     "label": plant, "unit": unit_str,
-                    "months": [_fmt_param(v, param_name) for v in _months_row(plant, unit, src_key)],
+                    "months": [_fmt_param(v, param_name) for v in months_vals],
+                    "months_raw": months_vals,
                     "reported": _fmt_param(reported, param_name),
+                    "reported_raw": reported,
                     "calculated": _verify_fmt4(calculated),
+                    "calculated_raw": calculated,
                     "deviation": _verify_deviates(reported, calculated, param_name),
                     "calc_detail": _reshape_detail(detail),
                 })
@@ -2180,11 +2184,15 @@ def generate_major_techno_verification(report_month: str) -> dict:
             sail_reported = _sail_reported()
             sail_detail = _sail_calculated_detail()
             sail_calculated = sail_detail["result"] if sail_detail else None
+            sail_months_vals = [_sail_month(m) for m in ytd]
             rows.append({
                 "label": "SAIL", "unit": unit_str,
-                "months": [_fmt_param(_sail_month(m), param_name) for m in ytd],
+                "months": [_fmt_param(v, param_name) for v in sail_months_vals],
+                "months_raw": sail_months_vals,
                 "reported": _fmt_param(sail_reported, param_name),
+                "reported_raw": sail_reported,
                 "calculated": _verify_fmt4(sail_calculated),
+                "calculated_raw": sail_calculated,
                 "deviation": _verify_deviates(sail_reported, sail_calculated, param_name),
                 "calc_detail": sail_detail,
             })
@@ -2203,12 +2211,15 @@ def generate_major_techno_verification(report_month: str) -> dict:
                     calculated = detail["result"] if detail else None
                     if reported is None and calculated is None:
                         continue
+                    su_months_vals = _months_row(plant, su, src_key, kind=kind)
                     rows.append({
                         "label": f"{plant} {su}", "unit": unit_str,
-                        "months": [_fmt_param(v, param_name)
-                                   for v in _months_row(plant, su, src_key, kind=kind)],
+                        "months": [_fmt_param(v, param_name) for v in su_months_vals],
+                        "months_raw": su_months_vals,
                         "reported": _fmt_param(reported, param_name),
+                        "reported_raw": reported,
                         "calculated": _verify_fmt4(calculated),
+                        "calculated_raw": calculated,
                         "deviation": _verify_deviates(reported, calculated, param_name),
                         "calc_detail": _reshape_detail(detail),
                     })
@@ -2298,11 +2309,15 @@ def generate_major_techno_verification(report_month: str) -> dict:
             sail_reported = _sms_reported()
             sail_detail = _sms_calculated_detail()
             sail_calculated = sail_detail["result"] if sail_detail else None
+            sms_months_vals = [_sms_month(m) for m in ytd]
             rows.append({
                 "label": "SAIL", "unit": unit_str,
-                "months": [_fmt_param(_sms_month(m), param_name) for m in ytd],
+                "months": [_fmt_param(v, param_name) for v in sms_months_vals],
+                "months_raw": sms_months_vals,
                 "reported": _fmt_param(sail_reported, param_name),
+                "reported_raw": sail_reported,
                 "calculated": _verify_fmt4(sail_calculated),
+                "calculated_raw": sail_calculated,
                 "deviation": _verify_deviates(sail_reported, sail_calculated, param_name),
                 "calc_detail": sail_detail,
             })

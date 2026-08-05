@@ -248,15 +248,22 @@ _SECTION_HEADINGS = {
 }
 
 
-def _scan_page_index(file_path: str, max_pages: int = 120) -> dict:
-    """Single lightweight pass: return {section_key: 0-based_page_index}.
+def _scan_page_index(file_path: str, max_pages: int = 120) -> tuple:
+    """Single lightweight pass: return ({section_key: 0-based_page_index}, page_texts).
 
-    Reads one page at a time; page text is not retained between iterations so
-    memory stays flat throughout the scan.
+    page_texts caches every page's extract_text() result keyed by 0-based
+    index, for the pages this scan actually had to read (i.e. up to and
+    including the last page examined before every section was found). This
+    text is the expensive part of a scan pass — some scanned/vector-heavy
+    pages take many seconds each (see extract_preview's Block 2 comment) —
+    so callers that need one of these pages again (e.g. _block_techno for
+    the section pages just located, or the month_diff fallback below) should
+    reuse it instead of re-opening the PDF and re-extracting.
     """
     import pdfplumber
     import sys
     found = {}
+    page_texts = {}
     remaining = set(_SECTION_HEADINGS.keys())
 
     try:
@@ -278,6 +285,7 @@ def _scan_page_index(file_path: str, max_pages: int = 120) -> dict:
                       flush=True, file=sys.stderr)
                 continue
 
+            page_texts[i] = txt
             up    = txt.upper()
             lines = txt.splitlines() if 'prod' in remaining else []
 
@@ -306,7 +314,7 @@ def _scan_page_index(file_path: str, max_pages: int = 120) -> dict:
 
     if remaining:
         print(f"[DSP PDF] scan: sections NOT found: {remaining}", flush=True, file=sys.stderr)
-    return found
+    return found, page_texts
 
 
 # ---------------------------------------------------------------------------
@@ -1363,7 +1371,8 @@ def _parse_bf_page1(lines, pno, want_mon, yy, report_month_num):
 # ---------------------------------------------------------------------------
 
 def _block_techno(file_path: str, page_index: dict,
-                  want_mon: str, y: int, yy: str, month_diff: int) -> list:
+                  want_mon: str, y: int, yy: str, month_diff: int,
+                  page_texts_cache: dict = None) -> list:
     """Open PDF, read only the techno pages (by index), close, parse rows.
 
     Args:
@@ -1371,6 +1380,12 @@ def _block_techno(file_path: str, page_index: dict,
         yy: 2-digit year string (e.g., '25') for display
         want_mon: Month name (e.g., 'SEP')
         month_diff: Column offset for month extraction
+        page_texts_cache: {0-based page index: extract_text() result} already
+            read by _scan_page_index's Pass 0 for these same section pages —
+            reused instead of re-extracting (some pages take 10-20s+ each, so
+            re-reading them is the difference between the request finishing
+            and timing out). Pages not already in the cache still get read
+            from the PDF as before.
     """
     import pdfplumber
     import sys
@@ -1400,13 +1415,28 @@ def _block_techno(file_path: str, page_index: dict,
 
     # Read only the specific pages we need; build a sparse page_texts list
     # (all other positions are empty strings so _find_page_by_heading still works
-    # by index without touching unloaded pages).
-    with pdfplumber.open(file_path) as pdf:
-        n_pages    = len(pdf.pages)
-        page_texts = [""] * n_pages
-        for idx in needed_idxs:
-            if 0 <= idx < n_pages:
-                page_texts[idx] = pdf.pages[idx].extract_text() or ""
+    # by index without touching unloaded pages). Pages Pass 0 already read are
+    # reused from page_texts_cache rather than re-extracted from the PDF.
+    page_texts_cache = page_texts_cache or {}
+    missing_idxs = [idx for idx in needed_idxs if idx not in page_texts_cache]
+
+    fresh_texts = {}
+    if missing_idxs:
+        with pdfplumber.open(file_path) as pdf:
+            n_pages = len(pdf.pages)
+            for idx in missing_idxs:
+                if 0 <= idx < n_pages:
+                    fresh_texts[idx] = pdf.pages[idx].extract_text() or ""
+        n_pages_total = n_pages
+    else:
+        n_pages_total = max(needed_idxs) + 1
+
+    page_texts = [""] * n_pages_total
+    for idx in needed_idxs:
+        if idx in page_texts_cache:
+            page_texts[idx] = page_texts_cache[idx]
+        elif idx in fresh_texts:
+            page_texts[idx] = fresh_texts[idx]
 
     rows = []
 
@@ -2171,7 +2201,7 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
 
     # ── Pass 0: page index scan ───────────────────────────────────────────
     print("[DSP PDF] Pass 0: scanning page index ...", flush=True, file=sys.stderr)
-    page_index = _scan_page_index(file_path)
+    page_index, page_texts_cache = _scan_page_index(file_path)
     gc.collect()
     print(f"[DSP PDF] Pass 0 done. Found pages: {page_index}", flush=True, file=sys.stderr)
 
@@ -2216,9 +2246,12 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
         # need month_diff — derive from production page if we didn't run block 1
         if not run_prod and 'prod' in page_index:
             try:
-                import pdfplumber as _plumb
-                with _plumb.open(file_path) as _pdf:
-                    _txt = _pdf.pages[page_index['prod']].extract_text() or ""
+                _prod_idx = page_index['prod']
+                _txt = page_texts_cache.get(_prod_idx)
+                if _txt is None:
+                    import pdfplumber as _plumb
+                    with _plumb.open(file_path) as _pdf:
+                        _txt = _pdf.pages[_prod_idx].extract_text() or ""
                 _mc = _month_header(_txt.splitlines())
                 if _mc and want_mon in _mc:
                     month_diff = len(_mc) - 1 - _mc.index(want_mon)
@@ -2227,7 +2260,8 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
 
         print("[DSP PDF] Block 2: techno parameters ...", flush=True, file=sys.stderr)
         try:
-            techno_rows = _block_techno(file_path, page_index, want_mon, y, yy, month_diff)
+            techno_rows = _block_techno(file_path, page_index, want_mon, y, yy, month_diff,
+                                         page_texts_cache=page_texts_cache)
             print(f"[DSP PDF] Block 2 done: {len(techno_rows)} techno rows",
                   flush=True, file=sys.stderr)
         except Exception as exc:

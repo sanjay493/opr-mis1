@@ -35,6 +35,16 @@ def _cell_str(v):
     return str(v)
 
 
+def _num_for_export(raw, formatted):
+    """Excel gets the exact value as stored in the DB, not the rounded
+    display string — but keeps the same blank-vs-shown decision _fmt_param/
+    _verify_fmt4 already made (e.g. hidden zeros), so cells that read blank
+    on screen stay blank here too."""
+    if formatted is None or formatted == "":
+        return ""
+    return raw
+
+
 def build_excel_bytes(data: dict, month: str) -> bytes:
     month_labels = data.get("month_labels") or []
     wb = openpyxl.Workbook()
@@ -72,12 +82,18 @@ def build_excel_bytes(data: dict, month: str) -> bytes:
             deviates = bool(r.get("deviation"))
             fill = _SAIL_FILL if is_sail else (_ZEBRA_FILL if idx % 2 == 1 else None)
             font = _SAIL_FONT if is_sail else Font(size=9)
+            months_fmt = r.get("months") or []
+            months_raw = r.get("months_raw") or [None] * len(months_fmt)
+            months_vals = [_num_for_export(rv, fv) for rv, fv in zip(months_raw, months_fmt)]
+            reported_val = _num_for_export(r.get("reported_raw"), r.get("reported", ""))
+            calculated_val = _num_for_export(r.get("calculated_raw"), r.get("calculated", ""))
             values = ([r.get("label", ""), r.get("unit", "")]
-                      + (r.get("months") or [])
-                      + [r.get("reported", ""), r.get("calculated", "")])
+                      + months_vals
+                      + [reported_val, calculated_val])
             calc_col = total_cols  # last column = Calculated
             for c, v in enumerate(values, start=1):
-                vc = ws.cell(row=row, column=c, value=_cell_str(v))
+                cell_value = v if isinstance(v, (int, float)) else _cell_str(v)
+                vc = ws.cell(row=row, column=c, value=cell_value)
                 vc.font = font
                 vc.border = _SAIL_DEV_BORDER if (deviates and is_sail) else _BORDER
                 vc.alignment = Alignment(horizontal="left" if c == 1 else "right")

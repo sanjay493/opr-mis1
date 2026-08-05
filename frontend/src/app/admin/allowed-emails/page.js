@@ -92,7 +92,7 @@ function AllowedEmailsInner() {
           <input
             type="email" className="form-control" placeholder="name@example.com" required
             value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
-            style={{ flex: 1 }}
+            style={{ flex: '1 1 auto', minWidth: 0, width: '100%', padding: '10px 14px', fontSize: '1rem' }}
           />
           <button type="submit" className="btn btn-primary" style={{ margin: 0 }}>Add</button>
         </form>
