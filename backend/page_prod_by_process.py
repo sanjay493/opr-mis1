@@ -210,6 +210,12 @@ def _semis_ytd(cur, months: list) -> float:
     return float(r[0]) if r and r[0] is not None else 0.0
 
 
+# Main-flow nodes for the Hot-Metal-to-Saleable-Steel Sankey (_flow_sankey_svg
+# below) — these get their label centered on the bar itself instead of the
+# above-bar placement every other (branch/split) node uses.
+_MID_LABEL_IDS = {"hm", "cs", "fsmill", "fstot"}
+
+
 def _node_totals(nodes: list, links: list) -> tuple:
     incoming = {n["id"]: 0.0 for n in nodes}
     outgoing = {n["id"]: 0.0 for n in nodes}
@@ -295,10 +301,30 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300) -> str:
                     f'rx="2.5" fill="{color}"/>')
         cx = g["x"] + g["w"] / 2
         val_str = f'{sizes[nid] * 1000:,.0f} T'  # '000T -> T
-        svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 32:.1f}" text-anchor="middle" font-size="12" '
-                    f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
-        svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 14:.1f}" text-anchor="middle" font-size="12" '
-                    f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
+        if nid in _MID_LABEL_IDS:
+            # Main-flow nodes (Hot Metal -> Crude Steel -> Finished Steel
+            # (Mills) -> SAIL Finished Steel) label at the bar's own vertical
+            # center rather than in the top margin, so the label sits beside
+            # the value it actually describes instead of floating above the
+            # whole column regardless of where that bar happens to sit. A
+            # translucent white chip backs the two lines since, centered,
+            # they cross the node's own fill and the ribbons flowing into/
+            # out of it, not just clear page background.
+            cy = g["y"] + g["h"] / 2
+            chip_w = max(len(n["label"]), len(val_str)) * 6.8 + 20
+            chip_h = 30.0
+            svg.append(f'<rect x="{cx - chip_w / 2:.1f}" y="{cy - chip_h / 2:.1f}" '
+                        f'width="{chip_w:.1f}" height="{chip_h:.1f}" rx="4" '
+                        f'fill="#ffffff" fill-opacity="0.88"/>')
+            svg.append(f'<text x="{cx:.1f}" y="{cy - 3:.1f}" text-anchor="middle" font-size="12" '
+                        f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
+            svg.append(f'<text x="{cx:.1f}" y="{cy + 13:.1f}" text-anchor="middle" font-size="12" '
+                        f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
+        else:
+            svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 32:.1f}" text-anchor="middle" font-size="12" '
+                        f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
+            svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 14:.1f}" text-anchor="middle" font-size="12" '
+                        f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
 
     svg.append("</svg>")
     return "\n".join(svg)
