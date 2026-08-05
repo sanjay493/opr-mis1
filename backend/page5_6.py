@@ -558,12 +558,22 @@ def _compute_ratio_series(report_month: str):
     return x_labels, len(hist_fys), ratio3
 
 
-# Sequential blue ramp (light -> dark), 13 fixed steps — see dataviz skill's
-# references/palette.md. Heatmap cells snap to the nearest step rather than
+# Sequential blue ramp (light -> dark) — see dataviz skill's references/
+# palette.md. Heatmap cells snap to the nearest step rather than
 # interpolating freehand, per that palette's "documented steps only" rule.
+#
+# Capped at step 500 (`#256abf`) rather than the full 100->700 range: this
+# report is print-only (rendered straight to PDF, never viewed on screen —
+# see generate_page6_trend_charts_html), and the dropped steps 550-700 are
+# the ramp's heaviest-ink tones (near-navy, close to full toner coverage per
+# cell). The palette doc calls print out explicitly as a case to economize
+# ink for; since every cell here already prints its numeric value, the
+# lighter capped ramp keeps the "darker = higher" read intact (still one
+# hue, still monotonic, still the same documented steps) while every cell —
+# including the hottest ones — stays well short of solid dark fill.
 _SEQ_BLUE_STEPS = [
-    "#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7",
-    "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b",
+    "#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec",
+    "#5598e7", "#3987e5", "#2a78d6", "#256abf",
 ]
 
 
@@ -598,10 +608,19 @@ def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title
         )
     lo, hi = min(all_vals), max(all_vals)
 
+    # Grid border lightened to a hairline gray (dataviz palette's gridline
+    # role, #e1e0d9) — a solid #cbd5e1 border on every one of the ~90 cell
+    # edges in this grid adds up; the lighter hairline still separates cells
+    # without itself being a meaningful ink cost. Row cells get more
+    # vertical padding (taller, easier-to-scan rows) than before; that space
+    # is paid for below by trimming the block's own margins/caption rather
+    # than growing the block's total footprint on the page.
+    _GRID_BORDER = "#e1e0d9"
+
     head_cells = "".join(
-        f'<th style="padding:2px 4px;border:1px solid #cbd5e1;font-size:6.8px;'
+        f'<th style="padding:2.5px 4px;border:1px solid {_GRID_BORDER};font-size:6.8px;'
         f'font-weight:{"bold" if i < fy_point_count else "600"};'
-        f'{"border-left:1.5px solid #1e293b;" if i == fy_point_count else ""}">{lbl}</th>'
+        f'{"border-left:1px solid #1e293b;" if i == fy_point_count else ""}">{lbl}</th>'
         for i, lbl in enumerate(x_labels)
     )
 
@@ -613,29 +632,29 @@ def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title
             bg = color or "#f8fafc"
             fg = _contrast_text(color) if color else "#94a3b8"
             text = f"{v:.3f}" if v is not None else "—"
-            sep = "border-left:1.5px solid #1e293b;" if i == fy_point_count else ""
+            sep = "border-left:1px solid #1e293b;" if i == fy_point_count else ""
             cells.append(
-                f'<td style="padding:2px 4px;border:1px solid #cbd5e1;{sep}'
+                f'<td style="padding:3.5px 4px;border:1px solid {_GRID_BORDER};{sep}'
                 f'background:{bg};color:{fg};text-align:center;font-size:7px;'
                 f'font-weight:600;">{text}</td>'
             )
         body_rows.append(
-            f'<tr><td style="padding:2px 4px;border:1px solid #cbd5e1;'
+            f'<tr><td style="padding:3.5px 4px;border:1px solid {_GRID_BORDER};'
             f'background:#eef2f6;font-weight:bold;font-size:7.5px;">{plant}</td>'
             + "".join(cells) + '</tr>'
         )
 
     return (
-        '<div style="margin-top:6px;">'
+        '<div style="margin-top:2px;">'
         f'<div style="font-size:9px;font-weight:bold;font-family:Arial,sans-serif;'
-        f'color:#1e293b;margin-bottom:2px;">{title}</div>'
+        f'color:#1e293b;margin-bottom:1px;">{title}</div>'
         '<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
-        f'<thead><tr><th style="padding:2px 4px;border:1px solid #cbd5e1;font-size:6.8px;">PLANT</th>'
+        f'<thead><tr><th style="padding:2.5px 4px;border:1px solid {_GRID_BORDER};font-size:6.8px;">PLANT</th>'
         f'{head_cells}</tr></thead>'
         f'<tbody>{"".join(body_rows)}</tbody>'
         '</table>'
-        '<div style="text-align:center;font-size:6.5px;color:#64748b;'
-        'font-family:Arial,sans-serif;margin-top:2px;">'
+        '<div style="text-align:center;font-size:6.2px;color:#64748b;'
+        'font-family:Arial,sans-serif;margin-top:1px;">'
         'Crude Steel / (Hot Metal − Pig Iron/0.85 − Hot Metal to ASP) — 5 Plants, last 3 FY annual '
         'ratios then current FY month-by-month to the report month. Darker = higher ratio.'
         '</div>'

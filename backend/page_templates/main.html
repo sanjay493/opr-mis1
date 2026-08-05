@@ -536,17 +536,23 @@
            annual) is a background fill only — no border, so it doesn't
            compete with the plan/SAIL/5 Plants row backgrounds it can land
            on top of. best-month (this column's own record, but not the
-           single all-time best) is the weaker signal and gets only a
-           light thin border, no fill. !important wins over qtr-cell/
-           total-cell/plan-row/sail-row/fp-row backgrounds since a record
-           can land on any of those. */
+           single all-time best) is the weaker signal and gets only an
+           underline on the value text, no fill/border — a cell border
+           was easy to mistake for a stray gridline once it landed on a
+           colored row background; an underline reads unambiguously as
+           "this value" regardless of what's behind it. !important wins
+           over qtr-cell/total-cell/plan-row/sail-row/fp-row backgrounds
+           since a record can land on any of those. */
         .page7-13-yearly-table td.best-ever {
             background: {{ colors.highlight_best_ever_bg }} !important;
             font-weight: 700; color: {{ colors.text_black }};
         }
         .page7-13-yearly-table td.best-month {
             font-weight: 700; color: {{ colors.text_black }};
-            border: 1pt solid {{ colors.highlight_best_month_border_light }} !important;
+            text-decoration: underline !important;
+            text-decoration-color: {{ colors.highlight_best_month_border_light }};
+            text-decoration-thickness: 1.5pt;
+            text-underline-offset: 2px;
         }
         .page7-13-legend { font-size: 8pt; color: {{ colors.text_secondary }}; margin-top: 4px; }
         .page7-13-legend .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: middle; }
