@@ -27,6 +27,7 @@ export default function GlobalNavbar() {
           children: [
             { label: 'Production Data Entry', link: '/data-entry/production', icon: '📊' },
             { label: 'Special Steel Manual Entry (ISP)', link: '/data-entry/special-steel', icon: '🔩' },
+            { label: 'Special Steel Grade Clubbing', link: '/data-entry/special-steel-grade-clubs', icon: '🔗' },
             { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
             { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
             { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' },

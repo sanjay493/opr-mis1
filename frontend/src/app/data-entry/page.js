@@ -64,6 +64,14 @@ function DataEntryPageInner() {
       color: '#0891b2',
       bgColor: 'rgba(8, 145, 178, 0.1)'
     },
+    {
+      title: 'Special Steel Grade Clubbing',
+      description: 'Combine near-duplicate quality grades into one report row for BSP/DSP/RSP/BSL.',
+      icon: '🔗',
+      link: '/data-entry/special-steel-grade-clubs',
+      color: '#b45309',
+      bgColor: 'rgba(180, 83, 9, 0.1)'
+    },
   ];
 
   return (

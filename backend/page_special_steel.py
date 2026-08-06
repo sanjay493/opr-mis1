@@ -29,31 +29,14 @@ import db
 # ── grade clubbing ──────────────────────────────────────────────────────────
 # Some product groups (esp. RSP's "New PM PLATES" / "HR PLATES SSL") list so
 # many near-duplicate quality-grade spec variants that the page spills onto
-# a second sheet. GRADE_CLUBS lets a few of them be displayed as one combined
+# a second sheet. Clubbing lets a few of them be displayed as one combined
 # row (figures summed) instead of hardcoding the combined text per case.
-#
-# Keyed by (plant, product group). Each entry is a club: either a plain list
-# of the raw quality_grade values (from special_steel_orders) to combine —
-# in the order they should appear in the merged label — or a dict
-# {"grades": [...], "label": "..."} when the auto-merge below doesn't read
-# cleanly (e.g. grades from genuinely different standards where a
-# shared-prefix/suffix merge would be misleading; verified this happens for
-# several real grade pairs, so don't skip the review — see auto_club_label
-# docstring). Members not present in a given month/YTD just contribute zero,
-# same as an ungrouped grade with no data that period.
-GRADE_CLUBS = {
-    ("RSP", "New PM PLATES"): [
-        ["IS2041/SA516", "IS2041R355/SA537CL1"],
-        ["ASME SA387 GR11 CL2 (N & T)", "ASME SA387 GR12 CL2 (N & T)"],
-    ],
-    ("RSP", "HR PLATES SSL"): [
-        ["IS5986ISH500LAHFQ450", "IS5986ISH540R-FRM410"],
-    ],
- ("DSP", "CC BILLET"): [
-        ["C18MNCRC1", "C18HMNV50"],
-    ],
-}
-
+# Editor/admin-managed via /data-entry/special-steel-grade-clubs and
+# api_special_steel_clubs.py — see special_steel_grade_clubs table. Rows
+# sharing (plant_name, product, club_label) are members of one club; a grade
+# can belong to at most one club per plant+product. Members not present in a
+# given month/YTD just contribute zero, same as an ungrouped grade with no
+# data that period.
 _CLUB_TOKEN_RE = re.compile(r'\s+|[A-Za-z0-9]+|[^\sA-Za-z0-9]')
 _CLUB_SUBTOKEN_RE = re.compile(r'\d+|[A-Za-z]+')
 
@@ -73,11 +56,11 @@ def _auto_club_label_pair(g1: str, g2: str, min_subtoken_prefix: int = 4) -> str
     shared lead is still folded into the prefix, since it's the same case as
     your worked IS2041 example.
 
-    This is a formatting convenience for GRADE_CLUBS entries that don't
-    specify an explicit "label" — it is NOT a similarity detector. Run on
+    This is a formatting convenience for when the grade-clubbing UI doesn't
+    get an explicit label — it is NOT a similarity detector. Run on
     arbitrary grade pairs it will happily produce nonsense (e.g. merging two
     unrelated ASTM standards into one confusing row), which is exactly why
-    GRADE_CLUBS lists members explicitly rather than clubbing automatically."""
+    clubs are picked explicitly by a person rather than auto-detected."""
     t1, t2 = _CLUB_TOKEN_RE.findall(g1), _CLUB_TOKEN_RE.findall(g2)
     n1, n2 = len(t1), len(t2)
 
@@ -126,18 +109,27 @@ def _auto_club_label(grades: list) -> str:
 
 def _resolve_clubs(plant: str, product: str) -> tuple:
     """Return (grade_to_club_index, club_specs) for this (plant, product),
-    where club_specs[i] = (member_grades, display_label)."""
-    raw = GRADE_CLUBS.get((plant, product), [])
+    where club_specs[i] = (member_grades, display_label). Reads
+    special_steel_grade_clubs — see module-level grade-clubbing note."""
+    conn = db.connect()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT quality_grade, club_label FROM special_steel_grade_clubs "
+        "WHERE plant_name=? AND product=? ORDER BY club_label, quality_grade",
+        (plant, product),
+    )
+    rows = cur.fetchall()
+    conn.close()
+
     grade_to_club = {}
     club_specs = []
-    for idx, entry in enumerate(raw):
-        members = entry["grades"] if isinstance(entry, dict) else entry
-        label = entry.get("label") if isinstance(entry, dict) else None
-        if not label:
-            label = _auto_club_label(members) if len(members) > 1 else members[0]
-        club_specs.append((members, label))
-        for g in members:
-            grade_to_club[g] = idx
+    label_to_idx = {}
+    for grade, label in rows:
+        idx = label_to_idx.setdefault(label, len(club_specs))
+        if idx == len(club_specs):
+            club_specs.append(([], label))
+        club_specs[idx][0].append(grade)
+        grade_to_club[grade] = idx
     return grade_to_club, club_specs
 
 
@@ -361,7 +353,7 @@ def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
     g_cum_ord = g_cum_act = g_cum_cply = 0.0
     has_cply = has_cum_cply = False
 
-    # See GRADE_CLUBS — some quality grades are combined into one displayed
+    # See _resolve_clubs — some quality grades are combined into one displayed
     # row (figures summed) instead of one row per grade, to keep dense
     # product groups from spilling onto a second page.
     grade_to_club, club_specs = _resolve_clubs(plant, product_group)

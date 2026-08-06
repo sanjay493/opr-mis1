@@ -150,6 +150,7 @@ from api_isp_techno import router as isp_techno_router
 from api_dsp_techno import router as dsp_techno_router
 from api_unified_techno import router as unified_techno_router
 from api_techno_manual import router as techno_manual_router
+from api_special_steel_clubs import router as special_steel_clubs_router
 from api_mcr_techno import router as mcr_techno_router
 from api_coal_co2_techno import router as coal_co2_techno_router
 from api_todo import router as todo_router
@@ -365,6 +366,7 @@ app.include_router(isp_techno_router)
 app.include_router(dsp_techno_router)
 app.include_router(unified_techno_router)
 app.include_router(techno_manual_router)
+app.include_router(special_steel_clubs_router)
 app.include_router(mcr_techno_router)
 app.include_router(coal_co2_techno_router)
 app.include_router(todo_router)

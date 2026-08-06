@@ -133,6 +133,20 @@ def init_db():
         """)
         cursor.execute("DROP TABLE special_steel_orders_presection")
 
+    # 5b. Special Steel grade clubbing — rows sharing (plant_name, product,
+    # club_label) are members of one combined display row on the Special
+    # Steel report. See page_special_steel.py's _resolve_clubs().
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS special_steel_grade_clubs (
+            plant_name     TEXT,
+            product        TEXT,
+            quality_grade  TEXT,
+            club_label     TEXT NOT NULL,
+            created_at     TEXT,
+            PRIMARY KEY (plant_name, product, quality_grade)
+        )
+    """)
+
     # 6. Opening stock table — stock as on 1st of stock_month (tonnes)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stock_table (

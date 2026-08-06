@@ -53,6 +53,18 @@ CREATE TABLE IF NOT EXISTS special_steel_orders (
     PRIMARY KEY (report_month, plant_name, product, quality_grade, section)
 ) ENGINE=InnoDB;
 
+-- Rows sharing (plant_name, product, club_label) are members of one combined
+-- display row on the Special Steel report — see page_special_steel.py's
+-- _resolve_clubs(). A grade can belong to at most one club per plant+product.
+CREATE TABLE IF NOT EXISTS special_steel_grade_clubs (
+    plant_name     VARCHAR(32)  NOT NULL,
+    product        VARCHAR(160) NOT NULL,
+    quality_grade  VARCHAR(160) NOT NULL,
+    club_label     VARCHAR(200) NOT NULL,
+    created_at     VARCHAR(40),
+    PRIMARY KEY (plant_name, product, quality_grade)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS stock_table (
     stock_month CHAR(7)     NOT NULL,
     plant_name  VARCHAR(32) NOT NULL,
