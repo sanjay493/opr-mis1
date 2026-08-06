@@ -13,6 +13,27 @@ function monthLabel(ym) {
   return `${MONTH_NAMES[parseInt(m, 10) - 1]}'${y.slice(2)}`;
 }
 
+// Item names come from the DB via backend's normalize_item_name (main.py) —
+// already fairly readable, but legacy uppercase/underscore names (e.g.
+// "BOTTOM_POURING_INGOT") slip through. Title-case long ALL-CAPS words as a
+// display-only safety net; short ones (<=4 chars, e.g. "BF", "TMT", "SMS")
+// and any word containing a digit or "#" (e.g. "BF#8", "SMS-2") are left
+// alone since they're codes/acronyms, not sentences.
+function humanizeLabel(raw) {
+  if (!raw) return raw;
+  return raw
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map((word) => {
+      if (/[0-9#]/.test(word)) return word;
+      if (word === word.toUpperCase() && word.length > 4) {
+        return word.charAt(0) + word.slice(1).toLowerCase();
+      }
+      return word;
+    })
+    .join(' ');
+}
+
 function fmt(v) {
   if (v == null) return '—';
   return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 });
@@ -163,6 +184,18 @@ export default function ProductionQueryPage() {
 
   const isUnitSelected = (plant, item) =>
     selectedUnits.some((u) => u.plant === plant && u.item === item);
+
+  const selectAllUnits = (plant) => {
+    const items = itemsByPlant[plant] || [];
+    setSelectedUnits((prev) => {
+      const withoutPlant = prev.filter((u) => u.plant !== plant);
+      return [...withoutPlant, ...items.map((item) => ({ plant, item }))];
+    });
+  };
+
+  const deselectAllUnits = (plant) => {
+    setSelectedUnits((prev) => prev.filter((u) => u.plant !== plant));
+  };
 
   const fetchData = () => {
     if (selectedUnits.length === 0 || !startMonth || !endMonth) return;
@@ -329,43 +362,82 @@ export default function ProductionQueryPage() {
             <div style={{ marginBottom: '14px' }}>
               <div style={{ fontSize: '11pt', fontWeight: 600, color: '#202124', marginBottom: '8px' }}>Units</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {selectedPlants.map((plant) => (
-                  <div key={plant} style={{
-                    border: '1px solid #dadce0',
-                    borderRadius: '8px',
-                    backgroundColor: '#ffffff',
-                    padding: '10px 14px',
-                  }}>
-                    <div style={{ fontSize: '10pt', fontWeight: 700, color: '#174ea6', marginBottom: '6px' }}>
-                      {plant}
+                {selectedPlants.map((plant) => {
+                  const plantItems = itemsByPlant[plant] || [];
+                  const allSelected = plantItems.length > 0 &&
+                    plantItems.every((item) => isUnitSelected(plant, item));
+                  return (
+                    <div key={plant} style={{
+                      border: '1px solid #dadce0',
+                      borderRadius: '8px',
+                      backgroundColor: '#ffffff',
+                      padding: '10px 14px',
+                    }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px',
+                      }}>
+                        <span style={{ fontSize: '10pt', fontWeight: 700, color: '#174ea6' }}>
+                          {plant}
+                        </span>
+                        {plantItems.length > 0 && (
+                          <span style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                              onClick={() => selectAllUnits(plant)}
+                              disabled={allSelected}
+                              style={{
+                                border: 'none', background: 'none', padding: 0,
+                                fontSize: '9pt', fontWeight: 600,
+                                color: allSelected ? '#bdc1c6' : '#1a73e8',
+                                cursor: allSelected ? 'default' : 'pointer',
+                                textDecoration: allSelected ? 'none' : 'underline',
+                              }}
+                            >
+                              Select All
+                            </button>
+                            <button
+                              onClick={() => deselectAllUnits(plant)}
+                              disabled={!plantItems.some((item) => isUnitSelected(plant, item))}
+                              style={{
+                                border: 'none', background: 'none', padding: 0,
+                                fontSize: '9pt', fontWeight: 600,
+                                color: plantItems.some((item) => isUnitSelected(plant, item)) ? '#1a73e8' : '#bdc1c6',
+                                cursor: plantItems.some((item) => isUnitSelected(plant, item)) ? 'pointer' : 'default',
+                                textDecoration: plantItems.some((item) => isUnitSelected(plant, item)) ? 'underline' : 'none',
+                              }}
+                            >
+                              Deselect All
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                        {plantItems.map((item) => (
+                          <label key={item} style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '10pt',
+                            color: '#202124',
+                            cursor: 'pointer',
+                            padding: '3px 0',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={isUnitSelected(plant, item)}
+                              onChange={() => toggleUnit(plant, item)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            {humanizeLabel(item)}
+                          </label>
+                        ))}
+                        {plantItems.length === 0 && (
+                          <span style={{ fontSize: '10pt', color: '#bdc1c6' }}>Loading units…</span>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
-                      {(itemsByPlant[plant] || []).map((item) => (
-                        <label key={item} style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '10pt',
-                          color: '#202124',
-                          cursor: 'pointer',
-                          padding: '3px 0',
-                          whiteSpace: 'nowrap',
-                        }}>
-                          <input
-                            type="checkbox"
-                            checked={isUnitSelected(plant, item)}
-                            onChange={() => toggleUnit(plant, item)}
-                            style={{ cursor: 'pointer' }}
-                          />
-                          {item}
-                        </label>
-                      ))}
-                      {(itemsByPlant[plant] || []).length === 0 && (
-                        <span style={{ fontSize: '10pt', color: '#bdc1c6' }}>Loading units…</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -591,7 +663,7 @@ export default function ProductionQueryPage() {
                       textAlign: 'center',
                       borderLeft: '1px solid #dadce0',
                     }}>
-                      {s.plant} · {s.item}
+                      {s.plant} · {humanizeLabel(s.item)}
                     </th>
                   ))}
                 </tr>
