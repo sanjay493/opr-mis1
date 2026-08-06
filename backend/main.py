@@ -1198,7 +1198,7 @@ async def confirm_plan(payload: dict):
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(report_month, plant_name, item_name)
                 DO UPDATE SET month_actual = excluded.month_actual
-            """, (r["month"], r.get("plant", ""), normalize_item_name(r["item_name"]), r["value"]))
+            """, (r["month"], r.get("plant", ""), normalize_item_name(r["item_name"], r.get("plant", "")), r["value"]))
             saved += 1
         conn.commit()
         conn.close()
@@ -1426,7 +1426,7 @@ async def confirm_extraction(payload: dict):
                     VALUES (?, ?, ?, ?)
                     ON CONFLICT(report_month, plant_name, item_name)
                     DO UPDATE SET month_actual = excluded.month_actual
-                """, (row_month, plant, normalize_item_name(r.get("item_name")), r.get("value")))
+                """, (row_month, plant, normalize_item_name(r.get("item_name"), plant), r.get("value")))
                 if r.get("value") is not None:
                     saved_prod += 1
 
@@ -1438,7 +1438,7 @@ async def confirm_extraction(payload: dict):
                     VALUES (?, ?, ?, ?)
                     ON CONFLICT(report_month, plant_name, item_name)
                     DO UPDATE SET month_actual = excluded.month_actual
-                """, (r["month"], r.get("plant", plant), normalize_item_name(r["item_name"]), r["value"]))
+                """, (r["month"], r.get("plant", plant), normalize_item_name(r["item_name"], r.get("plant", plant)), r["value"]))
                 saved_plan += 1
 
             for r in payload.get("techno_rows", []):
@@ -2145,7 +2145,7 @@ async def get_item_mapping_suggestions(plant: str):
     # raw DB name, since aliases must map to what's actually stored.
     items = sorted(
         (row[0] for row in cursor.fetchall()),
-        key=lambda n: production_item_sort_key(normalize_item_name(n)),
+        key=lambda n: production_item_sort_key(normalize_item_name(n, plant)),
     )
 
     conn.close()
@@ -2186,7 +2186,7 @@ async def save_item_alias(payload: dict):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-def normalize_item_name(name):
+def normalize_item_name(name, plant=None):
     """Normalize item names to consistent format"""
     if not name:
         return name
@@ -2210,6 +2210,28 @@ def normalize_item_name(name):
         name = 'BRC'
     elif name == 'BRC Round':
         name = 'Round Production'
+    # ASP: multiple extractors/uploads (excel_extractor_asp.py's "md
+    # cell"/"DAILY FLASH" sheets, pdf_extractor_asp.py's REP/FL report
+    # formats, and the ASPSSPVISL.xlsx ABP plan sheet — see those modules'
+    # docstrings) disagree on label/casing for the same physical metric.
+    # Fold onto the canonical actuals-side name so plan and actual (and
+    # every report reading production_table/production_plan_table) land on
+    # one row instead of two. Scoped to ASP only — "Plate Mill" in
+    # particular is a real, distinct RSP techno-param section name
+    # (different table) that must not be touched.
+    if plant == 'ASP':
+        if name in ('BARS Mill', 'Bars'):
+            name = 'BARS'
+        elif name in ('Plate Mill', 'Plates'):
+            name = 'PLATES'
+        elif name in ('FS PRD', 'Forgings'):
+            name = 'FORGINGS'
+        elif name in ('Concast', 'Concast Steel'):
+            name = 'Total Caster'
+        elif name == 'Billets/Bloom Semis':
+            name = 'Billets'
+        elif name == 'Finished':
+            name = 'Finished Steel'
     return name.strip()
 
 # BSP's two rolling mills each split into product groups where only one
@@ -2295,6 +2317,8 @@ PRODUCTION_ITEM_ORDER = [
     'SM',
     'USMILL',
     'BARMILL',
+    'Billets',
+    'Ingot Semis',
     'BARS',
     'BARS&RODMILL',
     'WRMILL',
@@ -2373,7 +2397,7 @@ async def get_production_items(plant: str, month: str):
     )
     plan_rows = {}
     for row in cursor.fetchall():
-        normalized = normalize_item_name(row[0])
+        normalized = normalize_item_name(row[0], plant)
         plan_rows[normalized] = row[1]
 
     cursor.execute(
@@ -2382,7 +2406,7 @@ async def get_production_items(plant: str, month: str):
     )
     actual_rows = {}
     for row in cursor.fetchall():
-        normalized = normalize_item_name(row[0])
+        normalized = normalize_item_name(row[0], plant)
         actual_rows[normalized] = row[1]
 
     conn.close()
@@ -2973,7 +2997,7 @@ def _production_fy_data(fy_start: int) -> dict:
             months,
         )
         for plant, item, month, value in cur.fetchall():
-            item = normalize_item_name(item)
+            item = normalize_item_name(item, plant)
             entry = data.setdefault(plant, {}).setdefault(item, {"actual": {}, "plan": {}})
             entry[key][month] = value
     conn.close()
@@ -3231,7 +3255,7 @@ async def production_query_items(plants: str = Query(...)):
                 f"SELECT DISTINCT item_name FROM {table} WHERE plant_name = ?",
                 (plant,),
             )
-            names.update(normalize_item_name(r[0]) for r in cur.fetchall())
+            names.update(normalize_item_name(r[0], plant) for r in cur.fetchall())
         items[plant] = sorted(names, key=production_item_sort_key)
     conn.close()
     return {"items": items}
@@ -3260,7 +3284,7 @@ def _production_query_data(start: str, end: str, units: list) -> dict:
     seen = set()
     for u in units:
         plant = str(u.get("plant", "")).strip()
-        item = normalize_item_name(str(u.get("item", "")).strip())
+        item = normalize_item_name(str(u.get("item", "")).strip(), plant)
         if plant and item and (plant, item) not in seen:
             seen.add((plant, item))
             wanted.append((plant, item))
@@ -3297,7 +3321,7 @@ def _production_query_data(start: str, end: str, units: list) -> dict:
                 months + query_plants,
             )
             for plant, item, month, value in cur.fetchall():
-                norm = normalize_item_name(item)
+                norm = normalize_item_name(item, plant)
                 s = index.get((plant, norm))
                 if s is not None and value is not None:
                     s[key][month] = round(float(value), 3)

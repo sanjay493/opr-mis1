@@ -13,9 +13,10 @@ ASP PDF extractor — handles two monthly report types:
    substring, to avoid both of those traps) and picking the run's 4th
    number (see _rep_resolve_actual() for how a rare disagreement between the
    normally-duplicate 4th/5th columns is resolved):
-     Total Crude Steel, Ingot Steel, Total Caster (Concast label varies:
-     "TOTAL CC" / "TOTAL CC SLAB" / "CONCAST PRODN" depending on report
-     vintage), Saleable Steel.
+     Total Crude Steel, Ingot Steel (raw ingot-mould production — NOT the
+     same metric as FL's "ING" below, see (2)), Total Caster (Concast label
+     varies: "TOTAL CC" / "TOTAL CC SLAB" / "CONCAST PRODN" depending on
+     report vintage), Saleable Steel.
    Closing Stock lives in a separate single-value row ("TOTAL PLANT ST.
    <value>"), extracted by regex — carefully distinguished from the
    unrelated "TOTAL PLANT STOCK <12 months of history>" row that precedes
@@ -29,12 +30,20 @@ ASP PDF extractor — handles two monthly report types:
    text layer in some source PDFs). For BOTH that report month and the
    immediately preceding month — its own dedicated "Actual" column further
    right in the same table, no second file needed — extracts:
-     ING      (Production for Finishing section) → Ingot Steel
+     ING      (Production for Finishing section) → Ingot Semis (the
+              semi-finished output rolled from ingots — a different, later
+              stage than REP/Excel's raw "Ingot Steel" crude production;
+              was previously mislabeled "Ingot Steel" here too, which let a
+              later FL upload silently overwrite the correct REP-sourced
+              value since both wrote the same item_name)
      BILLETS  (Saleable Production section)      → Billets
      BARS     (Saleable Production section)      → BARS
      FS PRD.  (Saleable Production section)      → FS PRD
      PL MILL  (Saleable Production section)      → PLATES
      TOTAL    (Saleable Production section)      → Saleable Steel
+     TOTAL    (DESPATCH section, separate from the above) → Saleable Steel
+              Despatch — actual dispatched/sold quantity, confirmed against
+              REP*.pdf's "PLANT DESPATCH T" row (near-exact match)
    Column values are matched by x-position against a reference row
    ("LIQ.PRD", always fully populated) rather than by list index, so a
    row with its own blank %Ach/CPLY cells doesn't shift later columns
@@ -70,6 +79,12 @@ _REP_LABEL_PATTERNS = {
     ],
     "Ingot Steel":       [["INGOT", "PRODUCTION", "T"]],
     "Saleable Steel":    [["SALEABLE", "STEEL", "T"]],
+    # NOT the "SALEABLE STEEL T" row above (that's production) — this is the
+    # separate "PLANT DESPATCH T" row, confirmed against FL*.pdf's DESPATCH
+    # section TOTAL (near-exact match, e.g. Jul'26: REP 12339 vs FL 12338;
+    # SALEABLE STEEL's own CUMM for the same month is a different number,
+    # 11543, matching FL's SALEABLE PRDUCTION section instead).
+    "Saleable Steel Despatch": [["PLANT", "DESPATCH", "T"]],
 }
 # "ST" not immediately followed by "OCK" — separates the single current-value
 # "TOTAL PLANT ST. <value>" row from the unrelated same-prefix
@@ -79,12 +94,16 @@ _REP_DATE_RE = re.compile(r'\bFOR\s*(\d{1,2})/(\d{1,2})/(\d{2,4})\b')
 
 # ── FL report: (label words, item_name, is_exact_total)
 _FL_ITEMS = [
-    (("ING",),          "Ingot Steel",   False),
+    (("ING",),          "Ingot Semis",   False),
     (("BILLETS",),      "Billets",       False),
     (("BARS",),         "BARS",          False),
     (("FS", "PRD."),    "FS PRD",        False),
     (("PL", "MILL"),    "PLATES",        False),
     (("TOTAL",),        "Saleable Steel", True),   # exact "TOTAL" row only — not "TOTAL CC SL"
+    # Separate "DESPATCH" section's own TOTAL row — actual dispatched/sold
+    # quantity, not production. Confirmed against REP*.pdf's "PLANT
+    # DESPATCH T" row (near-exact match; see _REP_LABEL_PATTERNS' comment).
+    (("TOTAL",),        "Saleable Steel Despatch", True),
 ]
 # Finished Steel = sum of these three (see module docstring)
 _FL_FINISHED_STEEL_PARTS = ["BARS", "FS PRD", "PLATES"]
@@ -398,13 +417,15 @@ def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
     blocks = _fl_section_blocks(rows)
     finishing_block = _fl_find_block(blocks, "FINISHING")
     saleable_block  = _fl_find_block(blocks, "SALEABLE")
+    despatch_block  = _fl_find_block(blocks, "DESPATCH")
     section_for = {
-        "Ingot Steel":    finishing_block,
-        "Billets":        saleable_block,
-        "BARS":           saleable_block,
-        "FS PRD":         saleable_block,
-        "PLATES":         saleable_block,
-        "Saleable Steel": saleable_block,
+        "Ingot Semis":              finishing_block,
+        "Billets":                  saleable_block,
+        "BARS":                     saleable_block,
+        "FS PRD":                   saleable_block,
+        "PLATES":                   saleable_block,
+        "Saleable Steel":           saleable_block,
+        "Saleable Steel Despatch":  despatch_block,
     }
 
     out_rows = []

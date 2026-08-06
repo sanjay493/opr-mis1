@@ -82,6 +82,17 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
             )
         logger.info(f"Detected {len(month_cols)} month columns: {month_cols[0][1]} → {month_cols[-1][1]}")
 
+        # ASP's plan sheet uses its own labels/casing for several items that
+        # the actuals-side extractors already store under a different
+        # canonical name (e.g. "Concast Steel" here vs "Total Caster" in
+        # production_table) — fold onto the same canonical form main.py's
+        # confirm_extraction/production-query code paths already use, so
+        # plan and actual land on one query row instead of two. Imported
+        # lazily (not at module top) since main.py only ever imports this
+        # module from inside its own functions, never at top level — by the
+        # time this runs, main.py is already fully loaded.
+        from main import normalize_item_name
+
         # --- Scan data rows ---
         # Col A: plant name (carried forward when blank)
         # Col B: item name (row skipped when blank)
@@ -100,6 +111,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
             item_name = str(b_val).strip() if b_val is not None else None
             if not item_name or current_plant is None:
                 continue  # blank spacer row
+            item_name = normalize_item_name(item_name, current_plant)
 
             for col_num, report_month in month_cols:
                 raw = ws.cell(row=row_num, column=col_num).value
