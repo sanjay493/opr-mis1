@@ -56,6 +56,14 @@ function DataEntryPageInner() {
       color: '#6366f1',
       bgColor: 'rgba(99, 102, 241, 0.1)'
     },
+    {
+      title: 'Techno Data Correction',
+      description: 'Find one techno-economic parameter across a plant + month range and correct it inline.',
+      icon: '🩹',
+      link: '/data-entry/techno-correction',
+      color: '#0891b2',
+      bgColor: 'rgba(8, 145, 178, 0.1)'
+    },
   ];
 
   return (

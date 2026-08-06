@@ -68,6 +68,23 @@ def _validate_month(report_month: str):
         raise HTTPException(400, "report_month must be YYYY-MM, e.g. '2026-05'")
 
 
+def _month_range(from_month: str, to_month: str) -> list:
+    """Inclusive chronological YYYY-MM list from from_month to to_month."""
+    y1, m1 = int(from_month[:4]), int(from_month[5:7])
+    y2, m2 = int(to_month[:4]), int(to_month[5:7])
+    if (y2, m2) < (y1, m1):
+        raise HTTPException(400, "to_month must not be before from_month")
+    months = []
+    y, m = y1, m1
+    while (y, m) <= (y2, m2):
+        months.append(f"{y}-{m:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return months
+
+
 def _get_hm_production(report_month: str, ytd: bool = False) -> Dict[str, float]:
     """Return {plant: HM_production} for the given month (or YTD sum)."""
     conn = _db.connect()
@@ -365,6 +382,51 @@ async def list_months(
     _db.init_db()
     months = _db.get_techno_months(plant.upper() if plant else None)
     return {"months": months, "count": len(months)}
+
+
+@router.get("/param-history")
+async def param_history(
+    plant: str = Query(..., description="Plant code: RSP, BSP, ISP, DSP, BSL, SAIL"),
+    unit: str = Query(..., description="Unit, e.g. BF-1, BF_Shop, General"),
+    param_key: str = Query(..., description="Parameter key, e.g. specific_energy_consumption"),
+    from_month: str = Query(..., description="YYYY-MM, inclusive"),
+    to_month: str = Query(..., description="YYYY-MM, inclusive"),
+):
+    """
+    Month-by-month {month_value, till_month_value} for one plant/unit/parameter
+    across a report_month range — powers the Techno Data Correction page's
+    filtered inline-edit grid. Months with no stored row come back with both
+    values null (still listed, so the grid can offer them as fillable rows).
+    """
+    _validate_month(from_month)
+    _validate_month(to_month)
+    _db.init_db()
+    months = _month_range(from_month, to_month)
+
+    conn = _db.connect()
+    cur = conn.cursor()
+    placeholders = ",".join("?" * len(months))
+    cur.execute(
+        f"SELECT report_month, techno_json FROM techno_data "
+        f"WHERE plant=? AND unit=? AND report_month IN ({placeholders})",
+        [plant.upper(), unit, *months],
+    )
+    by_month = {}
+    for rm, tj in cur.fetchall():
+        d = json.loads(tj)
+        by_month[rm] = {
+            "month_value":      d.get("month", {}).get(param_key),
+            "till_month_value": d.get("till_month", {}).get(param_key),
+        }
+    conn.close()
+
+    return {
+        "plant": plant.upper(), "unit": unit, "param_key": param_key,
+        "rows": [
+            {"report_month": m, **by_month.get(m, {"month_value": None, "till_month_value": None})}
+            for m in months
+        ],
+    }
 
 
 @router.get("/sail/preview")
