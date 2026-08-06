@@ -53,8 +53,14 @@ def _classify(path):
 
 def extract_file(path, kind):
     """Return (rows, error) where rows is a list of
-    {item_name, value, status, report_month, source_file} — value is None for
-    non-'ok' rows and those are skipped by the caller."""
+    {item_name, value, status, report_month, source_file, primary} — value is
+    None for non-'ok' rows and those are skipped by the caller. `primary` is
+    True when the row's report_month is this FILE's own detected report
+    month (its dedicated, calibrated "Actual" column), False when it's an
+    FL file's secondary "previous month" reference column — the latter has
+    been observed to occasionally misextract (see backfill run notes), so
+    the caller must never let a `primary=False` row overwrite an existing
+    `primary=True` value for the same (item, month)."""
     fname = os.path.basename(path)
     try:
         if kind == "rep_excel":
@@ -62,14 +68,16 @@ def extract_file(path, kind):
             month = result["month"]
             rows = [
                 {"item_name": r["item_name"], "value": r["value"], "status": r["status"],
-                 "report_month": month, "source_file": fname}
+                 "report_month": month, "source_file": fname, "primary": True}
                 for r in result["production_rows"]
             ]
         else:  # rep_pdf or fl_pdf — same extractor, auto-detects REP vs FL
             result = pdf_extractor_asp.extract_preview(path, "")
+            own_month = result["month"]
             rows = [
                 {"item_name": r["item_name"], "value": r["value"], "status": r["status"],
-                 "report_month": r.get("report_month", result["month"]), "source_file": fname}
+                 "report_month": r.get("report_month", own_month), "source_file": fname,
+                 "primary": r.get("report_month", own_month) == own_month}
                 for r in result["production_rows"]
             ]
         return rows, None
@@ -157,9 +165,12 @@ def main():
     print(f"Archive: {len(by_kind['rep_excel'])} REP Excel, {len(by_kind['rep_pdf'])} REP PDF, "
           f"{len(by_kind['fl_pdf'])} FL PDF files found.\n")
 
-    # final[(item, report_month)] = (value, source_file) — REP Excel/PDF processed first
-    # (Excel preferred when both exist for the same month), then FL last, matching the
-    # order these were actually uploaded historically (see extraction_log).
+    # final[(item, report_month)] = (value, source_file, primary) — REP Excel/PDF
+    # processed first (Excel preferred when both exist for the same month), then FL
+    # last, matching the order these were actually uploaded historically (see
+    # extraction_log). Within that order, a `primary=False` row (an FL file's
+    # secondary "previous month" column) is never allowed to overwrite an existing
+    # `primary=True` value — only fills the key if nothing's there yet.
     final = {}
     errors = []
 
@@ -169,7 +180,10 @@ def main():
                 continue
             item = normalize_item_name(r["item_name"], PLANT)
             key = (item, r["report_month"])
-            final[key] = (r["value"], r["source_file"])
+            existing = final.get(key)
+            if existing is not None and existing[2] and not r["primary"]:
+                continue  # don't let a secondary (prev-month) row clobber a primary one
+            final[key] = (r["value"], r["source_file"], r["primary"])
 
     rep_excel_months = set()
     for f in by_kind["rep_excel"]:
@@ -201,7 +215,7 @@ def main():
     plan_rows = extract_plan_preview()
     plan_final = {}
     for r in plan_rows:
-        plan_final[(r["item_name"], r["report_month"])] = (r["value"], r["source_file"])
+        plan_final[(r["item_name"], r["report_month"])] = (r["value"], r["source_file"], True)
 
     if errors:
         print(f"--- {len(errors)} file(s) failed to extract (skipped) ---")
@@ -215,7 +229,7 @@ def main():
     def print_diff(label, new_vals, cur_vals):
         print(f"--- {label}: {len(new_vals)} (item, month) values from source files ---")
         changed = 0
-        for (item, month), (new_val, source) in sorted(new_vals.items(), key=lambda x: (x[0][1], x[0][0])):
+        for (item, month), (new_val, source, _primary) in sorted(new_vals.items(), key=lambda x: (x[0][1], x[0][0])):
             old_val = cur_vals.get((item, month))
             if old_val is None or round(float(old_val), 3) != round(float(new_val), 3):
                 changed += 1
@@ -231,9 +245,9 @@ def main():
               f"Re-run with --apply to write.")
         return
 
-    for (item, month), (val, _src) in final.items():
+    for (item, month), (val, _src, _primary) in final.items():
         upsert("production_table", month, item, val)
-    for (item, month), (val, _src) in plan_final.items():
+    for (item, month), (val, _src, _primary) in plan_final.items():
         upsert("production_plan_table", month, item, val)
     print(f"APPLIED — {n1 + n2} value(s) written to the DB.")
 

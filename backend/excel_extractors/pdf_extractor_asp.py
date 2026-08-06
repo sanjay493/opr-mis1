@@ -30,12 +30,21 @@ ASP PDF extractor — handles two monthly report types:
    text layer in some source PDFs). For BOTH that report month and the
    immediately preceding month — its own dedicated "Actual" column further
    right in the same table, no second file needed — extracts:
+     INGT.    (general block, above the section headers) → Ingot Steel —
+              deliberately shares REP's item_name: verified near-exact match
+              (e.g. Jul'26: 10593 both sides), so whichever of REP/FL was
+              uploaded last updates the same DB row.
+     TOT.CC.  (general block)                    → Total Caster — same
+              deliberate item_name sharing with REP; FL's figure has been
+              confirmed slightly more accurate against the month-end report.
+     CRUDE    (general block)                    → Total Crude Steel — same
+              deliberate item_name sharing with REP (near-exact match).
      ING      (Production for Finishing section) → Ingot Semis (the
               semi-finished output rolled from ingots — a different, later
-              stage than REP/Excel's raw "Ingot Steel" crude production;
-              was previously mislabeled "Ingot Steel" here too, which let a
-              later FL upload silently overwrite the correct REP-sourced
-              value since both wrote the same item_name)
+              stage than "INGT." above; was previously mislabeled "Ingot
+              Steel" here too, which let a later FL upload silently
+              overwrite the correct REP-sourced value since both wrote the
+              same item_name)
      BILLETS  (Saleable Production section)      → Billets
      BARS     (Saleable Production section)      → BARS
      FS PRD.  (Saleable Production section)      → FS PRD
@@ -94,6 +103,18 @@ _REP_DATE_RE = re.compile(r'\bFOR\s*(\d{1,2})/(\d{1,2})/(\d{2,4})\b')
 
 # ── FL report: (label words, item_name, is_exact_total)
 _FL_ITEMS = [
+    # From the general block (same block as the LIQ.PRD calibration row,
+    # above the FINISHING/SALEABLE/DESPATCH sections) — these three match
+    # REP*.pdf's corresponding rows almost exactly (verified: e.g. Jul'26
+    # INGT.=10593 vs REP's INGOT PRODUCTION CUMM=10593, TOT.CC.=916 vs
+    # REP's TOTAL CC CUMM=916, CRUDE=11508 vs REP's CRUDE CUMM=11508), and
+    # FL's TOT.CC. figure is confirmed slightly more accurate against the
+    # month-end report than REP's — sharing REP's item_name here is
+    # deliberate, so whichever was uploaded last (usually FL, later in the
+    # month) updates the same DB row with its own figure.
+    (("INGT.",),        "Ingot Steel",         False),
+    (("TOT.CC.",),      "Total Caster",        False),
+    (("CRUDE",),        "Total Crude Steel",   False),
     (("ING",),          "Ingot Semis",   False),
     (("BILLETS",),      "Billets",       False),
     (("BARS",),         "BARS",          False),
@@ -415,10 +436,14 @@ def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
         )
 
     blocks = _fl_section_blocks(rows)
+    general_block   = _fl_find_block(blocks, "LIQ")
     finishing_block = _fl_find_block(blocks, "FINISHING")
     saleable_block  = _fl_find_block(blocks, "SALEABLE")
     despatch_block  = _fl_find_block(blocks, "DESPATCH")
     section_for = {
+        "Ingot Steel":              general_block,
+        "Total Caster":             general_block,
+        "Total Crude Steel":        general_block,
         "Ingot Semis":              finishing_block,
         "Billets":                  saleable_block,
         "BARS":                     saleable_block,
