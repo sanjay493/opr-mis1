@@ -33,7 +33,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 function getDefaultPeriod() {
   const d = new Date();
   d.setMonth(d.getMonth() - 1);
-  return { month: MONTHS[d.getMonth()], year: d.getFullYear().toString() };
+  // MONTHS is FY-ordered (April-first) — can't index it with JS's
+  // Jan-ordered getMonth(), so look the name up in a Jan-ordered array.
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return { month: names[d.getMonth()], year: d.getFullYear().toString() };
 }
 
 function ProductionDataEntryPageInner() {

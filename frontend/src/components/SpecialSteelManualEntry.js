@@ -59,7 +59,10 @@ function defaultYear() {
 function defaultMonth() {
   const d = new Date();
   d.setMonth(d.getMonth() - 1);
-  return MONTHS[d.getMonth()];
+  // MONTHS is FY-ordered (April-first) — can't index it with JS's
+  // Jan-ordered getMonth(), so look the name up in a Jan-ordered array.
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return names[d.getMonth()];
 }
 
 const SEL = {
