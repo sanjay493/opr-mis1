@@ -1,0 +1,78 @@
+
+> frontend@0.1.0 build
+> cross-env NODE_OPTIONS=--max-old-space-size=4096 next build
+
+▲ Next.js 16.2.7 (Turbopack)
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: "30mb"
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 19.3s
+  Running TypeScript ...
+  Finished TypeScript in 729ms ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/50) ...
+API_BASE_URL: 
+  Generating static pages using 3 workers (12/50) 
+  Generating static pages using 3 workers (24/50) 
+  Generating static pages using 3 workers (37/50) 
+✓ Generating static pages using 3 workers (50/50) in 1444ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin/activity-log
+├ ○ /admin/allowed-emails
+├ ○ /admin/backup
+├ ○ /admin/users
+├ ƒ /api/extract-preview
+├ ƒ /api/generate-pdf
+├ ○ /data-entry
+├ ○ /data-entry/bf-benchmark
+├ ○ /data-entry/capital-repair
+├ ○ /data-entry/conversion
+├ ○ /data-entry/ipt
+├ ○ /data-entry/legacy-sms-crude
+├ ○ /data-entry/opening-stock
+├ ○ /data-entry/production
+├ ○ /data-entry/special-steel
+├ ○ /data-entry/special-steel-abp
+├ ○ /data-entry/special-steel-grade-clubs
+├ ○ /data-entry/targets
+├ ○ /data-entry/techno
+├ ○ /data-entry/techno-correction
+├ ○ /data-entry/techno-manual
+├ ○ /data-entry/techno-page-targets
+├ ○ /data-entry/techno-summary
+├ ○ /forgot-password
+├ ○ /icon.png
+├ ○ /login
+├ ○ /profile
+├ ○ /records
+├ ○ /register
+├ ○ /report
+├ ○ /reports/bf-benchmark
+├ ○ /reports/do-letter
+├ ○ /reports/finished-steel
+├ ○ /reports/highlights
+├ ○ /reports/jpc-report
+├ ○ /reports/major-production
+├ ○ /reports/new-facilities
+├ ○ /reports/one-page-report
+├ ○ /reports/pmix-fy
+├ ○ /reports/production-fy
+├ ○ /reports/production-query
+├ ○ /reports/records-matrix
+├ ○ /reports/techno-custom
+├ ○ /reports/techno-dashboard
+├ ○ /reports/techno-monthly
+├ ○ /reports/techno-verification
+├ ○ /todo
+├ ○ /upload
+└ ○ /worklog
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

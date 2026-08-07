@@ -1,0 +1,14 @@
+
+> frontend@0.1.0 dev
+> cross-env NODE_OPTIONS=--max-old-space-size=4096 next dev
+
+▲ Next.js 16.2.7 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.8:3000
+✓ Ready in 1838ms
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: "30mb"
+
+○ Compiling /reports/bf-benchmark ...
+ GET /reports/bf-benchmark 200 in 9.6s (next.js: 9.0s, application-code: 651ms)
+ GET /reports/bf-benchmark 200 in 151ms (next.js: 20ms, application-code: 130ms)

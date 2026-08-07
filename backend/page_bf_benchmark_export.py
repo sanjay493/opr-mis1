@@ -1,15 +1,17 @@
 """
 Excel / PDF export for the Large BF Benchmarking comparison page
 (frontend: /reports/bf-benchmark). Takes the same dict api_bf_benchmark.
-build_compare() returns — {months, params, rows} — so the export always
-matches what's on screen exactly.
+build_compare() returns — {params, sail_bfs, year_blocks, external_blocks}
+— so the export always matches what's on screen.
 
-Visual style mirrors page_techno_custom_export.py's Custom Period mode
-(section-per-parameter, one row per BF, one column per month + an FY Avg
-column) for consistency with the rest of the app; render_pdf_bytes is
-imported from page_production_query_export.py directly rather than
-duplicated, since it has zero business logic (pure HTML-string-in,
-PDF-bytes-out).
+Layout: one row per parameter (2 leading columns: Parameter, Unit), then
+one merged column-group per selected SAIL year (month columns × SAIL BFs,
+plus an FY Avg group), followed by one merged column-group per non-SAIL BF
+showing its own last-available FY.
+
+render_pdf_bytes is imported from page_production_query_export.py directly
+rather than duplicated, since it has zero business logic (pure
+HTML-string-in, PDF-bytes-out).
 """
 import io
 
@@ -22,12 +24,10 @@ import page_production_query_export as _ppqe
 render_pdf_bytes = _ppqe.render_pdf_bytes
 
 _HDR_FILL = PatternFill("solid", fgColor="1A73E8")
+_HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
 _SUBHDR_FILL = PatternFill("solid", fgColor="E8F0FE")
-_SUBHDR_FONT = Font(bold=True, color="174EA6", size=9)
-_SECTION_FILL = PatternFill("solid", fgColor="1A73E8")
-_SECTION_FONT = Font(bold=True, color="FFFFFF", size=10)
-_SAIL_FILL = PatternFill("solid", fgColor="F9AB00")
-_SAIL_FONT = Font(bold=True, color="3C2F00", size=9)
+_SUBHDR_FONT = Font(bold=True, color="174EA6", size=8)
+_AVG_FILL = PatternFill("solid", fgColor="D2E3FC")
 _ZEBRA_FILL = PatternFill("solid", fgColor="F8F9FA")
 _THIN = Side(style="thin", color="DADCE0")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
@@ -41,76 +41,148 @@ def _fmt(v):
     return v
 
 
+def _sail_bf_labels(sail_bfs):
+    return [b.get("plant", b.get("label", "")) for b in sail_bfs]
+
+
+def _year_group_width(year_block, n_sail_bfs):
+    return (len(year_block["months"]) + 1) * n_sail_bfs  # +1 for FY Avg
+
+
+def _external_group_width(ext_block):
+    return len(ext_block["months"]) + 1 if ext_block.get("has_data") else 1
+
+
 def build_excel_bytes(data: dict) -> bytes:
-    months = data.get("months", [])
-    params = data.get("params", [])
-    rows = data.get("rows", [])
+    params = [p for p in data.get("params", []) if not p.get("static")]
+    sail_bfs = data.get("sail_bfs", [])
+    n_sail = len(sail_bfs)
+    sail_labels = _sail_bf_labels(sail_bfs)
+    years = sorted(data.get("year_blocks", {}).keys(), key=int)
+    ext_ids = list(data.get("external_blocks", {}).keys())
 
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "BF Benchmarking"[:31]
 
     ws.cell(row=1, column=1, value="Large BF Benchmarking — Comparative Performance Analysis").font = Font(bold=True, size=13)
-    ws.cell(row=2, column=1, value=f"Months: {', '.join(months)}").font = Font(italic=True, size=9)
 
-    total_cols = 1 + len(months) + 1  # BF + months + FY Avg
-    row = 4
+    r1, r2, r3 = 3, 4, 5  # header rows: year/BF-name | month/FY-Avg | SAIL-BF sub-cols
+    ws.cell(row=r1, column=1, value="Techno Parameter").font = _HDR_FONT
+    ws.cell(row=r1, column=1).fill = _HDR_FILL
+    ws.merge_cells(start_row=r1, start_column=1, end_row=r3, end_column=1)
+    ws.cell(row=r1, column=2, value="Unit").font = _HDR_FONT
+    ws.cell(row=r1, column=2).fill = _HDR_FILL
+    ws.merge_cells(start_row=r1, start_column=2, end_row=r3, end_column=2)
 
-    # Working Volume section (static, single column)
-    wc = ws.cell(row=row, column=1, value="Working Volume (m³)")
-    wc.font = _SECTION_FONT; wc.fill = _SECTION_FILL
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=2)
-    ws.cell(row=row, column=2).fill = _SECTION_FILL
-    row += 1
-    for idx, r in enumerate(rows):
-        fill = _SAIL_FILL if r.get("is_sail") else (_ZEBRA_FILL if idx % 2 == 1 else None)
-        font = _SAIL_FONT if r.get("is_sail") else Font(size=9)
-        lc = ws.cell(row=row, column=1, value=r.get("label", ""))
-        lc.font = font; lc.border = _BORDER
-        vc = ws.cell(row=row, column=2, value=_fmt(r.get("working_volume_m3")))
-        vc.font = font; vc.border = _BORDER; vc.alignment = Alignment(horizontal="right")
-        if fill:
-            lc.fill = fill; vc.fill = fill
-        row += 1
-    row += 1
-
-    headers = ["BF"] + months + ["FY Avg"]
-    for p in params:
-        if p.get("static"):
+    col = 3
+    year_col_start = {}
+    for y in years:
+        yb = data["year_blocks"][y]
+        width = _year_group_width(yb, n_sail) if n_sail else 0
+        if width == 0:
             continue
+        year_col_start[y] = col
+        hc = ws.cell(row=r1, column=col, value=f"FY {yb['fy_label']}")
+        hc.font = _HDR_FONT; hc.fill = _HDR_FILL
+        ws.merge_cells(start_row=r1, start_column=col, end_row=r1, end_column=col + width - 1)
+        for c in range(col, col + width):
+            ws.cell(row=r1, column=c).fill = _HDR_FILL
+        c2 = col
+        for m in yb["months"] + ["FY Avg"]:
+            hc2 = ws.cell(row=r2, column=c2, value=m)
+            hc2.font = _SUBHDR_FONT; hc2.fill = _SUBHDR_FILL
+            hc2.alignment = Alignment(horizontal="center")
+            ws.merge_cells(start_row=r2, start_column=c2, end_row=r2, end_column=c2 + n_sail - 1)
+            for c3, lbl in enumerate(sail_labels, start=c2):
+                hc3 = ws.cell(row=r3, column=c3, value=lbl)
+                hc3.font = _SUBHDR_FONT; hc3.fill = _SUBHDR_FILL
+                hc3.alignment = Alignment(horizontal="center")
+                hc3.border = _BORDER
+            c2 += n_sail
+        col += width
+
+    ext_col_start = {}
+    for bf_id in ext_ids:
+        eb = data["external_blocks"][bf_id]
+        width = _external_group_width(eb)
+        ext_col_start[bf_id] = col
+        title = f"{eb['label']} (FY {eb['fy_label']})" if eb.get("has_data") else f"{eb['label']} (no data)"
+        hc = ws.cell(row=r1, column=col, value=title)
+        hc.font = _HDR_FONT; hc.fill = _HDR_FILL
+        ws.merge_cells(start_row=r1, start_column=col, end_row=r1, end_column=col + width - 1)
+        for c in range(col, col + width):
+            ws.cell(row=r1, column=c).fill = _HDR_FILL
+        if eb.get("has_data"):
+            for c2, m in enumerate(eb["months"] + ["FY Avg"], start=col):
+                hc2 = ws.cell(row=r2, column=c2, value=m)
+                hc2.font = _SUBHDR_FONT; hc2.fill = _SUBHDR_FILL
+                hc2.alignment = Alignment(horizontal="center")
+                ws.merge_cells(start_row=r2, start_column=c2, end_row=r3, end_column=c2)
+        else:
+            ws.merge_cells(start_row=r2, start_column=col, end_row=r3, end_column=col)
+        col += width
+
+    total_cols = col - 1
+    row = r3 + 1
+    for p in params:
         key, label, unit = p["key"], p["label"], p.get("unit", "")
-        sc = ws.cell(row=row, column=1, value=f"{label} ({unit})" if unit else label)
-        sc.font = _SECTION_FONT; sc.fill = _SECTION_FILL
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=total_cols)
-        for c in range(2, total_cols + 1):
-            ws.cell(row=row, column=c).fill = _SECTION_FILL
-        row += 1
+        lc = ws.cell(row=row, column=1, value=label); lc.border = _BORDER
+        uc = ws.cell(row=row, column=2, value=unit); uc.border = _BORDER
+        fill = _ZEBRA_FILL if row % 2 == 0 else None
+        if fill:
+            lc.fill = fill; uc.fill = fill
 
-        for c, h in enumerate(headers, start=1):
-            hc = ws.cell(row=row, column=c, value=h)
-            hc.font = _SUBHDR_FONT; hc.fill = _SUBHDR_FILL
-            hc.alignment = Alignment(horizontal="center"); hc.border = _BORDER
-        row += 1
+        for y in years:
+            yb = data["year_blocks"][y]
+            base = year_col_start.get(y)
+            if base is None:
+                continue
+            c = base
+            for m in yb["months"]:
+                for bidx in range(n_sail):
+                    pd = yb["rows"][bidx]["params"].get(key, {})
+                    v = _fmt((pd.get("month_values") or {}).get(m))
+                    vc = ws.cell(row=row, column=c, value=v)
+                    vc.border = _BORDER; vc.alignment = Alignment(horizontal="right")
+                    if fill:
+                        vc.fill = fill
+                    c += 1
+            for bidx in range(n_sail):
+                pd = yb["rows"][bidx]["params"].get(key, {})
+                vc = ws.cell(row=row, column=c, value=_fmt(pd.get("avg")))
+                vc.font = Font(bold=True); vc.border = _BORDER; vc.alignment = Alignment(horizontal="right")
+                vc.fill = _AVG_FILL
+                c += 1
 
-        for idx, r in enumerate(rows):
-            fill = _SAIL_FILL if r.get("is_sail") else (_ZEBRA_FILL if idx % 2 == 1 else None)
-            font = _SAIL_FONT if r.get("is_sail") else Font(size=9)
-            pdata = (r.get("params") or {}).get(key, {})
-            mv = pdata.get("month_values", {}) or {}
-            values = [r.get("label", "")] + [_fmt(mv.get(m)) for m in months] + [_fmt(pdata.get("avg"))]
-            for c, v in enumerate(values, start=1):
-                vc = ws.cell(row=row, column=c, value=v)
-                vc.font = font; vc.border = _BORDER
-                vc.alignment = Alignment(horizontal="left" if c == 1 else "right")
+        for bf_id in ext_ids:
+            eb = data["external_blocks"][bf_id]
+            base = ext_col_start[bf_id]
+            if not eb.get("has_data"):
+                vc = ws.cell(row=row, column=base, value="—")
+                vc.border = _BORDER; vc.alignment = Alignment(horizontal="center")
                 if fill:
                     vc.fill = fill
-            row += 1
+                continue
+            c = base
+            pd = eb["params"].get(key, {})
+            mv = pd.get("month_values") or {}
+            for m in eb["months"]:
+                vc = ws.cell(row=row, column=c, value=_fmt(mv.get(m)))
+                vc.border = _BORDER; vc.alignment = Alignment(horizontal="right")
+                if fill:
+                    vc.fill = fill
+                c += 1
+            vc = ws.cell(row=row, column=c, value=_fmt(pd.get("avg")))
+            vc.font = Font(bold=True); vc.border = _BORDER; vc.alignment = Alignment(horizontal="right")
+            vc.fill = _AVG_FILL
         row += 1
 
     ws.column_dimensions["A"].width = 20
-    for i in range(2, total_cols + 1):
-        ws.column_dimensions[get_column_letter(i)].width = 12
-    ws.freeze_panes = "A5"
+    ws.column_dimensions["B"].width = 10
+    for i in range(3, total_cols + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 10
+    ws.freeze_panes = "C6"
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -118,68 +190,93 @@ def build_excel_bytes(data: dict) -> bytes:
 
 
 def build_pdf_html(data: dict) -> str:
-    months = data.get("months", [])
-    params = data.get("params", [])
-    rows = data.get("rows", [])
+    params = [p for p in data.get("params", []) if not p.get("static")]
+    sail_bfs = data.get("sail_bfs", [])
+    n_sail = len(sail_bfs)
+    sail_labels = _sail_bf_labels(sail_bfs)
+    years = sorted(data.get("year_blocks", {}).keys(), key=int)
+    ext_ids = list(data.get("external_blocks", {}).keys())
 
-    wv_rows = []
-    for r in rows:
-        wv_rows.append(
-            f'<tr class="{"sail-row" if r.get("is_sail") else ""}">'
-            f'<td class="bf">{r.get("label","")}</td><td>{_fmt(r.get("working_volume_m3")) or "—"}</td></tr>'
-        )
-    sections_html = [
-        '<div class="section-title">Working Volume (m³)</div>'
-        '<table><thead><tr><th>BF</th><th>Working Volume</th></tr></thead>'
-        f'<tbody>{"".join(wv_rows)}</tbody></table>'
-    ]
-
-    header_html = "<th>BF</th>" + "".join(f"<th>{m}</th>" for m in months) + "<th>FY Avg</th>"
-    for p in params:
-        if p.get("static"):
+    row1, row2, row3 = ['<th rowspan="3">Parameter</th><th rowspan="3">Unit</th>'], [""], [""]
+    for y in years:
+        yb = data["year_blocks"][y]
+        width = _year_group_width(yb, n_sail) if n_sail else 0
+        if width == 0:
             continue
+        row1.append(f'<th colspan="{width}">FY {yb["fy_label"]}</th>')
+        for m in yb["months"] + ["FY Avg"]:
+            row2.append(f'<th colspan="{n_sail}">{m}</th>')
+        for _ in yb["months"] + ["FY Avg"]:
+            for lbl in sail_labels:
+                row3.append(f"<th>{lbl}</th>")
+
+    for bf_id in ext_ids:
+        eb = data["external_blocks"][bf_id]
+        width = _external_group_width(eb)
+        title = f'{eb["label"]} (FY {eb["fy_label"]})' if eb.get("has_data") else f'{eb["label"]} (no data)'
+        row1.append(f'<th colspan="{width}">{title}</th>')
+        if eb.get("has_data"):
+            for m in eb["months"] + ["FY Avg"]:
+                row2.append(f'<th rowspan="2">{m}</th>')
+        else:
+            row2.append('<th rowspan="2">—</th>')
+
+    body_rows = []
+    for p in params:
         key, label, unit = p["key"], p["label"], p.get("unit", "")
-        body_rows = []
-        for r in rows:
-            pdata = (r.get("params") or {}).get(key, {})
-            mv = pdata.get("month_values", {}) or {}
-            cells = [f'<td class="bf">{r.get("label","")}</td>']
-            for m in months:
+        cells = [f'<td class="param">{label}</td><td class="unit">{unit}</td>']
+        for y in years:
+            yb = data["year_blocks"][y]
+            for m in yb["months"]:
+                for bidx in range(n_sail):
+                    pd = yb["rows"][bidx]["params"].get(key, {})
+                    v = _fmt((pd.get("month_values") or {}).get(m))
+                    cells.append(f"<td>{v if v != '' else '—'}</td>")
+            for bidx in range(n_sail):
+                pd = yb["rows"][bidx]["params"].get(key, {})
+                v = _fmt(pd.get("avg"))
+                cells.append(f'<td class="avg">{v if v != "" else "—"}</td>')
+        for bf_id in ext_ids:
+            eb = data["external_blocks"][bf_id]
+            if not eb.get("has_data"):
+                cells.append("<td>—</td>")
+                continue
+            pd = eb["params"].get(key, {})
+            mv = pd.get("month_values") or {}
+            for m in eb["months"]:
                 v = _fmt(mv.get(m))
                 cells.append(f"<td>{v if v != '' else '—'}</td>")
-            avg = _fmt(pdata.get("avg"))
-            cells.append(f'<td class="avg">{avg if avg != "" else "—"}</td>')
-            body_rows.append(f'<tr class="{"sail-row" if r.get("is_sail") else ""}">{"".join(cells)}</tr>')
-        title = f"{label} ({unit})" if unit else label
-        sections_html.append(
-            f'<div class="section-title">{title}</div>'
-            f'<table><thead><tr>{header_html}</tr></thead>'
-            f'<tbody>{"".join(body_rows)}</tbody></table>'
-        )
+            v = _fmt(pd.get("avg"))
+            cells.append(f'<td class="avg">{v if v != "" else "—"}</td>')
+        body_rows.append(f"<tr>{''.join(cells)}</tr>")
 
     return f"""<!doctype html>
 <html><head><meta charset="utf-8">
 <style>
-  @page {{ size: A4 landscape; margin: 12mm 10mm; }}
+  @page {{ size: A4 landscape; margin: 10mm 8mm; }}
   * {{ box-sizing: border-box; }}
   body {{ font-family: Arial, sans-serif; color: #202124; margin: 0; }}
-  h1 {{ font-size: 14pt; margin: 0 0 2px 0; }}
-  .subtitle {{ font-size: 9pt; color: #5f6368; margin: 0 0 8px 0; }}
-  .section-title {{ background: #1a73e8; color: #fff; font-weight: 700; font-size: 9.5pt;
-    padding: 4px 6px; margin-top: 10px; page-break-after: avoid; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 4px; }}
+  h1 {{ font-size: 13pt; margin: 0 0 8px 0; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 7pt; }}
   thead {{ display: table-header-group; }}
   tr {{ page-break-inside: avoid; }}
-  th, td {{ border: 1px solid #dadce0; padding: 3px 6px; text-align: right; white-space: nowrap; }}
-  th {{ background: #e8f0fe; color: #174ea6; font-weight: 700; }}
-  td.bf {{ text-align: left; font-weight: 700; }}
-  td.avg {{ font-weight: 700; }}
+  th, td {{ border: 1px solid #dadce0; padding: 2px 4px; text-align: right; white-space: nowrap; }}
+  th {{ background: #e8f0fe; color: #174ea6; font-weight: 700; text-align: center; }}
+  td.param {{ text-align: left; font-weight: 700; }}
+  td.unit {{ text-align: left; color: #5f6368; }}
+  td.avg {{ font-weight: 700; background: #d2e3fc; }}
   tr:nth-child(even) td {{ background: #f8f9fa; }}
-  tr.sail-row td {{ background: #f9ab00; color: #3c2f00; font-weight: 700; }}
+  tr:nth-child(even) td.avg {{ background: #d2e3fc; }}
 </style>
 </head>
 <body>
   <h1>Large BF Benchmarking — Comparative Performance Analysis</h1>
-  <p class="subtitle">Months: {', '.join(months)}</p>
-  {''.join(sections_html)}
+  <table>
+    <thead>
+      <tr>{''.join(row1)}</tr>
+      <tr>{''.join(row2)}</tr>
+      <tr>{''.join(row3)}</tr>
+    </thead>
+    <tbody>{''.join(body_rows)}</tbody>
+  </table>
 </body></html>"""

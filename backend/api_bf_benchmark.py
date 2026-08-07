@@ -70,8 +70,10 @@ class SailMetaRequest(BaseModel):
 
 
 class CompareRequest(BaseModel):
-    bf_keys: List[str]         # "sail:BSP:BF-8" or "ext:12"
-    months: List[str]          # ["2025-04", "2025-05", ...]
+    sail_bf_keys: List[str] = []       # "PLANT:UNIT", e.g. "BSP:BF-8"
+    years: List[int] = []              # FY start years, e.g. [2024, 2025] for FY2024-25/FY2025-26
+    month_slots: List[int] = list(range(12))   # 0=Apr..11=Mar, which FY months to include
+    external_bf_ids: List[int] = []    # each shown for ITS OWN last-available FY, not `years`
 
 
 def _validate_month(report_month: str):
@@ -80,6 +82,27 @@ def _validate_month(report_month: str):
         assert len(y) == 4 and 1 <= int(m) <= 12
     except Exception:
         raise HTTPException(400, "report_month must be YYYY-MM, e.g. '2026-05'")
+
+
+def _fy_start_of(report_month: str) -> int:
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    return y if m >= 4 else y - 1
+
+
+def _fy_label(fy_start: int) -> str:
+    return f"{fy_start}-{str((fy_start + 1) % 100).zfill(2)}"
+
+
+def _fy_months(fy_start: int, month_slots: List[int]) -> List[str]:
+    """month_slots are FY-relative: 0=April..11=March."""
+    out = []
+    for slot in sorted(set(month_slots)):
+        m, y = 4 + slot, fy_start
+        if m > 12:
+            m -= 12
+            y += 1
+        out.append(f"{y}-{m:02d}")
+    return out
 
 
 # ── Registry ──────────────────────────────────────────────────────────────────
@@ -93,14 +116,18 @@ async def get_params():
 async def list_external_bfs(active_only: bool = Query(False)):
     conn = _db.connect()
     cur = conn.cursor()
-    sql = "SELECT id, name, company, working_volume_m3, active, created_at FROM bf_benchmark_external_bf"
+    sql = (
+        "SELECT b.id, b.name, b.company, b.working_volume_m3, b.active, b.created_at, "
+        "(SELECT MAX(d.report_month) FROM bf_benchmark_external_data d WHERE d.external_bf_id=b.id) "
+        "FROM bf_benchmark_external_bf b"
+    )
     if active_only:
-        sql += " WHERE active=1"
-    sql += " ORDER BY name"
+        sql += " WHERE b.active=1"
+    sql += " ORDER BY b.name"
     cur.execute(sql)
     rows = [
         {"id": r[0], "name": r[1], "company": r[2], "working_volume_m3": r[3],
-         "active": bool(r[4]), "created_at": r[5]}
+         "active": bool(r[4]), "created_at": r[5], "latest_report_month": r[6]}
         for r in cur.fetchall()
     ]
     conn.close()
@@ -289,64 +316,86 @@ def _compare_external_bf(bf_id: int, months: List[str]) -> Dict:
     return params_out
 
 
+def _external_bf_latest_month(bf_id: int) -> Optional[str]:
+    conn = _db.connect()
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(report_month) FROM bf_benchmark_external_data WHERE external_bf_id=?", (bf_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row[0] if row and row[0] else None
+
+
 @router.post("/compare")
 async def compare(body: CompareRequest):
     # build_compare does one DB round-trip per BF×param×month (up to a few
-    # hundred for a full-FY, multi-BF comparison) — same order of magnitude
-    # as techno_custom_period (main.py), which run_in_threadpool for the
-    # same reason: keep that off the event loop.
+    # hundred for a multi-year, multi-BF comparison) — same order of
+    # magnitude as techno_custom_period (main.py), which run_in_threadpool
+    # for the same reason: keep that off the event loop.
     return await run_in_threadpool(build_compare, body)
 
 
 def build_compare(body: CompareRequest) -> Dict:
-    if not body.bf_keys:
+    if not body.sail_bf_keys and not body.external_bf_ids:
         raise HTTPException(400, "At least one BF is required")
-    if not body.months:
-        raise HTTPException(400, "At least one month is required")
-    for m in body.months:
-        _validate_month(m)
+    if body.sail_bf_keys and not body.years:
+        raise HTTPException(400, "At least one year is required for SAIL BFs")
 
-    ext_ids = [int(k.split(":", 1)[1]) for k in body.bf_keys if k.startswith("ext:")]
-    if ext_ids:
+    month_slots = sorted(set(s for s in body.month_slots if 0 <= s <= 11)) or list(range(12))
+
+    sail_bfs = []
+    for key in body.sail_bf_keys:
+        if key not in _SAIL_BF_BY_KEY:
+            raise HTTPException(400, f"Unknown SAIL BF: {key}")
+        sail_bfs.append(_SAIL_BF_BY_KEY[key])
+    sail_wv = _sail_working_volumes() if sail_bfs else {}
+
+    year_blocks = {}
+    for fy_start in body.years:
+        months = _fy_months(fy_start, month_slots)
+        rows = []
+        for b in sail_bfs:
+            key = f"{b['plant']}:{b['unit']}"
+            rows.append({
+                "bf_key": key, "label": b["label"],
+                "working_volume_m3": sail_wv.get(key),
+                "params": _compare_sail_bf(b["plant"], b["unit"], months),
+            })
+        year_blocks[str(fy_start)] = {"fy_label": _fy_label(fy_start), "months": months, "rows": rows}
+
+    external_blocks = {}
+    if body.external_bf_ids:
         conn = _db.connect()
         cur = conn.cursor()
-        ph = ",".join("?" * len(ext_ids))
-        cur.execute(f"SELECT id, name, company, working_volume_m3 FROM bf_benchmark_external_bf WHERE id IN ({ph})", ext_ids)
+        ph = ",".join("?" * len(body.external_bf_ids))
+        cur.execute(f"SELECT id, name, company, working_volume_m3 FROM bf_benchmark_external_bf WHERE id IN ({ph})", body.external_bf_ids)
         ext_meta = {r[0]: {"name": r[1], "company": r[2], "working_volume_m3": r[3]} for r in cur.fetchall()}
         conn.close()
-    else:
-        ext_meta = {}
 
-    sail_wv = _sail_working_volumes()
-
-    rows = []
-    for key in body.bf_keys:
-        if key.startswith("sail:"):
-            _, plant, unit = key.split(":", 2)
-            sail_key = f"{plant}:{unit}"
-            if sail_key not in _SAIL_BF_BY_KEY:
-                raise HTTPException(400, f"Unknown SAIL BF key: {key}")
-            label = _SAIL_BF_BY_KEY[sail_key]["label"]
-            rows.append({
-                "bf_key": key, "label": label, "is_sail": True,
-                "working_volume_m3": sail_wv.get(sail_key),
-                "params": _compare_sail_bf(plant, unit, body.months),
-            })
-        elif key.startswith("ext:"):
-            bf_id = int(key.split(":", 1)[1])
+        for bf_id in body.external_bf_ids:
             if bf_id not in ext_meta:
                 raise HTTPException(400, f"Unknown non-SAIL BF id: {bf_id}")
             meta = ext_meta[bf_id]
             label = f"{meta['name']} ({meta['company']})" if meta["company"] else meta["name"]
-            rows.append({
-                "bf_key": key, "label": label, "is_sail": False,
+            latest = _external_bf_latest_month(bf_id)
+            if latest is None:
+                external_blocks[str(bf_id)] = {
+                    "label": label, "fy_label": None, "months": [],
+                    "working_volume_m3": meta["working_volume_m3"], "params": {}, "has_data": False,
+                }
+                continue
+            fy_start = _fy_start_of(latest)
+            # Non-SAIL gets its own last-available FY, shown in full — not
+            # narrowed by month_slots (that narrowing only applies to the
+            # SAIL year blocks, which share a common selected FY).
+            months = _fy_months(fy_start, list(range(12)))
+            external_blocks[str(bf_id)] = {
+                "label": label, "fy_label": _fy_label(fy_start), "months": months,
                 "working_volume_m3": meta["working_volume_m3"],
-                "params": _compare_external_bf(bf_id, body.months),
-            })
-        else:
-            raise HTTPException(400, f"Malformed bf_key: {key}")
+                "params": _compare_external_bf(bf_id, months), "has_data": True,
+            }
 
-    return {"months": body.months, "params": BF_BENCHMARK_PARAMS, "rows": rows}
+    return {"params": BF_BENCHMARK_PARAMS, "sail_bfs": sail_bfs,
+            "year_blocks": year_blocks, "external_blocks": external_blocks}
 
 
 @router.post("/excel")
