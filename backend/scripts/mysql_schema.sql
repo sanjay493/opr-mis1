@@ -195,6 +195,8 @@ CREATE TABLE IF NOT EXISTS users (
     name          VARCHAR(190) DEFAULT '',
     role          VARCHAR(32),
     profile_pic   VARCHAR(255) DEFAULT '',
+    allowed_pages TEXT,
+    can_delete    TINYINT NOT NULL DEFAULT 1,
     created_at    VARCHAR(40) NOT NULL,
     updated_at    VARCHAR(40)
 ) ENGINE=InnoDB;
