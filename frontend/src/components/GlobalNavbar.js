@@ -31,6 +31,7 @@ export default function GlobalNavbar() {
             { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
             { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
             { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' },
+            { label: 'Large BF Benchmarking Entry', link: '/data-entry/bf-benchmark', icon: '🏗️' },
           ]
         },
         {
@@ -75,7 +76,8 @@ export default function GlobalNavbar() {
         { label: 'Finished Steel (Month & Unit-wise)', link: '/reports/finished-steel', icon: '📦' },
         { label: 'Plant-wise Techno', link: '/reports/techno-monthly', icon: '⚙️' },
         { label: 'Techno Dashboard', link: '/reports/techno-dashboard', icon: '🔬' },
-        { label: 'Techno Verification', link: '/reports/techno-verification', icon: '✅' }
+        { label: 'Techno Verification', link: '/reports/techno-verification', icon: '✅' },
+        { label: 'Large BF Benchmarking', link: '/reports/bf-benchmark', icon: '📐' }
       ]
     },
     {

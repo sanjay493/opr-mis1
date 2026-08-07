@@ -159,6 +159,7 @@ from api_worklog import router as worklog_router
 from api_auth import router as auth_router
 from api_admin import router as admin_router
 from api_admin_backup import router as admin_backup_router
+from api_bf_benchmark import router as bf_benchmark_router
 
 db.init_db()
 
@@ -346,6 +347,7 @@ app.include_router(worklog_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_backup_router)
+app.include_router(bf_benchmark_router)
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(_STATIC_DIR, "profile_pics"), exist_ok=True)

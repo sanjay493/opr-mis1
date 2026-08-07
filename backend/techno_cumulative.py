@@ -320,16 +320,59 @@ def compute_cumulative_from_values(
                     "furnace, so the two are identical)"
                 )
 
+    agg = aggregate_values(values, weights, method, months, weight_desc, warnings,
+                           weight_basis=bool(basis))
+
+    return {
+        "plant": plant, "unit": unit, "param_key": param_key,
+        "report_month": report_month, "fy_months": months,
+        "weight_basis": basis,
+        "weight_item": weight_desc,
+        **agg,
+    }
+
+
+def aggregate_values(
+    values: Dict[str, float],
+    weights: Dict[str, float],
+    method: str,
+    months: list,
+    weight_desc: Optional[str] = None,
+    warnings: Optional[list] = None,
+    weight_basis: bool = True,
+) -> Dict:
+    """Pure aggregation math for a {month: value} series — weighted average /
+    harmonic mean / sum / simple average, per CUMULATIVE_RULES' `method`.
+
+    Factored out of compute_cumulative_from_values so both the SAIL YTD
+    cumulative-preview flow (weights from production_table) and the Large BF
+    Benchmarking feature (weights from entered Hot Metal Production for
+    non-SAIL BFs) share one implementation of "how a BF rate gets averaged" —
+    same formulas, same weighted->average fallback when a valued month lacks
+    a weight, same step-by-step breakdown text.
+
+    `months` — the full ordered period (e.g. April→report_month, or the set
+    of months selected for a benchmarking year) driving iteration order and
+    which months count as "valued but unusable" for a weighted method.
+    `weight_basis` — False when the caller never had a weight source at all
+    (basis is None) — short-circuits straight to simple/sum, matching the
+    original `if basis:` gating.
+    warnings — pre-existing list to extend in place (mirrors the original
+    function's behavior); a fresh list is used if not supplied.
+
+    Returns {result, method_used, rows, steps, warnings}.
+    """
+    warnings = warnings if warnings is not None else []
     rows, steps = [], []
     result = None
     method_used = method
 
-    if method in ("weighted", "harmonic") and basis:
+    if method in ("weighted", "harmonic") and weight_basis:
         # A weighted result must cover EVERY month that has a value — a
-        # weighted subset silently drops months and misrepresents the YTD.
-        # If any valued month lacks a production weight (or is unusable for
+        # weighted subset silently drops months and misrepresents the
+        # aggregate. If any valued month lacks a weight (or is unusable for
         # the harmonic mean), fall back to the simple average of ALL monthly
-        # values so the cumulative always spans April→report_month.
+        # values so the result always spans the full period.
         unusable = [
             m for m in months
             if values.get(m) is not None
@@ -345,7 +388,7 @@ def compute_cumulative_from_values(
                 f"monthly values instead of the {label}.")
             method_used = "average"
 
-    if method_used in ("weighted", "harmonic") and basis:
+    if method_used in ("weighted", "harmonic") and weight_basis:
         label = ("production-weighted average" if method == "weighted"
                  else "production-weighted harmonic mean")
         formula = ("Σ(month value × production) ÷ Σ(production)" if method == "weighted"
@@ -406,12 +449,8 @@ def compute_cumulative_from_values(
             f"÷ {len(values)} = {result}")
 
     return {
-        "plant": plant, "unit": unit, "param_key": param_key,
-        "report_month": report_month, "fy_months": months,
         "method": {"weighted": "weighted_average", "harmonic": "harmonic_mean",
                    "sum": "sum"}.get(method_used, "simple_average"),
-        "weight_basis": basis,
-        "weight_item": weight_desc,
         "rows": rows, "result": result,
         "steps": steps, "warnings": warnings,
     }

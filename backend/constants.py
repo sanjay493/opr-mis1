@@ -103,4 +103,13 @@ PAGE_MODULES = {
             ("POST", "/api/worklog/{entry_id}/delete", True),
         ],
     },
+    "bf_benchmark": {
+        "label": "BF Benchmarking",
+        "routes": [
+            ("POST", "/api/bf-benchmark/external-bfs", False),
+            ("PATCH", "/api/bf-benchmark/external-bfs/{bf_id}", False),
+            ("POST", "/api/bf-benchmark/external-bfs/{bf_id}/entry", False),
+            ("PATCH", "/api/bf-benchmark/sail-meta", False),
+        ],
+    },
 }

@@ -429,6 +429,51 @@ def init_db():
         )
     """)
 
+    # 18. Large BF Benchmarking — static Working Volume for SAIL's 3 fixed
+    # large BFs (BSP BF-8, RSP BF-5, ISP BF-5); their monthly operating data
+    # already lives in techno_data, only Working Volume (an engineering spec
+    # that rarely changes) is tracked here.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bf_benchmark_sail_meta (
+            plant             TEXT NOT NULL,
+            unit              TEXT NOT NULL,
+            working_volume_m3 REAL,
+            updated_at        TEXT,
+            PRIMARY KEY (plant, unit)
+        )
+    """)
+
+    # 19. Large BF Benchmarking — registry of non-SAIL large BFs an admin/
+    # editor adds for comparison. Soft-deactivate via `active` (mirrors
+    # allowed_emails.barred) — no hard delete.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bf_benchmark_external_bf (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            name              TEXT NOT NULL,
+            company           TEXT DEFAULT '',
+            working_volume_m3 REAL,
+            active            INTEGER NOT NULL DEFAULT 1,
+            created_at        TEXT NOT NULL,
+            created_by        TEXT DEFAULT ''
+        )
+    """)
+
+    # 20. Large BF Benchmarking — monthly entered data for each non-SAIL BF.
+    # param_json holds {param_key: value} for the dynamic params plus
+    # hot_metal_production (weighting input only, not a displayed column) —
+    # new params later are just another JSON key, no migration needed.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bf_benchmark_external_data (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            external_bf_id  INTEGER NOT NULL,
+            report_month    TEXT NOT NULL,
+            param_json      TEXT NOT NULL DEFAULT '{}',
+            created_at      TEXT,
+            updated_at      TEXT,
+            UNIQUE(external_bf_id, report_month)
+        )
+    """)
+
     conn.commit()
     conn.close()
 

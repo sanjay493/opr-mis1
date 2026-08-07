@@ -306,3 +306,41 @@ CREATE TABLE IF NOT EXISTS page3_narrative (
     highlights            TEXT,
     updated_at            DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+-- Large BF Benchmarking — static Working Volume for SAIL's 3 fixed large
+-- BFs (BSP BF-8, RSP BF-5, ISP BF-5). Their monthly operating data already
+-- lives in techno_data; only Working Volume (rarely changes) is here.
+CREATE TABLE IF NOT EXISTS bf_benchmark_sail_meta (
+    plant             VARCHAR(32) NOT NULL,
+    unit              VARCHAR(32) NOT NULL,
+    working_volume_m3 DOUBLE,
+    updated_at        VARCHAR(40),
+    PRIMARY KEY (plant, unit)
+) ENGINE=InnoDB;
+
+-- Large BF Benchmarking — registry of non-SAIL large BFs added for
+-- comparison. Soft-deactivate via `active` (mirrors allowed_emails.barred)
+-- — no hard delete.
+CREATE TABLE IF NOT EXISTS bf_benchmark_external_bf (
+    id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name              VARCHAR(190) NOT NULL,
+    company           VARCHAR(190) DEFAULT '',
+    working_volume_m3 DOUBLE,
+    active            TINYINT NOT NULL DEFAULT 1,
+    created_at        VARCHAR(40) NOT NULL,
+    created_by        VARCHAR(190) DEFAULT ''
+) ENGINE=InnoDB;
+
+-- Large BF Benchmarking — monthly entered data for each non-SAIL BF.
+-- param_json holds {param_key: value} for the dynamic params plus
+-- hot_metal_production (weighting input only) — new params later are just
+-- another JSON key, no migration needed.
+CREATE TABLE IF NOT EXISTS bf_benchmark_external_data (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    external_bf_id  BIGINT NOT NULL,
+    report_month    CHAR(7) NOT NULL,
+    param_json      JSON NOT NULL,
+    created_at      VARCHAR(40),
+    updated_at      VARCHAR(40),
+    UNIQUE KEY uq_bf_benchmark_ext (external_bf_id, report_month)
+) ENGINE=InnoDB;
