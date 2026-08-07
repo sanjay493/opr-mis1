@@ -15,6 +15,7 @@ from pathlib import Path
 
 import db
 from constants import ALL_PLANTS as _FS_SAIL_8
+from constants import PAGE_MODULES
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest
 from report_utils import compute_item_row, build_production_narrative, get_dept_badge, blank_out_page_data
 from page3_highlights import generate_page3_highlights
@@ -247,70 +248,28 @@ from starlette.responses import JSONResponse
 import auth as _auth
 import activity_context as _activity_context
 
-_GATED_ROUTE_TEMPLATES = [
-    ("POST", "/api/bsp-techno/insert"),
-    ("POST", "/api/bsp-techno/extract/techno"),
-    ("POST", "/api/bsp-techno/extract/oisco"),
-    ("POST", "/api/dsp-techno/extract"),
-    ("POST", "/api/isp-techno/extract"),
-    ("POST", "/api/mcr-techno/cumulative-all"),
-    ("POST", "/api/mcr-techno/insert"),
-    ("POST", "/api/rsp-techno/insert"),
-    ("POST", "/api/rsp-techno/extract"),
-    ("POST", "/api/techno/manual/save"),
-    ("POST", "/api/techno/manual/sail/calculate"),
-    ("POST", "/api/todo/add"),
-    ("POST", "/api/todo/{job_id}/update"),
-    ("POST", "/api/todo/{job_id}/complete"),
-    ("POST", "/api/todo/{job_id}/reopen"),
-    ("POST", "/api/todo/{job_id}/delete"),
-    ("POST", "/api/techno/extract"),
-    ("POST", "/api/techno/insert"),
-    ("POST", "/api/worklog/add"),
-    ("POST", "/api/worklog/{entry_id}/update"),
-    ("POST", "/api/worklog/{entry_id}/delete"),
-    ("POST", "/api/data"),
-    ("POST", "/api/special-steel-manual/save"),
-    ("POST", "/api/upload-excel"),
-    ("POST", "/api/upload-excel-plan"),
-    ("POST", "/api/confirm-plan"),
-    ("POST", "/api/confirm-extraction"),
-    ("POST", "/api/bsl-bf-techno/save"),
-    ("POST", "/api/techno-entries"),
-    ("POST", "/api/save-item-alias"),
-    ("POST", "/api/production-entry"),
-    ("POST", "/api/legacy-sms-crude/confirm"),
-    ("POST", "/api/conversion-entry"),
-    ("POST", "/api/stock-entry"),
-    ("POST", "/api/techno-targets"),
-    ("POST", "/api/techno-manual-save"),
-    ("POST", "/api/ipt-entry"),
-    ("POST", "/api/ipt-delete"),
-    ("POST", "/api/capital-repair-entry"),
-    ("POST", "/api/techno-plan"),
-    ("POST", "/api/techno-plant-plan"),
-    ("POST", "/api/sail-techno-plan"),
-    ("POST", "/api/techno-calculate-sail-actuals"),
-    ("POST", "/api/techno-sail-targets"),
-    ("POST", "/api/techno-recalculate-sail"),
-    ("POST", "/api/techno-plant-targets"),
-    ("POST", "/api/techno-page-targets"),
-    ("POST", "/api/techno-sms-targets"),
-    ("POST", "/api/techno-recalculate-sail-weighted"),
-    ("POST", "/api/special-steel-abp"),
-]
-
-
 def _template_to_regex(template: str):
     pattern = _re.sub(r"\{[^/]+\}", r"[^/]+", template)
     return _re.compile(f"^{pattern}$")
 
 
-_GATED_ROUTES = [(method, _template_to_regex(tmpl)) for method, tmpl in _GATED_ROUTE_TEMPLATES]
+_GATED_ROUTES = [
+    (method, _template_to_regex(tmpl), module_key, is_delete)
+    for module_key, module in PAGE_MODULES.items()
+    for method, tmpl, is_delete in module["routes"]
+]
 
 
 def _is_gated(method: str, path: str) -> bool:
-    return any(method == m and rx.match(path) for m, rx in _GATED_ROUTES)
+    return any(method == m and rx.match(path) for m, rx, _, _ in _GATED_ROUTES)
+
+
+def _match_gated(method: str, path: str):
+    """Returns (module_key, is_delete) for the first matching gated route, or None."""
+    for m, rx, module_key, is_delete in _GATED_ROUTES:
+        if method == m and rx.match(path):
+            return module_key, is_delete
+    return None
 
 
 class EditorAdminGateMiddleware(BaseHTTPMiddleware):
@@ -332,6 +291,19 @@ class EditorAdminGateMiddleware(BaseHTTPMiddleware):
                 {"detail": "You don't have permission to do this — editor or administrator access required."},
                 status_code=403,
             )
+
+        if user["role"] == "editor":
+            module_key, is_delete = _match_gated(method, path)
+            allowed_pages = user.get("allowed_pages")
+            if allowed_pages:
+                allowed = json.loads(allowed_pages)
+                if module_key not in allowed:
+                    return JSONResponse({"detail": "You don't have access to this page."}, status_code=403)
+            if is_delete and not user.get("can_delete", 1):
+                return JSONResponse(
+                    {"detail": "You don't have permission to delete — enter/update only."},
+                    status_code=403,
+                )
 
         _activity_context.start()
         response = await call_next(request)
@@ -5048,6 +5020,122 @@ async def recalculate_sail_weighted(payload: dict):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+_MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+_RADAR_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+# Display name -> (unit, candidate snake_case keys tried in order). Coal to Hot
+# Metal / Specific Energy Consumption / Specific CO2 Emissions live under the
+# plant's 'General' unit; Fuel Rate is a Blast Furnace param under 'BF_Shop'
+# (ISP has no separate shop-level row — its one furnace unit 'BF-5' doubles as
+# the shop figure, same fallback api_techno_manual.py's _get_bf_shop_data uses).
+_RADAR_PARAMS = {
+    "coal_to_hm":                   ("General", ["coal_to_hm"]),
+    "specific_energy_consumption":  ("General", ["specific_energy_consumption", "sp_energy", "specific_energy"]),
+    "specific_co2_emissions":       ("General", ["specific_co2_emissions"]),
+    "fuel_rate":                    ("BF_Shop", ["fuel_rate"]),
+}
+
+
+def _radar_default_month() -> str:
+    """Last calendar month (same convention as every other page's
+    getDefaultPeriod — the current month's data is typically still being
+    entered, so the latest techno_data row is often sparse); falls back to
+    the latest available month with any techno data at all if even that's
+    empty."""
+    import datetime as _dt
+    available = db.get_techno_months() or []
+    _now = _dt.datetime.now()
+    last_month = (_now.replace(day=1) - _dt.timedelta(days=1)).strftime("%Y-%m")
+    return last_month if last_month in available else (available[0] if available else None)
+
+
+def _radar_months_between(start: str, end: str) -> list:
+    if start > end:
+        start, end = end, start
+    y, m = int(start[:4]), int(start[5:7])
+    ey, em = int(end[:4]), int(end[5:7])
+    months = []
+    while (y, m) <= (ey, em) and len(months) < 120:
+        months.append(f"{y}-{m:02d}")
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return months
+
+
+def _radar_plant_value(cur, plant: str, report_month: str, unit: str, keys: list, period: str):
+    units_to_try = [unit]
+    if unit == "BF_Shop" and plant == "ISP":
+        units_to_try = ["BF_Shop", "BF-5"]
+    for u in units_to_try:
+        cur.execute(
+            "SELECT techno_json FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+            (plant, report_month, u),
+        )
+        r = cur.fetchone()
+        if not r:
+            continue
+        try:
+            period_data = json.loads(r[0]).get(period, {})
+        except (ValueError, TypeError):
+            continue
+        for k in keys:
+            v = period_data.get(k)
+            if isinstance(v, (int, float)):
+                return float(v)
+    return None
+
+
+@app.get("/api/techno/plant-radar-summary")
+async def get_techno_plant_radar_summary(start: str = Query(None), end: str = Query(None)):
+    """Coal to Hot Metal / Fuel Rate / Specific Energy Consumption / Specific
+    CO2 Emissions for all 5 plants — feeds the Home page radar chart.
+
+    start == end (including the single-month default): cumulative FY-to-date
+    (till_month) figures for that month — same as before.
+    start != end: average of each month's own (non-cumulative) figure across
+    the range — a custom-period comparison, not tied to the FY-to-date window.
+    Both default to last calendar month when omitted."""
+    default_month = _radar_default_month()
+    start = start or default_month
+    end = end or start
+    if not start:
+        return {"start": None, "end": None, "period_label": "", "plants": []}
+    if start > end:
+        start, end = end, start
+
+    if start == end:
+        report_month = start
+        y, m = int(report_month[:4]), int(report_month[5:7])
+        fy_start = y if m >= 4 else y - 1
+        period_label = f"Apr'{str(fy_start)[2:]} – {_MONTHS_SHORT[m - 1]}'{str(y)[2:]}"
+    else:
+        sy, sm = int(start[:4]), int(start[5:7])
+        ey, em = int(end[:4]), int(end[5:7])
+        period_label = f"{_MONTHS_SHORT[sm - 1]}'{str(sy)[2:]} – {_MONTHS_SHORT[em - 1]}'{str(ey)[2:]} (avg)"
+
+    conn = db.connect()
+    cur = conn.cursor()
+    plants_out = []
+    try:
+        for plant in _RADAR_PLANTS:
+            row = {"plant": plant}
+            for display_key, (unit, keys) in _RADAR_PARAMS.items():
+                if start == end:
+                    row[display_key] = _radar_plant_value(cur, plant, start, unit, keys, "till_month")
+                else:
+                    vals = [
+                        v for v in (
+                            _radar_plant_value(cur, plant, mo, unit, keys, "month")
+                            for mo in _radar_months_between(start, end)
+                        ) if v is not None
+                    ]
+                    row[display_key] = round(sum(vals) / len(vals), 4) if vals else None
+            plants_out.append(row)
+    finally:
+        conn.close()
+
+    return {"start": start, "end": end, "period_label": period_label, "plants": plants_out}
 
 
 @app.get("/api/techno-summary")

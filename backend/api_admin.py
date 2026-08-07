@@ -3,15 +3,17 @@ Administrator-only endpoints: manage the registration allow-list (add /
 remove / bar emails), manage registered users (assign editor/admin role or
 delete an account), and view the activity log.
 """
+import json
 import sqlite3
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 import auth
 import db
+from constants import PAGE_MODULES
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(auth.require_admin)])
 
@@ -26,6 +28,11 @@ class BarRequest(BaseModel):
 
 class RoleRequest(BaseModel):
     role: Optional[str] = None  # None | 'editor' | 'admin'
+
+
+class PermissionsRequest(BaseModel):
+    allowed_pages: Optional[List[str]] = None  # None = unrestricted (all pages)
+    can_delete: bool = True
 
 
 # ── allow-list management ────────────────────────────────────────────────────
@@ -94,15 +101,58 @@ def bar_allowed_email(email: str, body: BarRequest, admin: dict = Depends(auth.r
 
 # ── user management ───────────────────────────────────────────────────────────
 
+@router.get("/page-modules")
+def list_page_modules():
+    return {"modules": [{"key": k, "label": v["label"]} for k, v in PAGE_MODULES.items()]}
+
+
 @router.get("/users")
 def list_users():
     conn = db.connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    cur.execute("SELECT id, email, name, role, profile_pic, created_at, updated_at FROM users ORDER BY created_at DESC")
+    cur.execute(
+        "SELECT id, email, name, role, profile_pic, allowed_pages, can_delete, created_at, updated_at "
+        "FROM users ORDER BY created_at DESC"
+    )
     rows = [dict(r) for r in cur.fetchall()]
+    for r in rows:
+        r["allowed_pages"] = json.loads(r["allowed_pages"]) if r["allowed_pages"] else None
+        r["can_delete"] = bool(r["can_delete"])
     conn.close()
     return {"users": rows}
+
+
+@router.patch("/users/{user_id}/permissions")
+def set_user_permissions(user_id: int, body: PermissionsRequest, admin: dict = Depends(auth.require_admin)):
+    if body.allowed_pages is not None:
+        unknown = set(body.allowed_pages) - set(PAGE_MODULES.keys())
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"Unknown page module(s): {', '.join(sorted(unknown))}")
+    conn = db.connect()
+    cur = conn.cursor()
+    cur.execute("SELECT email FROM users WHERE id=?", (user_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found.")
+    cur.execute(
+        "UPDATE users SET allowed_pages=?, can_delete=?, updated_at=? WHERE id=?",
+        (
+            json.dumps(body.allowed_pages) if body.allowed_pages is not None else None,
+            1 if body.can_delete else 0,
+            datetime.now(timezone.utc).isoformat(),
+            user_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    pages_desc = "all pages" if body.allowed_pages is None else f"{len(body.allowed_pages)} page(s)"
+    auth.log_activity(
+        admin, "update", "users",
+        f"set permissions of {row[0]} to {pages_desc}, can_delete={body.can_delete}",
+    )
+    return {"status": "ok"}
 
 
 @router.patch("/users/{user_id}/role")
@@ -143,6 +193,18 @@ def delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
 
 
 # ── activity log ──────────────────────────────────────────────────────────────
+
+@router.get("/activity-log/filters")
+def get_activity_log_filters():
+    conn = db.connect()
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT user_email FROM activity_log WHERE user_email IS NOT NULL ORDER BY user_email")
+    users = [r[0] for r in cur.fetchall()]
+    cur.execute("SELECT DISTINCT action FROM activity_log WHERE action IS NOT NULL ORDER BY action")
+    actions = [r[0] for r in cur.fetchall()]
+    conn.close()
+    return {"users": users, "actions": actions}
+
 
 @router.get("/activity-log")
 def get_activity_log(limit: int = 200, offset: int = 0, user_email: Optional[str] = None, action: Optional[str] = None):

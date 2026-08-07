@@ -249,13 +249,23 @@ def _bar_group_svg(bars: list, title: str, vw: int = 240, vh: int = 200) -> str:
 # share of this total) so it can't be encoded in the donut itself — it's
 # listed in the side legend instead.
 
-def _donut_svg(entities: list, title: str, vw: int = 700, vh: int = 220) -> str:
+def _donut_svg(entities: list, title: str, sail_qty=None, sail_pct=None,
+                mirror: bool = False, vw: int = 700, vh: int = 220) -> str:
     """entities: [(label, qty_or_None, pct_saleable_or_None, color), ...] —
-    the 5 plants. SAIL is implicit as the center total (sum of these five),
-    not a 6th slice — a slice equal to the sum of the other five would just
-    be "the whole" again, not a meaningful part of it."""
+    the 5 plants. SAIL is drawn as the center total (sum of these five as
+    pie proportions), not a 6th slice — a slice equal to the sum of the
+    other five would just be "the whole" again, not a meaningful part of
+    it. `sail_qty`/`sail_pct` are SAIL's own figures (its own despatch sum
+    and its own despatch/Saleable-Steel ratio — NOT derivable from the
+    plant slices' individual percentages, so passed in separately from
+    _period_value_pct(cur, months, "SAIL")); shown in the donut center
+    alongside the quantity, and as an extra summary row in the legend.
+    `mirror` swaps the donut/legend left-right — used so the month and
+    till-month blocks don't read as visually identical layouts."""
     total = sum(qty for _, qty, _, _ in entities if qty)
-    cx, cy, r_out, r_in = 110.0, vh / 2 + 4, 82.0, 46.0
+    center_qty = sail_qty if sail_qty is not None else total
+    cx, cy, r_out, r_in = (vw - 120.0 if mirror else 110.0), vh / 2 + 4, 82.0, 46.0
+    lx0 = 20 if mirror else 230
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
@@ -296,14 +306,19 @@ def _donut_svg(entities: list, title: str, vw: int = 700, vh: int = 220) -> str:
                              f'fill="{_contrast_text(color)}">{share * 100:.0f}%</text>')
             angle = a1
 
-        lines.append(f'<text x="{cx}" y="{cy - 3:.1f}" text-anchor="middle" font-size="14" '
-                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_fmt_int(total)}</text>')
-        lines.append(f'<text x="{cx}" y="{cy + 11:.1f}" text-anchor="middle" font-size="7.5" '
+        lines.append(f'<text x="{cx}" y="{cy - 6:.1f}" text-anchor="middle" font-size="14" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_fmt_int(center_qty)}</text>')
+        lines.append(f'<text x="{cx}" y="{cy + 8:.1f}" text-anchor="middle" font-size="7.5" '
                      f'font-family="Arial,sans-serif" fill="#64748b">SAIL, T</text>')
+        if sail_pct is not None:
+            lines.append(f'<text x="{cx}" y="{cy + 19:.1f}" text-anchor="middle" font-size="8" '
+                         f'font-weight="bold" font-family="Arial,sans-serif" fill="#166534">{sail_pct:.1f}% of Saleable Steel</text>')
 
     # Side legend: swatch, entity, quantity, share of this total, and each
-    # entity's own (unrelated) Special Steel % of Saleable Steel.
-    lx0, ly0, row_h = 230, 46, 26
+    # entity's own (unrelated) Special Steel % of Saleable Steel. A final
+    # SAIL row (bold, separated by a rule) gives the true consolidated
+    # figures — not derivable from averaging the plant rows above it.
+    ly0, row_h = 46, 26
     lines.append(f'<text x="{lx0}" y="{ly0 - 14}" font-size="7" font-weight="bold" '
                  f'font-family="Arial,sans-serif" fill="#64748b">PLANT</text>')
     lines.append(f'<text x="{lx0 + 250}" y="{ly0 - 14}" font-size="7" font-weight="bold" '
@@ -326,6 +341,21 @@ def _donut_svg(entities: list, title: str, vw: int = 700, vh: int = 220) -> str:
         pct_str = f"{pct:.1f}%" if pct is not None else "—"
         lines.append(f'<text x="{lx0 + 440}" y="{y:.1f}" text-anchor="end" font-size="9" '
                      f'font-family="Arial,sans-serif" fill="#334155">{pct_str}</text>')
+
+    sail_y = ly0 + len(entities) * row_h
+    lines.append(f'<line x1="{lx0}" y1="{sail_y - row_h + 8:.1f}" x2="{lx0 + 440}" y2="{sail_y - row_h + 8:.1f}" '
+                 f'stroke="#94a3b8" stroke-width="0.7"/>')
+    lines.append(f'<rect x="{lx0}" y="{sail_y - 9:.1f}" width="10" height="10" rx="1.5" fill="{_COLORS["SAIL"]}"/>')
+    lines.append(f'<text x="{lx0 + 15}" y="{sail_y:.1f}" font-size="9.5" font-weight="bold" '
+                 f'font-family="Arial,sans-serif" fill="#1e293b">SAIL</text>')
+    sail_qty_str = _fmt_int(sail_qty) if sail_qty is not None else "N/A"
+    lines.append(f'<text x="{lx0 + 250}" y="{sail_y:.1f}" text-anchor="end" font-size="9.5" font-weight="bold" '
+                 f'font-family="Arial,sans-serif" fill="#1e293b">{sail_qty_str}</text>')
+    lines.append(f'<text x="{lx0 + 340}" y="{sail_y:.1f}" text-anchor="end" font-size="9.5" font-weight="bold" '
+                 f'font-family="Arial,sans-serif" fill="#1e293b">100.0%</text>')
+    sail_pct_str = f"{sail_pct:.1f}%" if sail_pct is not None else "—"
+    lines.append(f'<text x="{lx0 + 440}" y="{sail_y:.1f}" text-anchor="end" font-size="9.5" font-weight="bold" '
+                 f'font-family="Arial,sans-serif" fill="#1e293b">{sail_pct_str}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -359,6 +389,13 @@ def generate_special_steel_trend(report_month: str) -> dict:
             month_slices.append((ent, qty, pct, _COLORS[ent]))
             qty, pct = _period_value_pct(cur, ytd_months, ent)
             ytd_slices.append((ent, qty, pct, _COLORS[ent]))
+
+        # SAIL's own despatch/Saleable-Steel ratio — a real aggregate over
+        # SAIL's own totals, not derivable from averaging the plant slices
+        # above (and not equal to summing the plant slices' qty either,
+        # since entity="SAIL" also includes SSPs — see _entity_plants).
+        sail_month_qty, sail_month_pct = _period_value_pct(cur, [report_month], "SAIL")
+        sail_ytd_qty, sail_ytd_pct = _period_value_pct(cur, ytd_months, "SAIL")
     finally:
         conn.close()
 
@@ -372,9 +409,11 @@ def generate_special_steel_trend(report_month: str) -> dict:
         "annual_svgs": [annual_svgs[e] for e in _BLOCK_ORDER],
         "month_svg": _donut_svg(
             month_slices, f"Special Steel Despatch — {month_label} (Plant Share of SAIL)",
+            sail_qty=sail_month_qty, sail_pct=sail_month_pct, mirror=False,
             vw=700, vh=220),
         "till_month_svg": _donut_svg(
             ytd_slices, f"Special Steel Despatch — {cum_label} YTD (Plant Share of SAIL)",
+            sail_qty=sail_ytd_qty, sail_pct=sail_ytd_pct, mirror=True,
             vw=700, vh=220),
         "fy_range_label": f"{_fy_short(fys[0])} to {_fy_short(fys[-1])}",
     }

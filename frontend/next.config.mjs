@@ -15,6 +15,12 @@ const nextConfig = {
     root: __dirname,
   },
   allowedDevOrigins: ['10.135.5.15', '192.168.1.7', 'localhost', '127.0.0.1'],
+  experimental: {
+    // Default proxy body buffer is 10MB (silently truncated past that, no
+    // error) — DSP monthly PDFs run up to ~19MB, so raise the ceiling well
+    // above that.
+    proxyClientMaxBodySize: '30mb',
+  },
   async rewrites() {
     return [
       {

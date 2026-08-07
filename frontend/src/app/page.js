@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import GlobalNavbar from '@/components/GlobalNavbar';
+import TechnoPerformanceCharts from '@/components/TechnoPerformanceCharts';
 
 export default function HomePage() {
 
@@ -141,6 +142,35 @@ export default function HomePage() {
                 <span>📄</span> View Reports
               </button>
             </Link>
+          </div>
+        </section>
+
+        {/* Techno-Economic Performance */}
+        <section style={{
+          maxWidth: '1600px',
+          margin: '0 auto',
+          padding: '0 32px 60px',
+        }}>
+          <div style={{
+            display: 'flex', gap: '32px', flexWrap: 'wrap',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <div style={{ flex: '1 1 320px', maxWidth: '480px' }}>
+              <h2 style={{ fontSize: '20pt', fontWeight: '800', color: '#202124', margin: '0 0 12px 0' }}>
+                Techno-Economic Performance
+              </h2>
+              <p style={{ fontSize: '10.5pt', color: '#5f6368', lineHeight: '1.6', margin: 0 }}>
+                Cumulative FY-to-date Coal to Hot Metal, Fuel Rate, Specific Energy Consumption
+                and Specific CO₂ Emissions across all 5 integrated plants — at a glance.
+              </p>
+            </div>
+            <div style={{
+              flex: '1 1 420px', maxWidth: '480px',
+              border: '1px solid #dadce0', borderRadius: '12px', padding: '16px',
+              backgroundColor: '#ffffff',
+            }}>
+              <TechnoPerformanceCharts />
+            </div>
           </div>
         </section>
 

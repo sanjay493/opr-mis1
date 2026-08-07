@@ -10,11 +10,24 @@ function ActivityLogInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [userFilter, setUserFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
+  const [users, setUsers] = useState([]);
+  const [actions, setActions] = useState([]);
 
-  const load = useCallback(async (email) => {
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/admin/activity-log/filters`, { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => { setUsers(data.users || []); setActions(data.actions || []); })
+      .catch(() => {});
+  }, []);
+
+  const load = useCallback(async (email, action) => {
     setLoading(true);
     try {
-      const qs = email ? `?user_email=${encodeURIComponent(email)}` : '';
+      const params = new URLSearchParams();
+      if (email) params.set('user_email', email);
+      if (action) params.set('action', action);
+      const qs = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`${API_BASE_URL}/api/admin/activity-log${qs}`, { credentials: 'include' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Could not load activity log.');
@@ -26,7 +39,10 @@ function ActivityLogInner() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(userFilter, actionFilter); }, [load, userFilter, actionFilter]);
+
+  const hasFilter = userFilter || actionFilter;
+  const clearFilters = () => { setUserFilter(''); setActionFilter(''); };
 
   return (
     <>
@@ -37,17 +53,42 @@ function ActivityLogInner() {
           Every insert, update, or delete performed through a data-entry or admin action.
         </p>
 
-        <form
-          onSubmit={(e) => { e.preventDefault(); load(userFilter); }}
-          style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}
-        >
-          <input
-            type="text" className="form-control" placeholder="Filter by user email…"
-            value={userFilter} onChange={(e) => setUserFilter(e.target.value)}
-            style={{ flex: 1 }}
-          />
-          <button type="submit" className="btn btn-secondary" style={{ margin: 0 }}>Filter</button>
-        </form>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '12px' }}>
+          <div>
+            <label htmlFor="activity-user-filter" style={{ display: 'block', fontSize: '9pt', fontWeight: 600, color: '#5f6368', marginBottom: '4px' }}>
+              User
+            </label>
+            <select
+              id="activity-user-filter" className="form-control"
+              value={userFilter} onChange={(e) => setUserFilter(e.target.value)}
+              style={{ minWidth: '220px' }}
+            >
+              <option value="">All users</option>
+              {users.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="activity-action-filter" style={{ display: 'block', fontSize: '9pt', fontWeight: 600, color: '#5f6368', marginBottom: '4px' }}>
+              Action
+            </label>
+            <select
+              id="activity-action-filter" className="form-control"
+              value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}
+              style={{ minWidth: '180px' }}
+            >
+              <option value="">All actions</option>
+              {actions.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+          {hasFilter && (
+            <button type="button" className="btn btn-secondary" onClick={clearFilters} style={{ margin: 0 }}>
+              Clear filters
+            </button>
+          )}
+        </div>
+        <p style={{ color: '#5f6368', fontSize: '9pt', marginBottom: '20px' }}>
+          {loading ? 'Loading…' : `Showing ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}${hasFilter ? ' matching the filters above' : ''}.`}
+        </p>
 
         {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
 

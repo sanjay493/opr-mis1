@@ -362,10 +362,18 @@ def init_db():
             name          TEXT DEFAULT '',
             role          TEXT,                  -- NULL | 'editor' | 'admin'
             profile_pic   TEXT DEFAULT '',        -- filename under static/profile_pics/
+            allowed_pages TEXT,                   -- NULL = unrestricted (all pages); else JSON array of module keys
+            can_delete    INTEGER NOT NULL DEFAULT 1,  -- 0 = editor may enter/update but not delete
             created_at    TEXT NOT NULL,
             updated_at    TEXT
         )
     """)
+    cursor.execute("PRAGMA table_info(users)")
+    _users_cols = [r[1] for r in cursor.fetchall()]
+    if "allowed_pages" not in _users_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN allowed_pages TEXT")
+    if "can_delete" not in _users_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN can_delete INTEGER NOT NULL DEFAULT 1")
 
     # 14. Registration whitelist — only emails listed here (and not barred)
     # may register. Administrators add/remove/bar entries.
@@ -1587,36 +1595,44 @@ def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str, co
         owns_conn = conn is None
         if owns_conn:
             conn = connect()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
-            (plant, report_month, unit),
-        )
-        row = cur.fetchone()
-        if owns_conn:
-            conn.close()
-        existing_source_file = row[0] if row else ''
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+                (plant, report_month, unit),
+            )
+            row = cur.fetchone()
+            existing_source_file = row[0] if row else ''
 
-        updated = {"month": dict(data.get("month", {})), "till_month": dict(data.get("till_month", {}))}
-        changed = False
-        for period in ("month", "till_month"):
-            d = updated[period]
-            hm, scrap = d.get(_TMI_INPUT_KEYS[0]), d.get(_TMI_INPUT_KEYS[1])
-            if isinstance(hm, (int, float)) and isinstance(scrap, (int, float)):
-                new_tmi = round(hm + scrap, 4)
-                if d.get("tmi") != new_tmi:
-                    d["tmi"] = new_tmi
-                    changed = True
-            coke, cdi = d.get(_FUEL_RATE_INPUT_KEYS[0]), d.get(_FUEL_RATE_INPUT_KEYS[1])
-            if isinstance(coke, (int, float)) and isinstance(cdi, (int, float)):
-                nut_coke = d.get("nut_coke_rate")
-                nut_coke = nut_coke if isinstance(nut_coke, (int, float)) else 0
-                new_fuel = round(coke + nut_coke + cdi, 4)
-                if d.get("fuel_rate") != new_fuel:
-                    d["fuel_rate"] = new_fuel
-                    changed = True
-        if changed:
-            _raw_upsert_techno_data(plant, report_month, unit, updated, source_file=existing_source_file, conn=conn)
+            updated = {"month": dict(data.get("month", {})), "till_month": dict(data.get("till_month", {}))}
+            changed = False
+            for period in ("month", "till_month"):
+                d = updated[period]
+                hm, scrap = d.get(_TMI_INPUT_KEYS[0]), d.get(_TMI_INPUT_KEYS[1])
+                if isinstance(hm, (int, float)) and isinstance(scrap, (int, float)):
+                    new_tmi = round(hm + scrap, 4)
+                    if d.get("tmi") != new_tmi:
+                        d["tmi"] = new_tmi
+                        changed = True
+                coke, cdi = d.get(_FUEL_RATE_INPUT_KEYS[0]), d.get(_FUEL_RATE_INPUT_KEYS[1])
+                if isinstance(coke, (int, float)) and isinstance(cdi, (int, float)):
+                    nut_coke = d.get("nut_coke_rate")
+                    nut_coke = nut_coke if isinstance(nut_coke, (int, float)) else 0
+                    new_fuel = round(coke + nut_coke + cdi, 4)
+                    if d.get("fuel_rate") != new_fuel:
+                        d["fuel_rate"] = new_fuel
+                        changed = True
+            if changed:
+                # conn is still open here regardless of owns_conn — closing
+                # early (before this write) was the bug: _raw_upsert_techno_data
+                # sees a non-None conn and assumes the caller owns/commits it,
+                # so we must commit ourselves when we're the owner.
+                _raw_upsert_techno_data(plant, report_month, unit, updated, source_file=existing_source_file, conn=conn)
+                if owns_conn:
+                    conn.commit()
+        finally:
+            if owns_conn:
+                conn.close()
     except Exception as e:
         print(f"[db] tmi/fuel_rate recompute failed for {plant}/{report_month}/{unit}: {e}")
 
