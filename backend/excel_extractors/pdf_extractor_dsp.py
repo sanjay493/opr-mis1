@@ -777,6 +777,48 @@ def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0
     return rows
 
 
+# Product-name cell text drifted across report eras/table layouts — early
+# (~2015-2017) reports used colon-suffixed/abbreviated labels ("STRLS :",
+# "TMT BAR :", "W & A :"), and pdfplumber occasionally wraps a long product
+# name across two lines in one cell (embedded "\n"), plus a handful of
+# one-month column-shift glitches (all confined to 2022-03) that truncated
+# the label entirely ("CC BILL", "CC Bloo", "CC Rou", "Structu"). None of
+# these coexist in the same month as their canonical spelling below — a
+# clean sequential handoff or an isolated one-off, not a genuinely distinct
+# product. (Confirmed distinct and deliberately NOT in this map: "ASP" vs
+# "ASP Structurals" vs "ASP : INGOT"→"Special Ingot" is folded in since
+# those two share an identical 2015-09..2017-07 date range; "CC Round" vs
+# "CC Round ASP" — both pairs coexist in the same months, so they're real,
+# separate product lines, not label drift.)
+_PRODUCT_NAME_MAP = {
+    "CC BILL": "CC BILLET",
+    "CC Bloo": "CC Bloom",
+    "CC Rou": "CC Round",
+    "Structu": "Structurals",
+    "Structrals": "Structurals",
+    "STRLS": "Structurals",
+    "STRLS :": "Structurals",
+    "STRLS :\n(MSM)": "Structurals",
+    "(MSM)": "Structurals",
+    "MSM": "Structurals",
+    "TMT BAR :": "TMT",
+    "TMT Bar": "TMT",
+    "TMT Bars": "TMT",
+    "W & A :": "W & A",
+    "ASP : INGOT": "Special Ingot",
+    "Rolled": "Rolled Bloom",
+    "Rolled\nBloom": "Rolled Bloom",
+    "Spl Steel\nto ASP": "Spl Steel to ASP",
+    # Wrapped-cell newline artifacts on otherwise-distinct products.
+    "ASP\nStructurals": "ASP Structurals",
+    "CC Round\nASP": "CC Round ASP",
+}
+
+
+def _normalize_product_name(raw: str) -> str:
+    return _PRODUCT_NAME_MAP.get(raw, raw)
+
+
 def _parse_special_steel_table(tbl, page_no, want_mon, yy):
     """Parse an already-extracted pdfplumber table into special_steel_orders rows."""
     period_row = None
@@ -844,7 +886,7 @@ def _parse_special_steel_table(tbl, page_no, want_mon, yy):
         # col0 may introduce a new product group even on a total row (the
         # "TMT" in the example above) — only col1-as-grade is suppressed.
         if col0 and not col0_is_total:
-            cur_product = col0
+            cur_product = _normalize_product_name(col0)
         if not is_total and col1:
             cur_grade = col1
 
