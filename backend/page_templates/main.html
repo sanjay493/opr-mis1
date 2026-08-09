@@ -137,6 +137,14 @@
             padding: 3mm 0;
         }
 
+        /* MIS at a Glance (page 2.5) — dense infographic-style page; the
+           default 3mm top/bottom padding was tight enough to push it onto a
+           second page once the semi-finished-by-plant chart was added, so
+           it gets the same tighter-padding treatment as page4/techno. */
+        .at-a-glance-page {
+            padding: 1mm 0;
+        }
+
         /* Corner department badge (pages 3+) is NOT rendered here — Chromium
            hard-clips anything positioned outside the printable area (the
            fixed 12mm/15mm band pdf.py reserves for header/footer), so it
@@ -655,32 +663,45 @@
     {# Row-group sizes (thead/tbody) emitted first so the more specific
        cell-level sizes (th/td) below win when both are given. #}
     {% if _tbl.get('thead') %}
-    .pg-{{ page.page }} thead { font-size: {{ _tbl.get('thead') }}pt !important; }
+    .pg-{{ page.page|pgclass }} thead { font-size: {{ _tbl.get('thead') }}pt !important; }
     {% endif %}
     {% if _tbl.get('tbody') %}
-    .pg-{{ page.page }} tbody { font-size: {{ _tbl.get('tbody') }}pt !important; }
+    .pg-{{ page.page|pgclass }} tbody { font-size: {{ _tbl.get('tbody') }}pt !important; }
     {% endif %}
     {% if _tbl.get('th') %}
-    .pg-{{ page.page }} th { font-size: {{ _tbl.get('th') }}pt !important; }
+    .pg-{{ page.page|pgclass }} th { font-size: {{ _tbl.get('th') }}pt !important; }
     {% endif %}
     {% if _tbl.get('td') %}
-    .pg-{{ page.page }} td { font-size: {{ _tbl.get('td') }}pt !important; }
+    .pg-{{ page.page|pgclass }} td { font-size: {{ _tbl.get('td') }}pt !important; }
     {% endif %}
     {% if _pl.get('fontFamily') %}
-    .pg-{{ page.page }},
-    .pg-{{ page.page }} th,
-    .pg-{{ page.page }} td { font-family: '{{ _pl.get("fontFamily") }}', Arial, sans-serif !important; }
+    .pg-{{ page.page|pgclass }},
+    .pg-{{ page.page|pgclass }} th,
+    .pg-{{ page.page|pgclass }} td { font-family: '{{ _pl.get("fontFamily") }}', Arial, sans-serif !important; }
     {% endif %}
     {% if _pl.get('fitToPage') %}
     {% if not _tbl.get('th') and not _tbl.get('td') %}
-    .pg-{{ page.page }} th,
-    .pg-{{ page.page }} td { font-size: 7pt !important; }
+    .pg-{{ page.page|pgclass }} th,
+    .pg-{{ page.page|pgclass }} td { font-size: 7pt !important; }
     {% endif %}
-    .pg-{{ page.page }} th,
-    .pg-{{ page.page }} td { padding: 0.5px 1.5px !important; line-height: 1.0 !important; }
-    .pg-{{ page.page }} .report-title-section { margin-bottom: 6px !important; }
-    .pg-{{ page.page }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; {% if not _tbl.get('td') %}font-size: 7pt !important;{% endif %} }
-    .pg-{{ page.page }} .highlights-box li { margin-bottom: 1px !important; }
+    {# tdPaddingV/lineHeight (set in main.py's generate_pdf for techno pages
+       27/28/30) scale this padding with how much the font above actually
+       shrank, instead of always slamming it to the same minimum regardless
+       - falls back to the original flat values for every other fitToPage
+       page (29/29.5, 31-35, and anything else) where that's unset. #}
+    .pg-{{ page.page|pgclass }} th,
+    .pg-{{ page.page|pgclass }} td { padding: {{ _pl.get('tdPaddingV', 0.5) }}px 1.5px !important; line-height: {{ _pl.get('lineHeight', 1.0) }} !important; }
+    .pg-{{ page.page|pgclass }} .report-title-section { margin-bottom: 6px !important; }
+    .pg-{{ page.page|pgclass }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; {% if not _tbl.get('td') %}font-size: 7pt !important;{% endif %} }
+    .pg-{{ page.page|pgclass }} .highlights-box li { margin-bottom: 1px !important; }
+    {% endif %}
+    {% if _pl.get('tablePaddingV') is not none %}
+    {# Set only when pdf.py's page-3 overflow measurement (build_pdf_response)
+       found this page spilling onto a 2nd physical page for this month's
+       content - narrows the production/TE table's cell padding instead of
+       always paying that cost on months that already fit on one page. #}
+    .pg-{{ page.page|pgclass }} .report-table th,
+    .pg-{{ page.page|pgclass }} .report-table td { padding: {{ _pl.get('tablePaddingV') }}px 4px !important; }
     {% endif %}
     {% endif %}
     {% endfor %}
@@ -693,7 +714,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters') %} content-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters') %} content-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}

@@ -2,14 +2,14 @@
         <div style="padding:2px 4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.8pt;color:{{ colors.text_primary }};">
 
           {# Banner #}
-          <div style="background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};padding:7px 14px;border-radius:5px;margin-bottom:5px;">
+          <div style="background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};padding:4px 14px;border-radius:5px;margin-bottom:3px;">
             <div style="font-size:17pt;font-weight:700;">{{ page.title }}</div>
             <div style="font-size:10.5pt;font-weight:500;opacity:0.92;">{{ page.month_label }}</div>
           </div>
 
           {# ── Production KPI tiles ── #}
-          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:4px;">Production Performance — Month ('000 T)</div>
-          <div style="display:flex;gap:7px;margin-bottom:5px;">
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">Production Performance — Month ('000 T)</div>
+          <div style="display:flex;gap:7px;margin-bottom:3px;">
             {% for row in page.production %}
             <div style="flex:1;border:1px solid {{ colors.border_light }};border-left:4px solid {{ colors.misc_accent_blue }};border-radius:4px;padding:5px 8px;">
               <div style="font-size:7.6pt;color:{{ colors.text_secondary }};text-transform:uppercase;font-weight:600;">{{ row.item }}</div>
@@ -25,14 +25,14 @@
           </div>
 
           {# ── YTD-by-FY bar chart (last 4 years, Apr-to-month) ── #}
-          <div style="font-size:12pt;font-weight:900;color:{{ colors.text_heading_dark }};margin-bottom:4px;">Production Trend — Last 4 Years ({{ page.ytd_trend.period_label }}, '000 T)</div>
-          <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:3px 8px;margin-bottom:5px;">
+          <div style="font-size:12pt;font-weight:900;color:{{ colors.text_heading_dark }};margin-bottom:3px;">Production Trend — Last 4 Years ({{ page.ytd_trend.period_label }}, '000 T)</div>
+          <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:3px 8px;margin-bottom:3px;">
             {{ page.ytd_trend.svg }}
           </div>
 
           {# ── Techno-Economic snapshot ── #}
-          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:4px;">Techno-Economic Snapshot — SAIL</div>
-          <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;margin-bottom:5px;">
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">Techno-Economic Snapshot — SAIL</div>
+          <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;margin-bottom:3px;">
             {% for t in page.techno %}
             {% set tbg = colors[t.bg_key] if t.bg_key else colors.highlight_default_row_bg %}
             <div style="background:{{ tbg }};border-radius:4px;padding:4px 7px;">
@@ -48,13 +48,13 @@
           </div>
 
           {# ── Value Added Steel (formerly "Special Steel") ── #}
-          <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:3px 6px;margin-bottom:4px;">
-            <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;">Value Added Steel Performance (SAIL)</div>
+          <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:2px 6px;margin-bottom:3px;">
+            <div style="font-size:11pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;">Value Added Steel Performance (SAIL)</div>
             <div style="display:flex;gap:9px;align-items:center;">
               <div style="flex:1.5;">{{ page.special_steel.five_year_svg }}</div>
               <div style="flex:0.85;border-left:1px solid {{ colors.border_divider }};padding-left:9px;">{{ page.special_steel.quarter_svg }}</div>
-              <div style="flex:0.55;font-size:7.5pt;line-height:1.6;padding-left:9px;border-left:1px solid {{ colors.border_divider }};">
-                <div style="font-size:8pt;font-weight:700;color:{{ colors.text_heading_dark }};margin-bottom:2px;">{{ page.special_steel.month_title }}</div>
+              <div style="flex:0.55;font-size:9.5pt;line-height:1.6;padding-left:9px;border-left:1px solid {{ colors.border_divider }};">
+                <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};margin-bottom:2px;">{{ page.special_steel.month_title }}</div>
                 <div>Qty (Value Added Steel): <b>{{ page.special_steel.month_qty if page.special_steel.month_qty else '—' }} T</b></div>
                 <div>%Fulfilment: <b>{{ page.special_steel.pct_ful if page.special_steel.pct_ful else '—' }}%</b></div>
                 <div>vs CPLY:
@@ -69,7 +69,7 @@
           </div>
 
           {# ── Trend strip ── #}
-          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:4px;">Saleable Steel &amp; Finished Steel Production Trend — Last 6 Months ('000 T)</div>
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">Saleable Steel &amp; Finished Steel Production Trend — Last 6 Months ('000 T)</div>
           <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:4px 8px;">
             {{ page.trend.svg }}
           </div>

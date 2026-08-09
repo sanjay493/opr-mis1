@@ -1,4 +1,4 @@
-    <div class="page7-13-section-page pg-{{ page.page }}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page7-13-section-page pg-{{ page.page|pgclass }}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
         {% for item in page['items'] %}
         <div class="page7-13-item-block">

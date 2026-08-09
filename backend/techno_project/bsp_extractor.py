@@ -143,6 +143,20 @@ def _load_map() -> Dict:
         raise FileNotFoundError(f"bsp_techno_map.json not found at {_MAP_PATH}")
 
 
+def _read_value(ws, row_spec, col: int) -> Optional[float]:
+    """row_spec is normally a single row number, but may instead be a list
+    of row numbers (e.g. ash_in_coke's [17, 18, 19] — CSP-I&II / CSP-III /
+    CSP-IV) meaning "average these rows' values in this column". Rows with
+    no usable value are skipped rather than treated as 0, so a partially-
+    filled group still yields the average of whatever is actually there;
+    an all-missing group yields None, same as a plain single-row miss."""
+    if isinstance(row_spec, (list, tuple)):
+        vals = [_clean(ws.cell(r, col).value) for r in row_spec]
+        vals = [v for v in vals if v is not None]
+        return round(sum(vals) / len(vals), 4) if vals else None
+    return _clean(ws.cell(row_spec, col).value)
+
+
 def _clean(v) -> Optional[float]:
     if v in _BAD:
         return None
@@ -304,8 +318,8 @@ class BspTechnoExtractor:
                             f"row {row_num}, which may not match this file's layout."
                         )
                 try:
-                    month_val = _clean(ws.cell(row_num, month_col).value)
-                    till_val  = _clean(ws.cell(row_num, cum_col).value)
+                    month_val = _read_value(ws, row_num, month_col)
+                    till_val  = _read_value(ws, row_num, cum_col)
                     scale = _PARAM_SCALE.get(param_key)
                     if scale:
                         if month_val is not None:

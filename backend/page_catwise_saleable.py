@@ -420,13 +420,13 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
                      category="FLAT"))
 
     rows.append(_row("Thick Plates", "data",
-                     _ann(cur, "BSL", "CRSALE", fy),
-                     _one(cur, "plan", "BSL", "CRSALE", rm),
-                     _one(cur, "act",  "BSL", "CRSALE", rm),
-                     _one(cur, "act",  "BSL", "CRSALE", pm),
-                     _ytd_one(cur, "plan", "BSL", "CRSALE", ytd),
-                     _ytd_one(cur, "act",  "BSL", "CRSALE", ytd),
-                     _ytd_one(cur, "act",  "BSL", "CRSALE", cply_ytd),
+                     _ann(cur, "BSL", "Thick Plate", fy),
+                     _one(cur, "plan", "BSL", "Thick Plate", rm),
+                     _one(cur, "act",  "BSL", "Thick Plate", rm),
+                     _one(cur, "act",  "BSL", "Thick Plate", pm),
+                     _ytd_one(cur, "plan", "BSL", "Thick Plate", ytd),
+                     _ytd_one(cur, "act",  "BSL", "Thick Plate", ytd),
+                     _ytd_one(cur, "act",  "BSL", "Thick Plate", cply_ytd),
                      category="FLAT"))
 
     for label, item in [

@@ -134,15 +134,71 @@ def _ytd_months_for_fy(fy_start_year: int, n_months: int) -> list:
     return months
 
 
-# ── SVG: two-series monthly trend line ───────────────────────────────────────
+# ── SVG: two-series monthly trend line + semi-finished-by-plant stacked bar ──
 
-def _trend_line_svg(labels: list, series: dict, colors: dict, vw: int = 480, vh: int = 160) -> str:
-    ml, mr, mt, mb = 34, 10, 16, 20
-    cw, ch = vw - ml - mr, vh - mt - mb
+# Reuses the page's own validated 4-color categorical order (already used for
+# the FY bar chart above) plus one more slot (magenta) for ASP — validated
+# together for adjacent-pair CVD/normal-vision separation, see
+# scripts/validate_palette.js. RSP has no "Saleable Semis" item at all (see
+# page_prod_by_process.py's _semis_ytd) — excluded from the stack rather than
+# shown as a zero segment. ASP doesn't track semis directly either, but
+# page5_6.py already derives it as Saleable Steel − Finished Steel for ASP —
+# the same derivation is reused here for consistency with that page.
+_SEMIS_PLANTS = ["BSP", "DSP", "BSL", "ISP", "ASP"]
+_SEMIS_COLORS = dict(zip(_SEMIS_PLANTS, _YTD_BAR_COLORS + ["#e87ba4"]))
+_SEMIS_INK = "#1e293b"  # legend/annotation text stays neutral ink, never the segment's own hue (identity comes from the adjacent swatch/fill, not colored text — low-contrast hues like yellow/aqua/magenta are illegible as text on a light surface)
 
-    all_vals = [v for vals in series.values() for v in vals if v is not None]
-    yhi = max(all_vals) * 1.15 if all_vals else 10.0
-    yhi = max(yhi, 5.0)
+
+def _semis_breakdown_data(months: list) -> dict:
+    """Per trailing month: each reporting plant's semi-finished steel
+    quantity, its % share of that month's cross-plant semi-finished total,
+    and — a different ratio — that same plant's own semi-finished as a % of
+    its own Saleable Steel (own product mix, not comparable across plants,
+    so kept as a separate number rather than blended into the share %)."""
+    out = {}
+    for m in months:
+        plants = []
+        for p in _SEMIS_PLANTS:
+            saleable = db.get_production_actual_value(p, "Saleable Steel", m)
+            if p == "ASP":
+                finished = db.get_production_actual_value(p, "Finished Steel", m)
+                semis = (saleable - finished) if (saleable is not None and finished is not None) else None
+            else:
+                semis = db.get_production_actual_value(p, "Saleable Semis", m)
+            if semis is None:
+                continue
+            plants.append({
+                "plant": p, "qty": semis,
+                "own_pct": round(semis / saleable * 100, 1) if saleable else None,
+            })
+        total = sum(p["qty"] for p in plants)
+        for p in plants:
+            p["share_pct"] = round(p["qty"] / total * 100, 1) if total else None
+        out[m] = {"total": total, "plants": plants}
+    return out
+
+
+def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: dict,
+                     vw: int = 480, vh: int = 180) -> str:
+    # No Y-axis (removed along with its value labels — every data point is
+    # already labeled directly on its line/bar, so the axis scale was
+    # redundant). Left margin is now sized for Zone B's "outside-left" share%
+    # labels (thin-segment fallback, positioned left of the first month's
+    # bar) rather than a column of axis numbers — those still need clearance
+    # or they render off-canvas at month 0.
+    ml, mr = 26, 10
+    # Zone A (top): existing Saleable/Finished Steel line trend.
+    mt_a, ch_a = 13, 70
+    # Zone B (bottom): new semi-finished-by-plant stacked bar — its own Y
+    # scale (a different, much smaller magnitude than Zone A), sharing Zone
+    # A's x positions so the same month lines up in both zones. "Fits inside
+    # the space available for each month" = the bar stays inside its own
+    # month's column (bar_w below), never widening the chart itself. The two
+    # zones share a SINGLE x-axis line (drawn once, at the very bottom) —
+    # Zone A has no baseline of its own.
+    mt_b, ch_b = mt_a + ch_a + 16, 64
+    mb = 16
+    cw = vw - ml - mr
 
     n = len(labels)
     step = cw / max(n - 1, 1)
@@ -150,21 +206,18 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, vw: int = 480, vh:
     def xs(i):
         return ml + i * step
 
-    def ys(v):
-        return mt + ch * (1.0 - v / yhi)
-
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
 
-    for k in range(4):
-        v = yhi * k / 3
-        gy = ys(v)
-        lines.append(f'<line x1="{ml}" y1="{gy:.1f}" x2="{vw - mr}" y2="{gy:.1f}" '
-                     f'stroke="#e2e8f0" stroke-width="0.6"/>')
-        lines.append(f'<text x="{ml - 4:.1f}" y="{gy + 2.5:.1f}" text-anchor="end" font-size="6.5" '
-                     f'font-family="Arial,sans-serif" fill="#64748b">{v:.0f}</text>')
-    lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
-                 f'stroke="#374151" stroke-width="0.8"/>')
+    # ── Zone A: line trend — no Y-axis, no gridlines, no baseline of its own
+    # (the one shared x-axis line lives at the bottom of Zone B); every point
+    # already carries its own value label, so the axis scale is redundant ──
+    all_vals = [v for vals in series.values() for v in vals if v is not None]
+    yhi_a = max(all_vals) * 1.15 if all_vals else 10.0
+    yhi_a = max(yhi_a, 5.0)
+
+    def ys_a(v):
+        return mt_a + ch_a * (1.0 - v / yhi_a)
 
     # Each series' data labels sit on a fixed side of its own line (above for
     # the first series, below for the second) rather than both hugging their
@@ -172,7 +225,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, vw: int = 480, vh:
     # same side collide/overlap wherever the lines cross or run parallel.
     for si, (name, vals) in enumerate(series.items()):
         color = colors.get(name, "#0284c7")
-        pts = [(xs(i), ys(v)) for i, v in enumerate(vals) if v is not None]
+        pts = [(xs(i), ys_a(v)) for i, v in enumerate(vals) if v is not None]
         if len(pts) > 1:
             d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in pts)
             lines.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.6"/>')
@@ -180,26 +233,98 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, vw: int = 480, vh:
         for i, v in enumerate(vals):
             if v is None:
                 continue
-            x, y = xs(i), ys(v)
+            x, y = xs(i), ys_a(v)
             lines.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2" fill="{color}"/>')
             # The first point sits exactly on the y-axis, so a centered label
-            # extends left into the gridline value labels — start it to the
-            # right of the point instead; every other point stays centered.
+            # extends left into the value labels — start it to the right of
+            # the point instead; every other point stays centered.
             anchor, tx = ("start", x + 3) if i == 0 else ("middle", x)
             lines.append(f'<text x="{tx:.1f}" y="{y + label_dy:.1f}" text-anchor="{anchor}" font-size="6.5" '
                          f'font-weight="bold" font-family="Arial,sans-serif" fill="{color}">{v:.0f}</text>')
 
-    for i, label in enumerate(labels):
-        lines.append(f'<text x="{xs(i):.1f}" y="{mt + ch + 13:.1f}" text-anchor="middle" '
-                     f'font-size="7" font-family="Arial,sans-serif" fill="#64748b">{label}</text>')
-
-    lx, ly = ml, 10
+    lx, ly = ml, 9
     for name in series:
         color = colors.get(name, "#0284c7")
         lines.append(f'<rect x="{lx}" y="{ly - 5}" width="9" height="3" fill="{color}"/>')
         lines.append(f'<text x="{lx + 12}" y="{ly - 2}" font-size="7" font-weight="bold" '
-                     f'font-family="Arial,sans-serif" fill="#1e293b">{name}</text>')
+                     f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{name}</text>')
         lx += 12 + len(name) * 4.6 + 16
+
+    # ── Zone B: semi-finished steel, stacked by plant ──
+    sub_y = mt_b - 9
+    lines.append(f'<text x="{ml:.1f}" y="{sub_y:.1f}" font-size="6.8" font-weight="bold" '
+                 f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">SEMI-FINISHED STEEL BY PLANT (\'000 T)</text>')
+    lines.append(f'<text x="{vw - mr:.1f}" y="{sub_y:.1f}" text-anchor="end" font-size="5.4" '
+                 f'font-family="Arial,sans-serif" font-style="italic" fill="#64748b">'
+                 f'bold % = share of total · small % = share of that plant\'s own Saleable Steel</text>')
+
+    # Legend (plant colors) — top-right of Zone B's plot area.
+    lx = vw - mr
+    legend_items = list(reversed(_SEMIS_PLANTS))  # build right-to-left, ending with BSP first on screen
+    for p in legend_items:
+        lx -= len(p) * 4.2 + 3
+        lines.append(f'<text x="{lx:.1f}" y="{mt_b - 1:.1f}" font-size="6" font-weight="bold" '
+                     f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{p}</text>')
+        lx -= 10
+        lines.append(f'<rect x="{lx:.1f}" y="{mt_b - 6:.1f}" width="7" height="5.5" rx="1" '
+                     f'fill="{_SEMIS_COLORS[p]}"/>')
+        lx -= 4
+
+    month_totals = [semis_by_month.get(m, {}).get("total", 0) or 0 for m in semis_by_month]
+    yhi_b = max(month_totals) * 1.2 if any(month_totals) else 10.0
+    yhi_b = max(yhi_b, 5.0)
+    base_b = mt_b + ch_b
+    bar_w = 19.0
+    seg_gap = 1.3  # surface-color ring between stacked segments (mark spec)
+
+    for i, (label, month_key) in enumerate(zip(labels, semis_by_month.keys())):
+        month = semis_by_month[month_key]
+        x = xs(i)
+        plants = month["plants"]
+        total = month["total"]
+        if total > 0:
+            lines.append(f'<text x="{x:.1f}" y="{base_b - ch_b * min(total / yhi_b, 1.0) - 4:.1f}" '
+                         f'text-anchor="middle" font-size="6.4" font-weight="bold" '
+                         f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{total:.0f}</text>')
+        y_cursor = base_b
+        for seg in plants:
+            seg_h = ch_b * seg["qty"] / yhi_b
+            if seg_h <= 0:
+                continue
+            by = y_cursor - seg_h
+            color = _SEMIS_COLORS[seg["plant"]]
+            lines.append(f'<rect x="{x - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" '
+                         f'height="{max(seg_h - seg_gap, 0.5):.1f}" fill="{color}"/>')
+            cy = by + seg_h / 2
+            # Share % must never just disappear on a thin segment (that's
+            # what happened before this fix — several months' BSL/ISP
+            # segments were too short for the label's 8.5px threshold, so
+            # they silently lost their %): tall-enough segments get it
+            # centered inside on the fill's own contrast color; a thin
+            # segment still gets it, just moved outside to the left (own %
+            # already lived outside to the right) instead of dropped.
+            if seg["share_pct"] is not None:
+                if seg_h >= 7:
+                    lines.append(f'<text x="{x:.1f}" y="{cy + 2:.1f}" text-anchor="middle" font-size="5.6" '
+                                 f'font-weight="bold" font-family="Arial,sans-serif" '
+                                 f'fill="{_contrast_text(color)}">{seg["share_pct"]:.0f}%</text>')
+                else:
+                    lines.append(f'<text x="{x - bar_w / 2 - 2.5:.1f}" y="{cy + 1.8:.1f}" text-anchor="end" '
+                                 f'font-size="5" font-weight="bold" font-family="Arial,sans-serif" '
+                                 f'fill="{_SEMIS_INK}">{seg["share_pct"]:.0f}%</text>')
+            if seg["own_pct"] is not None:
+                lines.append(f'<text x="{x + bar_w / 2 + 2.5:.1f}" y="{cy + 1.8:.1f}" font-size="5" '
+                             f'font-weight="bold" font-family="Arial,sans-serif" fill="{_SEMIS_INK}">'
+                             f'{seg["own_pct"]:.0f}%</text>')
+            y_cursor = by
+
+    # The one shared x-axis line for BOTH zones.
+    lines.append(f'<line x1="{ml}" y1="{base_b:.1f}" x2="{vw - mr}" y2="{base_b:.1f}" '
+                 f'stroke="#374151" stroke-width="0.8"/>')
+
+    for i, label in enumerate(labels):
+        lines.append(f'<text x="{xs(i):.1f}" y="{base_b + 12:.1f}" text-anchor="middle" '
+                     f'font-size="6.6" font-family="Arial,sans-serif" fill="#64748b">{label}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -657,9 +782,10 @@ def _trend_section(report_month: str) -> dict:
     for name, color in _TREND_SERIES:
         series[name] = [db.get_sail_production_actual(m, name) for m in months]
         colors[name] = color
+    semis_by_month = _semis_breakdown_data(months)
     return {
         "months": labels,
-        "svg": _trend_line_svg(labels, series, colors),
+        "svg": _trend_line_svg(labels, series, colors, semis_by_month),
     }
 
 

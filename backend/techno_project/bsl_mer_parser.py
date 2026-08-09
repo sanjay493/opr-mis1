@@ -101,6 +101,7 @@ class BslMerParser:
         self._extract_production_data(units)
         self._extract_quality_data(units)
         self._extract_consumption_data(units)
+        self._derive_shop_consumption(units)
         self._calculate_burden_percentages(units)
 
         return units
@@ -297,6 +298,35 @@ class BslMerParser:
             _d, m = _extract_pair(cells[11] if len(cells) > 11 else "")
             if m is not None:
                 units[unit_id]["slag_rate_month"] = m
+
+    def _derive_shop_consumption(self, units: Dict):
+        """BF_Shop's own raw-material consumption cell sometimes renders as
+        a run of asterisks ('***..') in the source PDF, when the monthly
+        cumulative is a large number that overflows the report's fixed
+        column width — seen for PELLET in the 2026-07 report ('6368/*****':
+        the day figure parses fine, the month figure doesn't). When that
+        happens the Shop total is derivable as the sum of the five
+        furnaces' own (legible) monthly figures — cross-checked against
+        this exact report's DAY value, which already equals the sum of the
+        furnace day values (1248+1879+1066+1130+1045 = 6368), confirming
+        Shop is a straight sum here.
+
+        Only fills a gap — never overwrites a value the PDF's Shop row did
+        report — and only sums when *every* furnace has that field, so a
+        second illegible furnace-level cell can't silently produce an
+        understated total (surfaces as a gap instead, per this parser's
+        existing "never guess" convention for missing data)."""
+        furnace_units = ["BF-1", "BF-2", "BF-3", "BF-4", "BF-5"]
+        shop = units.get("BF_Shop")
+        if not shop:
+            return
+        for field in ("iron_ore_consumption_month", "sinter_consumption_month",
+                      "pellet_consumption_month", "scrap_consumption_month"):
+            if shop.get(field) is not None:
+                continue
+            furnace_vals = [units[u].get(field) for u in furnace_units if u in units]
+            if furnace_vals and all(v is not None for v in furnace_vals):
+                shop[field] = round(sum(furnace_vals), 2)
 
     def _calculate_burden_percentages(self, units: Dict):
         """Calculate Sinter % and Pellet % in Burden from raw material consumption.

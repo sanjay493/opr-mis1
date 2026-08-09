@@ -242,6 +242,51 @@ def init_db():
             sort_order    INTEGER DEFAULT 0
         )
     """)
+    # 6d-1. Structured classification/date columns for production-loss
+    # analysis (see production_loss_analysis.py). Additive/nullable — every
+    # existing shop/equipment/activity/schedule_days/period/actual column
+    # above is untouched so pages 36-40 keep printing exactly as before.
+    # `actual` becomes a derived display string (written by
+    # format_cr_actual() in main.py) once a row is edited through the
+    # updated data-entry UI; unedited rows keep whatever free text they had.
+    cursor.execute("PRAGMA table_info(capital_repair_table)")
+    _cr_cols = [r[1] for r in cursor.fetchall()]
+    for _col, _ddl in [
+        ("unit_type",      "TEXT"),                              # BF/SMS/MILL/COKE/SINTER/GENERAL
+        ("unit_name",      "TEXT"),                              # matches plant_registry.PLANT_UNITS
+        ("sms_subtag",     "TEXT"),                               # 'CONVERTER' | 'CASTER' | NULL (unit_type='SMS' only)
+        ("actual_start",   "TEXT"),                               # 'YYYY-MM-DD'
+        ("actual_end",     "TEXT"),                               # 'YYYY-MM-DD', NULL if ongoing
+        ("actual_ongoing", "INTEGER NOT NULL DEFAULT 0"),
+        ("planned_days",   "REAL"),                                # manually confirmed, used for overrun math only
+    ]:
+        if _col not in _cr_cols:
+            cursor.execute(f"ALTER TABLE capital_repair_table ADD COLUMN {_col} {_ddl}")
+
+    # 6d-2. Breakdown log — plant/unit-wise unplanned-downtime events, entered
+    # ad hoc (full CRUD, unlike capital_repair_table's pre-seeded annual
+    # plan). Used alongside capital_repair_table by production_loss_analysis.py
+    # to explain Hot Metal / Crude Steel / Finished Steel shortfalls vs ABP.
+    # No `fy` column — always derived from start_ts via
+    # page_capital_repair.fy_from_month() to avoid a second source of truth.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS breakdown_table (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            plant                TEXT NOT NULL,
+            unit_type            TEXT NOT NULL,     -- BF/SMS/MILL/COKE/SINTER/GENERAL
+            unit_name            TEXT NOT NULL,     -- matches plant_registry.PLANT_UNITS
+            sms_subtag           TEXT,               -- 'CONVERTER' | 'CASTER' | NULL
+            start_ts             TEXT NOT NULL,      -- 'YYYY-MM-DD HH:MM'
+            end_ts               TEXT,               -- NULL = ongoing
+            is_ongoing           INTEGER NOT NULL DEFAULT 0,
+            cause                TEXT NOT NULL,
+            hours_lost_override  REAL,
+            created_by           TEXT,
+            created_at           TEXT,
+            updated_by           TEXT,
+            updated_at           TEXT
+        )
+    """)
 
     # 7. Inter-Plant Transfer (IPT) plan vs actual, per route per month
     cursor.execute("""
@@ -1063,6 +1108,118 @@ def delete_ipt_entry(month: str, item: str, from_plant: str, to_plant: str) -> i
     if old:
         activity_context.record(f"ipt_table/{item}/{from_plant}->{to_plant}/{month}", old, None)
     return deleted
+
+
+# ============================================================================
+# Breakdown log — plant/unit-wise unplanned-downtime events (see
+# api_breakdown.py). Unlike capital_repair_table (a pre-seeded annual plan
+# where only "actual" is ever edited), breakdown_table rows are ad hoc
+# events plant users create/edit/delete freely, so this is full CRUD.
+# ============================================================================
+
+def list_breakdown_entries(plant: Optional[str] = None, fy: Optional[str] = None,
+                            unit_type: Optional[str] = None, unit_name: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List breakdown events, optionally filtered. `fy` filters by the FY
+    fy_from_month(start_ts) falls in (computed in Python — start_ts has no
+    stored FY column, see breakdown_table's docstring in init_db())."""
+    from page_capital_repair import fy_from_month
+    init_db()
+    conn = connect()
+    sql = "SELECT * FROM breakdown_table WHERE 1=1"
+    args = []
+    if plant:
+        sql += " AND plant=?"; args.append(plant)
+    if unit_type:
+        sql += " AND unit_type=?"; args.append(unit_type)
+    if unit_name:
+        sql += " AND unit_name=?"; args.append(unit_name)
+    sql += " ORDER BY start_ts DESC, id DESC"
+    prev_factory = conn.row_factory
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.execute(sql, args)
+        rows = [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.row_factory = prev_factory
+        conn.close()
+    if fy:
+        rows = [r for r in rows if r.get("start_ts") and fy_from_month(r["start_ts"][:7]) == fy]
+    return rows
+
+
+def save_breakdown_entry(plant: str, unit_type: str, unit_name: str, sms_subtag: Optional[str],
+                          start_ts: str, end_ts: Optional[str], is_ongoing: bool,
+                          cause: str, hours_lost_override: Optional[float],
+                          created_by: str) -> int:
+    """Create one breakdown event. Returns the new row id."""
+    from datetime import datetime
+    init_db()
+    conn = connect()
+    now = datetime.now().isoformat()
+    cur = conn.execute("""
+        INSERT INTO breakdown_table
+            (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, is_ongoing,
+             cause, hours_lost_override, created_by, created_at, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, int(is_ongoing),
+          cause, hours_lost_override, created_by, now, created_by, now))
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+    activity_context.record(f"breakdown_table/{plant}/{unit_name}/{new_id}", None, {
+        "plant": plant, "unit_type": unit_type, "unit_name": unit_name, "sms_subtag": sms_subtag,
+        "start_ts": start_ts, "end_ts": end_ts, "is_ongoing": is_ongoing, "cause": cause,
+        "hours_lost_override": hours_lost_override,
+    })
+    return new_id
+
+
+def update_breakdown_entry(breakdown_id: int, updated_by: str, **fields) -> bool:
+    """Update the given fields (any subset of plant/unit_type/unit_name/sms_subtag/
+    start_ts/end_ts/is_ongoing/cause/hours_lost_override) on one breakdown event.
+    Returns False if the row doesn't exist."""
+    from datetime import datetime
+    init_db()
+    conn = connect()
+    old = _row_dict(conn, "SELECT * FROM breakdown_table WHERE id=?", (breakdown_id,))
+    if old is None:
+        conn.close()
+        return False
+    allowed = {"plant", "unit_type", "unit_name", "sms_subtag", "start_ts", "end_ts",
+               "is_ongoing", "cause", "hours_lost_override"}
+    sets, args = [], []
+    for k, v in fields.items():
+        if k not in allowed:
+            continue
+        sets.append(f"{k}=?")
+        args.append(int(v) if k == "is_ongoing" else v)
+    if not sets:
+        conn.close()
+        return True
+    sets.append("updated_by=?"); args.append(updated_by)
+    sets.append("updated_at=?"); args.append(datetime.now().isoformat())
+    args.append(breakdown_id)
+    conn.execute(f"UPDATE breakdown_table SET {', '.join(sets)} WHERE id=?", args)
+    conn.commit()
+    conn.close()
+    new = {**old, **{k: v for k, v in fields.items() if k in allowed}}
+    activity_context.record(f"breakdown_table/{old['plant']}/{old['unit_name']}/{breakdown_id}", old, new)
+    return True
+
+
+def delete_breakdown_entry(breakdown_id: int) -> bool:
+    """Delete one breakdown event, recording its prior state. Returns False if not found."""
+    init_db()
+    conn = connect()
+    old = _row_dict(conn, "SELECT * FROM breakdown_table WHERE id=?", (breakdown_id,))
+    if old is None:
+        conn.close()
+        return False
+    conn.execute("DELETE FROM breakdown_table WHERE id=?", (breakdown_id,))
+    conn.commit()
+    conn.close()
+    activity_context.record(f"breakdown_table/{old['plant']}/{old['unit_name']}/{breakdown_id}", old, None)
+    return True
 
 
 def _techno_param_entity(group_code: str, section: str, row_label: str):

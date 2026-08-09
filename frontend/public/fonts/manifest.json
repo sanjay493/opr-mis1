@@ -1,0 +1,93 @@
+[
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "300",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "frontend/public/fonts/roboto/roboto-300-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "frontend/public/fonts/roboto/roboto-400-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "frontend/public/fonts/roboto/roboto-500-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "frontend/public/fonts/roboto/roboto-700-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "900",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "frontend/public/fonts/roboto/roboto-900-normal.woff2"
+  },
+  {
+    "family": "Roboto Mono",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq38.woff2",
+    "local_path": "frontend/public/fonts/roboto-mono/roboto-mono-400-normal.woff2"
+  },
+  {
+    "family": "Roboto Mono",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq38.woff2",
+    "local_path": "frontend/public/fonts/roboto-mono/roboto-mono-500-normal.woff2"
+  },
+  {
+    "family": "Roboto Mono",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq38.woff2",
+    "local_path": "frontend/public/fonts/roboto-mono/roboto-mono-700-normal.woff2"
+  },
+  {
+    "family": "Inter",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+    "local_path": "frontend/public/fonts/inter/inter-400-normal.woff2"
+  },
+  {
+    "family": "Inter",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+    "local_path": "frontend/public/fonts/inter/inter-500-normal.woff2"
+  },
+  {
+    "family": "Inter",
+    "style": "normal",
+    "weight": "600",
+    "url": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+    "local_path": "frontend/public/fonts/inter/inter-600-normal.woff2"
+  },
+  {
+    "family": "Inter",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+    "local_path": "frontend/public/fonts/inter/inter-700-normal.woff2"
+  },
+  {
+    "family": "Inter",
+    "style": "normal",
+    "weight": "800",
+    "url": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+    "local_path": "frontend/public/fonts/inter/inter-800-normal.woff2"
+  }
+]

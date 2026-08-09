@@ -44,6 +44,12 @@ def get_dept_badge(page_num) -> Optional[Dict[str, Any]]:
         # 3.5 falls right after (former-1st, now 2nd) page 3, so it's back
         # to right too (3 took the left slot instead).
         return {"group": 1, "side": "right"}
+    if page_num == 29.5:
+        # "Iron Making (contd.)" sentinel (IRON_MAKING_PAGE_2_ID in main.py)
+        # - sits right after page 29 in the printed sequence, same group (7,
+        # Techno-Economic Parameters) as the page it continues, opposite
+        # side (29 is "right").
+        return {"group": 7, "side": "left"}
     if page_num == 3:
         return {"group": 1, "side": "left"}
     if not isinstance(page_num, int) or page_num < 3:

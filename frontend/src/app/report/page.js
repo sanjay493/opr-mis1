@@ -38,6 +38,7 @@ const PAGE_LABELS = {
   27: 'Major Techno-Economic Parameters',
   28: 'Techno – Coke & Coal Chemicals, Sinter',
   29: 'Techno – Iron Making',
+  29.5: 'Techno – Iron Making (contd.)',
   30: 'Techno – SMS Shop',
   31: 'Mill Wise Techno – BSP',
   32: 'Mill Wise Techno – DSP',

@@ -283,11 +283,47 @@ def _get_prod_ytd(cur, ytd_months, plant, item):
     return r[0] if r and r[0] else None
 
 
+_SSPS_PLANTS = ("ASP", "VISL", "SSP")
+
+
+def _ssps_special_steel(cur, months, item="Saleable Steel"):
+    """SSPs (Alloy Steels Plant + Visvesvaraya Iron & Steel Plant + Salem
+    Steel Plant) carry no order-book rows in special_steel_orders, so their
+    'actual' special-steel figure on page 24 is derived instead from
+    production_table: total <item> production across the three plants,
+    minus SSP's own Carbon Steel Production (Salem runs both stainless/
+    special and ordinary carbon steel off the same lines; ASP and VISL have
+    no carbon-steel split of their own, so their whole output counts).
+    'Saleable Steel' is used rather than 'Finished Steel' - ASP's Finished
+    Steel figure is a much narrower sub-metric (~5% of its Saleable Steel),
+    while Saleable Steel is consistent across all three plants.
+    production_table stores '000T; this page is in T -> ×1000, same
+    convention as ss_cur/ss_abp_fy below."""
+    ph = ",".join("?" * len(months))
+    cur.execute(f"""
+        SELECT COALESCE(SUM(month_actual),0) FROM production_table
+        WHERE report_month IN ({ph}) AND plant_name IN ('ASP','VISL','SSP') AND item_name=?
+    """, (*months, item))
+    total = (cur.fetchone() or [0])[0]
+    cur.execute(f"""
+        SELECT COALESCE(SUM(month_actual),0) FROM production_table
+        WHERE report_month IN ({ph}) AND plant_name='SSP' AND item_name='Carbon Steel Production'
+    """, (*months,))
+    carbon = (cur.fetchone() or [0])[0]
+    return (total - carbon) * 1000
+
+
 def _get_abp_sum(cur, months, plant):
     """Sum of a plant's Special Steel ABP targets over a set of months —
     used for the 'ABP of FY' column (the only ABP period shown on page 24;
     ISP and DSP don't carry a monthly special-steel plan, only an FY one,
-    so the month/till-month ABP columns were dropped)."""
+    so the month/till-month ABP columns were dropped).
+
+    special_steel_abp_table.abp_qty is stored in '000T (same convention as
+    production_table), but every other column on this page (orders/actual/
+    cply, from special_steel_orders) is already in T — so this is scaled
+    ×1000 here, same as the Saleable Steel row's own ABP a few lines down
+    in generate_special_steel_sail."""
     ph = ",".join("?" * len(months))
     cur.execute(f"""
         SELECT COALESCE(SUM(abp_qty),0)
@@ -295,7 +331,7 @@ def _get_abp_sum(cur, months, plant):
         WHERE report_month IN ({ph}) AND plant_name=?
     """, (*months, plant))
     r = cur.fetchone()
-    return r[0] if r and r[0] else None
+    return r[0] * 1000 if r and r[0] else None
 
 
 def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
@@ -814,27 +850,25 @@ def generate_special_steel_sail(report_month: str) -> dict:
                 "cum_pct_growth": _growth(ca, cc),
             })
 
-        # SSPs row
+        # SSPs row — no order-book data (special_steel_orders has no rows
+        # for 'SSPs'), so "orders"/"cum_orders" stay blank ('-' below) while
+        # "actual"/"cply"/"cum_actual"/"cum_cply" are derived from
+        # production_table via _ssps_special_steel (see its docstring).
         cur.execute("""
-            SELECT COALESCE(SUM(order_qty),0), COALESCE(SUM(actual_despatch),0)
-            FROM special_steel_orders WHERE report_month=? AND plant_name='SSPs'
+            SELECT COALESCE(SUM(order_qty),0) FROM special_steel_orders
+            WHERE report_month=? AND plant_name='SSPs'
         """, (report_month,))
-        ssps_o, ssps_a = cur.fetchone()
-        cur.execute("""
-            SELECT COALESCE(SUM(actual_despatch),0)
-            FROM special_steel_orders WHERE report_month=? AND plant_name='SSPs'
-        """, (cply_month,))
-        ssps_c = (cur.fetchone() or [0])[0]
+        ssps_o = (cur.fetchone() or [0])[0]
         cur.execute(f"""
-            SELECT COALESCE(SUM(order_qty),0), COALESCE(SUM(actual_despatch),0)
-            FROM special_steel_orders WHERE report_month IN ({ph_ytd}) AND plant_name='SSPs'
+            SELECT COALESCE(SUM(order_qty),0) FROM special_steel_orders
+            WHERE report_month IN ({ph_ytd}) AND plant_name='SSPs'
         """, (*ytd_months,))
-        ssps_co, ssps_ca = cur.fetchone()
-        cur.execute(f"""
-            SELECT COALESCE(SUM(actual_despatch),0)
-            FROM special_steel_orders WHERE report_month IN ({ph_cytd}) AND plant_name='SSPs'
-        """, (*cply_ytd_months,))
-        ssps_cc = (cur.fetchone() or [0])[0]
+        ssps_co = (cur.fetchone() or [0])[0]
+
+        ssps_a  = _ssps_special_steel(cur, [report_month])
+        ssps_c  = _ssps_special_steel(cur, [cply_month])
+        ssps_ca = _ssps_special_steel(cur, ytd_months)
+        ssps_cc = _ssps_special_steel(cur, cply_ytd_months)
 
         ssps_abp_fy = _get_abp_sum(cur, fy_months, "SSPs")
         sail_abp_fy += ssps_abp_fy or 0

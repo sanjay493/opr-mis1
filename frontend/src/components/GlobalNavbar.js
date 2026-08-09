@@ -48,6 +48,7 @@ export default function GlobalNavbar() {
             { label: 'IPT Status', link: '/data-entry/ipt', icon: '↔️' },
             { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
             { label: 'Capital Repair', link: '/data-entry/capital-repair', icon: '🛠️' },
+            { label: 'Breakdown Entry', link: '/data-entry/breakdown', icon: '⚠️' },
           ]
         },
         {
@@ -77,7 +78,8 @@ export default function GlobalNavbar() {
         { label: 'Plant-wise Techno', link: '/reports/techno-monthly', icon: '⚙️' },
         { label: 'Techno Dashboard', link: '/reports/techno-dashboard', icon: '🔬' },
         { label: 'Techno Verification', link: '/reports/techno-verification', icon: '✅' },
-        { label: 'Large BF Benchmarking', link: '/reports/bf-benchmark', icon: '📐' }
+        { label: 'Large BF Benchmarking', link: '/reports/bf-benchmark', icon: '📐' },
+        { label: 'Production Loss Analysis', link: '/reports/production-loss-analysis', icon: '📉' }
       ]
     },
     {

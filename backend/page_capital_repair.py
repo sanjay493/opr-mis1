@@ -40,6 +40,26 @@ def fy_from_month(report_month: str) -> str:
     return f"{start}-{(start + 1) % 100:02d}"
 
 
+def _d_m_yy(iso_date: str) -> str:
+    """'2026-06-07' -> '7.6.26' (matches the source PDF's date convention)."""
+    y, m, d = iso_date.split("-")
+    return f"{int(d)}.{int(m)}.{y[2:]}"
+
+
+def format_cr_actual(actual_start: str | None, actual_end: str | None, actual_ongoing: bool) -> str:
+    """Derive the printed 'Actual' text from structured dates, in the same
+    free-text convention the source PDF/plants already use
+    ('19.4.26-30.4.26' or '7.6.26-cont..'). Single source of truth going
+    forward: the capital_repair_table.actual column is written from this,
+    never entered as free text again, so pages 36-40 keep rendering
+    unchanged (CapitalRepairTemplate.js reads that column verbatim)."""
+    if not actual_start:
+        return ""
+    if actual_ongoing or not actual_end:
+        return f"{_d_m_yy(actual_start)}-cont.."
+    return f"{_d_m_yy(actual_start)}-{_d_m_yy(actual_end)}"
+
+
 def generate_capital_repair(plant: str, fy: str = "2026-27") -> dict:
     conn = db.connect()
     cur = conn.cursor()

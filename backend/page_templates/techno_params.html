@@ -1,6 +1,11 @@
         {% set _is_mill = page.group.startswith('MILL_') %}
         {% set _is_major = not _is_mill %}
-        {% set _tsz = '10pt' if _is_major else '9pt' %}
+        {# Iron Making (29 + its 29.5 continuation) carries 8 furnace-wise
+           sections across its two pages - denser than the other MAJOR-style
+           pages - so it gets a smaller base size than the other _is_major
+           pages to fit inside the tighter margins main.py gives these two
+           pages (see IRON_MAKING_PAGE_2_ID in main.py). #}
+        {% set _tsz = '8.5pt' if page.group == 'IRON_MAKING' else ('10pt' if _is_major else '9pt') %}
         {# Page 27 (MAJOR) keeps a fixed layout with hardcoded column widths -
            its row labels are short plant codes ("BSP", "SAIL"). Pages 28-30
            share _is_major's header/row structure but their row labels are
@@ -9,7 +14,15 @@
            layout (like the mill pages already use) so column 2 sizes to
            its actual content instead. #}
         {% set _fixed_layout = page.group == 'MAJOR' %}
-        <div style="padding:4px;font-family:'Roboto',sans-serif;font-size:{{ _tsz }};">
+        {# Arial Narrow (condensed, fits more per column) is for pages whose
+           layout actually has to accommodate a growing number of YTD-month
+           columns (28/29/29.5/30's auto-layout table, and the mill pages'
+           own auto-layout) - that pressure is exactly why those pages also
+           get the month-count font-shrink in main.py. Page 27 (MAJOR) is a
+           fixed-layout table that was never part of that shrink logic and
+           isn't affected by it either way - it keeps its original Roboto. #}
+        {% set _font_family = "'Roboto',sans-serif" if _fixed_layout else "'Arial Narrow',Arial,sans-serif" %}
+        <div style="padding:4px;font-family:{{ _font_family }};font-size:{{ _tsz }};">
           <div style="text-align:center;font-weight:700;font-size:{{ _tsz }};">{{ page.title }}</div>
           {% if page.subtitle %}
           <div style="text-align:center;font-weight:600;font-size:{{ _tsz }};margin-bottom:3px;">{{ page.subtitle }}</div>
@@ -67,19 +80,34 @@
               {% set _bb = ('border-bottom:1px solid ' ~ colors.border_black ~ ';') if loop.last  else '' %}
               {% set _box = ('border-top:1px solid ' ~ colors.border_black ~ ';border-bottom:1px solid ' ~ colors.border_black ~ ';font-weight:700;') if _bold_row else (_bt ~ _bb) %}
               {% set _td = _v ~ _box %}
-              {% set _row_bg = ('background:' ~ colors.highlight_achieved_band_bg ~ ';') if _sail else (('background:' ~ colors.highlight_bold_row_bg ~ ';') if row.bold else '') %}
+              {# Iron Making's plant-shop rows get the light-yellow target-band
+                 token instead of the default gray-blue bold-row background -
+                 reusing an already-validated palette color rather than a new
+                 one, and matching the "Target" column's own light-yellow so
+                 the shop total reads as the page's other highlighted value. #}
+              {% set _bold_bg = colors.highlight_target_band_bg if page.group == 'IRON_MAKING' else colors.highlight_bold_row_bg %}
+              {% set _row_bg = ('background:' ~ colors.highlight_achieved_band_bg ~ ';') if _sail else (('background:' ~ _bold_bg ~ ';') if row.bold else '') %}
               <tr style="{{ _row_bg }}">
                 {% if loop.first %}
                 {% if _is_major %}
                 {% set _sec_unit = sec.rows[0].unit if sec.rows else '' %}
                 {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label }}</td>
+                {% set _sec_valign = 'middle' if page.group == 'IRON_MAKING' else 'top' %}
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;vertical-align:{{ _sec_valign }};word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label }}</td>
                 {% else %}
                 <td rowspan="{{ sec.rows | length }}" style="padding:2px 1.5px;border:1px solid {{ colors.border_black }};text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label }}</td>
                 {% endif %}
                 {% endif %}
                 {% set _row_label = (row.label ~ ' (' ~ row.unit ~ ')') if (not _is_major and row.unit) else row.label %}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;white-space:nowrap;">{{ _row_label }}</td>
+                {# Page 27's Plants column is a hardcoded 7%-wide fixed-layout
+                   column (see _fixed_layout above) sized for short codes
+                   ("BSP", "SAIL") - wrapping the longer combined-shop labels
+                   that also land here ("BSP SMS-2", "RSP SMS-1", ...) turns
+                   many rows 2 lines tall and was overflowing page 27 onto a
+                   2nd physical page. Pages 28-30/29.5's Plants/Parameters
+                   column is auto-width instead (sized to its own longest
+                   label already), so wrapping there only ever helps. #}
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;{% if _fixed_layout %}white-space:nowrap;{% else %}word-wrap:break-word;overflow-wrap:break-word;{% endif %}">{{ _row_label }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy3 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy2 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy1 }}</td>

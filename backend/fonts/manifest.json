@@ -1,0 +1,282 @@
+[
+  {
+    "family": "IBM Plex Mono",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1i8q1w.woff2",
+    "local_path": "backend/fonts/ibm-plex-mono/ibm-plex-mono-400-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Mono",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwlBFgg.woff2",
+    "local_path": "backend/fonts/ibm-plex-mono/ibm-plex-mono-500-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Mono",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3pQPwlBFgg.woff2",
+    "local_path": "backend/fonts/ibm-plex-mono/ibm-plex-mono-700-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "italic",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXEKVElMYYaJe8bpLHnCwDKhdTEG46kmUZQCX598fQbM4jw8V78x9OWIhqbQ5g6voI.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans/ibm-plex-sans-400-italic.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "300",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans/ibm-plex-sans-300-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans/ibm-plex-sans-400-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans/ibm-plex-sans-500-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "600",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans/ibm-plex-sans-600-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans/ibm-plex-sans-700-normal.woff2"
+  },
+  {
+    "family": "Source Code Pro",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/sourcecodepro/v31/HI_SiYsKILxRpg3hIP6sJ7fM7PqlPevW.woff2",
+    "local_path": "backend/fonts/source-code-pro/source-code-pro-400-normal.woff2"
+  },
+  {
+    "family": "Source Code Pro",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/sourcecodepro/v31/HI_SiYsKILxRpg3hIP6sJ7fM7PqlPevW.woff2",
+    "local_path": "backend/fonts/source-code-pro/source-code-pro-500-normal.woff2"
+  },
+  {
+    "family": "Source Code Pro",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/sourcecodepro/v31/HI_SiYsKILxRpg3hIP6sJ7fM7PqlPevW.woff2",
+    "local_path": "backend/fonts/source-code-pro/source-code-pro-700-normal.woff2"
+  },
+  {
+    "family": "Source Sans 3",
+    "style": "italic",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/sourcesans3/v19/nwpDtKy2OAdR1K-IwhWudF-R3woAa8opPOrG97lwqLlOxCkSmg.woff2",
+    "local_path": "backend/fonts/source-sans-3/source-sans-3-400-italic.woff2"
+  },
+  {
+    "family": "Source Sans 3",
+    "style": "normal",
+    "weight": "300",
+    "url": "https://fonts.gstatic.com/s/sourcesans3/v19/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2",
+    "local_path": "backend/fonts/source-sans-3/source-sans-3-300-normal.woff2"
+  },
+  {
+    "family": "Source Sans 3",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/sourcesans3/v19/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2",
+    "local_path": "backend/fonts/source-sans-3/source-sans-3-400-normal.woff2"
+  },
+  {
+    "family": "Source Sans 3",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/sourcesans3/v19/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2",
+    "local_path": "backend/fonts/source-sans-3/source-sans-3-500-normal.woff2"
+  },
+  {
+    "family": "Source Sans 3",
+    "style": "normal",
+    "weight": "600",
+    "url": "https://fonts.gstatic.com/s/sourcesans3/v19/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2",
+    "local_path": "backend/fonts/source-sans-3/source-sans-3-600-normal.woff2"
+  },
+  {
+    "family": "Source Sans 3",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/sourcesans3/v19/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2",
+    "local_path": "backend/fonts/source-sans-3/source-sans-3-700-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "300",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "backend/fonts/roboto/roboto-300-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "backend/fonts/roboto/roboto-400-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "backend/fonts/roboto/roboto-500-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "backend/fonts/roboto/roboto-700-normal.woff2"
+  },
+  {
+    "family": "Roboto",
+    "style": "normal",
+    "weight": "900",
+    "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+    "local_path": "backend/fonts/roboto/roboto-900-normal.woff2"
+  },
+  {
+    "family": "Roboto Mono",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq38.woff2",
+    "local_path": "backend/fonts/roboto-mono/roboto-mono-400-normal.woff2"
+  },
+  {
+    "family": "Roboto Mono",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq38.woff2",
+    "local_path": "backend/fonts/roboto-mono/roboto-mono-500-normal.woff2"
+  },
+  {
+    "family": "Roboto Mono",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq38.woff2",
+    "local_path": "backend/fonts/roboto-mono/roboto-mono-700-normal.woff2"
+  },
+  {
+    "family": "Noto Sans",
+    "style": "italic",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/notosans/v42/o-0kIpQlx3QUlC5A4PNr4C5OaxRsfNNlKbCePevHtVtX57DGjDU1QDce2VDSyA.woff2",
+    "local_path": "backend/fonts/noto-sans/noto-sans-400-italic.woff2"
+  },
+  {
+    "family": "Noto Sans",
+    "style": "normal",
+    "weight": "300",
+    "url": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7duw.woff2",
+    "local_path": "backend/fonts/noto-sans/noto-sans-300-normal.woff2"
+  },
+  {
+    "family": "Noto Sans",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7duw.woff2",
+    "local_path": "backend/fonts/noto-sans/noto-sans-400-normal.woff2"
+  },
+  {
+    "family": "Noto Sans",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7duw.woff2",
+    "local_path": "backend/fonts/noto-sans/noto-sans-500-normal.woff2"
+  },
+  {
+    "family": "Noto Sans",
+    "style": "normal",
+    "weight": "600",
+    "url": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7duw.woff2",
+    "local_path": "backend/fonts/noto-sans/noto-sans-600-normal.woff2"
+  },
+  {
+    "family": "Noto Sans",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7duw.woff2",
+    "local_path": "backend/fonts/noto-sans/noto-sans-700-normal.woff2"
+  },
+  {
+    "family": "Noto Sans Mono",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/notosansmono/v37/BngcUXNETWXI6LwhGYvaxZikqZqK6fBq6kPvUce2oAZ2evCj.woff2",
+    "local_path": "backend/fonts/noto-sans-mono/noto-sans-mono-400-normal.woff2"
+  },
+  {
+    "family": "Noto Sans Mono",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/notosansmono/v37/BngcUXNETWXI6LwhGYvaxZikqZqK6fBq6kPvUce2oAZ2evCj.woff2",
+    "local_path": "backend/fonts/noto-sans-mono/noto-sans-mono-500-normal.woff2"
+  },
+  {
+    "family": "Noto Sans Mono",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/notosansmono/v37/BngcUXNETWXI6LwhGYvaxZikqZqK6fBq6kPvUce2oAZ2evCj.woff2",
+    "local_path": "backend/fonts/noto-sans-mono/noto-sans-mono-700-normal.woff2"
+  },
+  {
+    "family": "Lato",
+    "style": "italic",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/lato/v25/S6u8w4BMUTPHjxsAXC-q.woff2",
+    "local_path": "backend/fonts/lato/lato-400-italic.woff2"
+  },
+  {
+    "family": "Lato",
+    "style": "normal",
+    "weight": "300",
+    "url": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh7USSwiPGQ.woff2",
+    "local_path": "backend/fonts/lato/lato-300-normal.woff2"
+  },
+  {
+    "family": "Lato",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wXg.woff2",
+    "local_path": "backend/fonts/lato/lato-400-normal.woff2"
+  },
+  {
+    "family": "Lato",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVSwiPGQ.woff2",
+    "local_path": "backend/fonts/lato/lato-700-normal.woff2"
+  },
+  {
+    "family": "Lato",
+    "style": "normal",
+    "weight": "900",
+    "url": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh50XSwiPGQ.woff2",
+    "local_path": "backend/fonts/lato/lato-900-normal.woff2"
+  }
+]

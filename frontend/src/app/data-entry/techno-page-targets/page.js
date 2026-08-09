@@ -10,7 +10,13 @@ const FY_LIST = ['2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29
 const PAGES = [
   { page: 28, label: 'Page 28 — Coke Ovens & Sinter' },
   { page: 29, label: 'Page 29 — Iron Making' },
+  { page: 29.5, label: 'Page 29 (contd.) — Iron Making' },
   { page: 30, label: 'Page 30 — SMS Shop' },
+  { page: 31, label: 'Page 31 — Mill Wise (BSP)' },
+  { page: 32, label: 'Page 32 — Mill Wise (DSP)' },
+  { page: 33, label: 'Page 33 — Mill Wise (RSP)' },
+  { page: 34, label: 'Page 34 — Mill Wise (BSL)' },
+  { page: 35, label: 'Page 35 — Mill Wise (ISP)' },
 ];
 
 const keyOf = (col) => `${col.plant}|${col.unit}|${col.param_key}`;
@@ -106,15 +112,16 @@ function TechnoPageTargetsPageInner() {
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            Techno Targets — Pages 28-30
+            Techno Targets — Pages 28-35
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Entered once a year per FY; shown as the "Target" column on the month-wise techno pages
+            Entered once a year per FY; shown as the "Target"/"Norm" column on the month-wise techno pages
           </span>
         </div>
         <p style={{ fontSize: 12.5, color: '#9ca3af', marginTop: 0, marginBottom: 18 }}>
           No SAIL column here — SAIL's target on page 27 is entered separately at{' '}
           <a href="/data-entry/targets" style={{ color: '#1a73e8' }}>TE Targets</a>.
+          {' '}Pages 31-35 (Mill Wise) are grouped by parameter, one column per mill unit, for the one plant that page covers.
         </p>
 
         {/* Controls */}

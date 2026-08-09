@@ -41,6 +41,7 @@ TECHNO_PAGES = {
     27: ("MAJOR",       "MAJOR TECHNO-ECONOMIC PARAMETERS", ""),
     28: ("COKE_SINTER", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "COKE AND COAL CHEMICALS, SINTER PLANT"),
     29: ("IRON_MAKING", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "IRON MAKING"),
+    29.5: ("IRON_MAKING", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "IRON MAKING (CONTD.)"),
     30: ("SMS",         "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "SMS SHOP"),
     31: ("MILL_BSP",    "MILL WISE TECHNO-ECONOMIC PARAMETERS", "Bhilai Steel Plant"),
     32: ("MILL_DSP",    "MILL WISE TECHNO-ECONOMIC PARAMETERS", "Durgapur Steel Plant"),
@@ -2391,17 +2392,23 @@ _TECHNO_DB_SCHEMA = {
     },
     29: {
         "type": "param",
+        # Split across two physical pages (29 and 29.5 - see IRON_MAKING_PAGE_2_ID
+        # in main.py) since 8 furnace-wise sections no longer fit one page.
         "sections": [
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
             ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-3", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
             ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF-6", "hot_blast_temp"), ("BF-7", "hot_blast_temp"), ("BF-8", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
             ("Oxygen Enrichment",   "%",         [("BF-1", "o2_enrichment"), ("BF-2", "o2_enrichment"), ("BF-3", "o2_enrichment"), ("BF-4", "o2_enrichment"), ("BF-5", "o2_enrichment"), ("BF-6", "o2_enrichment"), ("BF-7", "o2_enrichment"), ("BF-8", "o2_enrichment"), ("BF_Shop", "o2_enrichment")]),
-            # Plant-wise (shop-level), not furnace-wise - unlike CDI/Hot Blast
-            # Temp/O2 Enrichment above, this deliberately excludes per-furnace
-            # BF-1..BF-8 entries. ISP has no separate BF_Shop unit (single
-            # furnace = the whole shop, see SINGLE_BF_PLANTS), so its shop
-            # figure lives under "BF-5" instead.
-            ("Slag Rate",           "kg/thm",    [("BF_Shop", "slag_rate"), ("BF-5", "slag_rate")]),
+            ("Coke Rate",            "kg/thm",   [("BF-1", "coke_rate"), ("BF-2", "coke_rate"), ("BF-3", "coke_rate"), ("BF-4", "coke_rate"), ("BF-5", "coke_rate"), ("BF-6", "coke_rate"), ("BF-7", "coke_rate"), ("BF-8", "coke_rate"), ("BF_Shop", "coke_rate")]),
+        ],
+    },
+    29.5: {
+        "type": "param",
+        "sections": [
+            ("Slag Rate",            "kg/thm",   [("BF-1", "slag_rate"), ("BF-2", "slag_rate"), ("BF-3", "slag_rate"), ("BF-4", "slag_rate"), ("BF-5", "slag_rate"), ("BF-6", "slag_rate"), ("BF-7", "slag_rate"), ("BF-8", "slag_rate"), ("BF_Shop", "slag_rate")]),
+            ("Fuel Rate",            "kg/thm",   [("BF-1", "fuel_rate"), ("BF-2", "fuel_rate"), ("BF-3", "fuel_rate"), ("BF-4", "fuel_rate"), ("BF-5", "fuel_rate"), ("BF-6", "fuel_rate"), ("BF-7", "fuel_rate"), ("BF-8", "fuel_rate"), ("BF_Shop", "fuel_rate")]),
+            ("BF Productivity",      "t/m³/day", [("BF-1", "bf_productivity"), ("BF-2", "bf_productivity"), ("BF-3", "bf_productivity"), ("BF-4", "bf_productivity"), ("BF-5", "bf_productivity"), ("BF-6", "bf_productivity"), ("BF-7", "bf_productivity"), ("BF-8", "bf_productivity"), ("BF_Shop", "bf_productivity")]),
+            ("Pellet in Burden",     "%",        [("BF-1", "pellet_in_burden"), ("BF-2", "pellet_in_burden"), ("BF-3", "pellet_in_burden"), ("BF-4", "pellet_in_burden"), ("BF-5", "pellet_in_burden"), ("BF-6", "pellet_in_burden"), ("BF-7", "pellet_in_burden"), ("BF-8", "pellet_in_burden"), ("BF_Shop", "pellet_in_burden")]),
         ],
     },
     30: {
@@ -2733,23 +2740,26 @@ def _row_label_and_bold(page_no, plant, src_unit, multi_plant, sec_label=None):
     """
     if page_no == 28 and sec_label != "Sinter Productivity":
         return _coke_oven_label(plant, src_unit), False
-    # Slag Rate: every row is already a plant total (BF_Shop, or BF-5 for
-    # ISP's single furnace) — never bold/bordered here, unlike CDI Rate/Hot
-    # Blast Temp/Oxygen Enrichment below, so the section doesn't turn into a
-    # solid block of heavy borders when EVERY row would otherwise qualify.
-    if sec_label == "Slag Rate":
-        return plant, False
     # ISP has a single furnace (BF-5) with no separate BF_Shop unit, so its
     # one row is normally shown as "ISP BF-5", unbolded, unlike every other
     # plant's bold plant-total row. On these furnace-wise sections, show it
     # as a bold bare "ISP" row instead, matching the other plants' totals
     # (BF-5's figure already IS ISP's shop-wide figure, there being only one furnace).
-    if plant == "ISP" and src_unit == "BF-5" and sec_label in ("CDI Rate", "Hot Blast Temp", "Oxygen Enrichment"):
+    if plant == "ISP" and src_unit == "BF-5" and sec_label in (
+        "CDI Rate", "Hot Blast Temp", "Oxygen Enrichment",
+        "Coke Rate", "Slag Rate", "Fuel Rate", "BF Productivity", "Pellet in Burden",
+    ):
         return plant, True
     if src_unit == "BF_Shop":
         return plant, True
     if src_unit == "General":
         return plant, False
+    # Iron Making (29/29.5): the bold shop-total row directly below each
+    # plant's furnace rows already identifies which plant they belong to
+    # (and is now highlighted - see techno_params.html), so the repeated
+    # "<plant> " prefix on every furnace row above it is redundant.
+    if page_no in (29, 29.5):
+        return src_unit, False
     label = f"{plant} {src_unit}" if multi_plant else src_unit
     return label, False
 
@@ -2770,14 +2780,15 @@ def _resolve_target_column_label(page_no, plant, src_unit, src_key, sec_label):
 
 
 def generate_techno_target_columns(page_no: int) -> dict:
-    """For pages 28-30 (type='param' in _TECHNO_DB_SCHEMA): discover every
-    (plant, unit, param_key) column that could take a Target value, from
-    data reported at ANY month (not scoped to a report_month/FY), so a
-    target can be entered before this FY's monthly uploads begin. Used by
-    the annual techno-target data-entry page — no SAIL column, since page
-    27's separate targets page already covers SAIL (see /data-entry/targets)."""
+    """For pages 28-30 (type='param') and 31-35 (type='mill') in
+    _TECHNO_DB_SCHEMA: discover every (plant, unit, param_key) column that
+    could take a Target/Norm value, from data reported at ANY month (not
+    scoped to a report_month/FY), so a target can be entered before this
+    FY's monthly uploads begin. Used by the annual techno-target data-entry
+    page — no SAIL column, since page 27's separate targets page already
+    covers SAIL (see /data-entry/targets)."""
     cfg = _TECHNO_DB_SCHEMA.get(page_no)
-    if not cfg or cfg["type"] != "param":
+    if not cfg or cfg["type"] not in ("param", "mill"):
         return {}
     group, title, subtitle = TECHNO_PAGES[page_no]
 
@@ -2816,34 +2827,60 @@ def generate_techno_target_columns(page_no: int) -> dict:
                     for alt in _COKE_OVEN_PARAM_ALIASES.get(key, []))
 
     sections = []
-    for (sec_label, unit_str, unit_specs) in cfg["sections"]:
-        columns = []
-        seen = set()
-        for plant in plants_present:
-            for (src_unit, src_key) in unit_specs:
+    if cfg["type"] == "param":
+        for (sec_label, unit_str, unit_specs) in cfg["sections"]:
+            columns = []
+            seen = set()
+            for plant in plants_present:
+                for (src_unit, src_key) in unit_specs:
+                    if not _key_available(plant, src_unit, src_key):
+                        continue
+                    col_key = (plant, src_unit, src_key)
+                    if col_key in seen:
+                        continue
+                    seen.add(col_key)
+                    columns.append({
+                        "plant":     plant,
+                        "unit":      src_unit,
+                        "param_key": src_key,
+                        "label":     _resolve_target_column_label(page_no, plant, src_unit, src_key, sec_label),
+                    })
+            if columns:
+                # Disambiguate columns that would otherwise share an identical
+                # label (e.g. a plant with a stale/legacy alternate unit for the
+                # same concept) by appending the underlying unit name.
+                label_counts = {}
+                for c in columns:
+                    label_counts[c["label"]] = label_counts.get(c["label"], 0) + 1
+                for c in columns:
+                    if label_counts[c["label"]] > 1:
+                        c["label"] = f"{c['label']} ({c['unit']})"
+                sections.append({"label": sec_label, "unit": unit_str, "columns": columns})
+    else:
+        # "mill" pages (31-35): _TECHNO_DB_SCHEMA groups by mill-unit
+        # (section=unit, rows=params for that one fixed plant) — the inverse
+        # of "param" pages' shape. Invert to section=param/columns=mill-unit
+        # here so the output contract (and the existing techno-page-targets
+        # UI, which is generic over it) stays identical either way. A param
+        # label reused across mill units (e.g. "Availability" on both PM and
+        # RSM) collapses into one section with one column per mill-unit; the
+        # unit_str shown is whichever mill-unit's spec is encountered first
+        # for that label (matches "param" pages' pre-existing assumption
+        # that one section has one shared unit_str).
+        plant = cfg["plant"]
+        by_param = {}
+        for (src_unit, param_specs) in cfg.get("sections", []):
+            for (param_label, src_key, unit_str) in param_specs:
                 if not _key_available(plant, src_unit, src_key):
                     continue
-                col_key = (plant, src_unit, src_key)
-                if col_key in seen:
-                    continue
-                seen.add(col_key)
-                columns.append({
-                    "plant":     plant,
-                    "unit":      src_unit,
-                    "param_key": src_key,
-                    "label":     _resolve_target_column_label(page_no, plant, src_unit, src_key, sec_label),
-                })
-        if columns:
-            # Disambiguate columns that would otherwise share an identical
-            # label (e.g. a plant with a stale/legacy alternate unit for the
-            # same concept) by appending the underlying unit name.
-            label_counts = {}
-            for c in columns:
-                label_counts[c["label"]] = label_counts.get(c["label"], 0) + 1
-            for c in columns:
-                if label_counts[c["label"]] > 1:
-                    c["label"] = f"{c['label']} ({c['unit']})"
-            sections.append({"label": sec_label, "unit": unit_str, "columns": columns})
+                entry = by_param.setdefault(param_label, {"unit_str": unit_str, "cols": []})
+                entry["cols"].append((src_unit, src_key))
+        for param_label, info in by_param.items():
+            columns = [
+                {"plant": plant, "unit": mill_unit, "param_key": key, "label": mill_unit}
+                for (mill_unit, key) in info["cols"]
+            ]
+            sections.append({"label": param_label, "unit": info["unit_str"], "columns": columns})
 
     return {"page": page_no, "title": title, "subtitle": subtitle, "sections": sections}
 

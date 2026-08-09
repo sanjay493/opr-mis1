@@ -69,7 +69,12 @@ _MIS2_PARAM_LABELS = [
 ]
 
 # ── PPC MIS S1 coke-rate block ───────────────────────────────────────────────
-# column-P label (exact, upper) → unit name
+# column-P label (exact, upper) → unit name. The same row also carries
+# NC Rate/CDI Rate/Sinter%/Slag Rate for that furnace a few columns further
+# right (header row: "BFs | HM Prodn | Pellet/I.Ore | Cast/Skips | On dt |
+# cum | Kg/THM(NC) | Kg/THM(CDI) | %age(Sinter) | Kg/THM(Slag)") — only
+# Slag Rate is pulled from here (NC/CDI/Sinter already come from the MIS-2
+# block above; this is the only furnace-wise source for Slag Rate at all).
 _PPC_COKE_LABELS = {
     "BF-4":      "BF-4",
     "BF-6":      "BF-6",
@@ -79,6 +84,7 @@ _PPC_COKE_LABELS = {
 }
 _PPC_LABEL_COL = 16   # column P (1-based)
 _PPC_COKE_COL = 21    # column U — "cum"
+_PPC_SLAG_COL = 25    # column Y — "Slag Rate (Kg/THM)"
 
 # ── PPC MIS S2 SMS blocks ────────────────────────────────────────────────────
 # column-D label → canonical param key (same keys the 3-page-Tech upload uses)
@@ -304,7 +310,8 @@ class BspMonthendTechnoExtractor:
             units.setdefault(unit, {"month": {}, "till_month": {}})
             units[unit]["month"][key] = value
 
-        # S1 — coke rate per furnace (column P label, column U cum value)
+        # S1 — coke rate + slag rate per furnace (column P label, column U
+        # cum coke-rate value, column Y slag-rate value)
         found = set()
         for r in range(1, len(s1) + 1):
             label = str(_cell(s1, r, _PPC_LABEL_COL) or "").strip().upper()
@@ -312,6 +319,7 @@ class BspMonthendTechnoExtractor:
             if unit and unit not in found:
                 found.add(unit)
                 put(unit, "coke_rate", _clean_val(_cell(s1, r, _PPC_COKE_COL)))
+                put(unit, "slag_rate", _clean_val(_cell(s1, r, _PPC_SLAG_COL)))
         for label, unit in _PPC_COKE_LABELS.items():
             if unit not in found:
                 self.warnings.append(f"PPC S1: coke-rate row '{label}' not found — skipped.")

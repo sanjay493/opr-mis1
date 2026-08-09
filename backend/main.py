@@ -32,7 +32,7 @@ from page_at_a_glance import generate_at_a_glance
 from page_key_parameters import generate_key_parameters
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
-from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month
+from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month, format_cr_actual
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
                           generate_major_techno_from_db, generate_techno_from_db,
@@ -160,6 +160,8 @@ from api_auth import router as auth_router
 from api_admin import router as admin_router
 from api_admin_backup import router as admin_backup_router
 from api_bf_benchmark import router as bf_benchmark_router
+from api_breakdown import router as breakdown_router
+from api_production_loss import router as production_loss_router
 
 db.init_db()
 
@@ -198,6 +200,18 @@ AT_A_GLANCE_PAGE_ID = 2.5
 # AT_A_GLANCE_PAGE_ID above (numbered main flow, no dept-badge, browsable
 # on-screen via PAGE_LABELS).
 KEY_PARAMS_PAGE_ID = 3.5
+
+# "Iron Making (contd.)" — page 29's furnace-wise Slag Rate/Fuel Rate/BF
+# Productivity/Pellet in Burden sections spill onto this second physical
+# page, inserted right after page 29 (see _TECHNO_DB_SCHEMA[29.5] /
+# TECHNO_PAGES[29.5] in page_techno.py). Unlike AT_A_GLANCE_PAGE_ID/
+# KEY_PARAMS_PAGE_ID, this one DOES get a dept-badge (same "Techno-Economic
+# Parameters" group 7 as page 29) — report_utils.get_dept_badge() special-
+# cases 29.5 directly since it fails the plain isinstance(int) branch every
+# other real page uses. It's picked up automatically by the generic
+# `if pg in TECHNO_PAGES` / `elif 28 <= pg <= 35` dispatch in _safe_techno()
+# and generate_techno_from_db() - no dedicated generator needed.
+IRON_MAKING_PAGE_2_ID = 29.5
 
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
@@ -348,6 +362,8 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_backup_router)
 app.include_router(bf_benchmark_router)
+app.include_router(breakdown_router)
+app.include_router(production_loss_router)
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(_STATIC_DIR, "profile_pics"), exist_ok=True)
@@ -410,12 +426,13 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config = blank_out_page_data(pages_config)
 
         if page_number is not None:
-            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID):
+            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID, IRON_MAKING_PAGE_2_ID):
                 # Page 24 (SAIL), the trend sentinel page, the "at a
-                # glance" sentinel page, and the "key parameters" sentinel
-                # page don't exist in the template (see the "Always
-                # regenerate special steel pages" comment below) — always
-                # synthesized fresh.
+                # glance" sentinel page, the "key parameters" sentinel
+                # page, and the "Iron Making (contd.)" sentinel page don't
+                # exist in the template (see the "Always regenerate
+                # special steel pages" comment below) — always synthesized
+                # fresh.
                 pages_config = [{"page": page_number}]
             else:
                 pages_config = [p for p in pages_config if p.get("page") == page_number]
@@ -525,18 +542,20 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
         _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
         if page_number is None:
             # None of page 24 (SAIL), the trend sentinel page, the "at a
-            # glance" sentinel page, or the "key parameters" sentinel page
-            # exist in the template — all four are always synthesized fresh.
-            # Strip any stale copy, then insert fresh placeholders right
-            # after page 23 (SAIL/trend), right after page 2/Index (at a
-            # glance, so it becomes the first NUMBERED page, "Page 1"), and
-            # right after page 3/Summary (key parameters, "Page 3"). (In
-            # single-page mode, page_number in (24, TREND_PAGE_ID,
-            # AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID) already synthesized
-            # its own shell above — skipped here since pages 2/3/23 aren't
-            # in the filtered list to anchor off of.)
+            # glance" sentinel page, the "key parameters" sentinel page, or
+            # the "Iron Making (contd.)" sentinel page exist in the
+            # template — all five are always synthesized fresh. Strip any
+            # stale copy, then insert fresh placeholders right after page 23
+            # (SAIL/trend), right after page 2/Index (at a glance, so it
+            # becomes the first NUMBERED page, "Page 1"), right after page
+            # 3/Summary (key parameters, "Page 3"), and right after page 29
+            # (Iron Making contd.). (In single-page mode, page_number in
+            # (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
+            # IRON_MAKING_PAGE_2_ID) already synthesized its own shell
+            # above — skipped here since pages 2/3/23/29 aren't in the
+            # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
-                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID)]
+                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID, IRON_MAKING_PAGE_2_ID)]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
@@ -547,6 +566,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             _idx3 = next((i for i, p in enumerate(pages_config) if p.get("page") == 3), None)
             if _idx3 is not None:
                 pages_config.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
+            _idx29 = next((i for i, p in enumerate(pages_config) if p.get("page") == 29), None)
+            if _idx29 is not None:
+                pages_config.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -689,6 +711,12 @@ async def generate_pdf(request: PDFRequest):
         _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 3), None)
         if _idx3 is not None:
             _pages_list.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
+    # "Iron Making (contd.)" sentinel page: always inserted right after
+    # page 29, same unconditional-insert pattern as above.
+    if not any(p.get("page") == IRON_MAKING_PAGE_2_ID for p in _pages_list):
+        _idx29 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 29), None)
+        if _idx29 is not None:
+            _pages_list.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
     for p in _pages_list:
         pg = p.get("page", 0)
         # Pure function of page number — recomputed fresh rather than trusted
@@ -766,17 +794,112 @@ async def generate_pdf(request: PDFRequest):
             # prefer_css_page_size), an overflow here was dragging pages
             # 4-6 (and everything else) down with it. Shrinking this
             # table's own font as month count grows keeps it self-contained.
-            if 28 <= pg <= 30:
+            if 28 <= pg <= 30 or pg == IRON_MAKING_PAGE_2_ID:
                 n_months = len(p.get("month_labels", []))
-                base_entry = _static_pages_cfg.get(str(pg), {})
+                # 29.5 has no entry of its own in layout_config.json (a new
+                # sentinel page, not part of the static "28-30" group) — it
+                # shares page 29's table styling, so borrow that entry's
+                # base size directly.
+                _base_lookup_pg = 29 if pg == IRON_MAKING_PAGE_2_ID else pg
+                base_entry = _static_pages_cfg.get(str(_base_lookup_pg), {})
                 base_size = base_entry.get("table", {}).get("td", 9.0)
                 font_size = techno_month_table_font_size(n_months, base=base_size)
-                if font_size < base_size:
+                # Iron Making (29) and its continuation (29.5) need tighter
+                # top/bottom margins than the shared "28-30" group default
+                # (4mm/3mm) to fit 8 furnace-wise parameter sections across
+                # exactly 2 physical pages — applied unconditionally (not
+                # just when the month-count font-shrink above triggers),
+                # since 29.5 has no static layout_config.json entry of its
+                # own at all (a new sentinel page, not part of that JSON
+                # group) and would otherwise silently fall back to
+                # main.html's generic 15mm default, overflowing far worse
+                # than page 29 ever did.
+                if font_size < base_size or pg in (29, IRON_MAKING_PAGE_2_ID):
                     entry = copy.deepcopy(base_entry)
-                    tbl = entry.setdefault("table", {})
-                    tbl["th"] = tbl["thead"] = font_size
-                    tbl["td"] = tbl["tbody"] = font_size
+                    if pg in (29, IRON_MAKING_PAGE_2_ID):
+                        entry["marginTop"] = 1
+                        entry["marginBottom"] = 1.5
+                        entry["marginLR"] = entry.get("marginLR", 4)
+                        # 8 furnace-wise sections need a smaller base than the
+                        # shared "28-30" group's 9pt to fit 2 pages — but
+                        # never *larger* than what the month-count shrink
+                        # below would already require late in the FY.
+                        # Row COUNT (~70-75, one row per reporting furnace)
+                        # barely changes with month count, but this font size
+                        # otherwise would (9pt down to 6.75pt) — so an early-
+                        # FY month (June: few YTD columns, no shrink pressure
+                        # at all) was landing at a *larger* font than a
+                        # late-FY month despite carrying just as many rows,
+                        # leaving it the tightest-fitting case of the year
+                        # instead of the roomiest. Capped at 7.8pt for a real
+                        # safety margin above the footer, verified
+                        # empirically against real June/March renders (June
+                        # being the tighter of the two).
+                        font_size = min(font_size, 7.8)
+                    if font_size < base_size:
+                        tbl = entry.setdefault("table", {})
+                        tbl["th"] = tbl["thead"] = font_size
+                        tbl["td"] = tbl["tbody"] = font_size
                     dynamic_page_layouts[str(pg)] = entry
+            # Pages 27, 28, 30 (MAJOR / Coke & Sinter / SMS Shop — NOT 29/29.5,
+            # already tuned above to fit their tighter 2-page budget right at
+            # the smallest padding) currently get their cell padding/line-
+            # height slammed to a flat 0.5px/1.0 by main.html's fitToPage CSS
+            # (see "fitToPage" below) any time a page carries that flag —
+            # regardless of how much the font above actually shrank for
+            # width. Most months (few YTD columns; or page 27, whose 8pt is
+            # fixed and never shrinks) have plenty of vertical headroom this
+            # left unused, making rows look needlessly cramped even though
+            # the page is far from full. Scale padding/line-height with the
+            # actual rendered font size instead: still the tight 0.5px/1.0
+            # right at the ~6.5pt shrink floor (March's 12 columns), but
+            # visibly roomier at a full-size font (June's 3 columns, or
+            # page 27's fixed 8pt, which never needed shrinking at all).
+            if pg in (27, 28, 30):
+                _pg_entry = dynamic_page_layouts.get(str(pg))
+                _eff_font = (
+                    (_pg_entry or {}).get("table", {}).get("td")
+                    or _static_pages_cfg.get(str(pg), {}).get("table", {}).get("td", 9.0)
+                )
+                _shrink_frac = max(0.0, min(1.0, (_eff_font - 6.5) / 2.5))
+                # Page 27's font is fixed at 8pt regardless of month count
+                # (no dynamic shrink of its own — nothing above ever touches
+                # pg==27), so at the worst-case 12-month March it's already
+                # at its narrowest without any of the width relief 28/30 get
+                # by shrinking further still - a smaller real vertical-slack
+                # budget than 28/30 have at that same nominal font size.
+                # Cap its padding/line-height boost accordingly (empirically
+                # verified against a real March render - the larger 28/30
+                # ceiling overflowed page 27 onto a 2nd physical page).
+                # Page 30 (SMS Shop) gets its own smaller cap too - the 1.5
+                # ceiling let its Caster Yield section spill 6 rows onto an
+                # otherwise-blank 2nd page for July 2026 (verified against a
+                # real render); page 28 keeps the original 1.5 ceiling,
+                # which still fits comfortably.
+                if pg == 27:
+                    _pad_ceiling, _lh_ceiling = 0.15, 0.005
+                elif pg == 30:
+                    _pad_ceiling, _lh_ceiling = 0.5, 0.05
+                else:
+                    _pad_ceiling, _lh_ceiling = 1.5, 0.15
+                entry = _pg_entry if _pg_entry is not None else copy.deepcopy(_static_pages_cfg.get(str(pg), {}))
+                entry["tdPaddingV"] = round(0.5 + _shrink_frac * _pad_ceiling, 2)
+                entry["lineHeight"] = round(1.0 + _shrink_frac * _lh_ceiling, 3)
+                if pg == 27:
+                    entry["marginTop"] = 0.5
+                    entry["marginBottom"] = 0.25
+                    # Page 27's static layout_config.json entry carries its
+                    # own "fontFamily": "Arial Narrow" (predates this
+                    # session) — main.html's fontFamily CSS rule is
+                    # !important, so it would keep overriding
+                    # techno_params.html's Roboto default for this page
+                    # even though that default is now conditioned on
+                    # _fixed_layout specifically to leave page 27 alone.
+                    # Since this page's font is meant to stay exactly what
+                    # it was ("same font and font size as earlier"), drop
+                    # the override here so Roboto actually renders.
+                    entry.pop("fontFamily", None)
+                dynamic_page_layouts[str(pg)] = entry
         if pg in CR_PAGES:
             p.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(request.month)))
             p["type"] = "capital_repair"
@@ -2309,6 +2432,7 @@ PRODUCTION_ITEM_ORDER = [
     'HSM Total HR Coil',
     'HSM HR Coil (Sale)',
     'HSM HR Plate',
+    'Thick Plate',
     'HSM-2 Total HR Coil',
     'HSM-2 HR Coil (Sale)',
     'HSM-2 HR Plate',
@@ -3611,9 +3735,7 @@ async def api_plant_units(plant_code: str = Query(None), unit_type: str = Query(
     Response: { units: [{unit_id, plant_code, unit_type, unit_name, display_label, is_shop}] }
     """
     from plant_registry import get_plant_units
-    conn = db.connect()
-    units = get_plant_units(conn, plant_code=plant_code, unit_type=unit_type)
-    conn.close()
+    units = get_plant_units(plant_code=plant_code, unit_type=unit_type)
     return {"units": units}
 
 
@@ -3624,9 +3746,7 @@ async def api_param_types(unit_type: str = Query(None)):
     Response: { param_types: [{type_id, unit_type, param_name, unit_of_meas, agg_method, sort_order}] }
     """
     from plant_registry import get_param_types
-    conn = db.connect()
-    pts = get_param_types(conn, unit_type=unit_type)
-    conn.close()
+    pts = get_param_types(unit_type=unit_type)
     return {"param_types": pts}
 
 
@@ -4056,14 +4176,19 @@ def get_capital_repair_entries(plant: str = Query(...), fy: str = Query(...)):
     conn = db.connect()
     cur  = conn.cursor()
     cur.execute("""
-        SELECT id, shop, equipment, activity, schedule_days, period, actual
+        SELECT id, shop, equipment, activity, schedule_days, period, actual,
+               unit_type, unit_name, sms_subtag, actual_start, actual_end,
+               actual_ongoing, planned_days
         FROM capital_repair_table
         WHERE plant=? AND fy=?
         ORDER BY sort_order ASC, id ASC
     """, (plant, fy))
     rows = [
         {"id": r[0], "shop": r[1], "equipment": r[2], "activity": r[3],
-         "schedule_days": r[4], "period": r[5], "actual": r[6] or ""}
+         "schedule_days": r[4], "period": r[5], "actual": r[6] or "",
+         "unit_type": r[7], "unit_name": r[8], "sms_subtag": r[9],
+         "actual_start": r[10], "actual_end": r[11],
+         "actual_ongoing": bool(r[12]), "planned_days": r[13]}
         for r in cur.fetchall()
     ]
     conn.close()
@@ -4072,16 +4197,75 @@ def get_capital_repair_entries(plant: str = Query(...), fy: str = Query(...)):
 
 @app.post("/api/capital-repair-entry")
 async def save_capital_repair_entry(payload: dict):
+    from plant_registry import UNIT_TYPES, is_valid_unit
+
     row_id = payload.get("id")
     if row_id is None:
         raise HTTPException(status_code=400, detail="id is required")
-    actual = (payload.get("actual") or "").strip()
+
+    unit_type = (payload.get("unit_type") or "").strip() or None
+    unit_name = (payload.get("unit_name") or "").strip() or None
+    sms_subtag = (payload.get("sms_subtag") or "").strip() or None
+    actual_start = (payload.get("actual_start") or "").strip() or None
+    actual_end = (payload.get("actual_end") or "").strip() or None
+    actual_ongoing = bool(payload.get("actual_ongoing"))
+    planned_days = payload.get("planned_days")
+    if planned_days in ("", None):
+        planned_days = None
+    else:
+        try:
+            planned_days = float(planned_days)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="planned_days must be a number")
+
     conn = db.connect()
     cur  = conn.cursor()
-    cur.execute("UPDATE capital_repair_table SET actual=? WHERE id=?", (actual, row_id))
+    cur.execute("SELECT plant FROM capital_repair_table WHERE id=?", (row_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Capital repair row not found")
+    plant = row[0]
+
+    if unit_type is not None:
+        if unit_type not in UNIT_TYPES:
+            conn.close()
+            raise HTTPException(status_code=400, detail=f"Unknown unit_type '{unit_type}'")
+        if unit_type == "SMS" and sms_subtag not in ("CONVERTER", "CASTER"):
+            conn.close()
+            raise HTTPException(status_code=400,
+                                 detail="sms_subtag ('CONVERTER' or 'CASTER') is required when unit_type is SMS")
+        if unit_type != "SMS":
+            sms_subtag = None
+        if unit_name and not is_valid_unit(plant, unit_type, unit_name):
+            conn.close()
+            raise HTTPException(status_code=400,
+                                 detail=f"'{unit_name}' is not a known {unit_type} unit for {plant}")
+
+    if actual_start and actual_end and actual_end < actual_start:
+        conn.close()
+        raise HTTPException(status_code=400, detail="actual_end must not be before actual_start")
+
+    actual = format_cr_actual(actual_start, actual_end, actual_ongoing)
+
+    old = db._row_dict(conn,
+        "SELECT unit_type, unit_name, sms_subtag, actual_start, actual_end, actual_ongoing, planned_days, actual "
+        "FROM capital_repair_table WHERE id=?", (row_id,))
+    cur.execute("""
+        UPDATE capital_repair_table
+        SET unit_type=?, unit_name=?, sms_subtag=?, actual_start=?, actual_end=?,
+            actual_ongoing=?, planned_days=?, actual=?
+        WHERE id=?
+    """, (unit_type, unit_name, sms_subtag, actual_start, actual_end,
+          int(actual_ongoing), planned_days, actual, row_id))
     conn.commit()
     conn.close()
-    return {"status": "ok", "message": "Saved."}
+    _activity_context.record(f"capital_repair_table/{plant}/{row_id}", old, {
+        "unit_type": unit_type, "unit_name": unit_name, "sms_subtag": sms_subtag,
+        "actual_start": actual_start, "actual_end": actual_end,
+        "actual_ongoing": actual_ongoing, "planned_days": planned_days, "actual": actual,
+    })
+    return {"status": "ok", "message": "Saved.", "actual": actual}
 
 
 # Acronym casing for parameter display names derived from techno_json keys.
@@ -4611,8 +4795,9 @@ async def save_techno_plant_targets(payload: dict):
 
 
 @app.get("/api/techno-page-targets")
-async def get_techno_page_targets(page: int = Query(...), fy: str = Query(...)):
-    """Target-entry columns for a pages 28-30 param (plant/unit/param_key,
+async def get_techno_page_targets(page: float = Query(...), fy: str = Query(...)):
+    """Target-entry columns for a pages 28-30 (or 29.5, Iron Making contd.)
+    param (plant/unit/param_key,
     discovered from data ever reported at any month) plus each column's
     currently-saved target for this FY, from techno_plan_fy. No SAIL column
     — page 27's own targets page (/data-entry/targets) already covers SAIL."""

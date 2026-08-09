@@ -86,14 +86,14 @@ function TechnoTiles({ techno }) {
 function ValueAddedSteelPanel({ specialSteel }) {
   return (
     <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '5px 8px' }}>
-      <div style={{ fontSize: '9pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ fontSize: '11pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
         Value Added Steel Performance (SAIL)
       </div>
       <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
         <div style={{ flex: 1.5 }} dangerouslySetInnerHTML={{ __html: specialSteel.five_year_svg || '' }} />
         <div style={{ flex: 0.85, borderLeft: `1px solid ${C.borderDivider}`, paddingLeft: 9 }} dangerouslySetInnerHTML={{ __html: specialSteel.quarter_svg || '' }} />
-        <div style={{ flex: 0.55, fontSize: '7.5pt', lineHeight: 1.6, paddingLeft: 9, borderLeft: `1px solid ${C.borderDivider}` }}>
-          <div style={{ fontSize: '8pt', fontWeight: 700, color: C.textHeadingDark, marginBottom: 2 }}>{specialSteel.month_title}</div>
+        <div style={{ flex: 0.55, fontSize: '9.5pt', lineHeight: 1.6, paddingLeft: 9, borderLeft: `1px solid ${C.borderDivider}` }}>
+          <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, marginBottom: 2 }}>{specialSteel.month_title}</div>
           <div>Qty (Value Added Steel): <b>{specialSteel.month_qty || '—'} T</b></div>
           <div>%Fulfilment: <b>{specialSteel.pct_ful || '—'}%</b></div>
           <div>vs CPLY: <GrowthText value={specialSteel.pct_growth} good={specialSteel.growth_good} /></div>
@@ -115,31 +115,31 @@ export default function AtAGlanceTemplate({ data }) {
 
   return (
     <div style={{ padding: '2px 4px', fontFamily: "'Arial Narrow', Arial, sans-serif", fontSize: '7.8pt', color: C.textPrimary }}>
-      <div style={{ background: C.accentBlue, color: C.textWhite, padding: '12px 16px', borderRadius: 5, marginBottom: 10 }}>
+      <div style={{ background: C.accentBlue, color: C.textWhite, padding: '8px 16px', borderRadius: 5, marginBottom: 6 }}>
         <div style={{ fontSize: '17pt', fontWeight: 700 }}>{title}</div>
         <div style={{ fontSize: '10.5pt', fontWeight: 500, opacity: 0.92 }}>{monthLabel}</div>
       </div>
 
-      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
         Production Performance — Month (&apos;000 T)
       </div>
       <ProductionTiles production={production} />
 
-      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
+      <div style={{ fontSize: '12pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
         Production Trend — Last 4 Years ({ytdTrend.period_label || ''} each year, &apos;000 T)
       </div>
       <YtdTrendChart ytdTrend={ytdTrend} />
 
-      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
         Techno-Economic Snapshot — SAIL
       </div>
       <TechnoTiles techno={techno} />
 
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 6 }}>
         <ValueAddedSteelPanel specialSteel={specialSteel} />
       </div>
 
-      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 5 }}>
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
         Saleable Steel &amp; Finished Steel Production Trend — Last 6 Months (&apos;000 T)
       </div>
       <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '5px 9px' }}

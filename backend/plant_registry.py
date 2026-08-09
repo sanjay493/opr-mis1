@@ -182,6 +182,18 @@ PARAM_TYPES = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# get_plant_units()/get_param_types() used to query DB tables (plant_units,
+# techno_param_types) that seed_plant_registry() below would populate. Those
+# tables were never added to mysql_schema.sql during the MySQL migration and
+# seed_plant_registry() was never wired up to run anywhere, so on the live
+# MySQL DB both tables simply don't exist and the old query-based versions
+# raised a 500 on every call. Since PLANT_UNITS/PARAM_TYPES above are already
+# the single source of truth the (dead) seed function would have copied from
+# a DB table, these now read the Python lists directly — no DB round-trip,
+# no missing-table failure mode, always in sync with PLANT_UNITS/PARAM_TYPES.
+# seed_plant_registry() is kept only as a reference for the old table shape.
+# ---------------------------------------------------------------------------
 def seed_plant_registry(conn):
     """
     Seed plant_units and techno_param_types tables from the definitions above.
@@ -216,32 +228,54 @@ def seed_plant_registry(conn):
     return units_added, param_types_added
 
 
-def get_plant_units(conn, plant_code=None, unit_type=None, include_shop=True):
-    """Query plant_units with optional filters. Returns list of dicts."""
-    sql = "SELECT unit_id, plant_code, unit_type, unit_name, display_label, is_shop, sort_order FROM plant_units WHERE is_active=1"
-    args = []
-    if plant_code:
-        sql += " AND plant_code=?"
-        args.append(plant_code)
-    if unit_type:
-        sql += " AND unit_type=?"
-        args.append(unit_type)
-    if not include_shop:
-        sql += " AND is_shop=0"
-    sql += " ORDER BY plant_code, sort_order"
-    cur = conn.execute(sql, args)
-    cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row)) for row in cur.fetchall()]
+def get_plant_units(plant_code=None, unit_type=None, include_shop=True):
+    """Return plant_units rows straight from the PLANT_UNITS list above.
+    Shape matches the old DB-table version so callers don't need to change."""
+    rows = []
+    for idx, (p_code, u_type, u_name, is_shop, sort_order) in enumerate(PLANT_UNITS):
+        if plant_code and p_code != plant_code:
+            continue
+        if unit_type and u_type != unit_type:
+            continue
+        if not include_shop and is_shop:
+            continue
+        display_label = f"{p_code} Plant Shop" if is_shop else f"{p_code} {u_name}"
+        rows.append({
+            "unit_id": idx + 1,
+            "plant_code": p_code,
+            "unit_type": u_type,
+            "unit_name": u_name,
+            "display_label": display_label,
+            "is_shop": is_shop,
+            "sort_order": sort_order,
+        })
+    rows.sort(key=lambda r: (r["plant_code"], r["sort_order"]))
+    return rows
 
 
-def get_param_types(conn, unit_type=None):
-    """Query techno_param_types with optional unit_type filter. Returns list of dicts."""
-    sql = "SELECT type_id, unit_type, param_name, unit_of_meas, agg_method, sort_order FROM techno_param_types"
-    args = []
-    if unit_type:
-        sql += " WHERE unit_type=?"
-        args.append(unit_type)
-    sql += " ORDER BY unit_type, sort_order"
-    cur = conn.execute(sql, args)
-    cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row)) for row in cur.fetchall()]
+def get_param_types(unit_type=None):
+    """Return techno_param_types rows straight from the PARAM_TYPES list above."""
+    rows = []
+    for idx, (u_type, param_name, unit_of_meas, agg_method, sort_order) in enumerate(PARAM_TYPES):
+        if unit_type and u_type != unit_type:
+            continue
+        rows.append({
+            "type_id": idx + 1,
+            "unit_type": u_type,
+            "param_name": param_name,
+            "unit_of_meas": unit_of_meas,
+            "agg_method": agg_method,
+            "sort_order": sort_order,
+        })
+    rows.sort(key=lambda r: (r["unit_type"], r["sort_order"]))
+    return rows
+
+
+def is_valid_unit(plant_code, unit_type, unit_name, include_shop=False):
+    """True if (plant_code, unit_type, unit_name) is a real PLANT_UNITS entry."""
+    for p_code, u_type, u_name, is_shop, _sort in PLANT_UNITS:
+        if p_code == plant_code and u_type == unit_type and u_name == unit_name:
+            if is_shop and not include_shop:
+                return False
+            return True
+    return False

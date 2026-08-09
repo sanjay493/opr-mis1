@@ -119,14 +119,24 @@ def _general_val(plant, key, techno, dp):
     return _round(techno.get((plant, _GENERAL_UNIT), {}).get(key), dp)
 
 
-def _first_present_val(plant, unit_candidates, key, techno, dp):
+def _first_present_val(plant, unit_candidates, key_or_keys, techno, dp):
     """Try each candidate unit name in order, return the first non-None
-    value found for `key` — used for shops (e.g. Coke Ovens) whose stored
-    unit name varies by plant, the same fallback idea as _bf_unit_for."""
+    value found for `key_or_keys` — used for shops (e.g. Coke Ovens) whose
+    stored unit name varies by plant, the same fallback idea as
+    _bf_unit_for. `key_or_keys` may be a single key or a list of key-name
+    aliases (some concepts have been stored under more than one literal key
+    across manual entry vs. different extractor generations — e.g. BSP's
+    July'26 Ash in Coal Blend was manually entered as
+    "average_ash_in_coal_blend" before the "3 page Tech" extractor started
+    writing "ash_in_coal_blend" from April'26 onward); aliases are tried in
+    the given order per unit."""
+    keys = key_or_keys if isinstance(key_or_keys, (list, tuple)) else [key_or_keys]
     for u in unit_candidates:
-        v = techno.get((plant, u), {}).get(key)
-        if v is not None:
-            return _round(v, dp)
+        d = techno.get((plant, u), {})
+        for k in keys:
+            v = d.get(k)
+            if v is not None:
+                return _round(v, dp)
     return None
 
 
@@ -227,6 +237,16 @@ _ROWS = [
     ("O2 Enrichment",       "%",        "bf", "o2_enrichment", 2, {}),
     ("Not Dry Casts",       "%",        "bf", "not_dry_cast", 2, {}),
     ("Coke Ash",            "%",        "coke_unit", "ash_in_coke", 2, {}),
+    # Coke-oven-sourced coal-blend quality metrics — distinct from "Imported
+    # Coking Coal in Blend" above, which is a SAIL-rollup % derived from
+    # separate indigenous/imported coal quantities (unit="General"); these
+    # two read the "Overall" figures the coke-oven techno source reports
+    # directly (currently populated for BSP only — "3 page Tech for CO"
+    # rows 10 and 15 — other plants render "—" until their own extractor
+    # writes these keys too).
+    ("Ash in Coal Blend",   "%",        "coke_unit",
+     ["ash_in_coal_blend", "average_ash_in_coal_blend", "ash_blend_coal"], 2, {}),
+    ("Imported Coal in Blend", "%",     "coke_unit", ["imported_coal_in_blend"], 1, {}),
     ("Sinter Fe",           "%",        "bf", "tfe_in_sinter", 2, {}),
     ("BF Slag Rate",        "kg/THM",   "bf", "slag_rate", 0, {}),
     ("HM Sent to PCM/Sand Pit/Dry Pit", "'000 T", "general", "hm_to_pcm_sandpit_drypit", 1, {"label_rowspan": 2}),

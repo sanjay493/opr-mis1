@@ -113,7 +113,12 @@ CREATE TABLE IF NOT EXISTS do_letter_remark_table (
 ) ENGINE=InnoDB;
 
 -- Capital Repair plan (pages 36-40, Report_format/CR.pdf format). "actual"
--- is the only field updated from the frontend as each repair executes.
+-- is derived/written by format_cr_actual() from actual_start/actual_end/
+-- actual_ongoing once a row is edited through the updated data-entry UI;
+-- shop/equipment/activity/schedule_days/period stay free text (print
+-- source of truth). unit_type/unit_name/sms_subtag/planned_days feed
+-- production_loss_analysis.py — see backend/scripts/migrate_add_cr_breakdown.sql
+-- for the ALTER TABLE that added these columns to the already-live DB.
 CREATE TABLE IF NOT EXISTS capital_repair_table (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
     plant         VARCHAR(8)   NOT NULL,
@@ -125,7 +130,36 @@ CREATE TABLE IF NOT EXISTS capital_repair_table (
     period        VARCHAR(64),
     actual        VARCHAR(128),
     sort_order    INT DEFAULT 0,
+    unit_type     VARCHAR(16)  NULL,
+    unit_name     VARCHAR(32)  NULL,
+    sms_subtag    VARCHAR(16)  NULL,
+    actual_start  CHAR(10)     NULL,
+    actual_end    CHAR(10)     NULL,
+    actual_ongoing TINYINT(1)  NOT NULL DEFAULT 0,
+    planned_days  DOUBLE       NULL,
     KEY idx_cr_plant_fy (plant, fy)
+) ENGINE=InnoDB;
+
+-- Breakdown log — plant/unit-wise unplanned-downtime events, full CRUD (see
+-- api_breakdown.py). No `fy` column — derived from start_ts via
+-- page_capital_repair.fy_from_month() to avoid a second source of truth.
+CREATE TABLE IF NOT EXISTS breakdown_table (
+    id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
+    plant                VARCHAR(8)   NOT NULL,
+    unit_type            VARCHAR(16)  NOT NULL,
+    unit_name            VARCHAR(32)  NOT NULL,
+    sms_subtag           VARCHAR(16)  NULL,
+    start_ts             VARCHAR(16)  NOT NULL,
+    end_ts               VARCHAR(16)  NULL,
+    is_ongoing           TINYINT(1)   NOT NULL DEFAULT 0,
+    cause                TEXT         NOT NULL,
+    hours_lost_override  DOUBLE       NULL,
+    created_by           VARCHAR(190),
+    created_at           VARCHAR(40),
+    updated_by           VARCHAR(190),
+    updated_at           VARCHAR(40),
+    KEY idx_breakdown_plant_unit (plant, unit_type, unit_name),
+    KEY idx_breakdown_start (start_ts)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS ipt_table (

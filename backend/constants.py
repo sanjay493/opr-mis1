@@ -78,6 +78,14 @@ PAGE_MODULES = {
             ("POST", "/api/capital-repair-entry", False),
         ],
     },
+    "breakdown": {
+        "label": "Breakdown Entry",
+        "routes": [
+            ("POST", "/api/breakdown", False),
+            ("PATCH", "/api/breakdown/{breakdown_id}", False),
+            ("DELETE", "/api/breakdown/{breakdown_id}", True),
+        ],
+    },
     "conversion_stock": {
         "label": "Conversion & Stock",
         "routes": [
