@@ -55,7 +55,7 @@ export default function GlobalNavbar() {
           groupLabel: 'Annual Targets',
           children: [
             { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' },
-            { label: 'TE Targets (Pages 28-30)', link: '/data-entry/techno-page-targets', icon: '🎯' },
+            { label: 'TE Targets (Pages 30-38)', link: '/data-entry/annual-target', icon: '🎯' },
             { label: 'Special Steel ABP (Page 24)', link: '/data-entry/special-steel-abp', icon: '🎯' },
           ]
         },

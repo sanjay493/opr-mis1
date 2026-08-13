@@ -7,16 +7,20 @@ import GlobalNavbar from '@/components/GlobalNavbar';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const FY_LIST = ['2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29'];
+// Labels use the printed PDF page numbers (as seen in the report/footer),
+// which run +3 ahead of the internal `page` id used by the API from this
+// point on (two front-matter sentinel pages, 2.5 and 3.5, plus the 29.5
+// Iron Making contd. page, push everything from page 30 onward up by 3).
 const PAGES = [
-  { page: 28, label: 'Page 28 — Coke Ovens & Sinter' },
-  { page: 29, label: 'Page 29 — Iron Making' },
-  { page: 29.5, label: 'Page 29 (contd.) — Iron Making' },
-  { page: 30, label: 'Page 30 — SMS Shop' },
-  { page: 31, label: 'Page 31 — Mill Wise (BSP)' },
-  { page: 32, label: 'Page 32 — Mill Wise (DSP)' },
-  { page: 33, label: 'Page 33 — Mill Wise (RSP)' },
-  { page: 34, label: 'Page 34 — Mill Wise (BSL)' },
-  { page: 35, label: 'Page 35 — Mill Wise (ISP)' },
+  { page: 28, label: 'Page 30 — Coke Ovens & Sinter' },
+  { page: 29, label: 'Page 31 — Iron Making' },
+  { page: 29.5, label: 'Page 32 (contd.) — Iron Making' },
+  { page: 30, label: 'Page 33 — SMS Shop' },
+  { page: 31, label: 'Page 34 — Mill Wise (BSP)' },
+  { page: 32, label: 'Page 35 — Mill Wise (DSP)' },
+  { page: 33, label: 'Page 36 — Mill Wise (RSP)' },
+  { page: 34, label: 'Page 37 — Mill Wise (BSL)' },
+  { page: 35, label: 'Page 38 — Mill Wise (ISP)' },
 ];
 
 const keyOf = (col) => `${col.plant}|${col.unit}|${col.param_key}`;
@@ -106,22 +110,22 @@ function TechnoPageTargetsPageInner() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
       <GlobalNavbar />
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 20px' }}>
+      <main style={{ flex: 1, overflow: 'auto', maxWidth: 1400, margin: '0 auto', padding: '22px 20px', width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            Techno Targets — Pages 28-35
+            Techno Targets — Pages 30-38
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
             Entered once a year per FY; shown as the "Target"/"Norm" column on the month-wise techno pages
           </span>
         </div>
         <p style={{ fontSize: 12.5, color: '#9ca3af', marginTop: 0, marginBottom: 18 }}>
-          No SAIL column here — SAIL's target on page 27 is entered separately at{' '}
+          No SAIL column here — SAIL's target on page 29 (printed) is entered separately at{' '}
           <a href="/data-entry/targets" style={{ color: '#1a73e8' }}>TE Targets</a>.
-          {' '}Pages 31-35 (Mill Wise) are grouped by parameter, one column per mill unit, for the one plant that page covers.
+          {' '}Pages 34-38 (Mill Wise) are grouped by parameter, one column per mill unit, for the one plant that page covers.
         </p>
 
         {/* Controls */}
@@ -219,7 +223,7 @@ function TechnoPageTargetsPageInner() {
             </div>
           </div>
         ))}
-      </div>
+      </main>
     </div>
   );
 }
