@@ -6,8 +6,11 @@ SAIL Plants in Q-1 2026-27").
 
 Sourced from techno_data (BF-shop-level, Coke-Oven-shop-level and General
 units — see page_techno.py's BF_SAIL_SPECS for the same key names) and
-production_table, using the report month's own values (not a quarterly
-average like the sample — this report is monthly).
+production_table, using April→report_month cumulative ("till the month")
+values, matching the title's period_label — techno parameters read the
+stored "till_month" dict (the same cumulative the Techno Manual Entry form
+computes/saves), production items are summed (day-weighted average for
+Oven Pushings, a Nos./day rate) across the FY-to-date months.
 
 Rows grouped under three section-header bands (Major Production
 Performance / Major Blast Furnace Techno-economic Parameters / Recovery of
@@ -22,6 +25,7 @@ there; until then they render as "—". Coke Ash and Sinter Fe already had a
 manual-entry home (Coke Ovens' ash_in_coke, Blast Furnace's tfe_in_sinter)
 and are now wired up here too.
 """
+import calendar as _calendar
 import json as _json
 
 import db
@@ -63,7 +67,10 @@ def _round(v, dp):
 
 
 def _fetch_techno(report_month: str) -> dict:
-    """{(plant, unit): {month: {...}}}"""
+    """{(plant, unit): {param: cumulative_value}} — reads the stored
+    "till_month" dict (April→report_month cumulative), the same figure the
+    Techno Manual Entry form computes/saves via techno_cumulative.py, not
+    the report month's own "month" value."""
     conn = db.connect()
     cur = conn.cursor()
     try:
@@ -75,24 +82,31 @@ def _fetch_techno(report_month: str) -> dict:
         )
         out = {}
         for plant, unit, tj in cur.fetchall():
-            out[(plant, unit)] = _json.loads(tj).get("month", {})
+            out[(plant, unit)] = _json.loads(tj).get("till_month", {})
         return out
     finally:
         conn.close()
 
 
-def _fetch_production(report_month: str) -> dict:
-    """{(plant, item_name): month_actual}"""
+def _fetch_production(ytd_months: list) -> dict:
+    """{(plant, item_name): {month: month_actual}} across April→report_month,
+    for _prod_val to aggregate (sum, or day-weighted average for Nos./day
+    items)."""
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(PLANTS))
+        ph_p = ",".join("?" * len(PLANTS))
+        ph_m = ",".join("?" * len(ytd_months))
         cur.execute(
-            f"SELECT plant_name, item_name, month_actual FROM production_table "
-            f"WHERE report_month=? AND plant_name IN ({ph})",
-            [report_month, *PLANTS],
+            f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
+            f"WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p})",
+            [*ytd_months, *PLANTS],
         )
-        return {(p, item): v for p, item, v in cur.fetchall() if v is not None}
+        out = {}
+        for p, item, m, v in cur.fetchall():
+            if v is not None:
+                out.setdefault((p, item), {})[m] = v
+        return out
     finally:
         conn.close()
 
@@ -170,11 +184,36 @@ def _ldg_val(plant, techno, dp):
     return "/".join(vals) if vals else None
 
 
-def _prod_val(plant, item_names, production, dp):
+def _days_in_month(month_str):
+    try:
+        y, m = int(month_str[:4]), int(month_str[5:7])
+        return _calendar.monthrange(y, m)[1]
+    except Exception:
+        return 30
+
+
+def _prod_val(plant, item_names, production, dp, ytd_months, nos_day=False):
+    """Aggregates a production_table item across ytd_months: summed
+    (extensive totals, e.g. Hot Metal) or day-weighted averaged (nos_day=True,
+    for Oven Pushings' Nos./day rate)."""
     for item in item_names:
-        v = production.get((plant, item))
-        if v is not None:
-            return _round(v, dp)
+        monthly = production.get((plant, item))
+        if not monthly:
+            continue
+        if nos_day:
+            tw, td = 0.0, 0
+            for m in ytd_months:
+                v = monthly.get(m)
+                if v is not None:
+                    days = _days_in_month(m)
+                    tw += v * days
+                    td += days
+            if td:
+                return _round(tw / td, dp)
+        else:
+            vals = [monthly[m] for m in ytd_months if m in monthly]
+            if vals:
+                return _round(sum(vals), dp)
     return None
 
 
@@ -197,7 +236,7 @@ def _special_steel_pct(plant, report_month, dp):
     from page_special_steel import generate_special_steel_plant
     try:
         ss = generate_special_steel_plant(report_month, plant)
-        v = ss.get("special_pct", {}).get("current")
+        v = ss.get("special_pct", {}).get("cum_current")
         return v if v not in (None, "") else None
     except Exception:
         return None
@@ -276,10 +315,10 @@ _ROWS = [
 
 
 def generate_key_parameters(report_month: str) -> dict:
-    techno = _fetch_techno(report_month)
-    production = _fetch_production(report_month)
-
     ytd_months = db.get_ytd_months(report_month)
+    techno = _fetch_techno(report_month)
+    production = _fetch_production(ytd_months)
+
     import datetime as _dt
     period_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")
     if len(ytd_months) > 1:
@@ -300,7 +339,8 @@ def generate_key_parameters(report_month: str) -> dict:
         values = {}
         for plant in PLANTS:
             if kind == "prod":
-                v = _prod_val(plant, spec, production, dp)
+                v = _prod_val(plant, spec, production, dp, ytd_months,
+                              nos_day=(unit == "Nos./day"))
             elif kind == "bf":
                 v = _bf_val(plant, spec, techno, dp)
             elif kind == "general":
@@ -329,13 +369,13 @@ def generate_key_parameters(report_month: str) -> dict:
                 b = _bf_val(plant, spec[1], techno, dp)
                 v = _round(100 - (a + b), dp) if a is not None and b is not None else None
             elif kind == "ratio_prod":
-                num = _prod_val(plant, [spec[0]], production, 6)
-                den = _prod_val(plant, [spec[1]], production, 6)
+                num = _prod_val(plant, [spec[0]], production, 6, ytd_months)
+                den = _prod_val(plant, [spec[1]], production, 6, ytd_months)
                 v = _round(num / den * 100, dp) if num is not None and den else None
             elif kind == "ratio_general_prod":
                 gkey, prod_items = spec
                 num = _general_val(plant, gkey, techno, 6)
-                den = _prod_val(plant, prod_items, production, 6)
+                den = _prod_val(plant, prod_items, production, 6, ytd_months)
                 v = _round(num / den * 100, dp) if num is not None and den else None
             elif kind == "special":
                 v = _special_steel_pct(plant, report_month, dp)
