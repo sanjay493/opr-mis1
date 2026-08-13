@@ -1055,6 +1055,33 @@ def _fmt_ym(ym: str) -> str:
         return ym
 
 
+def _rsp_ss_grade_case_map(db_month: str) -> dict:
+    """{(product, grade.upper()): canonical_spelling} from RSP's most recent
+    prior special-steel upload for each (product, grade) pair, keyed
+    case-insensitively. Used to fold a same-spelling-but-different-case label
+    (e.g. a source workbook typo like "Cu Bearing" vs "CU BEARING") back onto
+    the spelling already on record instead of letting it read as a new grade —
+    see the caller in _extract_rsp_ss_preview for what breaks otherwise."""
+    import db as _db
+    try:
+        conn = _db.connect()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT product, quality_grade, report_month
+            FROM special_steel_orders
+            WHERE plant_name='RSP' AND report_month < ?
+            ORDER BY report_month
+        """, (db_month,))
+        out = {}
+        for product, grade, _month in cur.fetchall():
+            out[(product, grade.upper())] = grade
+        conn.close()
+        return out
+    except Exception:
+        logger.warning("RSP Special Steel: grade-case lookup failed; skipping canonicalization.", exc_info=True)
+        return {}
+
+
 def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
     """Parse the RSP Special Steel Excel workbook.
 
@@ -1078,6 +1105,7 @@ def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
             f"or upload the report for {_fmt_ym(report_month)}."
         )
     db_month = detected_month or report_month
+    grade_case_map = _rsp_ss_grade_case_map(db_month)
 
     rows = []
     cur_product = ""
@@ -1121,9 +1149,20 @@ def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
         if not is_total and label.upper() == "CRNO":
             row_product = "Pipes, CRNO"
 
+        # Reuse a prior month's exact spelling for this (product, grade) when this
+        # month's label only differs by case — otherwise the report page treats
+        # "CU BEARING" vs "Cu Bearing" as two distinct grades: the historical
+        # spelling shows nil for the drifted month (no exact-string match) while
+        # the new spelling shows up as an orphan row with no YTD history.
+        grade_label = label
+        if not is_total:
+            canonical_label = grade_case_map.get((row_product, label.upper()))
+            if canonical_label:
+                grade_label = canonical_label
+
         rows.append({
             "product":         "" if is_total else row_product,
-            "quality_grade":   label,
+            "quality_grade":   grade_label,
             "section":         "",
             "sort_order":      sort,
             "order_qty":       c3,
