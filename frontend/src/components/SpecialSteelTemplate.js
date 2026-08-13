@@ -358,7 +358,7 @@ function SailTable({ data }) {
           </tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
             <td style={{ ...LBL, fontWeight: 600 }}>Special Steel % of Saleable Steel</td>
-            <td style={NUM}></td>
+            <td style={NUM}>{special_pct.abp}</td>
             <td style={NUM}></td>
             <td style={NUM}>{special_pct.current}</td>
             <td style={NUM}></td>

@@ -929,6 +929,7 @@ def generate_special_steel_sail(report_month: str) -> dict:
                 "cum_pct_growth": _growth(ss_cum, ss_ccum),
             },
             "special_pct": {
+                "abp":         _pct(sail_abp_fy, ss_abp_fy),
                 "current":     _pct(sail_at,  ss_cur),
                 "cply":        _pct(sail_ct,  ss_cply),
                 "cum_current": _pct(sail_cat, ss_cum),
