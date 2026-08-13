@@ -30,23 +30,66 @@ SAIL_BFS = [
 # key techno_data actually stores for SAIL BFs to have any figure show up —
 # see techno_registry.py's per-plant extractor mapping for what's captured
 # today (BSP BF-8 is missing coke_rate/fuel_rate/slag_rate/hot_blast_temp
-# per-furnace — those cells show blank for BSP, by design, not a bug).
+# per-furnace — those cells show blank for BSP, by design, not a bug). Some
+# of the params below (carbon_rate, blast_pressure, cold_blast_volume,
+# top_pressure, steam_addition, raw_flux_addition, raft, total_heat_loss)
+# have NO extractor writing them for any SAIL plant today — they're mapped
+# here per explicit request so the column exists and non-SAIL BFs can still
+# enter them by hand; SAIL's own cells just stay blank until an extractor
+# is written for them.
+#
+# `better`: which direction counts as the best value in a row, for the
+# comparison table's per-row highlight — "low" for coke_rate/nut_coke_rate/
+# fuel_rate/slag_rate (per direct instruction), "high" for every other
+# performance param, None for params that aren't a performance ranking
+# (working_volume_m3 is a fixed engineering spec, not something to rank).
+#
+# `computed`: True means the value is never read/entered directly — it's
+# derived from other params in this same row set (see
+# bf_benchmark_registry.compute_fuel_rate).
 BF_BENCHMARK_PARAMS = [
-    {"key": "working_volume_m3", "label": "Working Volume", "unit": "m³", "static": True},
-    {"key": "bf_productivity", "label": "BF Productivity", "unit": UNIT.T_M3_DAY, "static": False},
-    {"key": "coke_rate", "label": "Coke Rate", "unit": UNIT.KG_THM, "static": False},
-    {"key": "nut_coke_rate", "label": "Nut Coke Rate", "unit": UNIT.KG_THM, "static": False},
-    {"key": "cdi", "label": "CDI Rate", "unit": UNIT.KG_THM, "static": False},
-    {"key": "fuel_rate", "label": "Fuel Rate", "unit": UNIT.KG_THM, "static": False},
-    {"key": "slag_rate", "label": "Slag Rate", "unit": UNIT.KG_THM, "static": False},
-    {"key": "hot_blast_temp", "label": "HBT", "unit": UNIT.DEG_C, "static": False},
-    {"key": "o2_enrichment", "label": "O2 Enrichment", "unit": UNIT.PCT, "static": False},
+    {"key": "working_volume_m3", "label": "Working Volume", "unit": "m³", "static": True, "better": None},
+    {"key": "production", "label": "Production", "unit": UNIT.T, "static": False, "better": "high"},
+    {"key": "bf_productivity", "label": "BF Productivity", "unit": UNIT.T_M3_DAY, "static": False, "better": "high"},
+    {"key": "coke_rate", "label": "Coke Rate", "unit": UNIT.KG_THM, "static": False, "better": "low"},
+    {"key": "nut_coke_rate", "label": "Nut Coke Rate", "unit": UNIT.KG_THM, "static": False, "better": "low"},
+    {"key": "cdi", "label": "CDI Rate", "unit": UNIT.KG_THM, "static": False, "better": "high"},
+    {"key": "fuel_rate", "label": "Fuel Rate", "unit": UNIT.KG_THM, "static": False, "better": "low", "computed": True},
+    {"key": "carbon_rate", "label": "Carbon Rate", "unit": UNIT.KG_THM, "static": False, "better": "high"},
+    {"key": "slag_rate", "label": "Slag Rate", "unit": UNIT.KG_THM, "static": False, "better": "low"},
+    {"key": "hot_blast_temp", "label": "HBT", "unit": UNIT.DEG_C, "static": False, "better": "high"},
+    {"key": "o2_enrichment", "label": "O2 Enrichment", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "avg_hot_metal_temperature", "label": "Hot Metal Temperature", "unit": UNIT.DEG_C, "static": False, "better": "high"},
+    {"key": "blast_pressure", "label": "Blast Pressure", "unit": "kg/cm²", "static": False, "better": "high"},
+    {"key": "cold_blast_volume", "label": "Cold Blast Volume", "unit": UNIT.NM3_MIN, "static": False, "better": "high"},
+    {"key": "top_pressure", "label": "Top Pressure", "unit": "kg/cm²", "static": False, "better": "high"},
+    {"key": "steam_addition", "label": "Steam Addition", "unit": UNIT.KG_THM, "static": False, "better": "high"},
+    {"key": "sinter_in_burden", "label": "Sinter in Burden", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "pellet_in_burden", "label": "Pellet in Burden", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "raw_flux_addition", "label": "Raw Flux Addition", "unit": UNIT.KG_THM, "static": False, "better": "high"},
+    {"key": "silicon_in_hm", "label": "HM Silicon", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "sulphur_in_hm", "label": "HM Sulphur", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "raft", "label": "RAFT", "unit": UNIT.DEG_C, "static": False, "better": "high"},
+    {"key": "total_heat_loss", "label": "Total Heat Loss", "unit": "Kcal/THM", "static": False, "better": "high"},
 ]
 
-# Weighting-only input, collected for non-SAIL BFs alongside the params
-# above but never shown as its own comparison column — mirrors what
-# production_table already supplies for SAIL BFs (see techno_cumulative.py).
-HM_PRODUCTION_KEY = "hot_metal_production"
+# Fuel Rate is not entered/stored directly — always the sum of Coke Rate,
+# CDI and Nut Coke Rate (per direct instruction). Coke Rate and CDI are
+# required; Nut Coke Rate is optional and defaults to 0 if absent — same
+# rule db._maybe_recompute_derived_params already applies when SAIL's own
+# techno_data is saved (its _FUEL_RATE_INPUT_KEYS), kept identical here so
+# this feature's number always matches what the rest of the app computes.
+# Shared by the SAIL lookup (api_bf_benchmark._sail_period_values) and the
+# non-SAIL lookup (_external_bf_values) so both sides compute it the same
+# way, and by the data-entry page (read-only display) via the /params
+# response's `computed: True` flag.
+def compute_fuel_rate(values: dict) -> "float | None":
+    coke, cdi = values.get("coke_rate"), values.get("cdi")
+    if coke is None or cdi is None:
+        return None
+    nut = values.get("nut_coke_rate") or 0
+    return round(coke + nut + cdi, 4)
+
 
 DYNAMIC_PARAM_KEYS = [p["key"] for p in BF_BENCHMARK_PARAMS if not p["static"]]
 STATIC_PARAM_KEYS = [p["key"] for p in BF_BENCHMARK_PARAMS if p["static"]]

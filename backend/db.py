@@ -490,23 +490,36 @@ def init_db():
 
     # 19. Large BF Benchmarking — registry of non-SAIL large BFs an admin/
     # editor adds for comparison. Soft-deactivate via `active` (mirrors
-    # allowed_emails.barred) — no hard delete.
+    # allowed_emails.barred) — no hard delete. `company` (e.g. "JSW") and
+    # `location` (e.g. "Vijaynagar") are separate so the comparison table can
+    # group columns Company -> Location -> Furnace, matching how SAIL's own
+    # BFs group under plant (Location) -> unit (Furnace), company always
+    # "SAIL". Added after the table already existed in prod — see
+    # scripts/migrate_add_bf_benchmark_location.sql for the live MySQL DDL.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS bf_benchmark_external_bf (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
             name              TEXT NOT NULL,
             company           TEXT DEFAULT '',
+            location          TEXT DEFAULT '',
             working_volume_m3 REAL,
             active            INTEGER NOT NULL DEFAULT 1,
             created_at        TEXT NOT NULL,
             created_by        TEXT DEFAULT ''
         )
     """)
+    cursor.execute("PRAGMA table_info(bf_benchmark_external_bf)")
+    if "location" not in [r[1] for r in cursor.fetchall()]:
+        cursor.execute("ALTER TABLE bf_benchmark_external_bf ADD COLUMN location TEXT DEFAULT ''")
 
-    # 20. Large BF Benchmarking — monthly entered data for each non-SAIL BF.
-    # param_json holds {param_key: value} for the dynamic params plus
-    # hot_metal_production (weighting input only, not a displayed column) —
-    # new params later are just another JSON key, no migration needed.
+    # 20. Large BF Benchmarking — one entered figure set per non-SAIL BF per
+    # Financial Year (non-SAIL BFs only ever publish FY-level figures, not
+    # monthly ones — unlike SAIL's own BFs, which read from techno_data's
+    # monthly records). Despite the column name (kept as-is to avoid a
+    # migration; CHAR(7) already fits both), `report_month` holds an FY
+    # label here, e.g. "2025-26", not a calendar month. param_json holds
+    # {param_key: value} for the dynamic params — new params later are just
+    # another JSON key, no migration needed.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS bf_benchmark_external_data (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,

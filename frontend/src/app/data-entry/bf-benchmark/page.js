@@ -6,27 +6,17 @@ import RequireEditor from '@/components/RequireEditor';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
-const MONTH_NAMES_FULL = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-const MONTH_NUM = {
-  January: '01', February: '02', March: '03', April: '04',
-  May: '05', June: '06', July: '07', August: '08',
-  September: '09', October: '10', November: '11', December: '12',
-};
+// Non-SAIL BFs only ever publish FY-level figures (no monthly breakdown
+// exists for them), so entry is one FY at a time, not month+year.
 const YEAR_RANGE_START = 2000;
 const _now = new Date();
-const CURRENT_FY_END_YEAR = (_now.getMonth() >= 3 ? _now.getFullYear() : _now.getFullYear() - 1) + 1;
-const YEARS = Array.from(
-  { length: CURRENT_FY_END_YEAR - YEAR_RANGE_START + 1 },
-  (_, i) => String(YEAR_RANGE_START + i)
+const CURRENT_FY_START = _now.getMonth() >= 3 ? _now.getFullYear() : _now.getFullYear() - 1;
+const FY_START_YEARS = Array.from(
+  { length: CURRENT_FY_START - YEAR_RANGE_START + 1 },
+  (_, i) => YEAR_RANGE_START + i
 ).reverse();
 
-function defaultMonthYear() {
-  const d = new Date(); d.setMonth(d.getMonth() - 1);
-  return { monthName: MONTH_NAMES_FULL[d.getMonth()], year: String(d.getFullYear()) };
-}
+function fyLabelOf(y) { return `${y}-${String((y + 1) % 100).padStart(2, '0')}`; }
 
 const inputStyle = {
   padding: '7px 10px', fontSize: '10.5pt', border: '1px solid #dadce0',
@@ -54,19 +44,15 @@ function BFInner() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCompany, setNewCompany] = useState('');
+  const [newLocation, setNewLocation] = useState('');
 
   const [editingBfId, setEditingBfId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', company: '', workingVolume: '', active: true });
+  const [editForm, setEditForm] = useState({ name: '', company: '', location: '', workingVolume: '', active: true });
 
   const [selectedBfId, setSelectedBfId] = useState('');
-  const { monthName: defMonth, year: defYear } = defaultMonthYear();
-  const [monthName, setMonthName] = useState(defMonth);
-  const [year, setYear] = useState(defYear);
+  const [fy, setFy] = useState(fyLabelOf(CURRENT_FY_START));
   const [entryValues, setEntryValues] = useState({});
-  const [hmProduction, setHmProduction] = useState('');
   const [saving, setSaving] = useState(false);
-
-  const reportMonth = `${year}-${MONTH_NUM[monthName]}`;
 
   const loadRegistry = useCallback(async () => {
     setLoading(true);
@@ -97,22 +83,23 @@ function BFInner() {
   // compare call over the current month for the 3 fixed SAIL BFs.
   useEffect(() => {
     if (sailBfs.length === 0) return;
+    const thisMonth = new Date().toISOString().slice(0, 7);
     fetch(`${API}/api/bf-benchmark/compare`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
-        bf_keys: sailBfs.map((b) => `sail:${b.plant}:${b.unit}`),
-        months: [reportMonth],
+        sail_bf_keys: sailBfs.map((b) => `${b.plant}:${b.unit}`),
+        months: [thisMonth],
       }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!d) return;
+        if (!d || !d.periods || d.periods.length === 0) return;
         const map = {};
-        for (const row of d.rows) {
-          const [, plant, unit] = row.bf_key.split(':');
-          map[`${plant}:${unit}`] = row.working_volume_m3;
+        for (const row of d.periods[0].rows) {
+          const [plant, unit] = row.bf_key.split(':');
+          map[`${plant}:${unit}`] = row.values.working_volume_m3;
         }
         setSailMeta(map);
       })
@@ -150,11 +137,11 @@ function BFInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name: newName.trim(), company: newCompany.trim() }),
+        body: JSON.stringify({ name: newName.trim(), company: newCompany.trim(), location: newLocation.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Could not add BF.');
-      setNewName(''); setNewCompany(''); setShowAddForm(false);
+      setNewName(''); setNewCompany(''); setNewLocation(''); setShowAddForm(false);
       await loadRegistry();
     } catch (err) {
       setError(err.message);
@@ -165,7 +152,7 @@ function BFInner() {
     setError('');
     setEditingBfId(bf.id);
     setEditForm({
-      name: bf.name, company: bf.company || '',
+      name: bf.name, company: bf.company || '', location: bf.location || '',
       workingVolume: bf.working_volume_m3 ?? '', active: bf.active,
     });
   };
@@ -180,6 +167,7 @@ function BFInner() {
         body: JSON.stringify({
           name: editForm.name.trim(),
           company: editForm.company.trim(),
+          location: editForm.location.trim(),
           working_volume_m3: editForm.workingVolume === '' ? null : parseFloat(editForm.workingVolume),
           active: editForm.active,
         }),
@@ -193,22 +181,20 @@ function BFInner() {
     }
   };
 
-  const loadEntry = useCallback(async (bfId, rm) => {
-    if (!bfId) { setEntryValues({}); setHmProduction(''); return; }
+  const loadEntry = useCallback(async (bfId, forFy) => {
+    if (!bfId) { setEntryValues({}); return; }
     setError('');
     try {
-      const res = await fetch(`${API}/api/bf-benchmark/external-bfs/${bfId}/entry?report_month=${rm}`, { credentials: 'include' });
+      const res = await fetch(`${API}/api/bf-benchmark/external-bfs/${bfId}/entry?fy=${forFy}`, { credentials: 'include' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Could not load entry.');
-      const pd = data.param_data || {};
-      setEntryValues(pd);
-      setHmProduction(pd.hot_metal_production ?? '');
+      setEntryValues(data.param_data || {});
     } catch (err) {
       setError(err.message);
     }
   }, []);
 
-  useEffect(() => { loadEntry(selectedBfId, reportMonth); }, [selectedBfId, reportMonth, loadEntry]);
+  useEffect(() => { loadEntry(selectedBfId, fy); }, [selectedBfId, fy, loadEntry]);
 
   const saveEntry = async () => {
     if (!selectedBfId) { setError('Select a non-SAIL BF first.'); return; }
@@ -216,21 +202,20 @@ function BFInner() {
     try {
       const param_data = {};
       for (const p of params) {
-        if (p.static) continue;
+        if (p.static || p.computed) continue;
         const v = entryValues[p.key];
         param_data[p.key] = v === '' || v === undefined || v === null ? null : parseFloat(v);
       }
-      param_data.hot_metal_production = hmProduction === '' ? null : parseFloat(hmProduction);
 
       const res = await fetch(`${API}/api/bf-benchmark/external-bfs/${selectedBfId}/entry`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ report_month: reportMonth, param_data }),
+        body: JSON.stringify({ fy, param_data }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Could not save entry.');
-      setNotice(`Saved ${reportMonth} data.`);
+      setNotice(`Saved FY ${fy} data.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -238,7 +223,18 @@ function BFInner() {
     }
   };
 
-  const dynamicParams = params.filter((p) => !p.static);
+  const dynamicParams = params.filter((p) => !p.static && !p.computed);
+  const computedParams = params.filter((p) => !p.static && p.computed);
+
+  // Mirrors bf_benchmark_registry.compute_fuel_rate: Coke Rate + CDI
+  // required, Nut Coke Rate optional (defaults to 0).
+  const computeFuelRate = () => {
+    const coke = parseFloat(entryValues.coke_rate);
+    const cdi = parseFloat(entryValues.cdi);
+    if (Number.isNaN(coke) || Number.isNaN(cdi)) return null;
+    const nut = parseFloat(entryValues.nut_coke_rate);
+    return coke + cdi + (Number.isNaN(nut) ? 0 : nut);
+  };
 
   return (
     <>
@@ -246,7 +242,8 @@ function BFInner() {
       <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 20px', height: 'calc(100vh - 72px)', overflowY: 'auto' }}>
         <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Large BF Benchmarking — Data Entry</h1>
         <p style={{ color: '#5f6368', marginBottom: '20px' }}>
-          Manage non-SAIL large BFs and their monthly figures, plus Working Volume for SAIL&apos;s 3 large BFs.
+          Manage non-SAIL large BFs and their per-FY figures (non-SAIL BFs only publish Financial Year totals,
+          not monthly ones), plus Working Volume for SAIL&apos;s 3 large BFs.
           See the comparison at <a href="/reports/bf-benchmark">Large BF Benchmarking</a>.
         </p>
 
@@ -304,22 +301,27 @@ function BFInner() {
               {showAddForm && (
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'flex-end' }}>
                   <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>Name</label>
-                    <input style={inputStyle} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. G-BF" />
+                    <label style={labelStyle}>Furnace Name</label>
+                    <input style={inputStyle} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. BF-1" />
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={labelStyle}>Company</label>
-                    <input style={inputStyle} value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="e.g. Tata Steel" />
+                    <input style={inputStyle} value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="e.g. JSW" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Location</label>
+                    <input style={inputStyle} value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="e.g. Vijaynagar" />
                   </div>
                   <button className="btn btn-primary" onClick={addBf}>Save</button>
-                  <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setNewName(''); setNewCompany(''); }}>Cancel</button>
+                  <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setNewName(''); setNewCompany(''); setNewLocation(''); }}>Cancel</button>
                 </div>
               )}
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
-                    <th style={{ padding: '6px 8px' }}>Name</th>
+                    <th style={{ padding: '6px 8px' }}>Furnace</th>
                     <th style={{ padding: '6px 8px' }}>Company</th>
+                    <th style={{ padding: '6px 8px' }}>Location</th>
                     <th style={{ padding: '6px 8px' }}>Working Volume</th>
                     <th style={{ padding: '6px 8px' }}>Status</th>
                     <th style={{ padding: '6px 8px' }}></th>
@@ -331,6 +333,7 @@ function BFInner() {
                       <tr style={{ borderBottom: '1px solid #e8eaed' }}>
                         <td style={{ padding: '6px 8px' }}>{bf.name}</td>
                         <td style={{ padding: '6px 8px' }}>{bf.company || '—'}</td>
+                        <td style={{ padding: '6px 8px' }}>{bf.location || '—'}</td>
                         <td style={{ padding: '6px 8px' }}>{bf.working_volume_m3 != null ? `${bf.working_volume_m3} m³` : '—'}</td>
                         <td style={{ padding: '6px 8px' }}>{bf.active ? 'Active' : 'Inactive'}</td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }}>
@@ -339,15 +342,19 @@ function BFInner() {
                       </tr>
                       {editingBfId === bf.id && (
                         <tr style={{ borderBottom: '1px solid #e8eaed', background: '#f8f9fa' }}>
-                          <td colSpan={5} style={{ padding: '12px' }}>
+                          <td colSpan={6} style={{ padding: '12px' }}>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                               <div>
-                                <label style={labelStyle}>Name</label>
+                                <label style={labelStyle}>Furnace Name</label>
                                 <input style={inputStyle} value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
                               </div>
                               <div>
                                 <label style={labelStyle}>Company</label>
                                 <input style={inputStyle} value={editForm.company} onChange={(e) => setEditForm((f) => ({ ...f, company: e.target.value }))} />
+                              </div>
+                              <div>
+                                <label style={labelStyle}>Location</label>
+                                <input style={inputStyle} value={editForm.location} onChange={(e) => setEditForm((f) => ({ ...f, location: e.target.value }))} />
                               </div>
                               <div>
                                 <label style={labelStyle}>Working Volume (m³)</label>
@@ -366,35 +373,31 @@ function BFInner() {
                     </Fragment>
                   ))}
                   {externalBfs.length === 0 && (
-                    <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>No non-SAIL BFs added yet.</td></tr>
+                    <tr><td colSpan={6} style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>No non-SAIL BFs added yet.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
 
-            {/* Monthly entry */}
+            {/* FY entry */}
             <div style={cardStyle}>
-              <h3 style={{ marginTop: 0, fontSize: '12pt' }}>Monthly Entry</h3>
+              <h3 style={{ marginTop: 0, fontSize: '12pt' }}>Financial Year Entry</h3>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                 <div style={{ flex: 2 }}>
                   <label style={labelStyle}>Non-SAIL BF</label>
                   <select style={selStyle} value={selectedBfId} onChange={(e) => setSelectedBfId(e.target.value)}>
                     <option value="">Select a BF…</option>
                     {externalBfs.filter((b) => b.active).map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}{b.company ? ` (${b.company})` : ''}</option>
+                      <option key={b.id} value={b.id}>
+                        {b.name}{b.company ? ` (${b.company}${b.location ? ` – ${b.location}` : ''})` : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>Month</label>
-                  <select style={selStyle} value={monthName} onChange={(e) => setMonthName(e.target.value)}>
-                    {MONTH_NAMES_FULL.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Year</label>
-                  <select style={selStyle} value={year} onChange={(e) => setYear(e.target.value)}>
-                    {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                  <label style={labelStyle}>Financial Year</label>
+                  <select style={selStyle} value={fy} onChange={(e) => setFy(e.target.value)}>
+                    {FY_START_YEARS.map((y) => <option key={y} value={fyLabelOf(y)}>{fyLabelOf(y)}</option>)}
                   </select>
                 </div>
               </div>
@@ -412,17 +415,22 @@ function BFInner() {
                         />
                       </div>
                     ))}
-                    <div>
-                      <label style={labelStyle}>Hot Metal Production (used to weight yearly averages)</label>
-                      <input type="number" style={inputStyle} value={hmProduction} onChange={(e) => setHmProduction(e.target.value)} />
-                    </div>
+                    {computedParams.map((p) => (
+                      <div key={p.key}>
+                        <label style={labelStyle}>{p.label} ({p.unit}) — auto-calculated</label>
+                        <input
+                          type="text" disabled style={{ ...inputStyle, backgroundColor: '#f1f3f4', color: '#5f6368' }}
+                          value={p.key === 'fuel_rate' ? (computeFuelRate() ?? '—') : '—'}
+                        />
+                      </div>
+                    ))}
                   </div>
                   <button className="btn btn-primary" disabled={saving} onClick={saveEntry}>
-                    {saving ? 'Saving…' : `Save ${reportMonth}`}
+                    {saving ? 'Saving…' : `Save FY ${fy}`}
                   </button>
                 </>
               ) : (
-                <p style={{ color: '#5f6368' }}>Select a non-SAIL BF above to enter its monthly data.</p>
+                <p style={{ color: '#5f6368' }}>Select a non-SAIL BF above to enter its FY data.</p>
               )}
             </div>
           </>

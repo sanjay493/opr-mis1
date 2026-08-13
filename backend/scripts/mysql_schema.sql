@@ -354,21 +354,29 @@ CREATE TABLE IF NOT EXISTS bf_benchmark_sail_meta (
 
 -- Large BF Benchmarking — registry of non-SAIL large BFs added for
 -- comparison. Soft-deactivate via `active` (mirrors allowed_emails.barred)
--- — no hard delete.
+-- — no hard delete. `company` (e.g. "JSW") and `location` (e.g.
+-- "Vijaynagar") are separate so the comparison table can group columns
+-- Company -> Location -> Furnace. NOTE: `location` was added after this
+-- table already existed in prod — for an existing live DB, run
+-- scripts/migrate_add_bf_benchmark_location.sql instead of relying on this
+-- CREATE TABLE (IF NOT EXISTS is a no-op against an existing table).
 CREATE TABLE IF NOT EXISTS bf_benchmark_external_bf (
     id                BIGINT AUTO_INCREMENT PRIMARY KEY,
     name              VARCHAR(190) NOT NULL,
     company           VARCHAR(190) DEFAULT '',
+    location          VARCHAR(190) DEFAULT '',
     working_volume_m3 DOUBLE,
     active            TINYINT NOT NULL DEFAULT 1,
     created_at        VARCHAR(40) NOT NULL,
     created_by        VARCHAR(190) DEFAULT ''
 ) ENGINE=InnoDB;
 
--- Large BF Benchmarking — monthly entered data for each non-SAIL BF.
--- param_json holds {param_key: value} for the dynamic params plus
--- hot_metal_production (weighting input only) — new params later are just
--- another JSON key, no migration needed.
+-- Large BF Benchmarking — one entered figure set per non-SAIL BF per
+-- Financial Year (non-SAIL BFs only ever publish FY-level figures, not
+-- monthly ones). Despite the column name (kept as-is; CHAR(7) already fits
+-- both), `report_month` holds an FY label here, e.g. "2025-26", not a
+-- calendar month. param_json holds {param_key: value} for the dynamic
+-- params — new params later are just another JSON key, no migration needed.
 CREATE TABLE IF NOT EXISTS bf_benchmark_external_data (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     external_bf_id  BIGINT NOT NULL,
