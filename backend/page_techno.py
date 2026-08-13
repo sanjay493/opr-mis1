@@ -705,8 +705,11 @@ def generate_summary_chart_data(report_month: str) -> dict:
                 "label": f"{fy_label(fy)}\nTarget",
                 "value": _to_float(row.get("target")),
             }
+            # Month-only label (no "'YY" year suffix) — unlike _mlabel's other
+            # callers, this chart's x-axis only ever spans one FY's Apr-Mar
+            # months, so the year is redundant clutter, not disambiguation.
             monthly_bars = [
-                {"label": _mlabel(m), "value": _to_float(v)}
+                {"label": _MON[int(m[5:7])], "value": _to_float(v)}
                 for m, v in zip(ytd_months, months)
             ]
 

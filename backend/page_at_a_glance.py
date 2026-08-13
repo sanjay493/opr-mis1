@@ -185,8 +185,13 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
     # redundant). Left margin is now sized for Zone B's "outside-left" share%
     # labels (thin-segment fallback, positioned left of the first month's
     # bar) rather than a column of axis numbers — those still need clearance
-    # or they render off-canvas at month 0.
-    ml, mr = 26, 10
+    # or they render off-canvas at month 0. Right margin mirrors this: every
+    # segment's "own %" label sits outside-right of its bar (text-anchor
+    # "start", growing rightward from x + bar_w/2 + 2.5) — at the LAST
+    # month, that bar's x sits right at the canvas edge, so mr must clear
+    # bar_w/2 (~9.5) plus the label text itself or it renders off-canvas
+    # there too (same failure mode as month 0's left-side labels, mirrored).
+    ml, mr = 26, 26
     # Zone A (top): existing Saleable/Finished Steel line trend.
     mt_a, ch_a = 13, 70
     # Zone B (bottom): new semi-finished-by-plant stacked bar — its own Y
