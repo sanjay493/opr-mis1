@@ -32,7 +32,7 @@ if _TP_DIR not in sys.path:
 
 from coal_co2_epi_extractor import (  # noqa: E402
     PLANTS, ENVIRO_PARAM_ORDER, ENVIRO_KEY_UNITS,
-    extract_pdf, mlabel_from_report_month, plant_techno_json,
+    extract_report, mlabel_from_report_month, plant_techno_json, plant_till_techno_json,
 )
 from db import (  # noqa: E402
     init_db, merge_upsert_techno_data, get_techno_data,
@@ -68,7 +68,7 @@ def _existing_conflicts(report_month: str, plant_records: list) -> list:
 
 @router.post("/preview")
 async def preview_coal_co2(
-    file: UploadFile = File(..., description="Coal Consumption & CO2/Water/PM EPI report (.pdf)"),
+    file: UploadFile = File(..., description="Coal Consumption & CO2/Water/PM EPI report (.pdf or .docx)"),
     report_month: str = Form(..., description="Selected month YYYY-MM — must match a column in the report"),
 ):
     _validate_month(report_month)
@@ -81,7 +81,7 @@ async def preview_coal_co2(
         tmp.close()
 
         try:
-            blob = extract_pdf(tmp.name, report_month, mlabel)
+            blob = extract_report(tmp.name, report_month, mlabel)
         except ValueError as e:
             raise HTTPException(
                 status_code=422,
@@ -94,15 +94,16 @@ async def preview_coal_co2(
         plant_records = []
         for plant in PLANTS:
             month_json = plant_techno_json(enviro, coal, plant)
+            till_json = plant_till_techno_json(enviro, plant)
             plant_records.append({"plant": plant, "unit": "General",
-                                   "techno_json": {"month": month_json, "till_month": {}}})
+                                   "techno_json": {"month": month_json, "till_month": till_json}})
 
         target_fy = _target_fy(report_month)
         targets = {"fy": target_fy}
         for plant in PLANTS + ["SAIL"]:
             plant_targets = {}
             for key, label, jk in ENVIRO_PARAM_ORDER:
-                v = enviro[key]["target"].get(plant)
+                v = enviro.get(key, {}).get("target", {}).get(plant)
                 if v is not None:
                     plant_targets[label] = {"value": v, "unit": ENVIRO_KEY_UNITS[jk]}
             if plant_targets:

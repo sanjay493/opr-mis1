@@ -956,11 +956,13 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
         Coal Consumption &amp; CO2/Water/PM EPI Report — all 5 plants at once
       </div>
       <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
-        One "Major Environmental Performance Indicators (EPIs)" PDF covers BSP/DSP/RSP/BSL/ISP for {reportMonth},
-        plus their shared FY annual target. Saved into the same techno_data table (unit=&quot;General&quot;) as the rest of this page.
+        One "Major Environmental Performance Indicators (EPIs)" report (PDF, or the "EMD Flash Report" .docx) covers
+        BSP/DSP/RSP/BSL/ISP for {reportMonth}, plus their shared FY annual target. The .docx Flash Report carries only
+        Sp. CO2 Emission and Sp. Water Consumption (no Sp. PM Emission or Coal Consumption) — those fields are left as-is.
+        Saved into the same techno_data table (unit=&quot;General&quot;) as the rest of this page.
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <input ref={inputRef} type="file" accept=".pdf"
+        <input ref={inputRef} type="file" accept=".pdf,.docx"
           onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
           style={{ fontSize: 13, flex: 1, minWidth: 200 }}
           suppressHydrationWarning
