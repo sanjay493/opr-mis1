@@ -18,6 +18,33 @@ function BackupRestoreInner() {
   const [notice, setNotice] = useState('');
   const [backingUp, setBackingUp] = useState(false);
   const [restoringFile, setRestoringFile] = useState('');
+  const [elapsed, setElapsed] = useState(0);
+  const busy = backingUp || restoringFile !== '';
+
+  // A backup/restore shells out to mysqldump/mysql and can take a couple of
+  // minutes with no other feedback — surface elapsed time so it doesn't look
+  // hung, and warn before leaving so nobody navigates away thinking it froze
+  // (the operation keeps running server-side either way, but the success/
+  // error message would never reach anyone still on the page).
+  useEffect(() => {
+    if (!busy) {
+      setElapsed(0);
+      return;
+    }
+    const start = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [busy]);
+
+  useEffect(() => {
+    if (!busy) return;
+    const handler = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [busy]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,10 +124,15 @@ function BackupRestoreInner() {
           Restoring always saves a snapshot of the current data first.
         </p>
 
-        <button className="btn btn-primary" onClick={backupNow} disabled={backingUp} style={{ marginBottom: '20px' }}>
-          {backingUp ? 'Backing up…' : 'Backup Now'}
+        <button className="btn btn-primary" onClick={backupNow} disabled={busy} style={{ marginBottom: '20px' }}>
+          {backingUp ? `Backing up… (${elapsed}s)` : 'Backup Now'}
         </button>
 
+        {busy && (
+          <p style={{ color: '#5f6368', marginBottom: '12px' }}>
+            This can take a couple of minutes — please don&apos;t close or refresh this page.
+          </p>
+        )}
         {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
         {notice && <p style={{ color: '#188038', marginBottom: '12px' }}>{notice}</p>}
 
@@ -129,9 +161,9 @@ function BackupRestoreInner() {
                       className="btn btn-secondary"
                       style={{ color: '#c5221f', borderColor: '#c5221f' }}
                       onClick={() => restore(b.filename)}
-                      disabled={restoringFile !== ''}
+                      disabled={busy}
                     >
-                      {restoringFile === b.filename ? 'Restoring…' : 'Restore'}
+                      {restoringFile === b.filename ? `Restoring… (${elapsed}s)` : 'Restore'}
                     </button>
                   </td>
                 </tr>
