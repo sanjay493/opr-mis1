@@ -368,11 +368,18 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
         <div>
           <div style={{ fontWeight: '700', fontSize: '0.95em' }}>Highlights:</div>
           <div style={{ fontSize: '0.9em', lineHeight: '1.4', marginTop: '2px' }}>
-            {highlightLines.map((line, idx) => (
-              <div key={idx} style={{ fontWeight: line.endsWith(':-') ? '600' : '400' }}>
-                {line}
-              </div>
-            ))}
+            {highlightLines.map((line, idx) => {
+              const isHeading = line.endsWith(':-');
+              return (
+                <div key={idx} style={{
+                  fontWeight: isHeading ? '600' : '400',
+                  color: isHeading ? 'inherit' : '#0f766e',
+                  paddingLeft: isHeading ? 0 : '18px',
+                }}>
+                  {line}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
