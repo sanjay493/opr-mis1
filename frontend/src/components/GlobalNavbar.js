@@ -63,6 +63,8 @@ export default function GlobalNavbar() {
           groupLabel: 'Dashboards',
           children: [
             { label: 'Techno Summary', link: '/data-entry/techno-summary', icon: '📈' },
+            { label: 'Coal Consumption', link: '/data-entry/coal-consumption', icon: '⛏️' },
+            { label: 'CO2 / Water / PM', link: '/data-entry/co2-water-pm', icon: '🌫️' },
           ]
         },
       ]
