@@ -26,7 +26,7 @@ from page17_concast import generate_concast_data
 from page_prod_by_process import generate_prod_by_process
 from page_catwise_saleable import generate_catwise_saleable
 from page_segment_wise import generate_segment_wise
-from page_special_steel import generate_special_steel_plant, generate_special_steel_sail
+from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, _ssps_special_steel
 from page_special_steel_trend import generate_special_steel_trend
 from page_at_a_glance import generate_at_a_glance
 from page_key_parameters import generate_key_parameters
@@ -935,6 +935,41 @@ def get_special_steel_manual(plant: str = Query(...), month: str = Query(...)):
     finally:
         conn.close()
     return {"rows": rows, "plant": plant, "month": month}
+
+
+@app.get("/api/special-steel-ssps-basis")
+def get_special_steel_ssps_basis(month: str = Query(...)):
+    """SSPs's actual despatch isn't manually entered — it's computed from
+    Salem Steel Plant's own production_table despatch figures (see
+    _ssps_special_steel). Returns the raw Saleable Steel Despatch / Carbon
+    Steel Despatch inputs alongside the computed result so the manual-entry
+    screen can show how the SSPs figure was derived, for a single month."""
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT month_actual FROM production_table
+            WHERE report_month=? AND plant_name='SSP' AND item_name='Total Saleable Steel Despatch'
+        """, (month,))
+        row = cur.fetchone()
+        saleable_000t = row[0] if row else None
+
+        cur.execute("""
+            SELECT month_actual FROM production_table
+            WHERE report_month=? AND plant_name='SSP' AND item_name='Finished Carbon Steel Despatch'
+        """, (month,))
+        row = cur.fetchone()
+        carbon_000t = row[0] if row else None
+
+        computed_actual = _ssps_special_steel(cur, [month])
+    finally:
+        conn.close()
+    return {
+        "month": month,
+        "ssp_saleable_steel_000t": saleable_000t,
+        "ssp_carbon_steel_000t": carbon_000t,
+        "computed_actual_despatch_t": computed_actual,
+    }
 
 
 @app.post("/api/special-steel-manual/save")
@@ -3181,6 +3216,99 @@ async def production_fy_pdf(fy_start: int = Query(...), mode: str = Query("actua
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Special Steel — month-wise, plant-wise Order vs Actual Despatch (FY report)
+# ---------------------------------------------------------------------------
+
+SPECIAL_STEEL_FY_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SSPs"]
+
+
+def _special_steel_fy_data(fy_start: int) -> dict:
+    """Month-wise, plant-wise Special Steel Order Qty vs Actual Despatch for
+    a financial year, plus a computed SAIL total row. Mirrors
+    _production_fy_data's shape/conventions above."""
+    months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
+             [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
+    phs = ",".join("?" for _ in months)
+    plant_phs = ",".join("?" for _ in SPECIAL_STEEL_FY_PLANTS)
+
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        # data[plant][month] = {"order": val, "actual": val}
+        data = {p: {m: {"order": None, "actual": None} for m in months} for p in SPECIAL_STEEL_FY_PLANTS}
+        cur.execute(f"""
+            SELECT plant_name, report_month, SUM(order_qty), SUM(actual_despatch)
+            FROM special_steel_orders
+            WHERE report_month IN ({phs}) AND plant_name IN ({plant_phs})
+            GROUP BY plant_name, report_month
+        """, (*months, *SPECIAL_STEEL_FY_PLANTS))
+        for plant, month, order_qty, actual_despatch in cur.fetchall():
+            data[plant][month] = {"order": order_qty, "actual": actual_despatch}
+
+        # SSPs carries no real order-book rows in special_steel_orders — its
+        # actual despatch is derived from production_table instead, same as
+        # page 24 (see _ssps_special_steel's docstring).
+        for month in months:
+            data["SSPs"][month]["actual"] = _ssps_special_steel(cur, [month])
+    finally:
+        conn.close()
+
+    plants = [
+        {
+            "plant": plant,
+            "order": {m: data[plant][m]["order"] for m in months},
+            "actual": {m: data[plant][m]["actual"] for m in months},
+        }
+        for plant in SPECIAL_STEEL_FY_PLANTS
+    ]
+
+    # SAIL = sum of all plants above, treating missing values as 0; a month
+    # stays blank only if none of the plants have any data for it at all.
+    sail_order, sail_actual = {}, {}
+    for m in months:
+        order_vals = [data[p][m]["order"] for p in SPECIAL_STEEL_FY_PLANTS]
+        actual_vals = [data[p][m]["actual"] for p in SPECIAL_STEEL_FY_PLANTS]
+        sail_order[m] = sum(v for v in order_vals if v is not None) if any(v is not None for v in order_vals) else None
+        sail_actual[m] = sum(v for v in actual_vals if v is not None) if any(v is not None for v in actual_vals) else None
+    plants.append({"plant": "SAIL", "order": sail_order, "actual": sail_actual})
+
+    return {
+        "fy_start": fy_start,
+        "fy_label": f"{fy_start}-{str(fy_start + 1)[2:]}",
+        "months": months,
+        "plants": plants,
+    }
+
+
+@app.get("/api/special-steel-fys")
+async def list_special_steel_fys():
+    """List financial years that have Special Steel order-book data.
+    Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
+    conn = db.connect()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT report_month FROM special_steel_orders
+        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+    """)
+    fy_starts = set()
+    for (m,) in cur.fetchall():
+        year, month = int(m[:4]), int(m[5:7])
+        fy_starts.add(year if month >= 4 else year - 1)
+    conn.close()
+    return {
+        "fys": [
+            {"fy_start": y, "label": f"{y}-{str(y + 1)[2:]}"}
+            for y in sorted(fy_starts, reverse=True)
+        ]
+    }
+
+
+@app.get("/api/special-steel-fy")
+async def get_special_steel_fy(fy_start: int = Query(...)):
+    return _special_steel_fy_data(fy_start)
 
 
 # ---------------------------------------------------------------------------

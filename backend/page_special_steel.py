@@ -286,28 +286,29 @@ def _get_prod_ytd(cur, ytd_months, plant, item):
 _SSPS_PLANTS = ("ASP", "VISL", "SSP")
 
 
-def _ssps_special_steel(cur, months, item="Saleable Steel"):
-    """SSPs (Alloy Steels Plant + Visvesvaraya Iron & Steel Plant + Salem
-    Steel Plant) carry no order-book rows in special_steel_orders, so their
+def _ssps_special_steel(cur, months, item="Total Saleable Steel Despatch"):
+    """SSPs carries no order-book rows in special_steel_orders, so its
     'actual' special-steel figure on page 24 is derived instead from
-    production_table: total <item> production across the three plants,
-    minus SSP's own Carbon Steel Production (Salem runs both stainless/
-    special and ordinary carbon steel off the same lines; ASP and VISL have
-    no carbon-steel split of their own, so their whole output counts).
-    'Saleable Steel' is used rather than 'Finished Steel' - ASP's Finished
-    Steel figure is a much narrower sub-metric (~5% of its Saleable Steel),
-    while Saleable Steel is consistent across all three plants.
+    production_table: Salem Steel Plant's (SSP) own <item> despatch,
+    minus SSP's Finished Carbon Steel Despatch (Salem runs both
+    stainless/special and ordinary carbon steel off the same lines, so the
+    carbon-steel portion of its despatch isn't special steel and must be
+    subtracted out). Alloy Steels Plant and VISL are excluded — despite the
+    'SSPs' label bundling all three plants elsewhere, only Salem's own
+    despatch counts as special steel for this figure. Uses the DESPATCHES
+    section figures (pdf_extractor_ssp.py), not SALEABLE PRODUCTION, since
+    despatch is what actually leaves the plant.
     production_table stores '000T; this page is in T -> ×1000, same
     convention as ss_cur/ss_abp_fy below."""
     ph = ",".join("?" * len(months))
     cur.execute(f"""
         SELECT COALESCE(SUM(month_actual),0) FROM production_table
-        WHERE report_month IN ({ph}) AND plant_name IN ('ASP','VISL','SSP') AND item_name=?
+        WHERE report_month IN ({ph}) AND plant_name='SSP' AND item_name=?
     """, (*months, item))
     total = (cur.fetchone() or [0])[0]
     cur.execute(f"""
         SELECT COALESCE(SUM(month_actual),0) FROM production_table
-        WHERE report_month IN ({ph}) AND plant_name='SSP' AND item_name='Carbon Steel Production'
+        WHERE report_month IN ({ph}) AND plant_name='SSP' AND item_name='Finished Carbon Steel Despatch'
     """, (*months,))
     carbon = (cur.fetchone() or [0])[0]
     return (total - carbon) * 1000

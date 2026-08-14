@@ -91,21 +91,23 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
   const [status, setStatus]   = useState(null); // { type: 'success'|'error'|'info', text }
   const [loaded, setLoaded]   = useState(false);
   const [dirty, setDirty]     = useState(false);
+  const [sspsBasis, setSspsBasis] = useState(null); // { ssp_saleable_steel_000t, ssp_carbon_steel_000t, computed_actual_despatch_t }
 
   const reportMonth = `${year}-${MONTH_NUM[month]}`;
   const products    = PLANT_PRODUCTS[plant] || [];
+  const isSsps      = plant === 'SSPs';
 
   /* ── load ─────────────────────────────────────────────────────────────── */
   const handleLoad = async () => {
     if (dirty && !window.confirm('You have unsaved changes. Load and discard them?')) return;
-    setLoading(true); setStatus(null);
+    setLoading(true); setStatus(null); setSspsBasis(null);
     try {
       const res = await fetch(
         `${apiBase}/api/special-steel-manual?plant=${encodeURIComponent(plant)}&month=${encodeURIComponent(reportMonth)}`
       );
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      const fetched = data.rows.map(r => ({
+      let fetched = data.rows.map(r => ({
         _id: uid(),
         product:          r.product,
         quality_grade:    r.quality_grade,
@@ -113,6 +115,22 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
         order_qty:        r.order_qty != null ? String(r.order_qty) : '',
         actual_despatch:  r.actual_despatch != null ? String(r.actual_despatch) : '',
       }));
+
+      let basis = null;
+      if (isSsps) {
+        const basisRes = await fetch(
+          `${apiBase}/api/special-steel-ssps-basis?month=${encodeURIComponent(reportMonth)}`
+        );
+        if (basisRes.ok) basis = await basisRes.json();
+        // SSPs's actual despatch is never manually entered — always show the
+        // live-computed figure (matches what the report pages display),
+        // not whatever legacy value happens to be stored for this month.
+        const computed = basis?.computed_actual_despatch_t;
+        const computedStr = computed != null ? String(Math.round(computed * 100) / 100) : '';
+        fetched = (fetched.length ? fetched : [blankRow(plant)]).map(r => ({ ...r, actual_despatch: computedStr }));
+      }
+      setSspsBasis(basis);
+
       setRows(fetched.length ? fetched : [blankRow(plant)]);
       setLoaded(true); setDirty(false);
       setStatus(fetched.length
@@ -127,6 +145,7 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
 
   /* ── save ─────────────────────────────────────────────────────────────── */
   const handleSave = async () => {
+    if (isSsps) return; // SSPs is auto-computed from production data — nothing to save
     const valid = rows.filter(r => r.product.trim());
     if (!valid.length) { setStatus({ type: 'error', text: 'No rows with a product name to save.' }); return; }
     setSaving(true); setStatus(null);
@@ -164,7 +183,7 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
   const updateRow = (id, f, v) => { setRows(p => p.map(r => r._id === id ? { ...r, [f]: v } : r)); setDirty(true); };
 
   /* ── plant/month reset ────────────────────────────────────────────────── */
-  const resetSelector = (setter, val) => { setter(val); setLoaded(false); setRows([]); setDirty(false); setStatus(null); };
+  const resetSelector = (setter, val) => { setter(val); setLoaded(false); setRows([]); setDirty(false); setStatus(null); setSspsBasis(null); };
 
   /* ── status colour ───────────────────────────────────────────────────── */
   const stBg   = { success: '#dcfce7', error: '#fee2e2', info: '#eff6ff' }[status?.type] || '#f1f5f9';
@@ -226,6 +245,20 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
           </div>
         )}
 
+        {/* ── SSPs computed-basis note ──────────────────────────────────── */}
+        {isSsps && loaded && (
+          <div style={{ padding: '8px 14px', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 6, fontSize: '0.75rem', color: '#94a3b8', marginBottom: 14 }}>
+            SSPs Actual Despatch is auto-computed from Salem Steel Plant&apos;s (SSP) own despatch figures — not manually entered — so it can&apos;t be edited here.{' '}
+            {sspsBasis ? (
+              <>
+                SSP Saleable Steel Despatch: <strong style={{ color: '#64748b' }}>{sspsBasis.ssp_saleable_steel_000t != null ? `${sspsBasis.ssp_saleable_steel_000t} '000T` : '—'}</strong>
+                {' · '}SSP Carbon Steel Despatch: <strong style={{ color: '#64748b' }}>{sspsBasis.ssp_carbon_steel_000t != null ? `${sspsBasis.ssp_carbon_steel_000t} '000T` : '—'}</strong>
+                {' · '}Computed Actual Despatch: <strong style={{ color: '#64748b' }}>{sspsBasis.computed_actual_despatch_t != null ? `${Math.round(sspsBasis.computed_actual_despatch_t).toLocaleString('en-IN')} T` : '—'}</strong>
+              </>
+            ) : 'No despatch data found for this month.'}
+          </div>
+        )}
+
         {/* ── table ──────────────────────────────────────────────────────── */}
         {(loaded || rows.length > 0) ? (
           <>
@@ -256,7 +289,7 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
                         {/* Product */}
                         <td style={TD(bg)}>
                           <select value={row.product} onChange={e => updateRow(row._id, 'product', e.target.value)}
-                            style={INP()}>
+                            disabled={isSsps} style={INP()}>
                             {products.map(p => <option key={p} value={p}>{p}</option>)}
                             {!products.includes(row.product) && row.product &&
                               <option value={row.product}>{row.product}</option>}
@@ -267,35 +300,40 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
                           <input value={row.quality_grade}
                             onChange={e => updateRow(row._id, 'quality_grade', e.target.value)}
                             placeholder={TOTAL_GRADE_PLANTS.has(plant) ? 'TOTAL' : 'e.g. E250, IS:2062'}
-                            style={INP()} />
+                            disabled={isSsps} style={INP()} />
                         </td>
                         {/* Section */}
                         <td style={TD(bg)}>
                           <input value={row.section}
                             onChange={e => updateRow(row._id, 'section', e.target.value)}
                             placeholder="(opt)"
-                            style={INP({ color: '#64748b' })} />
+                            disabled={isSsps} style={INP({ color: '#64748b' })} />
                         </td>
                         {/* Orders */}
                         <td style={TD(bg)}>
                           <input type="number" step="any" min="0" value={row.order_qty}
                             onChange={e => updateRow(row._id, 'order_qty', e.target.value)}
-                            placeholder="0"
-                            style={INP({ textAlign: 'right', backgroundColor: '#eff6ff', color: '#1e40af' })} />
+                            placeholder="0" disabled={isSsps}
+                            style={INP({ textAlign: 'right', backgroundColor: isSsps ? '#f1f5f9' : '#eff6ff', color: isSsps ? '#94a3b8' : '#1e40af' })} />
                         </td>
                         {/* Actual */}
                         <td style={TD(bg)}>
                           <input type="number" step="any" min="0" value={row.actual_despatch}
                             onChange={e => updateRow(row._id, 'actual_despatch', e.target.value)}
-                            placeholder="0"
-                            style={INP({ textAlign: 'right', backgroundColor: '#f0fdf4', color: '#065f46' })} />
+                            placeholder="0" disabled={isSsps}
+                            title={isSsps ? 'Auto-computed from SSP production data — not editable' : undefined}
+                            style={INP({ textAlign: 'right', backgroundColor: isSsps ? '#f1f5f9' : '#f0fdf4', color: isSsps ? '#94a3b8' : '#065f46' })} />
                         </td>
                         {/* Actions */}
                         <td style={{ ...TD(bg), textAlign: 'center', whiteSpace: 'nowrap' }}>
-                          <button onClick={() => dupRow(row._id)} title="Duplicate row"
-                            style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: '13px', padding: '2px 4px' }}>⧉</button>
-                          <button onClick={() => deleteRow(row._id)} title="Delete row"
-                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '15px', padding: '2px 4px' }}>×</button>
+                          {!isSsps && (
+                            <>
+                              <button onClick={() => dupRow(row._id)} title="Duplicate row"
+                                style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: '13px', padding: '2px 4px' }}>⧉</button>
+                              <button onClick={() => deleteRow(row._id)} title="Delete row"
+                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '15px', padding: '2px 4px' }}>×</button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     );
@@ -313,17 +351,24 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
 
             {/* ── footer ─────────────────────────────────────────────────── */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, flexWrap: 'wrap', gap: 10 }}>
-              <button onClick={addRow}
-                style={{ padding: '6px 16px', backgroundColor: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
-                + Add Row
-              </button>
+              {!isSsps && (
+                <button onClick={addRow}
+                  style={{ padding: '6px 16px', backgroundColor: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
+                  + Add Row
+                </button>
+              )}
+              {isSsps && <span />}
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                  {rows.length} row(s) · Save replaces <em>all</em> existing data for {plant} {month} {year}
+                  {isSsps
+                    ? 'SSPs is read-only — auto-computed from production data'
+                    : <>{rows.length} row(s) · Save replaces <em>all</em> existing data for {plant} {month} {year}</>}
                 </span>
-                <button onClick={handleSave} disabled={saving || !dirty} style={BTN('#10b981', saving || !dirty)}>
-                  {saving ? 'Saving…' : 'Save All'}
-                </button>
+                {!isSsps && (
+                  <button onClick={handleSave} disabled={saving || !dirty} style={BTN('#10b981', saving || !dirty)}>
+                    {saving ? 'Saving…' : 'Save All'}
+                  </button>
+                )}
               </div>
             </div>
           </>
