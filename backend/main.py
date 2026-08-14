@@ -44,6 +44,7 @@ from page_jpc_report import build_jpc_report_bytes
 from page_finished_steel_report import build_finished_steel_report_csv
 from page_do_letter import build_do_letter_docx_bytes, build_do_annexure_xlsx_bytes
 import page_production_fy_export
+import page_special_steel_fy_export
 import page_production_query_export
 from page_one_page_report import build_one_page_report_bytes
 from page_pmix_fy_report import build_pmix_fy_report_bytes
@@ -3311,6 +3312,34 @@ async def get_special_steel_fy(fy_start: int = Query(...)):
     return _special_steel_fy_data(fy_start)
 
 
+@app.get("/api/special-steel-fy/excel")
+async def special_steel_fy_excel(fy_start: int = Query(...)):
+    data = _special_steel_fy_data(fy_start)
+    content = page_special_steel_fy_export.build_excel_bytes(data)
+    fname = f"SpecialSteel_{data['fy_label']}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.get("/api/special-steel-fy/pdf")
+async def special_steel_fy_pdf(fy_start: int = Query(...)):
+    import asyncio, concurrent.futures
+    data = _special_steel_fy_data(fy_start)
+    html = page_special_steel_fy_export.build_pdf_html(data)
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        content = await loop.run_in_executor(pool, page_special_steel_fy_export.render_pdf_bytes, html)
+    fname = f"SpecialSteel_{data['fy_label']}.pdf"
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # SAIL "1 page report" — Table A (Sales) / Table D (Stock) extraction
 # ---------------------------------------------------------------------------
@@ -4228,6 +4257,16 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
 # IPT (Inter-Plant Transfer) data entry
 # ---------------------------------------------------------------------------
 
+@app.get("/api/ipt-items")
+def get_ipt_items():
+    conn = db.connect()
+    cur  = conn.cursor()
+    cur.execute("SELECT DISTINCT item FROM ipt_table WHERE item IS NOT NULL AND item <> '' ORDER BY item")
+    items = [r[0] for r in cur.fetchall()]
+    conn.close()
+    return {"items": items}
+
+
 @app.get("/api/ipt-entries")
 def get_ipt_entries(month: str = Query(..., description="YYYY-MM")):
     conn = db.connect()
@@ -4281,6 +4320,50 @@ async def save_ipt_entry_api(payload: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/ipt-entries/bulk")
+async def save_ipt_entries_bulk(payload: dict):
+    """Save many IPT routes for a month in one call. Each entry may carry
+    orig_item/orig_from_plant/orig_to_plant (the key it was loaded under) —
+    if the key changed, the old row is deleted before the new key is upserted,
+    so editing item/from/to in place doesn't leave an orphan record behind."""
+    month = payload.get("month", "")
+    if not month:
+        raise HTTPException(status_code=400, detail="month is required")
+    entries = payload.get("entries", [])
+
+    def _flt(v):
+        try:
+            return float(v) if v not in (None, "", "-", "--") else None
+        except (ValueError, TypeError):
+            return None
+
+    saved = 0
+    try:
+        for e in entries:
+            item = (e.get("item") or "").strip()
+            from_plant = e.get("from_plant") or ""
+            to_plant = e.get("to_plant") or ""
+            if not item or not from_plant or not to_plant or from_plant == to_plant:
+                continue
+
+            orig_item = e.get("orig_item")
+            orig_from = e.get("orig_from_plant")
+            orig_to = e.get("orig_to_plant")
+            if orig_item and (orig_item != item or orig_from != from_plant or orig_to != to_plant):
+                db.delete_ipt_entry(month, orig_item, orig_from, orig_to)
+
+            db.save_ipt_entry(
+                month=month, item=item, from_plant=from_plant, to_plant=to_plant,
+                unit=e.get("unit", "T"), sort_order=int(e.get("sort_order") or 0),
+                plan=_flt(e.get("plan")), actual=_flt(e.get("actual")),
+                plan_tonnage=_flt(e.get("plan_tonnage")), actual_tonnage=_flt(e.get("actual_tonnage")),
+            )
+            saved += 1
+        return {"status": "ok", "saved": saved, "skipped": len(entries) - saved}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/ipt-delete")
 async def delete_ipt_entry_api(payload: dict):
     month      = payload.get("month", "")
@@ -4291,6 +4374,90 @@ async def delete_ipt_entry_api(payload: dict):
         raise HTTPException(status_code=400, detail="month, item, from_plant, to_plant required")
     db.delete_ipt_entry(month, item, from_plant, to_plant)
     return {"status": "ok", "message": "Deleted."}
+
+
+# ---------------------------------------------------------------------------
+# IPT — month-wise, item/route-wise Plan vs Actual (FY report)
+# ---------------------------------------------------------------------------
+
+def _ipt_fy_data(fy_start: int) -> dict:
+    """Month-wise Plan vs Actual for every item + From->To route, for a
+    financial year. Mirrors _special_steel_fy_data's shape/conventions."""
+    months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
+             [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
+    phs = ",".join("?" for _ in months)
+
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        # union of routes seen across the FY, keeping first-appearance order
+        cur.execute(f"""
+            SELECT item, from_plant, to_plant, MAX(unit), MIN(sort_order)
+            FROM ipt_table
+            WHERE report_month IN ({phs})
+            GROUP BY item, from_plant, to_plant
+            ORDER BY MIN(sort_order), item, from_plant, to_plant
+        """, months)
+        routes = cur.fetchall()
+
+        cur.execute(f"""
+            SELECT item, from_plant, to_plant, report_month, plan, actual
+            FROM ipt_table WHERE report_month IN ({phs})
+        """, months)
+        val_map = {(item, frm, to, rm): (plan, actual) for item, frm, to, rm, plan, actual in cur.fetchall()}
+    finally:
+        conn.close()
+
+    sections, by_item = [], {}
+    for item, frm, to, unit, _ in routes:
+        plan_by_month, actual_by_month = {}, {}
+        for m in months:
+            p, a = val_map.get((item, frm, to, m), (None, None))
+            plan_by_month[m] = p
+            actual_by_month[m] = a
+        row = {
+            "from": frm, "to": to, "unit": unit,
+            "plan": plan_by_month, "actual": actual_by_month,
+        }
+        if item not in by_item:
+            by_item[item] = {"item": item, "routes": []}
+            sections.append(by_item[item])
+        by_item[item]["routes"].append(row)
+
+    return {
+        "fy_start": fy_start,
+        "fy_label": f"{fy_start}-{str(fy_start + 1)[2:]}",
+        "months": months,
+        "sections": sections,
+    }
+
+
+@app.get("/api/ipt-fys")
+async def list_ipt_fys():
+    """List financial years that have IPT data.
+    Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
+    conn = db.connect()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT report_month FROM ipt_table
+        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+    """)
+    fy_starts = set()
+    for (m,) in cur.fetchall():
+        year, month = int(m[:4]), int(m[5:7])
+        fy_starts.add(year if month >= 4 else year - 1)
+    conn.close()
+    return {
+        "fys": [
+            {"fy_start": y, "label": f"{y}-{str(y + 1)[2:]}"}
+            for y in sorted(fy_starts, reverse=True)
+        ]
+    }
+
+
+@app.get("/api/ipt-fy")
+async def get_ipt_fy(fy_start: int = Query(...)):
+    return _ipt_fy_data(fy_start)
 
 
 # ---------------------------------------------------------------------------

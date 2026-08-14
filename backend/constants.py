@@ -69,6 +69,7 @@ PAGE_MODULES = {
         "label": "IPT",
         "routes": [
             ("POST", "/api/ipt-entry", False),
+            ("POST", "/api/ipt-entries/bulk", False),
             ("POST", "/api/ipt-delete", True),
         ],
     },
