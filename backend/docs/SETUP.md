@@ -84,6 +84,11 @@ CREATE USER 'mis_app'@'localhost' IDENTIFIED BY '<your-password>';
 CREATE USER 'mis_app'@'127.0.0.1' IDENTIFIED BY '<your-password>';
 GRANT ALL PRIVILEGES ON mis_reports.* TO 'mis_app'@'localhost';
 GRANT ALL PRIVILEGES ON mis_reports.* TO 'mis_app'@'127.0.0.1';
+-- RELOAD + PROCESS are global privileges mysqldump needs for its FLUSH TABLES
+-- step (backup_mysql.bat fails with "Access denied ... RELOAD or FLUSH_TABLES"
+-- without these - the database-scoped GRANT ALL above does not cover them).
+GRANT RELOAD, PROCESS ON *.* TO 'mis_app'@'localhost';
+GRANT RELOAD, PROCESS ON *.* TO 'mis_app'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ```
 

@@ -130,16 +130,24 @@ def _run_dump(dest: Path) -> None:
     tmp_dest = dest.with_name(f".{dest.name}.tmp")
     try:
         with open(tmp_dest, "wb") as out:
-            result = subprocess.run(
-                [
-                    str(bin_dir / "mysqldump.exe"),
-                    f"--defaults-extra-file={ini_path}",
-                    "--single-transaction", "--no-tablespaces", "--routines", "--triggers",
-                    "--set-gtid-purged=OFF",
-                    _MYSQL_CFG["database"],
-                ],
-                stdout=out, stderr=subprocess.PIPE, timeout=180,
-            )
+            try:
+                result = subprocess.run(
+                    [
+                        str(bin_dir / "mysqldump.exe"),
+                        f"--defaults-extra-file={ini_path}",
+                        "--single-transaction", "--no-tablespaces", "--routines", "--triggers",
+                        "--set-gtid-purged=OFF",
+                        _MYSQL_CFG["database"],
+                    ],
+                    stdout=out, stderr=subprocess.PIPE, timeout=180,
+                )
+            except subprocess.TimeoutExpired:
+                raise HTTPException(
+                    status_code=504,
+                    detail="mysqldump timed out after 180s — likely blocked by a long-running "
+                           "query or open transaction on mis_reports. Check SHOW FULL PROCESSLIST "
+                           "/ information_schema.innodb_trx and retry.",
+                )
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"mysqldump failed: {result.stderr.decode(errors='replace')[:500]}")
         if tmp_dest.stat().st_size < 1024:
@@ -212,10 +220,21 @@ def restore_backup(filename: str, admin: dict = Depends(auth.require_admin)):
     sanitized = _sanitize_for_restore(src)
     try:
         with open(sanitized, "rb") as stdin_file:
-            result = subprocess.run(
-                [str(bin_dir / "mysql.exe"), f"--defaults-extra-file={ini_path}", _MYSQL_CFG["database"]],
-                stdin=stdin_file, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
-            )
+            try:
+                result = subprocess.run(
+                    [str(bin_dir / "mysql.exe"), f"--defaults-extra-file={ini_path}", _MYSQL_CFG["database"]],
+                    stdin=stdin_file, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
+                )
+            except subprocess.TimeoutExpired:
+                raise HTTPException(
+                    status_code=504,
+                    detail=(
+                        "Restore timed out after 180s — likely blocked by a long-running query or "
+                        "open transaction on mis_reports. Check SHOW FULL PROCESSLIST / "
+                        "information_schema.innodb_trx, clear the blocker, and retry. "
+                        f"Data was not changed — pre-restore snapshot saved as {prerestore_name}."
+                    ),
+                )
         if result.returncode != 0:
             raise HTTPException(
                 status_code=500,
