@@ -5,7 +5,15 @@ import { useState, useEffect, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
+// SAIL included — techno_data plant="SAIL" unit="General" already exists
+// (written by the Coal OMI extractor for the 4 coal-consumption keys); a
+// manually-entered SAIL value here takes precedence over the report pages'
+// own computed crude-steel-weighted average of the 5 plants (page_techno.py
+// BF_SAIL_SPECS/_bf_sail_v — that computation is a fallback used only when
+// no stored SAIL value exists, same treatment as Specific Energy
+// Consumption). /api/techno/manual/entry+save are already plant-agnostic,
+// so no backend change was needed for this.
+const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
 
 const MONTHS = [
   'April', 'May', 'June', 'July', 'August', 'September',
