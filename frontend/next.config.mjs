@@ -20,6 +20,17 @@ const nextConfig = {
     // error) — DSP monthly PDFs run up to ~19MB, so raise the ceiling well
     // above that.
     proxyClientMaxBodySize: '30mb',
+    // Next dev's rewrite proxy hardcodes a 30s timeout by default
+    // (server/lib/router-utils/proxy-request.js) — too short for
+    // /api/admin/backups/*/restore, which shells out to mysqldump (pre-restore
+    // snapshot) then mysql (the actual restore), each with its own 180s
+    // subprocess timeout on the backend. A 10MB dump alone took ~40s in
+    // testing, well past 30s, causing the proxy to abort with ECONNRESET and
+    // return its own plain-text "Internal Server Error" before the backend's
+    // real (JSON) response ever arrived. Set comfortably above the backend's
+    // worst case (180s + 180s) so the backend's own timeout handling always
+    // wins.
+    proxyTimeout: 400000,
   },
   async rewrites() {
     return [
