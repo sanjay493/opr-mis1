@@ -60,6 +60,12 @@ CUMULATIVE_RULES = {
     "coke_production":   ("sum", None),
     "sinter_production": ("sum", None),
     "water_consumption": ("sum", None),
+    # Coal consumption ('000 T monthly figures, no cumulative column in the
+    # source report — till_month is built here as April->report_month sum)
+    "indigenous_pcc":     ("sum", None),
+    "indigenous_mcc":     ("sum", None),
+    "imported_hard_coal": ("sum", None),
+    "imported_soft_coal": ("sum", None),
 }
 
 # production_table item used when the weight comes from PLANT production

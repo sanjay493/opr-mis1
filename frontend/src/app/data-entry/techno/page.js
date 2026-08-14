@@ -1050,6 +1050,257 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
   );
 }
 
+// ── Coal OMI Excel extractor ─────────────────────────────────────────────────
+// Higher-precision sibling to CoalCo2ExtractRow above — same 4 coal keys,
+// but read directly from the "Coal OMI - <Mon><YY>.xlsx" workbook's decimal
+// cells instead of a PDF table, plus till_month (computed server-side by
+// summing this FY's monthly values — the PDF/docx path above never
+// populates till_month for these keys) and a new SAIL-only Receipt/
+// Consumption/Stock record. See backend/api_coal_omi_techno.py.
+const _COAL_OMI_ROWS = [
+  { key: 'indigenous_pcc', label: 'Indigenous PCC' },
+  { key: 'indigenous_mcc', label: 'Indigenous MCC' },
+  { key: 'imported_hard_coal', label: 'Imported Hard Coal' },
+  { key: 'imported_soft_coal', label: 'Imported Soft Coal' },
+];
+const _COAL_OMI_PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
+
+function CoalOmiExtractRow({ reportMonth, apiBase, onSuccess }) {
+  const [file, setFile] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
+  const inputRef = React.useRef();
+
+  React.useEffect(() => {
+    setFile(null);
+    setStatus(null);
+    setPreview(null);
+    if (inputRef.current) inputRef.current.value = '';
+  }, [reportMonth]);
+
+  const handlePreview = async () => {
+    if (!file) return;
+    setBusy(true);
+    setStatus(null);
+    setPreview(null);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('report_month', reportMonth);
+    try {
+      const res = await fetch(`${apiBase}/api/coal-omi/preview`, { method: 'POST', body: form });
+      const json = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(json.detail || 'Preview failed');
+      setPreview(json);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doSave = async (confirmReplace) => {
+    const res = await fetch(`${apiBase}/api/coal-omi/insert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        report_month: preview.report_month,
+        source_file: preview.source_file,
+        plants: preview.plants,
+        sail: preview.sail,
+        ois2: preview.ois2,
+        ...(confirmReplace ? { confirm_replace: true } : {}),
+      }),
+    });
+    return { res, json: await parseJsonResponse(res) };
+  };
+
+  const handleConfirmSave = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      let { res, json } = await doSave(false);
+      if (res.status === 409) {
+        if (!window.confirm(`${json.detail}\n\nReplace the existing values?`)) {
+          setBusy(false);
+          return;
+        }
+        ({ res, json } = await doSave(true));
+      }
+      if (!res.ok) throw new Error(json.detail || 'Save failed');
+      setStatus({ type: 'success', text: `✓ Saved ${json.saved.length} records for ${json.report_month}` });
+      setPreview(null);
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = '';
+      onSuccess();
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancel = () => { setPreview(null); setStatus(null); };
+
+  const fmt = (v) => (v === null || v === undefined ? '—' : v);
+  const cellStyle = { padding: '4px 8px', fontSize: 12.5, textAlign: 'right', borderBottom: '1px solid #f1f3f4' };
+  const labelCellStyle = { padding: '4px 8px', fontSize: 12.5, borderBottom: '1px solid #f1f3f4', color: '#374151' };
+  const warnStyle = { color: '#b45309', fontWeight: 700, marginLeft: 4, cursor: 'help' };
+
+  const tillMismatch = (plant, key) => (preview?.validation_warnings || [])
+    .find(w => w.type === 'till_month_mismatch' && w.plant === plant && w.key === key);
+  const sailMismatch = (key) => (preview?.validation_warnings || [])
+    .find(w => w.type === 'sail_mismatch' && w.key === key);
+
+  return (
+    <div style={{
+      marginBottom: 16, padding: '12px 14px',
+      background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', marginBottom: 4 }}>
+        Coal OMI Report (Excel) — higher-precision Coal Consumption + Receipt/Stock — all 5 plants at once
+      </div>
+      <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
+        The monthly "Coal OMI" workbook (2 sheets: coking coal consumption, and SAIL-level receipt/consumption/stock).
+        Till-month is computed as a running sum of April through {reportMonth} from what's already saved — the report's
+        own printed cumulative is shown only as a cross-check, flagged (⚠) if it disagrees. SAIL is computed as the sum
+        of the 5 plants, cross-checked against the report's own SAIL row the same way.
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <input ref={inputRef} type="file" accept=".xlsx"
+          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
+          style={{ fontSize: 13, flex: 1, minWidth: 200 }}
+          suppressHydrationWarning
+        />
+        {!preview && (
+          <button onClick={handlePreview} disabled={!file || busy}
+            style={{
+              padding: '7px 18px', background: busy ? '#5f6368' : '#1a73e8',
+              color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+              cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
+            }}
+          >
+            {busy ? 'Extracting…' : 'Preview'}
+          </button>
+        )}
+        {preview && (
+          <>
+            <button onClick={handleConfirmSave} disabled={busy}
+              style={{
+                padding: '7px 18px', background: busy ? '#5f6368' : '#1a73e8',
+                color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              {busy ? 'Saving…' : 'Confirm & Save'}
+            </button>
+            <button onClick={handleCancel} disabled={busy}
+              style={{
+                padding: '7px 14px', background: '#fff', color: '#5f6368',
+                border: '1px solid #dadce0', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10 }}><StatusMsg status={status} /></div>
+
+      {preview && (
+        <div style={{ marginTop: 6 }}>
+          {preview.has_existing && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+            }}>
+              ⚠ {preview.report_month} already has values for {preview.existing_conflicts.map(c => `${c.plant}/${c.unit}`).join(', ')} —
+              saving will ask to confirm overwriting them.
+            </div>
+          )}
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa' }}>
+                  <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Parameter / Plant</th>
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>Month</th>
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>Till Month (computed)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {_COAL_OMI_ROWS.map(row => (
+                  <React.Fragment key={row.key}>
+                    <tr>
+                      <td colSpan={3} style={{ ...labelCellStyle, fontWeight: 700, background: '#eff6ff' }}>{row.label}</td>
+                    </tr>
+                    {_COAL_OMI_PLANTS.map(p => {
+                      const rec = preview.plants.find(r => r.plant === p);
+                      const mismatch = tillMismatch(p, row.key);
+                      return (
+                        <tr key={p}>
+                          <td style={{ ...labelCellStyle, paddingLeft: 20 }}>{p}</td>
+                          <td style={cellStyle}>{fmt(rec?.techno_json?.month?.[row.key])}</td>
+                          <td style={cellStyle}>
+                            {fmt(rec?.techno_json?.till_month?.[row.key])}
+                            {mismatch && (
+                              <span style={warnStyle} title={`Report's own cumulative: ${mismatch.reported} (diff ${mismatch.diff})`}>⚠</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr>
+                      <td style={{ ...labelCellStyle, paddingLeft: 20, fontWeight: 700 }}>SAIL (computed sum)</td>
+                      <td style={{ ...cellStyle, fontWeight: 700 }}>
+                        {fmt(preview.sail?.techno_json?.month?.[row.key])}
+                        {sailMismatch(row.key) && (
+                          <span style={warnStyle} title={`Report's own SAIL row: ${sailMismatch(row.key).reported} (diff ${sailMismatch(row.key).diff})`}>⚠</span>
+                        )}
+                      </td>
+                      <td style={{ ...cellStyle, fontWeight: 700 }}>{fmt(preview.sail?.techno_json?.till_month?.[row.key])}</td>
+                    </tr>
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+            Receipt / Consumption / Stock (SAIL, {preview.ois2?.techno_json?.month?.stock_as_of_month || reportMonth})
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden' }}>
+              <tbody>
+                {[
+                  ['Receipt Plan (TPD)', 'receipt_plan_indigenous', 'receipt_plan_imported', 'receipt_plan_total'],
+                  ['Receipt Actual (TPD)', 'receipt_actual_indigenous', 'receipt_actual_imported', 'receipt_actual_total'],
+                  ['Consumption Actual (\'000 T)', 'consumption_actual_indigenous', 'consumption_actual_imported', 'consumption_actual_total'],
+                  ['Consumption Average (TPD)', 'consumption_avg_indigenous', 'consumption_avg_imported', 'consumption_avg_total'],
+                  ['Stock (\'000 T)', 'stock_indigenous', 'stock_imported', 'stock_total'],
+                ].map(([label, ind, imp, tot]) => {
+                  const m = preview.ois2?.techno_json?.month || {};
+                  return (
+                    <tr key={label}>
+                      <td style={labelCellStyle}>{label}</td>
+                      <td style={cellStyle}>Ind: {fmt(m[ind])}</td>
+                      <td style={cellStyle}>Imp: {fmt(m[imp])}</td>
+                      <td style={{ ...cellStyle, fontWeight: 700 }}>Total: {fmt(m[tot])}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Techno Data Panel — works for all 5 plants ───────────────────────────────
 // ── "Last saved" log — same extraction_log table /upload reads, filtered to
 // this plant's techno_data writes so it shows when each unit/month was last
@@ -1626,6 +1877,9 @@ function TechnoDataEntryInner() {
         </div>
 
         <CoalCo2ExtractRow reportMonth={reportMonth} apiBase={API_BASE_URL}
+          onSuccess={() => setDataRefreshKey(k => k + 1)} />
+
+        <CoalOmiExtractRow reportMonth={reportMonth} apiBase={API_BASE_URL}
           onSuccess={() => setDataRefreshKey(k => k + 1)} />
 
         <TechnoDataPanel key={dataRefreshKey} plant={plant} reportMonth={reportMonth} apiBase={API_BASE_URL} />

@@ -1,0 +1,278 @@
+"""
+"Coal OMI" Excel Extractor — pulls per-plant coking coal consumption and
+SAIL-level receipt/consumption/stock figures from EMD's monthly
+"Coal OMI - <Mon><YY>.xlsx" workbook (2 sheets, OIS-1 and OIS-2).
+
+This is a separate, higher-precision source for the same 4 coal-consumption
+keys (indigenous_pcc, indigenous_mcc, imported_hard_coal, imported_soft_coal)
+that coal_co2_epi_extractor.py's PDF/docx path already writes to
+techno_data (unit="General") — that older path reads whole numbers off a
+PDF table and never populates till_month for these keys. This extractor
+reads the workbook's actual decimal cell values directly, and till_month is
+computed by summing DB-stored monthly values via techno_cumulative.py
+(see plant_and_sail_techno_json / SAIL/till-month handling in
+api_coal_omi_techno.py, which calls this module).
+
+Sheet layouts (verified against 4 real files, Apr-Jul'26 — identical row
+positions across all 4, safe to hardcode, but every read still verifies the
+expected label text at that position first and raises ValueError naming the
+actual cell contents on a mismatch, rather than silently trusting a
+hardcoded position against a differently-laid-out file):
+
+OIS-1 ("Consumption of Coking Coal and CDI Coal - <Mon>'YY") — per plant
+  (BSP/DSP/RSP/BSL/ISP) plus a SAIL row, two consecutive rows each: the
+  report month's own row (col C = e.g. "Jul'26"), then an "Apr-<Mon>'YY"
+  FY-cumulative row directly below it. Column B holds the plant/SAIL label
+  on the first of the two rows only. Value columns: D=PCC, E=MCC (Indigenous
+  Coking Coal), G=Hard, H=Soft (Imported Coking Coal) — all '000 T. The
+  sheet's own Blend% columns (N-S) are intentionally NOT read here — that's
+  already computed correctly from these 4 raw quantities by
+  page_key_parameters.py's _coal_blend_pct, once till_month has data; CDI
+  Coal (col L) is out of scope for this feature.
+
+OIS-2 ("Receipt, Consumption and Stocks of Coking Coal at Plants during
+  <Mon>'YY") — SAIL-level only (no plant breakdown):
+    Row 5/6/7 = Indigenous/Imported/Total: col D=Receipt Plan (TPD),
+      E=Receipt Actual (TPD), I=Consumption Actual ('000 T), J=Consumption
+      Average (TPD).
+    Row 10 = a rolling series of month-end date cells starting at column D,
+      with a blank gap column roughly every 3rd column (an artifact of how
+      the sheet is copy-pasted forward each month) — NOT a fixed set of
+      columns, and not reliably extended by exactly one new trailing column
+      each month (confirmed: one sample file's trailing column was already
+      the FOLLOWING month's figure, another's still matched the report
+      month). This extractor scans every populated date cell in the row and
+      picks whichever one's MONTH NUMBER matches the report month's own
+      month number — the YEAR on these cells is unreliable (confirmed off
+      by one in the sample data) and is never trusted for matching, only
+      the month number. Rows 11/12/13 = Indigenous/Imported/Total stock
+      ('000 T) under whichever column matched. If no column matches, the
+      three stock values are None rather than guessed from the nearest
+      column.
+    Rows 37+ (seen in some files: stale leftover data from an unrelated
+    template, old dates, a completely different per-coal-type receipt
+    breakdown) are never read.
+
+Run as a script to dry-extract a folder of these files without touching the
+DB:
+    python coal_omi_extractor.py "D:\\opr-mis1\\Report_format\\Coal_co2"
+"""
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+
+PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+
+COAL_KEY_UNITS = {
+    "indigenous_pcc":     "'000 T",
+    "indigenous_mcc":     "'000 T",
+    "imported_hard_coal": "'000 T",
+    "imported_soft_coal": "'000 T",
+}
+
+_OIS1_ROWS = {
+    "BSP": (6, 7), "DSP": (9, 10), "RSP": (12, 13),
+    "BSL": (15, 16), "ISP": (19, 20), "SAIL": (22, 23),
+}
+_OIS1_COLS = {
+    "indigenous_pcc": 4, "indigenous_mcc": 5,
+    "imported_hard_coal": 7, "imported_soft_coal": 8,
+}
+_OIS1_PLANT_COL = 2   # B
+_OIS1_MONTH_COL = 3   # C
+
+_OIS2_ROW = {"indigenous": 5, "imported": 6, "total": 7}
+_OIS2_RECEIPT_PLAN_COL = 4   # D
+_OIS2_RECEIPT_ACTUAL_COL = 5  # E
+_OIS2_CONSUMPTION_ACTUAL_COL = 9   # I
+_OIS2_CONSUMPTION_AVG_COL = 10  # J
+_OIS2_STOCK_HEADER_ROW = 10
+_OIS2_STOCK_ROWS = {"indigenous": 11, "imported": 12, "total": 13}
+_OIS2_STOCK_SCAN_COLS = range(4, 15)  # D..N — generous, blank cells skipped
+
+_MONTH_ABBR = {1: "jan", 2: "feb", 3: "mar", 4: "apr", 5: "may", 6: "jun",
+               7: "jul", 8: "aug", 9: "sep", 10: "oct", 11: "nov", 12: "dec"}
+
+
+def mlabel_from_report_month(report_month: str) -> str:
+    """"2026-07" -> "Jul'26" """
+    year, mon_num = report_month.split("-")
+    return f"{_MONTH_ABBR[int(mon_num)].capitalize()}'{year[-2:]}"
+
+
+def cum_mlabel_from_report_month(report_month: str) -> str:
+    """"2026-07" -> "Apr-Jul'26" (FY-cumulative row header on OIS-1)."""
+    year, mon_num = report_month.split("-")
+    mon_num = int(mon_num)
+    fy_year = int(year) if mon_num >= 4 else int(year) - 1
+    if mon_num == 4:
+        return f"Apr'{str(fy_year)[-2:]}"
+    return f"Apr-{mlabel_from_report_month(report_month)}"
+
+
+def _num(v):
+    if v is None or v == "":
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def extract_ois1(path, report_month: str) -> dict:
+    """-> {plant_or_SAIL: {"month": {4 keys}, "report_cumulative": {4 keys}}}
+    for PLANTS + ["SAIL"]."""
+    import openpyxl
+    wb = openpyxl.load_workbook(path, data_only=True)
+    if "OIS-1" not in wb.sheetnames:
+        raise ValueError(f"'OIS-1' sheet not found — sheets present: {wb.sheetnames}")
+    ws = wb["OIS-1"]
+
+    mlabel = mlabel_from_report_month(report_month)
+    cum_mlabel = cum_mlabel_from_report_month(report_month)
+
+    # April is the FY's first month, so its cumulative trivially equals its
+    # own month value — no separate cumulative row is meaningful. Confirmed
+    # against a real sample file that April's own "cumulative" row is in
+    # fact mislabeled ("2026-27" instead of "Apr'26") and holds stale
+    # leftover values (matching what later becomes the FOLLOWING month's
+    # Apr-<mon> cumulative, not April's own) — a sheet-template artifact,
+    # not real April data. Skip reading/validating that row entirely for
+    # April rather than trusting it.
+    is_april = report_month.endswith("-04")
+
+    out = {}
+    for plant, (month_row, cum_row) in _OIS1_ROWS.items():
+        plant_cell = ws.cell(month_row, _OIS1_PLANT_COL).value
+        if plant_cell != plant:
+            raise ValueError(
+                f"OIS-1 row {month_row} col B expected '{plant}', found {plant_cell!r} — "
+                f"sheet layout doesn't match what this extractor expects."
+            )
+        month_label = ws.cell(month_row, _OIS1_MONTH_COL).value
+        if month_label != mlabel:
+            raise ValueError(
+                f"OIS-1 row {month_row} col C expected '{mlabel}' (from selected report_month "
+                f"{report_month}), found {month_label!r} — check the selected month matches "
+                f"this file."
+            )
+
+        month_vals = {k: _num(ws.cell(month_row, c).value) for k, c in _OIS1_COLS.items()}
+
+        if is_april:
+            cum_vals = dict(month_vals)
+        else:
+            cum_label = ws.cell(cum_row, _OIS1_MONTH_COL).value
+            if cum_label != cum_mlabel:
+                raise ValueError(
+                    f"OIS-1 row {cum_row} col C expected '{cum_mlabel}', found {cum_label!r}."
+                )
+            cum_vals = {k: _num(ws.cell(cum_row, c).value) for k, c in _OIS1_COLS.items()}
+
+        out[plant] = {"month": month_vals, "report_cumulative": cum_vals}
+
+    return out
+
+
+def _find_stock_column(ws, report_month: str):
+    """Row 10's date cells aren't at fixed columns and the year on them is
+    unreliable — scan for whichever populated date cell's MONTH NUMBER
+    matches report_month's, ignoring the year entirely. Returns the column
+    index, or None if no match."""
+    target_month = int(report_month[5:7])
+    matches = []
+    for col in _OIS2_STOCK_SCAN_COLS:
+        v = ws.cell(_OIS2_STOCK_HEADER_ROW, col).value
+        if isinstance(v, datetime) and v.month == target_month:
+            matches.append(col)
+    if not matches:
+        return None
+    # If more than one column matches (shouldn't normally happen within one
+    # file), prefer the last one — the more recently-added column is more
+    # likely to be this file's own intended entry for the report month.
+    return matches[-1]
+
+
+def extract_ois2(path, report_month: str) -> dict:
+    """-> {"receipt": {"indigenous"|"imported"|"total": {"plan","actual"}},
+           "consumption": {..same 3 keys..: {"actual","avg"}},
+           "stock": {"indigenous","imported","total", "as_of_month"}}
+    All SAIL-level (no plant breakdown in this sheet)."""
+    import openpyxl
+    wb = openpyxl.load_workbook(path, data_only=True)
+    if "OIS-2" not in wb.sheetnames:
+        raise ValueError(f"'OIS-2' sheet not found — sheets present: {wb.sheetnames}")
+    ws = wb["OIS-2"]
+
+    receipt, consumption = {}, {}
+    for category, row in _OIS2_ROW.items():
+        label = ws.cell(row, 3).value  # col C
+        if not label or category.lower() not in str(label).lower():
+            raise ValueError(
+                f"OIS-2 row {row} col C expected an '{category}' label, found {label!r}."
+            )
+        receipt[category] = {
+            "plan": _num(ws.cell(row, _OIS2_RECEIPT_PLAN_COL).value),
+            "actual": _num(ws.cell(row, _OIS2_RECEIPT_ACTUAL_COL).value),
+        }
+        consumption[category] = {
+            "actual": _num(ws.cell(row, _OIS2_CONSUMPTION_ACTUAL_COL).value),
+            "avg": _num(ws.cell(row, _OIS2_CONSUMPTION_AVG_COL).value),
+        }
+
+    stock_col = _find_stock_column(ws, report_month)
+    if stock_col is None:
+        stock = {"indigenous": None, "imported": None, "total": None, "as_of_month": None}
+    else:
+        as_of = ws.cell(_OIS2_STOCK_HEADER_ROW, stock_col).value
+        stock = {
+            "indigenous": _num(ws.cell(_OIS2_STOCK_ROWS["indigenous"], stock_col).value),
+            "imported": _num(ws.cell(_OIS2_STOCK_ROWS["imported"], stock_col).value),
+            "total": _num(ws.cell(_OIS2_STOCK_ROWS["total"], stock_col).value),
+            # Report the report_month's own 1st, not the (unreliable) year
+            # actually stored in the cell — the month number is all that
+            # was trustworthy about that cell in the first place.
+            "as_of_month": f"{report_month}-01",
+        }
+
+    return {"receipt": receipt, "consumption": consumption, "stock": stock}
+
+
+def extract_coal_omi(path, report_month: str) -> dict:
+    """-> {"ois1": extract_ois1(...), "ois2": extract_ois2(...)}"""
+    return {
+        "ois1": extract_ois1(path, report_month),
+        "ois2": extract_ois2(path, report_month),
+    }
+
+
+_FNAME_RE = re.compile(r"Coal OMI\s*-\s*([A-Za-z]{3})(\d{2})\.xlsx$", re.IGNORECASE)
+_MONTH_NUM = {v: k for k, v in _MONTH_ABBR.items()}
+
+
+def report_month_from_filename(fname: str):
+    """"Coal OMI - Jul26.xlsx" -> "2026-07", or None if unrecognized."""
+    m = _FNAME_RE.search(fname)
+    if not m:
+        return None
+    mon, yy = m.group(1).lower(), int(m.group(2))
+    if mon not in _MONTH_NUM:
+        return None
+    return f"{2000 + yy}-{_MONTH_NUM[mon]:02d}"
+
+
+if __name__ == "__main__":
+    import json as _json
+    folder_arg = sys.argv[1] if len(sys.argv) > 1 else r"D:\opr-mis1\Report_format\Coal_co2"
+    for path in sorted(Path(folder_arg).glob("Coal OMI*.xlsx")):
+        report_month = report_month_from_filename(path.name)
+        if not report_month:
+            print(f"skip (unrecognized filename): {path.name}")
+            continue
+        print(f"=== {path.name} -> {report_month} ===")
+        try:
+            blob = extract_coal_omi(str(path), report_month)
+            print(_json.dumps(blob, indent=2))
+        except ValueError as e:
+            print(f"EXTRACTION ERROR: {e}")

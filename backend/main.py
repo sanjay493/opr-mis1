@@ -30,6 +30,7 @@ from page_special_steel import generate_special_steel_plant, generate_special_st
 from page_special_steel_trend import generate_special_steel_trend
 from page_at_a_glance import generate_at_a_glance
 from page_key_parameters import generate_key_parameters
+from page_coal_receipts_stock import generate_coal_receipts_plants, generate_coal_receipts_sail
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt
 from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month, format_cr_actual
@@ -155,6 +156,7 @@ from api_techno_manual import router as techno_manual_router
 from api_special_steel_clubs import router as special_steel_clubs_router
 from api_mcr_techno import router as mcr_techno_router
 from api_coal_co2_techno import router as coal_co2_techno_router
+from api_coal_omi_techno import router as coal_omi_techno_router
 from api_todo import router as todo_router
 from api_worklog import router as worklog_router
 from api_auth import router as auth_router
@@ -213,6 +215,18 @@ KEY_PARAMS_PAGE_ID = 3.5
 # `if pg in TECHNO_PAGES` / `elif 28 <= pg <= 35` dispatch in _safe_techno()
 # and generate_techno_from_db() - no dedicated generator needed.
 IRON_MAKING_PAGE_2_ID = 29.5
+
+# "Coking Coal Receipts & Stock" — two pages inserted right after page 35
+# (Mill ISP, the last Mill-Wise Techno-Economic Parameters page), sourced
+# from techno_data via the Coal OMI extractor (api_coal_omi_techno.py /
+# page_coal_receipts_stock.py). Same sentinel-float treatment as
+# IRON_MAKING_PAGE_2_ID above, including a dept-badge (report_utils.py
+# special-cases both, group 8 - same as pages 31-35). Both reuse the
+# "key_parameters" page type verbatim (see page_coal_receipts_stock.py's
+# module docstring for why that template already fits without any new
+# frontend code) rather than page_techno.py's TECHNO_PAGES machinery.
+COAL_RECEIPTS_PAGE_ID = 35.5
+COAL_RECEIPTS_PAGE_2_ID = 35.6
 
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
@@ -357,6 +371,7 @@ app.include_router(techno_manual_router)
 app.include_router(special_steel_clubs_router)
 app.include_router(mcr_techno_router)
 app.include_router(coal_co2_techno_router)
+app.include_router(coal_omi_techno_router)
 app.include_router(todo_router)
 app.include_router(worklog_router)
 app.include_router(auth_router)
@@ -427,10 +442,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config = blank_out_page_data(pages_config)
 
         if page_number is not None:
-            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID, IRON_MAKING_PAGE_2_ID):
+            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
+                                IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID):
                 # Page 24 (SAIL), the trend sentinel page, the "at a
                 # glance" sentinel page, the "key parameters" sentinel
-                # page, and the "Iron Making (contd.)" sentinel page don't
+                # page, the "Iron Making (contd.)" sentinel page, and the
+                # two "Coking Coal Receipts & Stock" sentinel pages don't
                 # exist in the template (see the "Always regenerate
                 # special steel pages" comment below) — always synthesized
                 # fresh.
@@ -543,20 +560,24 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
         _SPECIAL_PLANTS = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
         if page_number is None:
             # None of page 24 (SAIL), the trend sentinel page, the "at a
-            # glance" sentinel page, the "key parameters" sentinel page, or
-            # the "Iron Making (contd.)" sentinel page exist in the
-            # template — all five are always synthesized fresh. Strip any
-            # stale copy, then insert fresh placeholders right after page 23
-            # (SAIL/trend), right after page 2/Index (at a glance, so it
-            # becomes the first NUMBERED page, "Page 1"), right after page
-            # 3/Summary (key parameters, "Page 3"), and right after page 29
-            # (Iron Making contd.). (In single-page mode, page_number in
-            # (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
-            # IRON_MAKING_PAGE_2_ID) already synthesized its own shell
-            # above — skipped here since pages 2/3/23/29 aren't in the
+            # glance" sentinel page, the "key parameters" sentinel page, the
+            # "Iron Making (contd.)" sentinel page, or the two "Coking Coal
+            # Receipts & Stock" sentinel pages exist in the template — all
+            # seven are always synthesized fresh. Strip any stale copy, then
+            # insert fresh placeholders right after page 23 (SAIL/trend),
+            # right after page 2/Index (at a glance, so it becomes the first
+            # NUMBERED page, "Page 1"), right after page 3/Summary (key
+            # parameters, "Page 3"), right after page 29 (Iron Making
+            # contd.), and right after page 35 (Coking Coal Receipts &
+            # Stock). (In single-page mode, page_number in (24,
+            # TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
+            # IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID,
+            # COAL_RECEIPTS_PAGE_2_ID) already synthesized its own shell
+            # above — skipped here since pages 2/3/23/29/35 aren't in the
             # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
-                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID, IRON_MAKING_PAGE_2_ID)]
+                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
+                                                      IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID)]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
@@ -570,6 +591,10 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             _idx29 = next((i for i, p in enumerate(pages_config) if p.get("page") == 29), None)
             if _idx29 is not None:
                 pages_config.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
+            _idx35 = next((i for i, p in enumerate(pages_config) if p.get("page") == 35), None)
+            if _idx35 is not None:
+                pages_config.insert(_idx35 + 1, {"page": COAL_RECEIPTS_PAGE_ID})
+                pages_config.insert(_idx35 + 2, {"page": COAL_RECEIPTS_PAGE_2_ID})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -594,6 +619,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page["type"] = "at_a_glance"
             if pg == KEY_PARAMS_PAGE_ID:
                 page.update(generate_key_parameters(month))
+                page["type"] = "key_parameters"
+            if pg == COAL_RECEIPTS_PAGE_ID:
+                page.update(generate_coal_receipts_plants(month))
+                page["type"] = "key_parameters"
+            if pg == COAL_RECEIPTS_PAGE_2_ID:
+                page.update(generate_coal_receipts_sail(month))
                 page["type"] = "key_parameters"
             if pg == 2:
                 page["rows"] = _index_rows()
@@ -718,6 +749,13 @@ async def generate_pdf(request: PDFRequest):
         _idx29 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 29), None)
         if _idx29 is not None:
             _pages_list.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
+    # "Coking Coal Receipts & Stock" sentinel pages: always inserted right
+    # after page 35, same unconditional-insert pattern as above.
+    if not any(p.get("page") == COAL_RECEIPTS_PAGE_ID for p in _pages_list):
+        _idx35 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 35), None)
+        if _idx35 is not None:
+            _pages_list.insert(_idx35 + 1, {"page": COAL_RECEIPTS_PAGE_ID})
+            _pages_list.insert(_idx35 + 2, {"page": COAL_RECEIPTS_PAGE_2_ID})
     for p in _pages_list:
         pg = p.get("page", 0)
         # Pure function of page number — recomputed fresh rather than trusted
@@ -776,6 +814,12 @@ async def generate_pdf(request: PDFRequest):
             p["type"] = "at_a_glance"
         if pg == KEY_PARAMS_PAGE_ID:
             p.update(generate_key_parameters(request.month))
+            p["type"] = "key_parameters"
+        if pg == COAL_RECEIPTS_PAGE_ID:
+            p.update(generate_coal_receipts_plants(request.month))
+            p["type"] = "key_parameters"
+        if pg == COAL_RECEIPTS_PAGE_2_ID:
+            p.update(generate_coal_receipts_sail(request.month))
             p["type"] = "key_parameters"
         if pg == 25:
             p.update(generate_opening_stock(request.month))

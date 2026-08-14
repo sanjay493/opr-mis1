@@ -45,6 +45,8 @@ const PAGE_LABELS = {
   33: 'Mill Wise Techno – RSP',
   34: 'Mill Wise Techno – BSL',
   35: 'Mill Wise Techno – ISP',
+  35.5: 'Coking Coal Receipts & Stock — Plants',
+  35.6: 'Coking Coal Receipts & Stock — SAIL Summary',
   36: 'Capital Repair – BSP',
   37: 'Capital Repair – DSP',
   38: 'Capital Repair – RSP',
