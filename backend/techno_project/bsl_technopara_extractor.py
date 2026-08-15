@@ -120,6 +120,11 @@ _COKE_KEY_NORM = {
     # BSL's Sheet1 "Sp. Heat Cons." row (COKE_SINTER/Energy branch below) —
     # same key as ISP/DSP/BSP's specific_heat_coke_ovens.
     "sp_heat_cons":      "specific_heat_coke_ovens",
+    # BSL's Sheet2 "Avg. Coking Time" row still carries the "Average" prefix
+    # that ash_in_coal_blend/vm_in_coal_blend (same Sheet2 block) already
+    # dropped - short-form key so a future cross-plant "coking_time" figure
+    # (frontend registry already anticipates this name) lands on the same key.
+    "average_coking_time": "coking_time",
 }
 
 # Sinter Plant labels where BSL's own wording diverges from the canonical

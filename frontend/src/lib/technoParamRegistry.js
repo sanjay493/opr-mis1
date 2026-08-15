@@ -78,8 +78,7 @@ export const PARAM_TEMPLATES = {
     // ISP's own spelling for the same concepts (m10 above is DSP's separate
     // legacy spelling for the same M10 concept, left as its own entry).
     'm10_coke','csr_coke','cri_coke',
-    'ash_in_coke','average_ash_in_coal_blend',
-    'average_volatile_matter_in_coal_blend',
+    'ash_in_coke','ash_in_coal_blend','vm_in_coal_blend',
   ],
   'Sinter Plant': [
     'sinter_production','productivity','basicity','tfe_in_sinter',
@@ -182,8 +181,9 @@ export const _LABEL_MAP = {
   m10:                                  'M10 (%)',
   m40:                                  'M40 (%)',
   ash_in_coke:                          'Ash in Coke (%)',
-  average_ash_in_coal_blend:            'Average Ash in Coal Blend (%)',
-  average_volatile_matter_in_coal_blend:'Average Volatile Matter in Coal Blend (%)',
+  ash_in_coal_blend:                    'Ash in Coal Blend (%)',
+  vm_in_coal_blend:                     'VM in Coal Blend (%)',
+  coking_time:                          'Coking Time (Hrs)',
   // Sinter
   dsp_sp_1:                             'DSP SP-1 Productivity (T/m²/hr)',
   dsp_sp_2:                             'DSP SP-2 Productivity (T/m²/hr)',
