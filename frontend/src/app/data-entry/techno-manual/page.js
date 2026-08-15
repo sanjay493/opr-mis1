@@ -527,6 +527,15 @@ function TechnoManualPageInner() {
   const areaUnits = {};
   AREA_ORDER.forEach(a => { areaUnits[a] = []; });
   Object.keys(unitData).forEach(u => {
+    // BSL's "SMS" unit is a shop-level rollup (LD Slag/Refractory/overall
+    // consumption figures), not a 3rd converter shop alongside SMS-I/SMS-II
+    // - unlike every other plant, which only ever has its real converter
+    // shops here. Hide it from the tab list so it doesn't look like a bogus
+    // extra shop; the data itself, extraction, and page 30's report
+    // generation (which already knows to fold this into SMS-I/SMS-II) are
+    // untouched - this unit is simply never selected, so it's never edited
+    // or saved over.
+    if (plant === 'BSL' && u === 'SMS') return;
     const a = unitArea(u);
     (areaUnits[a] = areaUnits[a] || []).push(u);
   });
