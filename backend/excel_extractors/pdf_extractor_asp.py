@@ -504,6 +504,105 @@ def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
     return out_rows
 
 
+def _fl_calibrate_ly_column(rows):
+    """x0 of the FL table's "last year, same month" column (e.g. a
+    SEPT'25-report's own "SEPT'24" column) — the 5th numeric value on the
+    'LIQ.PRD' reference row (Plan, Act, %Ach, PrevMonthAct, **LastYearAct**,
+    ...), same reference-row approach as _fl_calibrate_columns. Confirmed
+    against two real reports (Apr'25: header "APRIL'24" over data column
+    x0~253 vs LIQ.PRD's 5th number 8986; Sep'25: header "SEPT'24" over x0~253
+    vs 5th number 9254) — the report's own header literally names this
+    column, it isn't inferred."""
+    for row in rows:
+        if row and row[0]["text"].upper().startswith("LIQ"):
+            nums = _fl_row_numbers(row, 1)
+            if len(nums) >= 5:
+                return nums[4][1]
+    return None
+
+
+def _fl_last_year_month(report_month: str) -> str:
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    return f"{y - 1}-{m:02d}"
+
+
+def parse_fl_last_year_column(rows, report_month: str, n_pages: int) -> list:
+    """Extract the same FL items as _parse_fl_two_month, but from the
+    report's "last year, same month" column instead of its own report/prev
+    month columns — e.g. a Sept'25 FL report's own Sept'24 figures. Used to
+    backfill a prior FY's production_table from the following FY's monthly
+    FL reports, which each carry their own CPLY-month column already (no
+    separate prior-year file needed). Returns rows in the same shape as
+    _parse_fl_two_month, all tagged with report_month = last year's month."""
+    ly_x = _fl_calibrate_ly_column(rows)
+    if ly_x is None:
+        raise ValueError(
+            "Could not locate the FL report's 'LIQ.PRD' reference row — "
+            "unexpected table layout, cannot calibrate the last-year column."
+        )
+    ly_month = _fl_last_year_month(report_month)
+
+    blocks = _fl_section_blocks(rows)
+    general_block   = _fl_find_block(blocks, "LIQ")
+    finishing_block = _fl_find_block(blocks, "FINISHING")
+    saleable_block  = _fl_find_block(blocks, "SALEABLE")
+    despatch_block  = _fl_find_block(blocks, "DESPATCH")
+    section_for = {
+        "Ingot Steel":              general_block,
+        "Total Caster":             general_block,
+        "Total Crude Steel":        general_block,
+        "Ingot Semis":              finishing_block,
+        "Billets":                  saleable_block,
+        "BARS":                     saleable_block,
+        "FS PRD":                   saleable_block,
+        "PLATES":                   saleable_block,
+        "Saleable Steel":           saleable_block,
+        "Saleable Steel Despatch":  despatch_block,
+    }
+
+    out_rows = []
+    parts = {}
+    for label_words, item_name, exact_total in _FL_ITEMS:
+        block = section_for[item_name]
+        row = _fl_find_item_row(block, label_words, exact_total)
+        pdf_label = " ".join(label_words)
+        if row is None:
+            out_rows.append({
+                "item_name": f"(not found) {item_name}", "value": None, "unit": "T",
+                "cell": f"PDF ({n_pages}p) · FL row not found",
+                "pdf_label": pdf_label, "status": "unmapped", "report_month": ly_month,
+            })
+            continue
+
+        nums = _fl_row_numbers(row, len(label_words))
+        val = _fl_nearest(nums, ly_x)
+        row_text = _fl_row_text(row)[:70]
+        if val is not None:
+            out_val = round(val / 1000.0, 3)
+            out_rows.append({
+                "item_name": item_name, "value": out_val, "unit": "'000T",
+                "cell": f"PDF ({n_pages}p) · {_fmt_month(ly_month)} Actual (CPLY col)",
+                "pdf_label": row_text, "status": "ok", "report_month": ly_month,
+            })
+            if item_name in _FL_FINISHED_STEEL_PARTS:
+                parts[item_name] = out_val
+        else:
+            out_rows.append({
+                "item_name": f"(no value) {item_name}", "value": None, "unit": "T",
+                "cell": f"PDF ({n_pages}p) · {_fmt_month(ly_month)} Actual (CPLY col)",
+                "pdf_label": row_text, "status": "unmapped", "report_month": ly_month,
+            })
+
+    if all(p in parts for p in _FL_FINISHED_STEEL_PARTS):
+        fs_val = round(sum(parts[p] for p in _FL_FINISHED_STEEL_PARTS), 3)
+        out_rows.append({
+            "item_name": "Finished Steel", "value": fs_val, "unit": "'000T",
+            "cell": f"PDF ({n_pages}p) · {_fmt_month(ly_month)} [computed: BARS+FS PRD+PL MILL]",
+            "pdf_label": "BARS + FS PRD. + PL MILL", "status": "ok", "report_month": ly_month,
+        })
+    return out_rows
+
+
 def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     """Extract ASP production data from a PDF report.
 
