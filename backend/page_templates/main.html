@@ -264,48 +264,260 @@
         .page1-container {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
             min-height: 250mm;
-            text-align: center;
-            padding: 40mm 20mm;
+            padding: 14mm 16mm 10mm;
+            position: relative;
+            z-index: 0;
+        }
+
+        .page1-corner-photo {
+            position: absolute;
+            top: 6mm;
+            right: 16mm;
+            width: 58mm;
+            height: 32.5mm;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid {{ colors.border_divider }};
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+        }
+
+        .page1-brandrow {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 10mm;
+        }
+        .page1-logo {
+            height: 46px;
+            width: auto;
+            display: block;
+        }
+        .page1-tagline {
+            font-size: 10.5pt;
+            font-weight: 700;
+            color: {{ colors.cover_navy_dark }};
+            line-height: 1.25;
+            text-transform: uppercase;
+            border-left: 2px solid {{ colors.misc_accent_blue }};
+            padding-left: 12px;
         }
 
         .page1-accent {
             width: 80px;
             height: 6px;
-            background-color: {{ colors.misc_accent_blue }};
-            margin-bottom: 30px;
+            background: linear-gradient(90deg, {{ colors.cover_navy_dark }}, {{ colors.cover_ember }});
+            margin-bottom: 14px;
             border-radius: 3px;
         }
 
         .page1-title {
-            font-size: 30pt;
+            font-size: 34pt;
             font-weight: 900;
-            color: {{ colors.text_primary }};
-            line-height: 1.1;
-            margin-bottom: 10px;
+            line-height: 1.05;
+            margin: 0;
             text-transform: uppercase;
         }
+        .page1-title .l1 { color: {{ colors.cover_navy_dark }}; }
+        .page1-title .l2 { color: {{ colors.misc_accent_blue }}; }
+        .page1-title .l3 { color: {{ colors.text_muted }}; font-weight: 700; }
 
         .page1-subtitle {
-            font-size: 14pt;
-            font-weight: 500;
-            color: {{ colors.text_secondary }};
-            letter-spacing: 0.05em;
+            font-size: 13pt;
+            font-weight: 600;
+            color: {{ colors.cover_navy_dark }};
+            letter-spacing: 0.08em;
             text-transform: uppercase;
-            margin-bottom: 60px;
+            border-bottom: 1px solid {{ colors.border_divider }};
+            padding-bottom: 12px;
+            margin: 6px 0 16px;
         }
 
         .page1-meta {
-            margin-top: auto;
-            border-top: 1px solid {{ colors.border_divider }};
-            padding-top: 30px;
-            width: 100%;
             display: flex;
-            justify-content: space-between;
+            gap: 32px;
+            margin-bottom: 14mm;
+        }
+        .page1-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .page1-meta-badge {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: {{ colors.cover_navy_dark }};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .page1-meta-label {
             font-size: 9pt;
+            color: {{ colors.text_secondary }};
+        }
+        .page1-meta-value {
+            font-size: 11.5pt;
+            font-weight: 700;
+            color: {{ colors.cover_navy_dark }};
+        }
+
+        .page1-kpi-heading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            justify-content: center;
+            font-size: 12pt;
+            font-weight: 700;
+            color: {{ colors.cover_navy_dark }};
+            letter_spacing: 0.03em;
+            margin-bottom: 12px;
+        }
+        .page1-kpi-heading .rule {
+            flex: 1 1 auto;
+            max-width: 90px;
+            height: 1px;
+            background: {{ colors.border_divider }};
+        }
+        .page1-kpi-heading .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: {{ colors.misc_accent_blue }};
+        }
+
+        .page1-kpi-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 14mm;
+        }
+        .page1-kpi-card {
+            flex: 1 1 0;
+            background: {{ colors.cover_kpi_card_bg }};
+            border: 1px solid {{ colors.cover_kpi_card_border }};
+            border-radius: 8px;
+            padding: 12px 10px;
+            text-align: center;
+        }
+        .page1-kpi-label {
+            font-size: 8pt;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            color: {{ colors.text_secondary }};
+            margin-bottom: 6px;
+        }
+        .page1-kpi-value {
+            font-size: 20pt;
+            font-weight: 800;
+            color: {{ colors.cover_navy_dark }};
+            line-height: 1;
+        }
+        .page1-kpi-unit {
+            font-size: 8pt;
+            font-weight: 600;
             color: {{ colors.text_muted }};
+            margin-bottom: 8px;
+        }
+        .page1-kpi-sub {
+            font-size: 8pt;
+            color: {{ colors.text_secondary }};
+            border-top: 1px dashed {{ colors.border_divider }};
+            padding-top: 6px;
+            margin-top: 2px;
+        }
+
+        .page1-products-heading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            justify-content: center;
+            font-size: 12pt;
+            font-weight: 700;
+            color: {{ colors.cover_navy_dark }};
+            margin-bottom: 12px;
+        }
+        .page1-products-heading .rule {
+            flex: 1 1 auto;
+            max-width: 90px;
+            height: 1px;
+            background: {{ colors.border_divider }};
+        }
+        .page1-products-heading .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: {{ colors.cover_ember }};
+        }
+
+        .page1-products-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14mm;
+        }
+        .page1-product-card {
+            flex: 1 1 0;
+            text-align: center;
+        }
+        .page1-product-img {
+            width: 100%;
+            height: 20mm;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid {{ colors.cover_kpi_card_border }};
+            display: block;
+            margin-bottom: 4px;
+        }
+        .page1-product-label {
+            font-size: 7.5pt;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: {{ colors.text_secondary }};
+        }
+
+        .page1-footer {
+            margin-top: auto;
+            border-top: 2px solid {{ colors.cover_navy_dark }};
+            padding-top: 10px;
+        }
+        .page1-values-row {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            margin-bottom: 10px;
+        }
+        .page1-value-chip {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            flex: 0 0 auto;
+        }
+        .page1-value-badge {
+            width: 30px; height: 30px; border-radius: 50%;
+            border: 1.5px solid {{ colors.misc_accent_blue }};
+            display: flex; align-items: center; justify-content: center;
+        }
+        .page1-value-label {
+            font-size: 6.5pt;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            color: {{ colors.text_secondary }};
+        }
+        .page1-tagline2 {
+            margin-left: auto;
+            text-align: right;
+            font-size: 9.5pt;
+            font-weight: 700;
+            color: {{ colors.cover_navy_dark }};
+            line-height: 1.3;
+        }
+        .page1-tagline2 b { color: {{ colors.misc_accent_blue }}; }
+
+        .page1-bottombar {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            font-size: 7.5pt;
+            color: {{ colors.text_muted }};
+            border-top: 1px solid {{ colors.border_divider }};
+            padding-top: 8px;
         }
 
         /* ─── Page 2 – Index ────────────────────────────────── */

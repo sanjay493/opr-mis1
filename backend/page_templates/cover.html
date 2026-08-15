@@ -1,15 +1,134 @@
             <div class="page1-container">
+
+                {% if page.corner_image_data_uri %}
+                <img class="page1-corner-photo" src="{{ page.corner_image_data_uri }}" alt=""/>
+                {% endif %}
+
+                <div class="page1-brandrow">
+                    {% if page.logo_data_uri %}
+                    <img class="page1-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>
+                    {% endif %}
+                    <div class="page1-tagline">Strengthening India<br/>Through Steel</div>
+                </div>
+
                 <div class="page1-accent"></div>
-                <h1 class="page1-title">{{ page.title }}</h1>
-                <p class="page1-subtitle">O P E R A T I O N S   D I R E C T O R A T E</p>
+                <h1 class="page1-title">
+                    <div class="l1">Operations</div>
+                    <div class="l2">Monthly</div>
+                    <div class="l3">Informatics</div>
+                </h1>
+                <p class="page1-subtitle">Operations Directorate</p>
+
                 <div class="page1-meta">
-                    <div>
-                        <strong>Prepared By:</strong>
-                        <div style="margin-top: 4px;">MIS Group</div>
+                    <div class="page1-meta-item">
+                        <div class="page1-meta-badge">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <rect x="3" y="12" width="4" height="8" fill="#fff"/>
+                                <rect x="10" y="7" width="4" height="13" fill="#fff"/>
+                                <rect x="17" y="3" width="4" height="17" fill="#fff"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="page1-meta-label">Prepared By</div>
+                            <div class="page1-meta-value">MIS Group</div>
+                        </div>
                     </div>
-                    <div>
-                        <strong>Report Month:</strong>
-                        <div style="margin-top: 4px;">{{ month }}</div>
+                    <div class="page1-meta-item">
+                        <div class="page1-meta-badge">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <rect x="3" y="5" width="18" height="16" rx="2" stroke="#fff" stroke-width="1.8"/>
+                                <line x1="3" y1="10" x2="21" y2="10" stroke="#fff" stroke-width="1.8"/>
+                                <line x1="7" y1="2.5" x2="7" y2="6.5" stroke="#fff" stroke-width="1.8"/>
+                                <line x1="17" y1="2.5" x2="17" y2="6.5" stroke="#fff" stroke-width="1.8"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="page1-meta-label">Report Month</div>
+                            <div class="page1-meta-value">{{ page.month_display }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page1-kpi-heading">
+                    <span class="rule"></span>
+                    <span class="dot"></span>
+                    <span>SAIL Performance at a Glance ({{ page.month_short }})</span>
+                    <span class="dot"></span>
+                    <span class="rule"></span>
+                </div>
+
+                <div class="page1-kpi-row">
+                    {% set kpi_icons = {
+                        'HOT METAL': '<path d="M7 3h10l-1.5 6H8.5L7 3Z" fill="none" stroke="{c}" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 9h12l-1.2 9.5A2 2 0 0 1 14.8 20H9.2a2 2 0 0 1-2-1.5L6 9Z" fill="none" stroke="{c}" stroke-width="1.6" stroke-linejoin="round"/>',
+                        'CRUDE STEEL': '<path d="M5 8h14v8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V8Z" fill="none" stroke="{c}" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8V6a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" fill="none" stroke="{c}" stroke-width="1.6"/><line x1="12" y1="11" x2="12" y2="16" stroke="{c}" stroke-width="1.6"/>',
+                        'FINISHED STEEL': '<circle cx="12" cy="12" r="8.5" fill="none" stroke="{c}" stroke-width="1.6"/><circle cx="12" cy="12" r="5" fill="none" stroke="{c}" stroke-width="1.6"/><circle cx="12" cy="12" r="1.5" fill="{c}"/>',
+                        'SALEABLE STEEL': '<rect x="4" y="15" width="16" height="3.2" rx="0.6" fill="none" stroke="{c}" stroke-width="1.5"/><rect x="4" y="10.5" width="16" height="3.2" rx="0.6" fill="none" stroke="{c}" stroke-width="1.5"/><rect x="4" y="6" width="16" height="3.2" rx="0.6" fill="none" stroke="{c}" stroke-width="1.5"/>',
+                    } %}
+                    {% for k in page.kpis %}
+                    <div class="page1-kpi-card">
+                        <svg width="26" height="26" viewBox="0 0 24 24" style="margin-bottom:4px;">
+                            {{ (kpi_icons.get(k.label, '') | replace('{c}', colors.misc_accent_blue)) | safe }}
+                        </svg>
+                        <div class="page1-kpi-label">{{ k.label }}</div>
+                        <div class="page1-kpi-value">{{ k.mt }}</div>
+                        <div class="page1-kpi-unit">MT</div>
+                        <div class="page1-kpi-sub">
+                            {{ k.pct_ful }}% of APP<br/>
+                            vs CPLY:
+                            {% if k.growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ k.growth }}%</b>
+                            {% elif k.growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ k.growth }}%</b>
+                            {% else %}—{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if page.products %}
+                <div class="page1-products-heading">
+                    <span class="rule"></span>
+                    <span class="dot"></span>
+                    <span>Products of SAIL</span>
+                    <span class="dot"></span>
+                    <span class="rule"></span>
+                </div>
+                <div class="page1-products-row">
+                    {% for p in page.products %}
+                    <div class="page1-product-card">
+                        <img class="page1-product-img" src="{{ p.img }}" alt="{{ p.label }}"/>
+                        <div class="page1-product-label">{{ p.label }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="page1-footer">
+                    <div class="page1-values-row">
+                        {% set value_icons = [
+                            ('Performance', '<polyline points="3,17 9,10 13,14 21,5" fill="none" stroke="{c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="15,5 21,5 21,11" fill="none" stroke="{c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'),
+                            ('Efficiency', '<circle cx="12" cy="12" r="3" fill="none" stroke="{c}" stroke-width="1.6"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6" stroke="{c}" stroke-width="1.6" stroke-linecap="round"/>'),
+                            ('Sustainability', '<path d="M6 19c-2-6 1-13 12-14 1 8-3 13-12 14Z" fill="none" stroke="{c}" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 18c3-4 6-7 10-11" fill="none" stroke="{c}" stroke-width="1.6" stroke-linecap="round"/>'),
+                            ('People', '<circle cx="9" cy="8" r="3" fill="none" stroke="{c}" stroke-width="1.6"/><path d="M3.5 19c.5-3.5 3-5.5 5.5-5.5s5 2 5.5 5.5" fill="none" stroke="{c}" stroke-width="1.6" stroke-linecap="round"/><circle cx="17" cy="9" r="2.3" fill="none" stroke="{c}" stroke-width="1.6"/><path d="M15.2 13.2c2.2-.3 4.4 1.3 5 4.3" fill="none" stroke="{c}" stroke-width="1.6" stroke-linecap="round"/>'),
+                            ('Growth', '<polyline points="3,16 9,10 13,13 21,4" fill="none" stroke="{c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="16,4 21,4 21,9" fill="none" stroke="{c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><line x1="3" y1="20" x2="21" y2="20" stroke="{c}" stroke-width="1.6" stroke-linecap="round"/>'),
+                        ] %}
+                        {% for label, icon in value_icons %}
+                        <div class="page1-value-chip">
+                            <div class="page1-value-badge">
+                                <svg width="14" height="14" viewBox="0 0 24 24">{{ (icon | replace('{c}', colors.misc_accent_blue)) | safe }}</svg>
+                            </div>
+                            <div class="page1-value-label">{{ label|upper }}</div>
+                        </div>
+                        {% endfor %}
+                        <div class="page1-tagline2">
+                            Driving Excellence. Delivering Value.<br/>
+                            Building a <b>Stronger India</b>.
+                        </div>
+                    </div>
+                    <div class="page1-bottombar">
+                        <span>MIS OPERATIONS</span>
+                        <span>|</span>
+                        <span>OMI &ndash; {{ page.month_short }}</span>
+                        <span>|</span>
+                        <span>FOR INTERNAL CIRCULATION ONLY</span>
                     </div>
                 </div>
             </div>

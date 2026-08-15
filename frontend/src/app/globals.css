@@ -586,53 +586,9 @@ select.form-control {
    Naming: .pageN-{element}  |  common stays in .report-table
    ══════════════════════════════════════════════════════════ */
 
-/* ─── Page 1 – Cover ─────────────────────────────────────── */
-.page1-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex-grow: 1;
-  text-align: center;
-}
-
-.page1-accent {
-  width: 80px;
-  height: 6px;
-  background-color: var(--primary);
-  margin-bottom: 30px;
-  border-radius: 3px;
-}
-
-.page1-title {
-  font-size: 32pt;
-  font-weight: 900;
-  color: #0f172a;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  margin-bottom: 10px;
-}
-
-.page1-subtitle {
-  font-size: 16pt;
-  font-weight: 500;
-  color: #475569;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  margin-bottom: 60px;
-}
-
-.page1-meta {
-  margin-top: auto;
-  padding-top: 40px;
-  border-top: 1px solid #e2e8f0;
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  font-size: 9pt;
-  color: #64748b;
-  font-weight: 500;
-}
+/* Page 1 (Cover) is now fully inline-styled in CoverTemplate.js — see that
+   file — matching the newer report templates' convention (KeyParameters/
+   BfLargeAnnexure/etc.) rather than a shared className stylesheet. */
 
 /* ─── Page 2 – Index ─────────────────────────────────────── */
 .page2-heading {

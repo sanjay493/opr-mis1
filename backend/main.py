@@ -31,6 +31,7 @@ from page_special_steel_trend import generate_special_steel_trend
 from page_at_a_glance import generate_at_a_glance
 from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
+from page_cover import generate_cover
 from page_coal_receipts_stock import generate_coal_receipts_plants, generate_coal_receipts_sail
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt, _ITEM_ORDER as _IPT_ITEM_ORDER, _ITEM_RANK as _IPT_ITEM_RANK
@@ -639,6 +640,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == COAL_RECEIPTS_PAGE_2_ID:
                 page.update(generate_coal_receipts_sail(month))
                 page["type"] = "key_parameters"
+            if pg == 1:
+                page.update(generate_cover(month))
             if pg == 2:
                 page["rows"] = _index_rows()
             if pg == 25:
@@ -782,6 +785,8 @@ async def generate_pdf(request: PDFRequest):
         p["dept_badge"] = get_dept_badge(pg)
         if pg == 3 or p.get("type") == "summary":
             p["te_table"] = _safe_te_table(request.month)
+        if pg == 1:
+            p.update(generate_cover(request.month))
         if pg == 2:
             p["rows"] = _index_rows()
         if pg == 4 or p.get("type") == "page4_table":

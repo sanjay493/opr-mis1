@@ -77,5 +77,11 @@
   "misc_white":               "#ffffff",
   "misc_accent_blue":         "#0284c7",
   "misc_highlights_box_bg":   "#f8fafc",
-  "misc_highlights_box_border": "#0284c7"
+  "misc_highlights_box_border": "#0284c7",
+
+  "cover_navy_dark":          "#0a1a4a",
+  "cover_navy_mid":           "#12245e",
+  "cover_kpi_card_bg":        "#f8fafc",
+  "cover_kpi_card_border":    "#e2e8f0",
+  "cover_ember":              "#ea580c"
 }
