@@ -8,6 +8,7 @@ Unit: Tonnes  (DB stores '000 T — multiply × 1000)
 import math
 import db
 from page4 import _p4_ytd_sum, _p4_conv_actuals
+from page_at_a_glance import _declutter_1d
 
 _FIVE = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 _ALL8 = ["BSP", "DSP", "RSP", "BSL", "ISP", "ASP", "SSP", "VISL"]
@@ -301,6 +302,31 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
              f'L{x1:.1f},{ty0 + h:.1f} C{xm:.1f},{ty0 + h:.1f} {xm:.1f},{sy0 + h:.1f} {x0:.1f},{sy0 + h:.1f} Z')
         svg.append(f'<path d="{d}" fill="{sg["node"]["color"]}" fill-opacity="0.32" stroke="none"/>')
 
+    # Above-node labels (name + value, 2 lines, ~34pt tall) are anchored to
+    # each node's own top edge (g["y"] - 32 / - 14) — fine when nodes in a
+    # column are spaced well apart, but a column with several small/close
+    # nodes (e.g. a Sankey with many thin routes) packs their tops closer
+    # than 34pt apart, so adjacent labels overlap into an unreadable jumble.
+    # Decluttered per column (top-to-bottom, i.e. ascending y) the same way
+    # page_at_a_glance.py's own-% badges are — small counts per column, so
+    # this converges in a couple of passes — keeping every label at its own
+    # font-size (12pt, per direct instruction) rather than shrinking text to
+    # make it fit.
+    # A 2-line, 12pt label block's own visual footprint is ~30 SVG units
+    # tall (cap-height above the first baseline to descender below the
+    # second) — this needs real clearance beyond that on top of it, or
+    # consecutive blocks read as cramped/touching even when not truly
+    # overlapping (confirmed by measuring real rendered bounding boxes at
+    # a few tried values before landing here).
+    _LABEL_BLOCK_H = 55.0
+    label_y = {}
+    for c in columns:
+        non_mid = [n for n in by_col[c] if n["id"] not in _MID_LABEL_IDS]
+        ids_sorted = sorted((n["id"] for n in non_mid), key=lambda nid: geo[nid]["y"])
+        ideal = [geo[nid]["y"] for nid in ids_sorted]
+        adjusted = _declutter_1d(ideal, _LABEL_BLOCK_H)
+        label_y.update(zip(ids_sorted, adjusted))
+
     for nid, g in geo.items():
         n = g["node"]
         color = n["color"]
@@ -328,9 +354,16 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
             svg.append(f'<text x="{cx:.1f}" y="{cy + 13:.1f}" text-anchor="middle" font-size="12" '
                         f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
         else:
-            svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 32:.1f}" text-anchor="middle" font-size="12" '
+            ly = label_y.get(nid, g["y"])
+            # Collision-avoidance can shift a label away from its node's true
+            # top — a thin leader line back to the node keeps it legible
+            # which color/ribbon the label actually describes.
+            if abs(ly - g["y"]) > 0.5:
+                svg.append(f'<line x1="{cx:.1f}" y1="{ly - 6:.1f}" x2="{cx:.1f}" y2="{g["y"]:.1f}" '
+                            f'stroke="#94a3b8" stroke-width="0.6" stroke-dasharray="1.5,1.5"/>')
+            svg.append(f'<text x="{cx:.1f}" y="{ly - 32:.1f}" text-anchor="middle" font-size="12" '
                         f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
-            svg.append(f'<text x="{cx:.1f}" y="{g["y"] - 14:.1f}" text-anchor="middle" font-size="12" '
+            svg.append(f'<text x="{cx:.1f}" y="{ly - 14:.1f}" text-anchor="middle" font-size="12" '
                         f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
 
     svg.append("</svg>")

@@ -95,7 +95,11 @@ def _item_sankey_svg(item, routes_for_item, cum_map):
                       "color": _SANKEY_NODE_COLORS[(i + len(froms)) % len(_SANKEY_NODE_COLORS)]})
 
     unit_disp = "Rake" if (unit_label or "").strip().lower() == "rake" else "T"
-    return _sankey_svg(nodes, links, vw=560, vh=180,
+    # Taller than the width alone would suggest — a route list with 3+
+    # senders/receivers on one side needs real vertical room for the
+    # 2-line, 12pt labels above each node to stay legibly spaced (see
+    # _sankey_svg's _LABEL_BLOCK_H) without crowding the canvas edges.
+    return _sankey_svg(nodes, links, vw=560, vh=260,
                         value_fmt=lambda v: f'{v:,.0f} {unit_disp}')
 
 
