@@ -45,10 +45,12 @@ function ProductionDataEntryPageInner() {
   const [month, setMonth] = useState(defaultPeriod.month);
   const [year, setYear] = useState(defaultPeriod.year);
   const [items, setItems] = useState([]);
+  const [knownItems, setKnownItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const newRowSeq = React.useRef(0);
 
   const reportMonth = `${year}-${MONTH_NUM[month]}`;
   const reportMonthDisplay = `${month} ${year}`;
@@ -58,11 +60,13 @@ function ProductionDataEntryPageInner() {
     setStatus(null);
     setLoaded(false);
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/production-items?plant=${encodeURIComponent(plant)}&month=${encodeURIComponent(reportMonth)}`
-      );
+      const [res, suggestRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/production-items?plant=${encodeURIComponent(plant)}&month=${encodeURIComponent(reportMonth)}`),
+        fetch(`${API_BASE_URL}/api/item-mapping-suggestions?plant=${encodeURIComponent(plant)}`),
+      ]);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
+      setKnownItems(suggestRes.ok ? (await suggestRes.json()).items ?? [] : []);
       if (data.items.length === 0) {
         setStatus({ type: 'error', text: `No plan items found for ${plant} in ${reportMonthDisplay}. Upload ABP plan first.` });
         setItems([]);
@@ -83,6 +87,27 @@ function ProductionDataEntryPageInner() {
     }
   }, [plant, reportMonth]);
 
+  const handleAddRow = () => {
+    newRowSeq.current += 1;
+    setItems(prev => [...prev, {
+      key: `new-${newRowSeq.current}`,
+      isNew: true,
+      item_name: '',
+      plan_value: '',
+      actual_value: '',
+      plan_edit: '',
+      actual_edit: '',
+    }]);
+  };
+
+  const handleRemoveRow = (idx) => {
+    setItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleItemNameChange = (idx, val) => {
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, item_name: val } : it));
+  };
+
   const handleActualChange = (idx, val) => {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, actual_edit: val } : it));
   };
@@ -95,10 +120,10 @@ function ProductionDataEntryPageInner() {
     setSaving(true);
     setStatus(null);
     const entries = items.map(it => ({
-      item_name: it.item_name,
+      item_name: it.item_name.trim(),
       actual_value: it.actual_edit !== '' && it.actual_edit !== null ? parseFloat(it.actual_edit) : null,
       plan_value: it.plan_edit !== '' && it.plan_edit !== null ? parseFloat(it.plan_edit) : null,
-    })).filter(e => e.actual_value !== null || e.plan_value !== null);
+    })).filter(e => e.item_name !== '' && (e.actual_value !== null || e.plan_value !== null));
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/production-entry`, {
@@ -118,8 +143,18 @@ function ProductionDataEntryPageInner() {
   };
 
   const hasChanges = items.some(it =>
+    it.isNew ||
     it.actual_edit !== String(it.actual_value ?? '') ||
     it.plan_edit !== String(it.plan_value ?? '')
+  );
+
+  const usedItemNames = useMemo(
+    () => new Set(items.map(it => it.item_name.trim().toLowerCase()).filter(Boolean)),
+    [items]
+  );
+  const itemSuggestions = useMemo(
+    () => knownItems.filter(n => !usedItemNames.has(n.trim().toLowerCase())),
+    [knownItems, usedItemNames]
   );
 
   return (
@@ -226,9 +261,27 @@ function ProductionDataEntryPageInner() {
                         const varColor = variance > 0 ? '#059669' : variance < 0 ? '#dc2626' : '#6b7280';
 
                         return (
-                          <tr key={idx} style={{ borderBottom: '1px solid #f8f9fa' }}>
+                          <tr key={item.key ?? item.item_name} style={{ borderBottom: '1px solid #f8f9fa' }}>
                             <td style={{ padding: '12px 14px', fontSize: '13pt', color: '#202124', fontWeight: '500' }}>
-                              {item.item_name}
+                              {item.isNew ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <input
+                                    type="text"
+                                    list="known-item-names"
+                                    value={item.item_name}
+                                    onChange={e => handleItemNameChange(idx, e.target.value)}
+                                    placeholder="Select or type item name"
+                                    style={{ flex: 1, padding: '8px 10px', border: '1px solid #dadce0', borderRadius: '4px', fontSize: '13pt' }}
+                                  />
+                                  <button
+                                    onClick={() => handleRemoveRow(idx)}
+                                    title="Remove row"
+                                    style={{ border: 'none', background: 'transparent', color: '#dc2626', fontSize: '14pt', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ) : item.item_name}
                             </td>
                             <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                               <input
@@ -256,11 +309,26 @@ function ProductionDataEntryPageInner() {
                       })}
                     </tbody>
                   </table>
+                  <datalist id="known-item-names">
+                    {itemSuggestions.map(n => <option key={n} value={n} />)}
+                  </datalist>
                 </div>
 
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '16px' }}>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '16px' }}>
                   <button
-                    onClick={() => { setItems(items.map(it => ({ ...it, plan_edit: String(it.plan_value ?? ''), actual_edit: String(it.actual_value ?? '') }))); setStatus(null); }}
+                    onClick={handleAddRow}
+                    style={{ padding: '10px 20px', borderRadius: '4px', border: '1px dashed #6366f1', backgroundColor: '#fff', color: '#6366f1', fontSize: '12pt', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    + Add Item
+                  </button>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={() => {
+                      setItems(prev => prev
+                        .filter(it => !it.isNew)
+                        .map(it => ({ ...it, plan_edit: String(it.plan_value ?? ''), actual_edit: String(it.actual_value ?? '') })));
+                      setStatus(null);
+                    }}
                     disabled={!hasChanges}
                     style={{ padding: '10px 20px', borderRadius: '4px', border: '1px solid #dadce0', backgroundColor: '#fff', color: '#5f6368', fontSize: '12pt', fontWeight: '600', cursor: hasChanges ? 'pointer' : 'default' }}
                   >
@@ -273,6 +341,7 @@ function ProductionDataEntryPageInner() {
                   >
                     {saving ? 'Saving...' : 'Save to DB'}
                   </button>
+                  </div>
                 </div>
               </div>
             )}
