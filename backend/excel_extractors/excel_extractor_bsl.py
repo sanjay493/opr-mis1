@@ -1345,6 +1345,122 @@ _MAIN_PRODUCTS_TITLE_RE = re.compile(r'PRODUCTION\s+OF\s+MAIN\s+PRODUCTS', re.IG
 _BREAKUP_TITLE_RE = re.compile(r'BREAKUP\s+OF\s+PRIME', re.IGNORECASE)
 _NUM_TOKEN_RE = re.compile(r'^-?[\d,]+\.?\d*$')
 
+# Special Steel & Value Added Items despatch page, elsewhere in the same
+# "Rev <Mon><YY> (n).pdf" bundle (page 9 of 23 in the file this was built
+# against, titled "PRODUCTION/DESPATCH -- SPECIAL STEEL & VALUE ADDED
+# ITEMS") — matched on the distinctive tail of the title only, since the
+# leading "PRODUCTION/DESPATCH --" spacing/dash glyph isn't worth pinning
+# down across file editions.
+_SPECIAL_STEEL_DESPATCH_TITLE_RE = re.compile(
+    r'SPECIAL\s+STEEL\s*&\s*VALUE\s+ADDED\s+ITEMS', re.IGNORECASE)
+
+
+def _extract_special_steel_despatch_rows(pdf) -> tuple:
+    """Parse the "PRODUCTION/DESPATCH -- SPECIAL STEEL & VALUE ADDED ITEMS"
+    page (searched across the whole document — its position drifts between
+    file editions) into special_steel_rows.
+
+    Layout: product-group header rows (SLAB / HR COIL / HR PLATE / HR SHEET
+    / CR PRODUCT — bare label, no data), then "- <grade>" rows each with 8
+    numeric columns: MONTH (APP, ACTUAL, FULFIL%, PREV.YEAR), CUM (APP,
+    ACTUAL, FULFIL%, PREV.YEAR) — a "SUB - TOTAL" row closes each group, and
+    "TOTAL SPECIAL STEEL" closes the table.
+
+    Many grade names embed digits/slashes of their own (e.g. "SAE 1006 Si
+    Controlled Export", "E-34/E-38/SAPH/BSK 46/E-46", "ISC 370/390/410/440"),
+    so splitting label-vs-data by "first numeric token" (as
+    _parse_products_line does for the Main Products page) would misfire —
+    this page's grade column and its 8 data columns instead sit in fixed,
+    well-separated x-position bands, so grade text vs. data is split by each
+    word's x0 instead. Only the MONTH-ACTUAL column (the 2nd of the 8 —
+    "3rd column" counting the grade name itself as the 1st) is needed, found
+    by nearest x-position to that column's own header word rather than by
+    a fixed index, so a row missing a leading token can't silently shift
+    every value one column over.
+    """
+    target_page = None
+    for pg in pdf.pages:
+        text = pg.extract_text() or ""
+        if _SPECIAL_STEEL_DESPATCH_TITLE_RE.search(text):
+            target_page = pg
+            break
+    if target_page is None:
+        return [], None
+
+    words = target_page.extract_words(use_text_flow=False, keep_blank_chars=False)
+
+    header_actuals = sorted(
+        (w for w in words if w["text"] == "ACTUAL" and w["top"] < 120),
+        key=lambda w: w["x0"],
+    )
+    if not header_actuals:
+        logger.warning(
+            "BSL Special Steel Despatch page %s: 'ACTUAL' column header not "
+            "found — skipping despatch extraction.", target_page.page_number)
+        return [], target_page.page_number
+    month_actual_center = (header_actuals[0]["x0"] + header_actuals[0]["x1"]) / 2
+    # Observed column pitch is ~35-40pt on the sample file; half that (with
+    # margin) keeps the match from crossing into APP or FULFIL-MENT(%).
+    tolerance = 16.0
+    label_x_max = 240.0  # every data column starts at x0 >= ~242; grade text never reaches past ~200
+
+    row_groups = []
+    cur_top, cur = None, []
+    for w in sorted(words, key=lambda w: w["top"]):
+        if cur_top is None or abs(w["top"] - cur_top) > 3:
+            if cur:
+                row_groups.append(sorted(cur, key=lambda ww: ww["x0"]))
+            cur, cur_top = [w], w["top"]
+        else:
+            cur.append(w)
+    if cur:
+        row_groups.append(sorted(cur, key=lambda ww: ww["x0"]))
+
+    rows_out = []
+    current_product = ""
+    sort_order = 0
+    for row in row_groups:
+        if not row or row[0]["top"] < 120:
+            continue  # title/header band
+        label = " ".join(w["text"] for w in row if w["x0"] < label_x_max).strip()
+        data_words = [w for w in row if w["x0"] >= label_x_max]
+        if not label:
+            continue
+        label_upper = label.upper()
+        if label_upper.startswith("TOTAL SPECIAL STEEL"):
+            break  # grand total — end of table
+        if not data_words:
+            current_product = label  # section header: SLAB / HR COIL / HR PLATE / ...
+            continue
+        if label_upper.startswith("SUB - TOTAL") or label_upper.startswith("SUB-TOTAL"):
+            continue  # section subtotal — skip row, keep current_product
+        if not current_product:
+            continue
+
+        grade = label.lstrip("-").strip()
+        best = min(data_words, key=lambda w: abs((w["x0"] + w["x1"]) / 2 - month_actual_center))
+        if abs((best["x0"] + best["x1"]) / 2 - month_actual_center) > tolerance:
+            continue  # no word landed in the ACTUAL column on this row
+        val = _num(best["text"])
+
+        sort_order += 1
+        rows_out.append({
+            "product":         current_product,
+            "quality_grade":   grade,
+            "section":         "",
+            "sort_order":      sort_order,
+            "order_qty":       None,
+            "actual_despatch": val,
+            "unit":            "T",
+            "cell":            f"PDF p{target_page.page_number} · MONTH ACTUAL col",
+            # Matches the Corp Office extractor's convention (has_data check)
+            # of treating a genuine zero the same as "no data" — an
+            # all-zero grade row for the month isn't worth persisting.
+            "status":          "ok" if val else "zero",
+        })
+
+    return rows_out, target_page.page_number
+
 
 def _parse_products_line(line: str):
     """Split one text line of the products/breakup table into (label, [data
@@ -1440,8 +1556,16 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
     try:
         with pdfplumber.open(file_path) as pdf:
             pages_text = [pg.extract_text() or "" for pg in pdf.pages[:4]]
+            ss_rows, ss_page_num = _extract_special_steel_despatch_rows(pdf)
     except Exception as exc:
         raise ValueError(f"Cannot open PDF '{fname}': {exc}") from exc
+
+    ss_ok = sum(1 for r in ss_rows if r["status"] == "ok")
+    if ss_page_num is None:
+        logger.info("BSL Main Products PDF: no Special Steel & VAI despatch page found in %s", fname)
+    else:
+        logger.info("BSL Main Products PDF: %d/%d Special Steel despatch grade rows ok "
+                    "(page %d) for %s", ss_ok, len(ss_rows), ss_page_num, fname)
 
     p2_text = next((t for t in pages_text if _MAIN_PRODUCTS_TITLE_RE.search(t)), None)
     if p2_text is None:
@@ -1555,11 +1679,11 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
         "month":              db_month,
         "detected_month":     detected,
         "plant":              "BSL",
-        "workbook_sheets":    ["PDF p2/p3"],
+        "workbook_sheets":    ["PDF p2/p3"] + ([f"PDF p{ss_page_num} (Special Steel)"] if ss_page_num else []),
         "production_rows":    rows,
         "techno_rows":        [],
         "techno_param_rows":  [],
-        "special_steel_rows": [],
+        "special_steel_rows": ss_rows,
     }
 
 
@@ -2119,6 +2243,10 @@ def extract_preview(file_path: str, report_month: str, all_months: bool = False)
       → production_rows populated with the same 19 production items as the
         DPR Mail path, read straight from the finalised monthly report
         rather than a cumulative month-end DPR cell dump.
+      → special_steel_rows also populated, from this same bundle's
+        "PRODUCTION/DESPATCH -- SPECIAL STEEL & VALUE ADDED ITEMS" page
+        (position varies by edition — found by title search, not a fixed
+        page index); monthly actual = that page's MONTH-ACTUAL column.
 
     • Saleable Steel — Table No. 2.1 (.pdf) — Corporate MIS year-wise
       PRODUCTION SUMMARY page, one row per FY month (Apr-Mar) plus
