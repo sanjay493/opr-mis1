@@ -360,8 +360,22 @@ _TECHNO_PARAM_MAP = [
 # FAX GM OPRN sheet — monthly fax to Corp Office OPRN Directorate. Adds a
 # handful of parameters not present on Sheet1-4/SMS-I/SMS-II: per-furnace BF
 # dimensions (Useful/Working Volume, Not Dry Cast%) and per-furnace CDI, plus
-# Tar Injection, LD Slag, CO Gas Yield, Mn in HM, and SMS Avg Blow/Day, Avg
-# Heat Weight, Gross HM Consumption, Lime/Aluminium Consumption, Caster Yield.
+# Tar Injection, LD Slag, CO Gas Yield, Mn in HM, Si/S in HM, Slag Basicity/
+# MgO, and SMS Avg Blow/Day, Avg Heat Weight, Gross HM Consumption, Lime/
+# Aluminium Consumption, Caster Yield.
+#
+# This sheet's remaining rows (Fuel Rate, CDI overall, Sinter in Burden, Coke
+# Screen Loss, Dry Coal Charge, M-10, Ammonium Sulphate/Crude Tar/Benzol
+# Yield, Coke/Flux Crushing, Sp. Heat Consumption, and every SMS-I/SMS-II
+# consumption/lining-life/reblown-heat figure) are intentionally NOT mapped
+# here even though they're present on the sheet — each already has a more
+# direct source elsewhere in this same workbook (Sheet1's fixed rows, or
+# Sheet2/Sheet3/Sheet4/SMS-I/SMS-II's keyword-searched blocks — see
+# _SHEET2_KEYWORDS/_SHEET3_KEYWORDS/_SHEET4_KEYWORDS/_SMS_KEYWORDS below).
+# Duplicating them here would risk two conflicting values for the same
+# real-world figure depending on extraction order. Verified row-by-row
+# against those other maps/keyword lists before adding anything new — don't
+# add a FAX GM OPRN row without checking there first.
 #
 # Column layout differs from _TECHNO_PARAM_MAP — month/cum columns are not
 # adjacent, so cum_col is given explicitly rather than assumed as mon_col+1:
@@ -386,6 +400,17 @@ _FAX_SINGLE_PARAM_MAP = [
     (29,  7,  9, 1.0, "IRON_MAKING", "Tar Injection",         "BSL",                    "Kg/THM"),
     (32,  7,  9, 1.0, "SMS",         "LD Slag Cons",          "BSL",                    "Kg/TGS"),
     (53,  8, 10, 1.0, "IRON_MAKING", "Blast Furnaces",        "Manganese in HM",        "%"),
+    # BF slag/HM quality params with no source anywhere else in this
+    # extractor — confirmed against Sheet1's _TECHNO_PARAM_MAP and Sheet2/3/4's
+    # keyword lists (_SHEET2_KEYWORDS/_SHEET3_KEYWORDS/_SHEET4_KEYWORDS) that
+    # none of them cover these 4, unlike most of this table's other
+    # candidates (Sinter in Burden, Coke Screen Loss, Fuel Rate, CDI overall,
+    # and every SMS-I/SMS-II consumption figure are all already read
+    # elsewhere from a more direct source — deliberately NOT duplicated here).
+    (51,  8, 10, 1.0, "IRON_MAKING", "Blast Furnaces",        "Si in HM",               "%"),
+    (52,  8, 10, 1.0, "IRON_MAKING", "Blast Furnaces",        "S in HM",                "%"),
+    (55,  8, 10, 1.0, "IRON_MAKING", "Blast Furnaces",        "Slag Basicity",          "%"),
+    (56,  8, 10, 1.0, "IRON_MAKING", "Blast Furnaces",        "Slag MgO",               "%"),
     (57,  8, 10, 1.0, "SMS",         "SMS-I",                 "Average Blows Per Day",  "Nos."),
     (58,  8, 10, 1.0, "SMS",         "SMS-II",                "Average Blows Per Day",  "Nos."),
     (59,  8, 10, 1.0, "SMS",         "SMS-I",                 "Average Heat Weight",    "T"),
@@ -973,16 +998,34 @@ def _detect_month_from_pdf_text(text: str) -> Optional[str]:
 
 
 def _detect_month_from_fax_sheet(fax_ws) -> Optional[str]:
-    """Scan the FAX GM OPRN sheet's own header rows for a month-name + year
-    pattern (its row 9 reads "THE REQUIRED INFORMATION FOR <MONTH> <YEAR> IS
-    AS UNDER"). This sheet is a supplementary monthly fax to Corporate that
-    isn't always updated when the workbook is reused as next month's
-    template — confirmed on a real file where every other sheet (Sheet1-4,
-    SMS-I, SMS-II) correctly read "JUNE-2026" but this one still read
-    "FEBRUARY 2026", silently attaching stale furnace-wise data (BF-1/2/4/5
-    Coke Rate, Hot Blast Temp, Productivity, CDI, etc. — this sheet's ONLY
-    source for per-furnace breakdown) to the current month. Returns None if
-    no signal is found (never block on an undetectable signal)."""
+    """Detect what month FAX GM OPRN's data actually holds.
+
+    Primary signal: the actual date value in each particulars table's own
+    data-column header (row 11 col G, row 48 col H — the literal headers of
+    the columns _FAX_SINGLE_PARAM_MAP/_FAX_BF_FURNACE_PARAMS read "month"
+    values from, per their mon_col=7/8). These are structurally guaranteed
+    to describe the data since they ARE its column header, not free text
+    that can drift out of sync with it.
+
+    Fallback: scan for a month-name + year text pattern (row 9 reads "THE
+    REQUIRED INFORMATION FOR <MONTH> <YEAR> IS AS UNDER"), used only if
+    neither header cell holds a date. This sheet is a supplementary monthly
+    fax to Corporate that isn't always updated when the workbook is reused
+    as next month's template — confirmed on a real file where every other
+    sheet (Sheet1-4, SMS-I, SMS-II) correctly read "JUNE-2026" but this
+    sheet's row 9 title still read "FEBRUARY 2026" while its own data-column
+    headers (row 11/48) correctly read May 2026 — i.e. exactly the case the
+    header-date check above exists to get right instead of wrongly skipping
+    a month's worth of real furnace-wise data (BF-1/2/4/5 Coke Rate, Hot
+    Blast Temp, Productivity, CDI, etc. — this sheet's ONLY source for
+    per-furnace breakdown) over a stale banner elsewhere on the sheet.
+    Returns None if no signal is found at all (never block on an
+    undetectable signal)."""
+    for row, col in ((11, 7), (48, 8)):
+        val = fax_ws.cell(row, col).value
+        if isinstance(val, datetime):
+            return f"{val.year}-{val.month:02d}"
+
     for row in range(1, 12):
         for col in range(1, 6):
             try:
