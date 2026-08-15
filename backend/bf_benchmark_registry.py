@@ -71,7 +71,44 @@ BF_BENCHMARK_PARAMS = [
     {"key": "sulphur_in_hm", "label": "HM Sulphur", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "raft", "label": "RAFT", "unit": UNIT.DEG_C, "static": False, "better": "high"},
     {"key": "total_heat_loss", "label": "Total Heat Loss", "unit": "Kcal/THM", "static": False, "better": "high"},
+
+    # Added for the Large BFs (SAIL vs Non-SAIL) annexure report page — see
+    # page_bf_large_annexure.py. No SAIL extractor writes any of these today
+    # (same "blank until entered" situation as top_pressure/steam_addition/
+    # etc. above); entered via the dedicated /data-entry/bf-large-manual
+    # page, which saves into techno_data under the same per-BF unit
+    # (BF-8/BF-5) these keys are read from here — so a value entered there
+    # also shows up in the general Techno Manual Entry form's BF tabs, and
+    # vice versa, both being the same techno_data cell.
+    {"key": "lump_ore_fe", "label": "Lump Ore Fe", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "pellet_fe", "label": "Pellet Fe", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "avg_burden_fe", "label": "Avg. Burden Fe", "unit": UNIT.PCT, "static": False, "better": "high"},
+    # Distinct from steam_addition (Kg/THM, a per-tonne rate) above — this is
+    # an hourly flow figure, the unit the Excel source uses for this row.
+    {"key": "steam_rate_hr", "label": "Steam Rate", "unit": UNIT.T_HR, "static": False, "better": None},
+    {"key": "slag_mgo", "label": "Slag MgO", "unit": UNIT.PCT, "static": False, "better": None},
+    {"key": "slag_al2o3", "label": "Slag Al2O3", "unit": UNIT.PCT, "static": False, "better": None},
+    {"key": "slag_b2", "label": "Slag B2", "unit": UNIT.RATIO, "static": False, "better": None},
+    {"key": "eta_co", "label": "Eta CO", "unit": UNIT.PCT, "static": False, "better": "high"},
+    # Distinct from total_heat_loss (Kcal/THM, a per-tonne rate) above —
+    # this is an hourly figure, the unit the Excel source uses for this row.
+    {"key": "heat_load_flux", "label": "Heat Load/Flux", "unit": "MJ/hr", "static": False, "better": "low"},
+    {"key": "tapping_duration", "label": "Tapping Duration", "unit": UNIT.HRS, "static": False, "better": None},
+    # "furnace_availability" is an alias — ISP's own techno upload already
+    # writes it under that name (see KEY_ALIASES below); every other plant
+    # has nothing under either name yet.
+    {"key": "availability", "label": "Fce Availability", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "utilisation", "label": "Fce Utilisation", "unit": UNIT.PCT, "static": False, "better": "high"},
 ]
+
+# key -> [alternate techno_data key names already in use for that concept
+# under some plant's BF unit] — checked in listed order, first match wins.
+# Only needed where a plant's existing extractor already writes the same
+# concept under a different name than this registry's own key.
+KEY_ALIASES = {
+    "availability": ["furnace_availability"],
+    "utilisation": ["furnace_utilisation"],
+}
 
 # Fuel Rate is not entered/stored directly — always the sum of Coke Rate,
 # CDI and Nut Coke Rate (per direct instruction). Coke Rate and CDI are

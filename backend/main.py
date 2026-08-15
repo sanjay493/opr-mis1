@@ -30,6 +30,7 @@ from page_special_steel import generate_special_steel_plant, generate_special_st
 from page_special_steel_trend import generate_special_steel_trend
 from page_at_a_glance import generate_at_a_glance
 from page_key_parameters import generate_key_parameters
+from page_bf_large_annexure import generate_bf_large_annexure
 from page_coal_receipts_stock import generate_coal_receipts_plants, generate_coal_receipts_sail
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt, _ITEM_ORDER as _IPT_ITEM_ORDER, _ITEM_RANK as _IPT_ITEM_RANK
@@ -132,18 +133,19 @@ def _index_rows() -> list:
     instead means the Index is always correct for any month, independent of
     when it was first saved.
 
-    "MIS at a Glance" and "Key Parameters" are inserted as the new pages 1
-    and 3 (see AT_A_GLANCE_PAGE_ID / KEY_PARAMS_PAGE_ID above); the former
-    first-numbered-page "Production performance summary" becomes page 2
-    (+1), and everything after it shifts by +2 (two new pages ahead of it
-    now, not one)."""
+    "MIS at a Glance", "Key Parameters" and "Large BFs" are inserted as the
+    new pages 1, 3 and 4 (see AT_A_GLANCE_PAGE_ID / KEY_PARAMS_PAGE_ID /
+    BF_LARGE_ANNEXURE_PAGE_ID above); the former first-numbered-page
+    "Production performance summary" becomes page 2 (+1), and everything
+    after it shifts by +3 (three new pages ahead of it now, not two)."""
     rows = [
         {"sno": "1", "title": "MIS at a Glance", "page_range": "1"},
         {"sno": "2", "title": _INDEX_BASE_ROWS[0][0], "page_range": "2"},
         {"sno": "3", "title": "Key Parameters — Quarterly Performance", "page_range": "3"},
+        {"sno": "4", "title": "Large BFs — SAIL vs Non-SAIL Benchmark", "page_range": "4"},
     ]
-    for i, (title, page_range) in enumerate(_INDEX_BASE_ROWS[1:], start=4):
-        rows.append({"sno": str(i), "title": title, "page_range": _shift_page_range(page_range, 2)})
+    for i, (title, page_range) in enumerate(_INDEX_BASE_ROWS[1:], start=5):
+        rows.append({"sno": str(i), "title": title, "page_range": _shift_page_range(page_range, 3)})
     return rows
 from pdf import build_pdf_response
 from layout_loader import load_layout_config
@@ -203,6 +205,11 @@ AT_A_GLANCE_PAGE_ID = 2.5
 # AT_A_GLANCE_PAGE_ID above (numbered main flow, no dept-badge, browsable
 # on-screen via PAGE_LABELS).
 KEY_PARAMS_PAGE_ID = 3.5
+
+# "Large BFs" — SAIL vs Non-SAIL BF benchmark annexure (Report_format/Large
+# BFs for OMI.xlsx), sits right after Key Parameters. Same sentinel-float
+# treatment as KEY_PARAMS_PAGE_ID above (numbered main flow, no dept-badge).
+BF_LARGE_ANNEXURE_PAGE_ID = 3.6
 
 # "Iron Making (contd.)" — page 29's furnace-wise Slag Rate/Fuel Rate/BF
 # Productivity/Pellet in Burden sections spill onto this second physical
@@ -443,6 +450,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
 
         if page_number is not None:
             if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
+                                BF_LARGE_ANNEXURE_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID):
                 # Page 24 (SAIL), the trend sentinel page, the "at a
                 # glance" sentinel page, the "key parameters" sentinel
@@ -577,6 +585,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
                             if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
+                                                      BF_LARGE_ANNEXURE_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID)]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
@@ -588,6 +597,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             _idx3 = next((i for i, p in enumerate(pages_config) if p.get("page") == 3), None)
             if _idx3 is not None:
                 pages_config.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
+                pages_config.insert(_idx3 + 2, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
             _idx29 = next((i for i, p in enumerate(pages_config) if p.get("page") == 29), None)
             if _idx29 is not None:
                 pages_config.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
@@ -620,6 +630,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == KEY_PARAMS_PAGE_ID:
                 page.update(generate_key_parameters(month))
                 page["type"] = "key_parameters"
+            if pg == BF_LARGE_ANNEXURE_PAGE_ID:
+                page.update(generate_bf_large_annexure(month))
+                page["type"] = "bf_large_annexure"
             if pg == COAL_RECEIPTS_PAGE_ID:
                 page.update(generate_coal_receipts_plants(month))
                 page["type"] = "key_parameters"
@@ -743,6 +756,11 @@ async def generate_pdf(request: PDFRequest):
         _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 3), None)
         if _idx3 is not None:
             _pages_list.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
+    # "Large BFs" sentinel page: always inserted right after Key Parameters.
+    if not any(p.get("page") == BF_LARGE_ANNEXURE_PAGE_ID for p in _pages_list):
+        _idxkp = next((i for i, p in enumerate(_pages_list) if p.get("page") == KEY_PARAMS_PAGE_ID), None)
+        if _idxkp is not None:
+            _pages_list.insert(_idxkp + 1, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
     # "Iron Making (contd.)" sentinel page: always inserted right after
     # page 29, same unconditional-insert pattern as above.
     if not any(p.get("page") == IRON_MAKING_PAGE_2_ID for p in _pages_list):
@@ -815,6 +833,9 @@ async def generate_pdf(request: PDFRequest):
         if pg == KEY_PARAMS_PAGE_ID:
             p.update(generate_key_parameters(request.month))
             p["type"] = "key_parameters"
+        if pg == BF_LARGE_ANNEXURE_PAGE_ID:
+            p.update(generate_bf_large_annexure(request.month))
+            p["type"] = "bf_large_annexure"
         if pg == COAL_RECEIPTS_PAGE_ID:
             p.update(generate_coal_receipts_plants(request.month))
             p["type"] = "key_parameters"
