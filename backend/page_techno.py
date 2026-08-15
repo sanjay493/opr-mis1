@@ -3051,6 +3051,13 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                 for (src_unit, src_key) in unit_specs:
                     if src_unit == "BF-5" and plant != "ISP" and not _other_bf_units_present:
                         continue
+                    # BSP's BF-5 doesn't belong in the CDI Rate block on the
+                    # Iron Making page — excluded here rather than at the
+                    # data layer, so BSP BF-5's own CDI figure still shows
+                    # normally on every other furnace-wise section (Hot
+                    # Blast Temp, Oxygen Enrichment, Coke Rate, etc.).
+                    if plant == "BSP" and src_unit == "BF-5" and sec_label == "CDI Rate":
+                        continue
                     _key_aliases = [src_key] + _COKE_OVEN_PARAM_ALIASES.get(src_key, [])
                     # Include the row if ANY period this page displays has a
                     # value - current month, current-FY months so far, CPLY,
