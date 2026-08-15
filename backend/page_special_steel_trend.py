@@ -178,6 +178,16 @@ def _fy_short(fy_label: str) -> str:
     return f"FY{fy_label}"
 
 
+# x-axis label on the annual bar chart only — "yy-yy" (e.g. "22-23")
+# instead of the "FY yyyy-yy" _fy_short uses elsewhere on this page
+# (fy_range_label subtitle, etc.), per request.
+def _fy_axis_label(fy_label: str) -> str:
+    return fy_label[2:]
+
+
+_PREV_FY_PCT_LABEL_COLOR = "#1e3a8a"  # dark blue, closed-FY bars only — current-FY bar keeps its own bar color
+
+
 # ── SVG: half-circle-top bar path ──────────────────────────────────────────
 
 def _rounded_bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
@@ -199,8 +209,12 @@ def _rounded_bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
 # bar, that period's % of Saleable Steel above the bar top, x-axis label
 # below.
 
-def _bar_group_svg(bars: list, title: str, vw: int = 240, vh: int = 200) -> str:
-    """bars: [(x_label, qty_tonnes_or_None, pct_or_None, color), ...]"""
+def _bar_group_svg(bars: list, title: str, vw: int = 240, vh: int = 200,
+                    pct_font_size: float = 7.6) -> str:
+    """bars: [(x_label, qty_tonnes_or_None, pct_or_None, color), ...] — a 5th
+    element per bar (pct_label_color) overrides the "% of Saleable Steel"
+    label's color for just that bar; omitted/absent falls back to the bar's
+    own color (every caller except the annual chart's closed-FY bars)."""
     ml, mr, mt, mb = 12, 10, 30, 24
     cw, ch = vw - ml - mr, vh - mt - mb
 
@@ -220,7 +234,9 @@ def _bar_group_svg(bars: list, title: str, vw: int = 240, vh: int = 200) -> str:
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
 
-    for i, (label, qty, pct, color) in enumerate(bars):
+    for i, bar in enumerate(bars):
+        label, qty, pct, color = bar[:4]
+        pct_color = bar[4] if len(bar) > 4 else color
         cx = ml + i * slot_w + slot_w / 2
         if qty is None:
             by, bh = mt + ch - 3, 3
@@ -234,8 +250,8 @@ def _bar_group_svg(bars: list, title: str, vw: int = 240, vh: int = 200) -> str:
             path = _rounded_bar_path(cx - bar_w / 2, by, bar_w, bh, bar_w / 2)
             lines.append(f'<path d="{path}" fill="{color}"/>')
             if pct is not None:
-                lines.append(f'<text x="{cx:.1f}" y="{by - 5:.1f}" text-anchor="middle" font-size="7.6" '
-                             f'font-weight="bold" font-family="Arial,sans-serif" fill="{color}">{pct:.1f}%</text>')
+                lines.append(f'<text x="{cx:.1f}" y="{by - 5:.1f}" text-anchor="middle" font-size="{pct_font_size}" '
+                             f'font-weight="bold" font-family="Arial,sans-serif" fill="{pct_color}">{pct:.1f}%</text>')
             val_str = _fmt_int(qty)
             fill = _contrast_text(color)
             if 12 * len(val_str) * 0.62 <= bar_w - 4:
@@ -397,13 +413,13 @@ def generate_special_steel_trend(report_month: str) -> dict:
             bars = []
             for fy in fys[:-1]:
                 qty, pct = _period_value_pct(cur, _fy_months(fy), ent)
-                bars.append((_fy_short(fy), qty, pct, _FY_BAR_COLORS[len(bars)]))
+                bars.append((_fy_axis_label(fy), qty, pct, _FY_BAR_COLORS[len(bars)], _PREV_FY_PCT_LABEL_COLOR))
             cur_fy = fys[-1]
             _, cur_pct = _period_value_pct(cur, ytd_months, ent)
             cur_rate = _current_fy_rate(cur, report_month, ent)
             cur_qty = cur_rate * 1000 if cur_rate is not None else None
-            bars.append((f"{_fy_short(cur_fy)} (Likely)", cur_qty, cur_pct, _FY_BAR_COLORS[3]))
-            annual_svgs[ent] = _bar_group_svg(bars, ent, vw=240, vh=200)
+            bars.append((f"{_fy_axis_label(cur_fy)} (Likely)", cur_qty, cur_pct, _FY_BAR_COLORS[3]))
+            annual_svgs[ent] = _bar_group_svg(bars, ent, vw=240, vh=200, pct_font_size=12)
 
         month_slices, ytd_slices = [], []
         for ent in _PLANTS:
