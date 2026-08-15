@@ -142,7 +142,7 @@ def _index_rows() -> list:
         {"sno": "1", "title": "MIS at a Glance", "page_range": "1"},
         {"sno": "2", "title": _INDEX_BASE_ROWS[0][0], "page_range": "2"},
         {"sno": "3", "title": "Key Parameters — Quarterly Performance", "page_range": "3"},
-        {"sno": "4", "title": "Large BFs — SAIL vs Non-SAIL Benchmark", "page_range": "4"},
+        {"sno": "4", "title": "Large BFs — SAIL Benchmark", "page_range": "4"},
     ]
     for i, (title, page_range) in enumerate(_INDEX_BASE_ROWS[1:], start=5):
         rows.append({"sno": str(i), "title": title, "page_range": _shift_page_range(page_range, 3)})
@@ -206,7 +206,7 @@ AT_A_GLANCE_PAGE_ID = 2.5
 # on-screen via PAGE_LABELS).
 KEY_PARAMS_PAGE_ID = 3.5
 
-# "Large BFs" — SAIL vs Non-SAIL BF benchmark annexure (Report_format/Large
+# "Large BFs" — SAIL's largest BFs benchmark annexure (Report_format/Large
 # BFs for OMI.xlsx), sits right after Key Parameters. Same sentinel-float
 # treatment as KEY_PARAMS_PAGE_ID above (numbered main flow, no dept-badge).
 BF_LARGE_ANNEXURE_PAGE_ID = 3.6

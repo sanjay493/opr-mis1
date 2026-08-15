@@ -1,26 +1,20 @@
         <div style="padding:8px;font-family:Arial,sans-serif;font-size:6.5pt;">
-          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;">{{ page.title }}</div>
-          <div style="text-align:center;font-size:7pt;color:{{ colors.text_muted }};margin-bottom:6px;">
-            Previous FY: {{ page.prev_fy_label }} &middot; Month: {{ page.month_label }} &middot; YTD: Apr-{{ page.month_label }}
-          </div>
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:6px;">{{ page.title }}</div>
           <div style="overflow-x:auto;">
           <table style="border-collapse:collapse;border:1px solid {{ colors.border_darkest }};font-size:6.5pt;white-space:nowrap;">
             <thead>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
                 <th rowspan="2" style="padding:2px 4px;border:1px solid {{ colors.border_dark }};text-align:left;">Parameter</th>
                 <th rowspan="2" style="padding:2px 4px;border:1px solid {{ colors.border_dark }};">Unit</th>
-                {% for bf in page.sail_cols %}
-                <th colspan="3" style="padding:2px 4px;border:1px solid {{ colors.border_dark }};">{{ bf }}</th>
-                {% endfor %}
-                {% for bf in page.non_sail_cols %}
-                <th rowspan="2" style="padding:2px 4px;border:1px solid {{ colors.border_dark }};writing-mode:vertical-rl;">{{ bf }}</th>
-                {% endfor %}
+                <th colspan="{{ page.sail_cols|length }}" style="padding:2px 4px;border:1px solid {{ colors.border_dark }};">{{ page.prev_fy_col_label }}</th>
+                <th colspan="{{ page.sail_cols|length }}" style="padding:2px 4px;border:1px solid {{ colors.border_dark }};">{{ page.month_col_label }}</th>
+                <th colspan="{{ page.sail_cols|length }}" style="padding:2px 4px;border:1px solid {{ colors.border_dark }};">{{ page.ytd_col_label }}</th>
               </tr>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                {% for period in ['prev_fy', 'month', 'ytd'] %}
                 {% for bf in page.sail_cols %}
-                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};">Prev FY</th>
-                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};">Month</th>
-                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};">YTD</th>
+                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};line-height:1.2;">{{ bf.plant }}<br/>{{ bf.unit }}</th>
+                {% endfor %}
                 {% endfor %}
               </tr>
             </thead>
@@ -29,14 +23,11 @@
               <tr style="background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">
                 <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;">{{ row.parameter }}</td>
                 <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ row.unit }}</td>
+                {% for period in ['prev_fy', 'month', 'ytd'] %}
                 {% for bf in page.sail_cols %}
-                {% set v = row.sail[bf] %}
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ v.prev_fy if v.prev_fy is not none else '—' }}</td>
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ v.month if v.month is not none else '—' }}</td>
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ v.ytd if v.ytd is not none else '—' }}</td>
+                {% set v = row.sail[bf.label][period] %}
+                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ v if v is not none else '—' }}</td>
                 {% endfor %}
-                {% for bf in page.non_sail_cols %}
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.non_sail[bf] if row.non_sail[bf] is not none else '—' }}</td>
                 {% endfor %}
               </tr>
             {% endfor %}
@@ -44,7 +35,6 @@
           </table>
           </div>
           <div style="font-size:6pt;color:{{ colors.text_secondary }};margin-top:4px;">
-            Non-SAIL BFs show Previous FY only (no monthly figures are tracked for them). Blank cells ("—") have no
-            data uploaded/entered yet for that plant/period — see /data-entry/bf-large-manual.
+            Blank cells (&ldquo;—&rdquo;) have no data uploaded/entered yet for that furnace/period — see /data-entry/bf-large-manual.
           </div>
         </div>

@@ -1,19 +1,25 @@
 """
-"Large BFs" — Comparison of Performance of SAIL's Largest BFs with Non-SAIL
-BFs (Annexure-4) — page 3.6, inserted right after "Performance of SAIL
-Plants" (Key Parameters, page 3.5).
+"Large BFs" — Comparison of Performance of SAIL's Largest BFs (Annexure-4)
+— page 3.6, inserted right after "Performance of SAIL Plants" (Key
+Parameters, page 3.5). SAIL-only — the non-SAIL comparison columns the
+source Excel and the original design had were dropped per direction; that
+data is still maintained (and still comparable) in the separate, standalone
+/reports/bf-benchmark tool, which this page's row additions to
+bf_benchmark_registry.py also benefit.
 
-Format/layout mirrors Report_format/Large BFs for OMI.xlsx (sheet
-"Large BFs (2)") — same row list (Working Volume, Total HM Prod, ... Fce
-Utilisation), same 3 SAIL BFs (BSP BF-8, RSP BF-5, ISP BF-5) and the same
-non-SAIL companies (from bf_benchmark_external_bf). Columns differ from the
-source file on purpose: that Excel is a hand-built snapshot with one column
-per individual month of whichever FY it was made in (Apr, May, Jun, Apr-Jun,
+Row list mirrors Report_format/Large BFs for OMI.xlsx (sheet "Large BFs
+(2)") — Working Volume, Total HM Prod, ... Fce Utilisation — for the same 3
+SAIL BFs (BSP BF-8, RSP BF-5, ISP BF-5). Columns differ from the source
+file on purpose: that Excel is a hand-built snapshot with one column per
+individual month of whichever FY it was made in (Apr, May, Jun, Apr-Jun,
 Jul, Apr-Jul, ...), which doesn't fit this app's per-report_month generation
 model (every other page here regenerates cleanly for any selected month from
 a fixed column set). This page instead uses the same 3-column shape as the
 rest of the report — Previous FY (closed) Actual | <report month> Actual |
-Apr-<report month> (YTD) Actual — per user direction.
+Apr-<report month> (YTD) Actual — with each period's own dynamic label
+(e.g. "25-26" / "Jul-26" / "Apr-Jul'26" for report_month "2026-07") on the
+table's own parent header row, per user direction — each period-group's 3
+sub-columns are the 3 SAIL BFs (plant name over furnace name, wrapped).
 
 Data sources, per row:
   - Most rows read techno_data directly under the BF's own unit (BSP BF-8,
@@ -48,14 +54,9 @@ Data sources, per row:
     which shows the same techno_data cells) shows up on both forms and on
     this report page immediately, all being the same underlying value.
   - Working Volume is a static engineering spec, unchanged from month to
-    month — reused as-is from bf_benchmark_sail_meta/bf_benchmark_
-    external_bf.working_volume_m3 (the table the existing BF Benchmarking
-    feature already maintains this in; no reason to duplicate it).
-  - Non-SAIL side ("Previous FY" only, matching the source Excel's own
-    non-SAIL columns, which are FY-only too — no month-level non-SAIL data
-    exists anywhere) reads bf_benchmark_external_bf/_external_data
-    directly, the same tables /data-entry/bf-benchmark's non-SAIL grid
-    already writes to.
+    month — reused as-is from bf_benchmark_sail_meta.working_volume_m3 (the
+    table the existing BF Benchmarking feature already maintains this in;
+    no reason to duplicate it).
 """
 import json as _json
 import db
@@ -278,49 +279,39 @@ def _fmt_production(v):
     return None if v is None else round(v / 1_000_000, 3)
 
 
-def _external_bf_previous_fy(prev_fy_label: str):
-    """[{label, company, rows: {key: value}}, ...] for every active
-    non-SAIL BF, for the given "YYYY-YY" FY label — same tables /data-entry/
-    bf-benchmark's non-SAIL grid already writes to."""
-    conn = db.connect()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "SELECT id, name, company, location, working_volume_m3 "
-            "FROM bf_benchmark_external_bf WHERE active=1 ORDER BY company, name"
-        )
-        bfs = cur.fetchall()
-        out = []
-        for bf_id, name, company, location, wv in bfs:
-            cur.execute(
-                "SELECT param_json FROM bf_benchmark_external_data "
-                "WHERE external_bf_id=? AND report_month=?",
-                (bf_id, prev_fy_label),
-            )
-            r = cur.fetchone()
-            params = _json.loads(r[0]) if r and r[0] else {}
-            if wv is not None:
-                params.setdefault("working_volume_m3", wv)
-            out.append({"label": f"{company} {name}".strip(), "company": company, "params": params})
-        return out
-    finally:
-        conn.close()
+_MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _month_col_label(report_month: str) -> str:
+    """'2026-07' -> 'Jul-26' — the Month column's own header label."""
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    return f"{_MON_ABBR[m]}-{y % 100:02d}"
+
+
+def _ytd_col_label(ytd_months: list) -> str:
+    """['2026-04',...,'2026-07'] -> 'Apr-Jul'26' (or just "Apr'26" for a
+    single-month YTD) — mirrors page_key_parameters.py's period_label."""
+    y0, m0 = int(ytd_months[0][:4]), int(ytd_months[0][5:7])
+    y1, m1 = int(ytd_months[-1][:4]), int(ytd_months[-1][5:7])
+    if len(ytd_months) == 1:
+        return f"{_MON_ABBR[m0]}'{y0 % 100:02d}"
+    return f"{_MON_ABBR[m0]}-{_MON_ABBR[m1]}'{y1 % 100:02d}"
 
 
 def generate_bf_large_annexure(report_month: str) -> dict:
     fy_months = db.get_fy_months(report_month)
     prev_fy_start_year = int(fy_months[0][:4]) - 1
-    # Matches api_bf_benchmark.py's _fy_label() exactly — bf_benchmark_
-    # external_data.report_month stores FY labels in this "YYYY-YY" form
-    # (e.g. "2024-25"), not the "YY-YY" short form used elsewhere in this
-    # app (page_ipt.py's _fy_label, page_special_steel_trend.py's fy_label).
-    prev_fy_label = f"{prev_fy_start_year}-{(prev_fy_start_year + 1) % 100:02d}"
+    # Short "YY-YY" form, matching page_ipt.py's/page_special_steel_trend.py's
+    # own fy_label convention elsewhere in this app.
+    prev_fy_col_label = f"{prev_fy_start_year % 100:02d}-{(prev_fy_start_year + 1) % 100:02d}"
+    ytd_months_for_label = [m for m in fy_months if m <= report_month]
 
     sail_cols = []
     sail_values = {}   # {bf_label: {key: (prev_fy, month, ytd)}}
     for bf in SAIL_BFS:
         plant, unit, label = bf["plant"], bf["unit"], bf["label"]
-        sail_cols.append(label)
+        sail_cols.append({"label": label, "plant": plant, "unit": unit})
         vals, ytd_months, prev_fy_months = _sail_bf_values(plant, unit, report_month)
         vals["_coke_ash"], vals["_sinter_fe"] = _coke_ash_and_sinter_fe(plant, report_month)
         vals["_avg_daily_rate"] = _avg_daily_rate(vals["production"], report_month, ytd_months, prev_fy_months)
@@ -336,15 +327,13 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         vals["working_volume_m3"] = (wv, wv, wv)
         sail_values[label] = vals
 
-    external_bfs = _external_bf_previous_fy(prev_fy_label)
-    non_sail_cols = [bf["label"] for bf in external_bfs]
-
     rows = []
     for key in _ROW_KEYS:
         label, unit = _row_spec(key)
         dp = _dp_for(key)
         sail_out = {}
-        for bf_label in sail_cols:
+        for bf in sail_cols:
+            bf_label = bf["label"]
             prev_fy, month, ytd = sail_values[bf_label][key]
             if key == "production":
                 prev_fy, month, ytd = _fmt_production(prev_fy), _fmt_production(month), _fmt_production(ytd)
@@ -352,19 +341,14 @@ def generate_bf_large_annexure(report_month: str) -> dict:
             sail_out[bf_label] = {
                 "prev_fy": _round(prev_fy, dp), "month": _round(month, dp), "ytd": _round(ytd, dp),
             }
-        non_sail_out = {}
-        if not key.startswith("_"):
-            for bf in external_bfs:
-                v = bf["params"].get(key)
-                non_sail_out[bf["label"]] = _round(v, dp) if v is not None else None
-        rows.append({"parameter": label, "unit": unit, "sail": sail_out, "non_sail": non_sail_out})
+        rows.append({"parameter": label, "unit": unit, "sail": sail_out})
 
     return {
-        "title": "Comparison of Performance of Large BFs of SAIL with Non-SAIL BFs",
+        "title": "Comparison of Performance of Large BFs of SAIL",
         "variant": "bf_large_annexure",
         "sail_cols": sail_cols,
-        "non_sail_cols": non_sail_cols,
-        "prev_fy_label": prev_fy_label,
-        "month_label": report_month,
+        "prev_fy_col_label": prev_fy_col_label,
+        "month_col_label": _month_col_label(report_month),
+        "ytd_col_label": _ytd_col_label(ytd_months_for_label),
         "rows": rows,
     }

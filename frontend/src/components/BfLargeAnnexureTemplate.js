@@ -1,12 +1,14 @@
 'use client';
 
-import React from 'react';
-
 // Mirrors backend/page_templates/bf_large_annexure.html — SAIL's 3 largest
-// BFs (Previous FY / Month / YTD columns) vs non-SAIL BFs (Previous FY
-// only — no monthly data exists for them). See page_bf_large_annexure.py
-// for exactly what each row reads from and why the columns don't match the
-// source Excel's own hand-built month-by-month layout.
+// BFs only (no non-SAIL comparison columns — see /reports/bf-benchmark for
+// that, a separate standalone tool). Each of the 3 periods (Previous FY /
+// Month / YTD) is its own parent header group, dynamically labeled for
+// report_month (e.g. "25-26" / "Jul-26" / "Apr-Jul'26"); each group's 3
+// sub-columns are the 3 SAIL BFs, plant name wrapped over furnace name. See
+// page_bf_large_annexure.py for exactly what each row reads from.
+const PERIODS = ['prev_fy', 'month', 'ytd'];
+
 const CELL = { padding: '2px 5px', border: '1px solid #94a3b8', whiteSpace: 'nowrap' };
 const NUM  = { ...CELL, textAlign: 'right' };
 const LBL  = { ...CELL, textAlign: 'left', fontWeight: 600 };
@@ -18,15 +20,16 @@ const TH   = {
 
 export default function BfLargeAnnexureTemplate({ data }) {
   if (!data) return null;
-  const { title, prev_fy_label = '', month_label = '', sail_cols = [], non_sail_cols = [], rows = [] } = data;
+  const {
+    title, prev_fy_col_label = '', month_col_label = '', ytd_col_label = '',
+    sail_cols = [], rows = [],
+  } = data;
+  const periodLabels = { prev_fy: prev_fy_col_label, month: month_col_label, ytd: ytd_col_label };
 
   return (
     <div style={{ padding: '8px', fontFamily: 'Arial, sans-serif', fontSize: '0.6rem' }}>
-      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', marginBottom: 2 }}>
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', marginBottom: 8 }}>
         {title}
-      </div>
-      <div style={{ textAlign: 'center', fontSize: '0.7rem', color: '#64748b', marginBottom: 8 }}>
-        Previous FY: {prev_fy_label} &middot; Month: {month_label} &middot; YTD: Apr-{month_label}
       </div>
 
       <div style={{ overflowX: 'auto' }}>
@@ -35,19 +38,16 @@ export default function BfLargeAnnexureTemplate({ data }) {
             <tr>
               <th rowSpan={2} style={{ ...TH, textAlign: 'left' }}>Parameter</th>
               <th rowSpan={2} style={TH}>Unit</th>
-              {sail_cols.map((bf) => <th key={bf} colSpan={3} style={TH}>{bf}</th>)}
-              {non_sail_cols.map((bf) => (
-                <th key={bf} rowSpan={2} style={{ ...TH, writingMode: 'vertical-rl' }}>{bf}</th>
+              {PERIODS.map((p) => (
+                <th key={p} colSpan={sail_cols.length} style={TH}>{periodLabels[p]}</th>
               ))}
             </tr>
             <tr>
-              {sail_cols.map((bf) => (
-<React.Fragment key={bf}>
-                  <th style={TH}>Prev FY</th>
-                  <th style={TH}>Month</th>
-                  <th style={TH}>YTD</th>
-                </React.Fragment>
-              ))}
+              {PERIODS.map((p) => sail_cols.map((bf) => (
+                <th key={`${p}-${bf.label}`} style={{ ...TH, lineHeight: 1.2 }}>
+                  {bf.plant}<br />{bf.unit}
+                </th>
+              )))}
             </tr>
           </thead>
           <tbody>
@@ -55,19 +55,10 @@ export default function BfLargeAnnexureTemplate({ data }) {
               <tr key={ri} style={{ backgroundColor: ri % 2 ? '#f8fafc' : '#fff' }}>
                 <td style={LBL}>{row.parameter}</td>
                 <td style={{ ...CELL, textAlign: 'center', fontStyle: 'italic', color: '#475569' }}>{row.unit}</td>
-                {sail_cols.map((bf) => {
-                  const v = row.sail[bf] || {};
-                  return (
-                    <React.Fragment key={bf}>
-                      <td style={NUM}>{v.prev_fy ?? '—'}</td>
-                      <td style={NUM}>{v.month ?? '—'}</td>
-                      <td style={NUM}>{v.ytd ?? '—'}</td>
-                    </React.Fragment>
-                  );
-                })}
-                {non_sail_cols.map((bf) => (
-                  <td key={bf} style={NUM}>{row.non_sail[bf] ?? '—'}</td>
-                ))}
+                {PERIODS.map((p) => sail_cols.map((bf) => {
+                  const v = row.sail[bf.label]?.[p];
+                  return <td key={`${p}-${bf.label}`} style={NUM}>{v ?? '—'}</td>;
+                }))}
               </tr>
             ))}
           </tbody>
@@ -75,8 +66,8 @@ export default function BfLargeAnnexureTemplate({ data }) {
       </div>
 
       <div style={{ fontSize: '0.55rem', color: '#475569', marginTop: 4 }}>
-        Non-SAIL BFs show Previous FY only (no monthly figures are tracked for them). Blank cells (&ldquo;—&rdquo;)
-        have no data uploaded/entered yet for that plant/period — see <a href="/data-entry/bf-large-manual" style={{ color: '#1a73e8' }}>BF Large Manual Entry</a>.
+        Blank cells (&ldquo;—&rdquo;) have no data uploaded/entered yet for that furnace/period — see{' '}
+        <a href="/data-entry/bf-large-manual" style={{ color: '#1a73e8' }}>BF Large Manual Entry</a>.
       </div>
     </div>
   );
