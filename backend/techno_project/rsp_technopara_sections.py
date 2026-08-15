@@ -102,6 +102,8 @@ PARAM_ALIASES = {
     "LD Slag Cons.":                   "ld_slag_cons",
     "Basicity  (CaO/ SiO2)":           "basicity",
     "Plant Return Fines":              "return_fines",
+    "Fe in Sinter":                    "tfe_in_sinter",
+    "Machine Utilisation":             "machine_utilisation",
 
     # ---- Blast Furnaces — label already encodes the furnace ------------------
     "Productivity - BF #1":            ("BF-1", "bf_productivity"),

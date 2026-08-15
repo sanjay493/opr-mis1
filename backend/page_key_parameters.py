@@ -23,7 +23,10 @@ frontend/src/app/data-entry/techno-manual/page.js PARAM_TEMPLATES.General)
 so they'll start showing real numbers the moment someone fills them in
 there; until then they render as "—". Coke Ash and Sinter Fe already had a
 manual-entry home (Coke Ovens' ash_in_coke, Blast Furnace's tfe_in_sinter)
-and are now wired up here too.
+and are now wired up here too. Sinter Fe is plant-dependent: RSP records
+tfe_in_sinter per Sinter Plant unit (SP-1/SP-2/SP-3) and is shown slash-joined
+across the three machines (see _SP_UNIT_MAP/_sinter_fe_val); other plants
+still read the single BF-unit-sourced figure.
 """
 import calendar as _calendar
 import json as _json
@@ -51,6 +54,16 @@ _SMS_UNIT_MAP = {
     "RSP": ["SMS-1", "SMS-2"],
     "BSL": ["SMS-I", "SMS-II"],
     "ISP": ["SMS"],
+}
+
+# Plants that record Fe in Sinter per Sinter-Plant unit (RSP: SP-1/SP-2/SP-3
+# — see page_techno.py's "RSP: SP-1/SP-2/SP-3" comment for the same split)
+# get their "Sinter Fe" row slash-joined across those units, one value per
+# machine, like TMI's _sms_joined above. Plants not listed here have no
+# per-unit Sinter-Plant extraction for this key yet, so they keep the older
+# single BF-sourced ("bf" unit) figure via _sinter_fe_val's fallback.
+_SP_UNIT_MAP = {
+    "RSP": ["SP-1", "SP-2", "SP-3"],
 }
 
 _GENERAL_UNIT = "General"
@@ -184,6 +197,21 @@ def _ldg_val(plant, techno, dp):
     return "/".join(vals) if vals else None
 
 
+def _sinter_fe_val(plant, techno, dp):
+    """Sinter Fe: for plants in _SP_UNIT_MAP (RSP), slash-joins the reading
+    from each Sinter Plant unit (SP-1/SP-2/SP-3) — RSP's own tfe_in_sinter is
+    now extracted there (see rsp_technopara_sections.py). Other plants fall
+    back to the older single BF-sourced ("bf" unit) figure, unchanged."""
+    units = _SP_UNIT_MAP.get(plant)
+    if not units:
+        return _bf_val(plant, "tfe_in_sinter", techno, dp)
+    vals = []
+    for u in units:
+        v = techno.get((plant, u), {}).get("tfe_in_sinter")
+        vals.append(f"{_round(v, dp):.{dp}f}" if v is not None else "—")
+    return "/".join(vals) if vals else None
+
+
 def _days_in_month(month_str):
     try:
         y, m = int(month_str[:4]), int(month_str[5:7])
@@ -285,7 +313,7 @@ _ROWS = [
     # Blend" above in concept and was only ever populated for BSP.)
     ("Ash in Coal Blend",   "%",        "coke_unit",
      ["ash_in_coal_blend", "average_ash_in_coal_blend", "ash_blend_coal"], 2, {}),
-    ("Sinter Fe",           "%",        "bf", "tfe_in_sinter", 2, {}),
+    ("Sinter Fe",           "%",        "sinter_fe", None, 2, {}),
     ("BF Slag Rate",        "kg/THM",   "bf", "slag_rate", 0, {}),
     ("HM Sent to PCM/Sand Pit/Dry Pit", "'000 T", "general", "hm_to_pcm_sandpit_drypit", 1, {"label_rowspan": 2}),
     (None,                  "%",        "ratio_general_prod", ("hm_to_pcm_sandpit_drypit", ["Hot Metal"]), 1, {"continuation": True}),
@@ -355,6 +383,8 @@ def generate_key_parameters(report_month: str) -> dict:
                 v = _first_present_val(plant, _COKE_UNITS, spec, techno, dp)
             elif kind == "ldg":
                 v = _ldg_val(plant, techno, dp)
+            elif kind == "sinter_fe":
+                v = _sinter_fe_val(plant, techno, dp)
             elif kind == "bf_sum":
                 a = _bf_val(plant, spec[0], techno, dp)
                 b = _bf_val(plant, spec[1], techno, dp)
