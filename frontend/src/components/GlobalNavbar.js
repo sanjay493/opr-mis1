@@ -30,6 +30,7 @@ export default function GlobalNavbar() {
             { label: 'Special Steel Grade Clubbing', link: '/data-entry/special-steel-grade-clubs', icon: '🔗' },
             { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
             { label: 'CO2 / Water / PM Manual Entry', link: '/data-entry/co2-water-pm-manual', icon: '🌫️' },
+            { label: 'Key Parameters Manual Entry', link: '/data-entry/key-parameters-manual', icon: '🔑' },
             { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
             { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' },
             { label: 'Large BF Benchmarking Entry', link: '/data-entry/bf-benchmark', icon: '🏗️' },

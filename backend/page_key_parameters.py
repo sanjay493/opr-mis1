@@ -12,16 +12,18 @@ stored "till_month" dict (the same cumulative the Techno Manual Entry form
 computes/saves), production items are summed (day-weighted average for
 Oven Pushings, a Nos./day rate) across the FY-to-date months.
 
-Rows grouped under three section-header bands (Major Production
-Performance / Major Blast Furnace Techno-economic Parameters / Recovery of
-Process Gases), matching the sample layout. A few rows still have no data
-source wired up anywhere yet (CAPEX, Labour Productivity, Avg Rake
-Detention Time, HM Sent to PCM/Sand Pit/Dry Pit, Recovery of Process Gases
-COG/BFG/LDG) — these read a `techno_data` "General"-unit key that has been
-added to the Techno Manual Entry form's template (see
-frontend/src/app/data-entry/techno-manual/page.js PARAM_TEMPLATES.General)
-so they'll start showing real numbers the moment someone fills them in
-there; until then they render as "—". Coke Ash and Sinter Fe already had a
+Rows grouped under two section-header bands (Major Production Performance /
+Major Blast Furnace Techno-economic Parameters), matching the sample
+layout (its own third band, Recovery of Process Gases COG/BFG/LDG, was
+dropped — those three keys were never wired to a real data source; see
+frontend/src/app/data-entry/key-parameters-manual/page.js for the fields
+that still have no file-upload source). CAPEX, Labour Productivity, Avg
+Rake Detention Time, Demurrage, and HM Sent to PCM/Sand Pit/Dry Pit read a
+`techno_data` "General"-unit key with no extractor behind it — filled in
+via that dedicated manual-entry page (or the general Techno Manual Entry
+form's PARAM_TEMPLATES.General, frontend/src/app/data-entry/techno-manual/
+page.js) so they render as "—" until someone fills them in there. Coke Ash
+and Sinter Fe already had a
 manual-entry home (Coke Ovens' ash_in_coke, Blast Furnace's tfe_in_sinter)
 and are now wired up here too. Sinter Fe is plant-dependent: RSP records
 tfe_in_sinter per Sinter Plant unit (SP-1/SP-2/SP-3) and is shown slash-joined
@@ -175,28 +177,6 @@ def _sms_joined(plant, key, techno, dp):
     return "/".join(vals) if vals else None
 
 
-# LDG (BOF/LD Gas Yield) — same per-plant SMS shop list as TMI
-# (_SMS_UNIT_MAP, slash-joined when a plant reports more than one shop), but
-# the stored key name varies by plant: BSP calls it "ld_gas_recovery", DSP
-# "bof_gas_yield". RSP/ISP/BSL don't track this parameter in techno_data
-# yet — blank until a dedicated source is extracted.
-_LDG_KEY_BY_PLANT = {
-    "BSP": "ld_gas_recovery",
-    "DSP": "bof_gas_yield",
-}
-
-
-def _ldg_val(plant, techno, dp):
-    key = _LDG_KEY_BY_PLANT.get(plant)
-    if not key:
-        return None
-    vals = []
-    for u in _SMS_UNIT_MAP.get(plant, []):
-        v = techno.get((plant, u), {}).get(key)
-        vals.append(f"{_round(v, dp):.{dp}f}" if v is not None else "—")
-    return "/".join(vals) if vals else None
-
-
 def _sinter_fe_val(plant, techno, dp):
     """Sinter Fe: for plants in _SP_UNIT_MAP (RSP), slash-joins the reading
     from each Sinter Plant unit (SP-1/SP-2/SP-3) — RSP's own tfe_in_sinter is
@@ -270,6 +250,12 @@ def _special_steel_pct(plant, report_month, dp):
         return None
 
 
+# Placeholder swapped for "Demurrage (Apr-<report month>)" in
+# generate_key_parameters — the only row whose label needs the page's own
+# YTD period baked in (every other row's period is implied by the page
+# title alone).
+_DEMURRAGE_LABEL = "Demurrage ({period})"
+
 # (label, unit, kind, spec, decimal_places, flags)
 #   flags:
 #     highlight       - light background on this data row
@@ -329,15 +315,11 @@ _ROWS = [
     ("CAPEX",                  "Rs Cr",    "general", "capex", 1, {}),
     ("Labour Productivity",    "T/Man-yr", "general", "labour_productivity", 0, {}),
     ("Avg Rake Detention Time","Hrs",      "general", "avg_rake_detention_time", 1, {}),
+    # Label's period placeholder is filled in with the same Apr-<report
+    # month> range as the page title (_DEMURRAGE_LABEL below), since this
+    # is a till_month/YTD figure like every other "general" row here.
+    (_DEMURRAGE_LABEL,          "Rs Lakh",  "general", "demurrage", 1, {}),
     ("Value Added Products %", "%",        "special", None, 0, {}),
-
-    ("Recovery of Process Gases", "", _SECTION, None, 0, {}),
-    # cog_recovery/bfg_recovery/ldg_recovery below were placeholder keys no
-    # extractor ever writes -- these rows were always blank. Mapped to the
-    # actual stored parameters instead:
-    ("COG", "Nm³/T",    "coke_unit", "coke_oven_gas_yield", 0, {}),
-    ("BFG", "Nm³/THM",  "bf", "bf_gas_yield", 0, {}),
-    ("LDG", "Nm³/TCS",  "ldg", None, 0, {}),
 ]
 
 
@@ -351,11 +333,11 @@ def generate_key_parameters(report_month: str) -> dict:
     if len(ytd_months) > 1:
         period_label += "-" + _dt.datetime.strptime(ytd_months[-1], "%Y-%m").strftime("%b")
     report_year_2d = report_month[2:4]
-    fy_year = int(report_month[:4]) if int(report_month[5:7]) >= 4 else int(report_month[:4]) - 1
-    fy_label = f"{fy_year}-{(fy_year + 1) % 100:02d}"
 
     rows = []
     for label, unit, kind, spec, dp, flags in _ROWS:
+        if label == _DEMURRAGE_LABEL:
+            label = _DEMURRAGE_LABEL.format(period=f"{period_label}'{report_year_2d}")
         if kind == _SECTION:
             rows.append({"type": "section", "label": label})
             continue
@@ -381,8 +363,6 @@ def generate_key_parameters(report_month: str) -> dict:
                 # — stored under whichever of COB/Coke Ovens/COB-old/COB-new
                 # this plant's extractor used.
                 v = _first_present_val(plant, _COKE_UNITS, spec, techno, dp)
-            elif kind == "ldg":
-                v = _ldg_val(plant, techno, dp)
             elif kind == "sinter_fe":
                 v = _sinter_fe_val(plant, techno, dp)
             elif kind == "bf_sum":
@@ -424,7 +404,7 @@ def generate_key_parameters(report_month: str) -> dict:
         rows.append(row)
 
     return {
-        "title": f"Performance of SAIL Plants — {period_label}'{report_year_2d} (FY {fy_label})",
+        "title": f"Performance of SAIL Plants — {period_label}'{report_year_2d}",
         "plants": PLANTS,
         "rows": rows,
     }
