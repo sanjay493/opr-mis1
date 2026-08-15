@@ -32,7 +32,7 @@ from page_at_a_glance import generate_at_a_glance
 from page_key_parameters import generate_key_parameters
 from page_coal_receipts_stock import generate_coal_receipts_plants, generate_coal_receipts_sail
 from page_opening_stock import generate_opening_stock
-from page_ipt import generate_ipt
+from page_ipt import generate_ipt, _ITEM_ORDER as _IPT_ITEM_ORDER, _ITEM_RANK as _IPT_ITEM_RANK
 from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month, format_cr_actual
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
@@ -4467,6 +4467,9 @@ def _ipt_fy_data(fy_start: int) -> dict:
             by_item[item] = {"item": item, "routes": []}
             sections.append(by_item[item])
         by_item[item]["routes"].append(row)
+
+    # Same process-order convention as page_ipt.py's IPT Status report page.
+    sections.sort(key=lambda sec: (_IPT_ITEM_RANK.get(sec["item"], len(_IPT_ITEM_ORDER)), sec["item"]))
 
     return {
         "fy_start": fy_start,

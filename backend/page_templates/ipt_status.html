@@ -27,7 +27,7 @@
               {% for row in sec.rows %}
               <tr style="background:{{ sbg }};">
                 {% if loop.first %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;vertical-align:middle;">{{ sec.item }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;vertical-align:middle;">{{ sec.icon }} {{ sec.item }}</td>
                 {% endif %}
                 <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.from }}</td>
                 <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.to }}</td>
@@ -41,4 +41,21 @@
             {% endfor %}
             </tbody>
           </table>
+
+          {% set sankey_sections = page.sections | selectattr('sankey_svg') | list %}
+          {% if sankey_sections %}
+          <div style="margin-top:8pt;">
+            <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">
+              Inter-Plant Flow — Senders &amp; Receivers, {{ page.cum_label }}
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:6px;">
+              {% for sec in sankey_sections %}
+              <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:2px 6px;">
+                <div style="font-size:7.5pt;font-weight:600;text-align:center;">{{ sec.icon }} {{ sec.item }}</div>
+                {{ sec.sankey_svg }}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
         </div>

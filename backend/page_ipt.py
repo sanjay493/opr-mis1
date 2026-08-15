@@ -8,11 +8,95 @@ Columns: Item | From | To | Unit | <Month> Plan/Actual | <Apr-Month> Plan/Actual
 Cumulative = SUM across FY months Apr → report month.
 Routes shown = union of routes having any record in the FY so far,
 so a route transferred only in earlier months still appears.
+
+Item order/icons: every row in ipt_table currently has sort_order=0 (it's a
+per-route field, editable in the data-entry grid, but never actually used to
+differentiate item order yet), so the SQL's "ORDER BY MIN(sort_order), item"
+collapses to plain alphabetical. _ITEM_ORDER below re-sorts the built
+`sections` list into process order (use → produced order: Sinter/BF Coke/
+Coke Breeze feed the Blast Furnace; Screened Coke is BF Coke's coke-oven
+sibling; CC Slabs/Blooms/Billets are continuous-casting semis; HR Coil and
+Spade/2Pi/Jackal Slabs are downstream rolled/finished products) rather than
+writing real sort_order values into the DB, since that field is per-route
+(not per-item) and user-editable — overwriting it here could silently clobber
+a future manual edit. An item not in the list (a new one someone starts
+transferring) sorts after all known ones, alphabetically among itself, so it
+still shows up rather than erroring.
 """
 import db
+from page_prod_by_process import _sankey_svg
 
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+_ITEM_ORDER = [
+    "Sinter", "BF Coke", "Coke Breeze", "Screened Coke",
+    "CC Slabs", "CC Blooms", "CC Billets (105 sq mm)",
+    "HR Coil", "Spade/ 2Pi / Jackal Slabs",
+]
+_ITEM_RANK = {name: i for i, name in enumerate(_ITEM_ORDER)}
+
+# Small per-item icon (emoji — needs no image asset, renders identically in
+# the PDF export (Chromium) and the web view (React), unlike an <img> tag
+# which would need a static asset path reachable by both render paths).
+_ITEM_ICON = {
+    "Sinter":                    "🪨",
+    "BF Coke":                   "⚫",
+    "Coke Breeze":                "💨",
+    "Screened Coke":              "🔲",
+    "CC Slabs":                   "🟫",
+    "CC Blooms":                   "🧱",
+    "CC Billets (105 sq mm)":      "🪵",
+    "HR Coil":                    "🌀",
+    "Spade/ 2Pi / Jackal Slabs":   "🔩",
+}
+_DEFAULT_ICON = "📦"
+
+# Sankey (senders -> receivers) built for these 4 items only — the ones
+# explicitly asked for. Reuses page_prod_by_process.py's hand-rolled SVG
+# Sankey builder (no chart library — that page's own SVG string is embedded
+# verbatim in both the PDF template and the React web view, so a JS-only
+# charting lib like recharts, already a frontend dependency, wouldn't render
+# in the server-generated PDF; see that module for the full rationale).
+_SANKEY_ITEMS = {"Sinter", "BF Coke", "CC Slabs", "CC Blooms"}
+_SANKEY_NODE_COLORS = [
+    "#2a78d6", "#eb6834", "#1baf7a", "#eda100",
+    "#5b9bd5", "#e87ba4", "#a5a5a5", "#94a3b8",
+]
+
+
+def _item_sankey_svg(item, routes_for_item, cum_map):
+    """Bipartite Sankey (senders in column 0, receivers in column 1) for one
+    item, sized by cumulative FY actual (the same figure the table's own
+    "cum_actual" column shows) — plan isn't plotted, this illustrates what
+    actually moved. A route with no actual yet (nothing reported this FY)
+    is simply omitted rather than drawn as a zero-width ribbon."""
+    froms, tos, links = [], [], []
+    unit_label = "T"
+    for frm, to, unit in routes_for_item:
+        _, ca, _, _ = cum_map.get((item, frm, to), (None, None, None, None))
+        if not ca:
+            continue
+        unit_label = unit or unit_label
+        if frm not in froms:
+            froms.append(frm)
+        if to not in tos:
+            tos.append(to)
+        links.append({"source": f"from:{frm}", "target": f"to:{to}", "value": ca})
+    if not links:
+        return None
+
+    nodes = []
+    for i, f in enumerate(froms):
+        nodes.append({"id": f"from:{f}", "label": f, "column": 0,
+                      "color": _SANKEY_NODE_COLORS[i % len(_SANKEY_NODE_COLORS)]})
+    for i, t in enumerate(tos):
+        nodes.append({"id": f"to:{t}", "label": t, "column": 1,
+                      "color": _SANKEY_NODE_COLORS[(i + len(froms)) % len(_SANKEY_NODE_COLORS)]})
+
+    unit_disp = "Rake" if (unit_label or "").strip().lower() == "rake" else "T"
+    return _sankey_svg(nodes, links, vw=560, vh=180,
+                        value_fmt=lambda v: f'{v:,.0f} {unit_disp}')
 
 
 def _month_label(ym):
@@ -68,7 +152,7 @@ def generate_ipt(report_month: str) -> dict:
         cum_map = {(i, f, t): (p, a, pt, at) for i, f, t, p, a, pt, at in cur.fetchall()}
 
         # group routes by item, preserving order of first appearance
-        sections, by_item = [], {}
+        sections, by_item, routes_by_item = [], {}, {}
         for item, frm, to, unit, _ in routes:
             mp, ma, mpt, mat = cur_map.get((item, frm, to), (None, None, None, None))
             cp, ca, cpt, cat = cum_map.get((item, frm, to), (None, None, None, None))
@@ -84,9 +168,19 @@ def generate_ipt(report_month: str) -> dict:
                 "cum_actual_t": _fmt(cat) if is_rake else "",
             }
             if item not in by_item:
-                by_item[item] = {"item": item, "rows": []}
+                by_item[item] = {"item": item, "icon": _ITEM_ICON.get(item, _DEFAULT_ICON), "rows": []}
                 sections.append(by_item[item])
+                routes_by_item[item] = []
             by_item[item]["rows"].append(row)
+            routes_by_item[item].append((frm, to, unit))
+
+        for item in _SANKEY_ITEMS:
+            if item in by_item:
+                by_item[item]["sankey_svg"] = _item_sankey_svg(item, routes_by_item[item], cum_map)
+
+        # Process order (_ITEM_ORDER), unlisted items sorted alphabetically
+        # after all known ones — see module docstring.
+        sections.sort(key=lambda sec: (_ITEM_RANK.get(sec["item"], len(_ITEM_ORDER)), sec["item"]))
 
         return {
             "title": f"IPT Status for FY {_fy_label(report_month)}",

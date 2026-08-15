@@ -68,7 +68,7 @@ export default function IptStatusTemplate({ data }) {
                 {ri === 0 && (
                   <td rowSpan={sec.rows.length}
                       style={{ ...LBL, fontWeight: 600, verticalAlign: 'middle' }}>
-                    {sec.item}
+                    {sec.icon} {sec.item}
                   </td>
                 )}
                 <td style={CTR}>{row.from}</td>
@@ -83,6 +83,22 @@ export default function IptStatusTemplate({ data }) {
           )}
         </tbody>
       </table>
+
+      {sections.some((sec) => sec.sankey_svg) && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', marginBottom: 4 }}>
+            Inter-Plant Flow — Senders &amp; Receivers, {cum_label}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            {sections.filter((sec) => sec.sankey_svg).map((sec) => (
+              <div key={sec.item} style={{ border: '1px solid #cbd5e1', borderRadius: 4, padding: '4px 8px' }}>
+                <div style={{ fontSize: '0.7rem', fontWeight: 600, textAlign: 'center' }}>{sec.icon} {sec.item}</div>
+                <div dangerouslySetInnerHTML={{ __html: sec.sankey_svg }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

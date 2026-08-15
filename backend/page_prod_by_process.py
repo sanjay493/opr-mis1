@@ -225,7 +225,8 @@ def _node_totals(nodes: list, links: list) -> tuple:
     return incoming, outgoing
 
 
-def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300) -> str:
+def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
+                 value_fmt=None) -> str:
     """Hand-rolled layered Sankey: nodes carry a fixed 'column' (left-to-right
     stage), links only ever join adjacent columns. A node's height defaults to
     max(incoming, outgoing) so a node whose in/out differ (a process-yield
@@ -235,7 +236,12 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300) -> str:
     which overrides that — its outgoing ribbons then only fill part of its
     height when they don't fully account for it (real process loss/yield,
     surfaced as unfilled bar rather than silently shrinking the node to match
-    only what the split figures can explain)."""
+    only what the split figures can explain).
+
+    value_fmt(node_value) -> display string, e.g. "1,234 T" — defaults to
+    this page's own convention (input values are '000T, displayed as T);
+    a caller whose node values are already in their final display unit
+    (e.g. page_ipt.py's tonnes/rake counts) passes its own formatter."""
     ml, mr, mt, mb = 92, 92, 46, 10
     cw, ch = vw - ml - mr, vh - mt - mb
 
@@ -272,6 +278,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300) -> str:
             geo[n["id"]] = {"x": x, "y": y, "w": node_w, "h": h, "node": n}
             y += h + node_gap
 
+    fmt = value_fmt or (lambda v: f'{v * 1000:,.0f} T')
     out_used = {nid: 0.0 for nid in geo}
     in_used = {nid: 0.0 for nid in geo}
 
@@ -300,7 +307,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300) -> str:
         svg.append(f'<rect x="{g["x"]:.1f}" y="{g["y"]:.1f}" width="{g["w"]:.1f}" height="{g["h"]:.1f}" '
                     f'rx="2.5" fill="{color}"/>')
         cx = g["x"] + g["w"] / 2
-        val_str = f'{sizes[nid] * 1000:,.0f} T'  # '000T -> T
+        val_str = fmt(sizes[nid])
         if nid in _MID_LABEL_IDS:
             # Main-flow nodes (Hot Metal -> Crude Steel -> Finished Steel
             # (Mills) -> SAIL Finished Steel) label at the bar's own vertical
