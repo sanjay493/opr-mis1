@@ -147,6 +147,13 @@ def _ytd_months_for_fy(fy_start_year: int, n_months: int) -> list:
 _SEMIS_PLANTS = ["BSP", "DSP", "BSL", "ISP", "ASP"]
 _SEMIS_COLORS = dict(zip(_SEMIS_PLANTS, _YTD_BAR_COLORS + ["#e87ba4"]))
 _SEMIS_INK = "#1e293b"  # legend/annotation text stays neutral ink, never the segment's own hue (identity comes from the adjacent swatch/fill, not colored text — low-contrast hues like yellow/aqua/magenta are illegible as text on a light surface)
+_SEMIS_OWN_PCT_LABEL_COLOR = "#6366f1"  # indigo, for the "small % = ..." caption clause specifically
+_SEMIS_OWN_PCT_BADGE_FILL = "yellow"    # circle behind each own-% data label
+# Kept small: ASP's segment is consistently the thinnest in every month (its
+# own % badge sits only ~3-6 units from the neighboring segment's badge) —
+# a larger radius reads fine in isolation but overlaps its neighbor there.
+_SEMIS_OWN_PCT_BADGE_R = 3.0
+_SEMIS_OWN_PCT_BADGE_FS = 3.8
 
 
 def _semis_breakdown_data(months: list) -> dict:
@@ -175,6 +182,30 @@ def _semis_breakdown_data(months: list) -> dict:
         for p in plants:
             p["share_pct"] = round(p["qty"] / total * 100, 1) if total else None
         out[m] = {"total": total, "plants": plants}
+    return out
+
+
+def _declutter_1d(values: list, min_gap: float, iterations: int = 6) -> list:
+    """Nudge a list of positions (in real spatial adjacency order — each
+    entry adjacent to its neighbors in the list) apart so consecutive
+    values are at least min_gap apart, symmetrically (each colliding pair
+    pushed apart equally rather than cascading everything downward/upward
+    from one end) and iterated a few times so a fix for one pair doesn't
+    silently reintroduce a collision with its other neighbor. Converges
+    quickly for the small counts (<=5) this chart ever deals with."""
+    out = list(values)
+    n = len(out)
+    for _ in range(iterations):
+        moved = False
+        for i in range(1, n):
+            gap = out[i] - out[i - 1]
+            if gap < min_gap:
+                deficit = min_gap - gap
+                out[i - 1] -= deficit / 2
+                out[i] += deficit / 2
+                moved = True
+        if not moved:
+            break
     return out
 
 
@@ -261,7 +292,9 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
                  f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">SEMI-FINISHED STEEL BY PLANT (\'000 T)</text>')
     lines.append(f'<text x="{vw - mr:.1f}" y="{sub_y:.1f}" text-anchor="end" font-size="5.4" '
                  f'font-family="Arial,sans-serif" font-style="italic" fill="#64748b">'
-                 f'bold % = share of total · small % = share of that plant\'s own Saleable Steel</text>')
+                 f'bold % = share of total · '
+                 f'<tspan fill="{_SEMIS_OWN_PCT_LABEL_COLOR}" font-style="italic" text-decoration="underline">'
+                 f'small % = share of that plant\'s own Saleable Steel</tspan></text>')
 
     # Legend (plant colors) — top-right of Zone B's plot area.
     lx = vw - mr
@@ -291,16 +324,37 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
             lines.append(f'<text x="{x:.1f}" y="{base_b - ch_b * min(total / yhi_b, 1.0) - 4:.1f}" '
                          f'text-anchor="middle" font-size="6.4" font-weight="bold" '
                          f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{total:.0f}</text>')
+        # Geometry pass first (no SVG emitted yet) — the own-% badges need
+        # every segment's true center before any collision-avoidance can
+        # run, so bar/label emission is split into a second pass below.
+        geom = []
         y_cursor = base_b
         for seg in plants:
             seg_h = ch_b * seg["qty"] / yhi_b
             if seg_h <= 0:
                 continue
             by = y_cursor - seg_h
+            geom.append({"seg": seg, "seg_h": seg_h, "by": by, "cy": by + seg_h / 2})
+            y_cursor = by
+
+        # Own-% badges all sit at the same x (outside-right of the bar), so
+        # the only collision axis is vertical — and `geom`'s order is
+        # already real spatial adjacency (each entry touches its stacking
+        # neighbors), just bottom-to-top (descending y). _declutter_1d only
+        # needs consecutive-pair adjacency, not a particular direction, but
+        # working in ascending (top-to-bottom) order reads more naturally.
+        badge_r = _SEMIS_OWN_PCT_BADGE_R
+        min_gap = badge_r * 2 + 0.8
+        badge_idxs = [j for j, g in enumerate(geom) if g["seg"]["own_pct"] is not None]
+        ideal_desc = [geom[j]["cy"] for j in badge_idxs]
+        adjusted_asc = _declutter_1d(list(reversed(ideal_desc)), min_gap)
+        badge_cy = dict(zip(badge_idxs, reversed(adjusted_asc)))
+
+        for j, g in enumerate(geom):
+            seg, seg_h, by, cy = g["seg"], g["seg_h"], g["by"], g["cy"]
             color = _SEMIS_COLORS[seg["plant"]]
             lines.append(f'<rect x="{x - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" '
                          f'height="{max(seg_h - seg_gap, 0.5):.1f}" fill="{color}"/>')
-            cy = by + seg_h / 2
             # Share % must never just disappear on a thin segment (that's
             # what happened before this fix — several months' BSL/ISP
             # segments were too short for the label's 8.5px threshold, so
@@ -318,10 +372,21 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
                                  f'font-size="5" font-weight="bold" font-family="Arial,sans-serif" '
                                  f'fill="{_SEMIS_INK}">{seg["share_pct"]:.0f}%</text>')
             if seg["own_pct"] is not None:
-                lines.append(f'<text x="{x + bar_w / 2 + 2.5:.1f}" y="{cy + 1.8:.1f}" font-size="5" '
-                             f'font-weight="bold" font-family="Arial,sans-serif" fill="{_SEMIS_INK}">'
+                bcy = badge_cy[j]
+                bcx = x + bar_w / 2 + 2.5 + badge_r
+                # Collision-avoidance can shift a badge away from its true
+                # segment center — a thin leader line back to the segment's
+                # edge keeps it legible which color the % belongs to.
+                if abs(bcy - cy) > 0.5:
+                    lines.append(f'<line x1="{x + bar_w / 2 + 0.5:.1f}" y1="{cy:.1f}" '
+                                 f'x2="{bcx - badge_r:.1f}" y2="{bcy:.1f}" '
+                                 f'stroke="{_SEMIS_INK}" stroke-width="0.4"/>')
+                lines.append(f'<circle cx="{bcx:.1f}" cy="{bcy:.1f}" r="{badge_r:.1f}" '
+                             f'fill="{_SEMIS_OWN_PCT_BADGE_FILL}"/>')
+                lines.append(f'<text x="{bcx:.1f}" y="{bcy + 1.3:.1f}" text-anchor="middle" '
+                             f'font-size="{_SEMIS_OWN_PCT_BADGE_FS}" font-weight="bold" '
+                             f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">'
                              f'{seg["own_pct"]:.0f}%</text>')
-            y_cursor = by
 
     # The one shared x-axis line for BOTH zones.
     lines.append(f'<line x1="{ml}" y1="{base_b:.1f}" x2="{vw - mr}" y2="{base_b:.1f}" '
