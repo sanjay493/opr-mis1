@@ -26,10 +26,13 @@ _BF_PDF_KEY = {
     "HM Production":     "hm_production",
     "BF Productivity":   "bf_productivity",
     "HBT":               "hot_blast_temp",
-    # Quality
-    "Hot Metal Temp":    "hot_metal_temp",
-    "Si in HM":          "si_in_hm",
-    "S in HM":           "s_in_hm",
+    # Quality — canonical names matching RSP/ISP/DSP (this extraction path
+    # is currently dormant, no live data stored under either spelling yet;
+    # fixed proactively so it's correct whenever next used, no migration
+    # needed since there's nothing to migrate).
+    "Hot Metal Temp":    "avg_hot_metal_temperature",
+    "Si in HM":          "silicon_in_hm",
+    "S in HM":           "sulphur_in_hm",
     "Slag Al2O3":        "slag_al2o3",
     "Slag MgO":          "slag_mgo",
     "Slag Basicity":     "slag_basicity",
@@ -99,6 +102,27 @@ _COKE_KEY_NORM = {
     "crude_tar":         "crude_tar_yield",
     "crude_benzol":      "crude_benzol_yield",
     "ammonium_sulphate": "ammonium_sulphate_yield",
+    # BSL's own entry process switched from writing this under
+    # "coke_oven_gas_yield" to "coke_oven_gas" around mid-2025 (the source
+    # report's own label changed) - normalize back to the canonical name
+    # RSP/ISP/DSP/BSP all use rather than carrying BSL's split naming
+    # forward. page_techno.py's alias table already knew about this split;
+    # normalizing here removes the need for that alias going forward.
+    "coke_oven_gas":     "coke_oven_gas_yield",
+    "dry_coal_charge_per_oven": "dry_coal_charge_oven",
+}
+
+# Sinter Plant labels where BSL's own wording diverges from the canonical
+# key used by RSP/ISP/BSP for the same concept (RSP: rsp_technopara_sections.py,
+# ISP: isp_technopara_map.json, BSP: bsp_techno_map.json). Unlike the other
+# branches in _derive_unit_and_key, the Sinter Plant branch had no
+# normalization at all until this dict was added - confirmed the sole
+# source of 4 real BSL-vs-cross-plant naming divergences.
+_SINTER_KEY_NORM = {
+    "basicity_of_sinter":      "basicity",
+    "sinter_m_c_availability": "machine_availability",
+    "sinter_m_c_utilization":  "machine_utilisation",
+    "sinter_return":           "return_fines",
 }
 
 # BF furnace IDs in BSL (which are under repair varies by month; repair rows auto-filtered by extractor)
@@ -174,7 +198,8 @@ def _derive_unit_and_key(row: dict):
 
     # ── Sinter Plant ────────────────────────────────────────────────────────
     if section == "Sinter Plant":
-        return "Sinter", _to_snake(parameter)
+        raw_key = _to_snake(parameter)
+        return "Sinter", _SINTER_KEY_NORM.get(raw_key, raw_key)
 
     # ── BF Shop averages (IRON_MAKING, parameter="BSL") ─────────────────────
     if group_code == "IRON_MAKING" and parameter == "BSL":

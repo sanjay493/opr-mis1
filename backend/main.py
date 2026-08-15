@@ -4633,7 +4633,7 @@ _PARAM_KEY_ALIASES = {
     "sinter_in_burden": ["sinter_in_burden", "sinter% in burden"],
     "pellet_in_burden": ["pellet_in_burden", "pellet% in burden"],
     "coke_oven_gas_yield": ["coke_oven_gas_yield", "cog_yield"],
-    "dry_coal_charge_oven": ["dry_coal_charge_oven", "dry_coal_charge", "dry_coal_charge_per_oven"],
+    "dry_coal_charge_oven": ["dry_coal_charge_oven", "dry_coal_charge"],
     "ash_in_coke": ["ash_in_coke", "average_ash_in_coke", "ash_in_bf_coke"],
 }
 

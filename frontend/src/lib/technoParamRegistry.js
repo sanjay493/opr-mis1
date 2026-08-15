@@ -77,6 +77,13 @@ export const PARAM_TEMPLATES = {
   ],
   'Sinter Plant': [
     'sinter_production','productivity','basicity','tfe_in_sinter',
+    // machine_availability/machine_utilisation/return_fines: BSL used to
+    // write these under its own divergent names (sinter_m_c_availability/
+    // sinter_m_c_utilization/sinter_return) - fixed at the source now
+    // (bsl_technopara_extractor.py's _SINTER_KEY_NORM plus a one-off
+    // migration of existing rows), so these canonical names now cover BSL
+    // too instead of needing a separate divergent entry here.
+    'machine_availability','machine_utilisation','return_fines',
   ],
   'Rolling Mills': ['rolling_yield','production'],
   'General': [
@@ -165,6 +172,7 @@ export const _LABEL_MAP = {
   coke_oven_gas_yield:                  'Coke Oven Gas Yield (Nm³/T)',
   ammonium_sulphate_yield:               'Ammonium Sulphate Yield (Kg/TDC)',
   dry_coal_charge_oven:                 'Dry Coal Charge / Oven (T)',
+  dry_coal_charge_per_oven:             'Dry Coal Charge / Oven (T) — BSL',
   m10:                                  'M10 (%)',
   m40:                                  'M40 (%)',
   ash_in_coke:                          'Ash in Coke (%)',

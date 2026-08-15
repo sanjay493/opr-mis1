@@ -1128,9 +1128,12 @@ KEY_ALIASES = {
     # SMS (old DSP: hot_metal_consumption/scrap_consumption)
     "specific_hm_consumption":    ["hot_metal_consumption"],
     "specific_scrap_consumption": ["scrap_consumption"],
-    # Coke Ovens (old RSP/ISP: cog_yield; old DSP: dry_coal_charge_per_oven/dry_coal_charge)
+    # Coke Ovens (old RSP/ISP: cog_yield; old DSP: dry_coal_charge)
+    # BSL's dry_coal_charge_per_oven divergence is fixed at the source now
+    # (bsl_technopara_extractor.py's _COKE_KEY_NORM + a one-off migration of
+    # existing rows) rather than aliased here.
     "coke_oven_gas_yield":        ["cog_yield"],
-    "dry_coal_charge_oven":       ["dry_coal_charge", "dry_coal_charge_per_oven"],
+    "dry_coal_charge_oven":       ["dry_coal_charge"],
 }
 
 # ---------------------------------------------------------------------------
@@ -2666,13 +2669,14 @@ _TECHNO_DB_SCHEMA = {
 # "cog_yield"/"dry_coal_charge" alongside the canonical long-form keys
 # below). Canonical key -> alternate keys to also check.
 _COKE_OVEN_PARAM_ALIASES = {
-    "dry_coal_charge_oven":      ["dry_coal_charge", "dry_coal_charge_per_oven"],
-    # BSL's own entry process switched from writing this under
-    # "coke_oven_gas_yield" to "coke_oven_gas" around mid-2025 — since
-    # ~Feb'26 "coke_oven_gas_yield" is always explicitly 0 (not missing) with
-    # the real value under "coke_oven_gas" instead, so the None-only alias
-    # fallback in _gv below is widened to also treat 0 as "no value" here.
-    "coke_oven_gas_yield":       ["cog_yield", "coke_oven_gas"],
+    # BSL's own dry_coal_charge_per_oven / coke_oven_gas divergences (the
+    # latter from BSL's source report switching labels mid-2025, leaving a
+    # stale always-0 "coke_oven_gas_yield" alongside the real value under
+    # "coke_oven_gas") are fixed at the source now — bsl_technopara_extractor.py's
+    # _COKE_KEY_NORM plus a one-off migration of all existing rows — rather
+    # than aliased here.
+    "dry_coal_charge_oven":      ["dry_coal_charge"],
+    "coke_oven_gas_yield":       ["cog_yield"],
     "crude_tar_yield":           ["coal_tar_yield", "crude_tar"],
     "crude_benzol_yield":        ["crude_benzol"],
     "ammonium_sulphate_yield":   ["ammonium_sulphate"],
