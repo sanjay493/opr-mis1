@@ -26,6 +26,7 @@ import calendar
 import datetime as _dt
 import math
 import db
+from page_special_steel import _ssps_special_steel
 
 _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 _SSPS = "SSPs"
@@ -80,10 +81,31 @@ def _entity_plants(entity: str) -> list:
 
 
 def _sum_actual(cur, months: list, entity: str):
-    """(total_T, has_data) summed over the entity's underlying plant(s) for these months."""
+    """(total_T, has_data) summed over the entity's underlying plant(s) for these months.
+
+    SSPs is special-cased: it carries no real order-book rows in
+    special_steel_orders (any plant_name='SSPs' rows there are a leftover
+    from the old manual-entry screen, before that field became read-only —
+    see page_special_steel.py's _ssps_special_steel docstring), so summing
+    special_steel_orders for it the same way as the other plants silently
+    used stale/legacy figures instead of the live-computed one that page 24
+    (generate_special_steel_sail) and /reports/special-steel-fy already use.
+    Routing through _ssps_special_steel keeps every "Value Added Steel"
+    figure across the app consistent."""
     ph = ",".join("?" * len(months))
     total, has_any = 0.0, False
     for p in _entity_plants(entity):
+        if p == _SSPS:
+            cur.execute(f"""
+                SELECT COUNT(*) FROM production_table
+                WHERE report_month IN ({ph}) AND plant_name='SSP'
+                  AND item_name='Total Saleable Steel Despatch'
+            """, (*months,))
+            (c,) = cur.fetchone()
+            if c > 0:
+                has_any = True
+                total += _ssps_special_steel(cur, months)
+            continue
         cur.execute(f"""
             SELECT COALESCE(SUM(actual_despatch),0), COUNT(*)
             FROM special_steel_orders WHERE report_month IN ({ph}) AND plant_name=?
