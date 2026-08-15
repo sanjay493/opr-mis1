@@ -72,6 +72,12 @@ export const PARAM_TEMPLATES = {
     'crude_tar_yield','crude_benzol_yield','coke_oven_gas_yield','ammonium_sulphate_yield',
     'dry_coal_charge_oven',
     'm10','m40',
+    // m10_coke/csr_coke/cri_coke: BSL used to write these as coke_m_10/
+    // coke_csr/coke_cri - fixed at the source now (bsl_technopara_extractor.py's
+    // _COKE_KEY_NORM plus a one-off migration of existing rows), matching
+    // ISP's own spelling for the same concepts (m10 above is DSP's separate
+    // legacy spelling for the same M10 concept, left as its own entry).
+    'm10_coke','csr_coke','cri_coke',
     'ash_in_coke','average_ash_in_coal_blend',
     'average_volatile_matter_in_coal_blend',
   ],

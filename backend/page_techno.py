@@ -2680,18 +2680,20 @@ _COKE_OVEN_PARAM_ALIASES = {
     "crude_tar_yield":           ["coal_tar_yield", "crude_tar"],
     "crude_benzol_yield":        ["crude_benzol"],
     "ammonium_sulphate_yield":   ["ammonium_sulphate"],
+    # ash_blend_coal/vm_blend_coal: BSL's own ash_in_coal_blend/vm_in_coal_blend
+    # divergences deliberately left aliased here rather than fixed at the
+    # source — no plant currently reports under these two "canonical" names
+    # directly (DSP has yet a 3rd spelling of its own for each), so there's
+    # no clean convention to align BSL to.
     "ash_blend_coal":            ["average_ash_in_coal_blend", "ash_in_coal_blend"],
-    "ash_in_coke":               ["average_ash_in_coke", "ash_in_bf_coke"],
-    "m10_coke":                  ["m10", "coke_m_10"],
+    # BSL's own ash_in_bf_coke/m10_coke/csr_coke/cri_coke/specific_heat_coke_ovens
+    # divergences are fixed at the source now (bsl_technopara_extractor.py's
+    # _COKE_KEY_NORM plus a one-off migration of all existing rows) rather
+    # than aliased here.
+    "ash_in_coke":               ["average_ash_in_coke"],
+    "m10_coke":                  ["m10"],
     "m40_coke":                  ["m40"],
-    "csr_coke":                  ["coke_csr"],
-    "cri_coke":                  ["coke_cri"],
     "vm_blend_coal":             ["average_volatile_matter_in_coal_blend", "vm_in_coal_blend"],
-    # BSL's own extractor stores this under "sp_heat_cons" (Sheet1 F10/G10,
-    # "HEAT CONSUMPN. IN G.CAL/T OF DRY COAL CHARGED", x1000 to kcal/kg DC
-    # - same basis and scale as DSP's "specific_heat_coke_ovens", confirmed
-    # against real data: BSL ~660-685 vs DSP ~668 for the same months).
-    "specific_heat_coke_ovens":  ["sp_heat_cons"],
 }
 
 # BSP's Dry Coal Charge/Oven comes as two battery groups ("3 page Tech"

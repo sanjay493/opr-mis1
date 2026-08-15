@@ -110,6 +110,16 @@ _COKE_KEY_NORM = {
     # normalizing here removes the need for that alias going forward.
     "coke_oven_gas":     "coke_oven_gas_yield",
     "dry_coal_charge_per_oven": "dry_coal_charge_oven",
+    # ISP/BSP canonical spellings (m10_coke/csr_coke/cri_coke only ISP
+    # reports; ash_in_coke used by ISP+DSP+BSP) vs BSL's own Sheet2-derived
+    # wording for the same 4 concepts.
+    "coke_m_10":         "m10_coke",
+    "coke_csr":          "csr_coke",
+    "coke_cri":          "cri_coke",
+    "ash_in_bf_coke":    "ash_in_coke",
+    # BSL's Sheet1 "Sp. Heat Cons." row (COKE_SINTER/Energy branch below) —
+    # same key as ISP/DSP/BSP's specific_heat_coke_ovens.
+    "sp_heat_cons":      "specific_heat_coke_ovens",
 }
 
 # Sinter Plant labels where BSL's own wording diverges from the canonical
@@ -233,7 +243,8 @@ def _derive_unit_and_key(row: dict):
     if group_code == "COKE_SINTER" and section == "Energy":
         if "Specific Energy" in parameter:
             return "General", "specific_energy_consumption"
-        return "Coke Ovens", _to_snake(parameter)
+        raw_key = _to_snake(parameter)
+        return "Coke Ovens", _COKE_KEY_NORM.get(raw_key, raw_key)
 
     # ── Water consumption → General ─────────────────────────────────────────
     if group_code == "COKE_SINTER" and section == "Water":
