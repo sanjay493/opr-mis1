@@ -1,7 +1,7 @@
 {
   "_comment": "BSP 3-page-Tech.xlsx row map. Sheet=Sheet1. Row 4 cols D-O = Apr-Mar, Col P = ACTUAL (cum). Row 3 Col A = month name. Edit row numbers to match your actual file.",
   "_comment_heat_power": "RSM/URM/MM/WRM/PM heat_consumption/power_consumption and General.specific_energy_consumption are resolved by label search at extraction time (bsp_extractor.py's _HEAT_POWER_ENERGY_SEARCH) - two real file layouts circulate with these rows shifted relative to each other. The row numbers below for those keys are only a fallback if the search ever fails; they are NOT authoritative.",
-  "_comment_cob_rows_7_27": "ash_in_coal_blend (row 10, the 'Overall' row under 'Av. Ash in Coal Blend:', after Batt.1-8/Batt.9-11) and imported_coal_in_blend (row 15, the 'Overall' row under 'Imported Coal in Blend') are direct single-row lookups. ash_in_coke/m40_coke/m10_coke are averaged across their 3 listed rows (CSP-I&II / CSP-III / CSP-IV, under 'Av. Ash in BF Coke' / 'Micum :(+) 40 mm' / 'Micum :(-) 10 mm' respectively) - a param value may be a list of row numbers to mean 'average these', not just a single row number. Verified stable across a 2-year file gap (Mar'24 vs Apr'26).",
+  "_comment_cob_rows_7_27": "ash_in_coal_blend (row 10, the 'Overall' row under 'Av. Ash in Coal Blend:', after Batt.1-8/Batt.9-11) and imported_coal_in_blend (row 15, the 'Overall' row under 'Imported Coal in Blend') are direct single-row lookups. ash_in_coke/m40_coke/m10 are averaged across their 3 listed rows (CSP-I&II / CSP-III / CSP-IV, under 'Av. Ash in BF Coke' / 'Micum :(+) 40 mm' / 'Micum :(-) 10 mm' respectively) - a param value may be a list of row numbers to mean 'average these', not just a single row number. Verified stable across a 2-year file gap (Mar'24 vs Apr'26).",
 
   "COB": {
     "bf_coke_yield":            37,
@@ -16,7 +16,7 @@
     "imported_coal_in_blend":   15,
     "ash_in_coke":              [17, 18, 19],
     "m40_coke":                 [21, 22, 23],
-    "m10_coke":                 [25, 26, 27]
+    "m10":                      [25, 26, 27]
   },
 
   "SP-2": {

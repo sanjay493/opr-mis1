@@ -110,10 +110,13 @@ _COKE_KEY_NORM = {
     # normalizing here removes the need for that alias going forward.
     "coke_oven_gas":     "coke_oven_gas_yield",
     "dry_coal_charge_per_oven": "dry_coal_charge_oven",
-    # ISP/BSP canonical spellings (m10_coke/csr_coke/cri_coke only ISP
-    # reports; ash_in_coke used by ISP+DSP+BSP) vs BSL's own Sheet2-derived
-    # wording for the same 4 concepts.
-    "coke_m_10":         "m10_coke",
+    # ISP/BSP canonical spellings (csr_coke/cri_coke only ISP reports;
+    # ash_in_coke used by ISP+DSP+BSP) vs BSL's own Sheet2-derived wording
+    # for the same 4 concepts. m10: DSP's original spelling for the same
+    # M10 concept - ISP/BSP/BSL all used to write "m10_coke" instead, but
+    # DSP's shorter spelling was picked as the single canonical name across
+    # all 4 plants (BSL/ISP/BSP migrated onto it, not the reverse).
+    "coke_m_10":         "m10",
     "coke_csr":          "csr_coke",
     "coke_cri":          "cri_coke",
     "ash_in_bf_coke":    "ash_in_coke",

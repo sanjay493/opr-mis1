@@ -98,7 +98,7 @@
       "ash_blend_coal":153,
       "ash_in_coke":157,
       "m40_coke":158,
-      "m10_coke":159,
+      "m10":159,
       "csr_coke":160,
       "cri_coke":161
     },
@@ -113,7 +113,7 @@
       "ash_blend_coal":178,
       "ash_in_coke":182,
       "m40_coke":183,
-      "m10_coke":184,
+      "m10":184,
       "csr_coke":185,
       "cri_coke":186
     }

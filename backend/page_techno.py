@@ -2680,12 +2680,12 @@ _COKE_OVEN_PARAM_ALIASES = {
     "crude_tar_yield":           ["coal_tar_yield", "crude_tar"],
     "crude_benzol_yield":        ["crude_benzol"],
     "ammonium_sulphate_yield":   ["ammonium_sulphate"],
-    # BSL's own ash_in_bf_coke/m10_coke/csr_coke/cri_coke/specific_heat_coke_ovens
+    # BSL's own ash_in_bf_coke/csr_coke/cri_coke/specific_heat_coke_ovens
     # divergences are fixed at the source now (bsl_technopara_extractor.py's
     # _COKE_KEY_NORM plus a one-off migration of all existing rows) rather
-    # than aliased here.
+    # than aliased here. Same for m10_coke -> m10 (formerly ISP/BSP/BSL's
+    # own spelling, now migrated onto DSP's shorter "m10").
     "ash_in_coke":               ["average_ash_in_coke"],
-    "m10_coke":                  ["m10"],
     "m40_coke":                  ["m40"],
 }
 

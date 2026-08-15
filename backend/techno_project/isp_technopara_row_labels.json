@@ -83,7 +83,7 @@
       "ash_blend_coal": "Ash in blend coal",
       "ash_in_coke": "Ash",
       "m40_coke": "M40",
-      "m10_coke": "M10",
+      "m10": "M10",
       "csr_coke": "CSR",
       "cri_coke": "CRI"
     },
@@ -97,7 +97,7 @@
       "ash_blend_coal": "Ash in blend coal",
       "ash_in_coke": "Ash",
       "m40_coke": "M40",
-      "m10_coke": "M10",
+      "m10": "M10",
       "csr_coke": "CSR",
       "cri_coke": "CRI"
     }
