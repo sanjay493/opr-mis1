@@ -276,16 +276,15 @@ _ROWS = [
     ("O2 Enrichment",       "%",        "bf", "o2_enrichment", 2, {}),
     ("Not Dry Casts",       "%",        "bf", "not_dry_cast", 2, {}),
     ("Coke Ash",            "%",        "coke_unit", "ash_in_coke", 2, {}),
-    # Coke-oven-sourced coal-blend quality metrics — distinct from "Imported
+    # Coke-oven-sourced coal-blend quality metric — distinct from "Imported
     # Coking Coal in Blend" above, which is a SAIL-rollup % derived from
-    # separate indigenous/imported coal quantities (unit="General"); these
-    # two read the "Overall" figures the coke-oven techno source reports
-    # directly (currently populated for BSP only — "3 page Tech for CO"
-    # rows 10 and 15 — other plants render "—" until their own extractor
-    # writes these keys too).
+    # separate indigenous/imported coal quantities (unit="General"); this
+    # reads the "Overall" ash figure the coke-oven techno source reports
+    # directly. (A parallel "Imported Coal in Blend" row read from the same
+    # coke-oven source was dropped — it duplicated "Imported Coking Coal in
+    # Blend" above in concept and was only ever populated for BSP.)
     ("Ash in Coal Blend",   "%",        "coke_unit",
      ["ash_in_coal_blend", "average_ash_in_coal_blend", "ash_blend_coal"], 2, {}),
-    ("Imported Coal in Blend", "%",     "coke_unit", ["imported_coal_in_blend"], 1, {}),
     ("Sinter Fe",           "%",        "bf", "tfe_in_sinter", 2, {}),
     ("BF Slag Rate",        "kg/THM",   "bf", "slag_rate", 0, {}),
     ("HM Sent to PCM/Sand Pit/Dry Pit", "'000 T", "general", "hm_to_pcm_sandpit_drypit", 1, {"label_rowspan": 2}),
