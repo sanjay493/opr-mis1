@@ -46,11 +46,16 @@
             </table>
             <p class="page3-footnote">*includes conversion</p>
 
-            {# ── Highlights ── #}
+            {# ── Highlights (heading lines end ":-"; achievement items below
+                 them get the distinct highlight color — mirrors the
+                 web app's SummaryTemplate.js rendering) ── #}
             {% if page.highlights %}
             <p class="page3-section-heading">Highlights:</p>
-            <div style="font-size:var(--sz-td);line-height:1.4;white-space:pre-wrap;">{% for h in page.highlights %}{{ h }}
-{% endfor %}</div>
+            <div class="page3-highlights">
+                {% for h in page.highlights %}
+                <div class="{{ 'page3-highlight-heading' if h.endswith(':-') else 'page3-highlight-item' }}">{{ h }}</div>
+                {% endfor %}
+            </div>
             {% endif %}
 
             {# ── TE table: Target | Month | CPLY | Apr-Mon | CPLY Apr-Mon ── #}

@@ -372,8 +372,8 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
               const isHeading = line.endsWith(':-');
               return (
                 <div key={idx} style={{
-                  fontWeight: isHeading ? '600' : '400',
-                  color: isHeading ? 'inherit' : '#0f766e',
+                  fontWeight: isHeading ? '600' : '500',
+                  color: isHeading ? 'inherit' : '#b45309',
                   paddingLeft: isHeading ? 0 : '18px',
                 }}>
                   {line}
