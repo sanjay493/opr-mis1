@@ -67,6 +67,14 @@ BF_BENCHMARK_PARAMS = [
     {"key": "sinter_in_burden", "label": "Sinter in Burden", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "pellet_in_burden", "label": "Pellet in Burden", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "lump_in_burden", "label": "Lump in Burden", "unit": UNIT.PCT, "static": False, "better": "high"},
+    # Both added backfilling Report_format/Large BFs for OMI.xlsx's Non-SAIL
+    # data — that source has a Coke Ash and a Sinter Fe row (same concepts
+    # the SAIL annexure page already shows, page_bf_large_annexure.py's
+    # _coke_ash_and_sinter_fe), but neither existed here yet, so a non-SAIL
+    # BF had nowhere to enter them. Same key names as the SAIL side uses
+    # (ash_in_coke, tfe_in_sinter) — no translation needed either direction.
+    {"key": "ash_in_coke", "label": "Coke Ash", "unit": UNIT.PCT, "static": False, "better": "low"},
+    {"key": "tfe_in_sinter", "label": "Sinter Fe", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "raw_flux_addition", "label": "Raw Flux Addition", "unit": UNIT.KG_THM, "static": False, "better": "high"},
     {"key": "silicon_in_hm", "label": "HM Silicon", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "sulphur_in_hm", "label": "HM Sulphur", "unit": UNIT.PCT, "static": False, "better": "high"},

@@ -34,6 +34,7 @@ from pydantic import BaseModel
 
 import db as _db
 import page_bf_benchmark_export as _export
+from page_key_parameters import _COKE_UNITS
 import bf_benchmark_registry as _registry
 from bf_benchmark_registry import BF_BENCHMARK_PARAMS, DYNAMIC_PARAM_KEYS, PARAM_BY_KEY, SAIL_BFS
 
@@ -304,6 +305,22 @@ def _sail_period_values(plant: str, unit: str, report_month: str, period: str) -
             out["sulphur_in_hm"] = float(v) if v is not None else None
         except (TypeError, ValueError):
             pass
+    # Coke Ash: a plant-level figure stored under the coke-oven unit
+    # (COB/Coke Ovens/COB-old/COB-new), never the BF's own unit — same
+    # cross-unit lookup page_bf_large_annexure.py's Sinter Fe/Coke Ash row
+    # already does for the annexure page, needed here too or a SAIL BF's
+    # Coke Ash always shows blank on this comparison despite being on
+    # record.
+    if out.get("ash_in_coke") is None:
+        for coke_unit in _COKE_UNITS:
+            coke_src = _db.get_techno_data(plant, report_month, coke_unit).get(coke_unit, {}).get(period, {})
+            v = coke_src.get("ash_in_coke") or coke_src.get("average_ash_in_coke")
+            if v is not None:
+                try:
+                    out["ash_in_coke"] = float(v)
+                    break
+                except (TypeError, ValueError):
+                    pass
     out["fuel_rate"] = _registry.compute_fuel_rate(out)
     return out
 
