@@ -38,27 +38,49 @@
             </div>
 
             <div class="coal-c-heading">(C) Month-wise stocks at plants ('000 T)</div>
-            <table class="coal-table coal-stock-table">
+            {% set ga = page.stock_gap_after %}
+            <table class="coal-table coal-stock-table coal-stock-table-1">
                 <thead>
                     <tr>
                         <th class="coal-label-cell">Category</th>
-                        {% for c in page.stock_cols %}<th>{{ c.date_label }}</th>{% endfor %}
+                        {% for c in (page.stock_cols_1[:ga] if ga else page.stock_cols_1) %}<th>{{ c.date_label }}</th>{% endfor %}
+                        {% if ga %}
+                        <th class="coal-gap-cell coal-gap-col-wide"></th>
+                        {% for c in page.stock_cols_1[ga:] %}<th>{{ c.date_label }}</th>{% endfor %}
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td class="coal-label-cell">Indigenous</td>
-                        {% for c in page.stock_cols %}<td class="coal-num">{{ '%.0f'|format(c.indigenous) if c.indigenous is not none else '—' }}</td>{% endfor %}
+                    {% for label, key in [('Indigenous', 'indigenous'), ('Imported', 'imported'), ('Total', 'total')] %}
+                    <tr class="{% if key == 'total' %}coal-bold-row{% endif %}">
+                        <td class="coal-label-cell">{{ label }}</td>
+                        {% for c in (page.stock_cols_1[:ga] if ga else page.stock_cols_1) %}<td class="coal-num">{{ '%.0f'|format(c[key]) if c[key] is not none else '—' }}</td>{% endfor %}
+                        {% if ga %}
+                        <td class="coal-gap-cell"></td>
+                        {% for c in page.stock_cols_1[ga:] %}<td class="coal-num">{{ '%.0f'|format(c[key]) if c[key] is not none else '—' }}</td>{% endfor %}
+                        {% endif %}
                     </tr>
-                    <tr>
-                        <td class="coal-label-cell">Imported</td>
-                        {% for c in page.stock_cols %}<td class="coal-num">{{ '%.0f'|format(c.imported) if c.imported is not none else '—' }}</td>{% endfor %}
-                    </tr>
-                    <tr class="coal-bold-row">
-                        <td class="coal-label-cell">Total</td>
-                        {% for c in page.stock_cols %}<td class="coal-num">{{ '%.0f'|format(c.total) if c.total is not none else '—' }}</td>{% endfor %}
-                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
+
+            {% if page.stock_cols_2 %}
+            <table class="coal-table coal-stock-table coal-stock-table-2">
+                <thead>
+                    <tr>
+                        <th class="coal-label-cell">Category</th>
+                        {% for c in page.stock_cols_2 %}<th>{{ c.date_label }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label, key in [('Indigenous', 'indigenous'), ('Imported', 'imported'), ('Total', 'total')] %}
+                    <tr class="{% if key == 'total' %}coal-bold-row{% endif %}">
+                        <td class="coal-label-cell">{{ label }}</td>
+                        {% for c in page.stock_cols_2 %}<td class="coal-num">{{ '%.0f'|format(c[key]) if c[key] is not none else '—' }}</td>{% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
 
             <div class="coal-note">Note: The above information is based on reports from Plants/CCSO and is provisional</div>
