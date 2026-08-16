@@ -49,7 +49,16 @@ export const PARAM_TEMPLATES = {
     // Burden / slag
     'slag_rate','slag_offtake',
     'sinter_in_burden','pellet_in_burden','lump_in_burden',
-    'tfe_in_sinter','tfe_in_pellet','tfe_in_lump','fe_in_ore',
+    // pellet_fe/lump_ore_fe (not tfe_in_pellet/tfe_in_lump, despite the
+    // tfe_in_sinter naming above) — these must match bf_benchmark_registry.
+    // py's own keys exactly, since /data-entry/bf-large-manual's "Pellet
+    // Fe"/"Lump Ore Fe" fields (and page_bf_large_annexure.py's Avg. Burden
+    // Fe calc) read/write those same names. They used to diverge
+    // (tfe_in_pellet/tfe_in_lump here vs pellet_fe/lump_ore_fe there), so a
+    // value entered on one form silently never appeared on the other —
+    // never actually used before this fix (confirmed nothing was ever
+    // saved under the old names), so no data migration was needed.
+    'tfe_in_sinter','pellet_fe','lump_ore_fe','fe_in_ore',
     'furnace_availability',
   ],
   'SMS': [
@@ -145,6 +154,8 @@ export const _LABEL_MAP = {
   slag_offtake:                         'Slag Offtake (%)',
   sinter_in_burden:                     'Sinter in Burden (%)',
   pellet_in_burden:                     'Pellet in Burden (%)',
+  pellet_fe:                             'Pellet Fe (%)',
+  lump_ore_fe:                           'Lump Ore Fe (%)',
   furnace_availability:                 'Furnace Availability (%)',
   // SMS
   specific_hm_consumption:             'Specific HM Consumption (kg/TCS)',
