@@ -225,12 +225,36 @@ def _prod_val(plant, item_names, production, dp, ytd_months, nos_day=False):
     return None
 
 
-def _coal_blend_pct(plant, kind, techno, dp):
+_COAL_CONSUMPTION_UNIT = "Coal_Consumption"
+
+
+def _coal_blend_pct(plant, kind, report_month, dp):
     """kind: "total" (Imported Coking Coal in Blend) or "soft" (Imported
-    Soft Coking Coal in Blend), both % of total coking coal quantity."""
-    m = techno.get((plant, _GENERAL_UNIT), {})
-    pcc, mcc = m.get("indigenous_pcc"), m.get("indigenous_mcc")
-    hard, soft = m.get("imported_hard_coal"), m.get("imported_soft_coal")
+    Soft Coking Coal in Blend), both % of total coking coal quantity.
+    Prefers the FY-cumulative blend% stored directly in techno_data (unit=
+    "Coal_Consumption", till_month.imported_total_pct/soft_pct) — the
+    workbook's own printed Blend% column, extracted verbatim by
+    techno_project/coal_omi_extractor.py's extract_ois1_detail — since it
+    matches the source report exactly rather than drifting from its
+    rounding. Falls back to the older division-from-raw-quantities method
+    (unit="General"'s indigenous_pcc/mcc + imported_hard/soft_coal) when a
+    plant/month has no Coal_Consumption row yet — that unit is new (added
+    for the "Consumption of Coking Coal and CDI Coal" page) and only gets
+    populated once someone re-runs the Coal OMI upload for a given month,
+    so without this fallback every month uploaded before that point would
+    go blank here despite the raw quantities already sitting in the DB
+    under the older "General" unit."""
+    d = db.get_techno_data(plant, report_month, unit=_COAL_CONSUMPTION_UNIT).get(_COAL_CONSUMPTION_UNIT, {})
+    tm = d.get("till_month", {})
+    key = "imported_total_pct" if kind == "total" else "soft_pct"
+    v = tm.get(key)
+    if v is not None:
+        return _round(v, dp)
+
+    g = db.get_techno_data(plant, report_month, unit=_GENERAL_UNIT).get(_GENERAL_UNIT, {})
+    gtm = g.get("till_month", {})
+    pcc, mcc = gtm.get("indigenous_pcc"), gtm.get("indigenous_mcc")
+    hard, soft = gtm.get("imported_hard_coal"), gtm.get("imported_soft_coal")
     if None in (pcc, mcc, hard, soft):
         return None
     total = pcc + mcc + hard + soft
@@ -250,11 +274,35 @@ def _special_steel_pct(plant, report_month, dp):
         return None
 
 
-# Placeholder swapped for "Demurrage (Apr-<report month>)" in
-# generate_key_parameters — the only row whose label needs the page's own
-# YTD period baked in (every other row's period is implied by the page
-# title alone).
+# Placeholder swapped for "Demurrage (Apr-<latest month with data>)" in
+# generate_key_parameters — the only row whose label needs its own YTD
+# period baked in (every other row's period is implied by the page title
+# alone). Unlike those other rows, Demurrage is manual-entry-only with no
+# extractor behind it (see module docstring), so data entry routinely lags
+# the report month — the label tracks the latest month actually entered
+# rather than blindly matching the page title's Apr-<report_month> range.
 _DEMURRAGE_LABEL = "Demurrage ({period})"
+
+
+def _demurrage_latest_month(ytd_months: list) -> str:
+    """Latest month in ytd_months (Apr..report_month) with a "month"-level
+    demurrage figure entered for at least one plant, or None if none of the
+    FY-to-date months have any data yet."""
+    conn = db.connect()
+    cur = conn.cursor()
+    ph = ",".join("?" * len(PLANTS))
+    mph = ",".join("?" * len(ytd_months))
+    cur.execute(
+        f"SELECT report_month, techno_json FROM techno_data "
+        f"WHERE unit=? AND plant IN ({ph}) AND report_month IN ({mph})",
+        [_GENERAL_UNIT, *PLANTS, *ytd_months],
+    )
+    latest = None
+    for rm, tj in cur.fetchall():
+        if _json.loads(tj).get("month", {}).get("demurrage") is not None:
+            if latest is None or rm > latest:
+                latest = rm
+    return latest
 
 # (label, unit, kind, spec, decimal_places, flags)
 #   flags:
@@ -334,10 +382,19 @@ def generate_key_parameters(report_month: str) -> dict:
         period_label += "-" + _dt.datetime.strptime(ytd_months[-1], "%Y-%m").strftime("%b")
     report_year_2d = report_month[2:4]
 
+    demurrage_latest = _demurrage_latest_month(ytd_months)
+    if demurrage_latest:
+        dem_period = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")
+        if demurrage_latest != ytd_months[0]:
+            dem_period += "-" + _dt.datetime.strptime(demurrage_latest, "%Y-%m").strftime("%b")
+        dem_period += f"'{demurrage_latest[2:4]}"
+    else:
+        dem_period = f"{period_label}'{report_year_2d}"
+
     rows = []
     for label, unit, kind, spec, dp, flags in _ROWS:
         if label == _DEMURRAGE_LABEL:
-            label = _DEMURRAGE_LABEL.format(period=f"{period_label}'{report_year_2d}")
+            label = _DEMURRAGE_LABEL.format(period=dem_period)
         if kind == _SECTION:
             rows.append({"type": "section", "label": label})
             continue
@@ -357,7 +414,7 @@ def generate_key_parameters(report_month: str) -> dict:
             elif kind == "sms_join":
                 v = _sms_joined(plant, spec, techno, dp)
             elif kind == "coal_blend":
-                v = _coal_blend_pct(plant, spec, techno, dp)
+                v = _coal_blend_pct(plant, spec, report_month, dp)
             elif kind == "coke_unit":
                 # Any parameter scoped to the coke-oven unit (Coke Ash, COG)
                 # — stored under whichever of COB/Coke Ovens/COB-old/COB-new
