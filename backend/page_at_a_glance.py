@@ -33,7 +33,10 @@ _YTD_DB_ITEM = {"Crude Steel": "Total Crude Steel"}
 # "good" when it goes up. Sinter/Pellet in Burden are mix-ratio params with
 # no universal "better" direction, so they're left out of this set (default:
 # above target reads as good) same as BF Productivity.
-_TE_LOWER_IS_BETTER = {"Coke Rate", "Fuel Rate", "Specific Energy Consumption", "TMI", "Sp. CO2 Emission"}
+_TE_LOWER_IS_BETTER = {
+    "Coke Rate", "Fuel Rate", "Specific Energy Consumption", "TMI", "Sp. CO2 Emission",
+    "Imported Coking Coal in Blend",
+}
 _TE_PARAMS = [
     "Coke Rate", "Fuel Rate", "BF Productivity", "Specific Energy Consumption",
     "CDI Rate", "Sinter in Burden", "Pellet in Burden", "TMI", "Sp. CO2 Emission",
@@ -588,6 +591,21 @@ def _imported_coal_blend_pct(report_month: str):
     return round(imported / total * 100, 1) if found and total > 0 else None
 
 
+def _imported_coal_blend_target(report_month: str):
+    """SAIL's own Imported Coking Coal in Blend annual target — stored in
+    the same techno_plan_fy table every other techno target uses, under
+    plant_name='SAIL', unit='Coal_Consumption', key='imported_total_pct'
+    (see page_key_parameters.py's _coal_blend_targets / main.py's
+    /api/coal-blend-targets, entered via /data-entry/annual-target's "Coal
+    Blend %" tab) — a different (plant_name, unit) pair than page 27's own
+    SAIL techno target row ('SAIL', 'Shop'), since this concept lives
+    outside that table entirely (see page_key_parameters.py's module note)."""
+    fy = db.get_fy_for_month(report_month)
+    data = db.get_techno_plan("SAIL", fy, unit="Coal_Consumption").get("data", {})
+    v = data.get("imported_total_pct")
+    return v.get("value") if isinstance(v, dict) else v
+
+
 def _techno_section(report_month: str) -> list:
     te = {row["parameter"]: row for row in generate_at_a_glance_te_table(report_month)}
     out = []
@@ -612,10 +630,16 @@ def _techno_section(report_month: str) -> list:
 
     blend_pct = _imported_coal_blend_pct(report_month)
     if blend_pct is not None:
+        blend_target = _imported_coal_blend_target(report_month)
+        delta = None
+        if blend_target:
+            delta = -((blend_pct - blend_target) / blend_target * 100)
         out.append({
             "parameter": "Imported Coking Coal in Blend", "unit": "%",
-            "target": "", "month_actual": f"{blend_pct:.1f}",
-            "delta_pct": None, "good": None,
+            "target": f"{blend_target:.1f}" if blend_target is not None else "",
+            "month_actual": f"{blend_pct:.1f}",
+            "delta_pct": None if delta is None else round(delta, 1),
+            "good": None if delta is None else delta >= 0,
             "bg_key": _TE_CATEGORY_BG.get("Imported Coking Coal in Blend", "highlight_default_row_bg"),
         })
     return out

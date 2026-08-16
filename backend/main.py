@@ -5291,6 +5291,69 @@ async def save_techno_page_targets(payload: dict):
     return {"status": "success", "fy": fy, "saved": saved}
 
 
+# Imported Coal / Imported Soft Coal in Blend targets — a separate small
+# pair of endpoints rather than folding into /api/techno-page-targets'
+# pages 28-30 schema (_TECHNO_DB_SCHEMA/TECHNO_PAGES), since those page
+# numbers are the SAME ids main.py uses for actual report pages and this
+# concept isn't one of them; and rather than folding into /api/techno-plant-
+# targets (page 27's own targets), since that schema has no SAIL column by
+# design while this one needs SAIL too. Same underlying storage as both
+# (techno_plan_fy via db.get_techno_plan/save_techno_plan) — just a plant
+# list that includes SAIL and a fixed 2-key schema instead of a discovered
+# one. Read by page_key_parameters.py's _coal_blend_targets (5 plants
+# only — that report page has no SAIL column for any row).
+_COAL_BLEND_TARGET_UNIT = "Coal_Consumption"
+_COAL_BLEND_TARGET_KEY = {"total": "imported_total_pct", "soft": "soft_pct"}
+_COAL_BLEND_TARGET_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
+
+
+@app.get("/api/coal-blend-targets")
+async def get_coal_blend_targets(fy: str = Query(...)):
+    targets = {}
+    for plant in _COAL_BLEND_TARGET_PLANTS:
+        data = db.get_techno_plan(plant, fy, unit=_COAL_BLEND_TARGET_UNIT).get("data", {})
+        row = {}
+        for kind, key in _COAL_BLEND_TARGET_KEY.items():
+            v = data.get(key)
+            row[kind] = v.get("value") if isinstance(v, dict) else v
+        targets[plant] = row
+    return {"fy": fy, "plants": _COAL_BLEND_TARGET_PLANTS, "targets": targets}
+
+
+@app.post("/api/coal-blend-targets")
+async def save_coal_blend_targets(payload: dict):
+    """Payload: { fy, entries: [{plant, kind, value}] } — kind: "total" or
+    "soft". Merges into any existing techno_plan_fy row for (plant,
+    Coal_Consumption, fy), same convention as /api/techno-page-targets."""
+    fy = payload.get("fy", "")
+    entries = payload.get("entries", [])
+    if not fy:
+        raise HTTPException(status_code=400, detail="fy is required")
+
+    grouped = {}
+    for e in entries:
+        if e.get("plant") not in _COAL_BLEND_TARGET_PLANTS or e.get("kind") not in _COAL_BLEND_TARGET_KEY:
+            continue
+        grouped.setdefault(e["plant"], []).append(e)
+
+    saved = 0
+    for plant, rows in grouped.items():
+        existing = db.get_techno_plan(plant, fy, _COAL_BLEND_TARGET_UNIT)
+        merged = dict(existing.get("data", {}))
+        for e in rows:
+            v = e.get("value")
+            if v is None or v == "":
+                continue
+            try:
+                merged[_COAL_BLEND_TARGET_KEY[e["kind"]]] = {"value": float(v), "unit": "%"}
+                saved += 1
+            except (TypeError, ValueError):
+                continue
+        db.save_techno_plan(plant, fy, _COAL_BLEND_TARGET_UNIT, merged, is_user_supplied=True)
+
+    return {"status": "success", "fy": fy, "saved": saved}
+
+
 @app.get("/api/techno-sms-targets")
 async def get_techno_sms_targets(fy: str = Query("2026-27")):
     """

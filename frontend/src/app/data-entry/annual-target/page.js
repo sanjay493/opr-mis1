@@ -21,7 +21,23 @@ const PAGES = [
   { page: 33, label: 'Page 36 — Mill Wise (RSP)' },
   { page: 34, label: 'Page 37 — Mill Wise (BSL)' },
   { page: 35, label: 'Page 38 — Mill Wise (ISP)' },
+  // Not a real report page id (unlike every entry above, which is the
+  // exact same integer/float main.py uses for that actual page) — Imported
+  // Coal/Imported Soft Coal in Blend targets live on the Key Parameters
+  // page instead, a per-plant table with no target column of its own for
+  // any OTHER row, so they get their own small fixed 2-param schema here
+  // rather than being folded into either this page's discovered-from-data
+  // mechanism or page 27's targets page (neither fits: this one has no
+  // SAIL column by design, and page 27's schema is keyed off param labels
+  // that already mean something specific there).
+  { page: 'coal-blend', label: 'Coal Blend %' },
 ];
+
+const COAL_BLEND_SECTIONS = [
+  { kind: 'total', label: 'Imported Coking Coal in Blend' },
+  { kind: 'soft',  label: 'Imported Soft Coking Coal in Blend' },
+];
+const COAL_BLEND_PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
 
 const keyOf = (col) => `${col.plant}|${col.unit}|${col.param_key}`;
 
@@ -38,9 +54,26 @@ function TechnoPageTargetsPageInner() {
     setLoading(true);
     setStatus(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/techno-page-targets?page=${page}&fy=${encodeURIComponent(fy)}`);
-      if (!res.ok) throw new Error((await res.json()).detail || 'Load failed');
-      const json = await res.json();
+      let json;
+      if (page === 'coal-blend') {
+        const res = await fetch(`${API_BASE_URL}/api/coal-blend-targets?fy=${encodeURIComponent(fy)}`);
+        if (!res.ok) throw new Error((await res.json()).detail || 'Load failed');
+        const raw = await res.json();
+        json = {
+          sections: COAL_BLEND_SECTIONS.map(({ kind, label }) => ({
+            label,
+            unit: '%',
+            columns: COAL_BLEND_PLANTS.map((plant) => ({
+              plant, unit: 'Coal_Consumption', param_key: kind, label: plant,
+              target: raw.targets?.[plant]?.[kind] ?? null,
+            })),
+          })),
+        };
+      } else {
+        const res = await fetch(`${API_BASE_URL}/api/techno-page-targets?page=${page}&fy=${encodeURIComponent(fy)}`);
+        if (!res.ok) throw new Error((await res.json()).detail || 'Load failed');
+        json = await res.json();
+      }
       setData(json);
       const initial = {};
       (json.sections || []).forEach((sec) => {
@@ -74,6 +107,7 @@ function TechnoPageTargetsPageInner() {
   const handleSave = async () => {
     setSaving(true);
     setStatus(null);
+    const isCoalBlend = page === 'coal-blend';
     const entries = [];
     (data?.sections || []).forEach((sec) => {
       sec.columns.forEach((col) => {
@@ -81,10 +115,9 @@ function TechnoPageTargetsPageInner() {
         if (val === '' || val === undefined) return;
         const num = parseFloat(val);
         if (Number.isNaN(num)) return;
-        entries.push({
-          plant: col.plant, unit: col.unit, param_key: col.param_key,
-          unit_str: sec.unit, value: num,
-        });
+        entries.push(isCoalBlend
+          ? { plant: col.plant, kind: col.param_key, value: num }
+          : { plant: col.plant, unit: col.unit, param_key: col.param_key, unit_str: sec.unit, value: num });
       });
     });
     if (!entries.length) {
@@ -93,7 +126,7 @@ function TechnoPageTargetsPageInner() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/api/techno-page-targets`, {
+      const res = await fetch(`${API_BASE_URL}/api/${isCoalBlend ? 'coal-blend-targets' : 'techno-page-targets'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fy, entries }),
@@ -123,9 +156,13 @@ function TechnoPageTargetsPageInner() {
           </span>
         </div>
         <p style={{ fontSize: 12.5, color: '#9ca3af', marginTop: 0, marginBottom: 18 }}>
-          No SAIL column here — SAIL's target on page 29 (printed) is entered separately at{' '}
-          <a href="/data-entry/targets" style={{ color: '#1a73e8' }}>TE Targets</a>.
-          {' '}Pages 34-38 (Mill Wise) are grouped by parameter, one column per mill unit, for the one plant that page covers.
+          {page === 'coal-blend' ? (
+            <>Shown as the "Target %" row on the <a href="/report" style={{ color: '#1a73e8' }}>Key Parameters</a> page, directly under each plant's actual — the only tab here with a SAIL column.</>
+          ) : (
+            <>No SAIL column here — SAIL's target on page 29 (printed) is entered separately at{' '}
+              <a href="/data-entry/targets" style={{ color: '#1a73e8' }}>TE Targets</a>.
+              {' '}Pages 34-38 (Mill Wise) are grouped by parameter, one column per mill unit, for the one plant that page covers.</>
+          )}
         </p>
 
         {/* Controls */}

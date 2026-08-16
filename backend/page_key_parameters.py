@@ -269,6 +269,31 @@ def _coal_blend_pct(plant, kind, report_month, dp):
     return _round(numer / total * 100, dp)
 
 
+# Annual target for the 2 coal-blend rows — stored in the same techno_plan_fy
+# table every other techno target uses (db.get_techno_plan/save_techno_plan),
+# under unit="Coal_Consumption" (matching the actual figure's own source
+# unit above) and the SAME key names the actual reads
+# (imported_total_pct/soft_pct), so a target and its actual are always the
+# same underlying concept. Entered via /data-entry/annual-target's "Coal
+# Blend %" section (api_coal_blend_targets.py) — SAIL's own target is
+# stored there too (this report page has no SAIL column at all, for any
+# row, so it's stored but not shown here).
+_COAL_BLEND_TARGET_UNIT = "Coal_Consumption"
+_COAL_BLEND_TARGET_KEY = {"total": "imported_total_pct", "soft": "soft_pct"}
+
+
+def _coal_blend_targets(fy: str) -> dict:
+    """{(plant, kind): target_value} for kind in ("total", "soft"), for the
+    5 report-page plants only (SAIL excluded — see module note above)."""
+    out = {}
+    for plant in PLANTS:
+        data = db.get_techno_plan(plant, fy, unit=_COAL_BLEND_TARGET_UNIT).get("data", {})
+        for kind, key in _COAL_BLEND_TARGET_KEY.items():
+            val = data.get(key)
+            out[(plant, kind)] = val.get("value") if isinstance(val, dict) else val
+    return out
+
+
 def _special_steel_pct(plant, report_month, dp):
     from page_special_steel import generate_special_steel_plant
     try:
@@ -421,6 +446,8 @@ def generate_key_parameters(report_month: str) -> dict:
     else:
         dem_period = f"{period_label}'{report_year_2d}"
 
+    coal_blend_targets = _coal_blend_targets(db.get_fy_for_month(report_month))
+
     rows = []
     for label, unit, kind, spec, dp, flags in _ROWS:
         if label == _DEMURRAGE_LABEL:
@@ -518,6 +545,19 @@ def generate_key_parameters(report_month: str) -> dict:
         if flags.get("continuation"):
             row["continuation"] = True
         rows.append(row)
+
+        if kind == "coal_blend":
+            # Target sub-row, sharing the parameter-name cell above via the
+            # same rowspan/continuation mechanism "HM Sent to PCM/Sand Pit/
+            # Dry Pit"'s % row already uses — no SAIL column here (see
+            # _coal_blend_targets), so nothing to show in a 6th plant slot
+            # even if one existed.
+            row["label_rowspan"] = 2
+            rows.append({
+                "type": "data", "parameter": "", "unit": "Target %",
+                "plant_values": {p: _round(coal_blend_targets.get((p, spec)), dp) for p in PLANTS},
+                "continuation": True, "dim": True,
+            })
 
     return {
         "title": f"Performance of SAIL Plants — {period_label}'{report_year_2d}",
