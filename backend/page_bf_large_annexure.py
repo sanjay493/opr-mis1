@@ -157,6 +157,18 @@ def _sail_bf_values(plant, unit, report_month):
     prev_fy_row = rows.get(prev_fy_end, {})
     ytd_months = [m for m in fy_months if m <= report_month]
 
+    # HM Sulphur: RSP's own monthly report has no per-furnace breakdown for
+    # this parameter (confirmed against a real source workbook — unlike HM
+    # Silicon, which does), so whoever enters it can only ever have a
+    # shop-level figure to type in. Fall back to the plant's BF_Shop unit
+    # when the furnace's own unit has no value — same "shop-level fallback"
+    # pattern _coke_ash_and_sinter_fe below already uses for Sinter Fe/Coke
+    # Ash, applied generically here rather than gated to RSP specifically,
+    # since any plant could be in the same position.
+    shop_rows = {} if unit == "BF_Shop" else _fetch_bf_rows(plant, "BF_Shop", list(dict.fromkeys(prev_fy_months + fy_months)))
+    shop_cur_row = shop_rows.get(report_month, {})
+    shop_prev_fy_row = shop_rows.get(prev_fy_end, {})
+
     out = {}
     for key in list(PARAM_BY_KEY.keys()):
         if key in _ADDITIVE_KEYS:
@@ -179,6 +191,13 @@ def _sail_bf_values(plant, unit, report_month):
                 month_v = month_v if month_v is not None else compute_fuel_rate(cur_row.get("month", {}))
                 ytd_v = ytd_v if ytd_v is not None else compute_fuel_rate(cur_row.get("till_month", {}))
                 prev_fy_v = prev_fy_v if prev_fy_v is not None else compute_fuel_rate(prev_fy_row.get("till_month", {}))
+            elif key == "sulphur_in_hm":
+                if month_v is None:
+                    month_v = _period_value(key, shop_cur_row.get("month", {}))
+                if ytd_v is None:
+                    ytd_v = _period_value(key, shop_cur_row.get("till_month", {}))
+                if prev_fy_v is None:
+                    prev_fy_v = _period_value(key, shop_prev_fy_row.get("till_month", {}))
         out[key] = (prev_fy_v, month_v, ytd_v)
     return out, ytd_months, prev_fy_months
 

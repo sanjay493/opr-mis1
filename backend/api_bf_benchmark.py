@@ -292,6 +292,18 @@ def _sail_period_values(plant: str, unit: str, report_month: str, period: str) -
             out[key] = float(v) if v is not None else None
         except (TypeError, ValueError):
             out[key] = None
+    # HM Sulphur: some plants (confirmed for RSP) only report a shop-level
+    # figure, not broken down per furnace — fall back to the plant's
+    # BF_Shop unit when the furnace's own unit has no value. See
+    # page_bf_large_annexure.py's _sail_bf_values for the same fallback and
+    # its full rationale.
+    if out.get("sulphur_in_hm") is None and unit != "BF_Shop":
+        shop_src = _db.get_techno_data(plant, report_month, "BF_Shop").get("BF_Shop", {}).get(period, {})
+        v = shop_src.get("sulphur_in_hm")
+        try:
+            out["sulphur_in_hm"] = float(v) if v is not None else None
+        except (TypeError, ValueError):
+            pass
     out["fuel_rate"] = _registry.compute_fuel_rate(out)
     return out
 
