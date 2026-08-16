@@ -84,5 +84,23 @@
   "cover_badge_navy":         "#002691",
   "cover_kpi_card_bg":        "#f8fafc",
   "cover_kpi_card_border":    "#e2e8f0",
-  "cover_molten_red":         "#e8380d"
+  "cover_molten_red":         "#e8380d",
+
+  "_doc_khv": "'Key Highlights & Variances' page (page_key_highlights.py / key_highlights.html) — its own header-bar/box colors, since none of the generic highlight_* tokens above are solid enough for a colored header bar with white text.",
+
+  "khv_banner_bg":            "#0f2a5c",
+  "khv_badge_bg":              "#0047c8",
+  "khv_achieve_header_bg":    "#1e7e34",
+  "khv_achieve_box_bg":       "#f0fdf4",
+  "khv_achieve_box_border":   "#86efac",
+  "khv_shortfall_header_bg":  "#b91c1c",
+  "khv_shortfall_box_bg":     "#fef2f2",
+  "khv_shortfall_box_border": "#fca5a5",
+  "khv_focus_header_bg":      "#0f2a5c",
+  "khv_focus_box_bg":         "#f8fafc",
+  "khv_va_header_bg":         "#0369a1",
+  "khv_va_box_bg":            "#f0f9ff",
+  "khv_assessment_green":     "#16a34a",
+  "khv_assessment_amber":     "#d97706",
+  "khv_assessment_red":       "#dc2626"
 }

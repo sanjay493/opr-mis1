@@ -341,6 +341,19 @@ CREATE TABLE IF NOT EXISTS page3_narrative (
     updated_at            DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
+-- "Key Highlights & Variances" page narrative — Major Achievements / Major
+-- Shortfalls / Focus Areas Going Forward, keyed only by report_month, same
+-- independent-of-page_configs rationale as page3_narrative above. See
+-- page_key_highlights.py / api_key_highlights.py.
+CREATE TABLE IF NOT EXISTS key_highlights_narrative (
+    report_month   CHAR(7) NOT NULL PRIMARY KEY,
+    achievements   TEXT,
+    shortfalls     TEXT,
+    focus_areas    TEXT,
+    updated_by     VARCHAR(190),
+    updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 -- Large BF Benchmarking — static Working Volume for SAIL's 3 fixed large
 -- BFs (BSP BF-8, RSP BF-5, ISP BF-5). Their monthly operating data already
 -- lives in techno_data; only Working Volume (rarely changes) is here.

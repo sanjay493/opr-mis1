@@ -1,0 +1,182 @@
+{# ── Key Highlights & Variances — right after "SAIL Performance Summary" ── #}
+<div style="padding:2px 4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.4pt;color:{{ colors.text_primary }};">
+
+  {# Banner #}
+  <div style="display:flex;align-items:center;justify-content:space-between;background:{{ colors.khv_banner_bg }};color:{{ colors.text_white }};padding:5px 14px;border-radius:5px;margin-bottom:4px;">
+    <div>
+      <div style="font-size:16pt;font-weight:900;letter-spacing:0.3px;">{{ page.title }}</div>
+      <div style="font-size:8.5pt;font-weight:500;opacity:0.9;">{{ page.subtitle }}</div>
+    </div>
+    <div style="background:{{ colors.khv_badge_bg }};border-radius:5px;padding:4px 12px;text-align:center;">
+      <div style="font-size:6.4pt;text-transform:uppercase;opacity:0.85;">Report Month</div>
+      <div style="font-size:11pt;font-weight:800;">{{ page.month_label }}</div>
+    </div>
+  </div>
+
+  {# KPI strip #}
+  <div style="display:flex;gap:6px;margin-bottom:4px;">
+    {% for row in page.kpi %}
+    <div style="flex:1;border:1px solid {{ colors.border_light }};border-left:4px solid {{ colors.misc_accent_blue }};border-radius:4px;padding:4px 9px;">
+      <div style="font-size:7.2pt;color:{{ colors.text_secondary }};text-transform:uppercase;font-weight:700;">{{ row.item }}</div>
+      <div style="font-size:14pt;font-weight:800;color:{{ colors.text_primary }};line-height:1.15;">{{ row.value_mt if row.value_mt else '—' }} <span style="font-size:7.5pt;font-weight:600;">MT</span></div>
+      <div style="font-size:7pt;color:{{ colors.text_secondary }};">{{ row.pct_app if row.pct_app else '—' }}% of APP
+        &nbsp;|&nbsp; vs CPLY
+        {% if row.growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ row.growth_cply }}%</b>
+        {% elif row.growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ row.growth_cply }}%</b>
+        {% else %}<b>—</b>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Achievements | YTD Performance | Shortfalls #}
+  <div style="display:flex;gap:6px;margin-bottom:4px;align-items:stretch;">
+
+    <div style="flex:1;border:1px solid {{ colors.khv_achieve_box_border }};background:{{ colors.khv_achieve_box_bg }};border-radius:5px;overflow:hidden;">
+      <div style="background:{{ colors.khv_achieve_header_bg }};color:{{ colors.text_white }};font-weight:800;font-size:7.6pt;padding:3px 8px;text-transform:uppercase;">Major Achievements</div>
+      <ul style="margin:0;padding:5px 10px 5px 16px;list-style:disc;">
+        {% for a in page.achievements %}
+        <li style="margin-bottom:2px;font-weight:600;">{{ a.text }}
+          {% if a.subs %}
+          <ul style="margin:1px 0 2px 12px;list-style:circle;font-weight:400;">
+            {% for s in a.subs %}<li style="margin-bottom:1px;">{{ s }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+        </li>
+        {% else %}
+        <li style="color:{{ colors.text_faint }};font-style:italic;list-style:none;margin-left:-16px;">No achievements entered for this month yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div style="flex:1.15;border:1px solid {{ colors.border_light }};border-radius:5px;padding:4px 8px;">
+      <div style="font-weight:800;font-size:7.6pt;text-transform:uppercase;color:{{ colors.text_heading_dark }};margin-bottom:2px;">Year to Date Performance ({{ page.ytd.prev_label }} vs {{ page.ytd.cur_label }})</div>
+      <div style="font-size:6.2pt;color:{{ colors.text_secondary }};font-style:italic;margin-bottom:3px;">Quantity in '000 T</div>
+      {% for it in page.ytd.rows %}
+      <div style="margin-bottom:3px;">
+        <div style="display:flex;justify-content:space-between;font-size:6.6pt;font-weight:700;">
+          <span>{{ it.item }}</span>
+          {% if it.growth_pct %}<span style="{% if it.growth_good %}color:{{ colors.text_variance_green }}{% else %}color:{{ colors.text_variance_red }}{% endif %};">{{ '▲' if it.growth_good else '▼' }} {{ it.growth_pct }}%</span>{% endif %}
+        </div>
+        <div style="display:flex;align-items:center;gap:3px;">
+          <div style="width:30px;font-size:5.6pt;color:{{ colors.text_secondary }};">{{ it.prev_label if it.prev_label else page.ytd.prev_label }}</div>
+          <div style="flex:1;background:{{ colors.border_divider }};border-radius:2px;height:8px;"><div style="width:{{ it.prev_pct }}%;background:{{ colors.text_faint }};height:100%;border-radius:2px;"></div></div>
+          <div style="width:38px;font-size:5.8pt;text-align:right;">{{ it.prev_fmt }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:3px;">
+          <div style="width:30px;font-size:5.6pt;color:{{ colors.text_secondary }};">{{ it.cur_label if it.cur_label else page.ytd.cur_label }}</div>
+          <div style="flex:1;background:{{ colors.border_divider }};border-radius:2px;height:8px;"><div style="width:{{ it.cur_pct }}%;background:{{ colors.misc_accent_blue }};height:100%;border-radius:2px;"></div></div>
+          <div style="width:38px;font-size:5.8pt;text-align:right;font-weight:700;">{{ it.cur_fmt }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div style="flex:1;border:1px solid {{ colors.khv_shortfall_box_border }};background:{{ colors.khv_shortfall_box_bg }};border-radius:5px;overflow:hidden;">
+      <div style="background:{{ colors.khv_shortfall_header_bg }};color:{{ colors.text_white }};font-weight:800;font-size:7.6pt;padding:3px 8px;text-transform:uppercase;">Major Shortfalls / Areas of Concern</div>
+      <ul style="margin:0;padding:5px 10px 5px 16px;list-style:disc;">
+        {% for s in page.shortfalls %}
+        <li style="margin-bottom:2px;">{{ s }}</li>
+        {% else %}
+        <li style="color:{{ colors.text_faint }};font-style:italic;list-style:none;margin-left:-16px;">No shortfalls entered for this month yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+  </div>
+
+  {# Value Added Steel band #}
+  <div style="border:1px solid {{ colors.border_light }};background:{{ colors.khv_va_box_bg }};border-radius:5px;overflow:hidden;margin-bottom:4px;">
+    <div style="background:{{ colors.khv_va_header_bg }};color:{{ colors.text_white }};font-weight:800;font-size:7.6pt;padding:3px 8px;text-transform:uppercase;">Value Added Steel Performance (SAIL)</div>
+    <div style="display:flex;gap:0;padding:4px 8px;">
+      <div style="flex:1;padding-right:10px;">
+        <div style="font-size:7pt;font-weight:700;color:{{ colors.text_secondary }};text-transform:uppercase;">Value Added Steel (YTD)</div>
+        <div style="font-size:13pt;font-weight:800;">{{ page.value_added.ytd_pct if page.value_added.ytd_pct is not none else '—' }}%</div>
+        <div style="font-size:6.6pt;color:{{ colors.text_secondary }};">of Saleable Steel
+          {% if page.value_added.ytd_pp is not none %}
+          &nbsp;<b style="color:{{ colors.text_variance_green if page.value_added.ytd_pp >= 0 else colors.text_variance_red }};">{{ '▲' if page.value_added.ytd_pp >= 0 else '▼' }} {{ page.value_added.ytd_pp_abs }} pp</b> vs CPLY
+          {% endif %}
+        </div>
+      </div>
+      <div style="flex:1;border-left:1px solid {{ colors.border_divider }};padding:0 10px;">
+        <div style="font-size:7pt;font-weight:700;color:{{ colors.text_secondary }};text-transform:uppercase;">Quarter Just Ended ({{ page.value_added.quarter_label }})</div>
+        <div style="font-size:11pt;font-weight:800;">{{ page.value_added.quarter_cply_pct if page.value_added.quarter_cply_pct is not none else '—' }}% &rarr; {{ page.value_added.quarter_cur_pct if page.value_added.quarter_cur_pct is not none else '—' }}%</div>
+        <div style="font-size:6.6pt;color:{{ colors.text_secondary }};">
+          {% if page.value_added.quarter_pp is not none %}
+          <b style="color:{{ colors.text_variance_green if page.value_added.quarter_pp >= 0 else colors.text_variance_red }};">{{ '▲' if page.value_added.quarter_pp >= 0 else '▼' }} {{ page.value_added.quarter_pp_abs }} pp</b>
+          {% else %}—{% endif %}
+        </div>
+      </div>
+      <div style="flex:1;border-left:1px solid {{ colors.border_divider }};padding-left:10px;">
+        <div style="font-size:7pt;font-weight:700;color:{{ colors.text_secondary }};text-transform:uppercase;">For the Month ({{ page.value_added.month_label }})</div>
+        <div>Qty (Value Added Steel): <b>{{ page.value_added.month_qty if page.value_added.month_qty else '—' }} T</b></div>
+        <div>%Fulfilment: <b>{{ page.value_added.month_pct_ful if page.value_added.month_pct_ful else '—' }}%</b>
+          &nbsp;|&nbsp; vs CPLY:
+          {% if page.value_added.month_growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ page.value_added.month_growth_cply }}%</b>
+          {% elif page.value_added.month_growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ page.value_added.month_growth_cply }}%</b>
+          {% else %}<b>—</b>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Techno-Economic Snapshot | Focus Areas #}
+  <div style="display:flex;gap:6px;">
+
+    <div style="flex:1.25;">
+      <div style="font-weight:800;font-size:7.6pt;text-transform:uppercase;color:{{ colors.text_heading_dark }};margin-bottom:2px;">Techno-Economic Snapshot — {{ page.month_label }} Against Target</div>
+      <table style="border-collapse:collapse;width:100%;font-size:6.4pt;">
+        <thead>
+          <tr style="background:{{ colors.table_header_bg }};">
+            <th style="border:1px solid {{ colors.border_medium }};padding:2px 5px;text-align:left;">Parameter</th>
+            <th style="border:1px solid {{ colors.border_medium }};padding:2px 5px;">Unit</th>
+            <th style="border:1px solid {{ colors.border_medium }};padding:2px 5px;">Better Direction</th>
+            <th style="border:1px solid {{ colors.border_medium }};padding:2px 5px;">Actual</th>
+            <th style="border:1px solid {{ colors.border_medium }};padding:2px 5px;">Target FY</th>
+            <th style="border:1px solid {{ colors.border_medium }};padding:2px 5px;">Variance</th>
+            <th style="border:1px solid {{ colors.border_medium }};padding:2px 5px;">Assessment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in page.techno %}
+          <tr>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;font-weight:600;">{{ t.parameter }}</td>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ t.unit }}</td>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:center;color:{{ colors.text_secondary }};">{{ t.better_direction }}</td>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:right;">{{ t.actual }}</td>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:right;">{{ t.target }}</td>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:right;">{% if t.variance is not none %}{{ '%+.2f'|format(t.variance) }} ({{ t.variance_pct }}%){% else %}—{% endif %}</td>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;">
+              {% if t.dot_color == 'green' %}<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{{ colors.khv_assessment_green }};margin-right:3px;"></span>{{ t.assessment }}
+              {% elif t.dot_color == 'amber' %}<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{{ colors.khv_assessment_amber }};margin-right:3px;"></span>{{ t.assessment }}
+              {% elif t.dot_color == 'red' %}<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{{ colors.khv_assessment_red }};margin-right:3px;"></span>{{ t.assessment }}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="font-size:5.6pt;color:{{ colors.text_secondary }};margin-top:2px;">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{{ colors.khv_assessment_green }};margin-right:2px;"></span>Better than / within target &nbsp;
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{{ colors.khv_assessment_amber }};margin-right:2px;"></span>Slightly below/above target &nbsp;
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{{ colors.khv_assessment_red }};margin-right:2px;"></span>Below/above target
+      </div>
+    </div>
+
+    <div style="flex:1;border:1px solid {{ colors.border_light }};background:{{ colors.khv_focus_box_bg }};border-radius:5px;overflow:hidden;align-self:flex-start;">
+      <div style="background:{{ colors.khv_focus_header_bg }};color:{{ colors.text_white }};font-weight:800;font-size:7.6pt;padding:3px 8px;text-transform:uppercase;">Focus Areas Going Forward</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:4px 8px;">
+        {% for f in page.focus_areas %}
+        <div style="padding:2px 4px;">
+          <div style="font-size:6.8pt;font-weight:800;color:{{ colors.khv_focus_header_bg }};">{{ f.title }}</div>
+          <div style="font-size:6.2pt;color:{{ colors.text_secondary }};">{{ f.description }}</div>
+        </div>
+        {% else %}
+        <div style="grid-column:1 / -1;color:{{ colors.text_faint }};font-style:italic;">No focus areas entered for this month yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+</div>

@@ -474,6 +474,27 @@ def init_db():
         )
     """)
 
+    # 17b. "Key Highlights & Variances" page (KEY_HIGHLIGHTS_PAGE_ID in
+    # main.py) — Major Achievements / Major Shortfalls / Focus Areas Going
+    # Forward, the three narrative sections of that page that can't be
+    # derived from any numeric table (they're a human analyst's read of the
+    # month, not a computed figure). Stored as JSON arrays, one row per
+    # report_month, so the report page reads them back directly rather than
+    # attempting any on-the-fly text generation. Kept in its own table (same
+    # rationale as page3_narrative above) so saving it never risks touching
+    # any other page's data for the month. See page_key_highlights.py and
+    # api_key_highlights.py.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS key_highlights_narrative (
+            report_month   TEXT PRIMARY KEY,
+            achievements   TEXT,   -- JSON: [{"text": "...", "subs": ["...", ...]}, ...]
+            shortfalls     TEXT,   -- JSON: ["...", "...", ...]
+            focus_areas    TEXT,   -- JSON: [{"title": "...", "description": "..."}, ...]
+            updated_by     TEXT,
+            updated_at     TEXT
+        )
+    """)
+
     # 18. Large BF Benchmarking — static Working Volume for SAIL's 3 fixed
     # large BFs (BSP BF-8, RSP BF-5, ISP BF-5); their monthly operating data
     # already lives in techno_data, only Working Volume (an engineering spec
@@ -960,6 +981,55 @@ def save_page3_narrative(month: str, production_narrative: str, highlights: List
                        highlights = excluded.highlights,
                        updated_at = excluded.updated_at
     """, (month, production_narrative or "", highlights_text))
+    conn.commit()
+    conn.close()
+
+def get_key_highlights_narrative(month: str) -> Optional[dict]:
+    """Returns the saved Key Highlights & Variances narrative (Major
+    Achievements / Major Shortfalls / Focus Areas Going Forward) for a
+    month, or None if nothing has ever been saved for it — the report page
+    shows empty sections in that case rather than inventing text."""
+    init_db()
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT achievements, shortfalls, focus_areas, updated_by, updated_at "
+        "FROM key_highlights_narrative WHERE report_month = ?",
+        (month,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    achievements, shortfalls, focus_areas, updated_by, updated_at = row
+    return {
+        "achievements": json.loads(achievements) if achievements else [],
+        "shortfalls":   json.loads(shortfalls) if shortfalls else [],
+        "focus_areas":  json.loads(focus_areas) if focus_areas else [],
+        "updated_by":   updated_by or "",
+        "updated_at":   updated_at or "",
+    }
+
+def save_key_highlights_narrative(month: str, achievements: list, shortfalls: list,
+                                   focus_areas: list, updated_by: str = ""):
+    """Saves/updates the Key Highlights & Variances narrative for a month,
+    keyed only by report_month — independent of page_configs, same as
+    save_page3_narrative above."""
+    init_db()
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO key_highlights_narrative
+            (report_month, achievements, shortfalls, focus_areas, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(report_month)
+        DO UPDATE SET achievements = excluded.achievements,
+                       shortfalls  = excluded.shortfalls,
+                       focus_areas = excluded.focus_areas,
+                       updated_by  = excluded.updated_by,
+                       updated_at  = excluded.updated_at
+    """, (month, json.dumps(achievements or []), json.dumps(shortfalls or []),
+          json.dumps(focus_areas or []), updated_by or ""))
     conn.commit()
     conn.close()
 
