@@ -1,0 +1,47 @@
+            <div class="coal-title">{{ page.title }}</div>
+
+            <table class="coal-table epi-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2">Parameters</th>
+                        <th rowspan="2">Plant</th>
+                        <th rowspan="2">Actual</th>
+                        <th rowspan="2">Actual</th>
+                        <th rowspan="2">Target</th>
+                        <th colspan="{{ page.month_labels|length + 3 }}">Actual</th>
+                    </tr>
+                    <tr>
+                        <th>{{ page.fy2_label }}</th>
+                        <th>{{ page.fy1_label }}</th>
+                        <th>{{ page.target_label }}</th>
+                        {% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}
+                        <th>{{ page.cply_label }}</th>
+                        <th>{{ page.cum_label }}</th>
+                        <th>{{ page.cum_cply_label }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sec in page.sections %}
+                    {% for row in sec.rows %}
+                    <tr class="{% if loop.index == sec.rows|length %}coal-group-last{% endif %} {% if row.label == 'SAIL' %}coal-bold-row{% endif %}">
+                        {% if loop.first %}<td rowspan="{{ sec.rows|length }}" class="coal-plant-cell">{{ sec.label }}<br/><span class="epi-unit">({{ row.unit }})</span></td>{% endif %}
+                        <td class="coal-period-cell">{{ row.label }}</td>
+                        <td class="coal-num">{{ row.fy2 or '—' }}</td>
+                        <td class="coal-num">{{ row.fy1 or '—' }}</td>
+                        <td class="coal-num">{{ row.target or '—' }}</td>
+                        {% for v in row.months %}<td class="coal-num">{{ v or '—' }}</td>{% endfor %}
+                        <td class="coal-num">{{ row.cply or '—' }}</td>
+                        <td class="coal-num">{{ row.cum or '—' }}</td>
+                        <td class="coal-num">{{ row.cum_cply or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not loop.last %}
+                    <tr class="coal-plant-spacer-row">
+                        <td colspan="{{ 5 + page.month_labels|length + 3 }}"></td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="coal-note">Environment Management Division (EMD)</div>

@@ -1109,6 +1109,7 @@ function CoalOmiExtractRow({ reportMonth, apiBase, onSuccess }) {
         plants: preview.plants,
         sail: preview.sail,
         ois2: preview.ois2,
+        detail: preview.detail,
         ...(confirmReplace ? { confirm_replace: true } : {}),
       }),
     });
@@ -1292,6 +1293,34 @@ function CoalOmiExtractRow({ reportMonth, apiBase, onSuccess }) {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', margin: '10px 0 4px' }}>
+            Consumption of Coking Coal and CDI Coal (per plant — feeds the landscape report page)
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden' }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa' }}>
+                  <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Plant</th>
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>Total Coking Coal</th>
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>CDI Coal</th>
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>Imported Blend %</th>
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>Imported Soft %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(preview.detail || []).map(rec => (
+                  <tr key={rec.plant}>
+                    <td style={{ ...labelCellStyle, fontWeight: rec.plant === 'SAIL' ? 700 : 400 }}>{rec.plant}</td>
+                    <td style={cellStyle}>{fmt(rec.techno_json?.month?.total_coking_coal)}</td>
+                    <td style={cellStyle}>{fmt(rec.techno_json?.month?.cdi_coal)}</td>
+                    <td style={cellStyle}>{fmt(rec.techno_json?.month?.imported_total_pct)}%</td>
+                    <td style={cellStyle}>{fmt(rec.techno_json?.month?.soft_pct)}%</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

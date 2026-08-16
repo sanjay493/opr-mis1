@@ -13,6 +13,11 @@ computed by summing DB-stored monthly values via techno_cumulative.py
 (see plant_and_sail_techno_json / SAIL/till-month handling in
 api_coal_omi_techno.py, which calls this module).
 
+extract_ois1_detail reads OIS-1's full as-printed row (Total Coking Coal,
+CDI Coal, and both blend% column groups, not just the 4 raw quantities) for
+the "Consumption of Coking Coal and CDI Coal" display page — see its own
+docstring below.
+
 Sheet layouts (verified against 4 real files, Apr-Jul'26 — identical row
 positions across all 4, safe to hardcode, but every read still verifies the
 expected label text at that position first and raises ValueError naming the
@@ -81,6 +86,24 @@ _OIS1_COLS = {
 }
 _OIS1_PLANT_COL = 2   # B
 _OIS1_MONTH_COL = 3   # C
+
+# Full as-printed row — every quantity + blend% column on OIS-1, verified
+# against a live workbook (Coal OMI - Jul26.xlsx): D=PCC E=MCC F=Indigenous
+# Total, G=Hard H=Soft I=Imported Total, J=Total Coking Coal, L=CDI Coal
+# (K is a spacer column), N-P=Indigenous PCC/MCC/Total %, Q-S=Imported
+# Hard/Soft/Total % (M is a spacer column before the Blend% block). Used
+# for the "Consumption of Coking Coal and CDI Coal" display page, which
+# renders these values verbatim rather than recomputing totals/blend% —
+# see extract_ois1_detail.
+_OIS1_DETAIL_QTY_COLS = {
+    "pcc": 4, "mcc": 5, "indigenous_total": 6,
+    "hard": 7, "soft": 8, "imported_total": 9,
+    "total_coking_coal": 10, "cdi_coal": 12,
+}
+_OIS1_DETAIL_PCT_COLS = {
+    "pcc_pct": 14, "mcc_pct": 15, "indigenous_total_pct": 16,
+    "hard_pct": 17, "soft_pct": 18, "imported_total_pct": 19,
+}
 
 _OIS2_ROW = {"indigenous": 5, "imported": 6, "total": 7}
 _OIS2_RECEIPT_PLAN_COL = 4   # D
@@ -175,6 +198,71 @@ def extract_ois1(path, report_month: str) -> dict:
     return out
 
 
+def extract_ois1_detail(path, report_month: str) -> dict:
+    """-> {plant_or_SAIL: {"month": {...14 fields, label}, "till_month":
+    {...14 fields, label}}} for PLANTS + ["SAIL"] — every quantity and
+    blend% column on OIS-1, read verbatim (blend% converted from the
+    sheet's raw 0-1 fraction to a 0-100 percentage, rounded to 1dp to match
+    what's printed). "till_month" (not "ytd") to match
+    db.merge_upsert_techno_data's hardcoded ("month", "till_month") period
+    pair — it merges only those two keys, so a different key name would
+    silently vanish on any re-insert that merges into an existing row.
+    Powers the "Consumption of Coking Coal and CDI Coal" display page,
+    which renders this as-is with no recomputation — including the SAIL
+    row, which is the sheet's own printed row rather than a sum of the 5
+    plants (unlike extract_ois1/_build_plant_records's validation-focused
+    path, this one has no cross-check to fail on a mismatch).
+    Reuses the same row/column positions and April-has-no-YTD-row handling
+    as extract_ois1 — see that function's docstring for the sheet-layout
+    verification rationale."""
+    import openpyxl
+    wb = openpyxl.load_workbook(path, data_only=True)
+    if "OIS-1" not in wb.sheetnames:
+        raise ValueError(f"'OIS-1' sheet not found — sheets present: {wb.sheetnames}")
+    ws = wb["OIS-1"]
+
+    mlabel = mlabel_from_report_month(report_month)
+    cum_mlabel = cum_mlabel_from_report_month(report_month)
+    is_april = report_month.endswith("-04")
+
+    def _row_dict(row, label):
+        d = {"label": label}
+        for k, c in _OIS1_DETAIL_QTY_COLS.items():
+            d[k] = _num(ws.cell(row, c).value)
+        for k, c in _OIS1_DETAIL_PCT_COLS.items():
+            v = _num(ws.cell(row, c).value)
+            d[k] = round(v * 100, 1) if v is not None else None
+        return d
+
+    out = {}
+    for plant, (month_row, cum_row) in _OIS1_ROWS.items():
+        plant_cell = ws.cell(month_row, _OIS1_PLANT_COL).value
+        if plant_cell != plant:
+            raise ValueError(
+                f"OIS-1 row {month_row} col B expected '{plant}', found {plant_cell!r}."
+            )
+        month_label = ws.cell(month_row, _OIS1_MONTH_COL).value
+        if month_label != mlabel:
+            raise ValueError(
+                f"OIS-1 row {month_row} col C expected '{mlabel}', found {month_label!r}."
+            )
+        month_detail = _row_dict(month_row, mlabel)
+
+        if is_april:
+            till_month_detail = dict(month_detail)
+        else:
+            cum_label = ws.cell(cum_row, _OIS1_MONTH_COL).value
+            if cum_label != cum_mlabel:
+                raise ValueError(
+                    f"OIS-1 row {cum_row} col C expected '{cum_mlabel}', found {cum_label!r}."
+                )
+            till_month_detail = _row_dict(cum_row, cum_mlabel)
+
+        out[plant] = {"month": month_detail, "till_month": till_month_detail}
+
+    return out
+
+
 def _find_stock_column(ws, report_month: str):
     """Row 10's date cells aren't at fixed columns and the year on them is
     unreliable — scan for whichever populated date cell's MONTH NUMBER
@@ -240,10 +328,12 @@ def extract_ois2(path, report_month: str) -> dict:
 
 
 def extract_coal_omi(path, report_month: str) -> dict:
-    """-> {"ois1": extract_ois1(...), "ois2": extract_ois2(...)}"""
+    """-> {"ois1": extract_ois1(...), "ois2": extract_ois2(...),
+    "ois1_detail": extract_ois1_detail(...)}"""
     return {
         "ois1": extract_ois1(path, report_month),
         "ois2": extract_ois2(path, report_month),
+        "ois1_detail": extract_ois1_detail(path, report_month),
     }
 
 

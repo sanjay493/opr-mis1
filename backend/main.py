@@ -32,7 +32,9 @@ from page_at_a_glance import generate_at_a_glance
 from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
 from page_cover import generate_cover
-from page_coal_receipts_stock import generate_coal_receipts_plants, generate_coal_receipts_sail
+from page_coal_receipts_stock import generate_coal_receipts_sail
+from page_coal_consumption import generate_coal_consumption
+from page_epi import generate_epi
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt, _ITEM_ORDER as _IPT_ITEM_ORDER, _ITEM_RANK as _IPT_ITEM_RANK
 from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month, format_cr_actual
@@ -112,7 +114,7 @@ _INDEX_BASE_ROWS = [
     ("Techno-economic performance (Major parameters)", "26"),
     ("Month-wise techno-economic performance", "27-34"),
     ("Major Environmental Performance Indicators (EPIs)", "35"),
-    ("Coking Coal Receipts & Stock", "36-37"),
+    ("Consumption, Receipts & Stock of Coking Coal", "36-37"),
     ("Power Generation", "38"),
     ("Capital Repairs", "39-43"),
     ("Average detention per wagon/ commodity-wise detention", "44-47"),
@@ -138,15 +140,29 @@ def _index_rows() -> list:
     new pages 1, 3 and 4 (see AT_A_GLANCE_PAGE_ID / KEY_PARAMS_PAGE_ID /
     BF_LARGE_ANNEXURE_PAGE_ID above); the former first-numbered-page
     "Production performance summary" becomes page 2 (+1), and everything
-    after it shifts by +3 (three new pages ahead of it now, not two)."""
+    after it shifts by +3 (three new pages ahead of it now, not two).
+
+    A further +1 kicks in from "Major Environmental Performance Indicators
+    (EPIs)" onward (EPI_PAGE_ID, 35.4): the base scheme's own "35" slot for
+    it was fully consumed by the mill-wise techno cycle's 9th page (ISP)
+    before this page existed (see EPI_PAGE_ID's comment in main.py), so
+    it's a genuinely new physical page beyond the +3 already accounted for,
+    same as Iron Making (contd.)/Coal Receipts before it — except those two
+    land on pages the base scheme already reserved slots for ("29.5"'s
+    content was always going to spill onto a 2nd page, and "36-37"'s own
+    base range already assumed a 2-page Coal block right after "35"), so
+    they don't need their own extra bump."""
     rows = [
         {"sno": "1", "title": "MIS at a Glance", "page_range": "1"},
         {"sno": "2", "title": _INDEX_BASE_ROWS[0][0], "page_range": "2"},
         {"sno": "3", "title": "Key Parameters — Quarterly Performance", "page_range": "3"},
         {"sno": "4", "title": "Large BFs — SAIL Benchmark", "page_range": "4"},
     ]
+    extra = 0
     for i, (title, page_range) in enumerate(_INDEX_BASE_ROWS[1:], start=5):
-        rows.append({"sno": str(i), "title": title, "page_range": _shift_page_range(page_range, 3)})
+        if title.startswith("Major Environmental Performance Indicators"):
+            extra = 1
+        rows.append({"sno": str(i), "title": title, "page_range": _shift_page_range(page_range, 3 + extra)})
     return rows
 from pdf import build_pdf_response
 from layout_loader import load_layout_config
@@ -224,15 +240,23 @@ BF_LARGE_ANNEXURE_PAGE_ID = 3.6
 # and generate_techno_from_db() - no dedicated generator needed.
 IRON_MAKING_PAGE_2_ID = 29.5
 
-# "Coking Coal Receipts & Stock" — two pages inserted right after page 35
-# (Mill ISP, the last Mill-Wise Techno-Economic Parameters page), sourced
-# from techno_data via the Coal OMI extractor (api_coal_omi_techno.py /
-# page_coal_receipts_stock.py). Same sentinel-float treatment as
-# IRON_MAKING_PAGE_2_ID above, including a dept-badge (report_utils.py
-# special-cases both, group 8 - same as pages 31-35). Both reuse the
-# "key_parameters" page type verbatim (see page_coal_receipts_stock.py's
-# module docstring for why that template already fits without any new
-# frontend code) rather than page_techno.py's TECHNO_PAGES machinery.
+# "Major Environmental Performance Indicators (EPIs)" — inserted right after
+# page 35 (Mill ISP), right before the Coal Consumption/Receipts pages. The
+# original 1-47 page plan always reserved a slot here (_INDEX_BASE_ROWS'
+# "Major Environmental Performance Indicators (EPIs)" row sits at base
+# position "35", right before "Consumption, Receipts & Stock of Coking
+# Coal"'s "36-37") but the mill-wise techno cycle (27-35) ended up using
+# all the way through int page 35 before this page existed, so it was
+# never actually built until now. Sourced from page_techno.py's own
+# page-27 computation (see page_epi.py) rather than a fresh DB read.
+EPI_PAGE_ID = 35.4
+
+# "Coking Coal Receipts & Stock" — two pages inserted right after the EPI
+# page above, sourced from techno_data via the Coal OMI extractor
+# (api_coal_omi_techno.py / page_coal_receipts_stock.py / page_coal_
+# consumption.py). Same sentinel-float treatment as IRON_MAKING_PAGE_2_ID
+# above, including a dept-badge (report_utils.py special-cases all three,
+# group 8 - same as pages 31-35).
 COAL_RECEIPTS_PAGE_ID = 35.5
 COAL_RECEIPTS_PAGE_2_ID = 35.6
 
@@ -452,7 +476,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
         if page_number is not None:
             if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
-                                IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID):
+                                IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID):
                 # Page 24 (SAIL), the trend sentinel page, the "at a
                 # glance" sentinel page, the "key parameters" sentinel
                 # page, the "Iron Making (contd.)" sentinel page, and the
@@ -587,7 +611,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config = [p for p in pages_config
                             if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                                       BF_LARGE_ANNEXURE_PAGE_ID,
-                                                      IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID)]
+                                                      IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID)]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
@@ -604,8 +628,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 pages_config.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
             _idx35 = next((i for i, p in enumerate(pages_config) if p.get("page") == 35), None)
             if _idx35 is not None:
-                pages_config.insert(_idx35 + 1, {"page": COAL_RECEIPTS_PAGE_ID})
-                pages_config.insert(_idx35 + 2, {"page": COAL_RECEIPTS_PAGE_2_ID})
+                pages_config.insert(_idx35 + 1, {"page": EPI_PAGE_ID})
+                pages_config.insert(_idx35 + 2, {"page": COAL_RECEIPTS_PAGE_ID})
+                pages_config.insert(_idx35 + 3, {"page": COAL_RECEIPTS_PAGE_2_ID})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -634,12 +659,15 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == BF_LARGE_ANNEXURE_PAGE_ID:
                 page.update(generate_bf_large_annexure(month))
                 page["type"] = "bf_large_annexure"
+            if pg == EPI_PAGE_ID:
+                page.update(generate_epi(month))
+                page["orientation"] = "landscape"
             if pg == COAL_RECEIPTS_PAGE_ID:
-                page.update(generate_coal_receipts_plants(month))
-                page["type"] = "key_parameters"
+                page.update(generate_coal_consumption(month))
+                page["orientation"] = "landscape"
             if pg == COAL_RECEIPTS_PAGE_2_ID:
                 page.update(generate_coal_receipts_sail(month))
-                page["type"] = "key_parameters"
+                page["orientation"] = "landscape"
             if pg == 1:
                 page.update(generate_cover(month))
             if pg == 2:
@@ -770,13 +798,19 @@ async def generate_pdf(request: PDFRequest):
         _idx29 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 29), None)
         if _idx29 is not None:
             _pages_list.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
-    # "Coking Coal Receipts & Stock" sentinel pages: always inserted right
-    # after page 35, same unconditional-insert pattern as above.
-    if not any(p.get("page") == COAL_RECEIPTS_PAGE_ID for p in _pages_list):
+    # EPI sentinel page: always inserted right after page 35, same
+    # unconditional-insert pattern as above.
+    if not any(p.get("page") == EPI_PAGE_ID for p in _pages_list):
         _idx35 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 35), None)
         if _idx35 is not None:
-            _pages_list.insert(_idx35 + 1, {"page": COAL_RECEIPTS_PAGE_ID})
-            _pages_list.insert(_idx35 + 2, {"page": COAL_RECEIPTS_PAGE_2_ID})
+            _pages_list.insert(_idx35 + 1, {"page": EPI_PAGE_ID})
+    # "Coking Coal Receipts & Stock" sentinel pages: always inserted right
+    # after the EPI page, same unconditional-insert pattern as above.
+    if not any(p.get("page") == COAL_RECEIPTS_PAGE_ID for p in _pages_list):
+        _idxepi = next((i for i, p in enumerate(_pages_list) if p.get("page") == EPI_PAGE_ID), None)
+        if _idxepi is not None:
+            _pages_list.insert(_idxepi + 1, {"page": COAL_RECEIPTS_PAGE_ID})
+            _pages_list.insert(_idxepi + 2, {"page": COAL_RECEIPTS_PAGE_2_ID})
     for p in _pages_list:
         pg = p.get("page", 0)
         # Pure function of page number — recomputed fresh rather than trusted
@@ -841,12 +875,15 @@ async def generate_pdf(request: PDFRequest):
         if pg == BF_LARGE_ANNEXURE_PAGE_ID:
             p.update(generate_bf_large_annexure(request.month))
             p["type"] = "bf_large_annexure"
+        if pg == EPI_PAGE_ID:
+            p.update(generate_epi(request.month))
+            p["orientation"] = "landscape"
         if pg == COAL_RECEIPTS_PAGE_ID:
-            p.update(generate_coal_receipts_plants(request.month))
-            p["type"] = "key_parameters"
+            p.update(generate_coal_consumption(request.month))
+            p["orientation"] = "landscape"
         if pg == COAL_RECEIPTS_PAGE_2_ID:
             p.update(generate_coal_receipts_sail(request.month))
-            p["type"] = "key_parameters"
+            p["orientation"] = "landscape"
         if pg == 25:
             p.update(generate_opening_stock(request.month))
             p["type"] = "opening_stock"

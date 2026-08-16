@@ -1,0 +1,64 @@
+            <div class="coal-title">{{ page.title }}</div>
+
+            <div class="coal-ab-row">
+                <div class="coal-ab-box">
+                    <div class="coal-ab-heading">(A) Receipt at Plants <span class="coal-ab-unit">(TPD)</span></div>
+                    <table class="coal-table coal-ab-table">
+                        <thead>
+                            <tr><th></th><th>Plan</th><th>Actual</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for r in page.receipt_rows %}
+                            <tr class="{% if r.label == 'Total Coal' %}coal-bold-row{% endif %}">
+                                <td class="coal-label-cell">{{ r.label }}</td>
+                                <td class="coal-num">{{ '%.0f'|format(r.plan) if r.plan is not none else '—' }}</td>
+                                <td class="coal-num">{{ '%.0f'|format(r.actual) if r.actual is not none else '—' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="coal-ab-box">
+                    <div class="coal-ab-heading">(B) Consumption at Plants</div>
+                    <table class="coal-table coal-ab-table">
+                        <thead>
+                            <tr><th></th><th>Actual<br/>('000 T)</th><th>Average<br/>(TPD)</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for r in page.consumption_rows %}
+                            <tr class="{% if r.label == 'Total Coal' %}coal-bold-row{% endif %}">
+                                <td class="coal-label-cell">{{ r.label }}</td>
+                                <td class="coal-num">{{ '%.0f'|format(r.actual) if r.actual is not none else '—' }}</td>
+                                <td class="coal-num">{{ '%.0f'|format(r.avg) if r.avg is not none else '—' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="coal-c-heading">(C) Month-wise stocks at plants ('000 T)</div>
+            <table class="coal-table coal-stock-table">
+                <thead>
+                    <tr>
+                        <th class="coal-label-cell">Category</th>
+                        {% for c in page.stock_cols %}<th>{{ c.date_label }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="coal-label-cell">Indigenous</td>
+                        {% for c in page.stock_cols %}<td class="coal-num">{{ '%.0f'|format(c.indigenous) if c.indigenous is not none else '—' }}</td>{% endfor %}
+                    </tr>
+                    <tr>
+                        <td class="coal-label-cell">Imported</td>
+                        {% for c in page.stock_cols %}<td class="coal-num">{{ '%.0f'|format(c.imported) if c.imported is not none else '—' }}</td>{% endfor %}
+                    </tr>
+                    <tr class="coal-bold-row">
+                        <td class="coal-label-cell">Total</td>
+                        {% for c in page.stock_cols %}<td class="coal-num">{{ '%.0f'|format(c.total) if c.total is not none else '—' }}</td>{% endfor %}
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="coal-note">Note: The above information is based on reports from Plants/CCSO and is provisional</div>

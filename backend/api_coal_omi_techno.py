@@ -40,6 +40,8 @@ if _TP_DIR not in sys.path:
 from coal_omi_extractor import (  # noqa: E402
     PLANTS, COAL_KEY_UNITS, extract_coal_omi,
 )
+
+_COAL_CONSUMPTION_UNIT = "Coal_Consumption"
 from db import init_db, merge_upsert_techno_data, get_techno_data  # noqa: E402
 from techno_cumulative import compute_cumulative_preview  # noqa: E402
 from api_unified_techno import _validate_month  # noqa: E402
@@ -134,6 +136,20 @@ def _build_plant_records(ois1: dict, report_month: str):
     return plant_records, sail_record, warnings
 
 
+def _build_ois1_detail_records(ois1_detail: dict) -> list:
+    """One record per plant + SAIL, unit="Coal_Consumption" — the full
+    as-printed OIS-1 row (see extract_ois1_detail), stored verbatim for the
+    "Consumption of Coking Coal and CDI Coal" display page to render
+    directly with no recomputation."""
+    return [
+        {
+            "plant": plant, "unit": _COAL_CONSUMPTION_UNIT,
+            "techno_json": {"month": detail["month"], "till_month": detail["till_month"]},
+        }
+        for plant, detail in ois1_detail.items()
+    ]
+
+
 def _build_ois2_record(ois2: dict) -> dict:
     r, c, s = ois2["receipt"], ois2["consumption"], ois2["stock"]
     month_json = {
@@ -170,8 +186,9 @@ async def preview_coal_omi(
         init_db()
         plant_records, sail_record, warnings = _build_plant_records(blob["ois1"], report_month)
         ois2_record = _build_ois2_record(blob["ois2"])
+        detail_records = _build_ois1_detail_records(blob["ois1_detail"])
 
-        all_records = plant_records + [sail_record, ois2_record]
+        all_records = plant_records + [sail_record, ois2_record] + detail_records
         conflicts = _existing_conflicts(report_month, all_records)
         total_params = sum(
             sum(1 for v in r["techno_json"]["month"].values() if v is not None)
@@ -185,6 +202,7 @@ async def preview_coal_omi(
             "plants": plant_records,
             "sail": sail_record,
             "ois2": ois2_record,
+            "detail": detail_records,
             "total_params": total_params,
             "validation_warnings": warnings,
             "has_existing": bool(conflicts),
@@ -206,13 +224,15 @@ async def preview_coal_omi(
 async def insert_coal_omi(payload: dict):
     """
     Body: { report_month, source_file, plants: [{plant,unit,techno_json}],
-            sail: {...}, ois2: {...}, confirm_replace: bool }
+            sail: {...}, ois2: {...}, detail: [{plant,unit,techno_json}],
+            confirm_replace: bool }
     """
     report_month = payload.get("report_month", "")
     source_file = payload.get("source_file", "")
     plant_records = payload.get("plants", [])
     sail_record = payload.get("sail")
     ois2_record = payload.get("ois2")
+    detail_records = payload.get("detail", [])
     confirm_replace = bool(payload.get("confirm_replace"))
 
     _validate_month(report_month)
@@ -221,6 +241,7 @@ async def insert_coal_omi(payload: dict):
         all_records.append(sail_record)
     if ois2_record:
         all_records.append(ois2_record)
+    all_records.extend(detail_records)
     if not all_records:
         raise HTTPException(status_code=400, detail="No records to insert")
 

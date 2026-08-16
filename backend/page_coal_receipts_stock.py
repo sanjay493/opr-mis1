@@ -1,104 +1,68 @@
 """
-"Coking Coal Receipts & Stock" — two report pages sourced from techno_data,
-populated by api_coal_omi_techno.py (see techno_project/coal_omi_extractor.py
-for the source workbook). Both reuse the "key_parameters" page type/template
-verbatim (KeyParametersTemplate.js / page_templates/key_parameters.html are
-already fully generic over {title, plants, rows} — no new frontend code
-needed) rather than page_techno.py's per-plant-param TECHNO_PAGES machinery,
-which doesn't fit either page's shape (page 35.5 needs a SAIL column
-alongside the 5 plants; page 35.6 is SAIL-only, no plant columns at all).
-
-Page 35.5 — per-plant (BSP/DSP/RSP/BSL/ISP/SAIL) coking coal quantities,
-  both "This Month" and "Till Month" (April->report_month, computed by
-  techno_cumulative.py's "sum" rule at insert time — see api_coal_omi_techno.py)
-  as two row sections sharing the same plant columns.
-
-Page 35.6 — SAIL-only Receipt (Plan/Actual, TPD), Consumption (Actual/
-  Average), and Stock (as of the report month's 1st) — unit="Coal_Receipt_Stock",
-  a single "SAIL" column (the key_parameters template accepts any plants
-  list, including a length-1 one).
+"Receipt, Consumption and Stocks of Coking Coal at Plants" — landscape page
+reproducing Report_format/Coal_co2/Coal Format.pdf's OIS-2 table (SAIL-level
+only, no plant breakdown — the source workbook doesn't carry one). Sourced
+from techno_data (plant="SAIL", unit="Coal_Receipt_Stock"), populated by
+api_coal_omi_techno.py — see techno_project/coal_omi_extractor.py's
+extract_ois2 for the source workbook layout. Pure lookup/display: (A)/(B)
+read the report month's own stored row verbatim; (C)'s month-wise stock
+history is assembled by reading every FY-to-date month's OWN stored
+snapshot (each month's Excel upload captures that month's stock as of the
+column the extractor matched — see extract_ois2's docstring on why the
+workbook's own multi-column stock history is NOT trustworthy enough to
+read directly: stale/mismatched-year leftover columns are common) rather
+than trusting the current file's own (often incomplete or stale) historical
+columns — a month with no stored snapshot yet just renders blank in that
+column instead of guessing.
 """
 import db
 
-PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
-_GENERAL_UNIT = "General"
-_RECEIPT_STOCK_UNIT = "Coal_Receipt_Stock"
-
-_COAL_ROWS = [
-    ("Indigenous PCC", "indigenous_pcc"),
-    ("Indigenous MCC", "indigenous_mcc"),
-    ("Imported Hard Coking Coal", "imported_hard_coal"),
-    ("Imported Soft Coking Coal", "imported_soft_coal"),
-]
-
-
-def _fetch_general(report_month: str) -> dict:
-    """{plant: {"month": {...}, "till_month": {...}}} for PLANTS + SAIL,
-    unit="General"."""
-    out = {}
-    for plant in PLANTS + ["SAIL"]:
-        d = db.get_techno_data(plant, report_month, unit=_GENERAL_UNIT)
-        out[plant] = d.get(_GENERAL_UNIT, {})
-    return out
-
-
-def generate_coal_receipts_plants(report_month: str) -> dict:
-    techno = _fetch_general(report_month)
-    plants = PLANTS + ["SAIL"]
-
-    rows = [{"type": "section", "label": "This Month"}]
-    for label, key in _COAL_ROWS:
-        rows.append({
-            "type": "data", "parameter": label, "unit": "'000 T",
-            "plant_values": {p: techno.get(p, {}).get("month", {}).get(key) for p in plants},
-        })
-    rows.append({"type": "spacer"})
-    rows.append({"type": "section", "label": "Till Month (April onward)"})
-    for label, key in _COAL_ROWS:
-        rows.append({
-            "type": "data", "parameter": label, "unit": "'000 T",
-            "plant_values": {p: techno.get(p, {}).get("till_month", {}).get(key) for p in plants},
-        })
-
-    return {
-        "title": f"Coking Coal Consumption — {report_month}",
-        "plants": plants,
-        "rows": rows,
-    }
+_UNIT = "Coal_Receipt_Stock"
 
 
 def generate_coal_receipts_sail(report_month: str) -> dict:
-    d = db.get_techno_data("SAIL", report_month, unit=_RECEIPT_STOCK_UNIT)
-    m = d.get(_RECEIPT_STOCK_UNIT, {}).get("month", {})
+    stored = db.get_techno_data("SAIL", report_month, unit=_UNIT).get(_UNIT, {})
+    m = stored.get("month") or {}
 
-    def row(label, unit, key):
-        return {"type": "data", "parameter": label, "unit": unit, "plant_values": {"SAIL": m.get(key)}}
-
-    rows = [
-        {"type": "section", "label": "Receipt at Plants"},
-        row("Indigenous — Plan", "TPD", "receipt_plan_indigenous"),
-        row("Indigenous — Actual", "TPD", "receipt_actual_indigenous"),
-        row("Imported — Plan", "TPD", "receipt_plan_imported"),
-        row("Imported — Actual", "TPD", "receipt_actual_imported"),
-        row("Total — Plan", "TPD", "receipt_plan_total"),
-        row("Total — Actual", "TPD", "receipt_actual_total"),
-        {"type": "spacer"},
-        {"type": "section", "label": "Consumption at Plants"},
-        row("Indigenous — Actual", "'000 T", "consumption_actual_indigenous"),
-        row("Indigenous — Average", "TPD", "consumption_avg_indigenous"),
-        row("Imported — Actual", "'000 T", "consumption_actual_imported"),
-        row("Imported — Average", "TPD", "consumption_avg_imported"),
-        row("Total — Actual", "'000 T", "consumption_actual_total"),
-        row("Total — Average", "TPD", "consumption_avg_total"),
-        {"type": "spacer"},
-        {"type": "section", "label": f"Stock as of {m.get('stock_as_of_month') or '1st of month'}"},
-        row("Indigenous", "'000 T", "stock_indigenous"),
-        row("Imported", "'000 T", "stock_imported"),
-        row("Total", "'000 T", "stock_total"),
+    receipt_rows = [
+        {"label": "Indigenous Coal", "plan": m.get("receipt_plan_indigenous"), "actual": m.get("receipt_actual_indigenous")},
+        {"label": "Imported Coal", "plan": m.get("receipt_plan_imported"), "actual": m.get("receipt_actual_imported")},
+        {"label": "Total Coal", "plan": m.get("receipt_plan_total"), "actual": m.get("receipt_actual_total")},
+    ]
+    consumption_rows = [
+        {"label": "Indigenous Coal", "actual": m.get("consumption_actual_indigenous"), "avg": m.get("consumption_avg_indigenous")},
+        {"label": "Imported Coal", "actual": m.get("consumption_actual_imported"), "avg": m.get("consumption_avg_imported")},
+        {"label": "Total Coal", "actual": m.get("consumption_actual_total"), "avg": m.get("consumption_avg_total")},
     ]
 
+    stock_cols = []
+    for ytd_month in db.get_ytd_months(report_month):
+        ym = db.get_techno_data("SAIL", ytd_month, unit=_UNIT).get(_UNIT, {}).get("month") or {}
+        as_of = ym.get("stock_as_of_month")
+        date_label = None
+        if as_of:
+            y, mo, *_ = as_of.split("-")
+            date_label = f"01-{mo}-{y[-2:]}"
+        stock_cols.append({
+            "date_label": date_label or "—",
+            "indigenous": ym.get("stock_indigenous"),
+            "imported": ym.get("stock_imported"),
+            "total": ym.get("stock_total"),
+        })
+
     return {
-        "title": f"Coking Coal Receipts & Stock (SAIL) — {report_month}",
-        "plants": ["SAIL"],
-        "rows": rows,
+        "type": "coal_receipt_stock",
+        "title": f"Receipt, Consumption and Stocks of Coking Coal at Plants during {_month_label(report_month)}",
+        "receipt_rows": receipt_rows,
+        "consumption_rows": consumption_rows,
+        "stock_cols": stock_cols,
     }
+
+
+_MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _month_label(report_month: str) -> str:
+    y, m = report_month.split("-")
+    return f"{_MON_ABBR[int(m)]}'{y[-2:]}"

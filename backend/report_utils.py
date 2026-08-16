@@ -50,14 +50,15 @@ def get_dept_badge(page_num) -> Optional[Dict[str, Any]]:
         # Techno-Economic Parameters) as the page it continues, opposite
         # side (29 is "right").
         return {"group": 7, "side": "left"}
-    if page_num in (35.5, 35.6):
-        # "Coking Coal Receipts & Stock" sentinels (COAL_RECEIPTS_PAGE_ID /
-        # COAL_RECEIPTS_PAGE_2_ID in main.py) - inserted right after page 35
-        # (Mill ISP, last of the Mill-Wise Techno-Economic Parameters group),
-        # same group (8) as the section they continue. 35 is "right" (odd),
-        # so 35.5 is "left" and 35.6 (right after 35.5) is "right", same
-        # alternating convention as 29/29.5.
-        return {"group": 8, "side": "left" if page_num == 35.5 else "right"}
+    if page_num in (35.4, 35.5, 35.6):
+        # EPI (EPI_PAGE_ID) then "Coking Coal Receipts & Stock" sentinels
+        # (COAL_RECEIPTS_PAGE_ID / COAL_RECEIPTS_PAGE_2_ID in main.py) -
+        # inserted right after page 35 (Mill ISP, last of the Mill-Wise
+        # Techno-Economic Parameters group), same group (8) as the section
+        # they continue. 35 is "right" (odd), so the three continue
+        # alternating: 35.4 left, 35.5 right, 35.6 left - same convention
+        # as 29/29.5.
+        return {"group": 8, "side": "left" if page_num in (35.4, 35.6) else "right"}
     if page_num == 3:
         return {"group": 1, "side": "left"}
     if not isinstance(page_num, int) or page_num < 3:
