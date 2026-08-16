@@ -178,18 +178,23 @@ def _sms_joined(plant, key, techno, dp):
 
 
 def _sinter_fe_val(plant, techno, dp):
-    """Sinter Fe: for plants in _SP_UNIT_MAP (RSP), slash-joins the reading
-    from each Sinter Plant unit (SP-1/SP-2/SP-3) — RSP's own tfe_in_sinter is
-    now extracted there (see rsp_technopara_sections.py). Other plants fall
-    back to the older single BF-sourced ("bf" unit) figure, unchanged."""
+    """Sinter Fe: for plants in _SP_UNIT_MAP (RSP), averages the reading
+    across each Sinter Plant unit (SP-1/SP-2/SP-3) — RSP's own tfe_in_sinter
+    is now extracted there (see rsp_technopara_sections.py) — into a single
+    figure, matching every other plant's single-number display (used to be
+    slash-joined as 3 separate readings, per direct instruction changed to
+    a plain average; same averaging page_bf_large_annexure.py's Sinter Fe
+    row already does for RSP). Other plants fall back to the older single
+    BF-sourced ("bf" unit) figure, unchanged."""
     units = _SP_UNIT_MAP.get(plant)
     if not units:
         return _bf_val(plant, "tfe_in_sinter", techno, dp)
-    vals = []
-    for u in units:
-        v = techno.get((plant, u), {}).get("tfe_in_sinter")
-        vals.append(f"{_round(v, dp):.{dp}f}" if v is not None else "—")
-    return "/".join(vals) if vals else None
+    vals = [
+        v for u in units
+        for v in [techno.get((plant, u), {}).get("tfe_in_sinter")]
+        if v is not None
+    ]
+    return _round(sum(vals) / len(vals), dp) if vals else None
 
 
 def _days_in_month(month_str):
