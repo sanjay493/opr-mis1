@@ -5,17 +5,16 @@
                     <tr>
                         <th rowspan="2">Parameters</th>
                         <th rowspan="2">Plant</th>
-                        <th rowspan="2">Actual</th>
-                        <th rowspan="2">Actual</th>
-                        <th rowspan="2">Target</th>
-                        <th colspan="{{ page.month_labels|length + 3 }}">Actual</th>
+                        <th colspan="2">Actual</th>
+                        <th rowspan="2">{{ page.target_label }}</th>
+                        <th colspan="{{ page.month_labels|length }}">Actual</th>
+                        <th rowspan="2">{{ page.cply_label }}<br/>Actual</th>
+                        <th colspan="2">Actual</th>
                     </tr>
                     <tr>
                         <th>{{ page.fy2_label }}</th>
                         <th>{{ page.fy1_label }}</th>
-                        <th>{{ page.target_label }}</th>
                         {% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}
-                        <th>{{ page.cply_label }}</th>
                         <th>{{ page.cum_label }}</th>
                         <th>{{ page.cum_cply_label }}</th>
                     </tr>

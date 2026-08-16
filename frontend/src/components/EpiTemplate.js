@@ -31,17 +31,16 @@ export default function EpiTemplate({ data }) {
           <tr>
             <th style={thStyle} rowSpan={2}>Parameters</th>
             <th style={thStyle} rowSpan={2}>Plant</th>
-            <th style={thStyle} rowSpan={2}>Actual</th>
-            <th style={thStyle} rowSpan={2}>Actual</th>
-            <th style={thStyle} rowSpan={2}>Target</th>
-            <th style={thStyle} colSpan={month_labels.length + 3}>Actual</th>
+            <th style={thStyle} colSpan={2}>Actual</th>
+            <th style={thStyle} rowSpan={2}>{target_label}</th>
+            <th style={thStyle} colSpan={month_labels.length}>Actual</th>
+            <th style={thStyle} rowSpan={2}>{cply_label}<br />Actual</th>
+            <th style={thStyle} colSpan={2}>Actual</th>
           </tr>
           <tr>
             <th style={thStyle}>{fy2_label}</th>
             <th style={thStyle}>{fy1_label}</th>
-            <th style={thStyle}>{target_label}</th>
             {month_labels.map((m, i) => <th key={i} style={thStyle}>{m}</th>)}
-            <th style={thStyle}>{cply_label}</th>
             <th style={thStyle}>{cum_label}</th>
             <th style={thStyle}>{cum_cply_label}</th>
           </tr>
