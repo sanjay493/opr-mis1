@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from jinja2 import Environment, FileSystemLoader
 from models import PDFRequest
-from report_utils import get_dept_badge
+from report_utils import dept_badge_group
 
 _TMPL_DIR = os.path.join(os.path.dirname(__file__), 'page_templates')
 _jinja_env = Environment(loader=FileSystemLoader(_TMPL_DIR), autoescape=False)
@@ -238,7 +238,9 @@ def _apply_dept_badges(main_bytes: bytes, dept_badges: dict, browser, font_famil
     entirely.
 
     dept_badges: {report_page_number: {"group": int, "side": "left"|"right"}}
-    (see report_utils.get_dept_badge). Physical page positions are found via
+    (see report_utils.assign_dept_badges — the "side" value here is never
+    actually read; every page's side is recomputed below from its own true
+    physical position instead). Physical page positions are found via
     the invisible @@PGSTART_N@@ markers main.html/trend_section.html emit at
     the start of every page, rather than assumed 1:1 with dept_badges' keys —
     the trend pages (7-12) can expand into a different number of physical
@@ -669,12 +671,19 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
                         all_items.append(tp)
                     last_pg = tp.get("page", last_pg)
                     i += 1
+                # Only "group" is ever read back out of this — see
+                # _apply_dept_badges below, which recomputes "side" itself
+                # from each physical PDF page's own position (this merged
+                # block can expand into more physical pages than the
+                # logical page count here, so any "side" computed at this
+                # point couldn't stay correct across all of them anyway).
+                _badge_group = dept_badge_group(first_pg)
                 pages_to_render.append({
                     "type": "trend_section",
                     "page": first_pg,
                     "items": all_items,
                     "page_range": f"{first_pg}-{last_pg}",
-                    "dept_badge": get_dept_badge(first_pg),
+                    "dept_badge": {"group": _badge_group} if _badge_group is not None else None,
                 })
             else:
                 pages_to_render.append(p)

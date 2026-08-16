@@ -21,52 +21,108 @@ _DEPT_BADGE_GROUPS = [
 ]
 
 
-def get_dept_badge(page_num) -> Optional[Dict[str, Any]]:
-    """Corner-badge group + side for a page, or None for pages 1-2 (cover/
-    index are front matter — no header/footer/badge, matching the existing
-    convention) and any page number outside the known ranges.
+# Sentinel/non-range page ids -> corner-badge group (a pure function of the
+# page's own id, same as _DEPT_BADGE_GROUPS above, just for pages outside
+# every plain int range). Each rides along with the real section it's
+# physically inserted next to:
+#   2.5, 3, 3.5, 3.6 — "MIS at a Glance" / "SAIL Performance Summary" /
+#     "Key Parameters" / "Large BFs" all sit in the front-of-report summary
+#     cluster before real page 4, group 1 (same as _DEPT_BADGE_GROUPS'
+#     (3, 6, 1)) — not yet a section of its own.
+#   1024 — the Special Steel trend/performance-analysis page, inserted
+#     right after page 24, same group (5) it had while still numbered 24.
+#   29.5 — "Iron Making (contd.)", right after page 29, same group (7) as
+#     Techno-Economic Parameters.
+#   35.4, 35.5, 35.6 — EPI then "Coking Coal Receipts & Stock", right after
+#     page 35, same group (8) as Mill-Wise Techno-Economic Parameters.
+# 3.1 ("Key Highlights & Variances") would join the 2.5/3/3.5/3.6 group too
+# if it's ever wired back into the report — see KEY_HIGHLIGHTS_PAGE_ID in
+# main.py (currently built, not inserted).
+_DEPT_BADGE_EXPLICIT_GROUP = {
+    2.5: 1, 3: 1, 3.5: 1, 3.6: 1,
+    1024: 5,
+    29.5: 7,
+    35.4: 8, 35.5: 8, 35.6: 8,
+}
 
-    Side follows book-binding convention: recto (right-hand when bound) vs
-    verso (left-hand), alternating every page starting with the first page
-    after the Index — not from a plain odd/even split of the raw page
-    number, since the "MIS at a Glance" (2.5) and "Key Parameters" (3.5)
-    sentinel pages sit between the Index and the old page 3 without
-    renumbering it, which shifts page 3's position in the printed sequence
-    from 1st to 2nd (odd -> even) even though its own id is still odd.
-    Every page from 4 onward keeps the same position it always had (the two
-    sentinels together add exactly the two slots page 3 lost), so only
-    page 3 itself needs a hardcoded override below.
-    """
-    if page_num in (2.5, 3.5):
-        # Same color as the "SAIL Performance Summary" group (1) they sit
-        # right alongside - front-of-report summary content, not (yet) a
-        # section of its own. 2.5 is the first page after the Index (right);
-        # 3.5 falls right after (former-1st, now 2nd) page 3, so it's back
-        # to right too (3 took the left slot instead).
-        return {"group": 1, "side": "right"}
-    if page_num == 29.5:
-        # "Iron Making (contd.)" sentinel (IRON_MAKING_PAGE_2_ID in main.py)
-        # - sits right after page 29 in the printed sequence, same group (7,
-        # Techno-Economic Parameters) as the page it continues, opposite
-        # side (29 is "right").
-        return {"group": 7, "side": "left"}
-    if page_num in (35.4, 35.5, 35.6):
-        # EPI (EPI_PAGE_ID) then "Coking Coal Receipts & Stock" sentinels
-        # (COAL_RECEIPTS_PAGE_ID / COAL_RECEIPTS_PAGE_2_ID in main.py) -
-        # inserted right after page 35 (Mill ISP, last of the Mill-Wise
-        # Techno-Economic Parameters group), same group (8) as the section
-        # they continue. 35 is "right" (odd), so the three continue
-        # alternating: 35.4 left, 35.5 right, 35.6 left - same convention
-        # as 29/29.5.
-        return {"group": 8, "side": "left" if page_num in (35.4, 35.6) else "right"}
-    if page_num == 3:
-        return {"group": 1, "side": "left"}
+
+def dept_badge_group(page_num) -> Optional[int]:
+    """Which corner-badge color group a page belongs to, or None for pages
+    1-2 (cover/index are front matter — no header/footer/badge) and any
+    page id outside every known range/sentinel. Pure function of the
+    page's own id — see assign_dept_badges() for the (position-dependent)
+    left/right side."""
+    if page_num in _DEPT_BADGE_EXPLICIT_GROUP:
+        return _DEPT_BADGE_EXPLICIT_GROUP[page_num]
     if not isinstance(page_num, int) or page_num < 3:
         return None
     for lo, hi, group in _DEPT_BADGE_GROUPS:
         if lo <= page_num <= hi:
-            return {"group": group, "side": "right" if page_num % 2 == 1 else "left"}
+            return group
     return None
+
+
+# Canonical physical print order of every page id the report can contain,
+# cover (1) and index (2) excluded — those are front matter with no
+# header/footer/badge, so alternation starts at the first entry here. This
+# list is STATIC: unlike pages_config/_pages_list (which vary per request —
+# a single-page fetch's list literally contains just that one page), every
+# sentinel here is unconditionally inserted at the same fixed spot on every
+# render regardless of report month or data, so the position -> side
+# mapping below can be (and must be, see next paragraph) precomputed once
+# rather than re-derived from whatever page list happens to be at hand.
+#
+# An earlier version instead alternated over whatever list it was called
+# with, correct for the full-report fetch but silently wrong for a
+# single-page fetch (used by the web preview's page-selector navigation,
+# see useReportPage in the frontend) — a list of just one page always
+# "alternates" starting at "right", regardless of that page's true
+# position in the full report. Before that, an even earlier version
+# derived side from the page's own number's parity: correct only by
+# coincidence, as long as exactly an EVEN count of sentinel pages sat
+# before it — and flipped every page from wherever that count went odd
+# onward, which is exactly what happened when BF_LARGE_ANNEXURE_PAGE_ID
+# (3.6) shipped as a 3rd front-cluster sentinel without a matching fix (it
+# also fell outside every range entirely — no badge at all, missing from
+# the exported PDF too, since pdf.py only stamps where dept_badges has a
+# truthy entry). A precomputed lookup keyed by page id sidesteps every
+# variant of this bug at once: it doesn't matter what list, if any, this
+# page happens to be fetched alongside.
+_CANONICAL_PAGE_ORDER = [
+    2.5, 3, 3.5, 3.6,
+    *range(4, 25), 1024,
+    25, 26,
+    27, 28, 29, 29.5, 30,
+    31, 32, 33, 34, 35, 35.4, 35.5, 35.6,
+    *range(36, 41),
+]
+
+_DEPT_BADGE_SIDE = {}
+_side = "right"
+for _pg in _CANONICAL_PAGE_ORDER:
+    _DEPT_BADGE_SIDE[_pg] = _side
+    _side = "left" if _side == "right" else "right"
+del _pg, _side
+
+
+def assign_dept_badges(pages: list) -> None:
+    """Sets page["dept_badge"] = {"group", "side"} (or None) on every entry
+    of `pages`, IN PLACE — safe to call with the full report's page list,
+    a single-page list, or anything in between/out of order, since group
+    and side are both looked up purely from each page's own id (see
+    _DEPT_BADGE_SIDE above), never from position within `pages` itself.
+
+    Side follows book-binding convention (recto/verso). This mirrors
+    pdf.py's _apply_dept_badges, which independently recomputes each
+    PHYSICAL PDF page's side the same way (right if (k+1) is odd) from the
+    rendered page's own true position — this function exists so the live
+    web preview (which has no equivalent post-render pass) shows the same
+    alternation the exported PDF does.
+    """
+    for p in pages:
+        pg = p.get("page")
+        group = dept_badge_group(pg)
+        p["dept_badge"] = {"group": group, "side": _DEPT_BADGE_SIDE.get(pg, "right")} if group is not None else None
 
 
 def compute_item_row(month: str, item_name: str) -> list:

@@ -17,7 +17,7 @@ import db
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest
-from report_utils import compute_item_row, build_production_narrative, get_dept_badge, blank_out_page_data
+from report_utils import compute_item_row, build_production_narrative, assign_dept_badges, blank_out_page_data
 from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
 from page5_6 import generate_page5_rows, generate_page6_rows
@@ -29,6 +29,7 @@ from page_segment_wise import generate_segment_wise
 from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, _ssps_special_steel
 from page_special_steel_trend import generate_special_steel_trend
 from page_at_a_glance import generate_at_a_glance
+from page_key_highlights import generate_key_highlights
 from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
 from page_cover import generate_cover
@@ -184,6 +185,7 @@ from api_admin_backup import router as admin_backup_router
 from api_bf_benchmark import router as bf_benchmark_router
 from api_breakdown import router as breakdown_router
 from api_production_loss import router as production_loss_router
+from api_key_highlights import router as key_highlights_router
 
 db.init_db()
 
@@ -205,36 +207,55 @@ TREND_PAGE_ID = 1024
 # it's the first NUMBERED page, "Page 1"), so unlike its original position
 # (between Cover and Index) it now DOES get pdf.py's normal header/footer
 # and Chromium page-numbering: pdf.py's front/main page split is `page <=
-# 2`, and 2.5 > 2 puts it in the numbered main flow. It still gets no
-# corner dept-badge, for free — report_utils.get_dept_badge() only badges
-# *int* page numbers >= 3, and a float always fails that isinstance check
-# regardless of its value. Sentinel id kept as a float (not a big int like
-# TREND_PAGE_ID) specifically so it keeps sorting between real pages 2 and 3
-# in PAGE_LABELS/the on-screen navigator. get_data()'s page_number query
-# param is typed float (not int) specifically so this can be requested;
-# every comparison against it is a plain numeric one, so real int page
+# 2`, and 2.5 > 2 puts it in the numbered main flow. It also gets a corner
+# dept-badge (group 1, same as "SAIL Performance Summary" — see
+# report_utils.py's _DEPT_BADGE_EXPLICIT_GROUP), since it's the first
+# badge-eligible page after the Index. Sentinel id kept as a float (not a
+# big int like TREND_PAGE_ID) specifically so it keeps sorting between
+# real pages 2 and 3 in PAGE_LABELS/the on-screen navigator. get_data()'s
+# page_number query param is typed float (not int) specifically so this
+# can be requested; every comparison against it is a plain numeric one, so
+# real int page
 # numbers 1-40 are unaffected.
 AT_A_GLANCE_PAGE_ID = 2.5
+
+# "Key Highlights & Variances" — narrative + snapshot summary page
+# (Report_format/Key highlights and variance.png), sits right after "SAIL
+# Performance Summary" (page 3). NOT currently wired into any page list
+# below (no membership tuple, no insertion block, no dispatch case) — the
+# page/generator/editor/API/DB table all still exist (page_key_highlights.py,
+# api_key_highlights.py, key_highlights.html, KeyHighlightsTemplate.js,
+# /data-entry/key-highlights) and work standalone (e.g. GET /api/data?
+# page_number=3.1), pending a design rework before it's reinserted into the
+# report. To re-enable: add KEY_HIGHLIGHTS_PAGE_ID back into the membership
+# tuples / insertion blocks / dispatch cases that KEY_PARAMS_PAGE_ID appears
+# in below (both get_data and generate_pdf), restore its row in
+# _index_rows(), and add it back to report_utils.py's
+# _DEPT_BADGE_EXPLICIT_GROUP and frontend PAGE_LABELS — see git history for
+# the exact diff.
+KEY_HIGHLIGHTS_PAGE_ID = 3.1
 
 # "Key Parameters" quarterly summary table (Report_format/key_parameters.jpeg)
 # — sits right after "SAIL Performance Summary" (page 3 internally, "Page 2"
 # displayed), becoming "Page 3". Same sentinel-float treatment as
-# AT_A_GLANCE_PAGE_ID above (numbered main flow, no dept-badge, browsable
-# on-screen via PAGE_LABELS).
+# AT_A_GLANCE_PAGE_ID above (numbered main flow, DOES get a dept-badge —
+# group 1, same as page 3 — see report_utils.py's
+# _DEPT_BADGE_EXPLICIT_GROUP; browsable on-screen via PAGE_LABELS).
 KEY_PARAMS_PAGE_ID = 3.5
 
 # "Large BFs" — SAIL's largest BFs benchmark annexure (Report_format/Large
 # BFs for OMI.xlsx), sits right after Key Parameters. Same sentinel-float
-# treatment as KEY_PARAMS_PAGE_ID above (numbered main flow, no dept-badge).
+# treatment as KEY_PARAMS_PAGE_ID above (numbered main flow, group-1
+# dept-badge).
 BF_LARGE_ANNEXURE_PAGE_ID = 3.6
 
 # "Iron Making (contd.)" — page 29's furnace-wise Slag Rate/Fuel Rate/BF
 # Productivity/Pellet in Burden sections spill onto this second physical
 # page, inserted right after page 29 (see _TECHNO_DB_SCHEMA[29.5] /
-# TECHNO_PAGES[29.5] in page_techno.py). Unlike AT_A_GLANCE_PAGE_ID/
-# KEY_PARAMS_PAGE_ID, this one DOES get a dept-badge (same "Techno-Economic
-# Parameters" group 7 as page 29) — report_utils.get_dept_badge() special-
-# cases 29.5 directly since it fails the plain isinstance(int) branch every
+# TECHNO_PAGES[29.5] in page_techno.py). Same "Techno-Economic Parameters"
+# dept-badge group (7) as page 29 — report_utils.py's
+# _DEPT_BADGE_EXPLICIT_GROUP maps 29.5 there directly, since it (like every
+# sentinel float id) fails the plain isinstance(int) range check every
 # other real page uses. It's picked up automatically by the generic
 # `if pg in TECHNO_PAGES` / `elif 28 <= pg <= 35` dispatch in _safe_techno()
 # and generate_techno_from_db() - no dedicated generator needed.
@@ -412,6 +433,7 @@ app.include_router(admin_backup_router)
 app.include_router(bf_benchmark_router)
 app.include_router(breakdown_router)
 app.include_router(production_loss_router)
+app.include_router(key_highlights_router)
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(_STATIC_DIR, "profile_pics"), exist_ok=True)
@@ -474,7 +496,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config = blank_out_page_data(pages_config)
 
         if page_number is not None:
-            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
+            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID):
                 # Page 24 (SAIL), the trend sentinel page, the "at a
@@ -603,14 +625,14 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             # parameters, "Page 3"), right after page 29 (Iron Making
             # contd.), and right after page 35 (Coking Coal Receipts &
             # Stock). (In single-page mode, page_number in (24,
-            # TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
-            # IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID,
+            # TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
+            # KEY_PARAMS_PAGE_ID, IRON_MAKING_PAGE_2_ID, COAL_RECEIPTS_PAGE_ID,
             # COAL_RECEIPTS_PAGE_2_ID) already synthesized its own shell
             # above — skipped here since pages 2/3/23/29/35 aren't in the
             # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
-                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_PARAMS_PAGE_ID,
-                                                      BF_LARGE_ANNEXURE_PAGE_ID,
+                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
+                                                      KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID)]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
@@ -621,6 +643,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 pages_config.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
             _idx3 = next((i for i, p in enumerate(pages_config) if p.get("page") == 3), None)
             if _idx3 is not None:
+                # KEY_HIGHLIGHTS_PAGE_ID intentionally NOT inserted here — see
+                # its comment above main.py's constant definition (built, not
+                # currently wired into the report pending a design rework).
+                # Still listed in the strip-tuple just above so any stale
+                # cached page:3.1 entry from while this WAS wired in gets
+                # cleaned out rather than lingering.
                 pages_config.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
                 pages_config.insert(_idx3 + 2, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
             _idx29 = next((i for i, p in enumerate(pages_config) if p.get("page") == 29), None)
@@ -646,13 +674,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page["type"] = "special_steel"
             if pg == TREND_PAGE_ID:
                 page.update(generate_special_steel_trend(month))
-                # Outside all _DEPT_BADGE_GROUPS ranges (sentinel id), so it
-                # gets no badge from get_dept_badge() below — assign the same
-                # Special Steel group (5) it had while still numbered 24.
-                page["dept_badge"] = {"group": 5}
             if pg == AT_A_GLANCE_PAGE_ID:
                 page.update(generate_at_a_glance(month))
                 page["type"] = "at_a_glance"
+            if pg == KEY_HIGHLIGHTS_PAGE_ID:
+                page.update(generate_key_highlights(month))
+                page["orientation"] = "landscape"
             if pg == KEY_PARAMS_PAGE_ID:
                 page.update(generate_key_parameters(month))
                 page["type"] = "key_parameters"
@@ -687,14 +714,11 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page["type"] = "capital_repair"
                 page["orientation"] = "portrait"
 
-        # Corner badge (group + side) is a pure function of the page number —
-        # no DB dependency — so it's set unconditionally for every page,
-        # independent of the has_actuals/has_plans branch above. The trend
-        # sentinel page already got its badge assigned explicitly above
-        # (its id is intentionally outside every _DEPT_BADGE_GROUPS range,
-        # so get_dept_badge() would otherwise wipe it back to None here).
-        for page in pages_config:
-            page["dept_badge"] = page.get("dept_badge") or get_dept_badge(page.get("page"))
+        # Corner badge (group + side) is a pure function of pages_config's
+        # own (already-final) physical order — no DB dependency — so it's
+        # assigned unconditionally for every page, independent of the
+        # has_actuals/has_plans branch above.
+        assign_dept_badges(pages_config)
 
         return pages_config
     except Exception as e:
@@ -811,12 +835,13 @@ async def generate_pdf(request: PDFRequest):
         if _idxepi is not None:
             _pages_list.insert(_idxepi + 1, {"page": COAL_RECEIPTS_PAGE_ID})
             _pages_list.insert(_idxepi + 2, {"page": COAL_RECEIPTS_PAGE_2_ID})
+    # Corner badge (group + side) is a pure function of _pages_list's own
+    # (already-final) physical order — recomputed fresh rather than trusted
+    # from the submitted payload, since PageData doesn't declare this field
+    # and Pydantic would silently drop it on the way in.
+    assign_dept_badges(_pages_list)
     for p in _pages_list:
         pg = p.get("page", 0)
-        # Pure function of page number — recomputed fresh rather than trusted
-        # from the submitted payload, since PageData doesn't declare this
-        # field and Pydantic would silently drop it on the way in.
-        p["dept_badge"] = get_dept_badge(pg)
         if pg == 3 or p.get("type") == "summary":
             p["te_table"] = _safe_te_table(request.month)
         if pg == 1:
@@ -863,12 +888,12 @@ async def generate_pdf(request: PDFRequest):
         if pg == TREND_PAGE_ID:
             p.update(generate_special_steel_trend(request.month))
             p["type"] = "special_steel_trend"
-            # Outside all _DEPT_BADGE_GROUPS ranges (sentinel id) — assign
-            # the same Special Steel corner-badge group it had at page 24.
-            p["dept_badge"] = {"group": 5}
         if pg == AT_A_GLANCE_PAGE_ID:
             p.update(generate_at_a_glance(request.month))
             p["type"] = "at_a_glance"
+        if pg == KEY_HIGHLIGHTS_PAGE_ID:
+            p.update(generate_key_highlights(request.month))
+            p["orientation"] = "landscape"
         if pg == KEY_PARAMS_PAGE_ID:
             p.update(generate_key_parameters(request.month))
             p["type"] = "key_parameters"
