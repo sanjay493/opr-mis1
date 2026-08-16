@@ -6,37 +6,58 @@ from techno_data (plant="SAIL", unit="Coal_Receipt_Stock"), populated by
 api_coal_omi_techno.py — see techno_project/coal_omi_extractor.py's
 extract_ois2 for the source workbook layout. Pure lookup/display: (A)/(B)
 read the report month's own stored row verbatim; (C)'s month-wise stock
-history is assembled by reading every one of the report month's FY's 13
-month-start snapshots' OWN stored data (each month's Excel upload captures
-that month's stock as of the column the extractor matched — see
-extract_ois2's docstring on why the workbook's own multi-column stock
-history is NOT trustworthy enough to read directly: stale/mismatched-year
-leftover columns are common) rather than trusting the current file's own
-(often incomplete or stale) historical columns — a month with no stored
-snapshot yet (including any not-yet-reached this FY) is OMITTED from table
-(C) entirely rather than shown as a blank column, so the table only ever
-grows out to whatever's actually been reported.
+history is assembled from EVERY SAIL Coal_Receipt_Stock upload on record,
+not just the target month's own — each upload's OIS-2 sheet is a rolling
+multi-month view (extract_ois2's own "stock_history", covering several
+months, not just the one matching that upload's report_month), so one
+upload can backfill several FY months' stock at once (see
+_all_stock_snapshots). A month with no data anywhere on record (including
+any not-yet-reached this FY) is OMITTED from table (C) entirely rather
+than shown as a blank column, so the table only ever grows out to
+whatever's actually been reported.
 """
+import json as _json
+
 import db
 
 _UNIT = "Coal_Receipt_Stock"
 
 
-def _stock_col(month: str) -> dict:
-    ym = db.get_techno_data("SAIL", month, unit=_UNIT).get(_UNIT, {}).get("month") or {}
-    as_of = ym.get("stock_as_of_month")
-    date_label = None
-    if as_of:
-        y, mo, *_ = as_of.split("-")
-        date_label = f"01-{mo}-{y[-2:]}"
-    else:
-        # Nothing stored for this month yet — still needed as a fallback
-        # label for the has_data check below to key off of, even though a
-        # column with no data at all never actually renders (see
-        # generate_coal_receipts_sail's filtering).
-        y, mo = month.split("-")
-        date_label = f"01-{mo}-{y[-2:]}"
-    indigenous, imported, total = ym.get("stock_indigenous"), ym.get("stock_imported"), ym.get("stock_total")
+def _all_stock_snapshots() -> dict:
+    """{"YYYY-MM": {"indigenous","imported","total"}, ...} merged from
+    every SAIL Coal_Receipt_Stock upload on record — each upload's own
+    report_month point plus whatever else its stock_history also covers.
+    Rows are read oldest-report_month-first and later entries simply
+    overwrite earlier ones for the same target month, so a more recent
+    upload's figure for a given month always wins over an older one's."""
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT report_month, techno_json FROM techno_data "
+            "WHERE plant='SAIL' AND unit=? ORDER BY report_month ASC",
+            [_UNIT],
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    merged = {}
+    for rm, tj in rows:
+        m = _json.loads(tj).get("month", {})
+        indigenous, imported, total = m.get("stock_indigenous"), m.get("stock_imported"), m.get("stock_total")
+        if indigenous is not None or imported is not None or total is not None:
+            merged[rm] = {"indigenous": indigenous, "imported": imported, "total": total}
+        for hist_month, vals in (m.get("stock_history") or {}).items():
+            merged[hist_month] = vals
+    return merged
+
+
+def _stock_col(month: str, snapshots: dict) -> dict:
+    y, mo = month.split("-")
+    date_label = f"01-{mo}-{y[-2:]}"
+    vals = snapshots.get(month) or {}
+    indigenous, imported, total = vals.get("indigenous"), vals.get("imported"), vals.get("total")
     return {
         "date_label": date_label,
         "indigenous": indigenous,
@@ -82,14 +103,13 @@ def generate_coal_receipts_sail(report_month: str) -> dict:
     # separate stacked mini-tables — first 6 FY months (Apr-Sep), then the
     # remaining 7 (Oct through next FY's Apr) — per direct instruction,
     # matching the reference's layout. Within each block, a column only
-    # renders if that month actually has stock data — no more padding out
-    # to a fixed 13-column calendar grid with blank placeholders for
-    # months nobody's reported yet: an April report_month, whose own file
-    # is the only one on record, shows only the 1-2 columns that are
-    # actually populated (see _stock_col's has_data), not all 6.
+    # renders if that month actually has stock data anywhere on record —
+    # no more padding out to a fixed 13-column calendar grid with blank
+    # placeholders for months nobody's reported yet.
+    snapshots = _all_stock_snapshots()
     fy_stock_months = _fy_stock_months(report_month)
-    row1_raw = [_stock_col(mo) for mo in fy_stock_months[:6]]
-    row2_raw = [_stock_col(mo) for mo in fy_stock_months[6:]]
+    row1_raw = [_stock_col(mo, snapshots) for mo in fy_stock_months[:6]]
+    row2_raw = [_stock_col(mo, snapshots) for mo in fy_stock_months[6:]]
 
     stock_cols_1 = [c for c in row1_raw if c["has_data"]]
     stock_cols_2 = [c for c in row2_raw if c["has_data"]]

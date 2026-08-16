@@ -43,17 +43,22 @@ OIS-2 ("Receipt, Consumption and Stocks of Coking Coal at Plants during
     Row 10 = a rolling series of month-end date cells starting at column D,
       with a blank gap column roughly every 3rd column (an artifact of how
       the sheet is copy-pasted forward each month) — NOT a fixed set of
-      columns, and not reliably extended by exactly one new trailing column
-      each month (confirmed: one sample file's trailing column was already
-      the FOLLOWING month's figure, another's still matched the report
-      month). This extractor scans every populated date cell in the row and
-      picks whichever one's MONTH NUMBER matches the report month's own
-      month number — the YEAR on these cells is unreliable (confirmed off
-      by one in the sample data) and is never trusted for matching, only
-      the month number. Rows 11/12/13 = Indigenous/Imported/Total stock
-      ('000 T) under whichever column matched. If no column matches, the
-      three stock values are None rather than guessed from the nearest
-      column.
+      columns, and growing by roughly one new trailing column each month
+      (confirmed across Apr-Jul'26: Apr's file has 3 populated columns
+      ending at itself, May's has 4 ending at itself, ... — sometimes the
+      trailing column is already the FOLLOWING month's figure). This
+      extractor (_extract_stock_history) reads EVERY populated column, not
+      just report_month's own — the YEAR on these cells is unreliable
+      (confirmed off by one in the sample data) and is never trusted, only
+      the MONTH NUMBER, matched by walking outward from the one column
+      report_month's own month number reliably identifies. Rows 11/12/13 =
+      Indigenous/Imported/Total stock ('000 T) under whichever column.
+    Rows 15-18 (present in some files, e.g. Jul'26 — absent in Apr/May/
+      Jun'26): an optional second, single-column mini-table in the exact
+      same Category/Indigenous/Imported/Total shape as row 10-13's, holding
+      a preview of the FOLLOWING month's opening stock — read only when
+      row 15's own label confirms it's there and its month number is
+      exactly report_month + 1.
     Rows 37+ (seen in some files: stale leftover data from an unrelated
     template, old dates, a completely different per-coal-type receipt
     breakdown) are never read.
@@ -113,6 +118,18 @@ _OIS2_CONSUMPTION_AVG_COL = 10  # J
 _OIS2_STOCK_HEADER_ROW = 10
 _OIS2_STOCK_ROWS = {"indigenous": 11, "imported": 12, "total": 13}
 _OIS2_STOCK_SCAN_COLS = range(4, 15)  # D..N — generous, blank cells skipped
+
+# A second, separate mini-table some (not all — confirmed absent in
+# Apr/May/Jun'26, present in Jul'26) files carry directly below the main
+# one: same Category/Indigenous/Imported/Total shape, one single column
+# (D only), holding a preview of the FOLLOWING month's opening stock (seen
+# in Jul'26's file labeled with the same kind of unreliable year as the
+# main block, but a real month number one past report_month). Optional —
+# only read when row 15's own label confirms it's actually there.
+_OIS2_STOCK2_HEADER_ROW = 15
+_OIS2_STOCK2_LABEL_COL = 3  # C — "Category", same as the main block's C10
+_OIS2_STOCK2_COL = 4        # D
+_OIS2_STOCK2_ROWS = {"indigenous": 16, "imported": 17, "total": 18}
 
 _MONTH_ABBR = {1: "jan", 2: "feb", 3: "mar", 4: "apr", 5: "may", 6: "jun",
                7: "jul", 8: "aug", 9: "sep", 10: "oct", 11: "nov", 12: "dec"}
@@ -282,11 +299,97 @@ def _find_stock_column(ws, report_month: str):
     return matches[-1]
 
 
+def _stock_at_col(ws, col, rows=_OIS2_STOCK_ROWS) -> dict:
+    return {
+        "indigenous": _num(ws.cell(rows["indigenous"], col).value),
+        "imported": _num(ws.cell(rows["imported"], col).value),
+        "total": _num(ws.cell(rows["total"], col).value),
+    }
+
+
+def _extract_stock_history(ws, report_month: str) -> dict:
+    """-> {"YYYY-MM": {"indigenous","imported","total"}, ...} for EVERY
+    populated stock column in row 10, not just the one matching
+    report_month — a single upload's sheet is a rolling multi-month view
+    (confirmed: trailing several months, sometimes with one column already
+    the FOLLOWING month), so extracting all of them lets one upload
+    backfill several FY months at once instead of only report_month's own
+    point.
+
+    The YEAR on each date cell is unreliable (confirmed off-by-one in real
+    files) - only the MONTH NUMBER is trusted (see _find_stock_column).
+    Absolute calendar months are derived by walking outward from the
+    report_month-matching column (found via that same reliable rule),
+    decrementing/incrementing one real month per populated column as it
+    steps left/right, stopping at the first populated column whose own
+    month number doesn't match the expected next step (a real gap/
+    anomaly, not blindly extrapolated past — same "stay silent rather
+    than guess" rule the rest of this module follows)."""
+    anchor_col = _find_stock_column(ws, report_month)
+    if anchor_col is None:
+        return {}
+
+    populated = []
+    for col in _OIS2_STOCK_SCAN_COLS:
+        v = ws.cell(_OIS2_STOCK_HEADER_ROW, col).value
+        if isinstance(v, datetime):
+            populated.append((col, v.month))
+    anchor_idx = next(i for i, (c, _) in enumerate(populated) if c == anchor_col)
+
+    anchor_y, anchor_m = int(report_month[:4]), int(report_month[5:7])
+    result = {report_month: _stock_at_col(ws, anchor_col)}
+
+    y, m, idx = anchor_y, anchor_m, anchor_idx
+    while idx > 0:
+        prev_col, prev_month_num = populated[idx - 1]
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+        if prev_month_num != m:
+            break
+        result[f"{y}-{m:02d}"] = _stock_at_col(ws, prev_col)
+        idx -= 1
+
+    y, m, idx = anchor_y, anchor_m, anchor_idx
+    while idx < len(populated) - 1:
+        next_col, next_month_num = populated[idx + 1]
+        m += 1
+        if m == 13:
+            m, y = 1, y + 1
+        if next_month_num != m:
+            break
+        result[f"{y}-{m:02d}"] = _stock_at_col(ws, next_col)
+        idx += 1
+
+    # Optional second block (see _OIS2_STOCK2_* above) — the following
+    # month's opening stock, when this file happens to carry one. Only
+    # trusted if it isn't already covered by the main walk above (that
+    # walk's own month-number check is the stronger signal when both
+    # exist) and its own month number is exactly report_month + 1 - not
+    # blindly trusted just because a date-shaped cell sits there.
+    label = ws.cell(_OIS2_STOCK2_HEADER_ROW, _OIS2_STOCK2_LABEL_COL).value
+    if label and str(label).strip().lower() == "category":
+        v = ws.cell(_OIS2_STOCK2_HEADER_ROW, _OIS2_STOCK2_COL).value
+        if isinstance(v, datetime):
+            next_y, next_m = anchor_y, anchor_m + 1
+            if next_m == 13:
+                next_y, next_m = next_y + 1, 1
+            next_key = f"{next_y}-{next_m:02d}"
+            if v.month == next_m and next_key not in result:
+                result[next_key] = _stock_at_col(ws, _OIS2_STOCK2_COL, _OIS2_STOCK2_ROWS)
+
+    return result
+
+
 def extract_ois2(path, report_month: str) -> dict:
     """-> {"receipt": {"indigenous"|"imported"|"total": {"plan","actual"}},
            "consumption": {..same 3 keys..: {"actual","avg"}},
-           "stock": {"indigenous","imported","total", "as_of_month"}}
-    All SAIL-level (no plant breakdown in this sheet)."""
+           "stock": {"indigenous","imported","total", "as_of_month"},
+           "stock_history": {"YYYY-MM": {"indigenous","imported","total"}, ...}}
+    All SAIL-level (no plant breakdown in this sheet). "stock" is
+    report_month's own single point (kept for the (A)/(B)/current-stock
+    displays); "stock_history" is every month this same upload's sheet
+    happens to also carry data for — see _extract_stock_history."""
     import openpyxl
     wb = openpyxl.load_workbook(path, data_only=True)
     if "OIS-2" not in wb.sheetnames:
@@ -324,7 +427,9 @@ def extract_ois2(path, report_month: str) -> dict:
             "as_of_month": f"{report_month}-01",
         }
 
-    return {"receipt": receipt, "consumption": consumption, "stock": stock}
+    stock_history = _extract_stock_history(ws, report_month)
+
+    return {"receipt": receipt, "consumption": consumption, "stock": stock, "stock_history": stock_history}
 
 
 def extract_coal_omi(path, report_month: str) -> dict:

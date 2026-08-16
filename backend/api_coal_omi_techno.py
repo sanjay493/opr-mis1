@@ -162,6 +162,18 @@ def _build_ois2_record(ois2: dict) -> dict:
         "stock_indigenous": s["indigenous"], "stock_imported": s["imported"], "stock_total": s["total"],
         "stock_as_of_month": s["as_of_month"],
     }
+    # Every month this same upload's OIS-2 sheet also carries stock data
+    # for (a rolling multi-month view, not just report_month's own
+    # column) — see extract_ois2/_extract_stock_history. Read by
+    # page_coal_receipts_stock.py across ALL uploaded months' own
+    # records, not just each FY month's own single-point one, so one
+    # upload can backfill several FY months' stock at once. Omitted
+    # entirely (rather than sent as {}) when extraction found nothing, so
+    # merge_upsert_techno_data's non-null-wins merge never wipes out a
+    # richer history a previous upload already stored here.
+    stock_history = ois2.get("stock_history")
+    if stock_history:
+        month_json["stock_history"] = stock_history
     return {"plant": "SAIL", "unit": "Coal_Receipt_Stock", "techno_json": {"month": month_json}}
 
 

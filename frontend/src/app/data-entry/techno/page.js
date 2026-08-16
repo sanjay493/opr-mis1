@@ -1296,6 +1296,17 @@ function CoalOmiExtractRow({ reportMonth, apiBase, onSuccess }) {
               </tbody>
             </table>
           </div>
+          {(() => {
+            const hist = preview.ois2?.techno_json?.month?.stock_history || {};
+            const months = Object.keys(hist).sort();
+            return months.length > 0 && (
+              <div style={{ fontSize: 11.5, color: '#5f6368', margin: '4px 0 10px' }}>
+                This file's OIS-2 sheet also carries stock for {months.length} month{months.length === 1 ? '' : 's'}
+                {' '}({months.join(', ')}) — all of them are saved, backfilling table (C) on the report page for
+                any of those months that don&apos;t already have a figure.
+              </div>
+            );
+          })()}
 
           <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', margin: '10px 0 4px' }}>
             Consumption of Coking Coal and CDI Coal (per plant — feeds the landscape report page)
