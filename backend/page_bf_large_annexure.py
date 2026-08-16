@@ -26,12 +26,13 @@ Data sources, per row:
     RSP BF-5, ISP BF-5) — same params page_techno.py's Iron Making page (29)
     already shows per furnace, so these are already populated by the normal
     monthly techno uploads, nothing new to enter.
-  - "Production" is summed from each month's "month" value rather than read
-    from "till_month" — confirmed live that unlike rate params (coke_rate,
-    cdi, etc., which DO get a proper cumulative written to till_month),
-    production's till_month is only ever populated for April (the trivial
-    case where month==till_month); every other month leaves it null, so a
-    real YTD figure has to be summed here instead of trusted from storage.
+  - "Production" is the one exception: it reads production_table (each SAIL
+    BF's own furnace-specific item — see _PRODUCTION_ITEM), not techno_data,
+    per direct instruction — techno_data's "production" key is sparse and
+    unreliable (manual-entry-only, entered late and inconsistently), while
+    production_table is this app's deep, reliably-populated production
+    history. Summed per period from each month's own figure rather than any
+    stored cumulative, same reasoning as every other additive row here.
   - "Coke Ash" and "Sinter Fe" reuse the same plant-level (not per-furnace)
     figures page_key_parameters.py's Key Parameters page already shows
     (Coke-Ovens shop's ash_in_coke, and tfe_in_sinter — RSP split across
@@ -81,7 +82,7 @@ _ROW_KEYS = [
     "working_volume_m3", "production", "_avg_daily_rate", "bf_productivity",
     "coke_rate", "nut_coke_rate", "cdi", "fuel_rate",
     "sinter_in_burden", "pellet_in_burden", "_total_prepared_burden", "lump_in_burden",
-    "_coke_ash", "_sinter_fe", "lump_ore_fe", "pellet_fe", "avg_burden_fe",
+    "_coke_ash", "_sinter_fe", "lump_ore_fe", "pellet_fe", "_avg_burden_fe",
     "slag_rate", "hot_blast_temp", "o2_enrichment", "steam_rate_hr", "top_pressure",
     "silicon_in_hm", "sulphur_in_hm", "avg_hot_metal_temperature",
     "slag_mgo", "slag_al2o3", "slag_b2", "eta_co", "heat_load_flux",
@@ -93,6 +94,7 @@ _SPECIAL_ROWS = {
     "_total_prepared_burden":  ("Total Prepared Burden", "%"),
     "_coke_ash":               ("Coke Ash", "%"),
     "_sinter_fe":              ("Sinter Fe", "%"),
+    "_avg_burden_fe":          ("Avg. Burden Fe", "%"),
 }
 
 # Params whose techno_data figure is an additive per-month tonnage rather
@@ -100,6 +102,41 @@ _SPECIAL_ROWS = {
 # "production" today, but kept as a set in case a future row needs the same
 # treatment.
 _ADDITIVE_KEYS = {"production"}
+
+# Production reads production_table exclusively, never techno_data's own
+# "production" key — per direct instruction, that key isn't a trustworthy
+# source (sparsely manual-entered via bf-large-manual only from ~2026-06
+# onward for BSP/RSP, never at all for ISP), whereas production_table is
+# this app's established, deeply-historical production source (same table
+# page_key_parameters.py's Hot Metal row reads) and — confirmed against
+# every month where techno_data's key WAS populated — carries the exact
+# same figures anyway. BSP/RSP have their own furnace-specific item there
+# ("BF#8"/"BF#5"); ISP has no per-furnace item (the OMI production report
+# only ever tracked it at plant level there), but ISP is single-furnace
+# (same fact _BF_UNITS/_bf_unit_for in page_key_parameters.py relies on),
+# so its plant-level "Hot Metal" total IS BF-5's own output.
+_PRODUCTION_ITEM = {"BSP": "BF#8", "RSP": "BF#5", "ISP": "Hot Metal"}
+
+
+def _production_table_tonnes(plant: str, months: list) -> dict:
+    """{report_month: production_in_tonnes} from production_table (stored
+    in '000 T, like every other production_table item — see
+    _PRODUCTION_ITEM for which item_name each SAIL BF reads)."""
+    item = _PRODUCTION_ITEM.get(plant)
+    if not months or not item:
+        return {}
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        ph = ",".join("?" * len(months))
+        cur.execute(
+            f"SELECT report_month, month_actual FROM production_table "
+            f"WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+            (plant, item, *months),
+        )
+        return {rm: v * 1000 for rm, v in cur.fetchall() if v is not None}
+    finally:
+        conn.close()
 
 
 def _row_spec(key):
@@ -182,18 +219,20 @@ def _sail_bf_values(plant, unit, report_month):
     shop_cur_row = shop_rows.get(report_month, {})
     shop_prev_fy_row = shop_rows.get(prev_fy_end, {})
 
+    production_tonnes = _production_table_tonnes(plant, list(dict.fromkeys(prev_fy_months + fy_months)))
+
     out = {}
     for key in list(PARAM_BY_KEY.keys()):
         if key in _ADDITIVE_KEYS:
-            month_v = _period_value(key, cur_row.get("month", {}))
+            month_v = production_tonnes.get(report_month) if key == "production" else _period_value(key, cur_row.get("month", {}))
             ytd_v = sum(
                 v for m in ytd_months
-                for v in [_period_value(key, rows.get(m, {}).get("month", {}))]
+                for v in [production_tonnes.get(m) if key == "production" else _period_value(key, rows.get(m, {}).get("month", {}))]
                 if v is not None
             ) or None
             prev_fy_v = sum(
                 v for m in prev_fy_months
-                for v in [_period_value(key, rows.get(m, {}).get("month", {}))]
+                for v in [production_tonnes.get(m) if key == "production" else _period_value(key, rows.get(m, {}).get("month", {}))]
                 if v is not None
             ) or None
         else:
@@ -296,6 +335,34 @@ def _avg_daily_rate(production_tuple, report_month, ytd_months, prev_fy_months):
     )
 
 
+def _avg_burden_fe(sinter_pct, pellet_pct, lump_pct, sinter_fe, pellet_fe, lump_fe):
+    """(prev_fy, month, ytd) — per direct instruction:
+    (Sinter%×SinterFe + Pellet%×PelletFe + Lump%×LumpOreFe) / 100,
+    the same 3-way burden split Total Prepared Burden/Lump in Burden already
+    use, weighted by each component's own Fe assay instead of summed as a
+    single fixed-Fe blend. A component with a burden % of None/0 is simply
+    skipped (it isn't part of the mix); a component with a real, nonzero %
+    but no Fe assay entered makes the whole period's average un-computable
+    (silently treating its Fe as 0 would understate the true average), so
+    that period shows blank rather than a misleadingly low figure until the
+    missing Fe assay (Sinter Fe / Pellet Fe / Lump Ore Fe row) is entered."""
+    out = []
+    for s, p, l, sf, pf, lf in zip(sinter_pct, pellet_pct, lump_pct, sinter_fe, pellet_fe, lump_fe):
+        total = 0.0
+        has_component = False
+        computable = True
+        for pct, fe in ((s, sf), (p, pf), (l, lf)):
+            if not pct:
+                continue
+            has_component = True
+            if fe is None:
+                computable = False
+                break
+            total += pct * fe
+        out.append(_round(total / 100, 2) if has_component and computable else None)
+    return tuple(out)
+
+
 def _dp_for(key):
     if key in ("production",):
         return 3
@@ -366,6 +433,9 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         pl = vals["pellet_in_burden"]
         vals["_total_prepared_burden"] = tuple(
             _round(s + p, 2) if s is not None and p is not None else None for s, p in zip(sp, pl)
+        )
+        vals["_avg_burden_fe"] = _avg_burden_fe(
+            sp, pl, vals["lump_in_burden"], vals["_sinter_fe"], vals["pellet_fe"], vals["lump_ore_fe"],
         )
         wv = _sail_static_working_volume(plant, unit)
         vals["working_volume_m3"] = (wv, wv, wv)
