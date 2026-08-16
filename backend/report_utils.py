@@ -162,23 +162,42 @@ def compute_item_row(month: str, item_name: str) -> list:
     ytd_cply_months   = db.get_ytd_months(cply_month)
     ytd_cply_actual   = db.get_sail_production_ytd_actual(ytd_cply_months, db_item)
 
+    # Plain round() is banker's-rounding (round-half-to-even) — 1870.5
+    # rounds to 1870, not 1871, purely because 1870 happens to be even.
+    # page5_6.py's Plant-Wise Production Performance page (_fmt) already
+    # uses round-half-up (floor(x+0.5)) for the exact same production_
+    # plan_table figures, so a .5 total (as SAIL's summed Hot Metal plan
+    # for Jul'26 genuinely was: 448+490+216.5+262+454) showed 1871 there
+    # but 1870 here — same underlying number, two different rounding
+    # rules. Matches page5_6.py's convention so both pages always agree.
+    import math as _math
+
+    def _round_half_up(v):
+        # Unconditional floor(v + 0.5), matching page5_6.py's _fmt/_pct/
+        # _growth exactly (including for negatives: floor(-0.5+0.5) = 0,
+        # not -1) — a "round half up" that differs from "round half away
+        # from zero" is still fine to match here, since consistency with
+        # the other page is the actual goal, not picking the abstractly
+        # "more correct" negative-rounding convention.
+        return _math.floor(v + 0.5)
+
     def fmt(val):
-        return "" if val is None else str(round(val))
+        return "" if val is None else str(_round_half_up(val))
 
     def var(a, p):
         if a is None or p is None:
             return ""
-        return str(round(a - p))
+        return str(_round_half_up(a - p))
 
     def pct(num, den):
         if num is None or den is None or den == 0:
             return ""
-        return str(round((num / den) * 100))
+        return str(_round_half_up((num / den) * 100))
 
     def growth(num, den):
         if num is None or den is None or den == 0:
             return ""
-        return str(round(((num - den) / den) * 100))
+        return str(_round_half_up(((num - den) / den) * 100))
 
     return [
         fmt(month_plan),                          # 0  Monthly APP
