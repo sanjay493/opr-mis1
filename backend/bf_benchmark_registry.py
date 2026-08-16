@@ -66,6 +66,7 @@ BF_BENCHMARK_PARAMS = [
     {"key": "steam_addition", "label": "Steam Addition", "unit": UNIT.KG_THM, "static": False, "better": "high"},
     {"key": "sinter_in_burden", "label": "Sinter in Burden", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "pellet_in_burden", "label": "Pellet in Burden", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "lump_in_burden", "label": "Lump in Burden", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "raw_flux_addition", "label": "Raw Flux Addition", "unit": UNIT.KG_THM, "static": False, "better": "high"},
     {"key": "silicon_in_hm", "label": "HM Silicon", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "sulphur_in_hm", "label": "HM Sulphur", "unit": UNIT.PCT, "static": False, "better": "high"},

@@ -38,9 +38,16 @@ Data sources, per row:
     SP-1/2/3, other plants from the BF-shop unit) — same _COKE_UNITS/
     _SP_UNIT_MAP/_first_present_val/_sinter_fe_val helpers, imported rather
     than reimplemented.
-  - "Avg. Daily Rate", "Total Prepared Burden" and "Lump in Burden" are pure
-    arithmetic on other rows in this same table (production÷days-in-period,
-    sinter+pellet in burden, 100-that sum) — computed here, never stored.
+  - "Avg. Daily Rate" and "Total Prepared Burden" are pure arithmetic on
+    other rows in this same table (production÷days-in-period, sinter+pellet
+    in burden respectively) — computed here, never stored. "Lump in Burden"
+    used to be computed the same way (100 - Total Prepared Burden), but
+    that assumes sinter+pellet+lump always sum to 100% of the burden, which
+    doesn't hold for a furnace charging scrap too — it's now its own
+    directly-entered techno_data key (bf_benchmark_registry.py's
+    lump_in_burden), same as sinter_in_burden/pellet_in_burden, reading
+    whatever the plant's own report actually states rather than inferring
+    it.
   - The remaining ~12 rows (Lump Ore Fe, Pellet Fe, Avg. Burden Fe, Steam
     Rate, Top Pressure, Slag MgO/Al2O3/B2, Eta CO, Heat Load/Flux, Tapping
     Duration, Fce Availability/Utilisation) have no extractor writing them
@@ -73,7 +80,7 @@ from page_special_steel_trend import _days_in_fy
 _ROW_KEYS = [
     "working_volume_m3", "production", "_avg_daily_rate", "bf_productivity",
     "coke_rate", "nut_coke_rate", "cdi", "fuel_rate",
-    "sinter_in_burden", "pellet_in_burden", "_total_prepared_burden", "_lump_in_burden",
+    "sinter_in_burden", "pellet_in_burden", "_total_prepared_burden", "lump_in_burden",
     "_coke_ash", "_sinter_fe", "lump_ore_fe", "pellet_fe", "avg_burden_fe",
     "slag_rate", "hot_blast_temp", "o2_enrichment", "steam_rate_hr", "top_pressure",
     "silicon_in_hm", "sulphur_in_hm", "avg_hot_metal_temperature",
@@ -84,7 +91,6 @@ _ROW_KEYS = [
 _SPECIAL_ROWS = {
     "_avg_daily_rate":         ("Avg. Daily Rate", "TPD"),
     "_total_prepared_burden":  ("Total Prepared Burden", "%"),
-    "_lump_in_burden":         ("Lump in Burden", "%"),
     "_coke_ash":               ("Coke Ash", "%"),
     "_sinter_fe":              ("Sinter Fe", "%"),
 }
@@ -101,6 +107,13 @@ def _row_spec(key):
         label, unit = _SPECIAL_ROWS[key]
         return label, unit
     p = PARAM_BY_KEY[key]
+    if key == "production":
+        # bf_benchmark_registry.py's own unit (UNIT.T = "T") is shared with
+        # /reports/bf-benchmark, which shows this key at its raw
+        # techno_data scale (tonnes) — this page's own _fmt_production
+        # divides by 1e6 first (matching the source Excel's "Total HM Prod"
+        # column), so only THIS page's label needs overriding to "MT".
+        return p["label"], "MT"
     return p["label"], p["unit"]
 
 
@@ -287,9 +300,24 @@ def _dp_for(key):
     if key in ("production",):
         return 3
     if key in ("working_volume_m3", "_avg_daily_rate", "hot_blast_temp",
-               "avg_hot_metal_temperature", "tapping_duration"):
+               "avg_hot_metal_temperature", "tapping_duration",
+               "coke_rate", "nut_coke_rate", "cdi", "fuel_rate",
+               "sinter_in_burden", "pellet_in_burden",
+               "_total_prepared_burden", "lump_in_burden", "slag_rate"):
         return 0
     return 2
+
+
+def _clean(v, dp):
+    """_round(v, dp), but a 0dp row displays as a plain integer ("397") —
+    Python's round(float, 0) still returns a float, and DB-stored values
+    are a mix of int/float depending on how each was originally saved, so
+    without this, some cells in the same 0dp row would show "397" and
+    others "397.0" purely by storage-type accident."""
+    r = _round(v, dp)
+    if r is not None and dp == 0:
+        return int(r)
+    return r
 
 
 def _fmt_production(v):
@@ -339,9 +367,6 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         vals["_total_prepared_burden"] = tuple(
             _round(s + p, 2) if s is not None and p is not None else None for s, p in zip(sp, pl)
         )
-        vals["_lump_in_burden"] = tuple(
-            _round(100 - t, 2) if t is not None else None for t in vals["_total_prepared_burden"]
-        )
         wv = _sail_static_working_volume(plant, unit)
         vals["working_volume_m3"] = (wv, wv, wv)
         sail_values[label] = vals
@@ -358,7 +383,7 @@ def generate_bf_large_annexure(report_month: str) -> dict:
                 prev_fy, month, ytd = _fmt_production(prev_fy), _fmt_production(month), _fmt_production(ytd)
                 dp = 3
             sail_out[bf_label] = {
-                "prev_fy": _round(prev_fy, dp), "month": _round(month, dp), "ytd": _round(ytd, dp),
+                "prev_fy": _clean(prev_fy, dp), "month": _clean(month, dp), "ytd": _clean(ytd, dp),
             }
         rows.append({"parameter": label, "unit": unit, "sail": sail_out})
 

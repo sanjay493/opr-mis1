@@ -216,11 +216,16 @@
 
         .coal-ab-row {
             display: flex;
-            gap: 20px;
+            justify-content: space-between;
             margin-bottom: 12px;
         }
+        /* Sized to content (label col + 2-3 narrow data cols), not
+           stretched to fill half the landscape page each — matching the
+           reference PDF's compact boxes, which leave the rest of the page
+           blank rather than padding every cell out to fill it. */
         .coal-ab-box {
-            flex: 1;
+            flex: 0 0 auto;
+            width: 300px;
         }
         .coal-ab-heading {
             font-weight: 700;
@@ -230,6 +235,9 @@
         .coal-ab-unit {
             font-weight: 400;
             font-size: 8pt;
+        }
+        .coal-ab-table {
+            width: 100%;
         }
         .coal-ab-table th, .coal-ab-table td {
             font-size: 8.5pt;
@@ -248,6 +256,13 @@
         }
         .coal-stock-table th, .coal-stock-table td {
             font-size: 8pt;
+        }
+        /* Two stacked mini-tables (first 6 FY months, then the remaining
+           7), matching the reference PDF's own two-row layout rather than
+           one row growing wider as the FY progresses — see
+           page_coal_receipts_stock.py's _fy_stock_months. */
+        .coal-stock-table-2 {
+            margin-top: 6px;
         }
         .epi-table th, .epi-table td {
             font-size: 7.3pt;
