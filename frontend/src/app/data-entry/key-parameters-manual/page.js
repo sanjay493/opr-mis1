@@ -38,11 +38,17 @@ function getDefaultPeriod() {
 // under techno_data unit="General" — none of them has an extractor behind
 // it (no file upload ever fills them), so this is their only data source.
 const GENERAL_UNIT = 'General';
+// `scale` (optional): this field is STORED (techno_data) in a different
+// unit than it's shown/entered here — `scale` is "stored units per shown
+// unit" (e.g. Demurrage: 100 Rs Lakh per Rs Cr), divided out on load and
+// multiplied back in on save, so the raw techno_data figure (and the
+// report page's own /100 — see page_key_parameters.py's "demurrage"
+// branch) never has to change, only the unit each side shows.
 const GENERAL_PARAMS = [
   { key: 'capex', label: 'CAPEX', unit: 'Rs Cr' },
   { key: 'labour_productivity', label: 'Labour Productivity', unit: 'T/Man-yr' },
   { key: 'avg_rake_detention_time', label: 'Avg Rake Detention Time', unit: 'Hrs' },
-  { key: 'demurrage', label: 'Demurrage', unit: 'Rs Lakh' },
+  { key: 'demurrage', label: 'Demurrage', unit: 'Rs Cr', scale: 100 },
   { key: 'hm_to_pcm_sandpit_drypit', label: 'HM Sent to PCM/Sand Pit/Dry Pit', unit: "'000 T" },
 ];
 
@@ -89,8 +95,15 @@ function KeyParametersManualInner() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Load failed');
       const general = json.units?.[GENERAL_UNIT] || {};
-      setGeneralMonth({ ...general.month });
-      setGeneralTill({ ...general.till_month });
+      const gm = { ...general.month };
+      const gt = { ...general.till_month };
+      for (const { key, scale } of GENERAL_PARAMS) {
+        if (!scale) continue;
+        if (gm[key] != null) gm[key] = gm[key] / scale;
+        if (gt[key] != null) gt[key] = gt[key] / scale;
+      }
+      setGeneralMonth(gm);
+      setGeneralTill(gt);
 
       const fm = {}, ft = {};
       for (const unit of FE_SINTER_UNITS[plant] || []) {
@@ -125,9 +138,11 @@ function KeyParametersManualInner() {
     try {
       const month_data = {};
       const till_month_data = {};
-      for (const { key } of GENERAL_PARAMS) {
-        month_data[key] = generalMonth[key] === '' || generalMonth[key] === undefined ? null : Number(generalMonth[key]);
-        till_month_data[key] = generalTill[key] === '' || generalTill[key] === undefined ? null : Number(generalTill[key]);
+      for (const { key, scale } of GENERAL_PARAMS) {
+        const mv = generalMonth[key] === '' || generalMonth[key] === undefined ? null : Number(generalMonth[key]);
+        const tv = generalTill[key] === '' || generalTill[key] === undefined ? null : Number(generalTill[key]);
+        month_data[key] = mv !== null && scale ? mv * scale : mv;
+        till_month_data[key] = tv !== null && scale ? tv * scale : tv;
       }
       await saveUnit(GENERAL_UNIT, month_data, till_month_data);
 

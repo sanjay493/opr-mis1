@@ -284,25 +284,45 @@ def _special_steel_pct(plant, report_month, dp):
 _DEMURRAGE_LABEL = "Demurrage ({period})"
 
 
-def _demurrage_latest_month(ytd_months: list) -> str:
-    """Latest month in ytd_months (Apr..report_month) with a "month"-level
-    demurrage figure entered for at least one plant, or None if none of the
-    FY-to-date months have any data yet."""
+def _demurrage_by_plant(ytd_months: list) -> dict:
+    """{plant: (till_month_value_rs_lakh, source_month)} — each plant's own
+    latest available till_month Demurrage figure, walking backward from
+    report_month (ytd_months[-1]) to April. till_month is already a
+    cumulative Apr-to-that-month figure, so an earlier month's stored value
+    is a perfectly good stand-in for "as of the last time this was
+    entered" when the current report month's own figure isn't in yet —
+    Demurrage is manual-entry-only (no extractor behind it), so it
+    routinely lags. A plant absent from the returned dict has no data at
+    all anywhere in the FY-to-date — shown as "—", never fabricated.
+
+    One batched query for every plant/month rather than a per-plant loop
+    of single-month lookups, then picked in Python — same shape as
+    _fetch_production's history reads elsewhere on this page."""
     conn = db.connect()
     cur = conn.cursor()
-    ph = ",".join("?" * len(PLANTS))
-    mph = ",".join("?" * len(ytd_months))
-    cur.execute(
-        f"SELECT report_month, techno_json FROM techno_data "
-        f"WHERE unit=? AND plant IN ({ph}) AND report_month IN ({mph})",
-        [_GENERAL_UNIT, *PLANTS, *ytd_months],
-    )
-    latest = None
-    for rm, tj in cur.fetchall():
-        if _json.loads(tj).get("month", {}).get("demurrage") is not None:
-            if latest is None or rm > latest:
-                latest = rm
-    return latest
+    try:
+        ph_p = ",".join("?" * len(PLANTS))
+        ph_m = ",".join("?" * len(ytd_months))
+        cur.execute(
+            f"SELECT plant, report_month, techno_json FROM techno_data "
+            f"WHERE unit=? AND plant IN ({ph_p}) AND report_month IN ({ph_m})",
+            [_GENERAL_UNIT, *PLANTS, *ytd_months],
+        )
+        by_plant_month = {}
+        for plant, rm, tj in cur.fetchall():
+            v = _json.loads(tj).get("till_month", {}).get("demurrage")
+            if v is not None:
+                by_plant_month[(plant, rm)] = v
+    finally:
+        conn.close()
+
+    out = {}
+    for plant in PLANTS:
+        for m in reversed(ytd_months):
+            if (plant, m) in by_plant_month:
+                out[plant] = (by_plant_month[(plant, m)], m)
+                break
+    return out
 
 # (label, unit, kind, spec, decimal_places, flags)
 #   flags:
@@ -366,7 +386,7 @@ _ROWS = [
     # Label's period placeholder is filled in with the same Apr-<report
     # month> range as the page title (_DEMURRAGE_LABEL below), since this
     # is a till_month/YTD figure like every other "general" row here.
-    (_DEMURRAGE_LABEL,          "Rs Lakh",  "general", "demurrage", 1, {}),
+    (_DEMURRAGE_LABEL,          "Rs Cr",    "general", "demurrage", 2, {}),
     ("Value Added Products %", "%",        "special", None, 0, {}),
 ]
 
@@ -382,7 +402,12 @@ def generate_key_parameters(report_month: str) -> dict:
         period_label += "-" + _dt.datetime.strptime(ytd_months[-1], "%Y-%m").strftime("%b")
     report_year_2d = report_month[2:4]
 
-    demurrage_latest = _demurrage_latest_month(ytd_months)
+    # Drives BOTH the row label (period shown) and each plant's own value
+    # below (see the "demurrage" branch further down) — same source, so
+    # the label can never claim a more recent month than what's actually
+    # displayed.
+    demurrage_by_plant = _demurrage_by_plant(ytd_months)
+    demurrage_latest = max((m for _, m in demurrage_by_plant.values()), default=None)
     if demurrage_latest:
         dem_period = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")
         if demurrage_latest != ytd_months[0]:
@@ -411,6 +436,35 @@ def generate_key_parameters(report_month: str) -> dict:
                 v = _bf_val(plant, spec, techno, dp)
             elif kind == "general":
                 v = _general_val(plant, spec, techno, dp)
+                if spec == "coal_to_hm" and v is not None:
+                    # CHM Ratio: always show all 3 decimal places (e.g.
+                    # "0.920", not "0.92") — round(v, 3) alone drops
+                    # trailing zeros, which read as if the row had mixed
+                    # precision across plants.
+                    v = f"{v:.3f}"
+                elif spec == "demurrage":
+                    # Ignores the plain _general_val(v) above entirely —
+                    # that only ever looks at report_month itself, and
+                    # Demurrage (manual-entry-only, no extractor behind it)
+                    # routinely lags behind. demurrage_by_plant already
+                    # picked this plant's own latest available month
+                    # (report_month if present, else the closest earlier
+                    # one this FY — see its docstring), so this is
+                    # "dynamic, falls back to last available data" by
+                    # construction rather than a separate fallback step.
+                    #
+                    # Stored (and manually entered) in Rs Lakh — this row
+                    # displays Rs Cr (1 Cr = 100 Lakh), per direct
+                    # instruction. Converting at display time (dividing the
+                    # RAW value, not the already-dp-rounded one above, so
+                    # precision isn't lost to a premature round) rather
+                    # than migrating the DB keeps every already-entered
+                    # figure's real-world value unchanged; the
+                    # manual-entry form applies the same /100 (load) and
+                    # *100 (save) so a value round-trips correctly through
+                    # both.
+                    raw, _src_month = demurrage_by_plant.get(plant, (None, None))
+                    v = _round(raw / 100, dp) if raw is not None else None
             elif kind == "sms_join":
                 v = _sms_joined(plant, spec, techno, dp)
             elif kind == "coal_blend":
