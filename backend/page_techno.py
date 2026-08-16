@@ -299,6 +299,27 @@ def generate_at_a_glance_te_table(report_month: str) -> list:
     return _sail_row_table(report_month, wanted)
 
 
+def generate_key_highlights_te_table(report_month: str) -> list:
+    """Techno-Economic Snapshot table for the "Key Highlights & Variances"
+    page (KEY_HIGHLIGHTS_PAGE_ID) — same SAIL-row extraction as the two
+    tables above, with its own param list matching Report_format/Key
+    highlights and variance.png (adds Nut Coke Rate, which the other two
+    tables don't show)."""
+    wanted = [
+        ("Coke Rate",                   "kg/THM"),
+        ("Fuel Rate",                   "kg/THM"),
+        ("Nut Coke Rate",               "kg/THM"),
+        ("Specific Energy Consumption", "Gcal/tcs"),
+        ("Sp. CO2 Emission",            "T/tcs"),
+        ("BF Productivity",             "t/m3/day"),
+        ("CDI Rate",                    "kg/THM"),
+        ("Sinter in Burden",            "%"),
+        ("Pellet in Burden",            "%"),
+        ("TMI",                         "kg/tcs"),
+    ]
+    return _sail_row_table(report_month, wanted)
+
+
 # ---------------------------------------------------------------------------
 # Auto-calculate and store SAIL actuals (materialized view)
 # ---------------------------------------------------------------------------
