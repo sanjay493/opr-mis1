@@ -197,8 +197,14 @@ _FS_SAIL_SET = _FIVE + ["ASP", "SSP", "VISL"]
 
 
 def _semis_ytd(cur, months: list) -> float:
-    """SAIL 'Saleable Semis' (5 main plants only — RSP/ASP/SSP/VISL don't
-    report it), summed over YTD months."""
+    """SAIL 'Semi-finished steel' — the 5 main plants' own 'Saleable Semis'
+    item, PLUS ASP's own semi-finished output. ASP has no separate
+    "Saleable Semis" item to read directly — it's derived the same way
+    page5_6.py's Plant-Wise Production Performance page (the SAIL "Semi-
+    finished steel" row on pages 8-9) already does, as Saleable Steel -
+    Finished Steel — matching that convention here too so this page's
+    Semis for Sale always agrees with that one instead of quietly running
+    ~43,000 T under it every month (ASP's own missing share)."""
     ph_m = ",".join("?" * len(months))
     ph_p = ",".join("?" * len(_FIVE))
     cur.execute(
@@ -208,7 +214,24 @@ def _semis_ytd(cur, months: list) -> float:
         (*months, *_FIVE),
     )
     r = cur.fetchone()
-    return float(r[0]) if r and r[0] is not None else 0.0
+    five_plant = float(r[0]) if r and r[0] is not None else 0.0
+
+    cur.execute(
+        f"SELECT report_month, item_name, month_actual FROM production_table "
+        f"WHERE report_month IN ({ph_m}) AND plant_name='ASP' "
+        f"AND item_name IN ('Saleable Steel','Finished Steel')",
+        months,
+    )
+    asp_by_month = {}
+    for rm, item, val in cur.fetchall():
+        asp_by_month.setdefault(rm, {})[item] = val
+    asp_semis = sum(
+        d["Saleable Steel"] - d["Finished Steel"]
+        for d in asp_by_month.values()
+        if d.get("Saleable Steel") is not None and d.get("Finished Steel") is not None
+    )
+
+    return five_plant + asp_semis
 
 
 _IPT_SEMIS_ITEMS = (
@@ -263,7 +286,7 @@ def _node_totals(nodes: list, links: list) -> tuple:
 
 
 def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
-                 value_fmt=None, side_labels: bool = False) -> str:
+                 value_fmt=None, side_labels: bool = False, label_font_size: float = 12.0) -> str:
     """Hand-rolled layered Sankey: nodes carry a fixed 'column' (left-to-right
     stage), links only ever join adjacent columns. A node's height defaults to
     max(incoming, outgoing) so a node whose in/out differ (a process-yield
@@ -287,8 +310,17 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
     page_ipt.py, the only current caller) where each node already has
     clear vertical room of its own; skips the above-node decluttering pass
     entirely since there's nothing to declutter — each label just sits
-    beside the one node it belongs to."""
-    ml, mr, mt, mb = 92, 92, 46, 10
+    beside the one node it belongs to.
+
+    label_font_size: every text element's font-size — defaults to 12 (the
+    original, only ever value before this parameter existed, so every
+    existing caller/appearance is unchanged). Every other text-related
+    geometry constant below (margins, chip sizing, label offsets, the
+    declutter block height) scales proportionally with it via `fs_scale`,
+    so a caller asking for bigger text gets consistently bigger clearance
+    around it too, not overlapping labels sized for the old default."""
+    fs_scale = label_font_size / 12.0
+    ml, mr, mt, mb = 92 * fs_scale, 92 * fs_scale, 46 * fs_scale, 10 * fs_scale
     cw, ch = vw - ml - mr, vh - mt - mb
 
     incoming, outgoing = _node_totals(nodes, links)
@@ -298,7 +330,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
     columns = sorted({n["column"] for n in nodes})
     by_col = {c: [n for n in nodes if n["column"] == c] for c in columns}
 
-    node_gap = 40.0
+    node_gap = 40.0 * fs_scale
     scale = None
     for ns in by_col.values():
         total = sum(sizes[n["id"]] for n in ns)
@@ -318,7 +350,20 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
         ns = by_col[c]
         heights = [max(sizes[n["id"]] * scale, 4.0) for n in ns]
         total_h = sum(heights) + node_gap * (len(ns) - 1)
-        y = mt + (ch - total_h) / 2.0
+        # A column defaults to vertically centered — fine when its total
+        # height is a sizeable chunk of the canvas, but a single small node
+        # alone in its column (e.g. this page's "Semis for Sale", a minor
+        # branch off the much larger Crude Steel -> Finished Steel flow)
+        # centers right on top of whatever big ribbon happens to pass
+        # through that same vertical band. Any node in the column carrying
+        # "align": "top" pins the whole column to the top margin instead,
+        # to sit clear of that main stream.
+        if any(n.get("align") == "top" for n in ns):
+            y = mt
+        elif any(n.get("align") == "bottom" for n in ns):
+            y = mt + (ch - total_h)
+        else:
+            y = mt + (ch - total_h) / 2.0
         x = ml + c * (node_w + col_gap)
         for n, h in zip(ns, heights):
             geo[n["id"]] = {"x": x, "y": y, "w": node_w, "h": h, "node": n}
@@ -363,7 +408,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
     # consecutive blocks read as cramped/touching even when not truly
     # overlapping (confirmed by measuring real rendered bounding boxes at
     # a few tried values before landing here).
-    _LABEL_BLOCK_H = 55.0
+    _LABEL_BLOCK_H = 55.0 * fs_scale
     label_y = {}
     if not side_labels:
         for c in columns:
@@ -383,7 +428,15 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
         # "Direct Sale (Semis)", a derived remainder) carries its own
         # "value_prefix" (e.g. "≈ ") to mark that in the rendered value —
         # blank for every ordinary, directly-measured node.
-        val_str = n.get("value_prefix", "") + fmt(sizes[nid])
+        #
+        # "display_value" overrides only the printed number, leaving the
+        # node's actual geometry (bar height, ribbon widths) keyed to its
+        # real sizes[nid] — this page's "Conversion Agent" node sizes to
+        # its larger SLAB input (so the ~4% mill-yield loss still shows as
+        # an unfilled bar), but the number printed on it is the smaller
+        # finished-PRODUCT quantity, so it reads the same as the figure
+        # that actually flows on into SAIL Finished Steel.
+        val_str = n.get("value_prefix", "") + fmt(n.get("display_value", sizes[nid]))
         if nid in _MID_LABEL_IDS:
             # Main-flow nodes (Hot Metal -> Crude Steel -> Finished Steel
             # (Mills) -> SAIL Finished Steel) label at the bar's own vertical
@@ -394,30 +447,37 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
             # they cross the node's own fill and the ribbons flowing into/
             # out of it, not just clear page background.
             cy = g["y"] + g["h"] / 2
-            chip_w = max(len(n["label"]), len(val_str)) * 6.8 + 20
-            chip_h = 30.0
+            chip_w = max(len(n["label"]), len(val_str)) * 6.8 * fs_scale + 20 * fs_scale
+            chip_h = 30.0 * fs_scale
             svg.append(f'<rect x="{cx - chip_w / 2:.1f}" y="{cy - chip_h / 2:.1f}" '
                         f'width="{chip_w:.1f}" height="{chip_h:.1f}" rx="4" '
                         f'fill="#ffffff" fill-opacity="0.88"/>')
-            svg.append(f'<text x="{cx:.1f}" y="{cy - 3:.1f}" text-anchor="middle" font-size="12" '
+            svg.append(f'<text x="{cx:.1f}" y="{cy - 3 * fs_scale:.1f}" text-anchor="middle" font-size="{label_font_size:g}" '
                         f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
-            svg.append(f'<text x="{cx:.1f}" y="{cy + 13:.1f}" text-anchor="middle" font-size="12" '
+            svg.append(f'<text x="{cx:.1f}" y="{cy + 13 * fs_scale:.1f}" text-anchor="middle" font-size="{label_font_size:g}" '
                         f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
-        elif side_labels:
+        elif side_labels or n.get("label_side"):
             # Sender (first column) labels sit to the left of their node,
             # text growing leftward (text-anchor="end"); receiver (last
             # column) labels sit to the right, growing rightward — each
             # anchored to its own node's vertical center, no decluttering
             # needed since every label already sits right next to (and so
-            # is unambiguously tied to) the one node it describes.
+            # is unambiguously tied to) the one node it describes. A single
+            # node can opt into this style on its own via "label_side":
+            # "left"/"right" (e.g. this page's "EAF Route", inline beside
+            # its own line rather than stacked above it like everything
+            # else here) without switching every OTHER node over too —
+            # only page_ipt.py sets side_labels globally, for its own
+            # simple 2-column diagrams.
             cy = g["y"] + g["h"] / 2
-            if n["column"] == columns[0]:
-                tx, anchor = g["x"] - 6, "end"
+            want_right = n.get("label_side", "right" if n["column"] != columns[0] else "left") == "right"
+            if want_right:
+                tx, anchor = g["x"] + g["w"] + 6 * fs_scale, "start"
             else:
-                tx, anchor = g["x"] + g["w"] + 6, "start"
-            svg.append(f'<text x="{tx:.1f}" y="{cy - 3:.1f}" text-anchor="{anchor}" font-size="12" '
+                tx, anchor = g["x"] - 6 * fs_scale, "end"
+            svg.append(f'<text x="{tx:.1f}" y="{cy - 3 * fs_scale:.1f}" text-anchor="{anchor}" font-size="{label_font_size:g}" '
                         f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
-            svg.append(f'<text x="{tx:.1f}" y="{cy + 11:.1f}" text-anchor="{anchor}" font-size="12" '
+            svg.append(f'<text x="{tx:.1f}" y="{cy + 11 * fs_scale:.1f}" text-anchor="{anchor}" font-size="{label_font_size:g}" '
                         f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
         else:
             ly = label_y.get(nid, g["y"])
@@ -425,12 +485,27 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
             # top — a thin leader line back to the node keeps it legible
             # which color/ribbon the label actually describes.
             if abs(ly - g["y"]) > 0.5:
-                svg.append(f'<line x1="{cx:.1f}" y1="{ly - 6:.1f}" x2="{cx:.1f}" y2="{g["y"]:.1f}" '
+                svg.append(f'<line x1="{cx:.1f}" y1="{ly - 6 * fs_scale:.1f}" x2="{cx:.1f}" y2="{g["y"]:.1f}" '
                             f'stroke="#94a3b8" stroke-width="0.6" stroke-dasharray="1.5,1.5"/>')
-            svg.append(f'<text x="{cx:.1f}" y="{ly - 32:.1f}" text-anchor="middle" font-size="12" '
+            svg.append(f'<text x="{cx:.1f}" y="{ly - 32 * fs_scale:.1f}" text-anchor="middle" font-size="{label_font_size:g}" '
                         f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
-            svg.append(f'<text x="{cx:.1f}" y="{ly - 14:.1f}" text-anchor="middle" font-size="12" '
-                        f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
+            # "value_anchor": a node's value normally prints right below its
+            # own name (above), but one whose ribbon's real destination is
+            # what the number is actually about (e.g. this page's
+            # "Conversion Agent" — its value IS the finished-steel quantity
+            # that ends up at SAIL Finished Steel) can point its value at
+            # that OTHER node's own top edge instead, per direct
+            # instruction — still colored like the node it came from so
+            # it's clear which ribbon it's labeling.
+            anchor_id = n.get("value_anchor")
+            anchor_g = geo.get(anchor_id) if anchor_id else None
+            if anchor_g:
+                svg.append(f'<text x="{anchor_g["x"] - 4 * fs_scale:.1f}" y="{anchor_g["y"] - 6 * fs_scale:.1f}" '
+                            f'text-anchor="end" font-size="{label_font_size:g}" '
+                            f'font-family="Arial,sans-serif" fill="{color}">{val_str}</text>')
+            else:
+                svg.append(f'<text x="{cx:.1f}" y="{ly - 14 * fs_scale:.1f}" text-anchor="middle" font-size="{label_font_size:g}" '
+                            f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
 
     svg.append("</svg>")
     return "\n".join(svg)
@@ -451,45 +526,115 @@ def _flow_sankey_svg(cur, report_month: str) -> str:
     semis_ytd = _semis_ytd(cur, ytd_months)
     ipt_ytd = _ipt_transfer_ytd(cur, ytd_months)
     # Conversion Agent's SLAB input, back-estimated from its finished-steel
-    # OUTPUT at a ~94% mill yield (per direct instruction) — larger than
-    # conv_ytd itself (the actual finished-steel figure, still used
-    # unchanged for the conv->fstot link below). The gap between the two
-    # surfaces visually as the conv node's own tapering ribbon: a node
-    # with no explicit "value" override sizes to max(incoming, outgoing)
-    # (see _sankey_svg's doc), so its ~6% yield loss shows as unfilled bar
-    # rather than being silently absorbed anywhere.
-    conv_slab_ytd = conv_ytd / 0.94
+    # OUTPUT at a 96% mill yield (per direct instruction, revised from an
+    # earlier 94% figure) — larger than conv_ytd itself (the actual
+    # finished-steel figure, still used unchanged for the conv->fstot link
+    # below). The gap between the two surfaces visually as the conv node's
+    # own tapering ribbon: a node with no explicit "value" override sizes
+    # to max(incoming, outgoing) (see _sankey_svg's doc), so its ~4% yield
+    # loss shows as unfilled bar rather than being silently absorbed
+    # anywhere. conv_ytd is re-queried fresh per report_month above, so
+    # this — and every figure derived from it below — recomputes correctly
+    # for any month without further changes.
+    _CONV_MILL_YIELD = 0.96
+    conv_slab_ytd = conv_ytd / _CONV_MILL_YIELD
     # Semis for Sale now splits 3 ways instead of 2 (Direct Sale, IPT
     # Transfer, Conversion) — Direct Sale is still whatever's left over
     # with no independent DB actual of its own, just against a bigger set
     # of measured deductions than before, hence "≈" on its own value below.
     direct_sale_ytd = max(0.0, semis_ytd - ipt_ytd - conv_slab_ytd)
 
+    # Finished Steel (Mills) now sits one column further right than the
+    # other 3 semis-splits (dsale/ipt/conv), with SAIL Finished Steel
+    # pushed out to column 5 in turn — makes room for IPT Transfer to flow
+    # forward into it as a real link (below), rather than the two being
+    # unconnected siblings in the same column whose ribbons used to cross
+    # straight through the Finished Steel (Mills) bar to reach their own
+    # (more distant) targets. cs -> fsmill and conv -> fstot both already
+    # spanned non-adjacent columns before this and rendered fine — see
+    # _sankey_svg's own bezier-curve construction, which only needs each
+    # link's two endpoints, not that they sit in adjacent columns.
     nodes = [
         {"id": "hm",     "label": "Hot Metal",              "column": 0, "color": "#2a78d6", "value": hm_ytd},
-        {"id": "eaf",    "label": "EAF Route (ASP+SSP)",     "column": 0, "color": "#eda100"},
+        # "label_side": "right" — inline beside its own line rather than
+        # stacked above it (this page's default), per direct instruction.
+        {"id": "eaf",    "label": "EAF Route (ASP+SSP)",     "column": 0, "color": "#eda100", "label_side": "right"},
         {"id": "pig",    "label": "Pig Iron",                "column": 1, "color": "#94a3b8"},
         {"id": "cs",     "label": "Crude Steel",             "column": 1, "color": "#1baf7a"},
-        {"id": "semis",  "label": "Semis for Sale",          "column": 2, "color": "#eb6834"},
-        {"id": "dsale",  "label": "Direct Sale (Semis)",     "column": 3, "color": "#94a3b8", "value_prefix": "≈ "},
+        {"id": "semis",  "label": "Semis for Sale",          "column": 2, "color": "#eb6834", "align": "top"},
+        # Semis for Sale's 3-way split, top-to-bottom per direct
+        # instruction: Direct Sale on top, Conversion Agent in the middle,
+        # IPT Transfer on the bottom. Pushing Direct Sale out to its own
+        # far column (tried previously, to elongate its ribbon) made its
+        # long top-hugging ribbon cut straight across Conversion Agent's
+        # own ribbon on its way into SAIL Finished Steel — reverted; all
+        # three stay together, right next to Semis for Sale, where none of
+        # their ribbons has to cross another's path: Direct Sale is a dead
+        # end (no ribbon leaving this column at all), Conversion Agent's
+        # ribbon (claims SAIL Finished Steel's TOP incoming slot, see the
+        # conv->fstot link below) only has a short hop up from the middle,
+        # and IPT Transfer's ribbon drops from the bottom straight into
+        # Finished Steel (Mills) — itself bottom-aligned — right below it.
+        # column 3.5, not 3 — a fractional column is a valid, quieter way
+        # to stretch just this one ribbon a bit longer than its siblings'
+        # (columns are plain x-axis positions, not slot indices) without
+        # reaching all the way out to Finished Steel (Mills)/SAIL Finished
+        # Steel's own columns, which is what caused it to cross
+        # Conversion Agent's ribbon last time.
+        {"id": "dsale",  "label": "Direct Sale (Semis)",     "column": 3.5, "color": "#94a3b8", "value_prefix": "≈ ", "align": "top"},
+        # Blue, matching Finished Steel's own color — per direct
+        # instruction, since what it's carrying IS finished steel by the
+        # time it lands. "value_anchor": "fstot" moves its printed value
+        # (still the finished-PRODUCT quantity, see display_value above)
+        # to sit right above where its now-blue ribbon actually arrives,
+        # at SAIL Finished Steel's own bar, instead of up by its own small
+        # node — the number reads next to what it's actually describing.
+        {"id": "conv",   "label": "Conversion Agent",        "column": 3, "color": "#2a78d6", "display_value": conv_ytd, "value_anchor": "fstot"},
         {"id": "ipt",    "label": "IPT Transfer",            "column": 3, "color": "#5b9bd5"},
-        {"id": "conv",   "label": "Conversion Agent",        "column": 3, "color": "#e87ba4"},
-        {"id": "fsmill", "label": "Finished Steel (Mills)",  "column": 3, "color": "#1baf7a"},
-        {"id": "fstot",  "label": "SAIL Finished Steel",     "column": 4, "color": "#2a78d6"},
+        # "align": "bottom" — its own bar is nearly as tall as the whole
+        # canvas (fs_ytd is close in scale to Hot Metal itself), so with no
+        # alignment it fills almost the entire column and leaves nothing
+        # for Conversion Agent's ribbon (top-aligned, above) to route
+        # through on its way to SAIL Finished Steel. Pinning it to the
+        # bottom instead opens a clear strip across the top for that
+        # ribbon to pass through unobstructed.
+        {"id": "fsmill", "label": "Finished Steel (Mills)",  "column": 4, "color": "#1baf7a", "align": "bottom"},
+        {"id": "fstot",  "label": "SAIL Finished Steel",     "column": 5, "color": "#2a78d6"},
     ]
     links = [
         {"source": "hm",     "target": "pig",    "value": pig_ytd},
         {"source": "hm",     "target": "cs",     "value": bof_ytd},
         {"source": "eaf",    "target": "cs",     "value": eaf_ytd},
         {"source": "cs",     "target": "semis",  "value": semis_ytd},
-        {"source": "cs",     "target": "fsmill", "value": fs_ytd},
+        # Split into "direct" (still straight from Crude Steel) and "via
+        # IPT Transfer" (below) so the two sum back to the same fs_ytd
+        # total Finished Steel (Mills) always had — IPT-transferred semis
+        # becoming finished steel at the RECEIVING plant is already
+        # counted inside fs_ytd (SAIL's own total), so this only re-splits
+        # its source, never adds to it.
+        {"source": "cs",     "target": "fsmill", "value": max(0.0, fs_ytd - ipt_ytd)},
         {"source": "semis",  "target": "dsale",  "value": direct_sale_ytd},
         {"source": "semis",  "target": "ipt",    "value": ipt_ytd},
+        {"source": "ipt",    "target": "fsmill", "value": ipt_ytd},
         {"source": "semis",  "target": "conv",   "value": conv_slab_ytd},
-        {"source": "fsmill", "target": "fstot",  "value": fs_ytd},
+        # conv->fstot listed BEFORE fsmill->fstot so it claims the TOP of
+        # SAIL Finished Steel's incoming edge (ribbons stack in link-list
+        # order) — Conversion Agent now sits near the top of its own
+        # column (align: "top" above), so its ribbon can arc straight
+        # across at that same height into fstot's own top edge without
+        # dipping down through the much bigger Finished Steel (Mills)
+        # ribbon to reach a lower slot.
         {"source": "conv",   "target": "fstot",  "value": conv_ytd},
+        {"source": "fsmill", "target": "fstot",  "value": fs_ytd},
     ]
-    return _sankey_svg(nodes, links)
+    # Taller canvas (300 -> 420) to fill more of the page's own leftover
+    # space below the two tables above, and bigger text (12 -> 20, the
+    # default only ever rendered as ~8px once the SVG's viewBox got
+    # stretched to this page's ~667px-wide content column — per direct
+    # instruction, sized here for genuine ~12pt legibility instead) — see
+    # _sankey_svg's label_font_size doc for how every other text-related
+    # constant scales along with it automatically.
+    return _sankey_svg(nodes, links, vh=420, label_font_size=16)
 
 
 # ── public API ────────────────────────────────────────────────────────────────
