@@ -50,6 +50,12 @@ SAIL_BFS = [
 BF_BENCHMARK_PARAMS = [
     {"key": "working_volume_m3", "label": "Working Volume", "unit": "m³", "static": True, "better": None},
     {"key": "production", "label": "Production", "unit": UNIT.T, "static": False, "better": "high"},
+    # Added backfilling Report_format/Non SAIL BF Performance in 2023-24.pdf
+    # — that source reports Avg. Daily Prod directly per non-SAIL BF (an
+    # annual total ÷ operating days figure they publish themselves, unlike
+    # SAIL's own Avg. Daily Rate row, which page_bf_large_annexure.py
+    # always computes from Production ÷ days-in-period rather than storing).
+    {"key": "avg_daily_rate", "label": "Avg. Daily Prod", "unit": "TPD", "static": False, "better": "high"},
     {"key": "bf_productivity", "label": "BF Productivity", "unit": UNIT.T_M3_DAY, "static": False, "better": "high"},
     {"key": "coke_rate", "label": "Coke Rate", "unit": UNIT.KG_THM, "static": False, "better": "low"},
     {"key": "nut_coke_rate", "label": "Nut Coke Rate", "unit": UNIT.KG_THM, "static": False, "better": "low"},
@@ -102,6 +108,14 @@ BF_BENCHMARK_PARAMS = [
     {"key": "slag_al2o3", "label": "Slag Al2O3", "unit": UNIT.PCT, "static": False, "better": None},
     {"key": "slag_b2", "label": "Slag B2", "unit": UNIT.RATIO, "static": False, "better": None},
     {"key": "eta_co", "label": "Eta CO", "unit": UNIT.PCT, "static": False, "better": "high"},
+    # 4 more added backfilling Report_format/Non SAIL BF Performance in
+    # 2023-24.pdf — top-of-furnace gas readings that source reports and no
+    # SAIL extractor captures today.
+    {"key": "tuyere_velocity", "label": "Tuyere Velocity", "unit": "m/sec", "static": False, "better": None},
+    {"key": "top_gas_temp", "label": "Top Gas Temp", "unit": UNIT.DEG_C, "static": False, "better": None},
+    {"key": "top_gas_co2", "label": "Top Gas CO2", "unit": UNIT.PCT, "static": False, "better": "high"},
+    {"key": "top_gas_co", "label": "Top Gas CO", "unit": UNIT.PCT, "static": False, "better": "low"},
+    {"key": "coke_m10", "label": "Coke M10", "unit": UNIT.PCT, "static": False, "better": "low"},
     # Distinct from total_heat_loss (Kcal/THM, a per-tonne rate) above —
     # this is an hourly figure, the unit the Excel source uses for this row.
     {"key": "heat_load_flux", "label": "Heat Load/Flux", "unit": "MJ/hr", "static": False, "better": "low"},
