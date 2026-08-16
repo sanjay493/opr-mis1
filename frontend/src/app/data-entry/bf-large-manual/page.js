@@ -53,7 +53,11 @@ const PARAMS = [
   { key: 'top_pressure', label: 'Top Pressure', unit: 'kg/cm²' },
   { key: 'lump_ore_fe', label: 'Lump Ore Fe', unit: '%' },
   { key: 'pellet_fe', label: 'Pellet Fe', unit: '%' },
-  { key: 'avg_burden_fe', label: 'Avg. Burden Fe', unit: '%' },
+  // Avg. Burden Fe is NOT here — the report page now computes it live from
+  // Sinter/Pellet/Lump in Burden % × their own Fe assay above, per direct
+  // instruction (page_bf_large_annexure.py's _avg_burden_fe). It's no
+  // longer read from techno_data at all, so a manual-entry field for it
+  // here would silently do nothing.
   { key: 'steam_rate_hr', label: 'Steam Rate', unit: 'T/Hr' },
   { key: 'slag_mgo', label: 'Slag MgO', unit: '%' },
   { key: 'slag_al2o3', label: 'Slag Al2O3', unit: '%' },
@@ -61,7 +65,14 @@ const PARAMS = [
   { key: 'eta_co', label: 'Eta CO', unit: '%' },
   { key: 'heat_load_flux', label: 'Heat Load/Flux', unit: 'MJ/hr' },
   { key: 'tapping_duration', label: 'Tapping Duration', unit: 'Hrs' },
-  { key: 'availability', label: 'Fce Availability', unit: '%' },
+  // 'furnace_availability', not the registry's shorter 'availability' —
+  // must match techno-manual's own BF template key (and the literal key
+  // ISP's own monthly extractor already writes under), or the same
+  // divergence bug the Pellet Fe/Lump Ore Fe fix addressed reappears here:
+  // a value entered on one form silently invisible on the other.
+  // page_bf_large_annexure.py's KEY_ALIASES already resolves either name
+  // for the report itself; this only fixes the two ENTRY FORMS agreeing.
+  { key: 'furnace_availability', label: 'Fce Availability', unit: '%' },
   { key: 'utilisation', label: 'Fce Utilisation', unit: '%' },
 ];
 
