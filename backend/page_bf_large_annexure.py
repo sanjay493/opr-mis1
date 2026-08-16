@@ -49,18 +49,22 @@ Data sources, per row:
     lump_in_burden), same as sinter_in_burden/pellet_in_burden, reading
     whatever the plant's own report actually states rather than inferring
     it.
-  - The remaining ~12 rows (Lump Ore Fe, Pellet Fe, Avg. Burden Fe, Steam
-    Rate, Top Pressure, Slag MgO/Al2O3/B2, Eta CO, Heat Load/Flux, Tapping
-    Duration, Fce Availability/Utilisation) have no extractor writing them
-    for any SAIL plant today — added to bf_benchmark_registry.py's
+  - The remaining ~12 rows (Lump Ore Fe, Pellet Fe, Steam Rate, Top
+    Pressure, Slag MgO/Al2O3/B2, Eta CO, Heat Load/Flux, Tapping Duration,
+    Fce Availability/Utilisation) have no extractor writing them for any
+    SAIL plant today — added to bf_benchmark_registry.py's
     BF_BENCHMARK_PARAMS (purely additive; also gives the existing
     /reports/bf-benchmark comparison tool and its non-SAIL entry grid these
-    same rows for free) and filled in via the dedicated
-    /data-entry/bf-large-manual page, which saves into techno_data under
-    the SAME per-BF unit these rows read from here — so a value entered
-    there (or via the general Techno Manual Entry form's BF-8/BF-5 tabs,
-    which shows the same techno_data cells) shows up on both forms and on
-    this report page immediately, all being the same underlying value.
+    same rows for free) and filled in via the Techno Manual Entry form's
+    BF-8/BF-5 tabs (technoParamRegistry.js's Blast Furnace template),
+    which write into the SAME per-BF techno_data unit these rows read from
+    here. There used to be a second, dedicated /data-entry/bf-large-manual
+    page for exactly these rows, saving into the same cells via a
+    different form — removed per direct instruction once its field list
+    was folded into Techno Manual Entry, since having two forms edit the
+    same values under slightly different key names is exactly what caused
+    the Pellet Fe/Lump Ore Fe/Fce Availability divergence bugs fixed
+    earlier (a value entered on one form not showing up on the other).
   - Working Volume is a static engineering spec, unchanged from month to
     month — reused as-is from bf_benchmark_sail_meta.working_volume_m3 (the
     table the existing BF Benchmarking feature already maintains this in;
@@ -105,8 +109,8 @@ _ADDITIVE_KEYS = {"production"}
 
 # Production reads production_table exclusively, never techno_data's own
 # "production" key — per direct instruction, that key isn't a trustworthy
-# source (sparsely manual-entered via bf-large-manual only from ~2026-06
-# onward for BSP/RSP, never at all for ISP), whereas production_table is
+# source (sparsely manual-entered only from ~2026-06 onward for BSP/RSP,
+# never at all for ISP), whereas production_table is
 # this app's established, deeply-historical production source (same table
 # page_key_parameters.py's Hot Metal row reads) and — confirmed against
 # every month where techno_data's key WAS populated — carries the exact

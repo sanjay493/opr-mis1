@@ -45,21 +45,19 @@ export const PARAM_TEMPLATES = {
     // HM quality
     'silicon_in_hm','sulphur_in_hm','avg_hot_metal_temperature',
     // Blast
-    'hot_blast_temp','o2_enrichment','blast_moisture','blast_volume',
+    'hot_blast_temp','o2_enrichment','blast_moisture','blast_volume','top_pressure',
     // Burden / slag
-    'slag_rate','slag_offtake',
+    'slag_rate','slag_offtake','slag_mgo','slag_al2o3','slag_b2',
     'sinter_in_burden','pellet_in_burden','lump_in_burden',
-    // pellet_fe/lump_ore_fe (not tfe_in_pellet/tfe_in_lump, despite the
-    // tfe_in_sinter naming above) — these must match bf_benchmark_registry.
-    // py's own keys exactly, since /data-entry/bf-large-manual's "Pellet
-    // Fe"/"Lump Ore Fe" fields (and page_bf_large_annexure.py's Avg. Burden
-    // Fe calc) read/write those same names. They used to diverge
-    // (tfe_in_pellet/tfe_in_lump here vs pellet_fe/lump_ore_fe there), so a
-    // value entered on one form silently never appeared on the other —
-    // never actually used before this fix (confirmed nothing was ever
-    // saved under the old names), so no data migration was needed.
+    // These must match bf_benchmark_registry.py's own key names exactly —
+    // the "Comparison of Performance of Large BFs of SAIL" report page
+    // (page_bf_large_annexure.py) reads every one of them from BF-8/BF-5's
+    // own techno_data unit, same as everything else in this template
+    // (formerly the dedicated /data-entry/bf-large-manual page's own field
+    // list, merged in here so there's exactly one BF entry form).
     'tfe_in_sinter','pellet_fe','lump_ore_fe','fe_in_ore',
-    'furnace_availability',
+    'furnace_availability','utilisation',
+    'steam_rate_hr','eta_co','heat_load_flux','tapping_duration',
   ],
   'SMS': [
     'specific_hm_consumption',
@@ -152,11 +150,20 @@ export const _LABEL_MAP = {
   hot_blast_temp:                       'Hot Blast Temperature (°C)',
   o2_enrichment:                        'O₂ Enrichment (%)',
   slag_offtake:                         'Slag Offtake (%)',
+  top_pressure:                         'Top Pressure (kg/cm²)',
   sinter_in_burden:                     'Sinter in Burden (%)',
   pellet_in_burden:                     'Pellet in Burden (%)',
   pellet_fe:                             'Pellet Fe (%)',
   lump_ore_fe:                           'Lump Ore Fe (%)',
   furnace_availability:                 'Furnace Availability (%)',
+  utilisation:                          'Fce Utilisation (%)',
+  slag_mgo:                             'Slag MgO (%)',
+  slag_al2o3:                           'Slag Al2O3 (%)',
+  slag_b2:                              'Slag B2 (Ratio)',
+  steam_rate_hr:                        'Steam Rate (T/Hr)',
+  eta_co:                               'Eta CO (%)',
+  heat_load_flux:                       'Heat Load/Flux (MJ/hr)',
+  tapping_duration:                     'Tapping Duration (Hrs)',
   // SMS
   specific_hm_consumption:             'Specific HM Consumption (kg/TCS)',
   specific_scrap_consumption:          'Specific Scrap Consumption (kg/TCS)',

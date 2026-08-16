@@ -76,11 +76,14 @@ BF_BENCHMARK_PARAMS = [
     # Added for the Large BFs (SAIL vs Non-SAIL) annexure report page — see
     # page_bf_large_annexure.py. No SAIL extractor writes any of these today
     # (same "blank until entered" situation as top_pressure/steam_addition/
-    # etc. above); entered via the dedicated /data-entry/bf-large-manual
-    # page, which saves into techno_data under the same per-BF unit
-    # (BF-8/BF-5) these keys are read from here — so a value entered there
-    # also shows up in the general Techno Manual Entry form's BF tabs, and
-    # vice versa, both being the same techno_data cell.
+    # etc. above); for the 3 SAIL BFs, entered via the Techno Manual Entry
+    # form's BF-8/BF-5 tabs (technoParamRegistry.js's Blast Furnace
+    # template), which write into the same per-BF techno_data unit
+    # (BF-8/BF-5) these keys are read from here. avg_burden_fe is the one
+    # exception for SAIL: page_bf_large_annexure.py computes it live from
+    # the burden-mix and Fe-assay rows instead of reading a stored value —
+    # this key still matters here for non-SAIL BFs' own entry grid below,
+    # which has no such formula and enters it directly.
     {"key": "lump_ore_fe", "label": "Lump Ore Fe", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "pellet_fe", "label": "Pellet Fe", "unit": UNIT.PCT, "static": False, "better": "high"},
     {"key": "avg_burden_fe", "label": "Avg. Burden Fe", "unit": UNIT.PCT, "static": False, "better": "high"},
