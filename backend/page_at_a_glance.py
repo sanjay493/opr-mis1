@@ -156,7 +156,7 @@ _SEMIS_OWN_PCT_BADGE_FILL = "yellow"    # circle behind each own-% data label
 # own % badge sits only ~3-6 units from the neighboring segment's badge) —
 # a larger radius reads fine in isolation but overlaps its neighbor there.
 _SEMIS_OWN_PCT_BADGE_R = 3.0
-_SEMIS_OWN_PCT_BADGE_FS = 3.8
+_SEMIS_OWN_PCT_BADGE_FS = 4.6
 
 
 def _semis_breakdown_data(months: list) -> dict:
@@ -297,7 +297,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
                  f'font-family="Arial,sans-serif" font-style="italic" fill="#64748b">'
                  f'bold % = share of total · '
                  f'<tspan fill="{_SEMIS_OWN_PCT_LABEL_COLOR}" font-style="italic" text-decoration="underline">'
-                 f'small % = share of that plant\'s own Saleable Steel</tspan></text>')
+                 f'% in yellow circle = share of that plant\'s own Saleable Steel</tspan></text>')
 
     # Legend (plant colors) — top-right of Zone B's plot area.
     lx = vw - mr
