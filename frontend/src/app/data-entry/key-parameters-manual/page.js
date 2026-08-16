@@ -190,15 +190,34 @@ function KeyParametersManualInner() {
         month_data[key] = mv !== null && scale ? mv * scale : mv;
         till_month_data[key] = tv !== null && scale ? tv * scale : tv;
       }
-      await saveUnit(GENERAL_UNIT, month_data, till_month_data);
+      // Same "nothing to send" guard as the FE-Sinter loop below — only
+      // call saveUnit when at least one General param actually has a
+      // value; otherwise the backend's own "No values provided" rejection
+      // would surface here even when the real edit was only a Sinter Fe
+      // change below.
+      const hasGeneralValue = Object.values(month_data).some((v) => v !== null)
+        || Object.values(till_month_data).some((v) => v !== null);
+      if (hasGeneralValue) {
+        await saveUnit(GENERAL_UNIT, month_data, till_month_data);
+      }
 
       for (const unit of feUnits) {
         const mv = feMonth[unit];
         const tv = feTill[unit];
+        const mBlank = mv === '' || mv === undefined || mv === null;
+        const tBlank = tv === '' || tv === undefined || tv === null;
+        // Skip units with nothing entered on either side — saveUnit would
+        // send {tfe_in_sinter: null} for both periods, which the backend
+        // rejects as "No values provided — nothing to save." (a save with
+        // nothing to send there, not a real failure), surfacing as a
+        // misleading error even when the General params above just saved
+        // fine (e.g. only a Demurrage till-month value was changed and
+        // this plant has never had a Sinter Fe figure entered at all).
+        if (mBlank && tBlank) continue;
         await saveUnit(
           unit,
-          { [FE_SINTER_KEY]: mv === '' || mv === undefined ? null : Number(mv) },
-          { [FE_SINTER_KEY]: tv === '' || tv === undefined ? null : Number(tv) },
+          { [FE_SINTER_KEY]: mBlank ? null : Number(mv) },
+          { [FE_SINTER_KEY]: tBlank ? null : Number(tv) },
         );
       }
       // Resets the changed-highlight/count baseline to what was just
