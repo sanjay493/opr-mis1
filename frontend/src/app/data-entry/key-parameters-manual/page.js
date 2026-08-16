@@ -71,6 +71,39 @@ const FE_SINTER_UNITS = {
 };
 const FE_SINTER_KEY = 'tfe_in_sinter';
 
+// Count of param/unit keys whose current value differs from the value
+// last loaded/saved — drives both the changed-cell highlight and the
+// "Save (N changes)" button label, same convention as techno-manual/
+// page.js's countChanges().
+function countChanges(generalMonth, generalTill, initGeneralMonth, initGeneralTill,
+                       feMonth, feTill, initFeMonth, initFeTill, feUnits) {
+  let n = 0;
+  for (const { key } of GENERAL_PARAMS) {
+    if ((generalMonth[key] ?? '') !== (initGeneralMonth[key] ?? '')) n++;
+    if ((generalTill[key] ?? '') !== (initGeneralTill[key] ?? '')) n++;
+  }
+  for (const unit of feUnits) {
+    if ((feMonth[unit] ?? '') !== (initFeMonth[unit] ?? '')) n++;
+    if ((feTill[unit] ?? '') !== (initFeTill[unit] ?? '')) n++;
+  }
+  return n;
+}
+
+function ChangedInput({ value, onChange, changed, disabled }) {
+  return (
+    <input
+      type="number" step="any" disabled={disabled}
+      style={{
+        width: '110px', padding: '6px 8px', fontSize: '11pt', textAlign: 'right',
+        border: `1px solid ${changed ? '#f59e0b' : '#dadce0'}`, borderRadius: '4px',
+        background: disabled ? '#f9fafb' : changed ? '#fffbeb' : '#fff',
+      }}
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
 function KeyParametersManualInner() {
   const def = getDefaultPeriod();
   const [plant, setPlant] = useState('BSP');
@@ -80,6 +113,10 @@ function KeyParametersManualInner() {
   const [generalTill, setGeneralTill] = useState({});
   const [feMonth, setFeMonth] = useState({});   // { unit: value }
   const [feTill, setFeTill] = useState({});     // { unit: value }
+  const [initGeneralMonth, setInitGeneralMonth] = useState({});
+  const [initGeneralTill, setInitGeneralTill] = useState({});
+  const [initFeMonth, setInitFeMonth] = useState({});
+  const [initFeTill, setInitFeTill] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
@@ -104,6 +141,8 @@ function KeyParametersManualInner() {
       }
       setGeneralMonth(gm);
       setGeneralTill(gt);
+      setInitGeneralMonth(gm);
+      setInitGeneralTill(gt);
 
       const fm = {}, ft = {};
       for (const unit of FE_SINTER_UNITS[plant] || []) {
@@ -113,6 +152,8 @@ function KeyParametersManualInner() {
       }
       setFeMonth(fm);
       setFeTill(ft);
+      setInitFeMonth(fm);
+      setInitFeTill(ft);
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
     } finally {
@@ -121,6 +162,11 @@ function KeyParametersManualInner() {
   }, [plant, reportMonth]);
 
   useEffect(() => { load(); }, [load]);
+
+  const totalChanges = countChanges(
+    generalMonth, generalTill, initGeneralMonth, initGeneralTill,
+    feMonth, feTill, initFeMonth, initFeTill, feUnits,
+  );
 
   const saveUnit = async (unit, month_data, till_month_data) => {
     const res = await fetch(`${API_BASE_URL}/api/techno/manual/save`, {
@@ -155,6 +201,12 @@ function KeyParametersManualInner() {
           { [FE_SINTER_KEY]: tv === '' || tv === undefined ? null : Number(tv) },
         );
       }
+      // Resets the changed-highlight/count baseline to what was just
+      // saved, same as techno-manual/page.js's saveAll().
+      setInitGeneralMonth({ ...generalMonth });
+      setInitGeneralTill({ ...generalTill });
+      setInitFeMonth({ ...feMonth });
+      setInitFeTill({ ...feTill });
       setStatus({ type: 'success', text: `✓ Saved for ${plant} ${reportMonth}` });
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
@@ -167,29 +219,29 @@ function KeyParametersManualInner() {
     padding: '8px 12px', fontSize: '11pt', border: '1px solid #dadce0',
     borderRadius: '6px', backgroundColor: '#ffffff', color: '#202124', cursor: 'pointer',
   };
-  const inputStyle = {
-    width: '110px', padding: '6px 8px', fontSize: '11pt', textAlign: 'right',
-    border: '1px solid #dadce0', borderRadius: '4px',
-  };
   const cell = { padding: '8px 12px', fontSize: '10.5pt', borderBottom: '1px solid #e8eaed' };
 
-  const renderRow = (key, label, unit, monthVal, tillVal, onMonth, onTill, i) => (
+  const renderRow = (key, label, unit, monthVal, tillVal, onMonth, onTill, i, monthChanged, tillChanged) => (
     <tr key={key} style={{ backgroundColor: i % 2 === 1 ? '#f8f9fa' : '#fff' }}>
       <td style={cell}>{label}</td>
       <td style={{ ...cell, color: '#5f6368' }}>{unit}</td>
       <td style={{ ...cell, textAlign: 'right' }}>
-        <input type="number" step="any" style={inputStyle} value={monthVal ?? ''} onChange={onMonth} />
+        <ChangedInput value={monthVal ?? ''} disabled={saving} changed={monthChanged} onChange={onMonth} />
       </td>
       <td style={{ ...cell, textAlign: 'right' }}>
-        <input type="number" step="any" style={inputStyle} value={tillVal ?? ''} onChange={onTill} />
+        <ChangedInput value={tillVal ?? ''} disabled={saving} changed={tillChanged} onChange={onTill} />
       </td>
     </tr>
   );
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+    // height:100vh + flex column, with the content area its own
+    // flex:1/overflow:auto scroll region below the sticky GlobalNavbar —
+    // same layout techno-manual/page.js uses, rather than an unbounded
+    // minHeight:100vh page that just keeps growing.
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
-      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px' }}>
+      <div style={{ flex: 1, overflow: 'auto', maxWidth: '760px', margin: '0 auto', padding: '32px', width: '100%', boxSizing: 'border-box' }}>
         <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
           Key Parameters — Manual Entry
         </h1>
@@ -249,6 +301,8 @@ function KeyParametersManualInner() {
                 (e) => setGeneralMonth((v) => ({ ...v, [p.key]: e.target.value })),
                 (e) => setGeneralTill((v) => ({ ...v, [p.key]: e.target.value })),
                 i,
+                (generalMonth[p.key] ?? '') !== (initGeneralMonth[p.key] ?? ''),
+                (generalTill[p.key] ?? '') !== (initGeneralTill[p.key] ?? ''),
               ))}
               {feUnits.map((unit, j) => renderRow(
                 `fe-${unit}`,
@@ -258,6 +312,8 @@ function KeyParametersManualInner() {
                 (e) => setFeMonth((v) => ({ ...v, [unit]: e.target.value })),
                 (e) => setFeTill((v) => ({ ...v, [unit]: e.target.value })),
                 GENERAL_PARAMS.length + j,
+                (feMonth[unit] ?? '') !== (initFeMonth[unit] ?? ''),
+                (feTill[unit] ?? '') !== (initFeTill[unit] ?? ''),
               ))}
             </tbody>
           </table>
@@ -265,14 +321,14 @@ function KeyParametersManualInner() {
 
         <button
           onClick={handleSave}
-          disabled={saving || loading}
+          disabled={saving || loading || totalChanges === 0}
           style={{
             padding: '10px 24px', fontSize: '11pt', fontWeight: 700, border: 'none', borderRadius: '6px',
-            backgroundColor: saving ? '#9aa0a6' : '#1a73e8', color: '#fff',
-            cursor: saving || loading ? 'not-allowed' : 'pointer',
+            backgroundColor: saving ? '#9aa0a6' : totalChanges === 0 ? '#9aa0a6' : '#1a73e8', color: '#fff',
+            cursor: saving || loading || totalChanges === 0 ? 'not-allowed' : 'pointer',
           }}
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Saving…' : totalChanges > 0 ? `Save (${totalChanges} change${totalChanges > 1 ? 's' : ''})` : 'Save'}
         </button>
       </div>
     </div>

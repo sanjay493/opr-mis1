@@ -65,6 +65,34 @@ const PARAMS = [
   { key: 'utilisation', label: 'Fce Utilisation', unit: '%' },
 ];
 
+// Count of param keys whose current value differs from the value last
+// loaded/saved — drives both the changed-cell highlight and the "Save (N
+// changes)" button label, same convention as techno-manual/page.js's
+// countChanges().
+function countChanges(monthVals, tillVals, initMonthVals, initTillVals) {
+  let n = 0;
+  for (const { key } of PARAMS) {
+    if ((monthVals[key] ?? '') !== (initMonthVals[key] ?? '')) n++;
+    if ((tillVals[key] ?? '') !== (initTillVals[key] ?? '')) n++;
+  }
+  return n;
+}
+
+function ChangedInput({ value, onChange, changed, disabled }) {
+  return (
+    <input
+      type="number" step="any" disabled={disabled}
+      style={{
+        width: '110px', padding: '6px 8px', fontSize: '11pt', textAlign: 'right',
+        border: `1px solid ${changed ? '#f59e0b' : '#dadce0'}`, borderRadius: '4px',
+        background: disabled ? '#f9fafb' : changed ? '#fffbeb' : '#fff',
+      }}
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
 function BfLargeManualInner() {
   const def = getDefaultPeriod();
   const [bfKey, setBfKey] = useState('BSP');
@@ -72,6 +100,8 @@ function BfLargeManualInner() {
   const [year, setYear] = useState(def.year);
   const [monthVals, setMonthVals] = useState({});
   const [tillVals, setTillVals] = useState({});
+  const [initMonthVals, setInitMonthVals] = useState({});
+  const [initTillVals, setInitTillVals] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
@@ -89,6 +119,8 @@ function BfLargeManualInner() {
       const unitData = json.units?.[bf.unit] || {};
       setMonthVals({ ...unitData.month });
       setTillVals({ ...unitData.till_month });
+      setInitMonthVals({ ...unitData.month });
+      setInitTillVals({ ...unitData.till_month });
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
     } finally {
@@ -97,6 +129,8 @@ function BfLargeManualInner() {
   }, [bf.plant, bf.unit, reportMonth]);
 
   useEffect(() => { load(); }, [load]);
+
+  const totalChanges = countChanges(monthVals, tillVals, initMonthVals, initTillVals);
 
   const handleSave = async () => {
     setSaving(true);
@@ -115,6 +149,10 @@ function BfLargeManualInner() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Save failed');
+      // Resets the changed-highlight/count baseline to what was just saved,
+      // same as techno-manual/page.js's saveAll().
+      setInitMonthVals({ ...monthVals });
+      setInitTillVals({ ...tillVals });
       setStatus({ type: 'success', text: `✓ Saved for ${bf.label} — ${reportMonth}` });
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
@@ -127,16 +165,16 @@ function BfLargeManualInner() {
     padding: '8px 12px', fontSize: '11pt', border: '1px solid #dadce0',
     borderRadius: '6px', backgroundColor: '#ffffff', color: '#202124', cursor: 'pointer',
   };
-  const inputStyle = {
-    width: '110px', padding: '6px 8px', fontSize: '11pt', textAlign: 'right',
-    border: '1px solid #dadce0', borderRadius: '4px',
-  };
   const cell = { padding: '8px 12px', fontSize: '10.5pt', borderBottom: '1px solid #e8eaed' };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+    // height:100vh + flex column, with the content area its own
+    // flex:1/overflow:auto scroll region below the sticky GlobalNavbar —
+    // same layout techno-manual/page.js uses, rather than an unbounded
+    // minHeight:100vh page that just keeps growing.
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
-      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px' }}>
+      <div style={{ flex: 1, overflow: 'auto', maxWidth: '760px', margin: '0 auto', padding: '32px', width: '100%', boxSizing: 'border-box' }}>
         <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
           Large BFs — Manual Entry
         </h1>
@@ -195,16 +233,18 @@ function BfLargeManualInner() {
                   <td style={cell}>{p.label}</td>
                   <td style={{ ...cell, color: '#5f6368' }}>{p.unit}</td>
                   <td style={{ ...cell, textAlign: 'right' }}>
-                    <input
-                      type="number" step="any" style={inputStyle}
+                    <ChangedInput
                       value={monthVals[p.key] ?? ''}
+                      disabled={saving}
+                      changed={(monthVals[p.key] ?? '') !== (initMonthVals[p.key] ?? '')}
                       onChange={(e) => setMonthVals((v) => ({ ...v, [p.key]: e.target.value }))}
                     />
                   </td>
                   <td style={{ ...cell, textAlign: 'right' }}>
-                    <input
-                      type="number" step="any" style={inputStyle}
+                    <ChangedInput
                       value={tillVals[p.key] ?? ''}
+                      disabled={saving}
+                      changed={(tillVals[p.key] ?? '') !== (initTillVals[p.key] ?? '')}
                       onChange={(e) => setTillVals((v) => ({ ...v, [p.key]: e.target.value }))}
                     />
                   </td>
@@ -216,14 +256,14 @@ function BfLargeManualInner() {
 
         <button
           onClick={handleSave}
-          disabled={saving || loading}
+          disabled={saving || loading || totalChanges === 0}
           style={{
             padding: '10px 24px', fontSize: '11pt', fontWeight: 700, border: 'none', borderRadius: '6px',
-            backgroundColor: saving ? '#9aa0a6' : '#1a73e8', color: '#fff',
-            cursor: saving || loading ? 'not-allowed' : 'pointer',
+            backgroundColor: saving ? '#9aa0a6' : totalChanges === 0 ? '#9aa0a6' : '#1a73e8', color: '#fff',
+            cursor: saving || loading || totalChanges === 0 ? 'not-allowed' : 'pointer',
           }}
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Saving…' : totalChanges > 0 ? `Save (${totalChanges} change${totalChanges > 1 ? 's' : ''})` : 'Save'}
         </button>
       </div>
     </div>
