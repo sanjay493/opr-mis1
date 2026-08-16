@@ -5064,6 +5064,17 @@ async def get_techno_major_parameters():
         {"name": "Pellet in Burden", "unit": "%"},
         {"name": "BF Productivity", "unit": "t/m³/day"},
         {"name": "Specific Energy Consumption", "unit": "Gcal/tcs"},
+        # Same "General"-unit, CS-weighted category as Specific Energy
+        # Consumption above (not BF-shop physics either) — these 3 are the
+        # EPI page's (page_epi.py) own parameters, reusing the exact same
+        # unit_section rows/target lookup page_techno.py's Major Techno-
+        # Economic table already has for them (see page_techno.py:1677-79)
+        # — this list was simply never extended to cover them, so there was
+        # no way to enter/revise their Norm anywhere despite the report
+        # side already being fully wired to show one.
+        {"name": "Sp. CO2 Emission", "unit": "T/tcs"},
+        {"name": "Sp. Water Consumption", "unit": "m³/tcs"},
+        {"name": "Sp. PM Emission", "unit": "kg/tcs"},
     ]
     sms_params = [
         {"name": "Hot Metal Consumption", "unit": "kg/tcs"},
