@@ -278,15 +278,18 @@ def _plant_techno_view(plant, period_dict_by_unit):
     return {(plant, u): d for u, d in period_dict_by_unit.items()}
 
 
-def _coke_ash_and_sinter_fe(plant, report_month):
+def _coke_ash_and_sinter_fe(plant, unit, report_month):
     """(prev_fy, month, ytd) tuples for Coke Ash and Sinter Fe, reusing
-    page_key_parameters.py's plant-level (not per-furnace) resolution."""
+    page_key_parameters.py's plant-level (not per-furnace) resolution as a
+    fallback for Sinter Fe — see _resolve's furnace_fe check below for the
+    furnace-level figure this page prefers first."""
     prev_fy_end = _prev_fy_end_month(report_month)
 
     # Units potentially needed: coke-oven candidates + whichever Sinter/BF
-    # units _sinter_fe_val itself may read (BF_Shop/BF-5, or SP-1/2/3 for RSP).
+    # units _sinter_fe_val itself may read (BF_Shop/BF-5, or SP-1/2/3 for RSP)
+    # + this BF's own unit (for the furnace-level figure _resolve prefers).
     sinter_units = _SP_UNIT_MAP.get(plant, ["BF_Shop", "BF-5"])
-    all_units = list(dict.fromkeys(_COKE_UNITS + sinter_units))
+    all_units = list(dict.fromkeys(_COKE_UNITS + sinter_units + [unit]))
 
     rows = {}
     conn = db.connect()
@@ -298,8 +301,8 @@ def _coke_ash_and_sinter_fe(plant, report_month):
             f"WHERE plant=? AND unit IN ({ph_u}) AND report_month IN (?, ?)",
             (plant, *all_units, report_month, prev_fy_end),
         )
-        for unit, rm, tj in cur.fetchall():
-            rows[(unit, rm)] = _json.loads(tj)
+        for row_unit, rm, tj in cur.fetchall():
+            rows[(row_unit, rm)] = _json.loads(tj)
     finally:
         conn.close()
 
@@ -307,18 +310,24 @@ def _coke_ash_and_sinter_fe(plant, report_month):
         by_unit = {u: rows.get((u, rm), {}).get(period, {}) for u in all_units}
         techno = _plant_techno_view(plant, by_unit)
         ash = _first_present_val(plant, _COKE_UNITS, ["ash_in_coke", "average_ash_in_coke"], techno, 2)
-        # _sinter_fe_val (page_key_parameters.py) returns a "/"-joined
-        # display STRING for RSP (its 3 sinter plants shown side by side) —
-        # not usable here where every value needs to stay numeric for
-        # rounding/formatting. RSP's furnaces all draw from the same sinter
-        # supply, so the average across SP-1/2/3 is a fair single figure for
-        # a single-furnace comparison row.
-        sinter_vals = [
-            v for u in sinter_units
-            for v in [by_unit.get(u, {}).get("tfe_in_sinter")]
-            if v is not None
-        ]
-        fe = _round(sum(sinter_vals) / len(sinter_vals), 2) if sinter_vals else None
+        # Prefer Sinter Fe entered directly under this BF's OWN unit (e.g.
+        # RSP's BF-5 tab in Techno Manual Entry, tfe_in_sinter) — the exact
+        # furnace-level figure this per-furnace comparison row wants,
+        # confirmed live for RSP March'26 (entered under BF-5, not any of
+        # SP-1/2/3). Only falls back to the plant-wide SP-1/2/3 (or
+        # BF_Shop/BF-5) average — page_key_parameters.py's same
+        # resolution, a fair stand-in when nobody's entered the
+        # furnace-specific figure yet, but not as accurate as the real one.
+        furnace_fe = by_unit.get(unit, {}).get("tfe_in_sinter")
+        if furnace_fe is not None:
+            fe = _round(furnace_fe, 2)
+        else:
+            sinter_vals = [
+                v for u in sinter_units
+                for v in [by_unit.get(u, {}).get("tfe_in_sinter")]
+                if v is not None
+            ]
+            fe = _round(sum(sinter_vals) / len(sinter_vals), 2) if sinter_vals else None
         return ash, fe
 
     ash_month, fe_month = _resolve(report_month, "month")
@@ -431,7 +440,7 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         plant, unit, label = bf["plant"], bf["unit"], bf["label"]
         sail_cols.append({"label": label, "plant": plant, "unit": unit})
         vals, ytd_months, prev_fy_months = _sail_bf_values(plant, unit, report_month)
-        vals["_coke_ash"], vals["_sinter_fe"] = _coke_ash_and_sinter_fe(plant, report_month)
+        vals["_coke_ash"], vals["_sinter_fe"] = _coke_ash_and_sinter_fe(plant, unit, report_month)
         vals["_avg_daily_rate"] = _avg_daily_rate(vals["production"], report_month, ytd_months, prev_fy_months)
         sp = vals["sinter_in_burden"]
         pl = vals["pellet_in_burden"]
