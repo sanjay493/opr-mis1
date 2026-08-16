@@ -211,6 +211,42 @@ def _semis_ytd(cur, months: list) -> float:
     return float(r[0]) if r and r[0] is not None else 0.0
 
 
+_IPT_SEMIS_ITEMS = (
+    "CC Slabs", "CC Blooms", "CC Billets (105 sq mm)",
+    # ASP -> RSP, a slab-type product under its own item name in
+    # ipt_table (not "CC Slabs") — confirmed against a live check
+    # (670+560+647+503 = 2,380 T, Apr-Jul'26).
+    "Spade/ 2Pi / Jackal Slabs",
+)
+
+
+def _ipt_transfer_ytd(cur, months: list) -> float:
+    """Semis moved to another plant to be rolled into finished steel there,
+    rather than sold as-is — per direct instruction, "Total IPT" (_IPT_
+    SEMIS_ITEMS, ipt_table, any route) plus DSP's entire Bottom Pouring
+    Ingot output (all of it goes to ASP, though ipt_table has no explicit
+    route for it). ipt_table stores its actual in plain Tonnes (unlike
+    production_table's '000 T everywhere else on this page) — /1000 to
+    match."""
+    ph_m = ",".join("?" * len(months))
+    ph_i = ",".join("?" * len(_IPT_SEMIS_ITEMS))
+    cur.execute(
+        f"SELECT COALESCE(SUM(actual),0) FROM ipt_table "
+        f"WHERE report_month IN ({ph_m}) AND item IN ({ph_i})",
+        (*months, *_IPT_SEMIS_ITEMS),
+    )
+    ipt_t = float(cur.fetchone()[0] or 0.0)
+
+    cur.execute(
+        f"SELECT COALESCE(SUM(month_actual),0) FROM production_table "
+        f"WHERE report_month IN ({ph_m}) AND plant_name='DSP' AND item_name='Bottom Pouring Ingot'",
+        months,
+    )
+    ingot = float(cur.fetchone()[0] or 0.0)
+
+    return ipt_t / 1000.0 + ingot
+
+
 # Main-flow nodes for the Hot-Metal-to-Saleable-Steel Sankey (_flow_sankey_svg
 # below) — these get their label centered on the bar itself instead of the
 # above-bar placement every other (branch/split) node uses.
@@ -343,7 +379,11 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
         svg.append(f'<rect x="{g["x"]:.1f}" y="{g["y"]:.1f}" width="{g["w"]:.1f}" height="{g["h"]:.1f}" '
                     f'rx="2.5" fill="{color}"/>')
         cx = g["x"] + g["w"] / 2
-        val_str = fmt(sizes[nid])
+        # A node with no independent DB actual of its own (e.g. this page's
+        # "Direct Sale (Semis)", a derived remainder) carries its own
+        # "value_prefix" (e.g. "≈ ") to mark that in the rendered value —
+        # blank for every ordinary, directly-measured node.
+        val_str = n.get("value_prefix", "") + fmt(sizes[nid])
         if nid in _MID_LABEL_IDS:
             # Main-flow nodes (Hot Metal -> Crude Steel -> Finished Steel
             # (Mills) -> SAIL Finished Steel) label at the bar's own vertical
@@ -409,7 +449,21 @@ def _flow_sankey_svg(cur, report_month: str) -> str:
     bof_ytd, eaf_ytd, cs_ytd = bof_ytd or 0.0, eaf_ytd or 0.0, cs_ytd or 0.0
 
     semis_ytd = _semis_ytd(cur, ytd_months)
-    direct_sale_ytd = max(0.0, semis_ytd - conv_ytd)
+    ipt_ytd = _ipt_transfer_ytd(cur, ytd_months)
+    # Conversion Agent's SLAB input, back-estimated from its finished-steel
+    # OUTPUT at a ~94% mill yield (per direct instruction) — larger than
+    # conv_ytd itself (the actual finished-steel figure, still used
+    # unchanged for the conv->fstot link below). The gap between the two
+    # surfaces visually as the conv node's own tapering ribbon: a node
+    # with no explicit "value" override sizes to max(incoming, outgoing)
+    # (see _sankey_svg's doc), so its ~6% yield loss shows as unfilled bar
+    # rather than being silently absorbed anywhere.
+    conv_slab_ytd = conv_ytd / 0.94
+    # Semis for Sale now splits 3 ways instead of 2 (Direct Sale, IPT
+    # Transfer, Conversion) — Direct Sale is still whatever's left over
+    # with no independent DB actual of its own, just against a bigger set
+    # of measured deductions than before, hence "≈" on its own value below.
+    direct_sale_ytd = max(0.0, semis_ytd - ipt_ytd - conv_slab_ytd)
 
     nodes = [
         {"id": "hm",     "label": "Hot Metal",              "column": 0, "color": "#2a78d6", "value": hm_ytd},
@@ -417,7 +471,8 @@ def _flow_sankey_svg(cur, report_month: str) -> str:
         {"id": "pig",    "label": "Pig Iron",                "column": 1, "color": "#94a3b8"},
         {"id": "cs",     "label": "Crude Steel",             "column": 1, "color": "#1baf7a"},
         {"id": "semis",  "label": "Semis for Sale",          "column": 2, "color": "#eb6834"},
-        {"id": "dsale",  "label": "Direct Sale (Semis)",     "column": 3, "color": "#94a3b8"},
+        {"id": "dsale",  "label": "Direct Sale (Semis)",     "column": 3, "color": "#94a3b8", "value_prefix": "≈ "},
+        {"id": "ipt",    "label": "IPT Transfer",            "column": 3, "color": "#5b9bd5"},
         {"id": "conv",   "label": "Conversion Agent",        "column": 3, "color": "#e87ba4"},
         {"id": "fsmill", "label": "Finished Steel (Mills)",  "column": 3, "color": "#1baf7a"},
         {"id": "fstot",  "label": "SAIL Finished Steel",     "column": 4, "color": "#2a78d6"},
@@ -429,7 +484,8 @@ def _flow_sankey_svg(cur, report_month: str) -> str:
         {"source": "cs",     "target": "semis",  "value": semis_ytd},
         {"source": "cs",     "target": "fsmill", "value": fs_ytd},
         {"source": "semis",  "target": "dsale",  "value": direct_sale_ytd},
-        {"source": "semis",  "target": "conv",   "value": conv_ytd},
+        {"source": "semis",  "target": "ipt",    "value": ipt_ytd},
+        {"source": "semis",  "target": "conv",   "value": conv_slab_ytd},
         {"source": "fsmill", "target": "fstot",  "value": fs_ytd},
         {"source": "conv",   "target": "fstot",  "value": conv_ytd},
     ]
