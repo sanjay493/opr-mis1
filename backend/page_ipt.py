@@ -70,7 +70,14 @@ def _item_sankey_svg(item, routes_for_item, cum_map):
     item, sized by cumulative FY actual (the same figure the table's own
     "cum_actual" column shows) — plan isn't plotted, this illustrates what
     actually moved. A route with no actual yet (nothing reported this FY)
-    is simply omitted rather than drawn as a zero-width ribbon."""
+    is simply omitted rather than drawn as a zero-width ribbon.
+
+    side_labels=True (per direct instruction, for legibility): sender labels
+    sit to the LEFT of their node, receiver labels to the RIGHT, each
+    anchored to its own node's vertical center — rather than
+    _sankey_svg's default of every label stacked above its node. Only this
+    page opts in; page_prod_by_process.py's own (non-bipartite, multi-stage)
+    Sankey is unaffected."""
     froms, tos, links = [], [], []
     unit_label = "T"
     for frm, to, unit in routes_for_item:
@@ -97,9 +104,9 @@ def _item_sankey_svg(item, routes_for_item, cum_map):
     unit_disp = "Rake" if (unit_label or "").strip().lower() == "rake" else "T"
     # Taller than the width alone would suggest — a route list with 3+
     # senders/receivers on one side needs real vertical room for the
-    # 2-line, 12pt labels above each node to stay legibly spaced (see
-    # _sankey_svg's _LABEL_BLOCK_H) without crowding the canvas edges.
-    return _sankey_svg(nodes, links, vw=560, vh=260,
+    # 2-line, 12pt side labels to stay legibly spaced without crowding the
+    # canvas edges.
+    return _sankey_svg(nodes, links, vw=560, vh=260, side_labels=True,
                         value_fmt=lambda v: f'{v:,.0f} {unit_disp}')
 
 
@@ -111,13 +118,29 @@ def _cum_label(months):
         return _month_label(months[0])
     return f"{_MON[int(months[0][5:7])]}-{_month_label(months[-1])}"
 
-def _fy_label(report_month):
-    y, m = int(report_month[:4]), int(report_month[5:7])
-    fy = y if m >= 4 else y - 1
-    return f"{fy % 100}-{(fy + 1) % 100:02d}"
-
 def _fmt(v):
     return "" if v is None else str(int(round(v)))
+
+def _add_col_rowspans(rows, key):
+    """In-place: for consecutive rows sharing the same value under `key`,
+    the first row gets f"{key}_rowspan" = run length, the rest get 0 (skip
+    the cell entirely — merged into the first row's, per direct
+    instruction: "From"/"To" plant cells merge when adjacent rows repeat
+    the same plant). Rows are already grouped by item then sorted
+    from_plant, to_plant (see the SQL's ORDER BY), so "From" runs are
+    always contiguous within an item; "To" runs merge wherever two
+    adjacent rows happen to share the same receiver, whichever "From"
+    they're under."""
+    n = len(rows)
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and rows[j + 1][key] == rows[i][key]:
+            j += 1
+        rows[i][f"{key}_rowspan"] = j - i + 1
+        for k in range(i + 1, j + 1):
+            rows[k][f"{key}_rowspan"] = 0
+        i = j + 1
 
 
 def generate_ipt(report_month: str) -> dict:
@@ -182,15 +205,25 @@ def generate_ipt(report_month: str) -> dict:
             if item in by_item:
                 by_item[item]["sankey_svg"] = _item_sankey_svg(item, routes_by_item[item], cum_map)
 
+        for sec in sections:
+            _add_col_rowspans(sec["rows"], "from")
+            _add_col_rowspans(sec["rows"], "to")
+
         # Process order (_ITEM_ORDER), unlisted items sorted alphabetically
         # after all known ones — see module docstring.
         sections.sort(key=lambda sec: (_ITEM_RANK.get(sec["item"], len(_ITEM_ORDER)), sec["item"]))
 
+        month_label = _month_label(report_month)
+        cum_label = _cum_label(ytd_months)
+
         return {
-            "title": f"IPT Status for FY {_fy_label(report_month)}",
+            # Dynamic per the selected report month (same month_label/
+            # cum_label the header columns below already use), not a fixed
+            # FY string — per direct instruction.
+            "title": f"IPT Status for {month_label} & {cum_label}",
             "variant": "ipt_status",
-            "month_label": _month_label(report_month),
-            "cum_label": _cum_label(ytd_months),
+            "month_label": month_label,
+            "cum_label": cum_label,
             "sections": sections,
         }
     finally:

@@ -7,18 +7,18 @@
             </colgroup>
             <thead>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
-                <th rowspan="2" style="padding:3px 4px;border:1px solid {{ colors.border_dark }};text-align:left;">Item</th>
-                <th rowspan="2" style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">From</th>
-                <th rowspan="2" style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">To</th>
-                <th rowspan="2" style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">Unit</th>
-                <th colspan="2" style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">{{ page.month_label }}</th>
-                <th colspan="2" style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">{{ page.cum_label }}</th>
+                <th rowspan="2" style="padding:5px 4px;border:1px solid {{ colors.border_dark }};text-align:left;">Item</th>
+                <th rowspan="2" style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">From</th>
+                <th rowspan="2" style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">To</th>
+                <th rowspan="2" style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">Unit</th>
+                <th colspan="2" style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">{{ page.month_label }}</th>
+                <th colspan="2" style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">{{ page.cum_label }}</th>
               </tr>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
-                <th style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">Plan</th>
-                <th style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">Actual</th>
-                <th style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">Plan</th>
-                <th style="padding:3px 4px;border:1px solid {{ colors.border_dark }};">Actual</th>
+                <th style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">Plan</th>
+                <th style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">Actual</th>
+                <th style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">Plan</th>
+                <th style="padding:5px 4px;border:1px solid {{ colors.border_dark }};">Actual</th>
               </tr>
             </thead>
             <tbody>
@@ -27,15 +27,19 @@
               {% for row in sec.rows %}
               <tr style="background:{{ sbg }};">
                 {% if loop.first %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;vertical-align:middle;">{{ sec.icon }} {{ sec.item }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:5px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;vertical-align:middle;">{{ sec.icon }} {{ sec.item }}</td>
                 {% endif %}
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.from }}</td>
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.to }}</td>
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.unit }}</td>
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.plan }}{% if row.plan_t %}<div style="font-size:5.6pt;color:{{ colors.text_secondary }};">({{ row.plan_t }} T)</div>{% endif %}</td>
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.actual }}{% if row.actual_t %}<div style="font-size:5.6pt;color:{{ colors.text_secondary }};">({{ row.actual_t }} T)</div>{% endif %}</td>
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.cum_plan }}{% if row.cum_plan_t %}<div style="font-size:5.6pt;color:{{ colors.text_secondary }};">({{ row.cum_plan_t }} T)</div>{% endif %}</td>
-                <td style="padding:2px 5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.cum_actual }}{% if row.cum_actual_t %}<div style="font-size:5.6pt;color:{{ colors.text_secondary }};">({{ row.cum_actual_t }} T)</div>{% endif %}</td>
+                {% if row.from_rowspan %}
+                <td rowspan="{{ row.from_rowspan }}" style="padding:5px;border:1px solid {{ colors.border_medium }};text-align:center;vertical-align:middle;">{{ row.from }}</td>
+                {% endif %}
+                {% if row.to_rowspan %}
+                <td rowspan="{{ row.to_rowspan }}" style="padding:5px;border:1px solid {{ colors.border_medium }};text-align:center;vertical-align:middle;">{{ row.to }}</td>
+                {% endif %}
+                <td style="padding:5px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.unit }}</td>
+                <td style="padding:5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.plan }}{% if row.plan_t %}<div style="font-size:5.6pt;color:{{ colors.text_secondary }};">({{ row.plan_t }} T)</div>{% endif %}</td>
+                <td style="padding:5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.actual }}{% if row.actual_t %}<div style="font-size:5.6pt;color:{{ colors.text_secondary }};">({{ row.actual_t }} T)</div>{% endif %}</td>
+                <td style="padding:5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.cum_plan }}{% if row.cum_plan_t %}<div style="font-size:5.6pt;color:{{ colors.text_secondary }};">({{ row.cum_plan_t }} T)</div>{% endif %}</td>
+                <td style="padding:5px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ row.cum_actual }}{% if row.cum_actual_t %}<div style="font-size:5.6pt;color:{{ colors.text_secondary }};">({{ row.cum_actual_t }} T)</div>{% endif %}</td>
               </tr>
               {% endfor %}
             {% endfor %}

@@ -1,12 +1,12 @@
 'use client';
 
 // ── style tokens ──────────────────────────────────────────────────────────────
-const CELL = { padding: '2px 5px', border: '1px solid #94a3b8', lineHeight: 1.25, fontSize: 'var(--report-font-size)' };
+const CELL = { padding: '5px', border: '1px solid #94a3b8', lineHeight: 1.25, fontSize: 'var(--report-font-size)' };
 const NUM  = { ...CELL, textAlign: 'right' };
-const CTR  = { ...CELL, textAlign: 'center' };
+const CTR  = { ...CELL, textAlign: 'center', verticalAlign: 'middle' };
 const LBL  = { ...CELL, textAlign: 'left' };
 const TH   = {
-  backgroundColor: '#fff', color: '#000', padding: '3px 4px',
+  backgroundColor: '#fff', color: '#000', padding: '5px 4px',
   textAlign: 'center', verticalAlign: 'middle',
   border: '1px solid #334155', fontSize: 'var(--report-font-size)', lineHeight: 1.2, fontWeight: 600,
 };
@@ -71,8 +71,8 @@ export default function IptStatusTemplate({ data }) {
                     {sec.icon} {sec.item}
                   </td>
                 )}
-                <td style={CTR}>{row.from}</td>
-                <td style={CTR}>{row.to}</td>
+                {row.from_rowspan > 0 && <td rowSpan={row.from_rowspan} style={CTR}>{row.from}</td>}
+                {row.to_rowspan > 0 && <td rowSpan={row.to_rowspan} style={CTR}>{row.to}</td>}
                 <td style={CTR}>{row.unit}</td>
                 <td style={NUM}><Qty value={row.plan} tonnage={row.plan_t} /></td>
                 <td style={NUM}><Qty value={row.actual} tonnage={row.actual_t} /></td>

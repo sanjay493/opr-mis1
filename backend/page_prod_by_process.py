@@ -227,7 +227,7 @@ def _node_totals(nodes: list, links: list) -> tuple:
 
 
 def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
-                 value_fmt=None) -> str:
+                 value_fmt=None, side_labels: bool = False) -> str:
     """Hand-rolled layered Sankey: nodes carry a fixed 'column' (left-to-right
     stage), links only ever join adjacent columns. A node's height defaults to
     max(incoming, outgoing) so a node whose in/out differ (a process-yield
@@ -242,7 +242,16 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
     value_fmt(node_value) -> display string, e.g. "1,234 T" — defaults to
     this page's own convention (input values are '000T, displayed as T);
     a caller whose node values are already in their final display unit
-    (e.g. page_ipt.py's tonnes/rake counts) passes its own formatter."""
+    (e.g. page_ipt.py's tonnes/rake counts) passes its own formatter.
+
+    side_labels=True: every non-mid-flow label is anchored to its own
+    node's vertical center instead of stacked above it — on the LEFT for
+    a first-column node (sender), on the RIGHT for a last-column node
+    (receiver). Meant for a simple 2-column bipartite diagram (see
+    page_ipt.py, the only current caller) where each node already has
+    clear vertical room of its own; skips the above-node decluttering pass
+    entirely since there's nothing to declutter — each label just sits
+    beside the one node it belongs to."""
     ml, mr, mt, mb = 92, 92, 46, 10
     cw, ch = vw - ml - mr, vh - mt - mb
 
@@ -320,12 +329,13 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
     # a few tried values before landing here).
     _LABEL_BLOCK_H = 55.0
     label_y = {}
-    for c in columns:
-        non_mid = [n for n in by_col[c] if n["id"] not in _MID_LABEL_IDS]
-        ids_sorted = sorted((n["id"] for n in non_mid), key=lambda nid: geo[nid]["y"])
-        ideal = [geo[nid]["y"] for nid in ids_sorted]
-        adjusted = _declutter_1d(ideal, _LABEL_BLOCK_H)
-        label_y.update(zip(ids_sorted, adjusted))
+    if not side_labels:
+        for c in columns:
+            non_mid = [n for n in by_col[c] if n["id"] not in _MID_LABEL_IDS]
+            ids_sorted = sorted((n["id"] for n in non_mid), key=lambda nid: geo[nid]["y"])
+            ideal = [geo[nid]["y"] for nid in ids_sorted]
+            adjusted = _declutter_1d(ideal, _LABEL_BLOCK_H)
+            label_y.update(zip(ids_sorted, adjusted))
 
     for nid, g in geo.items():
         n = g["node"]
@@ -352,6 +362,22 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
             svg.append(f'<text x="{cx:.1f}" y="{cy - 3:.1f}" text-anchor="middle" font-size="12" '
                         f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
             svg.append(f'<text x="{cx:.1f}" y="{cy + 13:.1f}" text-anchor="middle" font-size="12" '
+                        f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
+        elif side_labels:
+            # Sender (first column) labels sit to the left of their node,
+            # text growing leftward (text-anchor="end"); receiver (last
+            # column) labels sit to the right, growing rightward — each
+            # anchored to its own node's vertical center, no decluttering
+            # needed since every label already sits right next to (and so
+            # is unambiguously tied to) the one node it describes.
+            cy = g["y"] + g["h"] / 2
+            if n["column"] == columns[0]:
+                tx, anchor = g["x"] - 6, "end"
+            else:
+                tx, anchor = g["x"] + g["w"] + 6, "start"
+            svg.append(f'<text x="{tx:.1f}" y="{cy - 3:.1f}" text-anchor="{anchor}" font-size="12" '
+                        f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{n["label"]}</text>')
+            svg.append(f'<text x="{tx:.1f}" y="{cy + 11:.1f}" text-anchor="{anchor}" font-size="12" '
                         f'font-family="Arial,sans-serif" fill="#475569">{val_str}</text>')
         else:
             ly = label_y.get(nid, g["y"])
