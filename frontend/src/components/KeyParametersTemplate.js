@@ -61,7 +61,7 @@ export default function KeyParametersTemplate({ data }) {
                 )}
                 <td style={{ ...cellStyle, fontStyle: 'italic', color: C.textSecondary }}>{row.unit}</td>
                 {plants.map((p) => (
-                  <td key={p} style={row.dim ? { ...cellStyle, fontStyle: 'italic', color: C.textSecondary } : cellStyle}>
+                  <td key={p} style={cellStyle}>
                     {row.plant_values && row.plant_values[p] !== null && row.plant_values[p] !== undefined ? row.plant_values[p] : '—'}
                   </td>
                 ))}
