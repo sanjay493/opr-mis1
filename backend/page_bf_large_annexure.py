@@ -377,13 +377,11 @@ def _avg_burden_fe(sinter_pct, pellet_pct, lump_pct, sinter_fe, pellet_fe, lump_
 
 
 def _dp_for(key):
-    if key in ("production",):
+    if key in ("production", "sulphur_in_hm"):
         return 3
     if key in ("working_volume_m3", "_avg_daily_rate", "hot_blast_temp",
-               "avg_hot_metal_temperature", "tapping_duration",
-               "coke_rate", "nut_coke_rate", "cdi", "fuel_rate",
-               "sinter_in_burden", "pellet_in_burden",
-               "_total_prepared_burden", "lump_in_burden", "slag_rate"):
+               "avg_hot_metal_temperature",
+               "coke_rate", "nut_coke_rate", "cdi", "fuel_rate", "slag_rate"):
         return 0
     return 2
 
@@ -464,7 +462,17 @@ def generate_bf_large_annexure(report_month: str) -> dict:
             prev_fy, month, ytd = sail_values[bf_label][key]
             if key == "production":
                 prev_fy, month, ytd = _fmt_production(prev_fy), _fmt_production(month), _fmt_production(ytd)
-                dp = 3
+                # Fixed 3dp string, not a plain round — Python drops
+                # trailing zeros on a bare float (2.900 -> 2.9, 0.870 ->
+                # 0.87), which reads as mixed precision across cells in the
+                # same row. Same fix CHM Ratio already applies for its own
+                # always-3dp display.
+                sail_out[bf_label] = {
+                    "prev_fy": f"{prev_fy:.3f}" if prev_fy is not None else None,
+                    "month": f"{month:.3f}" if month is not None else None,
+                    "ytd": f"{ytd:.3f}" if ytd is not None else None,
+                }
+                continue
             sail_out[bf_label] = {
                 "prev_fy": _clean(prev_fy, dp), "month": _clean(month, dp), "ytd": _clean(ytd, dp),
             }
