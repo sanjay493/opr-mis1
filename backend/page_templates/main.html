@@ -44,7 +44,15 @@
 
         .cover-page {
             page: cover-layout;
-            padding: 0;
+            /* !important: this rule is declared before the base .page
+               {padding: 3mm 0} rule below (line ~424) — with equal
+               single-class specificity, source order alone would let
+               .page's 3mm win over this 0, silently adding 6mm of extra
+               height inside the cover box and pushing .page1-bottombar
+               onto a blank page 2. Every other per-page-type override
+               (.at-a-glance-page, etc.) avoids this by being declared
+               after .page instead; this one predates that pattern. */
+            padding: 0 !important;
         }
 
         /* Page 4: tighter margins to maximise usable area while keeping footer clear */
@@ -452,6 +460,19 @@
            mark while still landing in the page's text layer for
            extract_text() to find. */
         .pg-badge-marker {
+            /* Left exactly as-is (display:inline-block) — two variants
+               were tried and rejected: position:absolute made pypdf's/
+               poppler's extract_text() find nothing at all (breaks
+               _apply_dept_badges and the page-break measurement passes in
+               pdf.py, silently — no exception, just empty results), and
+               display:block rendered the 1px-font glyphs with different
+               sub-pixel kerning that garbled the extracted text ("@@ GS _
+               @@" instead of "@@PGSTART_1@@"). This inline-block form is
+               the one every existing page already relies on and is known
+               to extract correctly. The ~20px "strut" it contributes to
+               its line box on the zero-margin cover page is compensated
+               for directly in .page1-container/.page1-content's height
+               instead — see the comment there. */
             display: inline-block;
             font-size: 1px;
             line-height: 0;
@@ -568,7 +589,20 @@
         .page1-container {
             position: relative;
             z-index: 0;
-            min-height: 297mm;
+            /* 290mm, not the true A4 height of 297mm. Two things eat into
+               the zero page margin this box is meant to fill exactly (see
+               @page cover-layout above): the .pg-badge-marker span just
+               before this element in the DOM (main.html, ~line 1127)
+               contributes a ~20px/~5.3mm "strut" to its inline-formatting
+               line box even though its own content is font-size:1px (see
+               .pg-badge-marker's comment — this is inherent to it staying
+               inline-block, which extract_text() needs it to be); plus a
+               small safety margin against Chromium print-pagination
+               rounding at an exact page-height box. Without this, the
+               last line of content (.page1-bottombar) was fragmenting
+               onto a blank second page. Imperceptible crop on a
+               full-bleed photo with object-fit:cover. */
+            min-height: 290mm;
             overflow: hidden;
         }
         .page1-bg {
@@ -582,7 +616,7 @@
         .page1-content {
             position: relative;
             z-index: 1;
-            min-height: 297mm;
+            min-height: 290mm;
         }
         /* The image's white content zone narrows to a "waist" around
            55-65% down the page (just below "Prepared By") before widening

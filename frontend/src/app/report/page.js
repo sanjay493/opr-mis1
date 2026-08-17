@@ -291,6 +291,23 @@ export default function ReportPage() {
 
   const { mutate: generatePDF, isPending: isGeneratingPDF } = useGeneratePDF();
 
+  // Full reports now take 20+ minutes to render (see useGeneratePDF — the
+  // job runs on the backend, decoupled from any request timeout), so the
+  // button needs to show it's still alive rather than just sitting on
+  // static "Compiling..." text with no feedback for that whole time.
+  const [pdfElapsedSec, setPdfElapsedSec] = useState(0);
+  useEffect(() => {
+    if (!isGeneratingPDF) {
+      setPdfElapsedSec(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const interval = setInterval(() => {
+      setPdfElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isGeneratingPDF]);
+
   // Merge the active page into pagesData once it arrives. Skipped if already
   // present (see the `enabled` guard above for why that matters).
   useEffect(() => {
@@ -590,7 +607,7 @@ export default function ReportPage() {
             style={{ borderColor: 'var(--primary)', color: '#1a73e8' }}
           >
             {isGeneratingPDF ? (
-              'Compiling PDF Backend...'
+              `Compiling PDF Backend... (${String(Math.floor(pdfElapsedSec / 60)).padStart(1, '0')}:${String(pdfElapsedSec % 60).padStart(2, '0')})`
             ) : isPreparingExport ? (
               'Preparing export…'
             ) : (

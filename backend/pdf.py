@@ -2,7 +2,7 @@ import functools
 import io
 import os
 from fastapi import HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from jinja2 import Environment, FileSystemLoader
 from models import PDFRequest
 from report_utils import dept_badge_group
@@ -317,7 +317,7 @@ def _apply_dept_badges(main_bytes: bytes, dept_badges: dict, browser, font_famil
 
 
 def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DEFAULT_FONT, report_month: str = "",
-                 dept_badges: dict = None) -> bytes:
+                 dept_badges: dict = None, cover_html: str = "") -> bytes:
     """Render one PDF using an already-launched Chromium `browser`. Callers
     (the page3-overflow / trend-break measurement passes and the final
     render, see _generate_pdf_sync) all share a single browser instance for
@@ -326,18 +326,40 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
     browser launches, which is pure overhead since it's the same renderer
     doing the same job each time.
 
-    Rendered as two separate PDF documents so the header/footer (with page
-    numbering) only appears from page 3 onward: `front_html` (cover + index,
-    pages 1-2) is rendered without header/footer, and `main_html` (page 3+) is
-    rendered with header/footer, which makes Chromium's own pageNumber/totalPages
-    counters naturally read "Page 1 of N" for the first page of the main content.
-    The two PDFs are then merged into one.
+    Rendered as up to three separate PDF documents, merged together:
+    `cover_html` (page 1 alone, if present) is rendered with a zero margin
+    so its full-bleed background photo actually reaches the physical page
+    edge; `front_html` (page 2, Index) is rendered without header/footer at
+    the normal margin; `main_html` (page 3+) is rendered with header/footer
+    at the normal margin, which makes Chromium's own pageNumber/totalPages
+    counters naturally read "Page 1 of N" for the first page of the main
+    content. main.html's own CSS already declares `@page cover-layout {
+    margin: 0 }` for the cover — but Playwright/Chromium's page.pdf()
+    `margin` option always overrides any `@page` margin from the page's own
+    CSS, so the cover was silently still getting the standard 12mm/15mm
+    margin (a visible gap along the top/side of the full-bleed photo)
+    unless it gets its own page.pdf() call with an explicit zero margin.
     """
     from pypdf import PdfReader, PdfWriter
     hdr_font = f"'{font_family}',Arial,sans-serif"
     margin = {"top": "12mm", "right": "15mm", "bottom": "12mm", "left": "15mm"}
+    zero_margin = {"top": "0", "right": "0", "bottom": "0", "left": "0"}
 
     writer = PdfWriter()
+
+    if cover_html:
+        page = browser.new_page()
+        page.set_content(cover_html, wait_until="domcontentloaded")
+        page.evaluate("document.fonts.ready")
+        cover_bytes = page.pdf(
+            format="A4",
+            print_background=True,
+            display_header_footer=False,
+            margin=zero_margin,
+        )
+        page.close()
+        for p in PdfReader(io.BytesIO(cover_bytes)).pages:
+            writer.add_page(p)
 
     if front_html:
         page = browser.new_page()
@@ -586,17 +608,29 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                 )
                 _apply_trend_page_splits(_tp, _page_of)
 
-        front_html = template.render(pages=front_pages, **render_kwargs) if front_pages else ""
+        # Page 1 (Cover) is rendered as its own document with a zero page
+        # margin (see _render_pdf's docstring — page.pdf()'s margin option
+        # always wins over the @page CSS the template already declares for
+        # it), separately from page 2 (Index), which keeps the normal margin.
+        _cover_pages = [p for p in front_pages if p.get("page") == 1]
+        _other_front_pages = [p for p in front_pages if p.get("page") != 1]
+        cover_html = template.render(pages=_cover_pages, **render_kwargs) if _cover_pages else ""
+        front_html = template.render(pages=_other_front_pages, **render_kwargs) if _other_front_pages else ""
         main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
         dept_badges = {p.get("page"): p.get("dept_badge") for p in main_pages if p.get("dept_badge")}
-        pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month, dept_badges=dept_badges)
+        pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month, dept_badges=dept_badges, cover_html=cover_html)
 
         browser.close()
 
     return pdf_bytes
 
 
-async def build_pdf_response(request: PDFRequest, pages_override: list = None, page_layouts: dict = None, font_config=None) -> StreamingResponse:
+async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, page_layouts: dict = None, font_config=None) -> tuple[bytes, str]:
+    """Runs the actual Playwright render and returns (pdf_bytes, filename).
+    Split out from build_pdf_response so a background job runner (see
+    main.py's /api/generate-pdf/start) can call it without needing an
+    HTTP response object — a full report now regularly takes 20+ minutes,
+    far past any reasonable synchronous HTTP timeout."""
     import asyncio
     import traceback as tb
     from models import FontConfig
@@ -732,18 +766,33 @@ async def build_pdf_response(request: PDFRequest, pages_override: list = None, p
             ),
         )
 
-        return StreamingResponse(
-            io.BytesIO(pdf_bytes),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": (
-                    f"attachment; filename=SAIL_MIS_Report_"
-                    f"{request.month.replace(' ', '_')}.pdf"
-                ),
-                "X-Content-Type-Options": "nosniff",
-            },
-        )
+        filename = f"SAIL_MIS_Report_{request.month.replace(' ', '_')}.pdf"
+        return pdf_bytes, filename
     except Exception as e:
         detail = f"PDF Compilation failed: {type(e).__name__}: {e}\n{tb.format_exc()}"
         print(detail)
         raise HTTPException(status_code=500, detail=detail)
+
+
+async def build_pdf_response(request: PDFRequest, pages_override: list = None, page_layouts: dict = None, font_config=None) -> Response:
+    """Synchronous (blocking-HTTP-request) entry point, kept for any caller
+    that wants a single-shot response rather than the async job flow. Not
+    used by main.py's report-export path anymore (see generate_pdf_bytes's
+    docstring for why)."""
+    pdf_bytes, filename = await generate_pdf_bytes(request, pages_override, page_layouts, font_config)
+    # A plain Response, not StreamingResponse(io.BytesIO(...)) — the whole
+    # PDF is already in memory, and StreamingResponse iterates its content
+    # using BytesIO's default __iter__, which reads line-by-line (splitting
+    # on b'\n', extremely common in binary PDF data). A ~3MB report body
+    # measured 176k+ newlines — that's 176k+ separate ASGI send() calls
+    # instead of one, which is what was actually turning a fast render into
+    # a multi-minute response (verified: a 61s render, then 5+ min just to
+    # stream a partial download of the result).
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

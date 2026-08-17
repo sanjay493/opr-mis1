@@ -5,6 +5,9 @@ import copy
 import io
 import re
 import sqlite3
+import time
+import uuid
+import asyncio
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
@@ -166,7 +169,7 @@ def _index_rows() -> list:
             extra = 1
         rows.append({"sno": str(i), "title": title, "page_range": _shift_page_range(page_range, 3 + extra)})
     return rows
-from pdf import build_pdf_response
+from pdf import build_pdf_response, generate_pdf_bytes
 from layout_loader import load_layout_config
 from api_rsp_techno import router as rsp_techno_router
 from api_bsp_techno import router as bsp_techno_router
@@ -793,8 +796,7 @@ def save_page3_narrative(request: Page3NarrativeRequest):
 # PDF generation
 # ---------------------------------------------------------------------------
 
-@app.post("/api/generate-pdf")
-async def generate_pdf(request: PDFRequest):
+def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     import datetime as _dt
     enriched = []
     dynamic_page_layouts = {}
@@ -1061,7 +1063,95 @@ async def generate_pdf(request: PDFRequest):
     # Layout/typography come from backend layout_config.json, plus the
     # dynamic techno month-table font sizes computed just above; frontend
     # overrides are otherwise ignored.
+    return enriched, dynamic_page_layouts
+
+
+@app.post("/api/generate-pdf")
+async def generate_pdf(request: PDFRequest):
+    """Synchronous, single-request PDF export. Kept for any non-browser
+    caller that wants one blocking round-trip; the report page itself uses
+    the async job flow below instead — a full report now regularly takes
+    20+ minutes, far past any HTTP client/proxy's reasonable timeout, and a
+    synchronous request has no way to hand back a partial result if the
+    caller gives up and disconnects first."""
+    enriched, dynamic_page_layouts = _enrich_pdf_pages(request)
     return await build_pdf_response(request, pages_override=enriched, page_layouts=dynamic_page_layouts or None, font_config=None)
+
+
+# In-memory job store for async PDF generation: job_id -> {status, created,
+# bytes, filename, error}. A single dict is fine — this backend runs as one
+# process (see project memory on the dual-uvicorn-instance footgun; that's
+# about accidental duplicate processes, not a deliberate multi-worker setup),
+# so there's no cross-process/multi-worker sharing concern here.
+_pdf_jobs: dict = {}
+_PDF_JOB_TTL_SECONDS = 2 * 60 * 60  # purge finished jobs after 2 hours
+
+
+def _purge_old_pdf_jobs():
+    cutoff = time.time() - _PDF_JOB_TTL_SECONDS
+    for jid in [j for j, v in _pdf_jobs.items() if v.get("created", 0) < cutoff]:
+        _pdf_jobs.pop(jid, None)
+
+
+async def _run_pdf_job(job_id: str, request: PDFRequest, enriched: list, dynamic_page_layouts: dict):
+    try:
+        pdf_bytes, filename = await generate_pdf_bytes(
+            request, pages_override=enriched, page_layouts=dynamic_page_layouts or None, font_config=None,
+        )
+        _pdf_jobs[job_id] = {
+            "status": "done", "created": _pdf_jobs[job_id]["created"],
+            "bytes": pdf_bytes, "filename": filename,
+        }
+    except Exception as e:
+        detail = e.detail if isinstance(e, HTTPException) else str(e)
+        _pdf_jobs[job_id] = {"status": "error", "created": _pdf_jobs[job_id]["created"], "error": detail}
+
+
+@app.post("/api/generate-pdf/start")
+async def generate_pdf_start(request: PDFRequest):
+    """Kicks off PDF generation in the background and returns immediately
+    with a job_id — see /api/generate-pdf/status/{job_id} and
+    /api/generate-pdf/result/{job_id}. Decouples render time (20+ minutes
+    for a full report) from any HTTP request timeout."""
+    _purge_old_pdf_jobs()
+    enriched, dynamic_page_layouts = _enrich_pdf_pages(request)
+    job_id = uuid.uuid4().hex
+    _pdf_jobs[job_id] = {"status": "pending", "created": time.time()}
+    task = asyncio.create_task(_run_pdf_job(job_id, request, enriched, dynamic_page_layouts))
+    _pdf_jobs[job_id]["task"] = task  # keep a reference so it isn't GC'd mid-run
+    return {"job_id": job_id}
+
+
+@app.get("/api/generate-pdf/status/{job_id}")
+async def generate_pdf_status(job_id: str):
+    job = _pdf_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown or expired job_id")
+    if job["status"] == "error":
+        return {"status": "error", "error": job.get("error", "PDF generation failed")}
+    return {"status": job["status"]}
+
+
+@app.get("/api/generate-pdf/result/{job_id}")
+async def generate_pdf_result(job_id: str):
+    job = _pdf_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown or expired job_id")
+    if job["status"] == "error":
+        raise HTTPException(status_code=500, detail=job.get("error", "PDF generation failed"))
+    if job["status"] != "done":
+        raise HTTPException(status_code=409, detail="PDF is still being generated")
+    # Plain Response, not StreamingResponse(io.BytesIO(...)) — see
+    # build_pdf_response's matching comment in pdf.py for why that combo is
+    # a serious perf trap for binary content (line-iterates on b'\n').
+    return Response(
+        content=job["bytes"],
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={job['filename']}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

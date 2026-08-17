@@ -151,23 +151,44 @@ export function useSavePage3Narrative() {
   });
 }
 
-// Generate PDF mutation
+// Generate PDF mutation. A full report render takes 20+ minutes, so this
+// doesn't hold one HTTP request open for that whole time: it starts a
+// backend job, polls status until done/error, then fetches the finished
+// PDF. Decouples render time from any client/proxy timeout.
+const PDF_POLL_INTERVAL_MS = 4000;
+
+async function throwForErrorResponse(response) {
+  const errBody = await response.json().catch(() => ({}));
+  throw new Error(errBody.error || errBody.detail || `HTTP ${response.status}`);
+}
+
 export function useGeneratePDF() {
   return useMutation({
     mutationFn: async ({ month, pages }) => {
-      const response = await fetch(`${API_BASE_URL}/api/generate-pdf`, {
+      const startRes = await fetch(`${API_BASE_URL}/api/generate-pdf/start`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ month, pages }),
       });
+      if (!startRes.ok) await throwForErrorResponse(startRes);
+      const { job_id } = await startRes.json();
 
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        throw new Error(errBody.error || `HTTP ${response.status}`);
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, PDF_POLL_INTERVAL_MS));
+        const statusRes = await fetch(`${API_BASE_URL}/api/generate-pdf/status/${job_id}`);
+        if (!statusRes.ok) await throwForErrorResponse(statusRes);
+        const statusBody = await statusRes.json();
+        if (statusBody.status === 'error') {
+          throw new Error(statusBody.error || 'PDF generation failed');
+        }
+        if (statusBody.status === 'done') break;
+        // else "pending" — keep polling
       }
-      return response.blob();
+
+      const resultRes = await fetch(`${API_BASE_URL}/api/generate-pdf/result/${job_id}`);
+      if (!resultRes.ok) await throwForErrorResponse(resultRes);
+      return resultRes.blob();
     },
   });
 }
