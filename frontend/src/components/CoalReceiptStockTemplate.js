@@ -8,15 +8,24 @@ const TITLE_COLOR = '#333333';
 const NOTE_COLOR = '#475569';
 
 const cellStyle = { border: `1px solid ${BORDER}`, padding: '2px 5px', textAlign: 'center' };
-const gapCellStyle = { border: 'none', padding: 0, background: 'transparent', width: '2%' };
+const gapCellStyle = { border: 'none', padding: 0, background: 'transparent', width: 14 };
+
+// Fixed (not 100%-stretched) column widths — however many months happen to
+// have data yet, each column stays the same width as every other row's,
+// instead of the table's columns stretching to fill the full available
+// width whenever few months are populated (e.g. early in an FY, before
+// most months have stock data: a lone 2-3-column table would otherwise
+// balloon each column to several times a fully-populated row's width).
+const LABEL_COL_WIDTH = 95;
+const DATA_COL_WIDTH = 68;
 
 function fmt0(v) {
   return v === null || v === undefined ? '—' : Math.round(v).toString();
 }
 
 function StockTable({ cols, gapAfter }) {
-  const th = { ...cellStyle, fontWeight: 700, fontSize: '8pt' };
-  const td = { ...cellStyle, fontSize: '8pt' };
+  const th = { ...cellStyle, fontWeight: 700, fontSize: '8pt', width: DATA_COL_WIDTH };
+  const td = { ...cellStyle, fontSize: '8pt', width: DATA_COL_WIDTH };
   const before = gapAfter ? cols.slice(0, gapAfter) : cols;
   const after = gapAfter ? cols.slice(gapAfter) : [];
 
@@ -29,10 +38,10 @@ function StockTable({ cols, gapAfter }) {
   );
 
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <table style={{ width: 'auto', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
       <thead>
         <tr>
-          <th style={{ ...th, textAlign: 'left' }}>Category</th>
+          <th style={{ ...th, textAlign: 'left', width: LABEL_COL_WIDTH }}>Category</th>
           {before.map((c, i) => <th key={i} style={th}>{c.date_label}</th>)}
           {gapAfter && <th style={gapCellStyle} />}
           {after.map((c, i) => <th key={gapAfter + i} style={th}>{c.date_label}</th>)}
@@ -40,15 +49,15 @@ function StockTable({ cols, gapAfter }) {
       </thead>
       <tbody>
         <tr>
-          <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>Indigenous</td>
+          <td style={{ ...td, textAlign: 'left', fontWeight: 600, width: LABEL_COL_WIDTH }}>Indigenous</td>
           {rowCells((c, i) => <td key={i} style={td}>{fmt0(c.indigenous)}</td>)}
         </tr>
         <tr>
-          <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>Imported</td>
+          <td style={{ ...td, textAlign: 'left', fontWeight: 600, width: LABEL_COL_WIDTH }}>Imported</td>
           {rowCells((c, i) => <td key={i} style={td}>{fmt0(c.imported)}</td>)}
         </tr>
         <tr style={{ fontWeight: 700 }}>
-          <td style={{ ...td, textAlign: 'left' }}>Total</td>
+          <td style={{ ...td, textAlign: 'left', width: LABEL_COL_WIDTH }}>Total</td>
           {rowCells((c, i) => <td key={i} style={td}>{fmt0(c.total)}</td>)}
         </tr>
       </tbody>
@@ -122,9 +131,11 @@ export default function CoalReceiptStockTemplate({ data }) {
           matching the reference PDF's own two-row layout rather than one
           row growing wider as the FY progresses. Each column only renders
           if that month actually has data (see stock_gap_after's docstring
-          in page_coal_receipts_stock.py) — the second table doesn't
-          render at all once nothing in it has data yet. */}
-      <StockTable cols={stockCols1} gapAfter={stockGapAfter} />
+          in page_coal_receipts_stock.py) — either table skips rendering
+          entirely once nothing in it has data yet (e.g. early in an FY,
+          before any Apr-Sep month has been reported, table 1 alone would
+          otherwise render as an empty label-only box). */}
+      {stockCols1.length > 0 && <StockTable cols={stockCols1} gapAfter={stockGapAfter} />}
       {stockCols2.length > 0 && (
         <div style={{ marginTop: 6 }}>
           <StockTable cols={stockCols2} />

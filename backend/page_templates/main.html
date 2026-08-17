@@ -254,8 +254,28 @@
             font-size: 9.5pt;
             margin: 6px 0 4px;
         }
+        /* Fixed (not 100%-stretched) column widths — however many months
+           happen to have data yet, each column stays the same width as
+           every other row's, instead of the table's columns stretching
+           to fill the full page width whenever few months are populated
+           (e.g. early in an FY, before most months have stock data: a
+           lone 2-3-column table would otherwise balloon each column to
+           several times a fully-populated row's width). table-layout:
+           fixed makes the explicit widths below authoritative regardless
+           of cell content or column count. */
+        .coal-stock-table {
+            width: auto;
+            table-layout: fixed;
+        }
         .coal-stock-table th, .coal-stock-table td {
             font-size: 8pt;
+            width: 68px;
+        }
+        .coal-stock-table .coal-label-cell {
+            width: 95px;
+        }
+        .coal-stock-table .coal-gap-col-wide {
+            width: 14px;
         }
         /* Two stacked mini-tables (first 6 FY months, then the remaining
            7), matching the reference PDF's own two-row layout rather than

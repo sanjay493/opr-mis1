@@ -39,6 +39,7 @@
 
             <div class="coal-c-heading">(C) Month-wise stocks at plants ('000 T)</div>
             {% set ga = page.stock_gap_after %}
+            {% if page.stock_cols_1 %}
             <table class="coal-table coal-stock-table coal-stock-table-1">
                 <thead>
                     <tr>
@@ -63,6 +64,7 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {% endif %}
 
             {% if page.stock_cols_2 %}
             <table class="coal-table coal-stock-table coal-stock-table-2">
