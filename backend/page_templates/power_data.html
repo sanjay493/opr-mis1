@@ -1,0 +1,59 @@
+            <div class="pwr-title">{{ page.title }}</div>
+
+            {% set groups = [
+                ('plan', 'PLAN (MW)', [('own','Own'),('new_pbs','N.P&BS'),('jv_pp2','JV2'),('drawal_jv_pp3','D.PP3'),('total','Total')]),
+                ('actual', 'ACTUAL (MW)', [('own','Own'),('new_pbs','N.P&BS'),('jv_pp2','JV2'),('drawal_jv_pp3','D.PP3'),('total','Total')]),
+                ('grid', 'GRID & CONSUMPTION', [('wheeling_px','Whl'),('purchase_px','Pur'),('renewable_gdam','RE'),('drawal_grid','D.Gr'),('export_grid','Exp'),('total_power_consump','TPC'),('decarbon_nos','D.No'),('decarbon_hrs','D.Hr'),('specific_power_cons','SPC')]),
+                ('last_year', 'LAST YEAR (MW)', [('own_cpp','Own'),('jv_cpp','JV'),('drawal_pp3','D.PP3'),('total_gen','T.Gen'),('total_power_consump','TPC')]),
+            ] %}
+
+            <table class="pwr-table">
+                <colgroup>
+                    <col class="pwr-plant-col">
+                    <col class="pwr-mon-col">
+                    {% for gkey, glabel, gcols in groups %}
+                        {% for ikey, ilabel in gcols %}<col class="pwr-data-col">{% endfor %}
+                    {% endfor %}
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th class="pwr-plant-col" rowspan="2">Plant</th>
+                        <th class="pwr-mon-col" rowspan="2">Mon</th>
+                        {% for gkey, glabel, gcols in groups %}
+                        <th class="pwr-grp-{{ gkey }}" colspan="{{ gcols|length }}">{{ glabel }}</th>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        {% for gkey, glabel, gcols in groups %}
+                            {% for ikey, ilabel in gcols %}
+                            <th class="pwr-sub-{{ gkey }}">{{ ilabel }}</th>
+                            {% endfor %}
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plant in page.plants %}
+                    {% for row in plant.rows %}
+                    <tr>
+                        {% if loop.first %}
+                        <td class="pwr-plant-cell" rowspan="13">{{ plant.name }}</td>
+                        {% endif %}
+                        <td class="pwr-mon-col pwr-label-cell">{{ row.month }}</td>
+                        {% for gkey, glabel, gcols in groups %}
+                            {% for ikey, ilabel in gcols %}
+                            <td class="pwr-num">{{ '%.0f'|format(row[gkey][ikey]) if row[gkey][ikey] is not none else '' }}</td>
+                            {% endfor %}
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                    <tr class="pwr-cum-row">
+                        <td class="pwr-mon-col pwr-label-cell">Cum.</td>
+                        {% for gkey, glabel, gcols in groups %}
+                            {% for ikey, ilabel in gcols %}
+                            <td class="pwr-num">{{ '%.0f'|format(plant.cum[gkey][ikey]) if plant.cum[gkey][ikey] is not none else '' }}</td>
+                            {% endfor %}
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>

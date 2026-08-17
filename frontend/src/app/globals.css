@@ -757,6 +757,16 @@ select.form-control {
   font-family: 'Arial Narrow', Arial, sans-serif !important;
 }
 
+/* ─── Page 1 – Cover: full-bleed background photo, no page margin at all
+   (CoverTemplate's own overlaid text is positioned in absolute %-based
+   coordinates read off the reference image, so it doesn't depend on any
+   padding box to stay readable) ─── */
+.a4-page.pg-1 {
+  --page-margin-top: 0mm;
+  --page-margin-bottom: 0mm;
+  --page-margin-lr: 0mm;
+}
+
 /* ─── Page 3 – SAIL Performance Summary: compact to fit on one page ─── */
 .a4-page.pg-3 {
   --page-margin-top: 3mm;

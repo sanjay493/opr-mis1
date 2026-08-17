@@ -644,17 +644,23 @@ def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title
             + "".join(cells) + '</tr>'
         )
 
+    # Margin from the table above (this block sits right below page 6's
+    # main plant-wise table) and the gap between the block's own
+    # title/caption and its table were both near-zero (2px/1px/1px) —
+    # widened per direct instruction so this section reads as its own
+    # distinct block instead of butting straight up against the table
+    # above it.
     return (
-        '<div style="margin-top:2px;">'
+        '<div style="margin-top:16px;">'
         f'<div style="font-size:9px;font-weight:bold;font-family:Arial,sans-serif;'
-        f'color:#1e293b;margin-bottom:1px;">{title}</div>'
+        f'color:#1e293b;margin-bottom:6px;">{title}</div>'
         '<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
         f'<thead><tr><th style="padding:2.5px 4px;border:1px solid {_GRID_BORDER};font-size:6.8px;">PLANT</th>'
         f'{head_cells}</tr></thead>'
         f'<tbody>{"".join(body_rows)}</tbody>'
         '</table>'
         '<div style="text-align:center;font-size:6.2px;color:#64748b;'
-        'font-family:Arial,sans-serif;margin-top:1px;">'
+        'font-family:Arial,sans-serif;margin-top:5px;">'
         'Crude Steel / (Hot Metal − Pig Iron/0.85 − Hot Metal to ASP) — 5 Plants, last 3 FY annual '
         'ratios then current FY month-by-month to the report month. Darker = higher ratio.'
         '</div>'

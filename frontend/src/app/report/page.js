@@ -49,6 +49,7 @@ const PAGE_LABELS = {
   35.4: 'Major Environmental Performance Indicators (EPIs)',
   35.5: 'Consumption of Coking Coal and CDI Coal',
   35.6: 'Receipt, Consumption & Stocks of Coking Coal',
+  35.7: 'Monthly Summary of Power Data',
   36: 'Capital Repair – BSP',
   37: 'Capital Repair – DSP',
   38: 'Capital Repair – RSP',
@@ -178,11 +179,12 @@ function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
       };
     }
 
-    // Capital Repair pages (36-40) already carry the correct FY computed
-    // server-side from the report month — running them through the generic
-    // date-shift regex on top of that double-applies the shift and corrupts
-    // the year (and can mangle schedule/period text like "7-15").
-    if (page.page >= 36 && page.page <= 40) {
+    // Capital Repair pages (36-40) and "Monthly Summary of Power Data"
+    // (35.7) already carry the correct FY computed server-side from the
+    // report month — running them through the generic date-shift regex on
+    // top of that double-applies the shift and corrupts the year (and can
+    // mangle schedule/period text like "7-15").
+    if ((page.page >= 36 && page.page <= 40) || page.type === 'power_data') {
       return page;
     }
 

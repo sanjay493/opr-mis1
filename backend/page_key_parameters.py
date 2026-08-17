@@ -421,14 +421,23 @@ def generate_key_parameters(report_month: str) -> dict:
     else:
         dem_period = f"{period_label}'{report_year_2d}"
 
+    # Rows between the "Major Blast Furnace Techno-economic Parameters"
+    # section header and whatever ends it (the next section header, or the
+    # spacer before CAPEX) get their per-plant max/min value highlighted,
+    # per direct instruction. Toggled on entering that section, off again
+    # at the next section/spacer row.
+    in_bf_section = False
+
     rows = []
     for label, unit, kind, spec, dp, flags in _ROWS:
         if label == _DEMURRAGE_LABEL:
             label = _DEMURRAGE_LABEL.format(period=dem_period)
         if kind == _SECTION:
+            in_bf_section = (label == "Major Blast Furnace Techno-economic Parameters")
             rows.append({"type": "section", "label": label})
             continue
         if kind == _SPACER:
+            in_bf_section = False
             rows.append({"type": "spacer"})
             continue
 
@@ -513,6 +522,27 @@ def generate_key_parameters(report_month: str) -> dict:
         row = {"type": "data", "parameter": label, "unit": unit, "plant_values": values}
         if flags.get("highlight"):
             row["highlight"] = True
+        # Max/min cell highlighting within the BF techno section (per direct
+        # instruction) — parsed from the same displayed value (a plain
+        # float for every row here except CHM Ratio, already formatted to
+        # "0.920" but still float()-parseable). TMI is skipped: it's a
+        # slash-joined per-converter string (e.g. "12.3/45.6"), not one
+        # comparable figure per plant. Ties (equal values) highlight every
+        # plant that shares them; a row with fewer than 2 distinct values
+        # (all blank, or all identical) gets no highlight at all — nothing
+        # to actually distinguish.
+        if in_bf_section and kind != "sms_join":
+            numeric = {}
+            for plant, v in values.items():
+                try:
+                    numeric[plant] = float(v)
+                except (TypeError, ValueError):
+                    pass
+            distinct = set(numeric.values())
+            if len(distinct) > 1:
+                vmax, vmin = max(distinct), min(distinct)
+                row["max_plants"] = [p for p, v in numeric.items() if v == vmax]
+                row["min_plants"] = [p for p, v in numeric.items() if v == vmin]
         if flags.get("label_rowspan"):
             row["label_rowspan"] = flags["label_rowspan"]
         if flags.get("continuation"):

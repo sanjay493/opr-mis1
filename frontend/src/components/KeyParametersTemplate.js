@@ -14,11 +14,20 @@ const C = {
   border: '#000000',
   sectionBg: '#f8fafc',
   highlightBg: '#eef2f6',
+  // Max/min cell highlight within the Major Blast Furnace Techno-economic
+  // Parameters section (see page_key_parameters.py's max_plants/min_plants)
+  // — neutral colors (not green/red) since "highest value" isn't
+  // consistently "better" across these rows (e.g. Coke Rate: lower is
+  // better, so its max is the worse figure) — matches
+  // highlight_actual_bg/highlight_target_band_bg in colors_config.json,
+  // used the same way on the PDF side.
+  maxBg: '#dbeafe',
+  minBg: '#fef9c3',
 };
 
 export default function KeyParametersTemplate({ data }) {
   const { title = '', plants = [], rows = [] } = data || {};
-  const cellStyle = { padding: '2px 5px', border: `1px solid ${C.border}`, textAlign: 'center' };
+  const cellStyle = { padding: '6px 5px', border: `1px solid ${C.border}`, textAlign: 'center' };
   const colSpan = 2 + plants.length;
 
   return (
@@ -60,11 +69,16 @@ export default function KeyParametersTemplate({ data }) {
                   </td>
                 )}
                 <td style={{ ...cellStyle, fontStyle: 'italic', color: C.textSecondary }}>{row.unit}</td>
-                {plants.map((p) => (
-                  <td key={p} style={cellStyle}>
-                    {row.plant_values && row.plant_values[p] !== null && row.plant_values[p] !== undefined ? row.plant_values[p] : '—'}
-                  </td>
-                ))}
+                {plants.map((p) => {
+                  const isMax = row.max_plants && row.max_plants.includes(p);
+                  const isMin = row.min_plants && row.min_plants.includes(p);
+                  const bg = isMax ? C.maxBg : (isMin ? C.minBg : undefined);
+                  return (
+                    <td key={p} style={{ ...cellStyle, background: bg, fontWeight: bg ? 700 : undefined }}>
+                      {row.plant_values && row.plant_values[p] !== null && row.plant_values[p] !== undefined ? row.plant_values[p] : '—'}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

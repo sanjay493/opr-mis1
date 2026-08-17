@@ -31,6 +31,22 @@
             margin: 12mm 15mm 12mm 15mm;
         }
 
+        /* Page 1 (Cover): full-bleed background photo, zero page margin —
+           the report's only page with no header/footer/badge (see
+           report_utils.py), so there's nothing that needs the usual margin
+           reserved for it. .page1-content's own overlaid text is
+           positioned in absolute %-based coordinates read off the
+           reference image, not dependent on any padding box. */
+        @page cover-layout {
+            size: A4 portrait;
+            margin: 0;
+        }
+
+        .cover-page {
+            page: cover-layout;
+            padding: 0;
+        }
+
         /* Page 4: tighter margins to maximise usable area while keeping footer clear */
         @page page4-layout {
             size: A4 portrait;
@@ -129,9 +145,13 @@
             padding-bottom: 0;
         }
 
-        /* Coking Coal Consumption / Receipt & Stock pages — landscape,
-           reproducing Report_format/Coal_co2/Coal Format.pdf's wide
-           compound-header tables. */
+        /* EPI / Key Highlights — landscape. Both coal pages
+           (coal_consumption, coal_receipt_stock) used to share this
+           landscape layout too, but are portrait now per direct
+           instruction — each falls through to the default @page rule
+           instead. Their .coal-*/.coal-stock-table styling below is
+           layout-agnostic (fixed-width tables, not width:100%) so nothing
+           else needed changing when they moved off this landscape page. */
         @page coal-landscape-layout {
             size: A4 landscape;
             margin-top: 8mm;
@@ -254,6 +274,15 @@
             font-size: 9.5pt;
             margin: 6px 0 4px;
         }
+        /* "Consumption of Coking Coal and CDI Coal" — more generous row
+           padding than the shared .coal-table base (2px 5px), per direct
+           instruction, to fill more of this specific portrait page's
+           height. Scoped to this table's own class rather than the base
+           rule so "Receipt, Consumption & Stocks of Coking Coal" (the
+           other .coal-table page) is unaffected. */
+        .coal-consumption-table th, .coal-consumption-table td {
+            padding: 6px 5px;
+        }
         /* Fixed (not 100%-stretched) column widths — however many months
            happen to have data yet, each column stays the same width as
            every other row's, instead of the table's columns stretching
@@ -284,9 +313,108 @@
         .coal-stock-table-2 {
             margin-top: 6px;
         }
+
+        /* "Monthly Summary of Power Data" — a portrait page reproducing
+           Report_format/Power-OIS/*.xlsx's own full-FY grid as ONE dense
+           table: header (group row + sub-header row) prints once, and each
+           plant's 13 rows (12 months + Cum.) sit under a single rowspan'd,
+           vertical-text plant-name cell instead of repeating the plant
+           name/header per block, per direct instruction. Fixed narrow
+           column widths via an explicit <colgroup> (not just CSS on th/td
+           — table-layout:fixed sizing is otherwise ambiguous once the
+           header's own row1 mixes rowspan/colspan cells with row2's plain
+           ones, which is what was letting the "Mon" column balloon in the
+           actual PDF render despite th/td CSS widths agreeing on-screen).
+           Tight dedicated @page margins (power-data-layout below, tighter
+           than the default 12mm top/bottom + 15mm sides) free up both
+           width and the header/footer band's footprint on this one page,
+           per direct instruction. Only the header/body divide and each
+           plant's Cum. row carry a bottom border — no rule under every
+           individual month row within a block, also per direct
+           instruction. */
+        @page power-data-layout {
+            size: A4 portrait;
+            margin: 4mm 5mm;
+        }
+        .power-data-page {
+            page: power-data-layout;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        .pwr-title {
+            text-align: center;
+            font-weight: 700;
+            font-size: 11pt;
+            text-decoration: underline;
+            margin-bottom: 4px;
+            color: {{ colors.text_dark_gray }};
+        }
+        .pwr-table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            border: 1px solid {{ colors.border_dark }};
+        }
+        .pwr-table th, .pwr-table td {
+            border-left: 1px solid {{ colors.border_dark }};
+            padding: 0px 1px;
+            font-size: 5.5pt;
+            line-height: 1.15;
+        }
+        .pwr-table th {
+            text-align: center;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .pwr-table thead tr:last-child th {
+            border-bottom: 1px solid {{ colors.border_dark }};
+        }
+        .pwr-plant-col {
+            width: 14px;
+        }
+        .pwr-mon-col {
+            width: 22px;
+        }
+        .pwr-data-col {
+            width: 19px;
+        }
+        .pwr-plant-cell {
+            text-align: center;
+            vertical-align: middle;
+            font-weight: 700;
+            font-size: 6.5pt;
+            background: #e2e8f0;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            padding: 2px 1px;
+            border: 1px solid {{ colors.border_dark }};
+        }
+        .pwr-label-cell {
+            text-align: left;
+            font-weight: 600;
+            background: #f8fafc;
+        }
+        .pwr-num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .pwr-cum-row td {
+            font-weight: 700;
+            background: #e2e8f0;
+            border-bottom: 1px solid {{ colors.border_dark }};
+        }
+        .pwr-grp-plan, .pwr-sub-plan     { background: #eef2ff; }
+        .pwr-grp-actual, .pwr-sub-actual { background: #ecfdf5; }
+        .pwr-grp-grid, .pwr-sub-grid     { background: #fff7ed; }
+        .pwr-grp-last_year, .pwr-sub-last_year { background: #f5f5f4; }
+        thead .pwr-grp-plan     { background: #c7d2fe; }
+        thead .pwr-grp-actual   { background: #a7f3d0; }
+        thead .pwr-grp-grid     { background: #fed7aa; }
+        thead .pwr-grp-last_year { background: #d6d3d1; }
+
         .epi-table th, .epi-table td {
             font-size: 7.3pt;
-            padding: 2px 4px;
+            padding: 6px 4px;
         }
         .epi-unit {
             font-weight: 400;
@@ -440,7 +568,7 @@
         .page1-container {
             position: relative;
             z-index: 0;
-            min-height: 250mm;
+            min-height: 297mm;
             overflow: hidden;
         }
         .page1-bg {
@@ -454,7 +582,7 @@
         .page1-content {
             position: relative;
             z-index: 1;
-            min-height: 250mm;
+            min-height: 297mm;
         }
         /* The image's white content zone narrows to a "waist" around
            55-65% down the page (just below "Prepared By") before widening
@@ -980,7 +1108,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters') %} content-page{% elif page.type in ('coal_consumption', 'coal_receipt_stock', 'epi', 'key_highlights') %} coal-landscape-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters') %} content-page{% elif page.type in ('epi', 'key_highlights') %} coal-landscape-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
@@ -1008,6 +1136,7 @@
         {% elif page.type == 'epi' %}{% include 'epi.html' %}
         {% elif page.type == 'coal_consumption' %}{% include 'coal_consumption.html' %}
         {% elif page.type == 'coal_receipt_stock' %}{% include 'coal_receipt_stock.html' %}
+        {% elif page.type == 'power_data' %}{% include 'power_data.html' %}
         {% else %}
             <div class="report-title-section">
                 <h2>{{ page.title }}</h2>

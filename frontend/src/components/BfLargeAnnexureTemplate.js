@@ -17,7 +17,7 @@ const PREV_FY_BG = '#fef9c3';
 const YTD_BG = '#d1fae5';
 const ZEBRA_BG = '#f8fafc';
 
-const CELL = { padding: '4px 8px', border: '1px solid #94a3b8' };
+const CELL = { padding: '7px 8px', border: '1px solid #94a3b8' };
 const NUM = { ...CELL, textAlign: 'right' };
 const LBL = { ...CELL, textAlign: 'left', fontWeight: 600 };
 const TH = {

@@ -23,6 +23,19 @@ CREATE TABLE IF NOT EXISTS production_plan_table (
     PRIMARY KEY (report_month, plant_name, item_name)
 ) ENGINE=InnoDB;
 
+-- Power-OIS monthly power data — same narrow shape as production_table,
+-- its own table since item_name values (plan_own, actual_total,
+-- wheeling_px, last_year_own_cpp_cum, etc.) come from a different
+-- vocabulary. See excel_extractors/excel_extractor_power_omi.py and
+-- page_power_data.py.
+CREATE TABLE IF NOT EXISTS power_data_table (
+    report_month CHAR(7)      NOT NULL,
+    plant_name   VARCHAR(32)  NOT NULL,
+    item_name    VARCHAR(64)  NOT NULL,
+    value        DOUBLE,
+    PRIMARY KEY (report_month, plant_name, item_name)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS page_configs (
     report_month CHAR(7) NOT NULL,
     page_number  INT     NOT NULL,

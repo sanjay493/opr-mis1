@@ -34,6 +34,7 @@ from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
 from page_cover import generate_cover
 from page_coal_receipts_stock import generate_coal_receipts_sail
+from page_power_data import generate_power_data
 from page_coal_consumption import generate_coal_consumption
 from page_epi import generate_epi
 from page_opening_stock import generate_opening_stock
@@ -177,6 +178,7 @@ from api_special_steel_clubs import router as special_steel_clubs_router
 from api_mcr_techno import router as mcr_techno_router
 from api_coal_co2_techno import router as coal_co2_techno_router
 from api_coal_omi_techno import router as coal_omi_techno_router
+from api_power_omi import router as power_omi_router
 from api_todo import router as todo_router
 from api_worklog import router as worklog_router
 from api_auth import router as auth_router
@@ -280,6 +282,13 @@ EPI_PAGE_ID = 35.4
 # group 8 - same as pages 31-35).
 COAL_RECEIPTS_PAGE_ID = 35.5
 COAL_RECEIPTS_PAGE_2_ID = 35.6
+
+# "Monthly Summary of Power Data" — inserted right after the Coking Coal
+# Receipts & Stock pages above, sourced from the dedicated power_data_table
+# via the Power-OIS extractor (api_power_omi.py / page_power_data.py). Same
+# sentinel-float treatment as COAL_RECEIPTS_PAGE_ID above, but portrait (no
+# orientation override) rather than landscape, per direct instruction.
+POWER_DATA_PAGE_ID = 35.7
 
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
@@ -425,6 +434,7 @@ app.include_router(special_steel_clubs_router)
 app.include_router(mcr_techno_router)
 app.include_router(coal_co2_techno_router)
 app.include_router(coal_omi_techno_router)
+app.include_router(power_omi_router)
 app.include_router(todo_router)
 app.include_router(worklog_router)
 app.include_router(auth_router)
@@ -498,7 +508,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
         if page_number is not None:
             if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
-                                IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID):
+                                IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
+                                POWER_DATA_PAGE_ID):
                 # Page 24 (SAIL), the trend sentinel page, the "at a
                 # glance" sentinel page, the "key parameters" sentinel
                 # page, the "Iron Making (contd.)" sentinel page, and the
@@ -633,7 +644,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config = [p for p in pages_config
                             if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
-                                                      IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID)]
+                                                      IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
+                                                      POWER_DATA_PAGE_ID)]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
@@ -659,6 +671,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 pages_config.insert(_idx35 + 1, {"page": EPI_PAGE_ID})
                 pages_config.insert(_idx35 + 2, {"page": COAL_RECEIPTS_PAGE_ID})
                 pages_config.insert(_idx35 + 3, {"page": COAL_RECEIPTS_PAGE_2_ID})
+                pages_config.insert(_idx35 + 4, {"page": POWER_DATA_PAGE_ID})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -691,10 +704,10 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page["orientation"] = "landscape"
             if pg == COAL_RECEIPTS_PAGE_ID:
                 page.update(generate_coal_consumption(month))
-                page["orientation"] = "landscape"
             if pg == COAL_RECEIPTS_PAGE_2_ID:
                 page.update(generate_coal_receipts_sail(month))
-                page["orientation"] = "landscape"
+            if pg == POWER_DATA_PAGE_ID:
+                page.update(generate_power_data(month))
             if pg == 1:
                 page.update(generate_cover(month))
             if pg == 2:
@@ -835,6 +848,13 @@ async def generate_pdf(request: PDFRequest):
         if _idxepi is not None:
             _pages_list.insert(_idxepi + 1, {"page": COAL_RECEIPTS_PAGE_ID})
             _pages_list.insert(_idxepi + 2, {"page": COAL_RECEIPTS_PAGE_2_ID})
+    # "Monthly Summary of Power Data" sentinel page: always inserted right
+    # after the "Receipt, Consumption & Stocks of Coking Coal" page, same
+    # unconditional-insert pattern as above.
+    if not any(p.get("page") == POWER_DATA_PAGE_ID for p in _pages_list):
+        _idxcoal2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == COAL_RECEIPTS_PAGE_2_ID), None)
+        if _idxcoal2 is not None:
+            _pages_list.insert(_idxcoal2 + 1, {"page": POWER_DATA_PAGE_ID})
     # Corner badge (group + side) is a pure function of _pages_list's own
     # (already-final) physical order — recomputed fresh rather than trusted
     # from the submitted payload, since PageData doesn't declare this field
@@ -905,10 +925,10 @@ async def generate_pdf(request: PDFRequest):
             p["orientation"] = "landscape"
         if pg == COAL_RECEIPTS_PAGE_ID:
             p.update(generate_coal_consumption(request.month))
-            p["orientation"] = "landscape"
         if pg == COAL_RECEIPTS_PAGE_2_ID:
             p.update(generate_coal_receipts_sail(request.month))
-            p["orientation"] = "landscape"
+        if pg == POWER_DATA_PAGE_ID:
+            p.update(generate_power_data(request.month))
         if pg == 25:
             p.update(generate_opening_stock(request.month))
             p["type"] = "opening_stock"

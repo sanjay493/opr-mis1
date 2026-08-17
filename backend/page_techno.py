@@ -2421,21 +2421,24 @@ _TECHNO_DB_SCHEMA = {
         "type": "param",
         # Split across two physical pages (29 and 29.5 - see IRON_MAKING_PAGE_2_ID
         # in main.py) since 8 furnace-wise sections no longer fit one page.
+        # Order (both pages) per direct instruction: page 29 = Coke Rate,
+        # CDI, Fuel Rate, HBT; page 29.5 = BF Productivity, Oxygen
+        # Enrichment, Pellet in Burden, Slag Rate.
         "sections": [
             # Blast furnaces — RSP: BF-1/BF-4/BF-5/BF_Shop, ISP: BF-5, BSL: BF-1/BF-2/BF-4/BF-5 (shared unit names)
-            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-3", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
-            ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF-6", "hot_blast_temp"), ("BF-7", "hot_blast_temp"), ("BF-8", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
-            ("Oxygen Enrichment",   "%",         [("BF-1", "o2_enrichment"), ("BF-2", "o2_enrichment"), ("BF-3", "o2_enrichment"), ("BF-4", "o2_enrichment"), ("BF-5", "o2_enrichment"), ("BF-6", "o2_enrichment"), ("BF-7", "o2_enrichment"), ("BF-8", "o2_enrichment"), ("BF_Shop", "o2_enrichment")]),
             ("Coke Rate",            "kg/thm",   [("BF-1", "coke_rate"), ("BF-2", "coke_rate"), ("BF-3", "coke_rate"), ("BF-4", "coke_rate"), ("BF-5", "coke_rate"), ("BF-6", "coke_rate"), ("BF-7", "coke_rate"), ("BF-8", "coke_rate"), ("BF_Shop", "coke_rate")]),
+            ("CDI Rate",            "kg/thm",    [("BF-1", "cdi"), ("BF-2", "cdi"), ("BF-3", "cdi"), ("BF-4", "cdi"), ("BF-5", "cdi"), ("BF-6", "cdi"), ("BF-7", "cdi"), ("BF-8", "cdi"), ("BF_Shop", "cdi")]),
+            ("Fuel Rate",            "kg/thm",   [("BF-1", "fuel_rate"), ("BF-2", "fuel_rate"), ("BF-3", "fuel_rate"), ("BF-4", "fuel_rate"), ("BF-5", "fuel_rate"), ("BF-6", "fuel_rate"), ("BF-7", "fuel_rate"), ("BF-8", "fuel_rate"), ("BF_Shop", "fuel_rate")]),
+            ("Hot Blast Temp",      "°C",        [("BF-1", "hot_blast_temp"), ("BF-2", "hot_blast_temp"), ("BF-3", "hot_blast_temp"), ("BF-4", "hot_blast_temp"), ("BF-5", "hot_blast_temp"), ("BF-6", "hot_blast_temp"), ("BF-7", "hot_blast_temp"), ("BF-8", "hot_blast_temp"), ("BF_Shop", "hot_blast_temp")]),
         ],
     },
     29.5: {
         "type": "param",
         "sections": [
-            ("Slag Rate",            "kg/thm",   [("BF-1", "slag_rate"), ("BF-2", "slag_rate"), ("BF-3", "slag_rate"), ("BF-4", "slag_rate"), ("BF-5", "slag_rate"), ("BF-6", "slag_rate"), ("BF-7", "slag_rate"), ("BF-8", "slag_rate"), ("BF_Shop", "slag_rate")]),
-            ("Fuel Rate",            "kg/thm",   [("BF-1", "fuel_rate"), ("BF-2", "fuel_rate"), ("BF-3", "fuel_rate"), ("BF-4", "fuel_rate"), ("BF-5", "fuel_rate"), ("BF-6", "fuel_rate"), ("BF-7", "fuel_rate"), ("BF-8", "fuel_rate"), ("BF_Shop", "fuel_rate")]),
             ("BF Productivity",      "t/m³/day", [("BF-1", "bf_productivity"), ("BF-2", "bf_productivity"), ("BF-3", "bf_productivity"), ("BF-4", "bf_productivity"), ("BF-5", "bf_productivity"), ("BF-6", "bf_productivity"), ("BF-7", "bf_productivity"), ("BF-8", "bf_productivity"), ("BF_Shop", "bf_productivity")]),
+            ("Oxygen Enrichment",   "%",         [("BF-1", "o2_enrichment"), ("BF-2", "o2_enrichment"), ("BF-3", "o2_enrichment"), ("BF-4", "o2_enrichment"), ("BF-5", "o2_enrichment"), ("BF-6", "o2_enrichment"), ("BF-7", "o2_enrichment"), ("BF-8", "o2_enrichment"), ("BF_Shop", "o2_enrichment")]),
             ("Pellet in Burden",     "%",        [("BF-1", "pellet_in_burden"), ("BF-2", "pellet_in_burden"), ("BF-3", "pellet_in_burden"), ("BF-4", "pellet_in_burden"), ("BF-5", "pellet_in_burden"), ("BF-6", "pellet_in_burden"), ("BF-7", "pellet_in_burden"), ("BF-8", "pellet_in_burden"), ("BF_Shop", "pellet_in_burden")]),
+            ("Slag Rate",            "kg/thm",   [("BF-1", "slag_rate"), ("BF-2", "slag_rate"), ("BF-3", "slag_rate"), ("BF-4", "slag_rate"), ("BF-5", "slag_rate"), ("BF-6", "slag_rate"), ("BF-7", "slag_rate"), ("BF-8", "slag_rate"), ("BF_Shop", "slag_rate")]),
         ],
     },
     30: {
@@ -3015,13 +3018,30 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         return v
 
     def _get_plan_value(plant, unit, param_key):
-        """Get planned value for a parameter from techno_plan_fy."""
-        plan_data = plan_store.get((plant, unit), {})
-        param_obj = plan_data.get(param_key, {})
-        # Handle both {value, unit} format and flat value
-        if isinstance(param_obj, dict):
-            return param_obj.get('value')
-        return param_obj
+        """Get planned value for a parameter from techno_plan_fy.
+
+        "fuel_rate" is never entered directly here (its Norm/Target cell
+        was showing blank for every furnace) — same rule as the ACTUAL
+        figure everywhere else in this app (bf_benchmark_registry.py's
+        compute_fuel_rate, db._maybe_recompute_derived_params): Fuel Rate
+        = Coke Rate + Nut Coke Rate + CDI Rate, Nut Coke Rate optional
+        (defaults to 0), computed on the fly from those three's own Norm/
+        Target entries rather than requiring a redundant separate entry."""
+        def _raw(key):
+            plan_data = plan_store.get((plant, unit), {})
+            param_obj = plan_data.get(key, {})
+            # Handle both {value, unit} format and flat value
+            if isinstance(param_obj, dict):
+                return param_obj.get('value')
+            return param_obj
+
+        if param_key == "fuel_rate":
+            coke, cdi = _raw("coke_rate"), _raw("cdi")
+            if coke is None or cdi is None:
+                return None
+            nut = _raw("nut_coke_rate") or 0
+            return round(coke + nut + cdi, 4)
+        return _raw(param_key)
 
     def _make_row(label, unit_str, plant, src_unit, src_key, bold=False, param_label=None):
         target_val = _get_plan_value(plant, src_unit, src_key)

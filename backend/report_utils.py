@@ -33,8 +33,9 @@ _DEPT_BADGE_GROUPS = [
 #     right after page 24, same group (5) it had while still numbered 24.
 #   29.5 — "Iron Making (contd.)", right after page 29, same group (7) as
 #     Techno-Economic Parameters.
-#   35.4, 35.5, 35.6 — EPI then "Coking Coal Receipts & Stock", right after
-#     page 35, same group (8) as Mill-Wise Techno-Economic Parameters.
+#   35.4, 35.5, 35.6, 35.7 — EPI, then "Coking Coal Receipts & Stock", then
+#     "Monthly Summary of Power Data", right after page 35, same group (8)
+#     as Mill-Wise Techno-Economic Parameters.
 # 3.1 ("Key Highlights & Variances") would join the 2.5/3/3.5/3.6 group too
 # if it's ever wired back into the report — see KEY_HIGHLIGHTS_PAGE_ID in
 # main.py (currently built, not inserted).
@@ -42,7 +43,7 @@ _DEPT_BADGE_EXPLICIT_GROUP = {
     2.5: 1, 3: 1, 3.5: 1, 3.6: 1,
     1024: 5,
     29.5: 7,
-    35.4: 8, 35.5: 8, 35.6: 8,
+    35.4: 8, 35.5: 8, 35.6: 8, 35.7: 8,
 }
 
 
@@ -93,7 +94,7 @@ _CANONICAL_PAGE_ORDER = [
     *range(4, 25), 1024,
     25, 26,
     27, 28, 29, 29.5, 30,
-    31, 32, 33, 34, 35, 35.4, 35.5, 35.6,
+    31, 32, 33, 34, 35, 35.4, 35.5, 35.6, 35.7,
     *range(36, 41),
 ]
 

@@ -1341,6 +1341,210 @@ function CoalOmiExtractRow({ reportMonth, apiBase, onSuccess }) {
   );
 }
 
+// Power-OIS monthly workbook — feeds the dedicated power_data_table (not
+// techno_data), see backend/api_power_omi.py and
+// excel_extractors/excel_extractor_power_omi.py. Unlike CoalOmiExtractRow
+// above, this doesn't key off reportMonth at all — a single upload spans
+// the whole FY (PLAN is pre-filled for all 12 months, ACTUAL only as far as
+// the report has actually progressed), so the preview shows every month
+// found in the file rather than just the selected one.
+const _POWER_OMI_PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SSP', 'VISP', 'CFP', 'SAIL'];
+
+function PowerOmiExtractRow({ apiBase, onSuccess }) {
+  const [file, setFile] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
+  const inputRef = React.useRef();
+
+  const handlePreview = async () => {
+    if (!file) return;
+    setBusy(true);
+    setStatus(null);
+    setPreview(null);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch(`${apiBase}/api/power-omi/preview`, { method: 'POST', body: form });
+      const json = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(json.detail || 'Preview failed');
+      setPreview(json);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doSave = async (confirmReplace) => {
+    const res = await fetch(`${apiBase}/api/power-omi/insert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        records: preview.records,
+        source_file: preview.source_file,
+        ...(confirmReplace ? { confirm_replace: true } : {}),
+      }),
+    });
+    return { res, json: await parseJsonResponse(res) };
+  };
+
+  const handleConfirmSave = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      let { res, json } = await doSave(false);
+      if (res.status === 409) {
+        if (!window.confirm(`${json.detail}\n\nReplace the existing values?`)) {
+          setBusy(false);
+          return;
+        }
+        ({ res, json } = await doSave(true));
+      }
+      if (!res.ok) throw new Error(json.detail || 'Save failed');
+      setStatus({ type: 'success', text: `✓ Saved ${json.saved} value(s)` });
+      setPreview(null);
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = '';
+      onSuccess();
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancel = () => { setPreview(null); setStatus(null); };
+
+  const cellStyle = { padding: '4px 8px', fontSize: 12.5, textAlign: 'right', borderBottom: '1px solid #f1f3f4' };
+  const labelCellStyle = { padding: '4px 8px', fontSize: 12.5, borderBottom: '1px solid #f1f3f4', color: '#374151' };
+  const fmt = (v) => (v === null || v === undefined ? '—' : v);
+
+  // "Actual Total" (MW) per plant per month — a representative slice of the
+  // ~24 columns actually saved, just for a sanity-check glance before commit.
+  const actualByPlantMonth = React.useMemo(() => {
+    if (!preview) return {};
+    const out = {};
+    for (const rec of preview.records) {
+      if (rec.item_name !== 'actual_total') continue;
+      out[rec.plant_name] = out[rec.plant_name] || {};
+      out[rec.plant_name][rec.report_month] = rec.value;
+    }
+    return out;
+  }, [preview]);
+
+  return (
+    <div style={{
+      marginBottom: 16, padding: '12px 14px',
+      background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', marginBottom: 4 }}>
+        Power-OIS Report (Excel) — Monthly Summary of Power Data — all plants, whole FY at once
+      </div>
+      <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
+        The monthly "Power-OIS" workbook — one sheet per FY, PLAN/ACTUAL generation, grid transactions,
+        specific power consumption, and a previous-FY comparison, per plant per month. Not tied to the
+        report month selector above — every month found in the file is extracted at once.
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <input ref={inputRef} type="file" accept=".xlsx"
+          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
+          style={{ fontSize: 13, flex: 1, minWidth: 200 }}
+          suppressHydrationWarning
+        />
+        {!preview && (
+          <button onClick={handlePreview} disabled={!file || busy}
+            style={{
+              padding: '7px 18px', background: busy ? '#5f6368' : '#1a73e8',
+              color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+              cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
+            }}
+          >
+            {busy ? 'Extracting…' : 'Preview'}
+          </button>
+        )}
+        {preview && (
+          <>
+            <button onClick={handleConfirmSave} disabled={busy}
+              style={{
+                padding: '7px 18px', background: busy ? '#5f6368' : '#1a73e8',
+                color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              {busy ? 'Saving…' : 'Confirm & Save'}
+            </button>
+            <button onClick={handleCancel} disabled={busy}
+              style={{
+                padding: '7px 14px', background: '#fff', color: '#5f6368',
+                border: '1px solid #dadce0', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10 }}><StatusMsg status={status} /></div>
+
+      {preview && (
+        <div style={{ marginTop: 6 }}>
+          {preview.has_existing && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+            }}>
+              ⚠ {preview.existing_conflicts_count} value(s) already exist for months in this file —
+              saving will ask to confirm overwriting them.
+            </div>
+          )}
+          {preview.warnings.length > 0 && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca',
+            }}>
+              {preview.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+            </div>
+          )}
+          <div style={{ fontSize: 12.5, color: '#374151', marginBottom: 6 }}>
+            {preview.record_count} value(s) found across {preview.months.length} month(s)
+            ({preview.months[0]} – {preview.months[preview.months.length - 1]}) for {preview.plants_found.length} plant(s).
+          </div>
+
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+            Actual Total Generation (MW) — sanity check
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden' }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa' }}>
+                  <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Plant</th>
+                  {preview.months.map(mo => (
+                    <th key={mo} style={{ ...cellStyle, fontWeight: 700 }}>{mo}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {_POWER_OMI_PLANTS.filter(p => preview.plants_found.includes(p)).map(p => (
+                  <tr key={p}>
+                    <td style={{ ...labelCellStyle, fontWeight: p === 'SAIL' ? 700 : 400 }}>{p}</td>
+                    {preview.months.map(mo => (
+                      <td key={mo} style={cellStyle}>{fmt(actualByPlantMonth[p]?.[mo])}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Techno Data Panel — works for all 5 plants ───────────────────────────────
 // ── "Last saved" log — same extraction_log table /upload reads, filtered to
 // this plant's techno_data writes so it shows when each unit/month was last
@@ -1920,6 +2124,9 @@ function TechnoDataEntryInner() {
           onSuccess={() => setDataRefreshKey(k => k + 1)} />
 
         <CoalOmiExtractRow reportMonth={reportMonth} apiBase={API_BASE_URL}
+          onSuccess={() => setDataRefreshKey(k => k + 1)} />
+
+        <PowerOmiExtractRow apiBase={API_BASE_URL}
           onSuccess={() => setDataRefreshKey(k => k + 1)} />
 
         <TechnoDataPanel key={dataRefreshKey} plant={plant} reportMonth={reportMonth} apiBase={API_BASE_URL} />

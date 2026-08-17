@@ -1,38 +1,18 @@
             <div class="coal-title">{{ page.title }}</div>
 
+            <div class="coal-c-heading">(A) Consumption ('000 T)</div>
             <table class="coal-table coal-consumption-table">
-                <colgroup>
-                    <col style="width:5%;">
-                    <col style="width:8%;">
-                    {% for _ in page.qty_cols %}<col style="width:4.6%;">{% endfor %}
-                    <col style="width:6%;">
-                    <col class="coal-gap-col-thin">
-                    <col style="width:5%;">
-                    <col class="coal-gap-col-wide">
-                    {% for _ in page.pct_cols %}<col style="width:4.4%;">{% endfor %}
-                </colgroup>
                 <thead>
-                    <tr class="coal-unit-row">
-                        <td colspan="2"></td>
-                        <td colspan="{{ page.qty_cols|length + 3 }}" class="coal-unit-label">Quantity in '000 T</td>
-                        <td class="coal-gap-cell"></td>
-                        <td colspan="{{ page.pct_cols|length }}" class="coal-unit-label">Blend %</td>
-                    </tr>
                     <tr>
                         <th rowspan="2"></th>
                         <th rowspan="2">Month / Category</th>
                         <th colspan="3">Indigenous Coking Coal</th>
                         <th colspan="3">Imported Coking Coal</th>
                         <th rowspan="2">Total Coking<br/>Coal</th>
-                        <th rowspan="2" class="coal-gap-cell"></th>
                         <th rowspan="2">CDI Coal</th>
-                        <th rowspan="2" class="coal-gap-cell"></th>
-                        <th colspan="3">Indigenous Coking Coal</th>
-                        <th colspan="3">Imported Coking Coal</th>
                     </tr>
                     <tr>
                         {% for label, key in page.qty_cols %}<th>{{ label }}</th>{% endfor %}
-                        {% for label, key in page.pct_cols %}<th>{{ label }}</th>{% endfor %}
                     </tr>
                 </thead>
                 <tbody>
@@ -45,9 +25,37 @@
                         <td class="coal-num">{{ '%.0f'|format(sub.vals[key]) if sub.vals.get(key) is not none else '—' }}</td>
                         {% endfor %}
                         <td class="coal-num">{{ '%.0f'|format(sub.vals.total_coking_coal) if sub.vals.get('total_coking_coal') is not none else '—' }}</td>
-                        <td class="coal-gap-cell"></td>
                         <td class="coal-num">{{ '%.0f'|format(sub.vals.cdi_coal) if sub.vals.get('cdi_coal') is not none else '—' }}</td>
-                        <td class="coal-gap-cell"></td>
+                    </tr>
+                    {% endfor %}
+                    {% if not loop.last %}
+                    <tr class="coal-plant-spacer-row">
+                        <td colspan="{{ 2 + page.qty_cols|length + 2 }}"></td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="coal-c-heading">(B) Blend %</div>
+            <table class="coal-table coal-consumption-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2"></th>
+                        <th rowspan="2">Month / Category</th>
+                        <th colspan="3">Indigenous Coking Coal</th>
+                        <th colspan="3">Imported Coking Coal</th>
+                    </tr>
+                    <tr>
+                        {% for label, key in page.pct_cols %}<th>{{ label }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for grp in page.groups %}
+                    {% for sub in grp.sub_rows %}
+                    <tr class="{% if loop.index == grp.sub_rows|length %}coal-group-last{% endif %}">
+                        {% if loop.first %}<td rowspan="{{ grp.sub_rows|length }}" class="coal-plant-cell">{{ grp.plant }}</td>{% endif %}
+                        <td class="coal-period-cell">{{ sub.label }}</td>
                         {% for label, key in page.pct_cols %}
                         <td class="coal-num">{{ '%.1f'|format(sub.vals[key]) + '%' if sub.vals.get(key) is not none else '—' }}</td>
                         {% endfor %}
@@ -55,7 +63,7 @@
                     {% endfor %}
                     {% if not loop.last %}
                     <tr class="coal-plant-spacer-row">
-                        <td colspan="{{ 2 + page.qty_cols|length + page.pct_cols|length + 4 }}"></td>
+                        <td colspan="{{ 2 + page.pct_cols|length }}"></td>
                     </tr>
                     {% endif %}
                     {% endfor %}

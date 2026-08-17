@@ -75,6 +75,22 @@ def init_db():
         )
     """)
 
+    # 2c. Power-OIS monthly power data — same narrow (report_month,
+    # plant_name, item_name, value) shape as production_table, its own
+    # table since these aren't production tonnage items and item_name
+    # values (plan_own, actual_total, wheeling_px, last_year_own_cpp_cum,
+    # etc.) come from a different vocabulary. See excel_extractors/
+    # excel_extractor_power_omi.py and page_power_data.py.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS power_data_table (
+            report_month TEXT,
+            plant_name TEXT,
+            item_name TEXT,
+            value REAL,
+            PRIMARY KEY (report_month, plant_name, item_name)
+        )
+    """)
+
     # 2b. Special Steel ABP (Annual Business Plan) — one monthly target per
     # plant, entered for all 12 months of a FY at once via the Special Steel
     # ABP Entry page. plant_name matches special_steel_orders' values (the 5

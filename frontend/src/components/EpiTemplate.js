@@ -9,7 +9,7 @@ const BORDER = '#334155';
 const TITLE_COLOR = '#333333';
 const NOTE_COLOR = '#475569';
 
-const cellStyle = { border: `1px solid ${BORDER}`, padding: '2px 4px', textAlign: 'center', fontSize: '7.3pt' };
+const cellStyle = { border: `1px solid ${BORDER}`, padding: '6px 4px', textAlign: 'center', fontSize: '7.3pt' };
 const thStyle = { ...cellStyle, fontWeight: 700 };
 
 export default function EpiTemplate({ data }) {
