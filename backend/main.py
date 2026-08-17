@@ -2525,6 +2525,7 @@ PRODUCTION_ITEM_ORDER = [
     'COB#1-8',
     'COB#6',
     'COB#9-10',
+    'COB#9-11',
     'COB#10',
     'COB#11',
     # 2. Sinter

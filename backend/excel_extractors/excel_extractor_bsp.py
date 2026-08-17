@@ -171,6 +171,9 @@ def _ppc_mis_config() -> Dict[str, tuple]:
     default_rc = {
         "COB#1-8":             (3,  5,  False),
         "COB#9-10":            (4,  5,  False),
+        # Same cell as COB#9-10 — see _PPC_GUARDED_ITEMS's "COB#9-11" entry
+        # for why both item_names coexist on this one row.
+        "COB#9-11":            (4,  5,  False),
         "Oven Pushing (nos/day)": (5,  5,  False),
         "SP-2":                (7,  5,  True),
         "SP-3":                (8,  5,  True),
@@ -263,6 +266,18 @@ _PPC_GUARDED_ITEMS = {
     # "Oven Pushing(nos/d)" below it needs a stable-label search rather than
     # a fixed row: this insertion is exactly what pushed it down by one row.
     "COB#9-10":          (4,  0, "BATT"),
+    # Same row as COB#9-10 above, but with a narrower guard: this row's own
+    # label text has drifted from "9&10"/"10-11"/"9-11" (older eras — kept
+    # under COB#9-10 only, its long-standing name) to "9 TO 11" from
+    # 2018-10 onward (confirmed against every archived report vintage in
+    # Report_format/MONTHEND/BSP: every file from 2018-10 through the
+    # present reads "BATT : 9 TO 11", every earlier one doesn't) — per
+    # direct instruction, this newer-era battery grouping gets its own
+    # honestly-named item alongside (not instead of) COB#9-10, so both
+    # co-exist on this one row: COB#9-10 keeps receiving every era's data
+    # exactly as it always has, while COB#9-11 only ever fills in for the
+    # eras that row's own label actually calls "9 to 11".
+    "COB#9-11":          (4,  0, "9 TO 11"),
     "RSMPRIME":          (37, 2, "RSM"),
     "URMPRIME":          (37, 7, "URM"),
     "Pig Iron":          (60, 12, "PIG IRON"),
@@ -278,6 +293,57 @@ def _find_ppc_label_row(ws, substrings, max_row=45):
         if any(s in label for s in substrings):
             return r
     return None
+
+
+class _CellValueAdapter:
+    """Wraps a plain (row_0based, col_0based) -> value getter (e.g.
+    _extract_ppc_mis_preview's `_cv`, which already handles both the xlrd
+    and openpyxl cases) so it can be passed to _resolve_ppc_mis_cells,
+    which — like the rest of this module — expects an xlrd-style
+    `.cell_value(r, c)` interface."""
+    def __init__(self, cv):
+        self._cv = cv
+
+    def cell_value(self, r, c):
+        v = self._cv(r, c)
+        return v if v is not None else ""
+
+
+def _resolve_ppc_mis_cells(ws) -> Dict[str, tuple]:
+    """The BSP PPC MIS cell mapping actually trustworthy for THIS sheet:
+    starts from _ppc_mis_config()'s default row/col mapping, then
+    (1) re-locates every stable-labeled item by searching the sheet for its
+    known label text instead of trusting a fixed row (works across every
+    report-era layout change — see _PPC_STABLE_LABELS), and (2) drops any
+    guarded item whose expected anchor label doesn't actually match at its
+    configured row (see _PPC_GUARDED_ITEMS), rather than risk reading the
+    wrong quantity silently.
+
+    Shared by extract_and_save_excel (direct DB write) and
+    _extract_ppc_mis_preview (preview) so the two extraction paths can
+    never silently diverge on which rows are trustworthy — before this was
+    shared, preview used the raw default mapping unconditionally (no
+    stable-label search, no guard), so a row shifted or reworded between
+    report eras could silently show/save the wrong cell (or a blank one)
+    in preview while the direct-write path caught and skipped it."""
+    production_cells = dict(_ppc_mis_config())
+
+    for item_name, (convert, substrings) in _PPC_STABLE_LABELS.items():
+        row = _find_ppc_label_row(ws, substrings)
+        default_col = production_cells.get(item_name, (None, 5, None))[1]
+        if row is not None:
+            production_cells[item_name] = (row, default_col, convert)
+        else:
+            production_cells.pop(item_name, None)
+
+    for item_name, (grow, gcol, needle) in _PPC_GUARDED_ITEMS.items():
+        if item_name not in production_cells:
+            continue
+        guard_label = str(ws.cell_value(grow, gcol) or "").strip().upper()
+        if needle not in guard_label:
+            production_cells.pop(item_name, None)
+
+    return production_cells
 
 
 def extract_and_save_excel(file_path: str, report_month: str = None,
@@ -311,28 +377,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
                 "no report_month was provided."
             )
 
-        production_cells = dict(_ppc_mis_config())
-
-        # Stable items: search for the row by label instead of trusting the
-        # config's row number, which is only valid for the current-era layout.
-        for item_name, (convert, substrings) in _PPC_STABLE_LABELS.items():
-            row = _find_ppc_label_row(ws, substrings)
-            default_col = production_cells.get(item_name, (None, 5, None))[1]
-            if row is not None:
-                production_cells[item_name] = (row, default_col, convert)
-            else:
-                production_cells.pop(item_name, None)
-
-        # Restructured items: keep the config's row/col, but only if the
-        # label actually there (or its section anchor) still matches —
-        # otherwise this file's layout doesn't match what that row assumes,
-        # so skip rather than risk reading the wrong quantity.
-        for item_name, (grow, gcol, needle) in _PPC_GUARDED_ITEMS.items():
-            if item_name not in production_cells:
-                continue
-            guard_label = str(ws.cell_value(grow, gcol) or "").strip().upper()
-            if needle not in guard_label:
-                production_cells.pop(item_name, None)
+        production_cells = _resolve_ppc_mis_cells(ws)
 
         conn = db.connect()
         cursor = conn.cursor()
@@ -987,6 +1032,8 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
         def _cv(r0, c0):        # 0-based
             return ws_s1.cell_value(r0, c0)
 
+        ws_for_resolve = ws_s1
+
     else:
         wb_raw = openpyxl.load_workbook(file_path, data_only=True)
         ws_s1  = wb_raw["S1"]
@@ -1004,6 +1051,8 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
             v = ws_s1.cell(row=r0 + 1, column=c0 + 1).value
             return None if v == "" else v
 
+        ws_for_resolve = _CellValueAdapter(_cv)
+
     month_mismatch = bool(
         report_month and db_month not in ("unknown", report_month)
     )
@@ -1016,7 +1065,13 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
         logger.info("BSP PPC MIS preview: month → %s", db_month)
 
     production_rows = []
-    for item_name, (row_0, col_0, do_convert) in _ppc_mis_config().items():
+    # Same guard/stable-label resolution extract_and_save_excel applies —
+    # previously this loop read _ppc_mis_config()'s raw default row/col
+    # unconditionally, so preview could silently show/save a stale or
+    # wrong cell (or skip a genuinely-shifted one) for any item whose row
+    # moved between report eras, out of step with what the direct-write
+    # path would have caught. See _resolve_ppc_mis_cells's own doc.
+    for item_name, (row_0, col_0, do_convert) in _resolve_ppc_mis_cells(ws_for_resolve).items():
         raw = _cv(row_0, col_0)
         val = _clean(raw)
         if val is not None and do_convert:
