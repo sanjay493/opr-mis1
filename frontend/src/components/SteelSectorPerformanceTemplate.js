@@ -25,8 +25,8 @@ const sectionHeading = {
   borderBottom: `1px solid ${BORDER}`, paddingBottom: 2,
 };
 const table = { width: '100%', borderCollapse: 'collapse', marginBottom: 6, fontSize: '11pt' };
-const th = { border: `1px solid ${BORDER}`, padding: '3px 5px', background: '#e2e8f0', fontWeight: 700, textAlign: 'center' };
-const td = { border: `1px solid ${BORDER}`, padding: '3px 5px', textAlign: 'center' };
+const th = { border: `1px solid ${BORDER}`, padding: '7px 9px', background: '#e2e8f0', fontWeight: 700, textAlign: 'center' };
+const td = { border: `1px solid ${BORDER}`, padding: '7px 9px', textAlign: 'center' };
 const tdLabel = td;
 const note = { fontSize: '10.5pt', fontStyle: 'italic', color: '#475569', marginTop: 2 };
 
@@ -71,6 +71,19 @@ function ValueCell({ value, share }) {
   );
 }
 
+// India's row has no share bracket of its own, but still needs a hidden
+// placeholder line matching the SAIL row's — otherwise the India row
+// renders one line shorter than the SAIL row below it (which does show a
+// bracket), making the two rows visibly uneven heights.
+function IndiaValueCell({ value }) {
+  return (
+    <td style={td}>
+      {fmtCell(value)}
+      <span style={{ ...shareBracket, visibility: 'hidden' }}>&nbsp;</span>
+    </td>
+  );
+}
+
 function ProductionOverviewTable({ headers, groups }) {
   if (!groups || !groups.length) return null;
   // headers come verbatim from the source PDF (e.g. "Jul 2026", "Apr-Jul
@@ -94,11 +107,11 @@ function ProductionOverviewTable({ headers, groups }) {
             <tr>
               <td style={{ ...tdLabel, fontWeight: 700 }} rowSpan={g.sail ? 2 : 1}>{g.item}</td>
               <td style={{ ...tdLabel, fontWeight: 600 }}>India</td>
-              <td style={td}>{fmtCell(g.india.report_month)}</td>
-              <td style={td}>{fmtCell(g.india.cply_month)}</td>
+              <IndiaValueCell value={g.india.report_month} />
+              <IndiaValueCell value={g.india.cply_month} />
               <td style={td}>{fmtCell(g.india.yoy_pct)}</td>
-              <td style={td}>{fmtCell(g.india.apr_report_month)}</td>
-              <td style={td}>{fmtCell(g.india.cply_apr_report_month)}</td>
+              <IndiaValueCell value={g.india.apr_report_month} />
+              <IndiaValueCell value={g.india.cply_apr_report_month} />
               <td style={td}>{fmtCell(g.india.cply_pct)}</td>
             </tr>
             {g.sail && (
