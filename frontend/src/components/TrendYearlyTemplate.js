@@ -110,7 +110,7 @@ function TrendTable({ rows, item_display, unit }) {
 
             return (
               <tr key={idx} style={{ background: bg, fontWeight: fw, borderTop: topBorder }}>
-                {row.is_first_in_plant && (
+                {row.rowspan_start && (
                   <td rowSpan={row.plant_row_count} style={plantCellStyle}>
                     {row.plant}
                   </td>

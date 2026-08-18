@@ -53,6 +53,31 @@
                (.at-a-glance-page, etc.) avoids this by being declared
                after .page instead; this one predates that pattern. */
             padding: 0 !important;
+            /* Collapses the inline "strut" that .pg-badge-marker (an
+               inline-block sibling positioned right before .page1-container
+               below) would otherwise contribute from *this* element's own
+               font metrics — an inline-block's line box always reserves
+               space for its containing block's font-size (the UA's default
+               'normal' line-height scales with font-size, so zeroing the
+               font-size alone zeroes the strut too), and that reserved
+               space was pushing the full-bleed background image down ~5mm
+               from the true page top. The marker keeps its own explicit
+               font-size:1px (below), but empirically an ancestor font-size
+               of 0 still makes Chromium drop its text from the PDF's text
+               layer — extract_text() no longer finds "@@PGSTART_1@@" here.
+               Harmless: pdf.py's marker-based lookups (_apply_dept_badges,
+               the page-3/trend overflow measurements) only ever read
+               main_bytes/main_pages — page 3 onward — never cover_bytes, so
+               nothing reads page 1's marker. Don't chase this if noticed;
+               fixing it would mean giving .cover-page a non-zero font-size
+               again and reopening the top-gap bug this rule exists to fix.
+               font-size only, NOT line-height: line-height is inherited as
+               a bare number, so a line-height:0 here would cascade onto
+               every cover-page descendant that doesn't set its own
+               line-height (e.g. .page1-kpi-label, .page1-kpi-heading) and
+               collapse their line boxes to zero, stacking their text on top
+               of neighboring elements instead of just killing the strut. */
+            font-size: 0;
         }
 
         /* Page 4: tighter margins to maximise usable area while keeping footer clear */
@@ -589,20 +614,16 @@
         .page1-container {
             position: relative;
             z-index: 0;
-            /* 290mm, not the true A4 height of 297mm. Two things eat into
-               the zero page margin this box is meant to fill exactly (see
-               @page cover-layout above): the .pg-badge-marker span just
-               before this element in the DOM (main.html, ~line 1127)
-               contributes a ~20px/~5.3mm "strut" to its inline-formatting
-               line box even though its own content is font-size:1px (see
-               .pg-badge-marker's comment — this is inherent to it staying
-               inline-block, which extract_text() needs it to be); plus a
-               small safety margin against Chromium print-pagination
-               rounding at an exact page-height box. Without this, the
-               last line of content (.page1-bottombar) was fragmenting
-               onto a blank second page. Imperceptible crop on a
-               full-bleed photo with object-fit:cover. */
-            min-height: 290mm;
+            /* 296.5mm, not the true A4 height of 297mm — the .cover-page
+               rule above now zeroes out the .pg-badge-marker strut that
+               used to push this box down ~5.3mm, so this only needs a
+               sub-millimeter safety margin against Chromium print-
+               pagination rounding at an exact page-height box (without
+               any margin at all, the last line of content
+               (.page1-bottombar) risks fragmenting onto a blank second
+               page). Imperceptible crop on a full-bleed photo with
+               object-fit:cover. */
+            min-height: 296.5mm;
             overflow: hidden;
         }
         .page1-bg {
@@ -616,7 +637,7 @@
         .page1-content {
             position: relative;
             z-index: 1;
-            min-height: 290mm;
+            min-height: 296.5mm;
         }
         /* The image's white content zone narrows to a "waist" around
            55-65% down the page (just below "Prepared By") before widening
@@ -1063,10 +1084,15 @@
         .catwise-table tr.cw-separator td { border: none; background: transparent; padding: 0; }
 
         /* ── page 18: Segment Wise Production ───────────────────────────── */
-        .segwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; font-size: 10pt; }
-        .segwise-table th { background-color: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 2px 3px; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 10pt; line-height: 1.2; font-weight: 600; }
+        {# 9.5pt/0.5px-1.5px padding, not the original 10pt/1px-2px — this
+           page's ~48 data rows were landing exactly one row (the final
+           grand-total) short of fitting on one physical page; shaving a
+           little off every row's height reclaims well over a row's worth
+           across the whole table. #}
+        .segwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; font-size: 9.5pt; }
+        .segwise-table th { background-color: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 1.5px 3px; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 9.5pt; line-height: 1.15; font-weight: 600; }
         .segwise-table th.lbl-th { text-align: left; }
-        .segwise-table td { padding: 1px 3px; border: 1px solid {{ colors.border_light }}; line-height: 1.2; }
+        .segwise-table td { padding: 0.5px 3px; border: 1px solid {{ colors.border_light }}; line-height: 1.15; }
         .segwise-table td.lbl-td { text-align: left; }
         .segwise-table td.num-td { text-align: right; }
         .segwise-table td.sw-group-cell { background-color: {{ colors.misc_white }}; color: {{ colors.text_black }}; font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; writing-mode: vertical-rl; transform: rotate(180deg); }

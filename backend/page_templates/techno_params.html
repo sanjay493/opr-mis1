@@ -1,38 +1,44 @@
         {% set _is_mill = page.group.startswith('MILL_') %}
         {% set _is_major = not _is_mill %}
+        {% set _major27 = page.group == 'MAJOR' %}
         {# Iron Making (29 + its 29.5 continuation) carries 8 furnace-wise
            sections across its two pages - denser than the other MAJOR-style
            pages - so it gets a smaller base size than the other _is_major
            pages to fit inside the tighter margins main.py gives these two
            pages (see IRON_MAKING_PAGE_2_ID in main.py). #}
         {% set _tsz = '8.5pt' if page.group == 'IRON_MAKING' else ('10pt' if _is_major else '9pt') %}
-        {# Page 27 (MAJOR) keeps a fixed layout with hardcoded column widths -
-           its row labels are short plant codes ("BSP", "SAIL"). Pages 28-30
-           share _is_major's header/row structure but their row labels are
-           longer ("BSP SMS-2", "BSP Batt. 9-11", "RSP-Old") and were
-           overflowing the same fixed 7% column - switch those to auto
-           layout (like the mill pages already use) so column 2 sizes to
-           its actual content instead. #}
-        {% set _fixed_layout = page.group == 'MAJOR' %}
         {# Arial Narrow (condensed, fits more per column) is for pages whose
            layout actually has to accommodate a growing number of YTD-month
            columns (28/29/29.5/30's auto-layout table, and the mill pages'
            own auto-layout) - that pressure is exactly why those pages also
-           get the month-count font-shrink in main.py. Page 27 (MAJOR) is a
-           fixed-layout table that was never part of that shrink logic and
-           isn't affected by it either way - it keeps its original Roboto. #}
-        {% set _font_family = "'Roboto',sans-serif" if _fixed_layout else "'Arial Narrow',Arial,sans-serif" %}
+           get the month-count font-shrink in main.py. Page 27 (MAJOR) was
+           never part of that shrink logic and isn't affected by it either
+           way - it keeps its original Roboto regardless of table layout. #}
+        {% set _font_family = "'Roboto',sans-serif" if _major27 else "'Arial Narrow',Arial,sans-serif" %}
         <div style="padding:4px;font-family:{{ _font_family }};font-size:{{ _tsz }};">
           <div style="text-align:center;font-weight:700;font-size:{{ _tsz }};">{{ page.title }}</div>
           {% if page.subtitle %}
           <div style="text-align:center;font-weight:600;font-size:{{ _tsz }};margin-bottom:3px;">{{ page.subtitle }}</div>
           {% endif %}
-          <table style="width:100%;border-collapse:collapse;border:1px solid {{ colors.border_black }};table-layout:{{ 'fixed' if _fixed_layout else 'auto' }};font-size:{{ _tsz }};margin-top:2px;">
+          {# table-layout:auto for every group here (page 27 included) - a
+             genuinely content-fit column (below, Plants on 27/28-30) can
+             only size to its own text under auto layout; table-layout:fixed
+             can't let one column track content while others stay
+             percentage-based, it just splits any unspecified column's share
+             of leftover width evenly regardless of what's in it. Page 27
+             used real fixed layout with a hardcoded 7% Plants column until
+             this rule - safe to drop now since page 27's Plants column only
+             ever holds short plant codes (BSP/DSP/RSP/BSL/ISP/SAIL, ≤4
+             chars), never the longer combined-shop labels ("BSP SMS-2",
+             "RSP-Old") that forced pages 28-30 onto auto layout in the
+             first place (see the word-wrap note below) - so there's no
+             risk of the same 2nd-page overflow recurring here. #}
+          <table style="width:100%;border-collapse:collapse;border:1px solid {{ colors.border_black }};table-layout:auto;font-size:{{ _tsz }};margin-top:2px;">
             <colgroup>
-              {% if _fixed_layout %}
-              <col style="width:10%"/><col style="width:7%"/>
-              {% set ncols = 7 + (page.month_labels | length) %}
-              {% for i in range(ncols) %}<col/>{% endfor %}
+              {% if _major27 %}
+              {# Parameters keeps its existing 10% hint (unchanged from
+                 before this page joined auto layout); Plants is content-fit. #}
+              <col style="width:10%"/><col/>
               {% elif _is_major %}
               {# Pages 28-30: constrain the rowspan'd Parameters column so a
                  long label (e.g. "Sp. Heat Consmn./t DC (1000 Kcal/Kg DC)")
@@ -99,15 +105,13 @@
                 {% endif %}
                 {% endif %}
                 {% set _row_label = (row.label ~ ' (' ~ row.unit ~ ')') if (not _is_major and row.unit) else row.label %}
-                {# Page 27's Plants column is a hardcoded 7%-wide fixed-layout
-                   column (see _fixed_layout above) sized for short codes
-                   ("BSP", "SAIL") - wrapping the longer combined-shop labels
-                   that also land here ("BSP SMS-2", "RSP SMS-1", ...) turns
-                   many rows 2 lines tall and was overflowing page 27 onto a
-                   2nd physical page. Pages 28-30/29.5's Plants/Parameters
-                   column is auto-width instead (sized to its own longest
-                   label already), so wrapping there only ever helps. #}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;{% if _fixed_layout %}white-space:nowrap;{% else %}word-wrap:break-word;overflow-wrap:break-word;{% endif %}">{{ _row_label }}</td>
+                {# Page 27's Plants column only ever holds short plant codes
+                   ("BSP", "SAIL") which never wrap anyway, so nowrap here is
+                   just a safety net. Pages 28-30/29.5's Plants/Parameters
+                   column carries the longer combined-shop labels ("BSP
+                   SMS-2", "RSP SMS-1", ...) that do need to wrap onto 2
+                   lines rather than force the column wide. #}
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;{% if _major27 %}white-space:nowrap;{% else %}word-wrap:break-word;overflow-wrap:break-word;{% endif %}">{{ _row_label }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy3 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy2 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy1 }}</td>

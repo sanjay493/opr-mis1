@@ -37,7 +37,7 @@
                     {% set plant = row['plant'] %}
                     {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
                     <tr class="{{ row_cls }}">
-                        {% if row['is_first_in_plant'] %}
+                        {% if row['rowspan_start'] %}
                         {% set pcls %}plant-cell{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{% endset %}
                         <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{{ plant }}</td>
                         {% endif %}

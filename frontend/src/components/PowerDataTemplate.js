@@ -68,8 +68,8 @@ const plantCellStyle = {
   writingMode: 'vertical-rl', transform: 'rotate(180deg)', padding: '2px 1px',
 };
 
-function fmt0(v) {
-  return v === null || v === undefined ? '' : Math.round(v).toString();
+function fmt2(v) {
+  return v === null || v === undefined ? '' : v.toFixed(2);
 }
 
 export default function PowerDataTemplate({ data }) {
@@ -111,7 +111,7 @@ export default function PowerDataTemplate({ data }) {
                   <td style={{ ...td, textAlign: 'left', fontWeight: 600, background: '#f8fafc' }}>{row.month}</td>
                   {GROUPS.flatMap((g) => g.cols.map(([key]) => (
                     <td key={`${g.key}-${key}`} style={{ ...td, background: row.has_data ? undefined : '#fafafa' }}>
-                      {fmt0(row[g.key]?.[key])}
+                      {fmt2(row[g.key]?.[key])}
                     </td>
                   )))}
                 </tr>
@@ -120,7 +120,7 @@ export default function PowerDataTemplate({ data }) {
                 <td style={{ ...td, textAlign: 'left', fontWeight: 700, background: '#e2e8f0', borderBottom: `1px solid ${BORDER}` }}>Cum.</td>
                 {GROUPS.flatMap((g) => g.cols.map(([key]) => (
                   <td key={`cum-${g.key}-${key}`} style={{ ...td, fontWeight: 700, background: '#e2e8f0', borderBottom: `1px solid ${BORDER}` }}>
-                    {fmt0(plant.cum[g.key]?.[key])}
+                    {fmt2(plant.cum[g.key]?.[key])}
                   </td>
                 )))}
               </tr>

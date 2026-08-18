@@ -61,6 +61,7 @@ function SWRow({ row }) {
 }
 
 export default function SegmentWiseTemplate({ data }) {
+  const title        = data?.title       || '';
   const monthLabel   = data?.month_label || '';
   const cplyLabel    = data?.cply_label  || '';
   const rows         = data?.rows        || [];
@@ -81,6 +82,9 @@ export default function SegmentWiseTemplate({ data }) {
 
   return (
     <div style={{ padding: '6px', fontFamily: 'Arial, sans-serif', fontSize: 'var(--report-font-size)' }}>
+      <div className="report-title-section">
+        <h2>{title}</h2>
+      </div>
       <table style={{
         width: '100%', borderCollapse: 'collapse',
         border: '2px solid #1e293b', tableLayout: 'fixed',

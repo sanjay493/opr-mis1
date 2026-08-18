@@ -95,9 +95,8 @@ function ValueAddedSteelPanel({ specialSteel }) {
         <div style={{ flex: 0.55, fontSize: '9.5pt', lineHeight: 1.6, paddingLeft: 9, borderLeft: `1px solid ${C.borderDivider}` }}>
           <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, marginBottom: 2 }}>{specialSteel.month_title}</div>
           <div>Qty (Value Added Steel): <b>{specialSteel.month_qty || '—'} T</b></div>
-          <div>%Fulfilment: <b>{specialSteel.pct_ful || '—'}%</b></div>
+          <div>%Fulfilment of Orderbook: <b>{specialSteel.pct_ful || '—'}%</b></div>
           <div>vs CPLY: <GrowthText value={specialSteel.pct_growth} good={specialSteel.growth_good} /></div>
-          <div>ABP FY: <b>{specialSteel.abp_fy || '—'}</b></div>
           <div>% of Saleable Steel: <b>{specialSteel.special_pct || '—'}%</b></div>
         </div>
       </div>

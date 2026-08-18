@@ -56,13 +56,12 @@
               <div style="flex:0.55;font-size:9.5pt;line-height:1.6;padding-left:9px;border-left:1px solid {{ colors.border_divider }};">
                 <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};margin-bottom:2px;">{{ page.special_steel.month_title }}</div>
                 <div>Qty (Value Added Steel): <b>{{ page.special_steel.month_qty if page.special_steel.month_qty else '—' }} T</b></div>
-                <div>%Fulfilment: <b>{{ page.special_steel.pct_ful if page.special_steel.pct_ful else '—' }}%</b></div>
+                <div>%Fulfilment of Orderbook: <b>{{ page.special_steel.pct_ful if page.special_steel.pct_ful else '—' }}%</b></div>
                 <div>vs CPLY:
                   {% if page.special_steel.growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ page.special_steel.pct_growth }}%</b>
                   {% elif page.special_steel.growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ page.special_steel.pct_growth }}%</b>
                   {% else %}<b>—</b>{% endif %}
                 </div>
-                <div>ABP FY: <b>{{ page.special_steel.abp_fy if page.special_steel.abp_fy else '—' }}</b></div>
                 <div>% of Saleable Steel: <b>{{ page.special_steel.special_pct if page.special_steel.special_pct else '—' }}%</b></div>
               </div>
             </div>

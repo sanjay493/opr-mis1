@@ -99,36 +99,76 @@ def _safe_techno(month, pg):
     except Exception:
         return {}
 
-# Index (page 2) content baseline, as it read BEFORE "MIS at a Glance" and
-# "Key Parameters" existed as numbered pages (i.e. when "Production
-# performance summary" was the first numbered page, "Page 1"). Kept as a
-# plain (title, page_range) baseline rather than edited in place, since
-# _index_rows() below derives the current numbering from it on every call —
-# see that function's docstring for why this can't just be a static value
-# in mis_data.json.
-_INDEX_BASE_ROWS = [
-    ("Production performance summary", "1"),
-    ("Production main Items", "2"),
-    ("Plant wise production", "3-4"),
-    ("Month-wise Production", "5-16"),
-    ("Concast Production, Production by process", "17"),
-    ("Category-wise Production of saleable steel", "18"),
-    ("Special Steel Production", "19-23"),
-    ("Inventory of ingots, bloom/billet, slab, pig iron & saleable steel at plants and stockyards", "24"),
-    ("Inter Plant Transfers", "25"),
-    ("Techno-economic performance (Major parameters)", "26"),
-    ("Month-wise techno-economic performance", "27-34"),
-    ("Major Environmental Performance Indicators (EPIs)", "35"),
-    ("Consumption, Receipts & Stock of Coking Coal", "36-37"),
-    ("Power Generation", "38"),
-    ("Capital Repairs", "39-43"),
-    ("Average detention per wagon/ commodity-wise detention", "44-47"),
+# Index (page 2) content inventory: (title, physical page count), in printed
+# order, "Page 1" (the page right after the Index) through the end of the
+# report. Previously this was a (title, page_range) baseline captured back
+# when "Production performance summary" was the very first numbered page,
+# with every page inserted since (MIS at a Glance, Key Parameters, Large
+# BFs, Segment Wise Production, the Special Steel trend/performance page,
+# EPI, Coal Receipts, Power Data...) individually patched in as a one-off
+# "+N from here on" shift. That approach silently drifted every time a
+# section's own page COUNT changed rather than pages being inserted before
+# it — e.g. Category-wise Production of Saleable Steel used to be one page
+# and is now three (one per plant group), Concast Production and
+# Production by Process used to share one page and are now two — so the
+# shift chain kept compounding wrong from that point on, and the old
+# "Average detention..." row pointed at a page (page_records.py's content)
+# that isn't even wired into the report anymore (it's its own standalone
+# /api/production-records endpoint now, not a numbered report page).
+#
+# _index_rows() below turns this into page numbers by walking it with a
+# running cursor, so every row's number is simply the sum of every prior
+# row's page count — no more shift arithmetic to keep in sync by hand.
+# Recomputed fresh on every request (not read from the static per-month
+# page_configs blob main.py otherwise loads page 2 from — see
+# _index_rows()'s docstring) so already-generated months stay correct too.
+#
+# Keep this in sync with frontend/src/app/report/page.js's PAGE_LABELS
+# (the on-screen page selector's own inventory of the same pages) whenever
+# a page is added, split, or removed.
+_INDEX_SECTIONS = [
+    ("MIS at a Glance", 1),
+    ("Production performance summary", 1),
+    ("Key Parameters — Quarterly Performance", 1),
+    ("Large BFs — SAIL Benchmark", 1),
+    ("Production main Items", 1),
+    ("Plant wise production", 2),
+    # Trend pages 7-12 (6 items: Oven Pushing/Sinter/Hot Metal/Crude Steel/
+    # Pig Iron & Finished Steel/Saleable Steel) flow as one continuous
+    # section rather than one physical page each (see pdf.py's trend_section
+    # merge + _measure_trend_page_breaks) — some items spill onto a 2nd
+    # physical page. Empirically 11 physical pages (5 of the 6 items
+    # 2-paged, 1 still fitting on its own single page) — measured identical
+    # at both 1 YTD month (April) and 4 YTD months (July), so the split
+    # looks driven by each item's fixed per-plant row content rather than
+    # by how many YTD month columns are in play, and should hold across the
+    # FY. Not a structural guarantee though — recheck (render pages 1-14
+    # for a given month and read off where the "13"/Concast marker lands)
+    # if page7_13.py's plant list or item count ever changes.
+    ("Month-wise Production", 11),
+    ("Concast Production, Production by process", 2),
+    # Category-wise (3 plant-group pages: BSP / DSP&RSP / BSL&ISP) +
+    # Segment Wise Production (1 page) - one Index entry covering all 4.
+    ("Category-wise Production of saleable steel", 4),
+    # BSP/DSP/RSP/BSL/ISP detail + SAIL consolidated (page_special_steel.py's
+    # generate_special_steel_plant x5 + generate_special_steel_sail).
+    ("Special Steel Production", 6),
+    # Trend/performance-analysis page inserted right after SAIL's page —
+    # TREND_PAGE_ID in main.py, sentinel id 1024, not part of the 1-40
+    # numbering.
+    ("Special Steel — Trend & Performance Analysis", 1),
+    ("Inventory of ingots, bloom/billet, slab, pig iron & saleable steel at plants and stockyards", 1),
+    ("Inter Plant Transfers", 1),
+    ("Techno-economic performance (Major parameters)", 1),
+    # Month-wise (Coke & Coal Chemicals/Sinter, Iron Making, Iron Making
+    # contd., SMS Shop — 4 pages, one of which is IRON_MAKING_PAGE_2_ID's
+    # own overflow page) + Mill-wise (BSP/DSP/RSP/BSL/ISP — 5 pages).
+    ("Month-wise techno-economic performance", 9),
+    ("Major Environmental Performance Indicators (EPIs)", 1),
+    ("Consumption, Receipts & Stock of Coking Coal", 2),
+    ("Monthly Summary of Power Data", 1),
+    ("Capital Repairs", 5),
 ]
-
-
-def _shift_page_range(page_range: str, delta: int) -> str:
-    """"3-4" -> "5-6" for delta=2; "35" -> "37"."""
-    return "-".join(str(int(p) + delta) for p in page_range.split("-"))
 
 
 def _index_rows() -> list:
@@ -141,33 +181,17 @@ def _index_rows() -> list:
     instead means the Index is always correct for any month, independent of
     when it was first saved.
 
-    "MIS at a Glance", "Key Parameters" and "Large BFs" are inserted as the
-    new pages 1, 3 and 4 (see AT_A_GLANCE_PAGE_ID / KEY_PARAMS_PAGE_ID /
-    BF_LARGE_ANNEXURE_PAGE_ID above); the former first-numbered-page
-    "Production performance summary" becomes page 2 (+1), and everything
-    after it shifts by +3 (three new pages ahead of it now, not two).
-
-    A further +1 kicks in from "Major Environmental Performance Indicators
-    (EPIs)" onward (EPI_PAGE_ID, 35.4): the base scheme's own "35" slot for
-    it was fully consumed by the mill-wise techno cycle's 9th page (ISP)
-    before this page existed (see EPI_PAGE_ID's comment in main.py), so
-    it's a genuinely new physical page beyond the +3 already accounted for,
-    same as Iron Making (contd.)/Coal Receipts before it — except those two
-    land on pages the base scheme already reserved slots for ("29.5"'s
-    content was always going to spill onto a 2nd page, and "36-37"'s own
-    base range already assumed a 2-page Coal block right after "35"), so
-    they don't need their own extra bump."""
-    rows = [
-        {"sno": "1", "title": "MIS at a Glance", "page_range": "1"},
-        {"sno": "2", "title": _INDEX_BASE_ROWS[0][0], "page_range": "2"},
-        {"sno": "3", "title": "Key Parameters — Quarterly Performance", "page_range": "3"},
-        {"sno": "4", "title": "Large BFs — SAIL Benchmark", "page_range": "4"},
-    ]
-    extra = 0
-    for i, (title, page_range) in enumerate(_INDEX_BASE_ROWS[1:], start=5):
-        if title.startswith("Major Environmental Performance Indicators"):
-            extra = 1
-        rows.append({"sno": str(i), "title": title, "page_range": _shift_page_range(page_range, 3 + extra)})
+    Walks _INDEX_SECTIONS with a running page-count cursor: each row's
+    page_range is simply "cursor" or "cursor-(cursor+count-1)", and the
+    cursor advances by that row's count for the next one. See
+    _INDEX_SECTIONS' own comment for why this replaced the previous
+    shift-a-historical-baseline approach."""
+    rows = []
+    cursor = 1
+    for i, (title, count) in enumerate(_INDEX_SECTIONS, start=1):
+        page_range = str(cursor) if count == 1 else f"{cursor}-{cursor + count - 1}"
+        rows.append({"sno": str(i), "title": title, "page_range": page_range})
+        cursor += count
     return rows
 from pdf import build_pdf_response, generate_pdf_bytes
 from layout_loader import load_layout_config
@@ -268,13 +292,13 @@ IRON_MAKING_PAGE_2_ID = 29.5
 
 # "Major Environmental Performance Indicators (EPIs)" — inserted right after
 # page 35 (Mill ISP), right before the Coal Consumption/Receipts pages. The
-# original 1-47 page plan always reserved a slot here (_INDEX_BASE_ROWS'
-# "Major Environmental Performance Indicators (EPIs)" row sits at base
-# position "35", right before "Consumption, Receipts & Stock of Coking
-# Coal"'s "36-37") but the mill-wise techno cycle (27-35) ended up using
-# all the way through int page 35 before this page existed, so it was
-# never actually built until now. Sourced from page_techno.py's own
-# page-27 computation (see page_epi.py) rather than a fresh DB read.
+# original 1-47 page plan always reserved a slot for an EPI section (see
+# _INDEX_SECTIONS' "Major Environmental Performance Indicators (EPIs)" row,
+# right before "Consumption, Receipts & Stock of Coking Coal") but the
+# mill-wise techno cycle (27-35) ended up using all the way through int
+# page 35 before this page existed, so it was never actually built until
+# now. Sourced from page_techno.py's own page-27 computation (see
+# page_epi.py) rather than a fresh DB read.
 EPI_PAGE_ID = 35.4
 
 # "Coking Coal Receipts & Stock" — two pages inserted right after the EPI

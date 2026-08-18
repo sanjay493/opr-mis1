@@ -779,10 +779,15 @@ select.form-control {
   --page-margin-bottom: 2mm;
 }
 
-/* ─── Pages 27-30 – TECHNO PARAMS: compact portrait to fit all rows on one page ─── */
+/* ─── Pages 27-30 – TECHNO PARAMS: compact portrait to fit all rows on one page ───
+   29.5 ("Iron Making (contd.)") shares this group with 29 — it's a sentinel
+   page (see IRON_MAKING_PAGE_2_ID in main.py), not one of the plain 27-30
+   ints, so its own class is "pg-29-5" (dot sanitized to a hyphen — see
+   pgclass() below), not "pg-29.5". */
 .a4-page.pg-27,
 .a4-page.pg-28,
 .a4-page.pg-29,
+.a4-page.pg-29-5,
 .a4-page.pg-30 {
   --page-margin-top: 4mm;
   --page-margin-bottom: 3mm;
@@ -801,6 +806,7 @@ select.form-control {
 .pg-27 table td, .pg-27 table th,
 .pg-28 table td, .pg-28 table th,
 .pg-29 table td, .pg-29 table th,
+.pg-29-5 table td, .pg-29-5 table th,
 .pg-30 table td, .pg-30 table th {
   padding: 0.5px 2px !important;
   font-family: 'Arial Narrow', Arial, sans-serif !important;
@@ -892,6 +898,7 @@ select.form-control {
   .a4-page.pg-27,
   .a4-page.pg-28,
   .a4-page.pg-29,
+  .a4-page.pg-29-5,
   .a4-page.pg-30 {
     page: pg27_layout;
     --report-font-size: 10pt;

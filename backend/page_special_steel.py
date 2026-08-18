@@ -898,11 +898,20 @@ def generate_special_steel_sail(report_month: str) -> dict:
             "cum_cply": _fmt(sail_cct), "cum_pct_growth": _growth(sail_cat, sail_cct),
         })
 
-        # production_table stores values in '000T; page unit is T → ×1000
-        ss_cur  = sum(v * 1000 for p in plants for v in [_get_prod(cur, report_month, p, "Saleable Steel")] if v)
-        ss_cply = sum(v * 1000 for p in plants for v in [_get_prod(cur, cply_month,   p, "Saleable Steel")] if v)
-        ss_cum  = sum(v * 1000 for p in plants for v in [_get_prod_ytd(cur, ytd_months,      p, "Saleable Steel")] if v)
-        ss_ccum = sum(v * 1000 for p in plants for v in [_get_prod_ytd(cur, cply_ytd_months, p, "Saleable Steel")] if v)
+        # production_table stores values in '000T; page unit is T → ×1000.
+        # Summed via db.get_sail_production_actual/_ytd_actual (all 8 plants —
+        # the 5 integrated plants here PLUS ASP/SSP/VISL, same PLANTS list
+        # get_sail_production_plan below already uses for the ABP figure)
+        # rather than looping the local 5-plant `plants` list above: this row
+        # is overall SAIL saleable steel production, not special-steel-only,
+        # so it must include the SSPs group like the ABP column already does
+        # — looping `plants` here previously left the actual/cply/cum/cply-cum
+        # columns 3 plants short of the ABP column they sit next to.
+        _t = lambda v: v * 1000 if v is not None else None
+        ss_cur  = _t(db.get_sail_production_actual(report_month, "Saleable Steel"))
+        ss_cply = _t(db.get_sail_production_actual(cply_month,   "Saleable Steel"))
+        ss_cum  = _t(db.get_sail_production_ytd_actual(ytd_months,      "Saleable Steel"))
+        ss_ccum = _t(db.get_sail_production_ytd_actual(cply_ytd_months, "Saleable Steel"))
 
         # Saleable Steel production ABP (FY only — see _get_abp_sum): existing
         # production_plan_table ABP-plan data (same source as page 3's

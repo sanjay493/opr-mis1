@@ -531,12 +531,20 @@ def _measure_trend_page_breaks(browser, trend_page: dict, main_pages: list, temp
 
 def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
     """Mutate trend_page's rows in place: within each plant/SAIL group,
-    recompute is_first_in_plant/plant_row_count so the rowspan'd plant-name
+    recompute rowspan_start/plant_row_count so the rowspan'd plant-name
     cell is split at every point page_of shows a page-index change — one
     merged, vertically-centered label per physical page instead of one for
     the whole group (which would leave later pages blank when the group
     spills over). A group with any row missing a measurement is left as a
-    single whole-group merge — the pre-existing, safe default."""
+    single whole-group merge — the pre-existing, safe default.
+
+    Deliberately does NOT touch is_first_in_plant: that field marks the
+    group's true first row (drives trend_section.html's thick .plant-first
+    separator border, one per genuine plant change) and must stay put even
+    when a page break lands mid-group — otherwise the row starting the new
+    physical page was picking up a spurious thick line, indistinguishable
+    from a real plant boundary, purely because it happened to fall at the
+    top of a page."""
     for ii, it in enumerate(trend_page.get("items", [])):
         rows = it.get("rows", [])
         i = 0
@@ -551,11 +559,11 @@ def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
                 for k in range(i, j):
                     if k > i and pages[k - i] != pages[k - i - 1]:
                         for m in range(seg_start, k):
-                            rows[m]["is_first_in_plant"] = (m == seg_start)
+                            rows[m]["rowspan_start"] = (m == seg_start)
                             rows[m]["plant_row_count"] = k - seg_start
                         seg_start = k
                 for m in range(seg_start, j):
-                    rows[m]["is_first_in_plant"] = (m == seg_start)
+                    rows[m]["rowspan_start"] = (m == seg_start)
                     rows[m]["plant_row_count"] = j - seg_start
             i = j
 

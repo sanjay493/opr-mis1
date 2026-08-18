@@ -8,8 +8,9 @@ FY-cumulative columns (this FY so far, and last FY's full total).
 
 Sits right before the Coal Consumption page (EPI_PAGE_ID, main.py) — the
 position the original 1-47 page plan always reserved for it (see
-_INDEX_BASE_ROWS's "35" row in main.py), which the mill-wise techno pages
-(27-35) ended up fully occupying before this page existed.
+_INDEX_SECTIONS' "Major Environmental Performance Indicators (EPIs)" row in
+main.py), which the mill-wise techno pages (27-35) ended up fully occupying
+before this page existed.
 
 No new computation here at all: these 3 parameters (techno_data unit=
 "General", keys sp_co2_emission/sp_water_consumption/sp_pm_emission) are

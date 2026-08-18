@@ -21,7 +21,6 @@ _PIG_IRON_CFG = {
     "unit": "'000 T",
     "db_item": "Pig Iron",
     "is_nos": False,
-    "show_all_rows": True,
     "groups": [("SAIL", _SAIL_8)],
 }
 
@@ -30,7 +29,6 @@ _FINISHED_STEEL_CFG = {
     "unit": "'000 T",
     "db_item": "Finished Steel",
     "is_nos": False,
-    "show_all_rows": True,
     "groups": [("SAIL", _SAIL_8)],
 }
 
@@ -457,9 +455,19 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
 
         _tag_best_flags(group_rows)
 
+        # is_first_in_plant: TRUE group boundary — drives the thick
+        # .plant-first separator border, so it must stay put even if the
+        # group later spans a page break (see pdf.py's
+        # _apply_trend_page_splits, which mutates rowspan_start/
+        # plant_row_count per split segment but deliberately leaves this
+        # one alone).
+        # rowspan_start: which row(s) open a fresh rowspan'd plant-label
+        # <td> — same as is_first_in_plant here (one rowspan for the whole
+        # group) until/unless a page split re-segments it.
         n = len(group_rows)
         for i, r in enumerate(group_rows):
             r["is_first_in_plant"] = (i == 0)
+            r["rowspan_start"]     = (i == 0)
             r["plant_row_count"]   = n
 
         rows.extend(group_rows)

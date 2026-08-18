@@ -41,7 +41,7 @@
                         <td class="pwr-mon-col pwr-label-cell">{{ row.month }}</td>
                         {% for gkey, glabel, gcols in groups %}
                             {% for ikey, ilabel in gcols %}
-                            <td class="pwr-num">{{ '%.0f'|format(row[gkey][ikey]) if row[gkey][ikey] is not none else '' }}</td>
+                            <td class="pwr-num">{{ '%.2f'|format(row[gkey][ikey]) if row[gkey][ikey] is not none else '' }}</td>
                             {% endfor %}
                         {% endfor %}
                     </tr>
@@ -50,7 +50,7 @@
                         <td class="pwr-mon-col pwr-label-cell">Cum.</td>
                         {% for gkey, glabel, gcols in groups %}
                             {% for ikey, ilabel in gcols %}
-                            <td class="pwr-num">{{ '%.0f'|format(plant.cum[gkey][ikey]) if plant.cum[gkey][ikey] is not none else '' }}</td>
+                            <td class="pwr-num">{{ '%.2f'|format(plant.cum[gkey][ikey]) if plant.cum[gkey][ikey] is not none else '' }}</td>
                             {% endfor %}
                         {% endfor %}
                     </tr>

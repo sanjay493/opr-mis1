@@ -179,9 +179,17 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
   const displayTotalPages = (totalPages || 48) - 2;
 
   const deptBadge = pageData.dept_badge;
+  // CSS-safe page-number class suffix, e.g. 29.5 -> "29-5" — a raw
+  // "pg-29.5" class parses as two chained selectors in any CSS rule
+  // written as .pg-29.5 (class "pg-29" AND class "5" — never matches a
+  // real element, which only ever carries the single class "pg-29.5"),
+  // so every globals.css rule targeting a sentinel float page id by class
+  // silently never applied. Mirrors pdf.py's own _pgclass() filter, which
+  // fixed the identical bug on the PDF side.
+  const pgClass = pageData.page != null ? ` pg-${String(pageData.page).replace(/\./g, '-')}` : '';
 
   return (
-    <div className={`a4-page${isLandscape ? ' landscape' : ''}${pageData.page ? ` pg-${pageData.page}` : ''}`}>
+    <div className={`a4-page${isLandscape ? ' landscape' : ''}${pgClass}`}>
       {/* Corner department badge (pages 3+; group/side computed server-side) */}
       {deptBadge && (
         <div className={`dept-badge side-${deptBadge.side} grp-${deptBadge.group}`}>
