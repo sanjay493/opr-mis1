@@ -204,6 +204,25 @@ def init_db():
         )
     """)
 
+    # 6c-steel. "Indian Steel Sector Performance" — PIB Ministry of Steel
+    # monthly release (Report_format/"Indian Steel Sector Performance in
+    # <Mon>'<YY>.pdf"), reproduced verbatim as pages 2.1-2.4 of the report
+    # (see page_steel_sector_performance.py). Pure archive, like
+    # sail_sales_table: one row per report_month, the ENTIRE extracted
+    # content (all numbered tables 1a/1b/1c/2/3a/4a/5 + narrative text
+    # sections 6/7/8) as a single JSON blob, so the extractor stays generic
+    # and any future consumer can walk sections without re-parsing the PDF.
+    # See excel_extractors/pdf_extractor_steel_sector_performance.py for the
+    # JSON shape.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS steel_sector_performance_table (
+            report_month TEXT PRIMARY KEY,
+            data_json    TEXT,
+            source_file  TEXT,
+            created_at   TEXT
+        )
+    """)
+
     # 6c-do. Plant-wise remarks for the Monthly DO Letter's Annexure-A
     # (Crude Steel) / Annexure-B (Finished Steel) tables, e.g. RSP's power-
     # interruption note explaining a Crude Steel shortfall. Entered ahead of

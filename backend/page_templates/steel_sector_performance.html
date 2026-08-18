@@ -1,0 +1,77 @@
+{% macro generic_table(t) %}
+{% if t %}
+{% if t.heading %}<div class="ssp-table-heading">{{ t.heading }}</div>{% endif %}
+<table class="ssp-table">
+    <thead><tr>{% for h in t.headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+    <tbody>
+        {% for row in t.rows %}
+        <tr>
+            {% for cell in row %}
+            <td class="{{ 'ssp-label' if loop.index0 == 0 else '' }}">{{ cell if cell is not none else '—' }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endmacro %}
+
+{% macro text_section(s) %}
+{% if s %}
+{% if s.heading %}<div class="ssp-section-heading">{{ s.heading }}</div>{% endif %}
+{% for p in s.paragraphs %}<p class="ssp-para">{{ p }}</p>{% endfor %}
+{% endif %}
+{% endmacro %}
+
+<div class="ssp-title">Indian Steel Sector Performance</div>
+<div class="ssp-subtitle">
+    {{ page.title or '' }}{% if page.posted_on %} — Posted: {{ page.posted_on }}{% endif %}
+    {% if page.data_month and page.data_month != page.report_month %} (latest available release: {{ page.data_month }}){% endif %}
+</div>
+
+{% if not page.available %}
+<div style="padding: 20px; text-align: center; color: #64748b; font-size: 9pt;">
+    No "Indian Steel Sector Performance" release has been uploaded yet for this month.
+</div>
+
+{% elif page.section == 'demand_trade' %}
+{{ generic_table(page.tables.get('2')) }}
+<div class="ssp-section-heading">3. Trade Dynamics</div>
+{{ generic_table(page.tables.get('3a')) }}
+
+{% elif page.section == 'raw_materials_indices' %}
+<div class="ssp-section-heading">4. Raw Materials</div>
+{{ generic_table(page.tables.get('4a')) }}
+{{ generic_table(page.tables.get('5')) }}
+
+{% elif page.section == 'policy_green' %}
+{{ text_section(page.text_sections.get('6')) }}
+{{ text_section(page.text_sections.get('7')) }}
+{{ text_section(page.text_sections.get('8')) }}
+{% if page.footer_note %}<div class="ssp-note">{{ page.footer_note }}</div>{% endif %}
+
+{% else %}
+{% set headers_1a = page.tables.get('1a', {}).get('headers') if page.tables.get('1a') else None %}
+{% set cols_1a = headers_1a if headers_1a and headers_1a|length == 7
+    else ['Production', 'Report Month', 'CPLY Month', 'YoY %', 'Apr-Report Month', 'CPLY Apr-Report Month', 'CPLY %'] %}
+<div class="ssp-section-heading">1a. Production Overview (in Mt) — with SAIL &amp; Share of India</div>
+<table class="ssp-table">
+    <thead><tr>{% for h in cols_1a %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+    <tbody>
+        {% for row in page.production_overview_1a %}
+        <tr class="{{ 'ssp-sail' if row.kind == 'sail' else ('ssp-share' if row.kind == 'share' else '') }}">
+            <td class="ssp-label">{{ row.item }}</td>
+            <td>{{ row.report_month if row.report_month is not none else '—' }}</td>
+            <td>{{ row.cply_month if row.cply_month is not none else '—' }}</td>
+            <td>{{ '' if row.kind else (row.yoy_pct if row.yoy_pct is not none else '—') }}</td>
+            <td>{{ row.apr_report_month if row.apr_report_month is not none else '—' }}</td>
+            <td>{{ row.cply_apr_report_month if row.cply_apr_report_month is not none else '—' }}</td>
+            <td>{{ '' if row.kind else (row.cply_pct if row.cply_pct is not none else '—') }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="ssp-note">Italic rows: SAIL actuals. Bold rows: SAIL's % share of the India total.</div>
+{{ generic_table(page.tables.get('1b')) }}
+{{ generic_table(page.tables.get('1c')) }}
+{% endif %}

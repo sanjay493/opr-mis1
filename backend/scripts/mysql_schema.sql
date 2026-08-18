@@ -114,6 +114,17 @@ CREATE TABLE IF NOT EXISTS sail_sales_note_table (
     note         TEXT
 ) ENGINE=InnoDB;
 
+-- "Indian Steel Sector Performance" — PIB Ministry of Steel monthly release,
+-- archived verbatim (all tables + text sections) as one JSON blob per
+-- report_month. See excel_extractors/pdf_extractor_steel_sector_performance.py
+-- and page_steel_sector_performance.py (pages 2.1-2.4 of the report).
+CREATE TABLE IF NOT EXISTS steel_sector_performance_table (
+    report_month CHAR(7)  NOT NULL PRIMARY KEY,
+    data_json    JSON,
+    source_file  VARCHAR(255),
+    created_at   VARCHAR(32)
+) ENGINE=InnoDB;
+
 -- Plant-wise remarks for the Monthly DO Letter's Annexure-A (Crude Steel) /
 -- Annexure-B (Finished Steel) tables — entered ahead of time so the letter
 -- (due the 1st of the following month) already has them when generated.

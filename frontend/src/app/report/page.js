@@ -9,6 +9,10 @@ import { useReportData, useReportPage, useGeneratePDF } from '@/hooks/useReportA
 const PAGE_LABELS = {
    1: 'Cover Page',
    2: 'Index / Contents',
+   2.1: 'Indian Steel Sector Performance — Production & Prices',
+   2.2: 'Indian Steel Sector Performance — Demand & Trade',
+   2.3: 'Indian Steel Sector Performance — Raw Materials & Indices',
+   2.4: 'Indian Steel Sector Performance — Policy & Green Steel Initiatives',
    2.5: 'MIS at a Glance',
    3: 'SAIL Performance Summary',
    3.5: 'Key Parameters',

@@ -427,6 +427,73 @@
             font-weight: 600;
             background: #f8fafc;
         }
+        .ssp-title {
+            text-align: center;
+            font-weight: 700;
+            font-size: 13pt;
+            color: #1e3a5f;
+            margin-bottom: 2px;
+        }
+        .ssp-subtitle {
+            text-align: center;
+            font-size: 8pt;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+        .ssp-section-heading {
+            font-weight: 700;
+            font-size: 10pt;
+            color: #1e3a5f;
+            margin: 10px 0 4px;
+            border-bottom: 1px solid {{ colors.border_dark }};
+            padding-bottom: 2px;
+        }
+        .ssp-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6px;
+            font-size: 8pt;
+        }
+        .ssp-table th, .ssp-table td {
+            border: 1px solid {{ colors.border_dark }};
+            padding: 3px 5px;
+        }
+        .ssp-table th {
+            background: #e2e8f0;
+            font-weight: 700;
+            text-align: center;
+        }
+        .ssp-table td {
+            text-align: right;
+        }
+        .ssp-table td.ssp-label {
+            text-align: left;
+        }
+        .ssp-table tr.ssp-sail {
+            font-style: italic;
+            background: #f8fafc;
+        }
+        .ssp-table tr.ssp-share {
+            font-weight: 700;
+            background: #eef2ff;
+        }
+        .ssp-table-heading {
+            font-weight: 700;
+            font-size: 8.5pt;
+            margin: 6px 0 3px;
+        }
+        .ssp-note {
+            font-size: 7pt;
+            font-style: italic;
+            color: #475569;
+            margin-top: 2px;
+        }
+        .ssp-para {
+            font-size: 8.5pt;
+            line-height: 1.4;
+            margin: 0 0 6px;
+            text-align: justify;
+        }
         .pwr-num {
             text-align: right;
             font-variant-numeric: tabular-nums;
@@ -1168,7 +1235,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters') %} content-page{% elif page.type in ('epi', 'key_highlights') %} coal-landscape-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance') %} content-page{% elif page.type in ('epi', 'key_highlights') %} coal-landscape-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
@@ -1197,6 +1264,7 @@
         {% elif page.type == 'coal_consumption' %}{% include 'coal_consumption.html' %}
         {% elif page.type == 'coal_receipt_stock' %}{% include 'coal_receipt_stock.html' %}
         {% elif page.type == 'power_data' %}{% include 'power_data.html' %}
+        {% elif page.type == 'steel_sector_performance' %}{% include 'steel_sector_performance.html' %}
         {% else %}
             <div class="report-title-section">
                 <h2>{{ page.title }}</h2>

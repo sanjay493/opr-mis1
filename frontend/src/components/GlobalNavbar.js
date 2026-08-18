@@ -70,6 +70,12 @@ export default function GlobalNavbar() {
             { label: 'CO2 / Water / PM', link: '/data-entry/co2-water-pm', icon: '🌫️' },
           ]
         },
+        {
+          groupLabel: 'External Sources',
+          children: [
+            { label: 'Indian Steel Sector Performance (PIB)', link: '/data-entry/steel-sector-performance', icon: '🏗️' },
+          ]
+        },
       ]
     },
     {

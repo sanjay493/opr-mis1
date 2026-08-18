@@ -38,6 +38,7 @@ from page_bf_large_annexure import generate_bf_large_annexure
 from page_cover import generate_cover
 from page_coal_receipts_stock import generate_coal_receipts_sail
 from page_power_data import generate_power_data
+from page_steel_sector_performance import generate_steel_sector_performance
 from page_coal_consumption import generate_coal_consumption
 from page_epi import generate_epi
 from page_opening_stock import generate_opening_stock
@@ -127,6 +128,7 @@ def _safe_techno(month, pg):
 # (the on-screen page selector's own inventory of the same pages) whenever
 # a page is added, split, or removed.
 _INDEX_SECTIONS = [
+    ("Indian Steel Sector Performance", 4),
     ("MIS at a Glance", 1),
     ("Production performance summary", 1),
     ("Key Parameters — Quarterly Performance", 1),
@@ -231,6 +233,24 @@ _IM_AVG_TO_MAJOR = {}
 # never persisted — always stripped from any cached pages_config and
 # resynthesized fresh on every render.
 TREND_PAGE_ID = 1024
+
+# "Indian Steel Sector Performance" — 4 pages reproducing the monthly PIB
+# (Ministry of Steel) release (Report_format/"Indian Steel Sector
+# Performance in <Mon>'<YY>.pdf"), sourced from steel_sector_performance_
+# table via the dedicated extractor (excel_extractors/pdf_extractor_steel_
+# sector_performance.py / page_steel_sector_performance.py). Placed right
+# after the Index, ahead of "MIS at a Glance" — same sentinel-float
+# treatment as AT_A_GLANCE_PAGE_ID below (numbered main flow, gets a corner
+# dept-badge — see report_utils.py's _DEPT_BADGE_EXPLICIT_GROUP), so
+# AT_A_GLANCE_PAGE_ID and everything after it now display one section later
+# ("Page 5" instead of "Page 1", etc.) — that's computed automatically by
+# _index_rows()'s running cursor, not hardcoded anywhere.
+STEEL_SECTOR_PAGES = {
+    2.1: "prod_prices",
+    2.2: "demand_trade",
+    2.3: "raw_materials_indices",
+    2.4: "policy_green",
+}
 
 # "MIS at a Glance" infographic snapshot — sits right after the Index (i.e.
 # it's the first NUMBERED page, "Page 1"), so unlike its original position
@@ -536,7 +556,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
-                                POWER_DATA_PAGE_ID):
+                                POWER_DATA_PAGE_ID) or page_number in STEEL_SECTOR_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
                 # glance" sentinel page, the "key parameters" sentinel
                 # page, the "Iron Making (contd.)" sentinel page, and the
@@ -672,7 +692,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                             if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
-                                                      POWER_DATA_PAGE_ID)]
+                                                      POWER_DATA_PAGE_ID)
+                            and p.get("page") not in STEEL_SECTOR_PAGES]
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
@@ -680,6 +701,15 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             _idx2 = next((i for i, p in enumerate(pages_config) if p.get("page") == 2), None)
             if _idx2 is not None:
                 pages_config.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
+            # "Indian Steel Sector Performance" — 4 sentinel pages, inserted
+            # right BEFORE "MIS at a Glance" (i.e. right after the Index),
+            # anchored on AT_A_GLANCE_PAGE_ID's own just-inserted position
+            # rather than page 2's, so they land ahead of it without having
+            # to touch AT_A_GLANCE_PAGE_ID's own insert line above.
+            _idx_aag = next((i for i, p in enumerate(pages_config) if p.get("page") == AT_A_GLANCE_PAGE_ID), None)
+            if _idx_aag is not None:
+                for _i, _pg in enumerate(sorted(STEEL_SECTOR_PAGES)):
+                    pages_config.insert(_idx_aag + _i, {"page": _pg})
             _idx3 = next((i for i, p in enumerate(pages_config) if p.get("page") == 3), None)
             if _idx3 is not None:
                 # KEY_HIGHLIGHTS_PAGE_ID intentionally NOT inserted here — see
@@ -749,6 +779,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page.update(_safe_techno(month, pg))
                 page["type"] = "techno_params"
                 page["orientation"] = "landscape" if 31 <= pg <= 35 else "portrait"
+            if pg in STEEL_SECTOR_PAGES:
+                page.update(generate_steel_sector_performance(month, STEEL_SECTOR_PAGES[pg]))
             if pg in CR_PAGES:
                 page.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(month)))
                 page["type"] = "capital_repair"
@@ -844,6 +876,15 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idx2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 2), None)
         if _idx2 is not None:
             _pages_list.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
+    # "Indian Steel Sector Performance" — 4 sentinel pages, always inserted
+    # right BEFORE "MIS at a Glance" (i.e. right after the Index), anchored
+    # on AT_A_GLANCE_PAGE_ID's own (now-guaranteed-present) position so they
+    # land ahead of it without touching the AT_A_GLANCE_PAGE_ID insert above.
+    if not any(p.get("page") in STEEL_SECTOR_PAGES for p in _pages_list):
+        _idx_aag = next((i for i, p in enumerate(_pages_list) if p.get("page") == AT_A_GLANCE_PAGE_ID), None)
+        if _idx_aag is not None:
+            for _i, _pg in enumerate(sorted(STEEL_SECTOR_PAGES)):
+                _pages_list.insert(_idx_aag + _i, {"page": _pg})
     # "Key Parameters" sentinel page: always inserted right after "SAIL
     # Performance Summary" (page 3), so it becomes "Page 3".
     if not any(p.get("page") == KEY_PARAMS_PAGE_ID for p in _pages_list):
@@ -1079,6 +1120,8 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
                     # the override here so Roboto actually renders.
                     entry.pop("fontFamily", None)
                 dynamic_page_layouts[str(pg)] = entry
+        if pg in STEEL_SECTOR_PAGES:
+            p.update(generate_steel_sector_performance(request.month, STEEL_SECTOR_PAGES[pg]))
         if pg in CR_PAGES:
             p.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(request.month)))
             p["type"] = "capital_repair"
@@ -3709,6 +3752,69 @@ async def sail_1page_report(month: str = Query(...)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="1_page_report_{month}.xlsx"'},
     )
+
+
+@app.post("/api/steel-sector-performance/preview")
+async def steel_sector_performance_preview(file: UploadFile = File(...), month: str = Form(...)):
+    """Extract every table + text section from the monthly PIB 'Indian Steel
+    Sector Performance' release for review. Returns a preview only —
+    nothing is written to the DB."""
+    import shutil, tempfile, sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename)[1]
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+        import pdf_extractor_steel_sector_performance as _ssp_mod
+        result = _ssp_mod.extract_preview(tmp_path, month)
+        result["source_file"] = file.filename
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {type(e).__name__}: {e}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+@app.post("/api/steel-sector-performance/confirm")
+async def steel_sector_performance_confirm(payload: dict):
+    """Save the user-confirmed extraction: the whole preview dict (tables +
+    text_sections + production_overview_1a_items etc.) archived verbatim as
+    one JSON blob per report_month in steel_sector_performance_table — see
+    that table's comment in db.py for why nothing is reshaped here."""
+    month = payload.get("report_month")
+    if not month:
+        raise HTTPException(status_code=400, detail="report_month is required")
+
+    source_file = payload.pop("source_file", "") or ""
+    import datetime as _dt
+    now = _dt.datetime.now().isoformat()
+
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO steel_sector_performance_table (report_month, data_json, source_file, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(report_month) DO UPDATE SET
+                data_json = excluded.data_json,
+                source_file = excluded.source_file,
+                created_at = excluded.created_at
+        """, (month, json.dumps(payload), source_file, now))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok", "report_month": month}
 
 
 @app.get("/api/pmix-fy-report")

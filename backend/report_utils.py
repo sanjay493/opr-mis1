@@ -39,7 +39,10 @@ _DEPT_BADGE_GROUPS = [
 # 3.1 ("Key Highlights & Variances") would join the 2.5/3/3.5/3.6 group too
 # if it's ever wired back into the report — see KEY_HIGHLIGHTS_PAGE_ID in
 # main.py (currently built, not inserted).
+#   2.1, 2.2, 2.3, 2.4 — "Indian Steel Sector Performance", right after the
+#     Index, ahead of "MIS at a Glance" — same group (1) as its neighbors.
 _DEPT_BADGE_EXPLICIT_GROUP = {
+    2.1: 1, 2.2: 1, 2.3: 1, 2.4: 1,
     2.5: 1, 3: 1, 3.5: 1, 3.6: 1,
     1024: 5,
     29.5: 7,
