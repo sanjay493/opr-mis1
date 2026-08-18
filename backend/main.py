@@ -140,8 +140,10 @@ def _safe_techno(month, pg):
 #     placeholder page (SAIL_MINES_PAGE_ID = 4.5) — index.txt marks its
 #     content "(empty page contents awaited)", so it exists as a titled
 #     slot with no data yet, not a real report section.
-#   index.txt's last line ("Details of Rakes detention...") is marked "(to
-#   added seperatly)" — intentionally not added here.
+#   - "Details of Rakes Detention Plant Wise" (index.txt's last line, marked
+#     "(to added seperatly)") is listed in the Index table per direct
+#     instruction, but has no real pages behind it yet — see its own
+#     comment at the bottom of this list.
 _INDEX_SECTIONS = [
     ("Indian Steel Sector Performance", 3),
     ("SAIL Performance - At a Glance", 1),
@@ -186,6 +188,12 @@ _INDEX_SECTIONS = [
     ("Details of Coking Coal Consumption, Blend and Stocks", 2),
     ("Plant Wise Power Data", 1),
     ("Status of Capital/Major Repairs Planned in ABP - Plant Wise", 5),
+    # index.txt marks this row "(to added seperatly)" — listed in the Index
+    # table (per direct instruction) with its stated page range, but no
+    # actual pages 57-60 exist in the report yet; unlike SAIL_MINES_PAGE_ID
+    # above, this is Index-row-only until a rake-detention data source
+    # exists and the real per-page split is known.
+    ("Details of Rakes Detention Plant Wise", 4),
 ]
 
 
