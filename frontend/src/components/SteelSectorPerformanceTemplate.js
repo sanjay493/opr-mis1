@@ -15,20 +15,20 @@ const TITLE_COLOR = '#1e3a5f';
 
 const wrap = { fontFamily: 'inherit' };
 const pageTitle = {
-  textAlign: 'center', fontWeight: 700, fontSize: '13pt', color: TITLE_COLOR, marginBottom: 2,
+  textAlign: 'center', fontWeight: 700, fontSize: '14pt', color: TITLE_COLOR, marginBottom: 2,
 };
 const pageSubtitle = {
-  textAlign: 'center', fontSize: '8pt', color: '#64748b', marginBottom: 10,
+  textAlign: 'center', fontSize: '10pt', color: '#64748b', marginBottom: 10,
 };
 const sectionHeading = {
-  fontWeight: 700, fontSize: '10pt', color: TITLE_COLOR, margin: '10px 0 4px',
+  fontWeight: 700, fontSize: '12pt', color: TITLE_COLOR, margin: '10px 0 4px',
   borderBottom: `1px solid ${BORDER}`, paddingBottom: 2,
 };
-const table = { width: '100%', borderCollapse: 'collapse', marginBottom: 6, fontSize: '8pt' };
+const table = { width: '100%', borderCollapse: 'collapse', marginBottom: 6, fontSize: '11pt' };
 const th = { border: `1px solid ${BORDER}`, padding: '3px 5px', background: '#e2e8f0', fontWeight: 700, textAlign: 'center' };
 const td = { border: `1px solid ${BORDER}`, padding: '3px 5px', textAlign: 'right' };
 const tdLabel = { ...td, textAlign: 'left' };
-const note = { fontSize: '7pt', fontStyle: 'italic', color: '#475569', marginTop: 2 };
+const note = { fontSize: '10.5pt', fontStyle: 'italic', color: '#475569', marginTop: 2 };
 
 function fmtCell(v) {
   return v === null || v === undefined || v === '' ? '—' : v;
@@ -39,7 +39,7 @@ function GenericTable({ tableData }) {
   const { heading, headers = [], rows = [] } = tableData;
   return (
     <div>
-      {heading && <div style={{ fontWeight: 700, fontSize: '8.5pt', margin: '6px 0 3px' }}>{heading}</div>}
+      {heading && <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px' }}>{heading}</div>}
       <table style={table}>
         <thead>
           <tr>{headers.map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
@@ -58,7 +58,7 @@ function GenericTable({ tableData }) {
   );
 }
 
-const shareBracket = { display: 'block', fontSize: '7pt', color: '#1d4ed8', fontWeight: 400 };
+const shareBracket = { display: 'block', fontSize: '10.5pt', color: '#1d4ed8', fontWeight: 400 };
 const sailRowStyle = { fontStyle: 'italic', background: '#f8fafc' };
 
 function ValueCell({ value, share }) {
@@ -125,7 +125,7 @@ function TextSection({ section }) {
     <div>
       {heading && <div style={sectionHeading}>{heading}</div>}
       {paragraphs.map((p, i) => (
-        <p key={i} style={{ fontSize: '8.5pt', lineHeight: 1.4, margin: '0 0 6px', textAlign: 'justify' }}>{p}</p>
+        <p key={i} style={{ fontSize: '11pt', lineHeight: 1.4, margin: '0 0 6px', textAlign: 'justify' }}>{p}</p>
       ))}
     </div>
   );
@@ -197,7 +197,7 @@ export default function SteelSectorPerformanceTemplate({ data }) {
     <div style={wrap}>
       <Header data={data} />
       <div style={sectionHeading}>1. Steel Production &amp; Prices</div>
-      <div style={{ fontWeight: 700, fontSize: '8.5pt', margin: '6px 0 3px' }}>
+      <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px' }}>
         1a. Production Overview (in Mt) — with SAIL &amp; Share of India
       </div>
       <ProductionOverviewTable headers={tables['1a']?.headers} groups={production_overview_1a} />
