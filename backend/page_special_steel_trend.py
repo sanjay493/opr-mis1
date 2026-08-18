@@ -443,7 +443,7 @@ def generate_special_steel_trend(report_month: str) -> dict:
 
     return {
         "type": "special_steel_trend",
-        "title": "SPECIAL STEEL — TREND & PERFORMANCE ANALYSIS",
+        "title": "Plant Wise Special Steel Production & SAIL Trend",
         "annual_svgs": [annual_svgs[e] for e in _BLOCK_ORDER],
         "month_svg": _donut_svg(
             month_slices, f"Special Steel Despatch — {month_label} (Plant Share of SAIL)",

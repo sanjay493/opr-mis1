@@ -124,7 +124,7 @@ def generate_coal_receipts_sail(report_month: str) -> dict:
 
     return {
         "type": "coal_receipt_stock",
-        "title": f"Receipt, Consumption and Stocks of Coking Coal at Plants during {_month_label(report_month)}",
+        "title": f"Details of Coking Coal Consumption, Blend and Stocks - Receipts & Stocks ({_month_label(report_month)})",
         "receipt_rows": receipt_rows,
         "consumption_rows": consumption_rows,
         "stock_cols_1": stock_cols_1,

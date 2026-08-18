@@ -86,7 +86,7 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
     <div className="report-table-wrapper" style={{ marginTop: '4px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2px' }}>
         <h2 className="page5-6-heading">
-          PLANT-WISE PRODUCTION PERFORMANCE :{shortM}'{shortY} and Apr-{shortM}'{shortY}
+          PLANT WISE ITEM WISE PRODUCTION & CS TO HM RATIO :{shortM}'{shortY} and Apr-{shortM}'{shortY}
         </h2>
         <span className="page5-6-unit">Unit:000 T</span>
       </div>

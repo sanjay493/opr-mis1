@@ -35,6 +35,7 @@ from page_at_a_glance import generate_at_a_glance
 from page_key_highlights import generate_key_highlights
 from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
+from page_sail_mines import generate_sail_mines
 from page_cover import generate_cover
 from page_coal_receipts_stock import generate_coal_receipts_sail
 from page_power_data import generate_power_data
@@ -127,15 +128,30 @@ def _safe_techno(month, pg):
 # Keep this in sync with frontend/src/app/report/page.js's PAGE_LABELS
 # (the on-screen page selector's own inventory of the same pages) whenever
 # a page is added, split, or removed.
+# Section names/order below follow Report_format/index.txt (Index rewrite
+# requested directly) rather than each page's own internal module name —
+# two structural differences from the page-generator layout itself:
+#   - "Plant Wise Special Steel Production & SAIL Trend" merges what used
+#     to be two separate rows (Special Steel Production's 6 plant pages +
+#     its Trend/Performance-Analysis sentinel page) into one Index line,
+#     7 pages total — the underlying pages/dispatch are unchanged, only
+#     the Index's own row count.
+#   - "SAIL Mines Production & Despatch Performance" is a brand-new single
+#     placeholder page (SAIL_MINES_PAGE_ID = 4.5) — index.txt marks its
+#     content "(empty page contents awaited)", so it exists as a titled
+#     slot with no data yet, not a real report section.
+#   index.txt's last line ("Details of Rakes detention...") is marked "(to
+#   added seperatly)" — intentionally not added here.
 _INDEX_SECTIONS = [
     ("Indian Steel Sector Performance", 3),
-    ("MIS at a Glance", 1),
-    ("Production performance summary", 1),
-    ("Key Parameters — Quarterly Performance", 1),
-    ("Large BFs — SAIL Benchmark", 1),
-    ("Production main Items", 1),
-    ("Plant wise production", 2),
-    # Trend pages 7-12 (6 items: Oven Pushing/Sinter/Hot Metal/Crude Steel/
+    ("SAIL Performance - At a Glance", 1),
+    ("SAIL Performance - 1 Page Summary", 1),
+    ("Inter Plant Performance Comparison", 1),
+    ("SAIL Large BFs - Performance Snapshot", 1),
+    ("SAIL Mines Production & Despatch Performance", 1),
+    ("Plant Wise Performance of Main Items (w.r.t. ABP)", 1),
+    ("Plant Wise Item Wise Production & CS to HM Ratio", 2),
+    # Trend pages (6 items: Oven Pushing/Sinter/Hot Metal/Crude Steel/
     # Pig Iron & Finished Steel/Saleable Steel) flow as one continuous
     # section rather than one physical page each (see pdf.py's trend_section
     # merge + _measure_trend_page_breaks) — some items spill onto a 2nd
@@ -144,32 +160,32 @@ _INDEX_SECTIONS = [
     # at both 1 YTD month (April) and 4 YTD months (July), so the split
     # looks driven by each item's fixed per-plant row content rather than
     # by how many YTD month columns are in play, and should hold across the
-    # FY. Not a structural guarantee though — recheck (render pages 1-14
-    # for a given month and read off where the "13"/Concast marker lands)
-    # if page7_13.py's plant list or item count ever changes.
-    ("Month-wise Production", 11),
-    ("Concast Production, Production by process", 2),
+    # FY. Not a structural guarantee though — recheck (render the pages
+    # around this section for a given month and read off where the
+    # Concast marker lands) if page7_13.py's plant list or item count
+    # ever changes.
+    ("10 Years Month Wise Production (Main Item Plant Wise)", 11),
+    ("Crude Steel Production Details - Concast & Process Type", 2),
     # Category-wise (3 plant-group pages: BSP / DSP&RSP / BSL&ISP) +
     # Segment Wise Production (1 page) - one Index entry covering all 4.
-    ("Category-wise Production of saleable steel", 4),
+    ("Plant Wise Category Wise Production of Saleable Steel", 4),
     # BSP/DSP/RSP/BSL/ISP detail + SAIL consolidated (page_special_steel.py's
-    # generate_special_steel_plant x5 + generate_special_steel_sail).
-    ("Special Steel Production", 6),
-    # Trend/performance-analysis page inserted right after SAIL's page —
-    # TREND_PAGE_ID in main.py, sentinel id 1024, not part of the 1-40
-    # numbering.
-    ("Special Steel — Trend & Performance Analysis", 1),
-    ("Inventory of ingots, bloom/billet, slab, pig iron & saleable steel at plants and stockyards", 1),
-    ("Inter Plant Transfers", 1),
-    ("Techno-economic performance (Major parameters)", 1),
+    # generate_special_steel_plant x5 + generate_special_steel_sail) + the
+    # Trend/performance-analysis sentinel page right after SAIL's page
+    # (TREND_PAGE_ID, sentinel id 1024, not part of the 1-40 numbering) —
+    # merged into one Index row, see module-level comment above.
+    ("Plant Wise Special Steel Production & SAIL Trend", 7),
+    ("Inventory Status (Pig Iron/Semis/Finished Steel)", 1),
+    ("IPT", 1),
+    ("Plant Wise Major TEPs (Major 12 Parameters)", 1),
     # Month-wise (Coke & Coal Chemicals/Sinter, Iron Making, Iron Making
     # contd., SMS Shop — 4 pages, one of which is IRON_MAKING_PAGE_2_ID's
     # own overflow page) + Mill-wise (BSP/DSP/RSP/BSL/ISP — 5 pages).
-    ("Month-wise techno-economic performance", 9),
-    ("Major Environmental Performance Indicators (EPIs)", 1),
-    ("Consumption, Receipts & Stock of Coking Coal", 2),
-    ("Monthly Summary of Power Data", 1),
-    ("Capital Repairs", 5),
+    ("Plant Wise Area Wise TEPs", 9),
+    ("Major Environmental Performance Indicators (EPIs) - Plant Wise", 1),
+    ("Details of Coking Coal Consumption, Blend and Stocks", 2),
+    ("Plant Wise Power Data", 1),
+    ("Status of Capital/Major Repairs Planned in ABP - Plant Wise", 5),
 ]
 
 
@@ -300,6 +316,16 @@ KEY_PARAMS_PAGE_ID = 3.5
 # treatment as KEY_PARAMS_PAGE_ID above (numbered main flow, group-1
 # dept-badge).
 BF_LARGE_ANNEXURE_PAGE_ID = 3.6
+
+# "SAIL Mines Production & Despatch Performance" — placeholder page from
+# Report_format/index.txt's Index rewrite (item 7): sits right after fixed
+# page 4 ("Production main Items"), before fixed page 5 ("Plant wise
+# production"). index.txt marks this section's content "(empty page
+# contents awaited)" — the slot/title exists now, real data does not; see
+# page_sail_mines.py for the placeholder body. Same sentinel-float
+# treatment as BF_LARGE_ANNEXURE_PAGE_ID above (numbered main flow,
+# group-1 dept-badge).
+SAIL_MINES_PAGE_ID = 4.5
 
 # "Iron Making (contd.)" — page 29's furnace-wise Slag Rate/Fuel Rate/BF
 # Productivity/Pellet in Burden sections spill onto this second physical
@@ -557,7 +583,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
 
         if page_number is not None:
             if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID, KEY_PARAMS_PAGE_ID,
-                                BF_LARGE_ANNEXURE_PAGE_ID,
+                                BF_LARGE_ANNEXURE_PAGE_ID, SAIL_MINES_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                 POWER_DATA_PAGE_ID) or page_number in STEEL_SECTOR_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
@@ -612,20 +638,20 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                     if cfg.get("combined_items"):
                         # Page 11: Pig Iron + Finished Steel combined
                         page["type"] = "trend_combined"
-                        page["title"] = f"MONTH-WISE PRODUCTION TREND : {cfg.get('display', '')}"
+                        page["title"] = f"10 YEARS MONTH WISE PRODUCTION : {cfg.get('display', '')}"
                         page["item_display"] = cfg.get("display", "")
                         page["unit"] = ""
                         page["rows"] = []
                         page["items"] = generate_combined_trend_items(month, pg)
                     else:
                         page["type"] = "trend_yearly"
-                        page["title"] = f"MONTH-WISE PRODUCTION TREND : {cfg.get('display', '')}"
+                        page["title"] = f"10 YEARS MONTH WISE PRODUCTION : {cfg.get('display', '')}"
                         page["item_display"] = cfg.get("display", "")
                         page["unit"] = cfg.get("unit", "")
                         page["rows"] = generate_trend_page_rows(month, pg)
                 if pg == 13:
                     page["type"] = "concast_performance"
-                    page["title"] = "CONCAST PRODUCTION PERFORMANCE"
+                    page["title"] = "Crude Steel Production Details - Concast"
                     page["subtitle"] = ""
                     page["rows"] = []
                     page["headers"] = []
@@ -634,7 +660,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                     page["ytd"]     = concast["ytd"]
                 if pg == 14:
                     page["type"] = "prod_by_process"
-                    page["title"] = "PRODUCTION BY PROCESS"
+                    page["title"] = "Crude Steel Production Details - Process Type"
                     pbp = generate_prod_by_process(month)
                     page["monthly"]      = pbp["monthly"]
                     page["monthly_prev"] = pbp["monthly_prev"]
@@ -693,7 +719,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
                             if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
-                                                      KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
+                                                      KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID, SAIL_MINES_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
@@ -726,6 +752,11 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 # cleaned out rather than lingering.
                 pages_config.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
                 pages_config.insert(_idx3 + 2, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
+            # "SAIL Mines Production & Despatch Performance" sentinel page:
+            # always inserted right after fixed page 4, ahead of fixed page 5.
+            _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
+            if _idx4 is not None:
+                pages_config.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
             _idx29 = next((i for i, p in enumerate(pages_config) if p.get("page") == 29), None)
             if _idx29 is not None:
                 pages_config.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
@@ -762,6 +793,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == BF_LARGE_ANNEXURE_PAGE_ID:
                 page.update(generate_bf_large_annexure(month))
                 page["type"] = "bf_large_annexure"
+            if pg == SAIL_MINES_PAGE_ID:
+                page.update(generate_sail_mines())
+                page["type"] = "sail_mines"
             if pg == EPI_PAGE_ID:
                 page.update(generate_epi(month))
                 page["orientation"] = "landscape"
@@ -902,6 +936,12 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idxkp = next((i for i, p in enumerate(_pages_list) if p.get("page") == KEY_PARAMS_PAGE_ID), None)
         if _idxkp is not None:
             _pages_list.insert(_idxkp + 1, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
+    # "SAIL Mines Production & Despatch Performance" sentinel page: always
+    # inserted right after fixed page 4.
+    if not any(p.get("page") == SAIL_MINES_PAGE_ID for p in _pages_list):
+        _idx4 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 4), None)
+        if _idx4 is not None:
+            _pages_list.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
     # "Iron Making (contd.)" sentinel page: always inserted right after
     # page 29, same unconditional-insert pattern as above.
     if not any(p.get("page") == IRON_MAKING_PAGE_2_ID for p in _pages_list):
@@ -993,6 +1033,9 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == BF_LARGE_ANNEXURE_PAGE_ID:
             p.update(generate_bf_large_annexure(request.month))
             p["type"] = "bf_large_annexure"
+        if pg == SAIL_MINES_PAGE_ID:
+            p.update(generate_sail_mines())
+            p["type"] = "sail_mines"
         if pg == EPI_PAGE_ID:
             p.update(generate_epi(request.month))
             p["orientation"] = "landscape"

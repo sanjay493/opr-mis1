@@ -38,7 +38,7 @@ _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 
 
 TECHNO_PAGES = {
-    27: ("MAJOR",       "MAJOR TECHNO-ECONOMIC PARAMETERS", ""),
+    27: ("MAJOR",       "Plant Wise Major TEPs (Major 12 Parameters)", ""),
     28: ("COKE_SINTER", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "COKE AND COAL CHEMICALS, SINTER PLANT"),
     29: ("IRON_MAKING", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "IRON MAKING"),
     29.5: ("IRON_MAKING", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "IRON MAKING (CONTD.)"),
@@ -1763,7 +1763,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
         sections = [s for s in sections if s.get("label") not in exclude_labels]
 
     return {
-        "title":          "MAJOR TECHNO-ECONOMIC PARAMETERS",
+        "title":          "Plant Wise Major TEPs (Major 12 Parameters)",
         "subtitle":       "",
         "variant":        "techno_params",
         "group":          "MAJOR",

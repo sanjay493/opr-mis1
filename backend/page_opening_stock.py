@@ -215,7 +215,7 @@ def generate_opening_stock(report_month: str) -> dict:
         ]
 
         return {
-            "title":      "OPENING STOCK AT SAIL PLANTS AND STOCKYARDS",
+            "title":      "Inventory Status (Pig Iron/Semis/Finished Steel)",
             "unit":       "'000T",
             "variant":    "opening_stock",
             "col_labels": [_col_label(m) for m in months],

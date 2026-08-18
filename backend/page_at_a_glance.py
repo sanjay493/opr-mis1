@@ -892,7 +892,7 @@ def generate_at_a_glance(report_month: str) -> dict:
 
     return {
         "type": "at_a_glance",
-        "title": "SAIL Performance — Report at a Glance",
+        "title": "SAIL Performance - At a Glance",
         "month_label": month_label,
         "production": _production_section(report_month),
         "ytd_trend": _ytd_trend_section(report_month),

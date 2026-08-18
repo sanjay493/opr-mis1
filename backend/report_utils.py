@@ -41,9 +41,11 @@ _DEPT_BADGE_GROUPS = [
 # main.py (currently built, not inserted).
 #   2.1, 2.2, 2.3 — "Indian Steel Sector Performance", right after the
 #     Index, ahead of "MIS at a Glance" — same group (1) as its neighbors.
+#   4.5 — "SAIL Mines Production & Despatch Performance", right after
+#     fixed page 4 — same group (1) as its 3.5/3.6 neighbors.
 _DEPT_BADGE_EXPLICIT_GROUP = {
     2.1: 1, 2.2: 1, 2.3: 1,
-    2.5: 1, 3: 1, 3.5: 1, 3.6: 1,
+    2.5: 1, 3: 1, 3.5: 1, 3.6: 1, 4.5: 1,
     1024: 5,
     29.5: 7,
     35.4: 8, 35.5: 8, 35.6: 8, 35.7: 8,

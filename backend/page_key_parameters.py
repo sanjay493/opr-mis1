@@ -550,7 +550,7 @@ def generate_key_parameters(report_month: str) -> dict:
         rows.append(row)
 
     return {
-        "title": f"Performance of SAIL Plants — {period_label}'{report_year_2d}",
+        "title": f"Inter Plant Performance Comparison — {period_label}'{report_year_2d}",
         "plants": PLANTS,
         "rows": rows,
     }

@@ -36,7 +36,7 @@ def generate_epi(report_month: str) -> dict:
 
     return {
         "type": "epi",
-        "title": "Major Environmental Performance Indicators (EPIs)",
+        "title": "Major Environmental Performance Indicators (EPIs) - Plant Wise",
         "fy2_label": major["fy2_label"],
         "fy1_label": major["fy1_label"],
         "target_label": major["target_label"],

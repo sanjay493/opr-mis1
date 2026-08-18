@@ -52,7 +52,7 @@ function TrendTable({ rows, item_display, unit }) {
         borderBottom: '2px solid #0f172a', paddingBottom: '4px', marginBottom: '6px',
       }}>
         <h2 className="page7-13-heading">
-          MONTH-WISE PRODUCTION TREND : {item_display}
+          10 YEARS MONTH WISE PRODUCTION : {item_display}
         </h2>
         <span className="page7-13-unit">Unit: {unit}</span>
       </div>

@@ -479,7 +479,7 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         rows.append({"parameter": label, "unit": unit, "sail": sail_out})
 
     return {
-        "title": "Comparison of Performance of Large BFs of SAIL",
+        "title": "SAIL Large BFs - Performance Snapshot",
         "variant": "bf_large_annexure",
         "sail_cols": sail_cols,
         "prev_fy_col_label": prev_fy_col_label,

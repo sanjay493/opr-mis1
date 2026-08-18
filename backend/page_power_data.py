@@ -134,7 +134,7 @@ def generate_power_data(report_month: str) -> dict:
 
     return {
         "type": "power_data",
-        "title": f"Monthly Summary of Power Data for {_title_month_label(report_month)} and FY {fy_label}",
+        "title": f"Plant Wise Power Data for {_title_month_label(report_month)} and FY {fy_label}",
         "plan_items": [label for _, label in _PLAN_ITEMS],
         "actual_items": [label for _, label in _ACTUAL_ITEMS],
         "grid_items": [label for _, label in _GRID_ITEMS],

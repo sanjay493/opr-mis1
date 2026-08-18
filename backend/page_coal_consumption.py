@@ -73,7 +73,7 @@ def generate_coal_consumption(report_month: str) -> dict:
 
     return {
         "type": "coal_consumption",
-        "title": f"Consumption of Coking Coal and CDI Coal - {_month_label(report_month)}",
+        "title": f"Details of Coking Coal Consumption, Blend and Stocks - Consumption ({_month_label(report_month)})",
         "qty_cols": QTY_COLS,
         "pct_cols": PCT_COLS,
         "groups": groups,
