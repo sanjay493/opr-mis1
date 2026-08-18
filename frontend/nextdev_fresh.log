@@ -1,0 +1,47 @@
+
+> frontend@0.1.0 dev
+> cross-env NODE_OPTIONS=--max-old-space-size=4096 next dev
+
+▲ Next.js 16.2.7 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.8:3000
+✓ Ready in 1509ms
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: "30mb"
+  · proxyTimeout: 400000
+
+○ Compiling /admin/backup ...
+ GET /admin/backup 200 in 8.3s (next.js: 7.9s, application-code: 459ms)
+ GET /admin/backup 200 in 239ms (next.js: 42ms, application-code: 197ms)
+ GET /reports/production-fy 200 in 2.8s (next.js: 2.6s, application-code: 125ms)
+ GET / 200 in 1802ms (next.js: 1674ms, application-code: 128ms)
+ GET /report 200 in 3.1s (next.js: 3.0s, application-code: 126ms)
+ POST /api/generate-pdf/start 200 in 6.4s (next.js: 1602ms, application-code: 4.8s)
+○ Compiling /reports/techno-verification ...
+ GET /reports/techno-verification 200 in 3.7s (next.js: 3.5s, application-code: 116ms)
+ GET /data-entry/techno-manual 200 in 1486ms (next.js: 1204ms, application-code: 282ms)
+ GET /login 200 in 739ms (next.js: 698ms, application-code: 42ms)
+ GET / 200 in 62ms (next.js: 23ms, application-code: 39ms)
+ GET /data-entry/techno-manual 200 in 48ms (next.js: 9ms, application-code: 39ms)
+ GET /data-entry/techno-correction 200 in 769ms (next.js: 723ms, application-code: 46ms)
+ GET /report 200 in 78ms (next.js: 18ms, application-code: 60ms)
+ GET /reports/techno-verification 200 in 195ms (next.js: 13ms, application-code: 182ms)
+ GET /reports/techno-verification 200 in 671ms (next.js: 242ms, application-code: 429ms)
+○ Compiling /data-entry/techno ...
+ GET /data-entry/techno 200 in 10.0s (next.js: 9.8s, application-code: 119ms)
+ GET /data-entry/techno-manual 200 in 130ms (next.js: 30ms, application-code: 100ms)
+ GET /report 200 in 76ms (next.js: 27ms, application-code: 50ms)
+API_BASE_URL: 
+ GET /report 200 in 289ms (next.js: 9ms, application-code: 280ms)
+○ Compiling /data-entry/targets ...
+ GET /data-entry/targets 200 in 12.8s (next.js: 12.5s, application-code: 282ms)
+ GET / 200 in 101ms (next.js: 33ms, application-code: 68ms)
+ GET / 200 in 808ms (next.js: 111ms, application-code: 696ms)
+ GET /report 200 in 67ms (next.js: 30ms, application-code: 37ms)
+ POST /api/generate-pdf/start 200 in 4.4s (next.js: 21ms, application-code: 4.3s)
+ POST /api/generate-pdf/start 200 in 5.6s (next.js: 14ms, application-code: 5.6s)
+ GET / 200 in 2.2s (next.js: 983ms, application-code: 1235ms)
+ GET /report 200 in 90ms (next.js: 43ms, application-code: 47ms)
+ GET /report 200 in 580ms (next.js: 15ms, application-code: 565ms)
+ GET /report 200 in 111ms (next.js: 12ms, application-code: 99ms)
+[?25h
