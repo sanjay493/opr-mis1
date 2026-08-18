@@ -4,12 +4,19 @@
 <table class="ssp-table">
     <thead><tr>{% for h in t.headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
     <tbody>
-        {% for row in t.rows %}
+        {% for g in t.row_groups %}
+        {% for cells in g.cells %}
         <tr>
-            {% for cell in row %}
-            <td class="{{ 'ssp-label' if loop.index0 == 0 else '' }}">{{ cell if cell is not none else '—' }}</td>
-            {% endfor %}
+            {% if loop.first %}
+            <td class="ssp-label"{% if g.cells|length > 1 %} rowspan="{{ g.cells|length }}"{% endif %}>{{ g.label if g.label is not none else '—' }}</td>
+            {% endif %}
+            {% if g.wide_text %}
+            <td colspan="{{ t.headers|length - 1 }}">{{ cells[0] }}</td>
+            {% else %}
+            {% for cell in cells %}<td>{{ cell if cell is not none else '—' }}</td>{% endfor %}
+            {% endif %}
         </tr>
+        {% endfor %}
         {% endfor %}
     </tbody>
 </table>
@@ -47,10 +54,10 @@
 {{ generic_table(page.tables.get('2')) }}
 <div class="ssp-section-heading">3. Trade Dynamics</div>
 {{ generic_table(page.tables.get('3a')) }}
-
-{% elif page.section == 'raw_materials_indices' %}
 <div class="ssp-section-heading">4. Raw Materials</div>
 {{ generic_table(page.tables.get('4a')) }}
+
+{% elif page.section == 'raw_materials_indices' %}
 {{ generic_table(page.tables.get('5')) }}
 
 {% elif page.section == 'policy_green' %}

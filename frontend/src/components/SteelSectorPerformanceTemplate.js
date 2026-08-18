@@ -36,7 +36,7 @@ function fmtCell(v) {
 
 function GenericTable({ tableData }) {
   if (!tableData) return null;
-  const { heading, headers = [], rows = [], footnotes = [] } = tableData;
+  const { heading, headers = [], row_groups: rowGroups = [], footnotes = [] } = tableData;
   return (
     <div>
       {heading && <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px' }}>{heading}</div>}
@@ -45,13 +45,18 @@ function GenericTable({ tableData }) {
           <tr>{headers.map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
         </thead>
         <tbody>
-          {rows.map((row, ri) => (
-            <tr key={ri}>
-              {row.map((cell, ci) => (
-                <td key={ci} style={ci === 0 ? tdLabel : td}>{fmtCell(cell)}</td>
-              ))}
+          {rowGroups.map((g, gi) => g.cells.map((cells, ci) => (
+            <tr key={`${gi}-${ci}`}>
+              {ci === 0 && (
+                <td style={tdLabel} rowSpan={g.cells.length > 1 ? g.cells.length : undefined}>
+                  {fmtCell(g.label)}
+                </td>
+              )}
+              {g.wide_text
+                ? <td style={td} colSpan={headers.length - 1}>{cells[0]}</td>
+                : cells.map((cell, i) => <td key={i} style={td}>{fmtCell(cell)}</td>)}
             </tr>
-          ))}
+          )))}
         </tbody>
       </table>
       {footnotes.map((fn, i) => <div key={i} style={note}>{fn}</div>)}
@@ -179,6 +184,8 @@ export default function SteelSectorPerformanceTemplate({ data }) {
         <GenericTable tableData={tables['2']} />
         <div style={sectionHeading}>3. Trade Dynamics</div>
         <GenericTable tableData={tables['3a']} />
+        <div style={sectionHeading}>4. Raw Materials</div>
+        <GenericTable tableData={tables['4a']} />
       </div>
     );
   }
@@ -187,8 +194,6 @@ export default function SteelSectorPerformanceTemplate({ data }) {
     return (
       <div style={wrap}>
         <Header data={data} />
-        <div style={sectionHeading}>4. Raw Materials</div>
-        <GenericTable tableData={tables['4a']} />
         <GenericTable tableData={tables['5']} />
       </div>
     );

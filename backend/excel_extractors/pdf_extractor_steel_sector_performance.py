@@ -60,6 +60,14 @@ _ITEM_LABELS_1A = ["Crude Steel", "Hot Metal", "Finished Steel"]
 # off there rather than folding it into section 8's last paragraph.
 _FOOTER_RE = re.compile(r'^Source:\s*Provisional JPC data', re.IGNORECASE)
 
+# A free-standing "Note: ..." paragraph under a table (e.g. 1c's "Note:
+# Prices are inclusive of GST...") isn't part of pdfplumber's table grid at
+# all — it's ordinary body text sitting between the table and the next
+# heading — so it needs a separate text-based pass, not the row-shape
+# heuristic _is_footnote_row() uses for a trailing row like 1b's "Top 7
+# includes...".
+_NOTE_RE = re.compile(r'^Note\s*:', re.IGNORECASE)
+
 
 def _clean_num(v):
     if v is None:
@@ -137,6 +145,44 @@ def _is_footnote_row(row):
     return bool(row and row[0]) and all(c is None for c in row[1:])
 
 
+def _group_table_rows(data_rows):
+    """Groups consecutive rows that share one leading-column label into a
+    single row-group — e.g. 3a reports Imports/Exports as TWO rows each
+    ('000 t, then Rs Crore), with the label only present on the first; a
+    blank leading cell means "still the previous row's label", so those
+    rows get grouped under it (rendered with the label cell rowspan'd
+    across the group instead of repeated/blank).
+
+    A group of exactly one row whose 2nd cell holds text while every cell
+    after it is empty (e.g. 3a's 'Net Trade Position' -> 'India was net
+    importer...' line) is flagged wide_text=True so the renderer can print
+    that cell spanning the rest of the row instead of as an ordinary
+    column value trailed by dashes.
+
+    Generic across every table (not 3a-specific) — a table with no such
+    blank-leading-cell rows just yields one single-row group per row,
+    identical to the unmerged rendering used before this existed.
+
+    Returns: [{"label": str|None, "cells": [[tail...], ...], "wide_text": bool}]
+    """
+    groups = []
+    for row in data_rows:
+        tail = list(row[1:]) if row else []
+        if row and row[0] is not None:
+            groups.append({"label": row[0], "cells": [tail]})
+        elif groups:
+            groups[-1]["cells"].append(tail)
+        else:
+            groups.append({"label": None, "cells": [tail]})
+    for g in groups:
+        only_row = g["cells"][0] if len(g["cells"]) == 1 else None
+        g["wide_text"] = bool(
+            only_row and only_row and only_row[0] not in (None, "")
+            and all(c is None for c in only_row[1:])
+        )
+    return groups
+
+
 def _table_dict(raw_table, heading_text):
     if not raw_table:
         return None
@@ -144,7 +190,13 @@ def _table_dict(raw_table, heading_text):
     headers, *body = rows
     data_rows = [r for r in body if not _is_footnote_row(r)]
     footnotes = [r[0] for r in body if _is_footnote_row(r)]
-    return {"heading": heading_text, "headers": headers, "rows": data_rows, "footnotes": footnotes}
+    return {
+        "heading": heading_text,
+        "headers": headers,
+        "rows": data_rows,
+        "row_groups": _group_table_rows(data_rows),
+        "footnotes": footnotes,
+    }
 
 
 def _heading_text(pages, positions, key):
@@ -226,6 +278,29 @@ def _paragraphs_from_lines(lines):
     return paras
 
 
+def _next_heading_key(positions, key):
+    """The heading that comes right after `key` in overall document order
+    (across BOTH table and text headings, not just table ones) — used to
+    bound the search for a free-text 'Note:' paragraph sitting between a
+    table and whatever section follows it."""
+    ordered = sorted(positions.keys(), key=lambda k: positions[k])
+    idx = ordered.index(key)
+    return ordered[idx + 1] if idx + 1 < len(ordered) else None
+
+
+def _table_note_footnotes(pages, positions, key):
+    """Any 'Note: ...' paragraph (with wrapped continuation lines) sitting
+    between table `key`'s heading and the next heading anywhere in the
+    document — e.g. 1c's 'Note: Prices are inclusive of GST...'. Generic
+    across every table key, not just 1c, since a future month's release
+    could carry the same kind of note under a different table."""
+    if key not in positions:
+        return []
+    next_key = _next_heading_key(positions, key)
+    lines = _text_block(pages, positions, key, next_key)
+    return [p for p in _paragraphs_from_lines(lines) if _NOTE_RE.match(p)]
+
+
 def _footer_note(pages):
     """The 'Source: Provisional JPC data...' legend line, joined with its
     wrapped continuation line(s) (small line-gap = still the same
@@ -271,6 +346,8 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     for key, _prefix in _TABLE_HEADINGS:
         heading_text = _heading_text(pages, positions, key)
         tables[key] = _table_dict(table_for_key.get(key), heading_text)
+        if tables[key] is not None:
+            tables[key]["footnotes"].extend(_table_note_footnotes(pages, positions, key))
 
     production_overview_1a_items = _extract_production_overview_items(tables.get("1a"))
     if not production_overview_1a_items:
