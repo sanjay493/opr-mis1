@@ -4,10 +4,12 @@
 Steel) release archived by pdf_extractor_steel_sector_performance.py /
 /api/steel-sector-performance/confirm into steel_sector_performance_table,
 verbatim — EXCEPT Table 1a (Production Overview), which gets SAIL's own
-Crude Steel / Hot Metal / Finished Steel actuals appended as extra rows,
-plus SAIL's % share of the India total for each of the table's four value
+Crude Steel / Hot Metal / Finished Steel actuals appended as extra rows
+(rounded to 1 decimal, matching the PDF's own India figures), with SAIL's
+own YoY%/CPLY% growth computed the same way the PDF computes India's, and
+SAIL's % share of the India total for each of the table's four value
 columns (report month, CPLY month, Apr-report-month cumulative, CPLY
-Apr-report-month cumulative).
+Apr-report-month cumulative) shown bracketed under the SAIL figures.
 
 SAIL rollup for those extra rows reuses db.get_sail_production_ytd_actual()
 — the same helper page_records.py / page_jpc_report.py's SAIL total already
@@ -57,8 +59,16 @@ _KT_TO_MT = 1000.0  # production_table stores '000 T (see page_jpc_report.py's "
 
 
 def _sail_value(item_db_name: str, months: list) -> float:
+    """Unrounded Mt — kept full precision here so YoY%/CPLY% growth (below)
+    is computed off the real value, not off an already-rounded display
+    figure. Display rounding to 1 decimal happens separately, in the
+    dict built by _augment_production_overview."""
     v = db.get_sail_production_ytd_actual(months, item_db_name)
-    return round(v / _KT_TO_MT, 3) if v is not None else None
+    return v / _KT_TO_MT if v is not None else None
+
+
+def _round1(v):
+    return round(v, 1) if v is not None else None
 
 
 def _share_pct(sail_val, india_val):
@@ -67,15 +77,23 @@ def _share_pct(sail_val, india_val):
     return round(sail_val / india_val * 100, 1)
 
 
+def _growth_pct(cur_v, prev_v):
+    """% growth over CPLY — same formula page_jpc_report.py's _gr() uses
+    for India's own YoY%/CPLY% columns, applied here to SAIL's figures."""
+    if cur_v is None or prev_v is None or prev_v == 0:
+        return None
+    return round((cur_v - prev_v) / abs(prev_v) * 100, 1)
+
+
 def _augment_production_overview(items: list, report_month: str) -> list:
     """One group per item (Crude Steel / Hot Metal / Finished Steel):
-    {"item": ..., "india": {...the 6 PDF columns...}, "sail": {...4 value
-    columns...}, "share": {...SAIL's % of India, same 4 columns...}} — the
-    item-name column spans both the India and SAIL rows in the rendered
-    table, and each India-row value cell shows its own SAIL-share%
-    underneath in brackets (see page_templates/steel_sector_performance.html
-    / SteelSectorPerformanceTemplate.js), so "share" is carried alongside
-    "india" rather than as a row of its own."""
+    {"item": ..., "india": {...the 6 PDF columns, unchanged...}, "sail":
+    {...4 value columns (1 decimal) + yoy_pct/cply_pct...}, "share": {...
+    SAIL's % of India, same 4 value columns...}} — the item-name column
+    spans both the India and SAIL rows in the rendered table, and each
+    SAIL-row value cell shows its own SAIL-share-of-India % underneath in
+    brackets (see page_templates/steel_sector_performance.html /
+    SteelSectorPerformanceTemplate.js)."""
     cply_month = db.get_cply_month(report_month)
     ytd_months = db.get_ytd_months(report_month)
     cply_ytd_months = db.get_ytd_months(cply_month)
@@ -87,13 +105,18 @@ def _augment_production_overview(items: list, report_month: str) -> list:
             out.append({"item": row["item"], "india": row, "sail": None, "share": None})
             continue
 
-        sail = {
+        sail_raw = {
             "report_month": _sail_value(db_item, [report_month]),
             "cply_month": _sail_value(db_item, [cply_month]),
             "apr_report_month": _sail_value(db_item, ytd_months),
             "cply_apr_report_month": _sail_value(db_item, cply_ytd_months),
         }
-        share = {col: _share_pct(sail[col], row.get(col)) for col in _VALUE_COLS}
+        sail = {
+            **{col: _round1(sail_raw[col]) for col in _VALUE_COLS},
+            "yoy_pct": _growth_pct(sail_raw["report_month"], sail_raw["cply_month"]),
+            "cply_pct": _growth_pct(sail_raw["apr_report_month"], sail_raw["cply_apr_report_month"]),
+        }
+        share = {col: _share_pct(sail_raw[col], row.get(col)) for col in _VALUE_COLS}
         out.append({"item": row["item"], "india": row, "sail": sail, "share": share})
     return out
 

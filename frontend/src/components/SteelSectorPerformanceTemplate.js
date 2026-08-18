@@ -93,22 +93,22 @@ function ProductionOverviewTable({ headers, groups }) {
             <tr>
               <td style={{ ...tdLabel, fontWeight: 700 }} rowSpan={g.sail ? 2 : 1}>{g.item}</td>
               <td style={{ ...tdLabel, fontWeight: 600 }}>India</td>
-              <ValueCell value={g.india.report_month} share={g.share?.report_month} />
-              <ValueCell value={g.india.cply_month} share={g.share?.cply_month} />
+              <td style={td}>{fmtCell(g.india.report_month)}</td>
+              <td style={td}>{fmtCell(g.india.cply_month)}</td>
               <td style={td}>{fmtCell(g.india.yoy_pct)}</td>
-              <ValueCell value={g.india.apr_report_month} share={g.share?.apr_report_month} />
-              <ValueCell value={g.india.cply_apr_report_month} share={g.share?.cply_apr_report_month} />
+              <td style={td}>{fmtCell(g.india.apr_report_month)}</td>
+              <td style={td}>{fmtCell(g.india.cply_apr_report_month)}</td>
               <td style={td}>{fmtCell(g.india.cply_pct)}</td>
             </tr>
             {g.sail && (
               <tr style={sailRowStyle}>
                 <td style={{ ...tdLabel, fontStyle: 'italic' }}>SAIL</td>
-                <td style={td}>{fmtCell(g.sail.report_month)}</td>
-                <td style={td}>{fmtCell(g.sail.cply_month)}</td>
-                <td style={td} />
-                <td style={td}>{fmtCell(g.sail.apr_report_month)}</td>
-                <td style={td}>{fmtCell(g.sail.cply_apr_report_month)}</td>
-                <td style={td} />
+                <ValueCell value={g.sail.report_month} share={g.share?.report_month} />
+                <ValueCell value={g.sail.cply_month} share={g.share?.cply_month} />
+                <td style={td}>{fmtCell(g.sail.yoy_pct)}</td>
+                <ValueCell value={g.sail.apr_report_month} share={g.share?.apr_report_month} />
+                <ValueCell value={g.sail.cply_apr_report_month} share={g.share?.cply_apr_report_month} />
+                <td style={td}>{fmtCell(g.sail.cply_pct)}</td>
               </tr>
             )}
           </React.Fragment>
@@ -201,7 +201,7 @@ export default function SteelSectorPerformanceTemplate({ data }) {
         1a. Production Overview (in Mt) — with SAIL &amp; Share of India
       </div>
       <ProductionOverviewTable headers={tables['1a']?.headers} groups={production_overview_1a} />
-      <div style={note}>Bracketed value under each India figure: SAIL's % share of India.</div>
+      <div style={note}>Bracketed value under each SAIL figure: SAIL's % share of India.</div>
       <GenericTable tableData={tables['1b']} />
       <GenericTable tableData={tables['1c']} />
     </div>

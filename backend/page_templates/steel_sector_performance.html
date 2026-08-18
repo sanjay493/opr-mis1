@@ -67,28 +67,28 @@
         <tr>
             <td class="ssp-label" style="font-weight:700;" rowspan="{{ '2' if g.sail else '1' }}">{{ g.item }}</td>
             <td class="ssp-label" style="font-weight:600;">India</td>
-            {{ value_cell(g.india.report_month, g.share.report_month if g.share else none) }}
-            {{ value_cell(g.india.cply_month, g.share.cply_month if g.share else none) }}
+            <td>{{ g.india.report_month if g.india.report_month is not none else '—' }}</td>
+            <td>{{ g.india.cply_month if g.india.cply_month is not none else '—' }}</td>
             <td>{{ g.india.yoy_pct if g.india.yoy_pct is not none else '—' }}</td>
-            {{ value_cell(g.india.apr_report_month, g.share.apr_report_month if g.share else none) }}
-            {{ value_cell(g.india.cply_apr_report_month, g.share.cply_apr_report_month if g.share else none) }}
+            <td>{{ g.india.apr_report_month if g.india.apr_report_month is not none else '—' }}</td>
+            <td>{{ g.india.cply_apr_report_month if g.india.cply_apr_report_month is not none else '—' }}</td>
             <td>{{ g.india.cply_pct if g.india.cply_pct is not none else '—' }}</td>
         </tr>
         {% if g.sail %}
         <tr class="ssp-sail">
             <td class="ssp-label" style="font-style:italic;">SAIL</td>
-            <td>{{ g.sail.report_month if g.sail.report_month is not none else '—' }}</td>
-            <td>{{ g.sail.cply_month if g.sail.cply_month is not none else '—' }}</td>
-            <td></td>
-            <td>{{ g.sail.apr_report_month if g.sail.apr_report_month is not none else '—' }}</td>
-            <td>{{ g.sail.cply_apr_report_month if g.sail.cply_apr_report_month is not none else '—' }}</td>
-            <td></td>
+            {{ value_cell(g.sail.report_month, g.share.report_month if g.share else none) }}
+            {{ value_cell(g.sail.cply_month, g.share.cply_month if g.share else none) }}
+            <td>{{ g.sail.yoy_pct if g.sail.yoy_pct is not none else '—' }}</td>
+            {{ value_cell(g.sail.apr_report_month, g.share.apr_report_month if g.share else none) }}
+            {{ value_cell(g.sail.cply_apr_report_month, g.share.cply_apr_report_month if g.share else none) }}
+            <td>{{ g.sail.cply_pct if g.sail.cply_pct is not none else '—' }}</td>
         </tr>
         {% endif %}
         {% endfor %}
     </tbody>
 </table>
-<div class="ssp-note">Bracketed value under each India figure: SAIL's % share of India.</div>
+<div class="ssp-note">Bracketed value under each SAIL figure: SAIL's % share of India.</div>
 {{ generic_table(page.tables.get('1b')) }}
 {{ generic_table(page.tables.get('1c')) }}
 {% endif %}
