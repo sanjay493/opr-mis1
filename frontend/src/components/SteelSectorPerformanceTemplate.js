@@ -36,7 +36,7 @@ function fmtCell(v) {
 
 function GenericTable({ tableData }) {
   if (!tableData) return null;
-  const { heading, headers = [], rows = [] } = tableData;
+  const { heading, headers = [], rows = [], footnotes = [] } = tableData;
   return (
     <div>
       {heading && <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px' }}>{heading}</div>}
@@ -54,6 +54,7 @@ function GenericTable({ tableData }) {
           ))}
         </tbody>
       </table>
+      {footnotes.map((fn, i) => <div key={i} style={note}>{fn}</div>)}
     </div>
   );
 }

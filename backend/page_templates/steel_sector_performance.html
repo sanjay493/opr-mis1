@@ -13,6 +13,7 @@
         {% endfor %}
     </tbody>
 </table>
+{% for fn in t.footnotes %}<div class="ssp-note">{{ fn }}</div>{% endfor %}
 {% endif %}
 {% endmacro %}
 

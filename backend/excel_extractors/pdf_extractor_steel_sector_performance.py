@@ -127,12 +127,24 @@ def _map_tables_to_headings(pages, positions, table_keys):
     return {k: all_tables[i] for i, k in enumerate(ordered_keys) if i < len(all_tables)}
 
 
+def _is_footnote_row(row):
+    """A row where only the first cell is populated (e.g. 1b's 'Top 7
+    includes SAIL, RINL, NSL, ...' line) is a footnote pdfplumber pulled in
+    as part of the table grid, not a real data row — split it out so it
+    prints as a footnote under the table instead of a table row full of
+    dashes. Generic (not 1b-specific) since any table in a future month's
+    release could carry the same trailing-note pattern."""
+    return bool(row and row[0]) and all(c is None for c in row[1:])
+
+
 def _table_dict(raw_table, heading_text):
     if not raw_table:
         return None
     rows = [[_norm_cell(c) for c in row] for row in raw_table]
     headers, *body = rows
-    return {"heading": heading_text, "headers": headers, "rows": body}
+    data_rows = [r for r in body if not _is_footnote_row(r)]
+    footnotes = [r[0] for r in body if _is_footnote_row(r)]
+    return {"heading": heading_text, "headers": headers, "rows": data_rows, "footnotes": footnotes}
 
 
 def _heading_text(pages, positions, key):
