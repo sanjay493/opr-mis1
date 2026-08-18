@@ -68,18 +68,23 @@ def _share_pct(sail_val, india_val):
 
 
 def _augment_production_overview(items: list, report_month: str) -> list:
-    """Appends a 'SAIL' row and a 'SAIL Share %' row right after each
-    India-total item row, using the item's own data (Crude Steel / Hot
-    Metal / Finished Steel only — the three rows this table has)."""
+    """One group per item (Crude Steel / Hot Metal / Finished Steel):
+    {"item": ..., "india": {...the 6 PDF columns...}, "sail": {...4 value
+    columns...}, "share": {...SAIL's % of India, same 4 columns...}} — the
+    item-name column spans both the India and SAIL rows in the rendered
+    table, and each India-row value cell shows its own SAIL-share%
+    underneath in brackets (see page_templates/steel_sector_performance.html
+    / SteelSectorPerformanceTemplate.js), so "share" is carried alongside
+    "india" rather than as a row of its own."""
     cply_month = db.get_cply_month(report_month)
     ytd_months = db.get_ytd_months(report_month)
     cply_ytd_months = db.get_ytd_months(cply_month)
 
     out = []
     for row in items:
-        out.append(row)
         db_item = _ITEM_DB_NAME.get(row["item"])
         if not db_item:
+            out.append({"item": row["item"], "india": row, "sail": None, "share": None})
             continue
 
         sail = {
@@ -88,14 +93,8 @@ def _augment_production_overview(items: list, report_month: str) -> list:
             "apr_report_month": _sail_value(db_item, ytd_months),
             "cply_apr_report_month": _sail_value(db_item, cply_ytd_months),
         }
-        sail_row = {"item": f"SAIL {row['item']}", "kind": "sail", **sail}
-        share_row = {
-            "item": "SAIL Share % of India",
-            "kind": "share",
-            **{col: _share_pct(sail[col], row.get(col)) for col in _VALUE_COLS},
-        }
-        out.append(sail_row)
-        out.append(share_row)
+        share = {col: _share_pct(sail[col], row.get(col)) for col in _VALUE_COLS}
+        out.append({"item": row["item"], "india": row, "sail": sail, "share": share})
     return out
 
 

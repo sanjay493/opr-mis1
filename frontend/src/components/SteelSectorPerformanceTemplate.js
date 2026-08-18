@@ -58,13 +58,20 @@ function GenericTable({ tableData }) {
   );
 }
 
-const ROW_STYLE = {
-  sail: { fontStyle: 'italic', background: '#f8fafc' },
-  share: { fontWeight: 700, background: '#eef2ff' },
-};
+const shareBracket = { display: 'block', fontSize: '7pt', color: '#1d4ed8', fontWeight: 400 };
+const sailRowStyle = { fontStyle: 'italic', background: '#f8fafc' };
 
-function ProductionOverviewTable({ headers, rows }) {
-  if (!rows || !rows.length) return null;
+function ValueCell({ value, share }) {
+  return (
+    <td style={td}>
+      {fmtCell(value)}
+      {share !== null && share !== undefined && <span style={shareBracket}>({share}%)</span>}
+    </td>
+  );
+}
+
+function ProductionOverviewTable({ headers, groups }) {
+  if (!groups || !groups.length) return null;
   // headers come verbatim from the source PDF (e.g. "Jul 2026", "Apr-Jul
   // 2026") — real month labels are friendlier here than the generic
   // report_month/cply_month/... key names used internally.
@@ -74,19 +81,37 @@ function ProductionOverviewTable({ headers, rows }) {
   return (
     <table style={table}>
       <thead>
-        <tr>{colHeaders.map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
+        <tr>
+          <th style={th}>{colHeaders[0]}</th>
+          <th style={th} />
+          {colHeaders.slice(1).map((h, i) => <th key={i} style={th}>{h}</th>)}
+        </tr>
       </thead>
       <tbody>
-        {rows.map((row, ri) => (
-          <tr key={ri} style={ROW_STYLE[row.kind]}>
-            <td style={tdLabel}>{row.item}</td>
-            <td style={td}>{fmtCell(row.report_month)}</td>
-            <td style={td}>{fmtCell(row.cply_month)}</td>
-            <td style={td}>{row.kind ? '' : fmtCell(row.yoy_pct)}</td>
-            <td style={td}>{fmtCell(row.apr_report_month)}</td>
-            <td style={td}>{fmtCell(row.cply_apr_report_month)}</td>
-            <td style={td}>{row.kind ? '' : fmtCell(row.cply_pct)}</td>
-          </tr>
+        {groups.map((g, gi) => (
+          <React.Fragment key={gi}>
+            <tr>
+              <td style={{ ...tdLabel, fontWeight: 700 }} rowSpan={g.sail ? 2 : 1}>{g.item}</td>
+              <td style={{ ...tdLabel, fontWeight: 600 }}>India</td>
+              <ValueCell value={g.india.report_month} share={g.share?.report_month} />
+              <ValueCell value={g.india.cply_month} share={g.share?.cply_month} />
+              <td style={td}>{fmtCell(g.india.yoy_pct)}</td>
+              <ValueCell value={g.india.apr_report_month} share={g.share?.apr_report_month} />
+              <ValueCell value={g.india.cply_apr_report_month} share={g.share?.cply_apr_report_month} />
+              <td style={td}>{fmtCell(g.india.cply_pct)}</td>
+            </tr>
+            {g.sail && (
+              <tr style={sailRowStyle}>
+                <td style={{ ...tdLabel, fontStyle: 'italic' }}>SAIL</td>
+                <td style={td}>{fmtCell(g.sail.report_month)}</td>
+                <td style={td}>{fmtCell(g.sail.cply_month)}</td>
+                <td style={td} />
+                <td style={td}>{fmtCell(g.sail.apr_report_month)}</td>
+                <td style={td}>{fmtCell(g.sail.cply_apr_report_month)}</td>
+                <td style={td} />
+              </tr>
+            )}
+          </React.Fragment>
         ))}
       </tbody>
     </table>
@@ -109,10 +134,9 @@ function TextSection({ section }) {
 function Header({ data }) {
   return (
     <>
-      <div style={pageTitle}>Indian Steel Sector Performance</div>
+      <div style={pageTitle}>{data.title}</div>
       <div style={pageSubtitle}>
-        {data.title}
-        {data.posted_on ? ` — Posted: ${data.posted_on}` : ''}
+        {data.posted_on ? `Posted On: ${data.posted_on}` : ''}
         {data.data_month && data.data_month !== data.report_month
           ? ` (latest available release: ${data.data_month})` : ''}
       </div>
@@ -172,9 +196,12 @@ export default function SteelSectorPerformanceTemplate({ data }) {
   return (
     <div style={wrap}>
       <Header data={data} />
-      <div style={sectionHeading}>1a. Production Overview (in Mt) — with SAIL &amp; Share of India</div>
-      <ProductionOverviewTable headers={tables['1a']?.headers} rows={production_overview_1a} />
-      <div style={note}>Italic rows: SAIL actuals. Bold rows: SAIL's % share of the India total.</div>
+      <div style={sectionHeading}>1. Steel Production &amp; Prices</div>
+      <div style={{ fontWeight: 700, fontSize: '8.5pt', margin: '6px 0 3px' }}>
+        1a. Production Overview (in Mt) — with SAIL &amp; Share of India
+      </div>
+      <ProductionOverviewTable headers={tables['1a']?.headers} groups={production_overview_1a} />
+      <div style={note}>Bracketed value under each India figure: SAIL's % share of India.</div>
       <GenericTable tableData={tables['1b']} />
       <GenericTable tableData={tables['1c']} />
     </div>

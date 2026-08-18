@@ -16,6 +16,10 @@
 {% endif %}
 {% endmacro %}
 
+{% macro value_cell(value, share) %}
+<td>{{ value if value is not none else '—' }}{% if share is not none %}<span class="ssp-share-bracket">({{ share }}%)</span>{% endif %}</td>
+{% endmacro %}
+
 {% macro text_section(s) %}
 {% if s %}
 {% if s.heading %}<div class="ssp-section-heading">{{ s.heading }}</div>{% endif %}
@@ -23,9 +27,9 @@
 {% endif %}
 {% endmacro %}
 
-<div class="ssp-title">Indian Steel Sector Performance</div>
+<div class="ssp-title">{{ page.title or '' }}</div>
 <div class="ssp-subtitle">
-    {{ page.title or '' }}{% if page.posted_on %} — Posted: {{ page.posted_on }}{% endif %}
+    {% if page.posted_on %}Posted On: {{ page.posted_on }}{% endif %}
     {% if page.data_month and page.data_month != page.report_month %} (latest available release: {{ page.data_month }}){% endif %}
 </div>
 
@@ -54,24 +58,37 @@
 {% set headers_1a = page.tables.get('1a', {}).get('headers') if page.tables.get('1a') else None %}
 {% set cols_1a = headers_1a if headers_1a and headers_1a|length == 7
     else ['Production', 'Report Month', 'CPLY Month', 'YoY %', 'Apr-Report Month', 'CPLY Apr-Report Month', 'CPLY %'] %}
-<div class="ssp-section-heading">1a. Production Overview (in Mt) — with SAIL &amp; Share of India</div>
+<div class="ssp-section-heading">1. Steel Production &amp; Prices</div>
+<div class="ssp-table-heading">1a. Production Overview (in Mt) — with SAIL &amp; Share of India</div>
 <table class="ssp-table">
-    <thead><tr>{% for h in cols_1a %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th>{{ cols_1a[0] }}</th><th></th>{% for h in cols_1a[1:] %}<th>{{ h }}</th>{% endfor %}</tr></thead>
     <tbody>
-        {% for row in page.production_overview_1a %}
-        <tr class="{{ 'ssp-sail' if row.kind == 'sail' else ('ssp-share' if row.kind == 'share' else '') }}">
-            <td class="ssp-label">{{ row.item }}</td>
-            <td>{{ row.report_month if row.report_month is not none else '—' }}</td>
-            <td>{{ row.cply_month if row.cply_month is not none else '—' }}</td>
-            <td>{{ '' if row.kind else (row.yoy_pct if row.yoy_pct is not none else '—') }}</td>
-            <td>{{ row.apr_report_month if row.apr_report_month is not none else '—' }}</td>
-            <td>{{ row.cply_apr_report_month if row.cply_apr_report_month is not none else '—' }}</td>
-            <td>{{ '' if row.kind else (row.cply_pct if row.cply_pct is not none else '—') }}</td>
+        {% for g in page.production_overview_1a %}
+        <tr>
+            <td class="ssp-label" style="font-weight:700;" rowspan="{{ '2' if g.sail else '1' }}">{{ g.item }}</td>
+            <td class="ssp-label" style="font-weight:600;">India</td>
+            {{ value_cell(g.india.report_month, g.share.report_month if g.share else none) }}
+            {{ value_cell(g.india.cply_month, g.share.cply_month if g.share else none) }}
+            <td>{{ g.india.yoy_pct if g.india.yoy_pct is not none else '—' }}</td>
+            {{ value_cell(g.india.apr_report_month, g.share.apr_report_month if g.share else none) }}
+            {{ value_cell(g.india.cply_apr_report_month, g.share.cply_apr_report_month if g.share else none) }}
+            <td>{{ g.india.cply_pct if g.india.cply_pct is not none else '—' }}</td>
         </tr>
+        {% if g.sail %}
+        <tr class="ssp-sail">
+            <td class="ssp-label" style="font-style:italic;">SAIL</td>
+            <td>{{ g.sail.report_month if g.sail.report_month is not none else '—' }}</td>
+            <td>{{ g.sail.cply_month if g.sail.cply_month is not none else '—' }}</td>
+            <td></td>
+            <td>{{ g.sail.apr_report_month if g.sail.apr_report_month is not none else '—' }}</td>
+            <td>{{ g.sail.cply_apr_report_month if g.sail.cply_apr_report_month is not none else '—' }}</td>
+            <td></td>
+        </tr>
+        {% endif %}
         {% endfor %}
     </tbody>
 </table>
-<div class="ssp-note">Italic rows: SAIL actuals. Bold rows: SAIL's % share of the India total.</div>
+<div class="ssp-note">Bracketed value under each India figure: SAIL's % share of India.</div>
 {{ generic_table(page.tables.get('1b')) }}
 {{ generic_table(page.tables.get('1c')) }}
 {% endif %}
