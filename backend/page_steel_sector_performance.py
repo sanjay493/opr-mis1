@@ -1,5 +1,5 @@
 """
-"Indian Steel Sector Performance" — pages 2.1-2.4, right after the Index
+"Indian Steel Sector Performance" — pages 2.1-2.3, right after the Index
 (see main.py's STEEL_SECTOR_PAGES). Reproduces the monthly PIB (Ministry of
 Steel) release archived by pdf_extractor_steel_sector_performance.py /
 /api/steel-sector-performance/confirm into steel_sector_performance_table,

@@ -186,14 +186,6 @@ export default function SteelSectorPerformanceTemplate({ data }) {
         <GenericTable tableData={tables['3a']} />
         <div style={sectionHeading}>4. Raw Materials</div>
         <GenericTable tableData={tables['4a']} />
-      </div>
-    );
-  }
-
-  if (section === 'raw_materials_indices') {
-    return (
-      <div style={wrap}>
-        <Header data={data} />
         <GenericTable tableData={tables['5']} />
       </div>
     );

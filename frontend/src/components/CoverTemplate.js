@@ -66,7 +66,7 @@ export default function CoverTemplate({ data }) {
           {month_display}
         </div>
 
-        <div style={{ position: 'absolute', top: '77%', left: '4%', width: '53%' }}>
+        <div style={{ position: 'absolute', top: '77%', left: '4%', width: '58%' }}>
           <div style={{ fontSize: '9.5pt', fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.02em', marginBottom: 0 }}>
             SAIL Performance at a Glance ({month_short})
             <span style={{ display: 'block', width: 36, height: 2, background: ROYAL_BLUE, marginTop: 3, marginBottom: 5 }} />
@@ -74,12 +74,13 @@ export default function CoverTemplate({ data }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px' }}>
             {kpis.map((k) => (
-              <div key={k.label} style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid #e2e8f0', borderRadius: 6, padding: '5px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                <div style={{ flex: '0 0 auto' }}>
+              <div key={k.label} style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid transparent', borderImage: 'linear-gradient(to right, #e2e8f0, transparent) 1', borderRadius: 6, padding: '5px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ flex: '1 1 auto', minWidth: 0 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" style={{ marginBottom: 1 }}>{KPI_ICONS[k.label]}</svg>
-                  <div style={{ fontSize: '6pt', fontWeight: 700, letterSpacing: '0.02em', color: '#475569', textTransform: 'uppercase' }}>{k.label}</div>
-                  <div style={{ fontSize: '11.5pt', fontWeight: 800, color: ROYAL_BLUE, lineHeight: 1 }}>{k.mt}</div>
-                  <div style={{ fontSize: '6pt', fontWeight: 600, color: '#64748b' }}>MT</div>
+                  <div style={{ fontSize: '11.5pt', fontWeight: 700, letterSpacing: '0.02em', color: '#475569', textTransform: 'uppercase' }}>{k.label}</div>
+                  <div style={{ fontSize: '11.5pt', fontWeight: 800, color: ROYAL_BLUE, lineHeight: 1 }}>
+                    {k.mt} <span style={{ fontWeight: 600, color: '#64748b' }}>MT</span>
+                  </div>
                 </div>
                 <div style={{ flex: '1 1 auto', textAlign: 'right', borderLeft: '1px dashed #e2e8f0', paddingLeft: 6, fontSize: '8.5pt', fontWeight: 700, color: '#475569', lineHeight: 1.45, whiteSpace: 'nowrap' }}>
                   <div>{k.pct_ful}% <span style={{ fontSize: '0.72em', fontWeight: 500 }}>of APP</span></div>

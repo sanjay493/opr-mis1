@@ -27,8 +27,7 @@
                                         {{ (kpi_icons.get(k.label, '') | replace('{c}', colors.cover_royal_blue)) | safe }}
                                     </svg>
                                     <div class="page1-kpi-label">{{ k.label }}</div>
-                                    <div class="page1-kpi-value">{{ k.mt }}</div>
-                                    <div class="page1-kpi-unit">MT</div>
+                                    <div class="page1-kpi-value">{{ k.mt }} <span class="page1-kpi-unit">MT</span></div>
                                 </div>
                                 <div class="page1-kpi-side">
                                     <div>{{ k.pct_ful }}% <span>of APP</span></div>

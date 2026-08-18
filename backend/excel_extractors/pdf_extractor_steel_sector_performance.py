@@ -1,7 +1,7 @@
 """
 "Indian Steel Sector Performance" extractor — the monthly PIB (Ministry of
 Steel) press release (Report_format/"Indian Steel Sector Performance in
-<Mon>'<YY>.pdf"), reproduced as pages 2.1-2.4 of the report (see
+<Mon>'<YY>.pdf"), reproduced as pages 2.1-2.3 of the report (see
 page_steel_sector_performance.py).
 
 The release is a fixed-template document (same section numbering every

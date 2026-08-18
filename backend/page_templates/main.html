@@ -728,7 +728,7 @@
             position: absolute;
             top: 77%;
             left: 4%;
-            width: 53%;
+            width: 58%;
         }
         .page1-kpi-heading {
             font-size: 9.5pt;
@@ -753,19 +753,22 @@
         }
         .page1-kpi-card {
             background: rgba(255,255,255,0.72);
-            border: 1px solid {{ colors.cover_kpi_card_border }};
+            border: 1px solid transparent;
+            border-image: linear-gradient(to right, {{ colors.cover_kpi_card_border }}, transparent) 1;
             border-radius: 6px;
-            padding: 5px 8px;
+            padding: 5px 10px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
         }
         .page1-kpi-main {
-            flex: 0 0 auto;
+            flex: 1 1 auto;
+            min-width: 0;
         }
         .page1-kpi-label {
-            font-size: 6pt;
+            font-size: 11.5pt;
             font-weight: 700;
             letter-spacing: 0.02em;
             color: {{ colors.text_secondary }};
@@ -779,7 +782,7 @@
             line-height: 1;
         }
         .page1-kpi-unit {
-            font-size: 6pt;
+            font-size: 11.5pt;
             font-weight: 600;
             color: {{ colors.text_muted }};
         }

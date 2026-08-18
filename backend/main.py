@@ -128,7 +128,7 @@ def _safe_techno(month, pg):
 # (the on-screen page selector's own inventory of the same pages) whenever
 # a page is added, split, or removed.
 _INDEX_SECTIONS = [
-    ("Indian Steel Sector Performance", 4),
+    ("Indian Steel Sector Performance", 3),
     ("MIS at a Glance", 1),
     ("Production performance summary", 1),
     ("Key Parameters — Quarterly Performance", 1),
@@ -234,7 +234,7 @@ _IM_AVG_TO_MAJOR = {}
 # resynthesized fresh on every render.
 TREND_PAGE_ID = 1024
 
-# "Indian Steel Sector Performance" — 4 pages reproducing the monthly PIB
+# "Indian Steel Sector Performance" — 3 pages reproducing the monthly PIB
 # (Ministry of Steel) release (Report_format/"Indian Steel Sector
 # Performance in <Mon>'<YY>.pdf"), sourced from steel_sector_performance_
 # table via the dedicated extractor (excel_extractors/pdf_extractor_steel_
@@ -243,13 +243,16 @@ TREND_PAGE_ID = 1024
 # treatment as AT_A_GLANCE_PAGE_ID below (numbered main flow, gets a corner
 # dept-badge — see report_utils.py's _DEPT_BADGE_EXPLICIT_GROUP), so
 # AT_A_GLANCE_PAGE_ID and everything after it now display one section later
-# ("Page 5" instead of "Page 1", etc.) — that's computed automatically by
+# ("Page 4" instead of "Page 1", etc.) — that's computed automatically by
 # _index_rows()'s running cursor, not hardcoded anywhere.
+# Originally 4 pages (2.1-2.4) with "raw_materials_indices" as its own
+# page — collapsed to 3 by folding table 5 (Key Indices) onto page 2.2
+# alongside 2/3a/4a, which had empty space; 2.3 now carries what used to
+# be 2.4's content (policy_green), and 2.4 no longer exists.
 STEEL_SECTOR_PAGES = {
     2.1: "prod_prices",
     2.2: "demand_trade",
-    2.3: "raw_materials_indices",
-    2.4: "policy_green",
+    2.3: "policy_green",
 }
 
 # "MIS at a Glance" infographic snapshot — sits right after the Index (i.e.
@@ -693,7 +696,10 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID)
-                            and p.get("page") not in STEEL_SECTOR_PAGES]
+                            and p.get("page") not in STEEL_SECTOR_PAGES
+                            and p.get("page") != 2.4]  # retired 4th steel-sector page (folded into 2.2) —
+                            # explicit literal so a pre-existing cached pages_config with this id
+                            # still gets cleaned out even though 2.4 is no longer a STEEL_SECTOR_PAGES key
             _idx23 = next((i for i, p in enumerate(pages_config) if p.get("page") == 23), None)
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
@@ -701,7 +707,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             _idx2 = next((i for i, p in enumerate(pages_config) if p.get("page") == 2), None)
             if _idx2 is not None:
                 pages_config.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
-            # "Indian Steel Sector Performance" — 4 sentinel pages, inserted
+            # "Indian Steel Sector Performance" — 3 sentinel pages, inserted
             # right BEFORE "MIS at a Glance" (i.e. right after the Index),
             # anchored on AT_A_GLANCE_PAGE_ID's own just-inserted position
             # rather than page 2's, so they land ahead of it without having
@@ -876,7 +882,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idx2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 2), None)
         if _idx2 is not None:
             _pages_list.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
-    # "Indian Steel Sector Performance" — 4 sentinel pages, always inserted
+    # "Indian Steel Sector Performance" — 3 sentinel pages, always inserted
     # right BEFORE "MIS at a Glance" (i.e. right after the Index), anchored
     # on AT_A_GLANCE_PAGE_ID's own (now-guaranteed-present) position so they
     # land ahead of it without touching the AT_A_GLANCE_PAGE_ID insert above.
