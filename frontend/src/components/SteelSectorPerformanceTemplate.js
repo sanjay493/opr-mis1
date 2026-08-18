@@ -26,8 +26,8 @@ const sectionHeading = {
 };
 const table = { width: '100%', borderCollapse: 'collapse', marginBottom: 6, fontSize: '11pt' };
 const th = { border: `1px solid ${BORDER}`, padding: '3px 5px', background: '#e2e8f0', fontWeight: 700, textAlign: 'center' };
-const td = { border: `1px solid ${BORDER}`, padding: '3px 5px', textAlign: 'right' };
-const tdLabel = { ...td, textAlign: 'left' };
+const td = { border: `1px solid ${BORDER}`, padding: '3px 5px', textAlign: 'center' };
+const tdLabel = td;
 const note = { fontSize: '10.5pt', fontStyle: 'italic', color: '#475569', marginTop: 2 };
 
 function fmtCell(v) {
