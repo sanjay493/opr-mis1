@@ -813,12 +813,12 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     # labels never overlap on the narrower vw=300 quarter chart.
     ly1 = 24
     lines.append(f'<rect x="{ml}" y="{ly1 - 7}" width="10" height="8" fill="{bar_colors[0]}"/>')
-    lines.append(f'<text x="{ml + 14}" y="{ly1}" font-size="11" font-family="Arial,sans-serif" '
-                 f'fill="#334155">% of Saleable Steel</text>')
+    lines.append(f'<text x="{ml + 14}" y="{ly1}" font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                 f'fill="#000000">% of Saleable Steel</text>')
     ly2 = ly1 + 13
     lines.append(f'<line x1="{ml}" y1="{ly2 - 3}" x2="{ml + 14}" y2="{ly2 - 3}" stroke="{_VA_LINE_COLOR}" stroke-width="1.8"/>')
-    lines.append(f'<text x="{ml + 18}" y="{ly2}" font-size="11" font-family="Arial,sans-serif" '
-                 f'fill="#334155">Qty (Million T)</text>')
+    lines.append(f'<text x="{ml + 18}" y="{ly2}" font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                 f'fill="#000000">Qty (Million T)</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
