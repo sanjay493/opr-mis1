@@ -186,6 +186,20 @@ CREATE TABLE IF NOT EXISTS breakdown_table (
     KEY idx_breakdown_start (start_ts)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS item_capacity_table (
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    plant_name       VARCHAR(8)   NOT NULL,
+    item_name        VARCHAR(64)  NOT NULL,
+    effective_month  CHAR(7)      NOT NULL,
+    annual_capacity  DOUBLE       NOT NULL,
+    reason           VARCHAR(255) DEFAULT '',
+    created_by       VARCHAR(190),
+    created_at       VARCHAR(40),
+    updated_by       VARCHAR(190),
+    updated_at       VARCHAR(40),
+    UNIQUE KEY uq_capacity_plant_item_month (plant_name, item_name, effective_month)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS ipt_table (
     report_month CHAR(7)     NOT NULL,
     item         VARCHAR(64) NOT NULL,

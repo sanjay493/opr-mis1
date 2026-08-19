@@ -323,6 +323,29 @@ def init_db():
         )
     """)
 
+    # 6d-3. Annual rated capacity per plant/item, with mid-FY change history.
+    # One row per (plant, item, effective_month): the capacity in effect for
+    # a given report month is the row with the latest effective_month <= that
+    # month (carries forward across FY boundaries and, within an FY, across
+    # a commissioning/decommissioning change — see db.get_effective_capacity).
+    # Absent any override, a single entry dated to FY-start covers the whole
+    # FY, matching "FY capacity shall be same for a FY period otherwise".
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS item_capacity_table (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            plant_name       TEXT NOT NULL,     -- BSP/DSP/RSP/BSL/ISP/ASP/SSP/VISL (individual plants only)
+            item_name        TEXT NOT NULL,     -- matches page4's db_item, e.g. 'Hot Metal'
+            effective_month  TEXT NOT NULL,      -- 'YYYY-MM'
+            annual_capacity  REAL NOT NULL,      -- '000 T / year, rated
+            reason           TEXT DEFAULT '',    -- e.g. commissioning/decommissioning note
+            created_by       TEXT,
+            created_at       TEXT,
+            updated_by       TEXT,
+            updated_at       TEXT,
+            UNIQUE(plant_name, item_name, effective_month)
+        )
+    """)
+
     # 7. Inter-Plant Transfer (IPT) plan vs actual, per route per month
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ipt_table (
@@ -1337,6 +1360,126 @@ def delete_breakdown_entry(breakdown_id: int) -> bool:
     conn.commit()
     conn.close()
     activity_context.record(f"breakdown_table/{old['plant']}/{old['unit_name']}/{breakdown_id}", old, None)
+    return True
+
+
+def list_capacity_entries(plant: Optional[str] = None, item: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List capacity-change entries, optionally filtered. Newest effective_month first."""
+    init_db()
+    conn = connect()
+    sql = "SELECT * FROM item_capacity_table WHERE 1=1"
+    args = []
+    if plant:
+        sql += " AND plant_name=?"; args.append(plant)
+    if item:
+        sql += " AND item_name=?"; args.append(item)
+    sql += " ORDER BY plant_name, item_name, effective_month DESC"
+    prev_factory = conn.row_factory
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.execute(sql, args)
+        rows = [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.row_factory = prev_factory
+        conn.close()
+    return rows
+
+
+def get_effective_capacity(plant: str, item: str, month: str) -> Optional[float]:
+    """Annual capacity ('000 T/yr) in effect for `plant`/`item` at `month` —
+    the latest entry with effective_month <= month, or None if the plant/item
+    has never had a capacity entered at or before that month."""
+    init_db()
+    conn = connect()
+    try:
+        cur = conn.execute(
+            "SELECT annual_capacity FROM item_capacity_table "
+            "WHERE plant_name=? AND item_name=? AND effective_month<=? "
+            "ORDER BY effective_month DESC LIMIT 1",
+            (plant, item, month),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def save_capacity_entry(plant: str, item: str, effective_month: str,
+                         annual_capacity: float, reason: str, created_by: str) -> int:
+    """Create one capacity entry. Returns the new row id. Raises
+    sqlite3.IntegrityError if (plant, item, effective_month) already exists —
+    callers should surface that as "an entry for this month already exists,
+    edit it instead"."""
+    from datetime import datetime
+    init_db()
+    conn = connect()
+    now = datetime.now().isoformat()
+    try:
+        cur = conn.execute("""
+            INSERT INTO item_capacity_table
+                (plant_name, item_name, effective_month, annual_capacity, reason,
+                 created_by, created_at, updated_by, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (plant, item, effective_month, annual_capacity, reason,
+              created_by, now, created_by, now))
+        conn.commit()
+        new_id = cur.lastrowid
+    finally:
+        conn.close()
+    activity_context.record(f"item_capacity_table/{plant}/{item}/{new_id}", None, {
+        "plant_name": plant, "item_name": item, "effective_month": effective_month,
+        "annual_capacity": annual_capacity, "reason": reason,
+    })
+    return new_id
+
+
+def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
+    """Update any subset of item_name/plant_name/effective_month/annual_capacity/
+    reason on one capacity entry. Returns False if the row doesn't exist.
+    Raises sqlite3.IntegrityError on a resulting (plant, item, effective_month)
+    clash with another row."""
+    from datetime import datetime
+    init_db()
+    conn = connect()
+    old = _row_dict(conn, "SELECT * FROM item_capacity_table WHERE id=?", (entry_id,))
+    if old is None:
+        conn.close()
+        return False
+    allowed = {"plant_name", "item_name", "effective_month", "annual_capacity", "reason"}
+    sets, args = [], []
+    for k, v in fields.items():
+        if k not in allowed:
+            continue
+        sets.append(f"{k}=?")
+        args.append(v)
+    if not sets:
+        conn.close()
+        return True
+    sets.append("updated_by=?"); args.append(updated_by)
+    sets.append("updated_at=?"); args.append(datetime.now().isoformat())
+    args.append(entry_id)
+    try:
+        conn.execute(f"UPDATE item_capacity_table SET {', '.join(sets)} WHERE id=?", args)
+        conn.commit()
+    finally:
+        conn.close()
+    new = {**old, **{k: v for k, v in fields.items() if k in allowed}}
+    activity_context.record(f"item_capacity_table/{old['plant_name']}/{old['item_name']}/{entry_id}", old, new)
+    return True
+
+
+def delete_capacity_entry(entry_id: int) -> bool:
+    """Delete one capacity entry, recording its prior state. Returns False if not found."""
+    init_db()
+    conn = connect()
+    old = _row_dict(conn, "SELECT * FROM item_capacity_table WHERE id=?", (entry_id,))
+    if old is None:
+        conn.close()
+        return False
+    conn.execute("DELETE FROM item_capacity_table WHERE id=?", (entry_id,))
+    conn.commit()
+    conn.close()
+    activity_context.record(f"item_capacity_table/{old['plant_name']}/{old['item_name']}/{entry_id}", old, None)
     return True
 
 

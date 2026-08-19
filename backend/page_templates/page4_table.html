@@ -13,35 +13,41 @@
                 <colgroup>
                     <col class="c-items" />
                     <col class="c-plant" />
+                    <col class="c-cap" />
                     <col class="c-ann" />
                     <col class="c-num" /><col class="c-num" /><col class="c-num-sm" /><col class="c-num-sm" />
                     <col class="c-num" /><col class="c-num-sm" />
+                    <col class="c-num-sm" />
                     <col class="c-num" /><col class="c-num" /><col class="c-num-sm" /><col class="c-num-sm" />
                     <col class="c-num" /><col class="c-num-sm" />
+                    <col class="c-num-sm" />
                 </colgroup>
                 <thead>
                     <tr>
                         <th rowspan="2" style="vertical-align: middle; text-align: left; padding-left: 3px;">Items</th>
                         <th rowspan="2" style="vertical-align: middle;">Plant</th>
+                        <th rowspan="2" style="vertical-align: middle;">Ann.<br/>Cap.</th>
                         <th rowspan="2" class="col-ann" style="vertical-align: middle;">APP<br/>{{ target_header.split()[1] }}</th>
                         <th colspan="4">{{ short_m }}'{{ short_y }}</th>
-                        <th rowspan="2" style="vertical-align: middle;">{{ short_m }}'{{ short_prev_y }}<br/>Actual</th>
+                        <th rowspan="2" style="vertical-align: middle;">{{ short_m }}'{{ short_prev_y }}<br/>Act.</th>
                         <th rowspan="2" style="vertical-align: middle;">%Gr.<br/>{{ short_m }}'{{ short_prev_y }}</th>
+                        <th rowspan="2" style="vertical-align: middle;">CU%</th>
                         <th colspan="4">Apr-{{ short_m }}'{{ short_y }}</th>
-                        <th rowspan="2" style="vertical-align: middle;">Apr-{{ short_m }}'{{ short_prev_y }}<br/>Actual</th>
+                        <th rowspan="2" style="vertical-align: middle;">Apr-{{ short_m }}'{{ short_prev_y }}<br/>Act.</th>
                         <th rowspan="2" style="vertical-align: middle;">%Gr.<br/>Apr-{{ short_m }}'{{ short_prev_y }}</th>
+                        <th rowspan="2" style="vertical-align: middle;">CU%</th>
                     </tr>
                     <tr>
-                        <th>APP</th><th class="col-m-act">Actual</th><th>Var</th><th>%Ful.</th>
-                        <th class="col-ytd-app">APP</th><th class="col-ytd-act">Actual</th><th>Var</th><th>%Ful.</th>
+                        <th>APP</th><th class="col-m-act">Act.</th><th>Var</th><th>%Ful.</th>
+                        <th class="col-ytd-app">APP</th><th class="col-ytd-act">Act.</th><th>Var</th><th>%Ful.</th>
                     </tr>
                 </thead>
-                {% set col_cls = ['col-ann','','col-m-act','','','','','col-ytd-app','col-ytd-act','','','',''] %}
+                {% set col_cls = ['col-ann','','col-m-act','','','','','','col-ytd-app','col-ytd-act','','','','',''] %}
                 <tbody>
                     {% for row in page.rows %}
                     <tr class="{% if row.is_first_in_group %}group-first {% endif %}{% if row.plant == 'SAIL' %}sail-row{% elif row.plant == '5 Plants' %}fp-row{% endif %}">
                         {% if row.is_conversion %}
-                        <td colspan="2" class="label-cell"
+                        <td colspan="3" class="label-cell"
                             style="font-weight: 700; font-size: 8pt; vertical-align: middle;
                                    padding: 1px 2px 1px 4px; font-family: inherit;">
                             Conversion
@@ -52,6 +58,7 @@
                                    padding: 1px 2px 1px 4px; font-family: inherit;">
                             SAIL incl. conversion
                         </td>
+                        <td class="label-cell" style="text-align: center;">{{ row.capacity }}</td>
                         {% else %}
                         {% if row.is_first_in_group %}
                         <td class="label-cell" rowspan="{{ row.group_size }}"
@@ -68,6 +75,7 @@
                                    white-space: nowrap; overflow: hidden;">
                             {{ row.plant }}
                         </td>
+                        <td class="label-cell" style="text-align: center;">{{ row.capacity }}</td>
                         {% endif %}
                         {% for val in row['values'] %}<td{% if col_cls[loop.index0] %} class="{{ col_cls[loop.index0] }}"{% endif %}>{{ val }}</td>{% endfor %}
                     </tr>

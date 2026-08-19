@@ -241,6 +241,7 @@ from api_bf_benchmark import router as bf_benchmark_router
 from api_breakdown import router as breakdown_router
 from api_production_loss import router as production_loss_router
 from api_key_highlights import router as key_highlights_router
+from api_capacity import router as capacity_router
 
 db.init_db()
 
@@ -528,6 +529,7 @@ app.include_router(bf_benchmark_router)
 app.include_router(breakdown_router)
 app.include_router(production_loss_router)
 app.include_router(key_highlights_router)
+app.include_router(capacity_router)
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(_STATIC_DIR, "profile_pics"), exist_ok=True)

@@ -121,4 +121,12 @@ PAGE_MODULES = {
             ("PATCH", "/api/bf-benchmark/sail-meta", False),
         ],
     },
+    "capacity": {
+        "label": "Annual Capacity",
+        "routes": [
+            ("POST", "/api/capacity", False),
+            ("PATCH", "/api/capacity/{entry_id}", False),
+            ("DELETE", "/api/capacity/{entry_id}", True),
+        ],
+    },
 }

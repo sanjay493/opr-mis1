@@ -1,23 +1,26 @@
 'use client';
 import React from 'react';
 
-// Column widths as % — 15 cols, must sum to 100
+// Column widths as % — 18 cols (Capacity + 2x CU% added), must sum to ~100
 const COL_W = {
-  items:      '10%',
-  plant:       '6%',
-  annualApp:   '8%',
+  items:      '8.5%',
+  plant:       '5%',
+  capacity:  '4.5%',
+  annualApp:   '7%',
   mApp:        '5%',
-  mActual:     '7%',
-  mVar:       '5.5%',
-  mPct:       '5.5%',
-  cplyAct:     '6%',
-  pctGr:      '5.5%',
-  ytdApp:      '6%',
-  ytdActual:   '7%',
-  ytdVar:     '5.5%',
-  ytdPct:     '5.5%',
-  ytdCply:     '6%',
-  ytdGr:      '5.5%',
+  mActual:     '6%',
+  mVar:       '5%',
+  mPct:        '5%',
+  cplyAct:   '5.5%',
+  pctGr:       '5%',
+  cuMonth:   '4.5%',
+  ytdApp:    '5.5%',
+  ytdActual:   '6%',
+  ytdVar:      '5%',
+  ytdPct:      '5%',
+  ytdCply:   '5.5%',
+  ytdGr:       '5%',
+  cuYtd:     '4.5%',
 };
 
 const TH_STYLE = { padding: '2.5px 2.5px', fontSize: '9pt', verticalAlign: 'middle', lineHeight: '1' };
@@ -152,6 +155,7 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
         <colgroup>
           <col wrapping="true" style={{ width: COL_W.items }} />
           <col style={{ width: COL_W.plant }} />
+          <col style={{ width: COL_W.capacity }} />
           <col style={{ width: COL_W.annualApp }} />
           <col style={{ width: COL_W.mApp }} />
           <col style={{ width: COL_W.mActual }} />
@@ -159,28 +163,33 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
           <col style={{ width: COL_W.mPct }} />
           <col style={{ width: COL_W.cplyAct }} />
           <col style={{ width: COL_W.pctGr }} />
+          <col style={{ width: COL_W.cuMonth }} />
           <col style={{ width: COL_W.ytdApp }} />
           <col style={{ width: COL_W.ytdActual }} />
           <col style={{ width: COL_W.ytdVar }} />
           <col style={{ width: COL_W.ytdPct }} />
           <col style={{ width: COL_W.ytdCply }} />
           <col style={{ width: COL_W.ytdGr }} />
+          <col style={{ width: COL_W.cuYtd }} />
         </colgroup>
 
         <thead>
           <tr>
             <th rowSpan="2" style={{ ...TH_STYLE, textAlign: 'left', paddingLeft: '4px' }}>Items</th>
             <th rowSpan="2" style={TH_STYLE}>Plant</th>
+            <th rowSpan="2" style={TH_STYLE}>Ann.<br />Cap.</th>
             <th rowSpan="2" style={TH_STYLE}>APP<br />{fyStr}</th>
             <th colSpan="4" style={TH_STYLE}>{shortM}'{shortY}</th>
-            <th rowSpan="2" style={TH_STYLE}>{shortM}'{prevY}<br />Act</th>
+            <th rowSpan="2" style={TH_STYLE}>{shortM}'{prevY}<br />Act.</th>
             <th rowSpan="2" style={TH_STYLE}>%Gr.<br />{shortM}'{prevY}</th>
+            <th rowSpan="2" style={TH_STYLE}>CU%</th>
             <th colSpan="4" style={TH_STYLE}>Apr-{shortM}'{shortY}</th>
-            <th rowSpan="2" style={TH_STYLE}>Apr-{shortM}'{prevY}<br />Act</th>
+            <th rowSpan="2" style={TH_STYLE}>Apr-{shortM}'{prevY}<br />Act.</th>
             <th rowSpan="2" style={TH_STYLE}>%Gr.<br />Apr-{shortM}'{prevY}</th>
+            <th rowSpan="2" style={TH_STYLE}>CU%</th>
           </tr>
           <tr>
-            {['APP','Act','Var','%Ful.','APP','Act','Var','%Ful.'].map((h, i) => (
+            {['APP','Act.','Var','%Ful.','APP','Act.','Var','%Ful.'].map((h, i) => (
               <th key={i} style={TH_STYLE}>{h}</th>
             ))}
           </tr>
@@ -194,18 +203,23 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
               {}
             }>
               {(row.is_conversion || row.is_sail_incl_conv) ? (
-                <td
-                  colSpan={2}
-                  style={{
-                    ...TD_STYLE,
-                    fontWeight: '700',
-                    textAlign: 'left',
-                    paddingLeft: '4px',
-                    verticalAlign: 'middle',
-                  }}
-                >
-                  {row.is_sail_incl_conv ? 'SAIL incl. conversion' : 'Conversion'}
-                </td>
+                <>
+                  <td
+                    colSpan={2}
+                    style={{
+                      ...TD_STYLE,
+                      fontWeight: '700',
+                      textAlign: 'left',
+                      paddingLeft: '4px',
+                      verticalAlign: 'middle',
+                    }}
+                  >
+                    {row.is_sail_incl_conv ? 'SAIL incl. conversion' : 'Conversion'}
+                  </td>
+                  <td style={{ ...TD_STYLE, textAlign: 'center', color: '#5f6368' }}>
+                    {row.capacity || ''}
+                  </td>
+                </>
               ) : (
                 <>
                   {isFirstInGroup && (
@@ -250,6 +264,9 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
                       value={plant}
                       onChange={(e) => handlePlantChange(rIdx, e.target.value)}
                     />
+                  </td>
+                  <td style={{ ...TD_STYLE, textAlign: 'center', color: '#5f6368' }}>
+                    {row.capacity || ''}
                   </td>
                 </>
               )}

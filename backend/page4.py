@@ -22,6 +22,7 @@ PAGE4_ITEMS = [
         "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "VISL", "SAIL"],
         "five_plants": _5P,
         "sail_set": _5P + ["VISL"],
+        "has_capacity": True,
     },
     {
         "display": "CRUDE STEEL",
@@ -29,6 +30,7 @@ PAGE4_ITEMS = [
         "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "ASP", "SSP", "VISL", "SAIL"],
         "five_plants": _5P,
         "sail_set": _5P + ["ASP", "SSP", "VISL"],
+        "has_capacity": True,
     },
     {
         "display": "SALEABLE STEEL",
@@ -36,6 +38,7 @@ PAGE4_ITEMS = [
         "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "ASP", "SSP", "VISL", "SAIL"],
         "five_plants": _5P,
         "sail_set": _5P + ["ASP", "SSP", "VISL"],
+        "has_capacity": True,
     },
     {
         "display": "PIG IRON",
@@ -50,8 +53,15 @@ PAGE4_ITEMS = [
         "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "ASP", "SSP", "VISL", "SAIL"],
         "five_plants": _5P,
         "sail_set": _5P + ["ASP", "SSP", "VISL"],
+        "has_capacity": True,
     },
 ]
+
+# Kept in sync with api_capacity.py's CAPACITY_ITEMS — the db_item names of
+# the 4 items capacity/CU% is tracked for (Oven Pushing is a nos/day rate,
+# Sinter/Pig Iron are intermediate items — none of the three get a capacity
+# entry, per direct instruction).
+CAPACITY_DB_ITEMS = {"Hot Metal", "Total Crude Steel", "Saleable Steel", "Finished Steel"}
 
 def _days_in_month(month_str: str) -> int:
     try:
@@ -175,8 +185,42 @@ def _p4_ytd_nos_plan(cur, months, plant, db_item, five_plants, sail_set):
 _DECIMAL_PLANTS = {"ASP", "SSP", "VISL"}
 
 
-def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set):
-    """Compute the 13 display values for one page-4 row."""
+def _p4_capacity_at(plant, db_item, month, five_plants, sail_set):
+    """Annual rated capacity ('000 T/yr) applicable at `month` for a single
+    plant or an aggregate row — "5 Plants"/"SAIL" sum their member plants'
+    own entries (each already resolved for mid-FY commissioning/decommissioning
+    changes via db.get_effective_capacity), never a directly-entered figure."""
+    if plant == "5 Plants":
+        members = five_plants
+    elif plant == "SAIL":
+        members = sail_set
+    else:
+        members = [plant]
+    total, found = 0.0, False
+    for p in members:
+        v = db.get_effective_capacity(p, db_item, month)
+        if v is not None:
+            total += v
+            found = True
+    return total if found else None
+
+
+def _p4_ytd_capacity(months, plant, db_item, five_plants, sail_set):
+    """Sum of each YTD month's own prorated (annual/12) capacity — correctly
+    reflects a mid-FY change by using that change's own rate only from its
+    effective month onward, not retroactively for the whole FY."""
+    total, found = 0.0, False
+    for m in months:
+        v = _p4_capacity_at(plant, db_item, m, five_plants, sail_set)
+        if v is not None:
+            total += v / 12
+            found = True
+    return total if found else None
+
+
+def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set, has_capacity=False):
+    """Compute the Capacity value plus the 15 display values (13 original +
+    2 CU% columns) for one page-4 row."""
     def fmt(v):
         return "" if v is None else str(round(v))
 
@@ -211,7 +255,16 @@ def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set
         act_ytd      = _p4_ytd_sum(cur, "act",  ytd_m,    plant, db_item, five_plants, sail_set)
         act_ytd_cply = _p4_ytd_sum(cur, "act", ytd_prev, plant, db_item, five_plants, sail_set)
 
-    return [
+    capacity_val = None
+    cu_month = cu_ytd = ""
+    if has_capacity:
+        capacity_val = _p4_capacity_at(plant, db_item, month, five_plants, sail_set)
+        monthly_capacity = capacity_val / 12 if capacity_val is not None else None
+        ytd_capacity = _p4_ytd_capacity(ytd_m, plant, db_item, five_plants, sail_set)
+        cu_month = pct(act_m, monthly_capacity)
+        cu_ytd = pct(act_ytd, ytd_capacity)
+
+    values = [
         fmt(ann),                   # 0  Annual APP
         fmt(plan_m),                # 1  Monthly APP
         fmt_act(act_m),             # 2  Monthly Actual
@@ -219,13 +272,16 @@ def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set
         pct(act_m, plan_m),         # 4  Monthly % Ful.
         fmt_act(act_cply),          # 5  CPLY Monthly Actual
         gr(act_m, act_cply),        # 6  % Growth CPLY
-        fmt(plan_ytd),              # 7  YTD APP
-        fmt_act(act_ytd),           # 8  YTD Actual
-        var(act_ytd, plan_ytd),     # 9  YTD Var
-        pct(act_ytd, plan_ytd),     # 10 YTD % Ful.
-        fmt_act(act_ytd_cply),      # 11 YTD CPLY Actual
-        gr(act_ytd, act_ytd_cply),  # 12 % Growth YTD CPLY
+        cu_month,                   # 7  CU% (Month)
+        fmt(plan_ytd),              # 8  YTD APP
+        fmt_act(act_ytd),           # 9  YTD Actual
+        var(act_ytd, plan_ytd),     # 10 YTD Var
+        pct(act_ytd, plan_ytd),     # 11 YTD % Ful.
+        fmt_act(act_ytd_cply),      # 12 YTD CPLY Actual
+        gr(act_ytd, act_ytd_cply),  # 13 % Growth YTD CPLY
+        cu_ytd,                     # 14 CU% (YTD)
     ]
+    return values, fmt(capacity_val)
 
 
 _EXTRA_PLANTS = {"ASP", "SSP", "VISL"}
@@ -296,6 +352,17 @@ def _safe_gr(c_s, p_s):
         return ""
 
 
+def _safe_cu(act_s, capacity):
+    """CU% from a (possibly string) actual value and a float capacity denominator."""
+    try:
+        a = float(act_s)
+    except (ValueError, TypeError):
+        return ""
+    if capacity is None or capacity == 0:
+        return ""
+    return str(round(a / capacity * 100))
+
+
 def generate_page4_rows(month: str) -> list:
     """Build all page-4 rows for `month`."""
     conn = db.connect()
@@ -308,22 +375,24 @@ def generate_page4_rows(month: str) -> list:
             is_nos   = cfg.get("is_nos_day", False)
             five_p   = cfg.get("five_plants", [])
             sail_set = cfg.get("sail_set", [])
+            has_cap  = cfg.get("has_capacity", False)
 
             # First pass: build group rows, apply per-plant hide rules
             group = []          # list of (plant, row_dict)
             visible_extra = False
 
             for plant in cfg["plants"]:
-                values = _p4_row_values(cur, month, plant, db_item, is_nos, five_p, sail_set)
+                values, capacity = _p4_row_values(cur, month, plant, db_item, is_nos, five_p, sail_set, has_cap)
                 # Hide VISL in HOT METAL when all key actuals are nil
                 if display == "HOT METAL" and plant == "VISL":
-                    if all(values[i] == "" for i in [2, 5, 8, 11]):
+                    if all(values[i] == "" for i in [2, 5, 9, 12]):
                         continue
                 if plant in _EXTRA_PLANTS:
                     visible_extra = True
                 group.append((plant, {
                     "label":        f"{display} {plant}",
                     "display_name": display,
+                    "capacity":     capacity,
                     "values":       values,
                 }))
 
@@ -341,21 +410,25 @@ def generate_page4_rows(month: str) -> list:
             "label": "CONVERSION SAIL",
             "display_name": "CONVERSION",
             "is_conversion": True,
+            "capacity": "",
             "values": [
                 "", "",                                      # 0 Annual APP, 1 Monthly APP
                 _fmt3(conv_m),                               # 2 Monthly Actual
                 "", "",                                      # 3 Var, 4 %Ful
                 _fmt3(conv_cply),                            # 5 CPLY Actual
                 _gr_vals(conv_m, conv_cply),                 # 6 %Growth
-                "",                                          # 7 YTD APP
-                _fmt3(conv_ytd),                             # 8 YTD Actual
-                "", "",                                      # 9 YTD Var, 10 YTD %Ful
-                _fmt3(conv_ytd_cply),                        # 11 YTD CPLY
-                _gr_vals(conv_ytd, conv_ytd_cply),           # 12 YTD %Growth
+                "",                                          # 7 CU% (Month) — conversion has no rated capacity
+                "",                                          # 8 YTD APP
+                _fmt3(conv_ytd),                             # 9 YTD Actual
+                "", "",                                      # 10 YTD Var, 11 YTD %Ful
+                _fmt3(conv_ytd_cply),                        # 12 YTD CPLY
+                _gr_vals(conv_ytd, conv_ytd_cply),           # 13 YTD %Growth
+                "",                                          # 14 CU% (YTD)
             ],
         })
 
-        sail_fs_vals = _p4_row_values(cur, month, "SAIL", "Finished Steel", False, _5P, fs_sail_set)
+        sail_fs_vals, sail_fs_capacity = _p4_row_values(
+            cur, month, "SAIL", "Finished Steel", False, _5P, fs_sail_set, has_capacity=True)
         # Add conversion to the UNROUNDED FS actuals — adding to the already
         # rounded row strings can shift the displayed total by 1 vs page 3
         # (e.g. 3967.24+100.33=4067.57 → 4068, but 3967+100.33 → 4067).
@@ -373,14 +446,20 @@ def generate_page4_rows(month: str) -> list:
         iv = list(sail_fs_vals)
         iv[2]  = _sum2(fs_m,        conv_m)
         iv[5]  = _sum2(fs_cply,     conv_cply)
-        iv[8]  = _sum2(fs_ytd,      conv_ytd)
-        iv[11] = _sum2(fs_ytd_cply, conv_ytd_cply)
+        iv[9]  = _sum2(fs_ytd,      conv_ytd)
+        iv[12] = _sum2(fs_ytd_cply, conv_ytd_cply)
         iv[3]  = _safe_var(iv[2],  iv[1])
         iv[4]  = _safe_pct(iv[2],  iv[1])
         iv[6]  = _safe_gr(iv[2],   iv[5])
-        iv[9]  = _safe_var(iv[8],  iv[7])
-        iv[10] = _safe_pct(iv[8],  iv[7])
-        iv[12] = _safe_gr(iv[8],   iv[11])
+        iv[10] = _safe_var(iv[9],  iv[8])
+        iv[11] = _safe_pct(iv[9],  iv[8])
+        iv[13] = _safe_gr(iv[9],   iv[12])
+        # CU% for the combined (FS + conversion) actuals, using SAIL Finished
+        # Steel's own capacity (conversion itself has no separate rated capacity).
+        capacity_f = float(sail_fs_capacity) if sail_fs_capacity else None
+        ytd_capacity = _p4_ytd_capacity(ytd_ms, "SAIL", "Finished Steel", _5P, fs_sail_set)
+        iv[7]  = _safe_cu(iv[2], capacity_f / 12 if capacity_f is not None else None)
+        iv[14] = _safe_cu(iv[9], ytd_capacity)
         # Round all numeric values to zero decimal places
         iv = [str(round(float(v))) if v not in ("", None) else v for v in iv]
 
@@ -388,6 +467,7 @@ def generate_page4_rows(month: str) -> list:
             "label": "SAIL INCL. CONV. SAIL",
             "display_name": "SAIL INCL. CONV.",
             "is_sail_incl_conv": True,
+            "capacity": sail_fs_capacity,
             "values": iv,
         })
 
