@@ -659,7 +659,11 @@ def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title
         f'{head_cells}</tr></thead>'
         f'<tbody>{"".join(body_rows)}</tbody>'
         '</table>'
-        '<div style="text-align:center;font-size:6.2px;color:#64748b;'
+        '<div style="text-align:center;font-size:7px;font-weight:bold;color:#1e293b;'
+        'font-family:Arial,sans-serif;margin-top:6px;">'
+        'CS to HM Ratio = CS / (Total HM Production &minus; HM sent to PCM/Sandpit &minus; HM sent to ASP)'
+        '</div>'
+        '<div style="text-align:center;font-size:10.5pt;font-weight:bold;color:#1e293b;'
         'font-family:Arial,sans-serif;margin-top:5px;">'
         'Crude Steel / (Hot Metal − Pig Iron/0.85 − Hot Metal to ASP) — 5 Plants, last 3 FY annual '
         'ratios then current FY month-by-month to the report month. Darker = higher ratio.'
@@ -676,5 +680,5 @@ def generate_page6_trend_charts_html(report_month: str) -> str:
     x_labels, fy_point_count, ratio3 = _compute_ratio_series(report_month)
     return _ratio_heatmap_html(
         x_labels, fy_point_count, ratio3,
-        "CRUDE STEEL / (HOT METAL − PIG IRON/0.85 − HOT METAL TO ASP)",
+        "CS to HM Ratio",
     )
