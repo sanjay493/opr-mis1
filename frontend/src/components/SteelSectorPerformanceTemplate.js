@@ -25,8 +25,8 @@ const sectionHeading = {
   borderBottom: `1px solid ${BORDER}`, paddingBottom: 2,
 };
 const table = { width: '100%', borderCollapse: 'collapse', marginBottom: 6, fontSize: '11pt' };
-const th = { border: `1px solid ${BORDER}`, padding: '7px 9px', background: '#e2e8f0', fontWeight: 700, textAlign: 'center' };
-const td = { border: `1px solid ${BORDER}`, padding: '7px 9px', textAlign: 'center' };
+const th = { border: `1px solid ${BORDER}`, padding: '7px 9px', background: '#e2e8f0', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' };
+const td = { border: `1px solid ${BORDER}`, padding: '7px 9px', textAlign: 'center', verticalAlign: 'middle' };
 const tdLabel = td;
 const note = { fontSize: '10.5pt', fontStyle: 'italic', color: '#475569', marginTop: 2 };
 
