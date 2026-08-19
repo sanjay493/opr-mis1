@@ -269,14 +269,30 @@ def _coal_blend_pct(plant, kind, report_month, dp):
     return _round(numer / total * 100, dp)
 
 
-def _special_steel_pct(plant, report_month, dp):
-    from page_special_steel import generate_special_steel_plant
+def _value_added_pct_of_finished(plant, ytd_months, production, dp):
+    """% Value Added Product of Finished Steel = plant's Value Added
+    (Special) Steel despatch / plant's own Finished Steel production, over
+    the Apr-report_month YTD period this table's every other row covers.
+    Numerator reuses the same Value Added Steel figure page 24's Special
+    Steel report and the At-a-Glance VA chart both already compute
+    (page_special_steel_trend._sum_actual, plant-scoped); denominator reuses
+    the `production` dict every other production-sourced row here already
+    reads (_prod_val), rather than the plant's Saleable Steel — the
+    denominator _sum_actual's callers elsewhere in the app use — per direct
+    instruction for this specific row."""
+    from page_special_steel_trend import _sum_actual
+    conn = db.connect()
+    cur = conn.cursor()
     try:
-        ss = generate_special_steel_plant(report_month, plant)
-        v = ss.get("special_pct", {}).get("cum_current")
-        return v if v not in (None, "") else None
-    except Exception:
+        qty, has = _sum_actual(cur, ytd_months, plant)
+    finally:
+        conn.close()
+    if not has:
         return None
+    finished_000T = _prod_val(plant, ["Finished Steel"], production, 6, ytd_months)
+    if not finished_000T:
+        return None
+    return _round(qty / (finished_000T * 1000) * 100, dp)
 
 
 # Placeholder swapped for "Demurrage (Apr-<latest month with data>)" in
@@ -392,7 +408,7 @@ _ROWS = [
     # month> range as the page title (_DEMURRAGE_LABEL below), since this
     # is a till_month/YTD figure like every other "general" row here.
     (_DEMURRAGE_LABEL,          "Rs Cr",    "general", "demurrage", 2, {}),
-    ("Value Added Products %", "%",        "special", None, 0, {}),
+    ("% Value Added Product of Finished Steel", "%", "special", None, 0, {}),
 ]
 
 
@@ -512,7 +528,7 @@ def generate_key_parameters(report_month: str) -> dict:
                 den = _prod_val(plant, prod_items, production, 6, ytd_months)
                 v = _round(num / den * 100, dp) if num is not None and den else None
             elif kind == "special":
-                v = _special_steel_pct(plant, report_month, dp)
+                v = _value_added_pct_of_finished(plant, ytd_months, production, dp)
             else:
                 v = None
             values[plant] = v
