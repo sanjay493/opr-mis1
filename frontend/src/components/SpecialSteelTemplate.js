@@ -149,7 +149,7 @@ function DetailTable({ data }) {
           </tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
             {hasProd && <td style={NUM} />}
-            <td style={{ ...LBL, fontWeight: 600 }}>Special Steel % of Saleable Steel</td>
+            <td style={{ ...LBL, fontWeight: 600 }}>Special Steel as % of Saleable Steel</td>
             <td style={NUM} colSpan={2}>{special_pct.current}</td>
             <td style={NUM}></td>
             <td style={NUM}>{special_pct.cply}</td>
@@ -251,7 +251,7 @@ function IspTable({ data }) {
             <td style={NUM}>{saleable_production.cum_pct_growth}</td>
           </tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
-            <td style={{ ...LBL, fontWeight: 600 }}>Special Steel % of Saleable Steel</td>
+            <td style={{ ...LBL, fontWeight: 600 }}>Special Steel as % of Saleable Steel</td>
             <td style={NUM} colSpan={2}>{special_pct.current}</td>
             <td style={NUM}></td>
             <td style={NUM}>{special_pct.cply}</td>
@@ -357,7 +357,7 @@ function SailTable({ data }) {
             <td style={NUM}>{saleable_production.cum_pct_growth}</td>
           </tr>
           <tr style={{ backgroundColor: '#e0f2fe' }}>
-            <td style={{ ...LBL, fontWeight: 600 }}>Special Steel % of Saleable Steel</td>
+            <td style={{ ...LBL, fontWeight: 600 }}>Special Steel as % of Saleable Steel</td>
             <td style={NUM}>{special_pct.abp}</td>
             <td style={NUM}></td>
             <td style={NUM}>{special_pct.current}</td>
