@@ -38,8 +38,8 @@ _TE_LOWER_IS_BETTER = {
     "Imported Coking Coal in Blend",
 }
 _TE_PARAMS = [
-    "Coke Rate", "Fuel Rate", "BF Productivity", "Specific Energy Consumption",
-    "CDI Rate", "Sinter in Burden", "Pellet in Burden", "TMI", "Sp. CO2 Emission",
+   "Imported Coking Coal in Blend","BF Productivity","Coke Rate",  "CDI Rate", "Fuel Rate", "Sinter in Burden", 
+    "Pellet in Burden", "TMI","Specific Energy Consumption", "Sp. CO2 Emission",
 ]
 
 # Tile background groups the tile by what the parameter actually IS (fuel &
@@ -608,6 +608,26 @@ def _imported_coal_blend_target(report_month: str):
 
 def _techno_section(report_month: str) -> list:
     te = {row["parameter"]: row for row in generate_at_a_glance_te_table(report_month)}
+
+    # "Imported Coking Coal in Blend" doesn't come from generate_at_a_glance_
+    # te_table (see _COAL_BLEND_PLANTS' module comment) — computed here and
+    # merged into `te` in the SAME {"unit", "values": [target, actual]} shape
+    # every other row has, so it flows through the one loop below like any
+    # other parameter and its tile position follows _TE_PARAMS' own order
+    # instead of always landing last. It's already listed in
+    # _TE_LOWER_IS_BETTER (lower blend % is "good"), so the loop's existing
+    # sign-flip covers it too — no separate delta formula needed.
+    blend_pct = _imported_coal_blend_pct(report_month)
+    if blend_pct is not None:
+        blend_target = _imported_coal_blend_target(report_month)
+        te["Imported Coking Coal in Blend"] = {
+            "unit": "%",
+            "values": [
+                f"{blend_target:.1f}" if blend_target is not None else "",
+                f"{blend_pct:.1f}",
+            ],
+        }
+
     out = []
     for name in _TE_PARAMS:
         row = te.get(name)
@@ -626,21 +646,6 @@ def _techno_section(report_month: str) -> list:
             "delta_pct": None if delta is None else round(delta, 1),
             "good": None if delta is None else delta >= 0,
             "bg_key": _TE_CATEGORY_BG.get(name, "highlight_default_row_bg"),
-        })
-
-    blend_pct = _imported_coal_blend_pct(report_month)
-    if blend_pct is not None:
-        blend_target = _imported_coal_blend_target(report_month)
-        delta = None
-        if blend_target:
-            delta = -((blend_pct - blend_target) / blend_target * 100)
-        out.append({
-            "parameter": "Imported Coking Coal in Blend", "unit": "%",
-            "target": f"{blend_target:.1f}" if blend_target is not None else "",
-            "month_actual": f"{blend_pct:.1f}",
-            "delta_pct": None if delta is None else round(delta, 1),
-            "good": None if delta is None else delta >= 0,
-            "bg_key": _TE_CATEGORY_BG.get("Imported Coking Coal in Blend", "highlight_default_row_bg"),
         })
     return out
 
