@@ -743,7 +743,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     deliberately mapped into a fixed band near the top (~4%-26% of chart
     height) — so on any real data the line draws clear above the bar tops,
     per spec, rather than because the two series happen to be comparable."""
-    ml, mr, mt, mb = 10, 10, 30, 40
+    ml, mr, mt, mb = 10, 10, 42, 40
     cw, ch = vw - ml - mr, vh - mt - mb
 
     pct_present = [v for v in pct_vals if v is not None]
@@ -788,8 +788,8 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
             val_str = f"{pv:.1f}%"
             ty = by + bh / 2
             lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" dominant-baseline="middle" '
-                         f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
-                         f'fill="{_contrast_text(color)}">{val_str}</text>')
+                         f'font-size="12" font-weight="bold" font-family="Arial,sans-serif" '
+                         f'fill="#000000">{val_str}</text>')
         main_cat, sub_cat = _split_cat_label(cat)
         lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 16:.1f}" text-anchor="middle" font-size="11" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{main_cat}</text>')
@@ -806,17 +806,18 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
         lines.append(f'<path d="{d}" fill="none" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
     for px, py, qv in pts:
         lines.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.4" fill="{_VA_LINE_COLOR}"/>')
-        lines.append(f'<text x="{px:.1f}" y="{py - 8:.1f}" text-anchor="middle" font-size="11" '
+        lines.append(f'<text x="{px:.1f}" y="{py - 8:.1f}" text-anchor="middle" font-size="12" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="{_VA_LINE_COLOR}">{_fmt_million(qv)}</text>')
 
-    # legend
-    ly = 24
-    lines.append(f'<rect x="{ml}" y="{ly - 6}" width="9" height="7" fill="{bar_colors[0]}"/>')
-    lines.append(f'<text x="{ml + 12}" y="{ly}" font-size="6.6" font-family="Arial,sans-serif" '
+    # legend — stacked two rows (rather than side-by-side) so the 11pt
+    # labels never overlap on the narrower vw=300 quarter chart.
+    ly1 = 24
+    lines.append(f'<rect x="{ml}" y="{ly1 - 7}" width="10" height="8" fill="{bar_colors[0]}"/>')
+    lines.append(f'<text x="{ml + 14}" y="{ly1}" font-size="11" font-family="Arial,sans-serif" '
                  f'fill="#334155">% of Saleable Steel</text>')
-    lx2 = ml + 100
-    lines.append(f'<line x1="{lx2}" y1="{ly - 3}" x2="{lx2 + 12}" y2="{ly - 3}" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
-    lines.append(f'<text x="{lx2 + 15}" y="{ly}" font-size="6.6" font-family="Arial,sans-serif" '
+    ly2 = ly1 + 13
+    lines.append(f'<line x1="{ml}" y1="{ly2 - 3}" x2="{ml + 14}" y2="{ly2 - 3}" stroke="{_VA_LINE_COLOR}" stroke-width="1.8"/>')
+    lines.append(f'<text x="{ml + 18}" y="{ly2}" font-size="11" font-family="Arial,sans-serif" '
                  f'fill="#334155">Qty (Million T)</text>')
 
     lines.append("</svg>")
@@ -842,7 +843,7 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
             if is_current:
                 qty = _current_fy_rate(cur, report_month, "SAIL")
                 qty = qty * 1000 if qty is not None else None  # '000T -> T
-            fy_cats.append(f"FY{fy}" + (" (YTD rate)" if is_current else ""))
+            fy_cats.append(f"{fy[2:]}" + (" (YTD rate)" if is_current else ""))
             fy_pct.append(pct)
             fy_qty.append(qty)
 
