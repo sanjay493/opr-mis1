@@ -43,6 +43,7 @@ _COLORS = {
     "RSP": "#A5A5A5",
     "BSL": "#FFC000",
     "ISP": "#5B9BD5",
+    "SSPs": "#8E44AD",
     "SAIL": "#70AD47",
 }
 # Annual chart: same entity across 4 periods, so color encodes "how recent"
@@ -421,8 +422,16 @@ def generate_special_steel_trend(report_month: str) -> dict:
             bars.append((f"{_fy_axis_label(cur_fy)} (Likely)", cur_qty, cur_pct, _FY_BAR_COLORS[3]))
             annual_svgs[ent] = _bar_group_svg(bars, ent, vw=240, vh=200, pct_font_size=12)
 
+        # SSPs (Salem's own special-steel despatch, per _ssps_special_steel)
+        # gets its own slice alongside the 5 plants — SAIL's center total
+        # already includes it (_entity_plants("SAIL") = _PLANTS + [SSPs]),
+        # so omitting it here previously left the slices summing to less
+        # than the center total with no visual account of the gap. SSPs has
+        # no "% of Saleable Steel" denominator of its own (no plant_name=
+        # 'SSPs' row in production_table) — _period_value_pct degrades to
+        # pct=None for it, which the donut legend already renders as "—".
         month_slices, ytd_slices = [], []
-        for ent in _PLANTS:
+        for ent in _PLANTS + [_SSPS]:
             qty, pct = _period_value_pct(cur, [report_month], ent)
             month_slices.append((ent, qty, pct, _COLORS[ent]))
             qty, pct = _period_value_pct(cur, ytd_months, ent)
