@@ -143,7 +143,7 @@ function TrendTable({ rows, item_display, unit }) {
         Best Ever (month / quarter / annual record)
         &nbsp;&nbsp;
         <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: 'transparent', border: `1px solid ${LIGHT_BORDER}` }} />
-        Best for that Calendar Month/Quarter (e.g. best April, best Q3, on record)
+        Best for that Calendar Month/Quarter (e.g. best April, best Q3)
       </div>
     </div>
   );
