@@ -156,7 +156,7 @@ _SEMIS_OWN_PCT_BADGE_FILL = "yellow"    # circle behind each own-% data label
 # own % badge sits only ~3-6 units from the neighboring segment's badge) —
 # a larger radius reads fine in isolation but overlaps its neighbor there.
 _SEMIS_OWN_PCT_BADGE_R = 3.0
-_SEMIS_OWN_PCT_BADGE_FS = 4.6
+_SEMIS_OWN_PCT_BADGE_FS = 5.0
 
 
 def _semis_breakdown_data(months: list) -> dict:
@@ -292,19 +292,19 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
     # ── Zone B: semi-finished steel, stacked by plant ──
     sub_y = mt_b - 9
     lines.append(f'<text x="{ml:.1f}" y="{sub_y:.1f}" font-size="6.8" font-weight="bold" '
-                 f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">SEMI-FINISHED STEEL BY PLANT (\'000 T)</text>')
+                 f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">Semis by plant (\'000T &amp; %)</text>')
     lines.append(f'<text x="{vw - mr:.1f}" y="{sub_y:.1f}" text-anchor="end" font-size="5.4" '
                  f'font-family="Arial,sans-serif" font-style="italic" fill="#64748b">'
                  f'bold % = share of total · '
                  f'<tspan fill="{_SEMIS_OWN_PCT_LABEL_COLOR}" font-style="italic" text-decoration="underline">'
-                 f'% in yellow circle = share of that plant\'s own Saleable Steel</tspan></text>')
+                 f'right (circle) % = share of plant\'s own Saleable Steel</tspan></text>')
 
     # Legend (plant colors) — top-right of Zone B's plot area.
     lx = vw - mr
     legend_items = list(reversed(_SEMIS_PLANTS))  # build right-to-left, ending with BSP first on screen
     for p in legend_items:
         lx -= len(p) * 4.2 + 3
-        lines.append(f'<text x="{lx:.1f}" y="{mt_b - 1:.1f}" font-size="6" font-weight="bold" '
+        lines.append(f'<text x="{lx:.1f}" y="{mt_b - 1:.1f}" font-size="6.4" font-weight="bold" '
                      f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{p}</text>')
         lx -= 10
         lines.append(f'<rect x="{lx:.1f}" y="{mt_b - 6:.1f}" width="7" height="5.5" rx="1" '
@@ -325,7 +325,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
         total = month["total"]
         if total > 0:
             lines.append(f'<text x="{x:.1f}" y="{base_b - ch_b * min(total / yhi_b, 1.0) - 4:.1f}" '
-                         f'text-anchor="middle" font-size="6.4" font-weight="bold" '
+                         f'text-anchor="middle" font-size="6.8" font-weight="bold" '
                          f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{total:.0f}</text>')
         # Geometry pass first (no SVG emitted yet) — the own-% badges need
         # every segment's true center before any collision-avoidance can
@@ -367,12 +367,12 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
             # already lived outside to the right) instead of dropped.
             if seg["share_pct"] is not None:
                 if seg_h >= 7:
-                    lines.append(f'<text x="{x:.1f}" y="{cy + 2:.1f}" text-anchor="middle" font-size="5.6" '
+                    lines.append(f'<text x="{x:.1f}" y="{cy + 2:.1f}" text-anchor="middle" font-size="6" '
                                  f'font-weight="bold" font-family="Arial,sans-serif" '
                                  f'fill="{_contrast_text(color)}">{seg["share_pct"]:.0f}%</text>')
                 else:
                     lines.append(f'<text x="{x - bar_w / 2 - 2.5:.1f}" y="{cy + 1.8:.1f}" text-anchor="end" '
-                                 f'font-size="5" font-weight="bold" font-family="Arial,sans-serif" '
+                                 f'font-size="5.4" font-weight="bold" font-family="Arial,sans-serif" '
                                  f'fill="{_SEMIS_INK}">{seg["share_pct"]:.0f}%</text>')
             if seg["own_pct"] is not None:
                 bcy = badge_cy[j]
