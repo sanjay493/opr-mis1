@@ -407,9 +407,20 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
 
 # ── SVG: grouped bar chart — one group per production item, one bar per FY ──
 
+def _contrast_text_color(hex_color: str) -> str:
+    """Dark or light label ink, whichever reads clearly on this fill —
+    _VA_ORANGE_LIGHT is light enough that white text (fine on _VA_ORANGE)
+    would fail contrast, so the in-bar label color can't be hardcoded."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    luminance = 0.299 * r + 0.587 * g + 0.114 * b
+    return "#1e293b" if luminance > 150 else "#ffffff"
+
+
 def _bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
-    """Bar outline with a half-circular top cap (radius r, clamped to fit)
-    and a flat bottom — the "capsule top" bar shape."""
+    """Bar outline with a rounded top cap (radius r, clamped to fit) and a
+    flat bottom. r == w/2 gives the full "capsule top" shape; a small r
+    (a few px) gives an ordinary bar with softened top corners."""
     r = max(0.0, min(r, w / 2, h))
     if r <= 0.05:
         return f'M{x:.1f},{y + h:.1f} L{x:.1f},{y:.1f} L{x + w:.1f},{y:.1f} L{x + w:.1f},{y + h:.1f} Z'
@@ -653,7 +664,9 @@ def _techno_section(report_month: str) -> list:
 _VA_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 _VA_BAR_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
 _VA_ORANGE = "#eb6834"
+_VA_ORANGE_LIGHT = "#f6c3a1"
 _VA_LINE_COLOR = "#334155"
+_VA_STEM_COLOR = "#cbd5e1"
 
 
 def _va_period_saleable_total(cur, months) -> float:
@@ -738,16 +751,16 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
                             bar_colors: list, title: str,
                             vw: int = 470, vh: int = 250) -> str:
     """Grouped bar (% of Saleable Steel) + line (Qty, Million T) combo, on two
-    independent scales: the % axis auto-scales with generous headroom so
-    bars only ever occupy the lower ~60% of the chart, and the qty line is
-    deliberately mapped into a fixed band near the top (~4%-26% of chart
-    height) — so on any real data the line draws clear above the bar tops,
-    per spec, rather than because the two series happen to be comparable."""
-    ml, mr, mt, mb = 10, 10, 30, 40
+    independent scales: the % axis auto-scales with headroom so bars only
+    ever occupy the lower ~70% of the chart, and the qty line is mapped into
+    a band that hugs just above the tallest bar — close enough that a thin
+    dashed stem from each bar top to its line point reads as one connected
+    chart rather than two stacked, disconnected layers."""
+    ml, mr, mt, mb = 10, 10, 38, 40
     cw, ch = vw - ml - mr, vh - mt - mb
 
     pct_present = [v for v in pct_vals if v is not None]
-    pct_yhi = max(5.0, (max(pct_present) if pct_present else 10.0) * 1.6)
+    pct_yhi = max(5.0, (max(pct_present) if pct_present else 10.0) * 1.4)
 
     qty_present = [v for v in qty_vals if v is not None]
     qty_lo = min(qty_present) * 0.85 if qty_present else 0.0
@@ -755,7 +768,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     if qty_hi <= qty_lo:
         qty_hi = qty_lo + 1.0
 
-    line_top, line_bot = mt + ch * 0.04, mt + ch * 0.26
+    line_top, line_bot = mt + ch * 0.09, mt + ch * 0.24
 
     def line_y(v):
         return line_bot - (line_bot - line_top) * (v - qty_lo) / (qty_hi - qty_lo)
@@ -763,11 +776,21 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     n = len(categories)
     slot_w = cw / n
     bar_w = max(34.0, slot_w * 0.4)
+    bar_radius = 5.0
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
-    lines.append(f'<text x="{vw / 2:.0f}" y="12" text-anchor="middle" font-size="8.5" '
+    lines.append(f'<text x="{ml}" y="14" text-anchor="start" font-size="12" '
                  f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
+    ly = 30
+    lines.append(f'<rect x="{ml}" y="{ly - 8}" width="10" height="9" fill="{bar_colors[-1]}"/>')
+    lines.append(f'<text x="{ml + 14}" y="{ly}" font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                 f'fill="#475569">% of Saleable Steel</text>')
+    lx2 = ml + 145
+    lines.append(f'<line x1="{lx2}" y1="{ly - 3}" x2="{lx2 + 14}" y2="{ly - 3}" stroke="{_VA_LINE_COLOR}" stroke-width="1.8"/>')
+    lines.append(f'<circle cx="{lx2 + 7}" cy="{ly - 3}" r="1.8" fill="{_VA_LINE_COLOR}"/>')
+    lines.append(f'<text x="{lx2 + 18}" y="{ly}" font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                 f'fill="#475569">Qty (Million T)</text>')
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
 
@@ -777,6 +800,8 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
         color = bar_colors[i % len(bar_colors)]
         cx = x + slot_w / 2
         pv = pct_vals[i]
+        qv = qty_vals[i]
+        by = None
         if pv is None:
             by = mt + ch - 3
             lines.append(f'<rect x="{cx - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="3" '
@@ -784,42 +809,37 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
         else:
             bh = max(2.0, ch * pv / pct_yhi)
             by = mt + ch - bh
-            lines.append(f'<path d="{_bar_path(cx - bar_w / 2, by, bar_w, bh, bar_w / 2)}" fill="{color}"/>')
+            lines.append(f'<path d="{_bar_path(cx - bar_w / 2, by, bar_w, bh, bar_radius)}" fill="{color}"/>')
             val_str = f"{pv:.1f}%"
-            ty = by + bh / 2
-            lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" dominant-baseline="middle" '
-                         f'font-size="12" font-weight="bold" font-family="Arial,sans-serif" '
-                         f'fill="#000000">{val_str}</text>')
+            if bh >= 16:
+                lines.append(f'<text x="{cx:.1f}" y="{by + bh / 2:.1f}" text-anchor="middle" dominant-baseline="middle" '
+                             f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                             f'fill="{_contrast_text_color(color)}">{val_str}</text>')
+            else:
+                lines.append(f'<text x="{cx:.1f}" y="{by - 4:.1f}" text-anchor="middle" '
+                             f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                             f'fill="#1e293b">{val_str}</text>')
         main_cat, sub_cat = _split_cat_label(cat)
         lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 16:.1f}" text-anchor="middle" font-size="11" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{main_cat}</text>')
         if sub_cat:
             lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 27:.1f}" text-anchor="middle" font-size="7.5" '
                          f'font-family="Arial,sans-serif" fill="#64748b">{sub_cat}</text>')
-        qv = qty_vals[i]
         if qv is not None:
-            pts.append((cx, line_y(qv), qv))
+            py = line_y(qv)
+            if pv is not None and by is not None and py < by - 4:
+                lines.append(f'<line x1="{cx:.1f}" y1="{by - 1:.1f}" x2="{cx:.1f}" y2="{py + 4:.1f}" '
+                             f'stroke="{_VA_STEM_COLOR}" stroke-width="0.8" stroke-dasharray="1.6,1.6"/>')
+            pts.append((cx, py, qv))
         x += slot_w
 
     if len(pts) >= 2:
         d = "M " + " L ".join(f"{px:.1f} {py:.1f}" for px, py, _ in pts)
         lines.append(f'<path d="{d}" fill="none" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
     for px, py, qv in pts:
-        lines.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.4" fill="{_VA_LINE_COLOR}"/>')
-        lines.append(f'<text x="{px:.1f}" y="{py - 8:.1f}" text-anchor="middle" font-size="12" '
+        lines.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.6" fill="#ffffff" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
+        lines.append(f'<text x="{px:.1f}" y="{py - 7:.1f}" text-anchor="middle" font-size="11" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="{_VA_LINE_COLOR}">{_fmt_million(qv)}</text>')
-
-    # legend — single inline row (fits within the narrower vw=300 quarter
-    # chart too: swatch+text1 run to ~x=150, leaving room for the line
-    # marker+text2 before the right margin).
-    ly = 24
-    lines.append(f'<rect x="{ml}" y="{ly - 7}" width="10" height="8" fill="{bar_colors[0]}"/>')
-    lines.append(f'<text x="{ml + 14}" y="{ly}" font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
-                 f'fill="#000000">% of Saleable Steel</text>')
-    lx2 = ml + 140
-    lines.append(f'<line x1="{lx2}" y1="{ly - 3}" x2="{lx2 + 14}" y2="{ly - 3}" stroke="{_VA_LINE_COLOR}" stroke-width="1.8"/>')
-    lines.append(f'<text x="{lx2 + 18}" y="{ly}" font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
-                 f'fill="#000000">Qty (Million T)</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -871,7 +891,7 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
             fy_cats, fy_pct, fy_qty, [_VA_ORANGE] * len(fy_cats),
             "Last 5 Years", vw=560, vh=222),
         "quarter_svg": _value_added_combo_svg(
-            q_cats, q_pct, q_qty, [_VA_BAR_COLORS[0], _VA_BAR_COLORS[3]],
+            q_cats, q_pct, q_qty, [_VA_ORANGE_LIGHT, _VA_ORANGE],
             "Quarter Just Ended vs CPLY", vw=300, vh=222),
     }
 
