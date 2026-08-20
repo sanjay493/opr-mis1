@@ -367,23 +367,33 @@ def generate_segment_wise(report_month: str) -> dict:
                        _ytd_one(cur,"act","BSP","WIRERODS",ytd),
                        _ytd_one(cur,"act","BSP","WIRERODS",cply_ytd)))
 
-        rnd_ann   = (_ann(cur,"BSP","MM",fy) or 0) + (_ann(cur,"BSP","BARS&RODMILL",fy) or 0)
-        rnd_plan  = ((_one(cur,"plan","BSP","MM",report_month) or 0) +
+        # "MM" (Merchant Mill) is TMT BARS(MM) + LT STRS(MM) combined - the
+        # actual Rounds figure is the TMT-bar item only; the Light
+        # Structurals item is its own row below.
+        rnd_ann   = (_ann(cur,"BSP","TMT BARS(MM)",fy) or 0) + (_ann(cur,"BSP","BARS&RODMILL",fy) or 0)
+        rnd_plan  = ((_one(cur,"plan","BSP","TMT BARS(MM)",report_month) or 0) +
                      (_one(cur,"plan","BSP","BARS&RODMILL",report_month) or 0))
-        rnd_act   = ((_one(cur,"act","BSP","MM",report_month) or 0) +
+        rnd_act   = ((_one(cur,"act","BSP","TMT BARS(MM)",report_month) or 0) +
                      (_one(cur,"act","BSP","BARS&RODMILL",report_month) or 0))
-        rnd_cply  = ((_one(cur,"act","BSP","MM",prev_month) or 0) +
+        rnd_cply  = ((_one(cur,"act","BSP","TMT BARS(MM)",prev_month) or 0) +
                      (_one(cur,"act","BSP","BARS&RODMILL",prev_month) or 0))
-        rnd_cplan = ((_ytd_one(cur,"plan","BSP","MM",ytd) or 0) +
+        rnd_cplan = ((_ytd_one(cur,"plan","BSP","TMT BARS(MM)",ytd) or 0) +
                      (_ytd_one(cur,"plan","BSP","BARS&RODMILL",ytd) or 0))
-        rnd_cact  = ((_ytd_one(cur,"act","BSP","MM",ytd) or 0) +
+        rnd_cact  = ((_ytd_one(cur,"act","BSP","TMT BARS(MM)",ytd) or 0) +
                      (_ytd_one(cur,"act","BSP","BARS&RODMILL",ytd) or 0))
-        rnd_ccply = ((_ytd_one(cur,"act","BSP","MM",cply_ytd) or 0) +
+        rnd_ccply = ((_ytd_one(cur,"act","BSP","TMT BARS(MM)",cply_ytd) or 0) +
                      (_ytd_one(cur,"act","BSP","BARS&RODMILL",cply_ytd) or 0))
         rows.append(_r("Rounds", "data", "LONG", "BSP",
                        rnd_ann or None, rnd_plan or None, rnd_act or None, rnd_cply or None,
                        rnd_cplan or None, rnd_cact or None, rnd_ccply or None))
-        rows.append(_zero("Light Structurals", "LONG", "BSP"))
+        rows.append(_r("Light Structurals", "data", "LONG", "BSP",
+                       _ann(cur,"BSP","LT STRS(MM)",fy),
+                       _one(cur,"plan","BSP","LT STRS(MM)",report_month),
+                       _one(cur,"act","BSP","LT STRS(MM)",report_month),
+                       _one(cur,"act","BSP","LT STRS(MM)",prev_month),
+                       _ytd_one(cur,"plan","BSP","LT STRS(MM)",ytd),
+                       _ytd_one(cur,"act","BSP","LT STRS(MM)",ytd),
+                       _ytd_one(cur,"act","BSP","LT STRS(MM)",cply_ytd)))
         rows.append(_zero("Heavy Structural", "LONG", "BSP"))
 
         rail_items = ["RSM_RAIL", "URM_RAIL"]
