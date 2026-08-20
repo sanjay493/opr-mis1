@@ -154,21 +154,26 @@ _SEMIS_INK = "#1e293b"  # legend/annotation text stays neutral ink, never the se
 
 def _semis_breakdown_data(months: list) -> dict:
     """Per trailing month: each reporting plant's semi-finished steel
-    quantity and its % share of that month's cross-plant semi-finished
-    total."""
+    quantity, its % share of that month's cross-plant semi-finished total,
+    and — a different ratio — that same plant's own semi-finished as a % of
+    its own Saleable Steel (own product mix, not comparable across plants,
+    so kept as a separate number rather than blended into the share %)."""
     out = {}
     for m in months:
         plants = []
         for p in _SEMIS_PLANTS:
+            saleable = db.get_production_actual_value(p, "Saleable Steel", m)
             if p == "ASP":
-                saleable = db.get_production_actual_value(p, "Saleable Steel", m)
                 finished = db.get_production_actual_value(p, "Finished Steel", m)
                 semis = (saleable - finished) if (saleable is not None and finished is not None) else None
             else:
                 semis = db.get_production_actual_value(p, "Saleable Semis", m)
             if semis is None:
                 continue
-            plants.append({"plant": p, "qty": semis})
+            plants.append({
+                "plant": p, "qty": semis,
+                "own_pct": round(semis / saleable * 100, 1) if saleable else None,
+            })
         total = sum(p["qty"] for p in plants)
         for p in plants:
             p["share_pct"] = round(p["qty"] / total * 100, 1) if total else None
@@ -271,12 +276,17 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
     return "\n".join(lines)
 
 
+_SEMIS_OWN_PCT_COLOR = "#6366f1"  # indigo — distinguishes "% of this plant's own Saleable Steel" from the gray share-of-total %
+
+
 def _semis_table_html(labels: list, semis_by_month: dict) -> str:
-    """Semis-by-plant breakdown as a plain table (qty '000T + % share of
-    that month's cross-plant total) — replaces the old stacked-bar Zone B,
-    which needed a whole collision-avoidance pass (_declutter_1d) just to
-    keep its data labels from overlapping. A table has no such layout
-    problem and reads the underlying numbers more precisely besides."""
+    """Semis-by-plant breakdown as a plain table — qty ('000T), % share of
+    that month's cross-plant total (gray), and % of the plant's own
+    Saleable Steel (indigo) — replaces the old stacked-bar Zone B, which
+    needed a whole collision-avoidance pass (_declutter_1d) just to keep
+    those same three figures from overlapping as data labels. A table has
+    no such layout problem and reads the underlying numbers more precisely
+    besides."""
     # Padding/line-height kept tight — the whole at-a-glance page has almost
     # no vertical slack left (see .at-a-glance-page's own comment in
     # main.html: the page was already pushed onto a second page once before
@@ -299,10 +309,12 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
                 cells.append(f'<td style="{cell}text-align:center;color:#94a3b8;">—</td>')
             else:
                 present = True
+                own_pct = (f' <span style="color:{_SEMIS_OWN_PCT_COLOR};font-weight:700;">'
+                           f'{seg["own_pct"]:.0f}%</span>') if seg["own_pct"] is not None else ""
                 cells.append(
                     f'<td style="{cell}text-align:center;white-space:nowrap;">'
                     f'{seg["qty"]:.0f} <span style="color:#64748b;font-weight:400;">'
-                    f'({seg["share_pct"]:.0f}%)</span></td>'
+                    f'({seg["share_pct"]:.0f}%)</span>{own_pct}</td>'
                 )
         if not present:
             continue  # plant reports no semis anywhere in this window — omit its row entirely
@@ -324,9 +336,13 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
     )
 
     return (
-        f'<div style="margin-top:2px;">'
+        f'<div style="margin-top:2px;display:flex;justify-content:space-between;align-items:baseline;">'
         f'<div style="font-size:7pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px;">'
         f'Semis by plant (\'000T &amp; %)</div>'
+        f'<div style="font-size:5.6pt;font-style:italic;color:#64748b;">'
+        f'gray % = share of month total &middot; '
+        f'<span style="color:{_SEMIS_OWN_PCT_COLOR};">indigo % = share of plant\'s own Saleable Steel</span></div>'
+        f'</div>'
         f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:6.4pt;">'
         f'<thead><tr><th style="{cell}text-align:left;color:#475569;'
         f'border-bottom:1px solid #cbd5e1;">Plant</th>{header_cells}</tr></thead>'
