@@ -858,7 +858,16 @@ def compute_sail_targets(fy: str) -> dict:
     for param in _BF_HM_PARAMS:
         num = den = 0.0
         for p in _BF_PLANTS:
-            v = tgt.get((p, param))
+            if param == "Fuel Rate":
+                # Derived, never entered directly - see unit_section's same
+                # rule above. Keeps the SAIL target consistent with each
+                # plant's own (derived) Fuel Rate target instead of a
+                # separately-entered SAIL-level number that can drift from
+                # what Coke/Nut Coke/CDI Rate targets actually sum to.
+                coke, cdi = tgt.get((p, "Coke Rate")), tgt.get((p, "CDI Rate"))
+                v = coke + (tgt.get((p, "Nut Coke Rate")) or 0) + cdi if coke is not None and cdi is not None else None
+            else:
+                v = tgt.get((p, param))
             w = hm_wt.get(p)
             if v is not None and w:
                 num += v * w
@@ -1487,6 +1496,12 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
             "cum_cply":  _fmt_param(cum_cply_fn(), param_name) if cum_cply_fn else "",
         }
 
+    def _plan_val(plan_data, name):
+        if not plan_data or 'data' not in plan_data or name not in plan_data['data']:
+            return None
+        val = plan_data['data'][name]
+        return val.get('value') if isinstance(val, dict) else val
+
     def unit_section(param_name, unit_str, src_units, src_key):
         """One row per plant. Searches src_units in order for data."""
         if isinstance(src_units, str):
@@ -1495,13 +1510,19 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
         for p in plants_with_data:
             # Fetch plan data from techno_plan_fy table
             plan_data = db.get_techno_plant_plan(p, target_fy)
-            plan_value = None
-            if plan_data and 'data' in plan_data and param_name in plan_data['data']:
-                val = plan_data['data'][param_name]
-                if isinstance(val, dict) and 'value' in val:
-                    plan_value = val['value']
-                else:
-                    plan_value = val
+            if param_name == "Fuel Rate":
+                # Never entered directly (same rule as the Iron Making page's
+                # _get_plan_value and the ACTUAL figure everywhere else -
+                # bf_benchmark_registry.py's compute_fuel_rate): Fuel Rate =
+                # Coke Rate + Nut Coke Rate + CDI Rate, Nut Coke Rate optional
+                # (defaults to 0). Deriving it here too means this page and
+                # the Iron Making page can't show different Fuel Rate norms
+                # for the same plant/FY.
+                coke, cdi = _plan_val(plan_data, "Coke Rate"), _plan_val(plan_data, "CDI Rate")
+                plan_value = round(coke + (_plan_val(plan_data, "Nut Coke Rate") or 0) + cdi, 4) \
+                    if coke is not None and cdi is not None else None
+            else:
+                plan_value = _plan_val(plan_data, param_name)
 
             rows.append(_build_row(
                 p, unit_str,
@@ -1686,15 +1707,24 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
             continue
 
         param_name = section["label"]
-        # Get SAIL plan value
-        sail_plan_value = None
-        if sail_plan_data and param_name in sail_plan_data:
-            val = sail_plan_data[param_name]
-            # Handle both direct values and dict with 'value' key
+
+        def _sail_plan_val(name):
+            if not sail_plan_data or name not in sail_plan_data:
+                return None
+            val = sail_plan_data[name]
             if isinstance(val, dict) and 'value' in val:
-                sail_plan_value = val['value']
-            elif isinstance(val, (int, float)):
-                sail_plan_value = val
+                return val['value']
+            return val if isinstance(val, (int, float)) else None
+
+        # Get SAIL plan value. Fuel Rate is derived (Coke Rate + Nut Coke
+        # Rate + CDI Rate), same rule as unit_section/compute_sail_targets
+        # above, rather than a separately-stored SAIL-level number.
+        if param_name == "Fuel Rate":
+            coke, cdi = _sail_plan_val("Coke Rate"), _sail_plan_val("CDI Rate")
+            sail_plan_value = round(coke + (_sail_plan_val("Nut Coke Rate") or 0) + cdi, 4) \
+                if coke is not None and cdi is not None else None
+        else:
+            sail_plan_value = _sail_plan_val(param_name)
 
         # Build SAIL row — populate actuals for SMS params from weighted-average computation
         _SMS_PARAM_KEYS = SMS_PARAM_KEYS
