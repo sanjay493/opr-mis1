@@ -150,37 +150,25 @@ def _ytd_months_for_fy(fy_start_year: int, n_months: int) -> list:
 _SEMIS_PLANTS = ["BSP", "DSP", "BSL", "ISP", "ASP"]
 _SEMIS_COLORS = dict(zip(_SEMIS_PLANTS, _YTD_BAR_COLORS + ["#e87ba4"]))
 _SEMIS_INK = "#1e293b"  # legend/annotation text stays neutral ink, never the segment's own hue (identity comes from the adjacent swatch/fill, not colored text — low-contrast hues like yellow/aqua/magenta are illegible as text on a light surface)
-_SEMIS_OWN_PCT_LABEL_COLOR = "#6366f1"  # indigo, for the "small % = ..." caption clause specifically
-_SEMIS_OWN_PCT_BADGE_FILL = "yellow"    # circle behind each own-% data label
-# Kept small: ASP's segment is consistently the thinnest in every month (its
-# own % badge sits only ~3-6 units from the neighboring segment's badge) —
-# a larger radius reads fine in isolation but overlaps its neighbor there.
-_SEMIS_OWN_PCT_BADGE_R = 3.0
-_SEMIS_OWN_PCT_BADGE_FS = 5.0
 
 
 def _semis_breakdown_data(months: list) -> dict:
     """Per trailing month: each reporting plant's semi-finished steel
-    quantity, its % share of that month's cross-plant semi-finished total,
-    and — a different ratio — that same plant's own semi-finished as a % of
-    its own Saleable Steel (own product mix, not comparable across plants,
-    so kept as a separate number rather than blended into the share %)."""
+    quantity and its % share of that month's cross-plant semi-finished
+    total."""
     out = {}
     for m in months:
         plants = []
         for p in _SEMIS_PLANTS:
-            saleable = db.get_production_actual_value(p, "Saleable Steel", m)
             if p == "ASP":
+                saleable = db.get_production_actual_value(p, "Saleable Steel", m)
                 finished = db.get_production_actual_value(p, "Finished Steel", m)
                 semis = (saleable - finished) if (saleable is not None and finished is not None) else None
             else:
                 semis = db.get_production_actual_value(p, "Saleable Semis", m)
             if semis is None:
                 continue
-            plants.append({
-                "plant": p, "qty": semis,
-                "own_pct": round(semis / saleable * 100, 1) if saleable else None,
-            })
+            plants.append({"plant": p, "qty": semis})
         total = sum(p["qty"] for p in plants)
         for p in plants:
             p["share_pct"] = round(p["qty"] / total * 100, 1) if total else None
@@ -212,32 +200,16 @@ def _declutter_1d(values: list, min_gap: float, iterations: int = 6) -> list:
     return out
 
 
-def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: dict,
-                     vw: int = 480, vh: int = 180) -> str:
+def _trend_line_svg(labels: list, series: dict, colors: dict,
+                     vw: int = 480, vh: int = 108) -> str:
     # No Y-axis (removed along with its value labels — every data point is
     # already labeled directly on its line/bar, so the axis scale was
-    # redundant). Left margin is now sized for Zone B's "outside-left" share%
-    # labels (thin-segment fallback, positioned left of the first month's
-    # bar) rather than a column of axis numbers — those still need clearance
-    # or they render off-canvas at month 0. Right margin mirrors this: every
-    # segment's "own %" label sits outside-right of its bar (text-anchor
-    # "start", growing rightward from x + bar_w/2 + 2.5) — at the LAST
-    # month, that bar's x sits right at the canvas edge, so mr must clear
-    # bar_w/2 (~9.5) plus the label text itself or it renders off-canvas
-    # there too (same failure mode as month 0's left-side labels, mirrored).
+    # redundant).
     ml, mr = 26, 26
-    # Zone A (top): existing Saleable/Finished Steel line trend.
-    mt_a, ch_a = 13, 70
-    # Zone B (bottom): new semi-finished-by-plant stacked bar — its own Y
-    # scale (a different, much smaller magnitude than Zone A), sharing Zone
-    # A's x positions so the same month lines up in both zones. "Fits inside
-    # the space available for each month" = the bar stays inside its own
-    # month's column (bar_w below), never widening the chart itself. The two
-    # zones share a SINGLE x-axis line (drawn once, at the very bottom) —
-    # Zone A has no baseline of its own.
-    mt_b, ch_b = mt_a + ch_a + 16, 64
+    mt, ch = 13, 70
     mb = 16
     cw = vw - ml - mr
+    base = mt + ch
 
     n = len(labels)
     step = cw / max(n - 1, 1)
@@ -248,15 +220,14 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
 
-    # ── Zone A: line trend — no Y-axis, no gridlines, no baseline of its own
-    # (the one shared x-axis line lives at the bottom of Zone B); every point
-    # already carries its own value label, so the axis scale is redundant ──
+    # No gridlines; every point already carries its own value label, so the
+    # axis scale is redundant.
     all_vals = [v for vals in series.values() for v in vals if v is not None]
-    yhi_a = max(all_vals) * 1.15 if all_vals else 10.0
-    yhi_a = max(yhi_a, 5.0)
+    yhi = max(all_vals) * 1.15 if all_vals else 10.0
+    yhi = max(yhi, 5.0)
 
-    def ys_a(v):
-        return mt_a + ch_a * (1.0 - v / yhi_a)
+    def ys(v):
+        return mt + ch * (1.0 - v / yhi)
 
     # Each series' data labels sit on a fixed side of its own line (above for
     # the first series, below for the second) rather than both hugging their
@@ -264,7 +235,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
     # same side collide/overlap wherever the lines cross or run parallel.
     for si, (name, vals) in enumerate(series.items()):
         color = colors.get(name, "#0284c7")
-        pts = [(xs(i), ys_a(v)) for i, v in enumerate(vals) if v is not None]
+        pts = [(xs(i), ys(v)) for i, v in enumerate(vals) if v is not None]
         if len(pts) > 1:
             d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in pts)
             lines.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.6"/>')
@@ -272,7 +243,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
         for i, v in enumerate(vals):
             if v is None:
                 continue
-            x, y = xs(i), ys_a(v)
+            x, y = xs(i), ys(v)
             lines.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2" fill="{color}"/>')
             # The first point sits exactly on the y-axis, so a centered label
             # extends left into the value labels — start it to the right of
@@ -289,133 +260,84 @@ def _trend_line_svg(labels: list, series: dict, colors: dict, semis_by_month: di
                      f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{name}</text>')
         lx += 12 + len(name) * 4.6 + 16
 
-    # ── Zone B: semi-finished steel, stacked by plant ──
-    sub_y = mt_b - 9
-    lines.append(f'<text x="{ml:.1f}" y="{sub_y:.1f}" font-size="6.8" font-weight="bold" '
-                 f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">Semis by plant (\'000T &amp; %)</text>')
-    lines.append(f'<text x="{vw - mr:.1f}" y="{sub_y:.1f}" text-anchor="end" font-size="5.4" '
-                 f'font-family="Arial,sans-serif" font-style="italic" fill="#64748b">'
-                 f'bold % = share of total · '
-                 f'<tspan fill="{_SEMIS_OWN_PCT_LABEL_COLOR}" font-style="italic" text-decoration="underline">'
-                 f'right (circle) % = share of plant\'s own Saleable Steel</tspan></text>')
-
-    # Legend (plant colors) — top-right of Zone B's plot area.
-    lx = vw - mr
-    legend_items = list(reversed(_SEMIS_PLANTS))  # build right-to-left, ending with BSP first on screen
-    for p in legend_items:
-        lx -= len(p) * 4.2 + 3
-        lines.append(f'<text x="{lx:.1f}" y="{mt_b - 1:.1f}" font-size="6.4" font-weight="bold" '
-                     f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{p}</text>')
-        lx -= 10
-        lines.append(f'<rect x="{lx:.1f}" y="{mt_b - 6:.1f}" width="7" height="5.5" rx="1" '
-                     f'fill="{_SEMIS_COLORS[p]}"/>')
-        lx -= 4
-
-    month_totals = [semis_by_month.get(m, {}).get("total", 0) or 0 for m in semis_by_month]
-    yhi_b = max(month_totals) * 1.2 if any(month_totals) else 10.0
-    yhi_b = max(yhi_b, 5.0)
-    base_b = mt_b + ch_b
-    bar_w = 19.0
-    seg_gap = 1.3  # surface-color ring between stacked segments (mark spec)
-
-    for i, (label, month_key) in enumerate(zip(labels, semis_by_month.keys())):
-        month = semis_by_month[month_key]
-        x = xs(i)
-        plants = month["plants"]
-        total = month["total"]
-        if total > 0:
-            lines.append(f'<text x="{x:.1f}" y="{base_b - ch_b * min(total / yhi_b, 1.0) - 4:.1f}" '
-                         f'text-anchor="middle" font-size="6.8" font-weight="bold" '
-                         f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{total:.0f}</text>')
-        # Geometry pass first (no SVG emitted yet) — the own-% badges need
-        # every segment's true center before any collision-avoidance can
-        # run, so bar/label emission is split into a second pass below.
-        geom = []
-        y_cursor = base_b
-        for seg in plants:
-            seg_h = ch_b * seg["qty"] / yhi_b
-            if seg_h <= 0:
-                continue
-            by = y_cursor - seg_h
-            geom.append({"seg": seg, "seg_h": seg_h, "by": by, "cy": by + seg_h / 2})
-            y_cursor = by
-
-        # Own-% badges all sit at the same x (outside-right of the bar), so
-        # the only collision axis is vertical — and `geom`'s order is
-        # already real spatial adjacency (each entry touches its stacking
-        # neighbors), just bottom-to-top (descending y). _declutter_1d only
-        # needs consecutive-pair adjacency, not a particular direction, but
-        # working in ascending (top-to-bottom) order reads more naturally.
-        badge_r = _SEMIS_OWN_PCT_BADGE_R
-        min_gap = badge_r * 2 + 0.8
-        badge_idxs = [j for j, g in enumerate(geom) if g["seg"]["own_pct"] is not None]
-        ideal_desc = [geom[j]["cy"] for j in badge_idxs]
-        adjusted_asc = _declutter_1d(list(reversed(ideal_desc)), min_gap)
-        badge_cy = dict(zip(badge_idxs, reversed(adjusted_asc)))
-
-        for j, g in enumerate(geom):
-            seg, seg_h, by, cy = g["seg"], g["seg_h"], g["by"], g["cy"]
-            color = _SEMIS_COLORS[seg["plant"]]
-            lines.append(f'<rect x="{x - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" '
-                         f'height="{max(seg_h - seg_gap, 0.5):.1f}" fill="{color}"/>')
-            # Share % must never just disappear on a thin segment (that's
-            # what happened before this fix — several months' BSL/ISP
-            # segments were too short for the label's 8.5px threshold, so
-            # they silently lost their %): tall-enough segments get it
-            # centered inside on the fill's own contrast color; a thin
-            # segment still gets it, just moved outside to the left (own %
-            # already lived outside to the right) instead of dropped.
-            if seg["share_pct"] is not None:
-                if seg_h >= 7:
-                    lines.append(f'<text x="{x:.1f}" y="{cy + 2:.1f}" text-anchor="middle" font-size="6" '
-                                 f'font-weight="bold" font-family="Arial,sans-serif" '
-                                 f'fill="{_contrast_text(color)}">{seg["share_pct"]:.0f}%</text>')
-                else:
-                    lines.append(f'<text x="{x - bar_w / 2 - 2.5:.1f}" y="{cy + 1.8:.1f}" text-anchor="end" '
-                                 f'font-size="5.4" font-weight="bold" font-family="Arial,sans-serif" '
-                                 f'fill="{_SEMIS_INK}">{seg["share_pct"]:.0f}%</text>')
-            if seg["own_pct"] is not None:
-                bcy = badge_cy[j]
-                bcx = x + bar_w / 2 + 2.5 + badge_r
-                # Collision-avoidance can shift a badge away from its true
-                # segment center — a thin leader line back to the segment's
-                # edge keeps it legible which color the % belongs to.
-                if abs(bcy - cy) > 0.5:
-                    lines.append(f'<line x1="{x + bar_w / 2 + 0.5:.1f}" y1="{cy:.1f}" '
-                                 f'x2="{bcx - badge_r:.1f}" y2="{bcy:.1f}" '
-                                 f'stroke="{_SEMIS_INK}" stroke-width="0.4"/>')
-                lines.append(f'<circle cx="{bcx:.1f}" cy="{bcy:.1f}" r="{badge_r:.1f}" '
-                             f'fill="{_SEMIS_OWN_PCT_BADGE_FILL}"/>')
-                lines.append(f'<text x="{bcx:.1f}" y="{bcy + 1.3:.1f}" text-anchor="middle" '
-                             f'font-size="{_SEMIS_OWN_PCT_BADGE_FS}" font-weight="bold" '
-                             f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">'
-                             f'{seg["own_pct"]:.0f}%</text>')
-
-    # The one shared x-axis line for BOTH zones.
-    lines.append(f'<line x1="{ml}" y1="{base_b:.1f}" x2="{vw - mr}" y2="{base_b:.1f}" '
+    lines.append(f'<line x1="{ml}" y1="{base:.1f}" x2="{vw - mr}" y2="{base:.1f}" '
                  f'stroke="#374151" stroke-width="0.8"/>')
 
     for i, label in enumerate(labels):
-        lines.append(f'<text x="{xs(i):.1f}" y="{base_b + 12:.1f}" text-anchor="middle" '
+        lines.append(f'<text x="{xs(i):.1f}" y="{base + 12:.1f}" text-anchor="middle" '
                      f'font-size="6.6" font-family="Arial,sans-serif" fill="#64748b">{label}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
 
 
+def _semis_table_html(labels: list, semis_by_month: dict) -> str:
+    """Semis-by-plant breakdown as a plain table (qty '000T + % share of
+    that month's cross-plant total) — replaces the old stacked-bar Zone B,
+    which needed a whole collision-avoidance pass (_declutter_1d) just to
+    keep its data labels from overlapping. A table has no such layout
+    problem and reads the underlying numbers more precisely besides."""
+    # Padding/line-height kept tight — the whole at-a-glance page has almost
+    # no vertical slack left (see .at-a-glance-page's own comment in
+    # main.html: the page was already pushed onto a second page once before
+    # by this same section, back when it was a stacked bar).
+    cell = "padding:1px 5px;line-height:1.15;"
+    month_keys = list(semis_by_month.keys())
+    header_cells = "".join(
+        f'<th style="{cell}text-align:center;font-weight:700;color:{_SEMIS_INK};'
+        f'border-bottom:1px solid #cbd5e1;white-space:nowrap;">{lbl}</th>'
+        for lbl in labels
+    )
+
+    body_rows = []
+    for p in _SEMIS_PLANTS:
+        cells = []
+        present = False
+        for mk in month_keys:
+            seg = next((s for s in semis_by_month[mk]["plants"] if s["plant"] == p), None)
+            if seg is None:
+                cells.append(f'<td style="{cell}text-align:center;color:#94a3b8;">—</td>')
+            else:
+                present = True
+                cells.append(
+                    f'<td style="{cell}text-align:center;white-space:nowrap;">'
+                    f'{seg["qty"]:.0f} <span style="color:#64748b;font-weight:400;">'
+                    f'({seg["share_pct"]:.0f}%)</span></td>'
+                )
+        if not present:
+            continue  # plant reports no semis anywhere in this window — omit its row entirely
+        swatch = (f'<span style="display:inline-block;width:6px;height:6px;border-radius:1px;'
+                  f'background:{_SEMIS_COLORS[p]};margin-right:4px;"></span>')
+        body_rows.append(
+            f'<tr><td style="{cell}font-weight:700;color:{_SEMIS_INK};white-space:nowrap;">'
+            f'{swatch}{p}</td>{"".join(cells)}</tr>'
+        )
+
+    total_cells = "".join(
+        f'<td style="{cell}text-align:center;font-weight:700;color:{_SEMIS_INK};">'
+        f'{(semis_by_month[mk]["total"] or 0):.0f}</td>'
+        for mk in month_keys
+    )
+    body_rows.append(
+        f'<tr style="border-top:1.3px solid #374151;"><td style="{cell}font-weight:700;'
+        f'color:{_SEMIS_INK};">Total</td>{total_cells}</tr>'
+    )
+
+    return (
+        f'<div style="margin-top:2px;">'
+        f'<div style="font-size:7pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px;">'
+        f'Semis by plant (\'000T &amp; %)</div>'
+        f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:6.4pt;">'
+        f'<thead><tr><th style="{cell}text-align:left;color:#475569;'
+        f'border-bottom:1px solid #cbd5e1;">Plant</th>{header_cells}</tr></thead>'
+        f'<tbody>{"".join(body_rows)}</tbody>'
+        f'</table></div>'
+    )
+
+
 
 
 # ── SVG: grouped bar chart — one group per production item, one bar per FY ──
-
-def _contrast_text_color(hex_color: str) -> str:
-    """Dark or light label ink, whichever reads clearly on this fill —
-    _VA_ORANGE_LIGHT is light enough that white text (fine on _VA_ORANGE)
-    would fail contrast, so the in-bar label color can't be hardcoded."""
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    luminance = 0.299 * r + 0.587 * g + 0.114 * b
-    return "#1e293b" if luminance > 150 else "#ffffff"
-
 
 def _bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
     """Bar outline with a rounded top cap (radius r, clamped to fit) and a
@@ -814,7 +736,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
             if bh >= 16:
                 lines.append(f'<text x="{cx:.1f}" y="{by + bh / 2:.1f}" text-anchor="middle" dominant-baseline="middle" '
                              f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
-                             f'fill="{_contrast_text_color(color)}">{val_str}</text>')
+                             f'fill="{_contrast_text(color)}">{val_str}</text>')
             else:
                 lines.append(f'<text x="{cx:.1f}" y="{by - 4:.1f}" text-anchor="middle" '
                              f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
@@ -906,7 +828,7 @@ def _trend_section(report_month: str) -> dict:
     semis_by_month = _semis_breakdown_data(months)
     return {
         "months": labels,
-        "svg": _trend_line_svg(labels, series, colors, semis_by_month),
+        "svg": _trend_line_svg(labels, series, colors) + _semis_table_html(labels, semis_by_month),
     }
 
 
