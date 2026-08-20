@@ -118,6 +118,7 @@
   },
 
   "General": {
-    "specific_energy_consumption": 161
+    "specific_energy_consumption": 161,
+    "sp_power_consumption": 158
   }
 }

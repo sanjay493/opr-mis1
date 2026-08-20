@@ -329,6 +329,14 @@ def _cell_float(ws, row: int, col: int) -> Optional[float]:
 _TECHNO_PARAM_MAP = [
     # ── Sheet1 ─────────────────────────────────────────────────────────────
     ("Sheet1", 10,  6, 1000.0, "COKE_SINTER", "Energy",                "Sp. Heat Cons.",                    "Kcal/TCO"),
+    # Plant-wide "POWER CONSUMPN/T OF SAL.STEEL" (item 3 in Sheet1's own
+    # numbered list) — NOT the same as row 24's CRM-3-specific figure a few
+    # rows above it (see _CRM_ROWS' own comment on that distinction, from an
+    # earlier direct user correction). Section text is "Sp Power
+    # Consumption" (not "Specific...") so _to_snake() in
+    # bsl_technopara_extractor.py's MAJOR-group branch yields
+    # "sp_power_consumption" with no _MAJOR_KEY_NORM override needed.
+    ("Sheet1", 26,  6,    1.0, "MAJOR",       "Sp Power Consumption", "BSL",                                "KWH"),
     ("Sheet1", 28,  6,    1.0, "COKE_SINTER", "Energy",                "Specific Energy Consumption",       "G.Cal/TCS"),
     ("Sheet1", 31,  6,    1.0, "COKE_SINTER", "Sinter Plant",          "Machine Productivity",              "T/m²/hr"),
     ("Sheet1", 33,  6,    1.0, "IRON_MAKING", "BF Productivity",       "BSL",                               "T/m³/day"),

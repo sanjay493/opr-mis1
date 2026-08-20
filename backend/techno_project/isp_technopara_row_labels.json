@@ -105,6 +105,7 @@
     "General": {
       "coal_to_hm": "Gross Coal to Hot Metal Ratio",
       "specific_energy_consumption": "Sp Energy Consumption",
+      "sp_power_consumption": "Sp Power Consumption",
       "specific_water_consumption": "Sp Water Consumption",
       "specific_co2_emissions": "Sp. CO2 emission"
     }

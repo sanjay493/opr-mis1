@@ -97,6 +97,11 @@ _HEAT_POWER_ENERGY_SEARCH = {
     ("WRM", "power_consumption"): ("power cons", "wire rod"),
     ("PM",  "power_consumption"): ("power cons", "plate"),
     ("General", "specific_energy_consumption"): (None, "gross energy"),
+    # "Plant Operation" (the plant-wide Kwh/TSS figure, distinct from the
+    # per-mill RSM/URM/MM/WRM/PM rows above it) sits in the same "power
+    # cons" window, right before the "Gross Energy Consumption" block-end
+    # marker.
+    ("General", "sp_power_consumption"):          ("power cons", "plant operation"),
 }
 
 

@@ -19,6 +19,7 @@ from pdf_extractor_dsp import extract_preview
 # Sections that come from _MAJOR_PAGE_DEFS — plant-level KPIs saved under "DSP" unit
 _MAJOR_PARAM_SECTIONS = frozenset([
     "Specific Energy Consumption",
+    "Sp Power Consumption",
     "BOF Slag Utilisation",
     "Coke Screen Loss",
 ])

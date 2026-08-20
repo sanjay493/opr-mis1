@@ -153,12 +153,9 @@ def _first_present_val(plant, unit_candidates, key_or_keys, techno, dp):
     value found for `key_or_keys` — used for shops (e.g. Coke Ovens) whose
     stored unit name varies by plant, the same fallback idea as
     _bf_unit_for. `key_or_keys` may be a single key or a list of key-name
-    aliases (some concepts have been stored under more than one literal key
-    across manual entry vs. different extractor generations — e.g. BSP's
-    July'26 Ash in Coal Blend was manually entered as
-    "average_ash_in_coal_blend" before the "3 page Tech" extractor started
-    writing "ash_in_coal_blend" from April'26 onward); aliases are tried in
-    the given order per unit."""
+    aliases (for a concept that's been stored under more than one literal
+    key across manual entry vs. different extractor generations); aliases
+    are tried in the given order per unit."""
     keys = key_or_keys if isinstance(key_or_keys, (list, tuple)) else [key_or_keys]
     for u in unit_candidates:
         d = techno.get((plant, u), {})
@@ -269,12 +266,51 @@ def _coal_blend_pct(plant, kind, report_month, dp):
     return _round(numer / total * 100, dp)
 
 
+# Product groups within each plant's own special_steel_orders breakdown
+# (page_special_steel.py's _gen_* generators) that are semi-finished value
+# added product rather than finished — literal `product` column values,
+# copied from those generators' own group lists so a rename there can't
+# silently desync this classification. DSP already separates these two
+# categories explicitly in its own report ("TOTAL SEMI-FINISHED" vs "TOTAL
+# FINISHED STEEL"); BSP's is its "Semis" group. BSL's "SLAB" and ISP's
+# "150 BLT"/"200 BLM" mills are semi-finished shapes (billet/bloom/slab) by
+# the same metallurgical convention. RSP's own groups (PM/HR Plates, HR
+# Coils, Pipes/CRNO, SPP) are all finished mill products — no semi-finished
+# group for RSP.
+_SEMI_FINISHED_GROUPS = {
+    "BSP": ["Semis"],
+    "DSP": ["CC BILLET", "CC Bloom", "CC Round"],
+    "RSP": [],
+    "BSL": ["SLAB"],
+    "ISP": ["150 BLT", "200 BLM"],
+}
+
+
+def _semi_finished_actual(cur, ytd_months: list, plant: str) -> float:
+    groups = _SEMI_FINISHED_GROUPS.get(plant) or []
+    if not groups:
+        return 0.0
+    ph_m = ",".join("?" * len(ytd_months))
+    ph_g = ",".join("?" * len(groups))
+    cur.execute(f"""
+        SELECT COALESCE(SUM(actual_despatch),0) FROM special_steel_orders
+        WHERE report_month IN ({ph_m}) AND plant_name=? AND product IN ({ph_g})
+    """, (*ytd_months, plant, *groups))
+    (t,) = cur.fetchone()
+    return t or 0.0
+
+
 def _value_added_pct_of_finished(plant, ytd_months, production, dp):
-    """% Value Added Product of Finished Steel = plant's Value Added
-    (Special) Steel despatch / plant's own Finished Steel production, over
-    the Apr-report_month YTD period this table's every other row covers.
-    Numerator reuses the same Value Added Steel figure page 24's Special
-    Steel report and the At-a-Glance VA chart both already compute
+    """% Value Added Product of Finished Steel = (plant's Total Value Added
+    Steel despatch minus its Semi-Finished Value Added despatch) / plant's
+    own Finished Steel production, over the Apr-report_month YTD period
+    this table's every other row covers — isolating the FINISHED portion of
+    value-added product before comparing it against Finished Steel
+    production, per direct instruction (the un-subtracted total routinely
+    exceeded 100% for plants with a large semis component, e.g. DSP/ISP,
+    since that numerator included product that was never finished steel to
+    begin with). Total reuses the same Value Added Steel figure page 24's
+    Special Steel report and the At-a-Glance VA chart both already compute
     (page_special_steel_trend._sum_actual, plant-scoped); denominator reuses
     the `production` dict every other production-sourced row here already
     reads (_prod_val), rather than the plant's Saleable Steel — the
@@ -285,6 +321,7 @@ def _value_added_pct_of_finished(plant, ytd_months, production, dp):
     cur = conn.cursor()
     try:
         qty, has = _sum_actual(cur, ytd_months, plant)
+        semi_qty = _semi_finished_actual(cur, ytd_months, plant)
     finally:
         conn.close()
     if not has:
@@ -292,7 +329,7 @@ def _value_added_pct_of_finished(plant, ytd_months, production, dp):
     finished_000T = _prod_val(plant, ["Finished Steel"], production, 6, ytd_months)
     if not finished_000T:
         return None
-    return _round(qty / (finished_000T * 1000) * 100, dp)
+    return _round((qty - semi_qty) / (finished_000T * 1000) * 100, dp)
 
 
 # Placeholder swapped for "Demurrage (Apr-<latest month with data>)" in
@@ -379,25 +416,22 @@ _ROWS = [
     ("O2 Enrichment",       "%",        "bf", "o2_enrichment", 2, {}),
     ("Not Dry Casts",       "%",        "bf", "not_dry_cast", 2, {}),
     ("Coke Ash",            "%",        "coke_unit", "ash_in_coke", 2, {}),
-    # Coke-oven-sourced coal-blend quality metric — distinct from "Imported
-    # Coking Coal in Blend" above, which is a SAIL-rollup % derived from
-    # separate indigenous/imported coal quantities (unit="General"); this
-    # reads the "Overall" ash figure the coke-oven techno source reports
-    # directly. (A parallel "Imported Coal in Blend" row read from the same
-    # coke-oven source was dropped — it duplicated "Imported Coking Coal in
-    # Blend" above in concept and was only ever populated for BSP.)
-    ("Ash in Coal Blend",   "%",        "coke_unit",
-     ["ash_in_coal_blend", "average_ash_in_coal_blend", "ash_blend_coal"], 2, {}),
     ("Sinter Fe",           "%",        "sinter_fe", None, 2, {}),
     ("BF Slag Rate",        "kg/THM",   "bf", "slag_rate", 0, {}),
     ("HM Sent to PCM/Sand Pit/Dry Pit", "'000 T", "general", "hm_to_pcm_sandpit_drypit", 1, {"label_rowspan": 2}),
     (None,                  "%",        "ratio_general_prod", ("hm_to_pcm_sandpit_drypit", ["Hot Metal"]), 1, {"continuation": True}),
 
-    ("TMI",                 "kg/TCS",   "sms_join", "tmi", 1, {}),
-    ("CHM Ratio",           "",         "general", "coal_to_hm", 3, {}),
-    ("SEC",                 "Gcal/TCS", "general", "specific_energy_consumption", 2, {}),
-    ("SWC",                 "m³/TCS",   "general", "sp_water_consumption", 2, {}),
-    ("Sp CO2 Emission",     "T-CO2/TCS","general", "sp_co2_emission", 2, {}),
+    ("TMI",                       "kg/TCS",   "sms_join", "tmi", 1, {}),
+    ("CHM Ratio",                 "",         "general", "coal_to_hm", 3, {}),
+    # Unit is kWh/TSS (per Tonne Saleable Steel), not /TCS like its
+    # neighbors — confirmed against every plant's own source workbook/PDF
+    # (BSP "Plant Operation" row: Kwh/TSS; DSP/RSP/BSL: same; ISP's own
+    # sheet even carries a separate TCS-basis sub-row that was NOT the one
+    # used here, per direct instruction to read the KwH/TSS row).
+    ("Sp. Power Consumption",     "kWh/TSS",  "general", "sp_power_consumption", 2, {}),
+    ("Sp. Energy Consumption",    "Gcal/TCS", "general", "specific_energy_consumption", 2, {}),
+    ("Sp. Water Consumption",     "m³/TCS",   "general", "sp_water_consumption", 2, {}),
+    ("Sp CO2 Emission",           "T-CO2/TCS","general", "sp_co2_emission", 2, {}),
 
     (None, "", _SPACER, None, 0, {}),
 
@@ -407,7 +441,12 @@ _ROWS = [
     # Label's period placeholder is filled in with the same Apr-<report
     # month> range as the page title (_DEMURRAGE_LABEL below), since this
     # is a till_month/YTD figure like every other "general" row here.
-    (_DEMURRAGE_LABEL,          "Rs Cr",    "general", "demurrage", 2, {}),
+    # Split into two data rows sharing one parameter-name cell (same
+    # label_rowspan/continuation pattern as "HM Sent to PCM/Sand Pit/Dry
+    # Pit" above): the raw Rs Cr figure, then that same figure expressed as
+    # an expense rate (Rs Cr per '000T of Crude Steel produced, YTD).
+    (_DEMURRAGE_LABEL,          "Rs Cr",    "general", "demurrage", 2, {"label_rowspan": 2}),
+    (None,                      "Rs/TCS",   "demurrage_per_tcs", None, 4, {"continuation": True}),
     ("% Value Added Product of Finished Steel", "%", "special", None, 0, {}),
 ]
 
@@ -495,6 +534,14 @@ def generate_key_parameters(report_month: str) -> dict:
                     # both.
                     raw, _src_month = demurrage_by_plant.get(plant, (None, None))
                     v = _round(raw / 100, dp) if raw is not None else None
+            elif kind == "demurrage_per_tcs":
+                # Demurrage expense rate = the same Rs Cr figure the row
+                # above shows (same latest-available-month fallback via
+                # demurrage_by_plant), divided by this plant's own YTD
+                # Crude Steel production — per direct instruction.
+                raw, _src_month = demurrage_by_plant.get(plant, (None, None))
+                crude_000t = _prod_val(plant, ["Total Crude Steel"], production, 6, ytd_months)
+                v = _round(raw / 100 / crude_000t, dp) if raw is not None and crude_000t else None
             elif kind == "sms_join":
                 v = _sms_joined(plant, spec, techno, dp)
             elif kind == "coal_blend":

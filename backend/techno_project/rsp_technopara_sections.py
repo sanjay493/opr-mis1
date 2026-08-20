@@ -220,6 +220,16 @@ PARAM_ALIASES = {
     "Make-Up Water Cons.":            "specific_water_consumption",
     "Sp. CO2 Emmission ":             "specific_co2_emissions",
     "Dry Coal input":                 ("General", "specific_heat_coke_ovens"),
+    # Sp. Power Consumption — the "Saleable Steel" row under the
+    # "Elect.Cons.Per Ton of:" table (its own section header text varies
+    # enough across file editions — "Elect.Cons.Per Ton of:" vs the
+    # SECTION_UNITS key "ELECT.CONS.PER T OF" — that current_unit isn't
+    # reliably "General" there, so this uses an explicit unit override like
+    # "Coke Screen Loss"/"Dry Coal input" above rather than the bare form).
+    # "Saleable Steel" is otherwise unique sheet-wide (verified against a
+    # Jun'26 sample), so no risk of colliding with a same-named row under a
+    # different section.
+    "Saleable Steel":                 ("General", "sp_power_consumption"),
 }
 
 # Per-furnace blocks where all four furnaces (BF-1/BF-4/BF-5/BF_Shop) sit in

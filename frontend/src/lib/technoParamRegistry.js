@@ -100,7 +100,7 @@ export const PARAM_TEMPLATES = {
   ],
   'Rolling Mills': ['rolling_yield','production'],
   'General': [
-    'specific_energy_consumption',
+    'specific_energy_consumption','sp_power_consumption',
     'bof_slag_utilisation','coke_screen_loss',
     'coal_to_hm',
     'specific_water_consumption','water_consumption',

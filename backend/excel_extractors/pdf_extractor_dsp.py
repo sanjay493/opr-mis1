@@ -584,9 +584,17 @@ _WA_PARAMS = {
 }
 
 _MAJOR_PAGE_DEFS = [
-    ("gross energy consumption", "MAJOR",       "Specific Energy Consumption",      "DSP",     "G.Cal/TCS",121),
-    ("bof slag utilisation",     "COKE_SINTER", "BOF Slag Utilisation",             "DSP",     "%",         41),
-    ("loss at skip",             "IRON_MAKING", "Coke Screen Loss",                 "DSP", "%",  31),
+    ("gross energy consumption",   "MAJOR",       "Specific Energy Consumption",      "DSP",     "G.Cal/TCS",121),
+    # Section text is "Sp Power Consumption" (not "Specific...") so
+    # _to_snake() in dsp_technopara_extractor.py yields "sp_power_consumption"
+    # — the same canonical key page_key_parameters.py and every other
+    # plant's extractor use (ISP's own source row is literally labeled "Sp
+    # Power Consumption" too). Same growing-FY-table row structure as
+    # "Gross Energy Consumption" immediately above it in the source PDF —
+    # see special_params/skip_prior_year below.
+    ("specific power consumption", "MAJOR",       "Sp Power Consumption",             "DSP",     "KWH/TSS",  122),
+    ("bof slag utilisation",       "COKE_SINTER", "BOF Slag Utilisation",             "DSP",     "%",         41),
+    ("loss at skip",               "IRON_MAKING", "Coke Screen Loss",                 "DSP", "%",  31),
 ]
 # NOTE: Removed from Major Techno (will be extracted from Blast Furnace page instead):
 # - Coke Rate, CDI Rate, Nut Coke Rate, Fuel Rate, Sinter in Burden
@@ -705,9 +713,9 @@ def _parse_params_from_lines(lines, section, param_list, page_no, want_mon, yy, 
 def _parse_general_params(lines, param_defs, page_no, want_mon, yy, month_diff=0, offset=4, report_month_num=None):
     rows = []
     # Parameters that should NOT have prior year extraction
-    skip_prior_year = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
+    skip_prior_year = {"gross energy consumption", "specific power consumption", "bof slag utilisation", "loss at skip"}
     # Parameters with special column handling (different structure in PDF)
-    special_params = {"gross energy consumption", "bof slag utilisation", "loss at skip"}
+    special_params = {"gross energy consumption", "specific power consumption", "bof slag utilisation", "loss at skip"}
     # crude benzol appears on two lines: Lit./TDC (skip) then Kg/TDC (use next line)
     _crude_benzol_kw = "crude benzol"
     lines_list = list(lines)
