@@ -235,32 +235,46 @@ def _dsp(cur, rm, pm, fy, ytd, cply_ytd):
 
     rows.append(_section_hdr("FINISHED STEEL"))
 
-    for label, item in [
-        ("Rounds-Total",        "MM"),
-        ("  Merchant Mill-TMT", "MM"),
-    ]:
+    # SPU Jagdishpur's Rounds output is folded into DSP's own Merchant Mill
+    # figure on this page rather than shown as its own row.
+    dsp_rounds_items = ["MM", "SPU Jagdishpur"]
+    for label in ("Rounds-Total", "  Merchant Mill-TMT"):
         rows.append(_row(label, "data",
-                         _ann(cur, "DSP", "MM", fy),
-                         _one(cur, "plan", "DSP", "MM", rm),
-                         _one(cur, "act",  "DSP", "MM", rm),
-                         _one(cur, "act",  "DSP", "MM", pm),
-                         _ytd_one(cur, "plan", "DSP", "MM", ytd),
-                         _ytd_one(cur, "act",  "DSP", "MM", ytd),
-                         _ytd_one(cur, "act",  "DSP", "MM", cply_ytd),
+                         _ann_sum(cur, "DSP", dsp_rounds_items, fy),
+                         _sum_items(cur, "plan", "DSP", dsp_rounds_items, rm),
+                         _sum_items(cur, "act",  "DSP", dsp_rounds_items, rm),
+                         _sum_items(cur, "act",  "DSP", dsp_rounds_items, pm),
+                         _ytd_sum_items(cur, "plan", "DSP", dsp_rounds_items, ytd),
+                         _ytd_sum_items(cur, "act",  "DSP", dsp_rounds_items, ytd),
+                         _ytd_sum_items(cur, "act",  "DSP", dsp_rounds_items, cply_ytd),
                          category="LONG"))
 
+    # Section Mill ran alongside MSM through FY2025-26 and was decommissioned
+    # in Oct'25 - it has no plan/current-FY actuals any more, but its CPLY
+    # actuals (pm / cply_ytd, reaching back into last FY) are real and must
+    # still count toward Med.Structurals Total.
+    msm_items = ["MSM", "Section Mill"]
+    rows.append(_row("Med.Structurals Total", "data",
+                     _ann_sum(cur, "DSP", msm_items, fy),
+                     _sum_items(cur, "plan", "DSP", msm_items, rm),
+                     _sum_items(cur, "act",  "DSP", msm_items, rm),
+                     _sum_items(cur, "act",  "DSP", msm_items, pm),
+                     _ytd_sum_items(cur, "plan", "DSP", msm_items, ytd),
+                     _ytd_sum_items(cur, "act",  "DSP", msm_items, ytd),
+                     _ytd_sum_items(cur, "act",  "DSP", msm_items, cply_ytd),
+                     category="LONG"))
     for label, item in [
-        ("Med.Structurals Total", "MSM"),
-        ("  MSM",                 "MSM"),
+        ("  MSM",           "MSM"),
+        ("  Section Mill",  "Section Mill"),
     ]:
         rows.append(_row(label, "data",
-                         _ann(cur, "DSP", "MSM", fy),
-                         _one(cur, "plan", "DSP", "MSM", rm),
-                         _one(cur, "act",  "DSP", "MSM", rm),
-                         _one(cur, "act",  "DSP", "MSM", pm),
-                         _ytd_one(cur, "plan", "DSP", "MSM", ytd),
-                         _ytd_one(cur, "act",  "DSP", "MSM", ytd),
-                         _ytd_one(cur, "act",  "DSP", "MSM", cply_ytd),
+                         _ann(cur, "DSP", item, fy),
+                         _one(cur, "plan", "DSP", item, rm),
+                         _one(cur, "act",  "DSP", item, rm),
+                         _one(cur, "act",  "DSP", item, pm),
+                         _ytd_one(cur, "plan", "DSP", item, ytd),
+                         _ytd_one(cur, "act",  "DSP", item, ytd),
+                         _ytd_one(cur, "act",  "DSP", item, cply_ytd),
                          category="LONG"))
 
     rows.append(_row("Wheel & Axles", "data",
