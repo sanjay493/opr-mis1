@@ -1204,33 +1204,108 @@ async def generate_pdf(request: PDFRequest):
     return await build_pdf_response(request, pages_override=enriched, page_layouts=dynamic_page_layouts or None, font_config=None)
 
 
-# In-memory job store for async PDF generation: job_id -> {status, created,
-# bytes, filename, error}. A single dict is fine — this backend runs as one
-# process (see project memory on the dual-uvicorn-instance footgun; that's
-# about accidental duplicate processes, not a deliberate multi-worker setup),
-# so there's no cross-process/multi-worker sharing concern here.
-_pdf_jobs: dict = {}
+# Job store for async PDF generation, persisted to disk under
+# backend/temp/pdf_jobs/ as {job_id}.json (status/created/filename/error) plus
+# {job_id}.pdf once done. A plain in-memory dict used to hold this, but the
+# dev backend runs under `uvicorn --reload`, which kills and respawns the
+# worker process on any .py save anywhere under backend/ — a full report
+# takes 20+ minutes to render, so a reload landing mid-render or mid-poll was
+# routinely wiping the in-memory store out from under an in-flight job,
+# surfacing as a bare "HTTP 404" on the next status/result poll. Writing
+# state to disk means a job that finished before a reload is still fetchable
+# afterwards. _pdf_job_tasks below is a separate in-memory-only dict (task
+# references can't survive a process restart anyway, so there's no reload
+# hazard in keeping it in memory).
+_PDF_JOBS_DIR = os.path.join(os.path.dirname(__file__), "temp", "pdf_jobs")
+_pdf_job_tasks: dict = {}  # job_id -> asyncio.Task, keeps tasks started by *this* process from being GC'd mid-run
 _PDF_JOB_TTL_SECONDS = 2 * 60 * 60  # purge finished jobs after 2 hours
 
 
+def _pdf_job_meta_path(job_id: str) -> str:
+    return os.path.join(_PDF_JOBS_DIR, f"{job_id}.json")
+
+
+def _pdf_job_pdf_path(job_id: str) -> str:
+    return os.path.join(_PDF_JOBS_DIR, f"{job_id}.pdf")
+
+
+def _write_pdf_job_meta(job_id: str, meta: dict):
+    os.makedirs(_PDF_JOBS_DIR, exist_ok=True)
+    path = _pdf_job_meta_path(job_id)
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f)
+    os.replace(tmp_path, path)  # atomic, so a concurrent status poll never sees a half-written file
+
+
+def _read_pdf_job_meta(job_id: str):
+    try:
+        with open(_pdf_job_meta_path(job_id), "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _read_pdf_job_meta_checked(job_id: str):
+    """Like _read_pdf_job_meta, but catches jobs orphaned by a mid-render
+    process restart: a job still "pending" whose task isn't in this
+    process's _pdf_job_tasks wasn't started by this process, so nothing is
+    ever going to finish it. Flip it to a clear error instead of leaving the
+    caller to poll a job that will never change."""
+    meta = _read_pdf_job_meta(job_id)
+    if meta and meta.get("status") == "pending" and job_id not in _pdf_job_tasks:
+        meta["status"] = "error"
+        meta["error"] = "Server restarted while generating this PDF - please try again."
+        _write_pdf_job_meta(job_id, meta)
+    return meta
+
+
 def _purge_old_pdf_jobs():
+    if not os.path.isdir(_PDF_JOBS_DIR):
+        return
     cutoff = time.time() - _PDF_JOB_TTL_SECONDS
-    for jid in [j for j, v in _pdf_jobs.items() if v.get("created", 0) < cutoff]:
-        _pdf_jobs.pop(jid, None)
+    job_ids = {fname[:-len(".json")] for fname in os.listdir(_PDF_JOBS_DIR) if fname.endswith(".json")}
+    for job_id in job_ids:
+        meta = _read_pdf_job_meta(job_id)
+        if not meta or meta.get("created", 0) < cutoff:
+            for path in (_pdf_job_meta_path(job_id), _pdf_job_pdf_path(job_id)):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+    # Sweep orphans by file mtime instead: a .pdf whose .json was already
+    # removed, or a leftover .tmp from a write interrupted mid os.replace.
+    for fname in os.listdir(_PDF_JOBS_DIR):
+        job_id = fname.rsplit(".", 1)[0]
+        if job_id in job_ids:
+            continue
+        fpath = os.path.join(_PDF_JOBS_DIR, fname)
+        try:
+            if os.path.getmtime(fpath) < cutoff:
+                os.remove(fpath)
+        except OSError:
+            pass
 
 
 async def _run_pdf_job(job_id: str, request: PDFRequest, enriched: list, dynamic_page_layouts: dict):
+    meta = _read_pdf_job_meta(job_id) or {"created": time.time()}
     try:
         pdf_bytes, filename = await generate_pdf_bytes(
             request, pages_override=enriched, page_layouts=dynamic_page_layouts or None, font_config=None,
         )
-        _pdf_jobs[job_id] = {
-            "status": "done", "created": _pdf_jobs[job_id]["created"],
-            "bytes": pdf_bytes, "filename": filename,
-        }
+        pdf_path = _pdf_job_pdf_path(job_id)
+        tmp_pdf_path = pdf_path + ".tmp"
+        with open(tmp_pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+        os.replace(tmp_pdf_path, pdf_path)
+        meta.update({"status": "done", "filename": filename})
+        _write_pdf_job_meta(job_id, meta)
     except Exception as e:
         detail = e.detail if isinstance(e, HTTPException) else str(e)
-        _pdf_jobs[job_id] = {"status": "error", "created": _pdf_jobs[job_id]["created"], "error": detail}
+        meta.update({"status": "error", "error": detail})
+        _write_pdf_job_meta(job_id, meta)
+    finally:
+        _pdf_job_tasks.pop(job_id, None)
 
 
 @app.post("/api/generate-pdf/start")
@@ -1242,39 +1317,44 @@ async def generate_pdf_start(request: PDFRequest):
     _purge_old_pdf_jobs()
     enriched, dynamic_page_layouts = _enrich_pdf_pages(request)
     job_id = uuid.uuid4().hex
-    _pdf_jobs[job_id] = {"status": "pending", "created": time.time()}
+    _write_pdf_job_meta(job_id, {"status": "pending", "created": time.time()})
     task = asyncio.create_task(_run_pdf_job(job_id, request, enriched, dynamic_page_layouts))
-    _pdf_jobs[job_id]["task"] = task  # keep a reference so it isn't GC'd mid-run
+    _pdf_job_tasks[job_id] = task
     return {"job_id": job_id}
 
 
 @app.get("/api/generate-pdf/status/{job_id}")
 async def generate_pdf_status(job_id: str):
-    job = _pdf_jobs.get(job_id)
-    if not job:
+    meta = _read_pdf_job_meta_checked(job_id)
+    if not meta:
         raise HTTPException(status_code=404, detail="Unknown or expired job_id")
-    if job["status"] == "error":
-        return {"status": "error", "error": job.get("error", "PDF generation failed")}
-    return {"status": job["status"]}
+    if meta["status"] == "error":
+        return {"status": "error", "error": meta.get("error", "PDF generation failed")}
+    return {"status": meta["status"]}
 
 
 @app.get("/api/generate-pdf/result/{job_id}")
 async def generate_pdf_result(job_id: str):
-    job = _pdf_jobs.get(job_id)
-    if not job:
+    meta = _read_pdf_job_meta_checked(job_id)
+    if not meta:
         raise HTTPException(status_code=404, detail="Unknown or expired job_id")
-    if job["status"] == "error":
-        raise HTTPException(status_code=500, detail=job.get("error", "PDF generation failed"))
-    if job["status"] != "done":
+    if meta["status"] == "error":
+        raise HTTPException(status_code=500, detail=meta.get("error", "PDF generation failed"))
+    if meta["status"] != "done":
         raise HTTPException(status_code=409, detail="PDF is still being generated")
+    try:
+        with open(_pdf_job_pdf_path(job_id), "rb") as f:
+            pdf_bytes = f.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="PDF file missing or expired")
     # Plain Response, not StreamingResponse(io.BytesIO(...)) — see
     # build_pdf_response's matching comment in pdf.py for why that combo is
     # a serious perf trap for binary content (line-iterates on b'\n').
     return Response(
-        content=job["bytes"],
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename={job['filename']}",
+            "Content-Disposition": f"attachment; filename={meta['filename']}",
             "X-Content-Type-Options": "nosniff",
         },
     )
