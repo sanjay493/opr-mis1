@@ -51,20 +51,25 @@
 </div>
 
 {% elif page.section == 'demand_trade' %}
+<div class="ssp-demandtrade-section">
 {{ generic_table(page.tables.get('2')) }}
 <div class="ssp-section-heading">3. Trade Dynamics</div>
 {{ generic_table(page.tables.get('3a')) }}
 <div class="ssp-section-heading">4. Raw Materials</div>
 {{ generic_table(page.tables.get('4a')) }}
 {{ generic_table(page.tables.get('5')) }}
+</div>
 
 {% elif page.section == 'policy_green' %}
+<div class="ssp-policy-section">
 {{ text_section(page.text_sections.get('6')) }}
 {{ text_section(page.text_sections.get('7')) }}
 {{ text_section(page.text_sections.get('8')) }}
 {% if page.footer_note %}<div class="ssp-note">{{ page.footer_note }}</div>{% endif %}
+</div>
 
 {% else %}
+<div class="ssp-prodprices-section">
 {% set headers_1a = page.tables.get('1a', {}).get('headers') if page.tables.get('1a') else None %}
 {% set cols_1a = headers_1a if headers_1a and headers_1a|length == 7
     else ['Production', 'Report Month', 'CPLY Month', 'YoY %', 'Apr-Report Month', 'CPLY Apr-Report Month', 'CPLY %'] %}
@@ -101,4 +106,5 @@
 <div class="ssp-note">Bracketed value under each SAIL figure: SAIL's % share of India.</div>
 {{ generic_table(page.tables.get('1b')) }}
 {{ generic_table(page.tables.get('1c')) }}
+</div>
 {% endif %}

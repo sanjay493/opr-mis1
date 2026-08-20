@@ -457,7 +457,7 @@
         .ssp-table th, .ssp-table td {
             border: 1px solid {{ colors.border_dark }};
             padding: 7px 9px;
-            vertical-align: middle;
+            vertical-align: middle !important;
         }
         .ssp-table th {
             background: #e2e8f0;
@@ -480,7 +480,7 @@
         .ssp-table-heading {
             font-weight: 700;
             font-size: 11pt;
-            margin: 6px 0 3px;
+            margin: 16px 0 3px;
             padding-bottom: 2px;
         }
         .ssp-note {
@@ -488,12 +488,22 @@
             font-style: italic;
             color: #475569;
             margin-top: 2px;
+            padding-bottom: 8px;
         }
         .ssp-para {
             font-size: 11pt;
             line-height: 1.4;
             margin: 0 0 6px;
             text-align: justify;
+        }
+        .ssp-policy-section {
+            padding: 0 10mm;
+        }
+        .ssp-prodprices-section {
+            padding-left: 10mm;
+        }
+        .ssp-demandtrade-section {
+            padding-right: 10mm;
         }
         .pwr-num {
             text-align: right;
@@ -792,7 +802,7 @@
             text-align: right;
             border-left: 1px dashed {{ colors.border_divider }};
             padding-left: 6px;
-            font-size: 8.5pt;
+            font-size: 11pt;
             font-weight: 700;
             color: {{ colors.text_secondary }};
             line-height: 1.3;
