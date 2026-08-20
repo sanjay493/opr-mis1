@@ -433,7 +433,7 @@ class IspTechnoExtractor:
             "BM": {"specific_heat_consumption": 1000},
             "USM": {"specific_heat_consumption": 1000},
             "WRM": {"specific_heat_consumption": 1000},
-            "COKE OVENS": {"specific_heat_coke_ovens": 1000},
+            "COKE OVENS": {"specific_heat_coke_ovens": 1000, "bf_coke_yield": 100},
             # "Gross Coal to Hot Metal Ratio" (row 15 of "Maj Techno Summ") is
             # reported in Kg/THM; SAIL's convention for this parameter is a
             # small ~0.8-1.0 ratio (raw Kg/THM ÷ 1000), matching the

@@ -91,6 +91,7 @@
   },
   "COKE OVENS": {
     "COB-old": {
+      "bf_coke_yield": "21/17",
       "dry_coal_charge_oven": "17/8",
       "specific_heat_coke_ovens": 169,
       "coke_oven_gas_yield": 164,
@@ -103,7 +104,7 @@
       "cri_coke":161
     },
     "COB-new": {
-      "bf_coke_yield": 37,
+      "bf_coke_yield": "22/18",
       "coke_oven_gas_yield": 189,
       "dry_coal_charge_oven": "18/9",
       "specific_heat_coke_ovens": 195,
