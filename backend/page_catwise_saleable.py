@@ -7,8 +7,10 @@ import db
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def _fmt(v):
-    return "" if v is None else str(int(round(v)))
+def _fmt(v, dp=0):
+    if v is None:
+        return ""
+    return f"{v:.{dp}f}" if dp else str(int(round(v)))
 
 def _ipct(a, b):
     if a is None or b is None or b == 0:
@@ -77,7 +79,7 @@ def _ann_sum(cur, plant, items, fy_months):
 
 
 def _row(label, rtype, ann, m_plan, m_act, cply,
-         cum_plan=None, cum_act=None, cum_cply=None, indent=0, category=""):
+         cum_plan=None, cum_act=None, cum_cply=None, indent=0, category="", decimals=0):
     if rtype == "pct":
         return {"label": label, "type": rtype, "indent": indent,
                 "ann_plan": ann or "", "m_plan": m_plan or "",
@@ -87,16 +89,16 @@ def _row(label, rtype, ann, m_plan, m_act, cply,
                 "cum_cply": cum_cply or "", "cum_growth": "",
                 "category": category}
     return {"label": label, "type": rtype, "indent": indent,
-            "ann_plan":   _fmt(ann),
-            "m_plan":     _fmt(m_plan),
-            "m_act":      _fmt(m_act),
+            "ann_plan":   _fmt(ann, decimals),
+            "m_plan":     _fmt(m_plan, decimals),
+            "m_act":      _fmt(m_act, decimals),
             "m_pct":      _ipct(m_act, m_plan),
-            "cply_act":   _fmt(cply),
+            "cply_act":   _fmt(cply, decimals),
             "m_growth":   _igr(m_act, cply),
-            "cum_plan":   _fmt(cum_plan),
-            "cum_act":    _fmt(cum_act),
+            "cum_plan":   _fmt(cum_plan, decimals),
+            "cum_act":    _fmt(cum_act, decimals),
             "cum_pct":    _ipct(cum_act, cum_plan),
-            "cum_cply":   _fmt(cum_cply),
+            "cum_cply":   _fmt(cum_cply, decimals),
             "cum_growth": _igr(cum_act, cum_cply),
             "category":   category}
 
@@ -389,13 +391,19 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
     # the Coil-Sale-only ones displayed below) — CRC&S(1&2) includes the CR
     # Sheet quantity that has no visible row of its own (see "CR Sheets"
     # zero-row below), so summing the Coil-only figures instead would silently
-    # drop CR Sheet out of the page total.
+    # drop CR Sheet out of the page total. Thick Plate and Chequered Plate
+    # (mapped to production_table's "Checkered plate") are their own
+    # independent mill outputs, not bundled into any other item here — both
+    # were previously displayed under the FLAT category but left out of
+    # this sum, silently undercounting the page total by their quantity.
     flat_items_bsl = ["HSM HR Coil (Sale)", "HSM HR Plate", "HR Sheet",
-                      "CRC&S(1&2)", "CRC(3)", "GP/GC", "GPC3"]
+                      "CRC&S(1&2)", "CRC(3)", "GP/GC", "GPC3",
+                      "Thick Plate", "Checkered plate"]
 
     for label, item in [
         ("HR Coils",               "HSM HR Coil (Sale)"),
         ("HR Plates",              "HSM HR Plate"),
+        ("Chequered Plate",        "Checkered plate"),
         ("HR Sheets",              "HR Sheet"),
         ("CR Coils",               "CR I/II CR(Coil) Sale"),
         ("New CR Coils",           "CR III CR(Coil) Sale"),
@@ -418,7 +426,7 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
                      _ytd_one(cur, "plan", "BSL", "CR Sheets", ytd),
                      _ytd_one(cur, "act",  "BSL", "CR Sheets", ytd),
                      _ytd_one(cur, "act",  "BSL", "CR Sheets", cply_ytd),
-                     category="FLAT"))
+                     category="FLAT", decimals=3))
     # "New CR Sheet" (CRM-III) is backfilled historically (always 0 — mill 3
     # makes coil only) but has no live extractor cell, since no report ever
     # carries a nonzero figure for it. Future months read as blank rather

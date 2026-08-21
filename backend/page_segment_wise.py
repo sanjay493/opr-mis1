@@ -188,9 +188,10 @@ def generate_segment_wise(report_month: str) -> dict:
                        _ytd_one(cur,"act","BSL","Saleable Semis",ytd),
                        _ytd_one(cur,"act","BSL","Saleable Semis",cply_ytd)))
         for label, item in [
-            ("HR Coils",     "HSM HR Coil (Sale)"),
-            ("HR Plates",    "HSM HR Plate"),
-            ("HR Sheets",    "HR Sheet"),
+            ("HR Coils",        "HSM HR Coil (Sale)"),
+            ("HR Plates",       "HSM HR Plate"),
+            ("Chequered Plate", "Checkered plate"),
+            ("HR Sheets",       "HR Sheet"),
             ("CR Coils",     "CR I/II CR(Coil) Sale"),
             ("New CR Coils", "CR III CR(Coil) Sale"),
         ]:
