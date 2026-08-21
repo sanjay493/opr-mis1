@@ -313,8 +313,7 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
                            f'{seg["own_pct"]:.0f}%</span>') if seg["own_pct"] is not None else ""
                 cells.append(
                     f'<td style="{cell}text-align:center;white-space:nowrap;">'
-                    f'{seg["qty"]:.0f} <span style="color:#64748b;font-weight:400;">'
-                    f'({seg["share_pct"]:.0f}%)</span>{own_pct}</td>'
+                    f'{seg["qty"]:.0f}{own_pct}</td>'
                 )
         if not present:
             continue  # plant reports no semis anywhere in this window — omit its row entirely
@@ -337,13 +336,12 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
 
     return (
         f'<div style="margin-top:2px;display:flex;justify-content:space-between;align-items:baseline;">'
-        f'<div style="font-size:7pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px;">'
+        f'<div style="font-size:8.5pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px;">'
         f'Semis by plant (\'000T &amp; %)</div>'
-        f'<div style="font-size:5.6pt;font-style:italic;color:#64748b;">'
-        f'gray % = share of month total &middot; '
-        f'<span style="color:{_SEMIS_OWN_PCT_COLOR};">indigo % = share of plant\'s own Saleable Steel</span></div>'
+        f'<div style="font-size:6.5pt;font-style:italic;color:{_SEMIS_OWN_PCT_COLOR};">'
+        f'% = share of plant\'s own Saleable Steel</div>'
         f'</div>'
-        f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:6.4pt;">'
+        f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:7.5pt;">'
         f'<thead><tr><th style="{cell}text-align:left;color:#475569;'
         f'border-bottom:1px solid #cbd5e1;">Plant</th>{header_cells}</tr></thead>'
         f'<tbody>{"".join(body_rows)}</tbody>'
@@ -372,7 +370,7 @@ def _bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
 
 def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
                         vw: int = 980, vh: int = 250) -> str:
-    ml, mr, mt, mb = 34, 10, 28, 50
+    ml, mr, mt, mb = 34, 10, 46, 66
     cw, ch = vw - ml - mr, vh - mt - mb
 
     all_vals = [v for item in items for (_, v) in data[item] if v is not None]
@@ -392,20 +390,27 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
     cluster_w = n_bars * bar_w + (n_bars - 1) * bar_gap
     cluster_pad = (group_w - cluster_w) / 2
 
-    fs = 11.0        # item name / growth labels
+    # fs is this chart's own SVG-viewBox font-size, NOT points — a literal
+    # 11 here rendered at only ~5.5pt on a real page (confirmed empirically:
+    # this chart's viewBox-to-rendered-width ratio is ~1.99), so it's scaled
+    # up here to actually measure ~11pt once Chromium shrinks the whole
+    # 980-wide viewBox down to this chart's real on-page width. data_fs
+    # (in-bar value labels) is left at its original scale — not part of
+    # this legibility fix.
+    fs = 22.0        # item name / growth labels / legend — true ~11pt on the page
     data_fs = 14.0   # in-bar data value labels — larger, read against the bar's own fill
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
 
-    lx, ly = ml, 14
+    lx, ly = ml, 24
     for j, fy_label in enumerate(fy_labels):
         note = " (YTD)" if j == len(fy_labels) - 1 else ""
         label = f"FY{fy_label}{note}"
-        lines.append(f'<rect x="{lx}" y="{ly - 7}" width="10" height="8" rx="2" fill="{_YTD_BAR_COLORS[j]}"/>')
-        lines.append(f'<text x="{lx + 13}" y="{ly}" font-size="8" font-family="Arial,sans-serif" '
+        lines.append(f'<rect x="{lx}" y="{ly - 12}" width="16" height="15" rx="2" fill="{_YTD_BAR_COLORS[j]}"/>')
+        lines.append(f'<text x="{lx + 21}" y="{ly}" font-size="{fs:.1f}" font-family="Arial,sans-serif" '
                      f'fill="#334155">{label}</text>')
-        lx += 13 + len(label) * 5.0 + 14
+        lx += 21 + len(label) * 13.6 + 18
 
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
@@ -441,14 +446,14 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
                              f'font-size="{data_fs:.1f}" font-weight="bold" font-family="Arial,sans-serif" '
                              f'fill="{tfill}">{val_str}</text>')
         lxc = gx + group_w / 2
-        lyc = mt + ch + 20
+        lyc = mt + ch + 26
         lines.append(f'<text x="{lxc:.1f}" y="{lyc:.1f}" text-anchor="middle" font-size="{fs:.1f}" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{item}</text>')
         g = growth.get(item, {})
         if g.get("pct") is not None:
             arrow = "▲" if g["good"] else "▼"
             gcolor = "#059669" if g["good"] else "#b91c1c"
-            lines.append(f'<text x="{lxc:.1f}" y="{lyc + 16:.1f}" text-anchor="middle" font-size="{fs:.1f}" '
+            lines.append(f'<text x="{lxc:.1f}" y="{lyc + 28:.1f}" text-anchor="middle" font-size="{fs:.1f}" '
                          f'font-weight="bold" font-family="Arial,sans-serif" fill="{gcolor}">'
                          f'{arrow} {abs(g["pct"]):.1f}%</text>')
         gx += group_w + group_gap
@@ -500,7 +505,7 @@ def _ytd_trend_section(report_month: str) -> dict:
     return {
         "fy_labels": fy_labels,
         "period_label": period_label,
-        "svg": _ytd_bar_chart_svg(_PROD_ITEMS, data, fy_labels, growth),
+        "svg": _ytd_bar_chart_svg(_PROD_ITEMS, data, fy_labels, growth, vh=180),
     }
 
 
@@ -687,15 +692,50 @@ def _split_cat_label(cat: str):
 
 def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
                             bar_colors: list, title: str,
-                            vw: int = 470, vh: int = 250) -> str:
+                            vw: int = 470, vh: int = 250, label_fs: float = 22.0) -> str:
     """Grouped bar (% of Saleable Steel) + line (Qty, Million T) combo, on two
     independent scales: the % axis auto-scales with headroom so bars only
     ever occupy the lower ~70% of the chart, and the qty line is mapped into
     a band that hugs just above the tallest bar — close enough that a thin
     dashed stem from each bar top to its line point reads as one connected
-    chart rather than two stacked, disconnected layers."""
-    ml, mr, mt, mb = 10, 10, 38, 40
+    chart rather than two stacked, disconnected layers.
+
+    label_fs: the SVG font-size (in this chart's own viewBox user-units,
+    NOT points) for the title/legend/bar-value/line-value/x-axis text.
+    SVG text scales with the chart's viewBox-to-rendered-width ratio, not
+    with CSS px/pt directly — a literal font-size="11" here does NOT render
+    as 11pt on the page; it renders at whatever the chart's own width
+    happens to scale it to (confirmed empirically: this combo chart at
+    vw=560 rendered a literal "11" at only ~4.7pt on a real page, at
+    vw=300 ~5.0pt — illegible, and the two vw's don't even scale to the
+    same pt size). Callers must pass the vw-specific value that measures
+    out to true ~11pt for THIS chart's actual rendered width in the report
+    (see the five_year_svg/quarter_svg call sites below) — there's no
+    general formula from vw alone, since final rendered width also depends
+    on the surrounding flex layout's own proportions, not just this SVG's
+    own viewBox."""
+    # Header is title + 2 legend rows stacked vertically (not side by side —
+    # at label_fs's size, "% of Saleable Steel" alone is wider than the
+    # entire quarter_svg chart (vw=300), so a side-by-side legend simply
+    # had nowhere to put the 2nd item except on top of the 1st). row_gap is
+    # this chart's own line-height in its viewBox units; mt reserves enough
+    # for title + both legend rows plus clearance before the chart itself.
+    row_gap = round(label_fs * 1.35)
+    title_y = 18
+    # Wrap the title onto a 2nd line when it's too wide for this chart's own
+    # vw at label_fs — "Quarter Just Ended vs CPLY" at its true-11pt size
+    # doesn't fit on one line within the narrower quarter_svg (vw=300;
+    # confirmed empirically, it ran off the right edge otherwise). Rough
+    # bold-Arial width estimate (~0.52em/char), same style of estimate the
+    # bar-width fix above uses.
+    import textwrap as _textwrap
+    max_chars = max(8, int((vw - 20) / (label_fs * 0.52)))
+    title_lines = _textwrap.wrap(title, width=max_chars, max_lines=2) or [title]
+    legend1_y = title_y + row_gap * len(title_lines)
+    legend2_y = legend1_y + row_gap
+    ml, mr, mt, mb = 10, 10, legend2_y + 34, 80
     cw, ch = vw - ml - mr, vh - mt - mb
+    sub_fs = round(label_fs * 7.5 / 11, 1)  # keep the (YTD rate)-style sub-annotation's size proportional to label_fs, same ratio as the original 7.5-vs-11 pair
 
     pct_present = [v for v in pct_vals if v is not None]
     pct_yhi = max(5.0, (max(pct_present) if pct_present else 10.0) * 1.4)
@@ -713,21 +753,30 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
 
     n = len(categories)
     slot_w = cw / n
-    bar_w = max(34.0, slot_w * 0.4)
+    # Wide enough to actually contain a value label like "53.7%" (5 chars)
+    # at label_fs — the old 0.4-of-slot fraction was tuned for the small
+    # pre-fix font; at label_fs's larger size that made bars narrower than
+    # their own label, so the label's white (contrast-color) portion
+    # sticking out past the bar's edges landed on the white page background
+    # and effectively vanished (confirmed: the raw SVG text was always
+    # correct, e.g. "53.7%" in full — this was a rendering/width problem,
+    # not a data one). Same width-estimate formula _ytd_bar_chart_svg
+    # already uses for its own fits-inside check (0.62em/char + 10 pad).
+    bar_w = max(34.0, slot_w * 0.4, label_fs * 5 * 0.62 + 10)
     bar_radius = 5.0
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
-    lines.append(f'<text x="{ml}" y="14" text-anchor="start" font-size="12" '
-                 f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
-    ly = 30
-    lines.append(f'<rect x="{ml}" y="{ly - 8}" width="10" height="9" fill="{bar_colors[-1]}"/>')
-    lines.append(f'<text x="{ml + 14}" y="{ly}" font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+    for _i, _tline in enumerate(title_lines):
+        lines.append(f'<text x="{ml}" y="{title_y + _i * row_gap}" text-anchor="start" font-size="{label_fs}" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_tline}</text>')
+    sw = round(label_fs * 0.42)  # legend swatch size, scaled with label_fs
+    lines.append(f'<rect x="{ml}" y="{legend1_y - sw + 1}" width="{sw + 2}" height="{sw}" fill="{bar_colors[-1]}"/>')
+    lines.append(f'<text x="{ml + sw + 6}" y="{legend1_y}" font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
                  f'fill="#475569">% of Saleable Steel</text>')
-    lx2 = ml + 145
-    lines.append(f'<line x1="{lx2}" y1="{ly - 3}" x2="{lx2 + 14}" y2="{ly - 3}" stroke="{_VA_LINE_COLOR}" stroke-width="1.8"/>')
-    lines.append(f'<circle cx="{lx2 + 7}" cy="{ly - 3}" r="1.8" fill="{_VA_LINE_COLOR}"/>')
-    lines.append(f'<text x="{lx2 + 18}" y="{ly}" font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+    lines.append(f'<line x1="{ml}" y1="{legend2_y - sw / 2:.1f}" x2="{ml + sw + 4}" y2="{legend2_y - sw / 2:.1f}" stroke="{_VA_LINE_COLOR}" stroke-width="1.8"/>')
+    lines.append(f'<circle cx="{ml + sw / 2 + 2:.1f}" cy="{legend2_y - sw / 2:.1f}" r="2.2" fill="{_VA_LINE_COLOR}"/>')
+    lines.append(f'<text x="{ml + sw + 10}" y="{legend2_y}" font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
                  f'fill="#475569">Qty (Million T)</text>')
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
@@ -751,17 +800,17 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
             val_str = f"{pv:.1f}%"
             if bh >= 16:
                 lines.append(f'<text x="{cx:.1f}" y="{by + bh / 2:.1f}" text-anchor="middle" dominant-baseline="middle" '
-                             f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                             f'font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
                              f'fill="{_contrast_text(color)}">{val_str}</text>')
             else:
                 lines.append(f'<text x="{cx:.1f}" y="{by - 4:.1f}" text-anchor="middle" '
-                             f'font-size="11" font-weight="bold" font-family="Arial,sans-serif" '
+                             f'font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
                              f'fill="#1e293b">{val_str}</text>')
         main_cat, sub_cat = _split_cat_label(cat)
-        lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 16:.1f}" text-anchor="middle" font-size="11" '
+        lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 18:.1f}" text-anchor="middle" font-size="{label_fs}" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{main_cat}</text>')
         if sub_cat:
-            lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 27:.1f}" text-anchor="middle" font-size="7.5" '
+            lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 32:.1f}" text-anchor="middle" font-size="{sub_fs}" '
                          f'font-family="Arial,sans-serif" fill="#64748b">{sub_cat}</text>')
         if qv is not None:
             py = line_y(qv)
@@ -776,7 +825,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
         lines.append(f'<path d="{d}" fill="none" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
     for px, py, qv in pts:
         lines.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.6" fill="#ffffff" stroke="{_VA_LINE_COLOR}" stroke-width="1.6"/>')
-        lines.append(f'<text x="{px:.1f}" y="{py - 7:.1f}" text-anchor="middle" font-size="11" '
+        lines.append(f'<text x="{px:.1f}" y="{py - 9:.1f}" text-anchor="middle" font-size="{label_fs}" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="{_VA_LINE_COLOR}">{_fmt_million(qv)}</text>')
 
     lines.append("</svg>")
@@ -827,10 +876,10 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
         "month_qty": month_qty,
         "five_year_svg": _value_added_combo_svg(
             fy_cats, fy_pct, fy_qty, [_VA_ORANGE] * len(fy_cats),
-            "Last 5 Years", vw=560, vh=222),
+            "Last 5 Years", vw=560, vh=270, label_fs=25.6),
         "quarter_svg": _value_added_combo_svg(
             q_cats, q_pct, q_qty, [_VA_ORANGE_LIGHT, _VA_ORANGE],
-            "Quarter Just Ended vs CPLY", vw=300, vh=222),
+            "Quarter Just Ended vs CPLY", vw=300, vh=270, label_fs=24.2),
     }
 
 
@@ -844,7 +893,7 @@ def _trend_section(report_month: str) -> dict:
     semis_by_month = _semis_breakdown_data(months)
     return {
         "months": labels,
-        "svg": _trend_line_svg(labels, series, colors) + _semis_table_html(labels, semis_by_month),
+        "svg": _trend_line_svg(labels, series, colors, vh=95) + _semis_table_html(labels, semis_by_month),
     }
 
 

@@ -45,7 +45,7 @@ _DEPT_BADGE_GROUPS = [
 #     fixed page 4 — same group (1) as its 3.5/3.6 neighbors.
 _DEPT_BADGE_EXPLICIT_GROUP = {
     2.1: 1, 2.2: 1, 2.3: 1,
-    2.5: 1, 3: 1, 3.5: 1, 3.6: 1, 4.5: 1,
+    2.5: 1, 3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1,
     1024: 5,
     29.5: 7,
     35.4: 8, 35.5: 8, 35.6: 8, 35.7: 8,
@@ -95,7 +95,7 @@ def dept_badge_group(page_num) -> Optional[int]:
 # variant of this bug at once: it doesn't matter what list, if any, this
 # page happens to be fetched alongside.
 _CANONICAL_PAGE_ORDER = [
-    2.5, 3, 3.5, 3.6,
+    2.5, 3, 3.5, 3.6, 3.61, 3.62, 3.63,
     *range(4, 25), 1024,
     25, 26,
     27, 28, 29, 29.5, 30,

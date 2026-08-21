@@ -437,3 +437,29 @@ CREATE TABLE IF NOT EXISTS bf_benchmark_external_data (
     updated_at      VARCHAR(40),
     UNIQUE KEY uq_bf_benchmark_ext (external_bf_id, report_month)
 ) ENGINE=InnoDB;
+
+-- Cost Trend (Report_format/COST TREND.xlsx, sheets HM/CS/SS) — closed-FY
+-- annual figures (entered once per FY, never revised monthly) and
+-- current-FY monthly figures (month + till_month entered directly, same
+-- convention as techno_data/Demurrage — a till_month figure isn't always a
+-- clean sum of the monthly ones). product is 'HM'/'CS'/'SS' (Hot Metal/
+-- Crude Steel/Saleable Steel); cost_type is 'TOTAL'/'VARIABLE'/'FIXED';
+-- plant is BSP/DSP/RSP/BSL/ISP plus the workbook's own 'SAIL' aggregate row.
+CREATE TABLE IF NOT EXISTS cost_trend_annual (
+    fy         CHAR(7)     NOT NULL,
+    product    VARCHAR(8)  NOT NULL,
+    cost_type  VARCHAR(16) NOT NULL,
+    plant      VARCHAR(16) NOT NULL,
+    value      DOUBLE,
+    PRIMARY KEY (fy, product, cost_type, plant)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS cost_trend_monthly (
+    report_month      CHAR(7)     NOT NULL,
+    product           VARCHAR(8)  NOT NULL,
+    cost_type         VARCHAR(16) NOT NULL,
+    plant             VARCHAR(16) NOT NULL,
+    month_value       DOUBLE,
+    till_month_value  DOUBLE,
+    PRIMARY KEY (report_month, product, cost_type, plant)
+) ENGINE=InnoDB;

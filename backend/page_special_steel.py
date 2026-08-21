@@ -335,6 +335,24 @@ def _get_abp_sum(cur, months, plant):
     return r[0] * 1000 if r and r[0] else None
 
 
+def _gkey(qg, sec):
+    """Case/whitespace-normalized (quality_grade, section) dict key.
+
+    Different months' uploads/manual entries have stored the exact same
+    grade under different casing (confirmed: BSL HR COIL's "Boiler Quality"
+    vs "BOILER QUALITY" — same grade, different month, e.g. 2026-07 was
+    entered upper-case while every surrounding month used title case). SQL
+    GROUP BY (in _fetch_all_grades/_fetch_group_ytd/_fetch_cply_ytd) already
+    merges these correctly under a case-insensitive collation, but a plain
+    Python dict keyed on the raw string does not — cur_map.get((qg, sec))
+    below silently missed a month whose casing didn't match whichever
+    variant _fetch_all_grades happened to pick as its group's representative
+    string, showing 0 for that period despite real data existing. Normalize
+    every dict key (never the displayed label, which keeps its original
+    casing) so a grade matches across months regardless of casing."""
+    return ((qg or "").strip().upper(), (sec or "").strip().upper())
+
+
 def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
                  plant, product_group, total_label, club_sections=False):
     """Return (rows, g_ord, g_act, g_cply, g_cum_ord, g_cum_act, g_cum_cply).
@@ -347,10 +365,10 @@ def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
     one row per (quality_grade, section) pair — used where the section
     breakdown isn't wanted on the printed page."""
     rows     = [_hdr(product_group)]
-    cur_map  = {(qg, sec): (o, a) for qg, sec, o, a in _fetch_group(cur, month, plant, product_group)}
-    cply_map = _fetch_cply(cur, cply_month, plant, product_group)
-    ytd_map  = _fetch_group_ytd(cur, ytd_months, plant, product_group)
-    cytd_map = _fetch_cply_ytd(cur, cply_ytd_months, plant, product_group)
+    cur_map  = {_gkey(qg, sec): (o, a) for qg, sec, o, a in _fetch_group(cur, month, plant, product_group)}
+    cply_map = {_gkey(*k): v for k, v in _fetch_cply(cur, cply_month, plant, product_group).items()}
+    ytd_map  = {_gkey(*k): v for k, v in _fetch_group_ytd(cur, ytd_months, plant, product_group).items()}
+    cytd_map = {_gkey(*k): v for k, v in _fetch_cply_ytd(cur, cply_ytd_months, plant, product_group).items()}
 
     # ytd_months includes the current month; cply_ytd_months includes cply_month
     all_grades = _fetch_all_grades(cur, ytd_months + cply_ytd_months, plant, product_group)
@@ -406,22 +424,22 @@ def _build_group(cur, month, cply_month, ytd_months, cply_ytd_months,
             o = a = co = ca = 0.0
             c_parts, cc_parts = [], []
             for g in members:
-                mo, ma = cur_map.get((g, ""), (0, 0))
+                mo, ma = cur_map.get(_gkey(g, ""), (0, 0))
                 o += mo or 0; a += ma or 0
-                mco, mca = ytd_map.get((g, ""), (0, 0))
+                mco, mca = ytd_map.get(_gkey(g, ""), (0, 0))
                 co += mco or 0; ca += mca or 0
-                mc = cply_map.get((g, ""))
+                mc = cply_map.get(_gkey(g, ""))
                 if mc is not None: c_parts.append(mc)
-                mcc = cytd_map.get((g, ""))
+                mcc = cytd_map.get(_gkey(g, ""))
                 if mcc is not None: cc_parts.append(mcc)
             c  = sum(c_parts) if c_parts else None
             cc = sum(cc_parts) if cc_parts else None
         else:
-            o, a   = cur_map.get((qg, sec), (0, 0))
+            o, a   = cur_map.get(_gkey(qg, sec), (0, 0))
             o, a   = o or 0, a or 0
-            c      = cply_map.get((qg, sec))
-            co, ca = ytd_map.get((qg, sec), (0, 0))
-            cc     = cytd_map.get((qg, sec))
+            c      = cply_map.get(_gkey(qg, sec))
+            co, ca = ytd_map.get(_gkey(qg, sec), (0, 0))
+            cc     = cytd_map.get(_gkey(qg, sec))
             label  = f"{qg} {sec}".strip() if sec else qg
 
         # Hide rows with no activity in current month, YTD, or either CPLY period

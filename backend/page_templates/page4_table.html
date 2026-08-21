@@ -49,13 +49,13 @@
                         {% if row.is_conversion %}
                         <td colspan="3" class="label-cell"
                             style="font-weight: 700; font-size: 8pt; vertical-align: middle;
-                                   padding: 1px 2px 1px 4px; font-family: inherit;">
+                                   padding: 1.8px 2px 1.8px 4px; font-family: inherit;">
                             Conversion
                         </td>
                         {% elif row.is_sail_incl_conv %}
                         <td colspan="2" class="label-cell"
                             style="font-weight: 700; font-size: 8pt; vertical-align: middle;
-                                   padding: 1px 2px 1px 4px; font-family: inherit;">
+                                   padding: 1.8px 2px 1.8px 4px; font-family: inherit;">
                             SAIL incl. conversion
                         </td>
                         <td class="label-cell" style="text-align: center;">{{ row.capacity }}</td>
@@ -63,14 +63,14 @@
                         {% if row.is_first_in_group %}
                         <td class="label-cell" rowspan="{{ row.group_size }}"
                             style="font-weight: 700; font-size: 8pt; vertical-align: middle;
-                                   background-color: {{ colors.highlight_group_label_bg }}; padding: 1px 2px 1px 4px;
+                                   background-color: {{ colors.highlight_group_label_bg }}; padding: 1.8px 2px 1.8px 4px;
                                    overflow: hidden; font-family: inherit;">
                             {{ row.item }}
                         </td>
                         {% endif %}
                         <td class="label-cell"
                             style="font-weight: 600; font-size: 8pt; text-align: center;
-                                   background-color: {{ colors.highlight_group_label_bg }}; padding: 1px 2px;
+                                   background-color: {{ colors.highlight_group_label_bg }}; padding: 1.8px 2px;
                                    font-family: inherit;
                                    white-space: nowrap; overflow: hidden;">
                             {{ row.plant }}

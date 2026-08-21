@@ -663,11 +663,6 @@ def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title
         'font-family:Arial,sans-serif;margin-top:6px;">'
         'CS to HM Ratio = CS / (Total HM Production &minus; HM sent to PCM/Sandpit &minus; HM sent to ASP)'
         '</div>'
-        '<div style="text-align:center;font-size:10.5pt;font-weight:bold;color:#1e293b;'
-        'font-family:Arial,sans-serif;margin-top:5px;">'
-        'Crude Steel / (Hot Metal − Pig Iron/0.85 − Hot Metal to ASP) — 5 Plants, last 3 FY annual '
-        'ratios then current FY month-by-month to the report month. Darker = higher ratio.'
-        '</div>'
         "</div>"
     )
 

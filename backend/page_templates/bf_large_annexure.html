@@ -1,19 +1,19 @@
-        <div style="padding:8px;font-family:Arial,sans-serif;font-size:9.5pt;">
-          <div style="text-align:center;font-weight:700;font-size:13pt;margin-bottom:8px;">{{ page.title }}</div>
+        <div style="padding:3px;font-family:Arial,sans-serif;font-size:7.5pt;">
+          <div style="text-align:center;font-weight:700;font-size:11pt;margin-bottom:3px;">{{ page.title }}</div>
           <div style="overflow-x:auto;">
-          <table style="border-collapse:collapse;border:1px solid {{ colors.border_darkest }};font-size:9.5pt;width:100%;">
+          <table style="border-collapse:collapse;border:1px solid {{ colors.border_darkest }};font-size:7.5pt;width:100%;">
             <thead>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
-                <th rowspan="2" style="padding:5px 8px;border:1px solid {{ colors.border_dark }};text-align:left;">Parameter</th>
-                <th rowspan="2" style="padding:5px 8px;border:1px solid {{ colors.border_dark }};">Unit</th>
-                <th colspan="{{ page.sail_cols|length }}" style="padding:5px 8px;border:1px solid {{ colors.border_dark }};background:{{ colors.highlight_target_band_bg }};">{{ page.prev_fy_col_label }}</th>
-                <th colspan="{{ page.sail_cols|length }}" style="padding:5px 8px;border:1px solid {{ colors.border_dark }};">{{ page.month_col_label }}</th>
-                <th colspan="{{ page.sail_cols|length }}" style="padding:5px 8px;border:1px solid {{ colors.border_dark }};background:{{ colors.highlight_cumulative_bg }};">{{ page.ytd_col_label }}</th>
+                <th rowspan="2" style="padding:3px 6px;border:1px solid {{ colors.border_dark }};text-align:left;">Parameter</th>
+                <th rowspan="2" style="padding:3px 6px;border:1px solid {{ colors.border_dark }};">Unit</th>
+                {% for period in page.periods %}
+                <th colspan="{{ page.sail_cols|length }}" style="padding:2px 5px;border:1px solid {{ colors.border_dark }};line-height:1.2;{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ period.label }}</th>
+                {% endfor %}
               </tr>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
-                {% for period in ['prev_fy', 'month', 'ytd'] %}
+                {% for period in page.periods %}
                 {% for bf in page.sail_cols %}
-                <th style="padding:4px 6px;border:1px solid {{ colors.border_dark }};line-height:1.25;{% if period == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ bf.plant }}<br/>{{ bf.unit }}</th>
+                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};line-height:1.15;{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ bf.plant }}<br/>{{ bf.unit }}</th>
                 {% endfor %}
                 {% endfor %}
               </tr>
@@ -21,12 +21,12 @@
             <tbody>
             {% for row in page.rows %}
               <tr>
-                <td style="padding:4px 8px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.parameter }}</td>
-                <td style="padding:4px 8px;border:1px solid {{ colors.border_medium }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.unit }}</td>
-                {% for period in ['prev_fy', 'month', 'ytd'] %}
+                <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;line-height:1.1;background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.parameter }}</td>
+                <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};line-height:1.1;background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.unit }}</td>
+                {% for period in page.periods %}
                 {% for bf in page.sail_cols %}
-                {% set v = row.sail[bf.label][period] %}
-                <td style="padding:4px 5px;border:1px solid {{ colors.border_medium }};text-align:right;{% if period == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }}66;{% elif period == 'ytd' %}background:{{ colors.highlight_cumulative_bg }}66;{% else %}background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};{% endif %}">{{ v if v is not none else '—' }}</td>
+                {% set v = row.sail[bf.label][period.key] %}
+                <td style="padding:1.5px 4px;border:1px solid {{ colors.border_medium }};text-align:right;line-height:1.1;{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }}66;{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }}66;{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }}66;{% else %}background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};{% endif %}">{{ v if v is not none else '—' }}</td>
                 {% endfor %}
                 {% endfor %}
               </tr>

@@ -19,7 +19,7 @@ from pathlib import Path
 import db
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
-from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest
+from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest
 from report_utils import compute_item_row, build_production_narrative, assign_dept_badges, blank_out_page_data
 from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
@@ -35,6 +35,7 @@ from page_at_a_glance import generate_at_a_glance
 from page_key_highlights import generate_key_highlights
 from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
+from page_cost_trend import generate_cost_trend
 from page_sail_mines import generate_sail_mines
 from page_cover import generate_cover
 from page_coal_receipts_stock import generate_coal_receipts_sail
@@ -326,6 +327,17 @@ KEY_PARAMS_PAGE_ID = 3.5
 # dept-badge).
 BF_LARGE_ANNEXURE_PAGE_ID = 3.6
 
+# "Cost Trend" — TREND IN COST OF PRODUCTION OF HOT METAL/CRUDE STEEL/
+# SALEABLE STEEL (Report_format/COST TREND.xlsx, sheets HM/CS/SS), 3 pages
+# inserted right after Large BFs, per direct instruction. Same sentinel-
+# float treatment as BF_LARGE_ANNEXURE_PAGE_ID above (numbered main flow,
+# group-1 dept-badge); kept as three separate ids (not one page carrying a
+# list) so each page gets its own @@PGSTART_N@@ marker/physical position,
+# same as every other multi-page section in this app.
+COST_TREND_HM_PAGE_ID = 3.61
+COST_TREND_CS_PAGE_ID = 3.62
+COST_TREND_SS_PAGE_ID = 3.63
+
 # "SAIL Mines Production & Despatch Performance" — placeholder page from
 # Report_format/index.txt's Index rewrite (item 7): sits right after fixed
 # page 4 ("Production main Items"), before fixed page 5 ("Plant wise
@@ -593,7 +605,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
 
         if page_number is not None:
             if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID, KEY_PARAMS_PAGE_ID,
-                                BF_LARGE_ANNEXURE_PAGE_ID, SAIL_MINES_PAGE_ID,
+                                BF_LARGE_ANNEXURE_PAGE_ID,
+                                COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
+                                SAIL_MINES_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                 POWER_DATA_PAGE_ID) or page_number in STEEL_SECTOR_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
@@ -729,7 +743,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
                             if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
-                                                      KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID, SAIL_MINES_PAGE_ID,
+                                                      KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
+                                                      COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
+                                                      SAIL_MINES_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
@@ -762,6 +778,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 # cleaned out rather than lingering.
                 pages_config.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
                 pages_config.insert(_idx3 + 2, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
+                pages_config.insert(_idx3 + 3, {"page": COST_TREND_HM_PAGE_ID})
+                pages_config.insert(_idx3 + 4, {"page": COST_TREND_CS_PAGE_ID})
+                pages_config.insert(_idx3 + 5, {"page": COST_TREND_SS_PAGE_ID})
             # "SAIL Mines Production & Despatch Performance" sentinel page:
             # always inserted right after fixed page 4, ahead of fixed page 5.
             _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
@@ -803,6 +822,15 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == BF_LARGE_ANNEXURE_PAGE_ID:
                 page.update(generate_bf_large_annexure(month))
                 page["type"] = "bf_large_annexure"
+            if pg == COST_TREND_HM_PAGE_ID:
+                page.update(generate_cost_trend(month, "HM"))
+                page["type"] = "cost_trend"
+            if pg == COST_TREND_CS_PAGE_ID:
+                page.update(generate_cost_trend(month, "CS"))
+                page["type"] = "cost_trend"
+            if pg == COST_TREND_SS_PAGE_ID:
+                page.update(generate_cost_trend(month, "SS"))
+                page["type"] = "cost_trend"
             if pg == SAIL_MINES_PAGE_ID:
                 page.update(generate_sail_mines())
                 page["type"] = "sail_mines"
@@ -946,6 +974,14 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idxkp = next((i for i, p in enumerate(_pages_list) if p.get("page") == KEY_PARAMS_PAGE_ID), None)
         if _idxkp is not None:
             _pages_list.insert(_idxkp + 1, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
+    # "Cost Trend" sentinel pages (HM/CS/SS): always inserted right after
+    # Large BFs, in that order.
+    if not any(p.get("page") == COST_TREND_HM_PAGE_ID for p in _pages_list):
+        _idxbf = next((i for i, p in enumerate(_pages_list) if p.get("page") == BF_LARGE_ANNEXURE_PAGE_ID), None)
+        if _idxbf is not None:
+            _pages_list.insert(_idxbf + 1, {"page": COST_TREND_HM_PAGE_ID})
+            _pages_list.insert(_idxbf + 2, {"page": COST_TREND_CS_PAGE_ID})
+            _pages_list.insert(_idxbf + 3, {"page": COST_TREND_SS_PAGE_ID})
     # "SAIL Mines Production & Despatch Performance" sentinel page: always
     # inserted right after fixed page 4.
     if not any(p.get("page") == SAIL_MINES_PAGE_ID for p in _pages_list):
@@ -1043,6 +1079,15 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == BF_LARGE_ANNEXURE_PAGE_ID:
             p.update(generate_bf_large_annexure(request.month))
             p["type"] = "bf_large_annexure"
+        if pg == COST_TREND_HM_PAGE_ID:
+            p.update(generate_cost_trend(request.month, "HM"))
+            p["type"] = "cost_trend"
+        if pg == COST_TREND_CS_PAGE_ID:
+            p.update(generate_cost_trend(request.month, "CS"))
+            p["type"] = "cost_trend"
+        if pg == COST_TREND_SS_PAGE_ID:
+            p.update(generate_cost_trend(request.month, "SS"))
+            p["type"] = "cost_trend"
         if pg == SAIL_MINES_PAGE_ID:
             p.update(generate_sail_mines())
             p["type"] = "sail_mines"
@@ -1483,6 +1528,49 @@ def save_special_steel_abp(request: SpecialSteelAbpSaveRequest):
         conn.commit()
     finally:
         conn.close()
+    return {"status": "success", "saved": saved}
+
+
+# Cost Trend (Report_format/COST TREND.xlsx, sheets HM/CS/SS) — see
+# page_cost_trend.py's module docstring for the full data model. product is
+# always one of these 3; cost_type/plant come from db.COST_TREND_COST_TYPES/
+# COST_TREND_PLANTS.
+COST_TREND_PRODUCTS = ["HM", "CS", "SS"]
+
+
+@app.get("/api/cost-trend/annual")
+def get_cost_trend_annual_api(product: str = Query(...), fy: str = Query(...)):
+    """Existing annual Cost Trend entries for one product/FY, for pre-filling
+    the Annual tab of the Cost Trend Entry form: {cost_type: {plant: value}}."""
+    data = db.get_cost_trend_annual(product, [fy])
+    return {"product": product, "fy": fy, "entries": data.get(fy, {})}
+
+
+@app.post("/api/cost-trend/annual")
+def save_cost_trend_annual_api(request: CostTrendAnnualSaveRequest):
+    """Upsert a batch of Cost Trend annual entries (cost_type x plant) for
+    one product/FY."""
+    entries = [{"cost_type": e.cost_type, "plant": e.plant, "value": e.value} for e in request.entries]
+    saved = db.save_cost_trend_annual(request.fy, request.product, entries)
+    return {"status": "success", "saved": saved}
+
+
+@app.get("/api/cost-trend/monthly")
+def get_cost_trend_monthly_api(product: str = Query(...), report_month: str = Query(...)):
+    """Existing monthly Cost Trend entries for one product/report_month, for
+    pre-filling the Monthly tab of the Cost Trend Entry form:
+    {cost_type: {plant: {"month": v, "till_month": v}}}."""
+    data = db.get_cost_trend_monthly(product, [report_month])
+    return {"product": product, "report_month": report_month, "entries": data.get(report_month, {})}
+
+
+@app.post("/api/cost-trend/monthly")
+def save_cost_trend_monthly_api(request: CostTrendMonthlySaveRequest):
+    """Upsert a batch of Cost Trend monthly entries (cost_type x plant,
+    month + till_month) for one product/report_month."""
+    entries = [{"cost_type": e.cost_type, "plant": e.plant,
+                "month_value": e.month_value, "till_month_value": e.till_month_value} for e in request.entries]
+    saved = db.save_cost_trend_monthly(request.report_month, request.product, entries)
     return {"status": "success", "saved": saved}
 
 

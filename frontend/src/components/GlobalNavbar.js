@@ -60,6 +60,7 @@ export default function GlobalNavbar() {
             { label: 'TE Targets', link: '/data-entry/targets', icon: '🎯' },
             { label: 'TE Targets (Pages 30-38)', link: '/data-entry/annual-target', icon: '🎯' },
             { label: 'Special Steel ABP (Page 24)', link: '/data-entry/special-steel-abp', icon: '🎯' },
+            { label: 'Cost Trend (Pages 3.61-3.63)', link: '/data-entry/cost-trend', icon: '💰' },
             { label: 'Annual Capacity', link: '/data-entry/annual-capacity', icon: '🏭' },
           ]
         },

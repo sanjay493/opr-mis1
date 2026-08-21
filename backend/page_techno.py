@@ -953,10 +953,18 @@ def _fmt_bar_val(v: float) -> str:
     return s.rstrip("0").rstrip(".")
 
 
-def _param_svg(p: dict, vw: int = 290, vh: int = 165) -> str:
-    mt   = 28
-    mb   = 32
-    ml   = 5
+def _param_svg(p: dict, vw: int = 290, vh: int = 230) -> str:
+    # label_fs is this chart's own SVG-viewBox font-size, NOT points — a
+    # literal font-size="7"/"6.5" here rendered at only ~5.2pt/~4.5pt on a
+    # real page-3 (confirmed empirically: this chart's viewBox-to-rendered-
+    # width ratio is ~1.346, same for the data-label and x-axis-label code
+    # paths since they share one viewBox). Scaled up here to actually
+    # measure ~11pt once Chromium shrinks the 290-wide viewBox down to this
+    # chart's real on-page width (~half of page 3's content column).
+    label_fs = 14.8
+    mt   = 30
+    mb   = 85
+    ml   = 16
     mr   = 5
     cw, ch = vw - ml - mr, vh - mt - mb
     SEP_W = 4
@@ -1024,10 +1032,10 @@ def _param_svg(p: dict, vw: int = 290, vh: int = 165) -> str:
                 f'height="{bh:.1f}" fill="{color}" rx="1.5"/>'
             )
             val_str = _fmt_bar_val(v)
-            vly     = by - 3
+            vly     = by - 6
             lines.append(
                 f'<text x="{bx + bar_w / 2:.1f}" y="{vly:.1f}" text-anchor="middle" '
-                f'font-size="7" font-weight="bold" font-family="Arial,sans-serif" '
+                f'font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
                 f'fill="{color}">{val_str}</text>'
             )
 
@@ -1036,30 +1044,30 @@ def _param_svg(p: dict, vw: int = 290, vh: int = 165) -> str:
         label_parts = lbl.split("\n")
         if len(label_parts) == 1:
             if many:
-                ly = mt + ch + 7
-                lines.append(
-                    f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="end" '
-                    f'font-size="6" font-family="Arial,sans-serif" fill="#374151" '
-                    f'transform="rotate(-40,{lx:.1f},{ly:.1f})">{lbl}</text>'
-                )
-            else:
                 ly = mt + ch + 10
                 lines.append(
+                    f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="end" '
+                    f'font-size="{label_fs}" font-family="Arial,sans-serif" fill="#374151" '
+                    f'transform="rotate(-60,{lx:.1f},{ly:.1f})">{lbl}</text>'
+                )
+            else:
+                ly = mt + ch + 16
+                lines.append(
                     f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="middle" '
-                    f'font-size="6.5" font-family="Arial,sans-serif" fill="#374151">'
+                    f'font-size="{label_fs}" font-family="Arial,sans-serif" fill="#374151">'
                     f'{lbl}</text>'
                 )
         else:
-            ly1 = mt + ch + 10
-            ly2 = mt + ch + 19
+            ly1 = mt + ch + 16
+            ly2 = mt + ch + 32
             lines.append(
                 f'<text x="{lx:.1f}" y="{ly1:.1f}" text-anchor="middle" '
-                f'font-size="6.5" font-family="Arial,sans-serif" fill="#374151">'
+                f'font-size="{label_fs}" font-family="Arial,sans-serif" fill="#374151">'
                 f'{label_parts[0]}</text>'
             )
             lines.append(
                 f'<text x="{lx:.1f}" y="{ly2:.1f}" text-anchor="middle" '
-                f'font-size="6.5" font-family="Arial,sans-serif" fill="#374151">'
+                f'font-size="{label_fs}" font-family="Arial,sans-serif" fill="#374151">'
                 f'{label_parts[1]}</text>'
             )
         x += slot_w
@@ -3122,12 +3130,14 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                 for (src_unit, src_key) in unit_specs:
                     if src_unit == "BF-5" and plant != "ISP" and not _other_bf_units_present:
                         continue
-                    # BSP's BF-5 doesn't belong in the CDI Rate block on the
-                    # Iron Making page — excluded here rather than at the
-                    # data layer, so BSP BF-5's own CDI figure still shows
-                    # normally on every other furnace-wise section (Hot
-                    # Blast Temp, Oxygen Enrichment, Coke Rate, etc.).
-                    if plant == "BSP" and src_unit == "BF-5" and sec_label == "CDI Rate":
+                    # BSP's BF-1 and BF-5 are not shown on the Iron Making
+                    # page under any furnace-wise section (Coke Rate, CDI
+                    # Rate, Fuel Rate, Hot Blast Temp, BF Productivity,
+                    # Oxygen Enrichment, Pellet in Burden, Slag Rate) —
+                    # excluded here rather than at the data layer, so BSP's
+                    # other furnaces (BF-2/3/4/6/7/8) and BF_Shop still show
+                    # normally.
+                    if plant == "BSP" and src_unit in ("BF-1", "BF-5") and page_no in (29, 29.5):
                         continue
                     _key_aliases = [src_key] + _COKE_OVEN_PARAM_ALIASES.get(src_key, [])
                     # Include the row if ANY period this page displays has a

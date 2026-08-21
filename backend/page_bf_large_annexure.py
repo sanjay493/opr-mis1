@@ -9,17 +9,17 @@ bf_benchmark_registry.py also benefit.
 
 Row list mirrors Report_format/Large BFs for OMI.xlsx (sheet "Large BFs
 (2)") — Working Volume, Total HM Prod, ... Fce Utilisation — for the same 3
-SAIL BFs (BSP BF-8, RSP BF-5, ISP BF-5). Columns differ from the source
-file on purpose: that Excel is a hand-built snapshot with one column per
-individual month of whichever FY it was made in (Apr, May, Jun, Apr-Jun,
-Jul, Apr-Jul, ...), which doesn't fit this app's per-report_month generation
-model (every other page here regenerates cleanly for any selected month from
-a fixed column set). This page instead uses the same 3-column shape as the
-rest of the report — Previous FY (closed) Actual | <report month> Actual |
-Apr-<report month> (YTD) Actual — with each period's own dynamic label
-(e.g. "25-26" / "Jul-26" / "Apr-Jul'26" for report_month "2026-07") on the
-table's own parent header row, per user direction — each period-group's 3
+SAIL BFs (BSP BF-8, RSP BF-5, ISP BF-5). Column shape mirrors
+Report_format/"Comparative Performance of large BFs of SAIL.pdf" — Prev FY
+(closed) Actual | ABP Targets (current FY) | one column per YTD month
+(Apr, May, ... up to report_month) | Apr-<report month> (YTD) Actual —
+each period's own dynamic label (e.g. "25-26" / "ABP Targets for 2026-27" /
+"Apr-26" / ... / "Apr-Jul'26" for report_month "2026-07") on the table's own
+parent header row, per direct instruction — each period-group's 3
 sub-columns are the 3 SAIL BFs (plant name over furnace name, wrapped).
+Landscape orientation (set in main.py alongside every other page's
+orientation flag), also per direct instruction — this many period groups
+(up to 7 for a March report month) needs the extra width.
 
 Data sources, per row:
   - Most rows read techno_data directly under the BF's own unit (BSP BF-8,
@@ -33,6 +33,11 @@ Data sources, per row:
     production_table is this app's deep, reliably-populated production
     history. Summed per period from each month's own figure rather than any
     stored cumulative, same reasoning as every other additive row here.
+  - "ABP Targets" reads techno_plan_fy (plant_name/unit=the BF's own unit,
+    fy=report_month's FY) — the same store the Techno Manual Entry form's
+    annual-target tab already writes into (BF-8/BF-5 tabs), so whatever's
+    already been entered there shows up here for free; a key with no entry
+    shows "—" rather than being computed or guessed.
   - "Coke Ash" and "Sinter Fe" reuse the same plant-level (not per-furnace)
     figures page_key_parameters.py's Key Parameters page already shows
     (Coke-Ovens shop's ash_in_coke, and tfe_in_sinter — RSP split across
@@ -68,7 +73,14 @@ Data sources, per row:
   - Working Volume is a static engineering spec, unchanged from month to
     month — reused as-is from bf_benchmark_sail_meta.working_volume_m3 (the
     table the existing BF Benchmarking feature already maintains this in;
-    no reason to duplicate it).
+    no reason to duplicate it) — shown under every period column, same
+    figure repeated, matching the source PDF.
+
+Note: the source PDF has no "Heat Load/Flux" row (it's skipped entirely in
+that report), but this page keeps it — it's already wired up for RSP (whose
+techno_data does carry heat_load_flux most months) and dropping a row is a
+bigger call than this rewrite's brief covers; flagged to the user rather
+than silently removed.
 """
 import json as _json
 import db
@@ -121,6 +133,13 @@ _ADDITIVE_KEYS = {"production"}
 # so its plant-level "Hot Metal" total IS BF-5's own output.
 _PRODUCTION_ITEM = {"BSP": "BF#8", "RSP": "BF#5", "ISP": "Hot Metal"}
 
+# No ABP target makes sense for these — pure per-shift/derived readings a
+# plant's annual plan never states a single-figure target for. Skipped when
+# building the ABP column so the row shows "—" rather than a stray 0/None
+# read as if it were a real (and missing) target.
+_NO_ABP_KEYS = {"working_volume_m3", "_avg_daily_rate", "_total_prepared_burden",
+                "_coke_ash", "_sinter_fe", "lump_ore_fe", "pellet_fe", "_avg_burden_fe"}
+
 
 def _production_table_tonnes(plant: str, months: list) -> dict:
     """{report_month: production_in_tonnes} from production_table (stored
@@ -149,12 +168,18 @@ def _row_spec(key):
         return label, unit
     p = PARAM_BY_KEY[key]
     if key == "production":
-        # bf_benchmark_registry.py's own unit (UNIT.T = "T") is shared with
-        # /reports/bf-benchmark, which shows this key at its raw
-        # techno_data scale (tonnes) — this page's own _fmt_production
-        # divides by 1e6 first (matching the source Excel's "Total HM Prod"
-        # column), so only THIS page's label needs overriding to "MT".
-        return p["label"], "MT"
+        # bf_benchmark_registry.py's own unit (UNIT.T = "T") and label
+        # ("Production") are shared with /reports/bf-benchmark, which shows
+        # this key at its raw techno_data scale — this page's own
+        # _fmt_production divides by 1e6 first (matching the source
+        # PDF/Excel's "Total HM Prod" column), so only THIS page's label
+        # and unit need overriding to match that sample.
+        return "Total HM Prod", "MT"
+    if key == "bf_productivity":
+        # Sample PDF's own row label ("BF Prodty-WV") — bf_benchmark_
+        # registry.py's shared label ("BF Productivity") stays as-is for
+        # every other page/tool that reads PARAM_BY_KEY.
+        return "BF Prodty-WV", p["unit"]
     return p["label"], p["unit"]
 
 
@@ -197,8 +222,11 @@ def _period_value(key, period_dict):
 
 
 def _sail_bf_values(plant, unit, report_month):
-    """{key: (prev_fy, month, ytd)} for every non-special row, for one SAIL BF."""
+    """{key: {"prev_fy": v, <ytd_month>: v, ..., "ytd": v}} for every
+    non-special row, for one SAIL BF. "abp" is NOT included here — see
+    _sail_bf_abp, a separate data source (techno_plan_fy, not techno_data)."""
     fy_months = db.get_fy_months(report_month)          # this FY, Apr..Mar
+    ytd_months = [m for m in fy_months if m <= report_month]
     # Shift report_month back exactly one calendar year and ask for THAT
     # month's FY — correct even for report_months in Jan/Feb/Mar, where a
     # flat "subtract 1 from fy_months[0]'s year" would mislabel every month
@@ -206,10 +234,10 @@ def _sail_bf_values(plant, unit, report_month):
     prev_fy_months = db.get_fy_months(f"{int(report_month[:4]) - 1}-{report_month[5:]}")
     prev_fy_end = _prev_fy_end_month(report_month)
 
-    rows = _fetch_bf_rows(plant, unit, list(dict.fromkeys(prev_fy_months + fy_months)))
+    all_months = list(dict.fromkeys(prev_fy_months + fy_months))
+    rows = _fetch_bf_rows(plant, unit, all_months)
     cur_row = rows.get(report_month, {})
     prev_fy_row = rows.get(prev_fy_end, {})
-    ytd_months = [m for m in fy_months if m <= report_month]
 
     # HM Sulphur: RSP's own monthly report has no per-furnace breakdown for
     # this parameter (confirmed against a real source workbook — unlike HM
@@ -219,43 +247,60 @@ def _sail_bf_values(plant, unit, report_month):
     # pattern _coke_ash_and_sinter_fe below already uses for Sinter Fe/Coke
     # Ash, applied generically here rather than gated to RSP specifically,
     # since any plant could be in the same position.
-    shop_rows = {} if unit == "BF_Shop" else _fetch_bf_rows(plant, "BF_Shop", list(dict.fromkeys(prev_fy_months + fy_months)))
+    shop_rows = {} if unit == "BF_Shop" else _fetch_bf_rows(plant, "BF_Shop", all_months)
     shop_cur_row = shop_rows.get(report_month, {})
     shop_prev_fy_row = shop_rows.get(prev_fy_end, {})
 
-    production_tonnes = _production_table_tonnes(plant, list(dict.fromkeys(prev_fy_months + fy_months)))
+    production_tonnes = _production_table_tonnes(plant, all_months)
 
     out = {}
     for key in list(PARAM_BY_KEY.keys()):
+        vals = {}
         if key in _ADDITIVE_KEYS:
-            month_v = production_tonnes.get(report_month) if key == "production" else _period_value(key, cur_row.get("month", {}))
-            ytd_v = sum(
-                v for m in ytd_months
-                for v in [production_tonnes.get(m) if key == "production" else _period_value(key, rows.get(m, {}).get("month", {}))]
-                if v is not None
+            for m in ytd_months:
+                vals[m] = production_tonnes.get(m)
+            vals["ytd"] = sum(
+                v for m in ytd_months for v in [production_tonnes.get(m)] if v is not None
             ) or None
-            prev_fy_v = sum(
-                v for m in prev_fy_months
-                for v in [production_tonnes.get(m) if key == "production" else _period_value(key, rows.get(m, {}).get("month", {}))]
-                if v is not None
+            vals["prev_fy"] = sum(
+                v for m in prev_fy_months for v in [production_tonnes.get(m)] if v is not None
             ) or None
         else:
-            month_v = _period_value(key, cur_row.get("month", {}))
-            ytd_v = _period_value(key, cur_row.get("till_month", {}))
-            prev_fy_v = _period_value(key, prev_fy_row.get("till_month", {}))
+            for m in ytd_months:
+                vals[m] = _period_value(key, rows.get(m, {}).get("month", {}))
+            vals["ytd"] = _period_value(key, cur_row.get("till_month", {}))
+            vals["prev_fy"] = _period_value(key, prev_fy_row.get("till_month", {}))
             if key == "fuel_rate":
-                month_v = month_v if month_v is not None else compute_fuel_rate(cur_row.get("month", {}))
-                ytd_v = ytd_v if ytd_v is not None else compute_fuel_rate(cur_row.get("till_month", {}))
-                prev_fy_v = prev_fy_v if prev_fy_v is not None else compute_fuel_rate(prev_fy_row.get("till_month", {}))
+                for m in ytd_months:
+                    if vals[m] is None:
+                        vals[m] = compute_fuel_rate(rows.get(m, {}).get("month", {}))
+                if vals["ytd"] is None:
+                    vals["ytd"] = compute_fuel_rate(cur_row.get("till_month", {}))
+                if vals["prev_fy"] is None:
+                    vals["prev_fy"] = compute_fuel_rate(prev_fy_row.get("till_month", {}))
             elif key == "sulphur_in_hm":
-                if month_v is None:
-                    month_v = _period_value(key, shop_cur_row.get("month", {}))
-                if ytd_v is None:
-                    ytd_v = _period_value(key, shop_cur_row.get("till_month", {}))
-                if prev_fy_v is None:
-                    prev_fy_v = _period_value(key, shop_prev_fy_row.get("till_month", {}))
-        out[key] = (prev_fy_v, month_v, ytd_v)
+                for m in ytd_months:
+                    if vals[m] is None:
+                        vals[m] = _period_value(key, shop_rows.get(m, {}).get("month", {}))
+                if vals["ytd"] is None:
+                    vals["ytd"] = _period_value(key, shop_cur_row.get("till_month", {}))
+                if vals["prev_fy"] is None:
+                    vals["prev_fy"] = _period_value(key, shop_prev_fy_row.get("till_month", {}))
+        out[key] = vals
     return out, ytd_months, prev_fy_months
+
+
+def _sail_bf_abp(plant, unit, fy_label):
+    """{key: value} — this BF's ABP/annual-target figures for fy_label
+    (e.g. "2026-27"), from techno_plan_fy (the same store the Techno Manual
+    Entry form's annual-target tab writes into). A key with nothing entered
+    is simply absent — shown as "—", never computed or guessed."""
+    data = db.get_techno_plan(plant, fy_label, unit=unit).get("data", {})
+    out = {}
+    for key in PARAM_BY_KEY:
+        v = data.get(key)
+        out[key] = v.get("value") if isinstance(v, dict) else v
+    return out
 
 
 def _sail_static_working_volume(plant, unit):
@@ -278,28 +323,35 @@ def _plant_techno_view(plant, period_dict_by_unit):
     return {(plant, u): d for u, d in period_dict_by_unit.items()}
 
 
-def _coke_ash_and_sinter_fe(plant, unit, report_month):
-    """(prev_fy, month, ytd) tuples for Coke Ash and Sinter Fe, reusing
-    page_key_parameters.py's plant-level (not per-furnace) resolution as a
-    fallback for Sinter Fe — see _resolve's furnace_fe check below for the
-    furnace-level figure this page prefers first."""
+def _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months):
+    """({"prev_fy":v, <ytd_month>:v, ..., "ytd":v} for Coke Ash,
+    same shape for Sinter Fe) — reusing page_key_parameters.py's
+    plant-level (not per-furnace) resolution as a fallback for Sinter Fe —
+    see _resolve's furnace_fe check below for the furnace-level figure
+    this page prefers first."""
     prev_fy_end = _prev_fy_end_month(report_month)
+    periods = ["prev_fy"] + ytd_months + ["ytd"]
+    period_months = {"prev_fy": prev_fy_end, "ytd": report_month}
+    for m in ytd_months:
+        period_months[m] = m
 
     # Units potentially needed: coke-oven candidates + whichever Sinter/BF
     # units _sinter_fe_val itself may read (BF_Shop/BF-5, or SP-1/2/3 for RSP)
     # + this BF's own unit (for the furnace-level figure _resolve prefers).
     sinter_units = _SP_UNIT_MAP.get(plant, ["BF_Shop", "BF-5"])
     all_units = list(dict.fromkeys(_COKE_UNITS + sinter_units + [unit]))
+    all_months = list(dict.fromkeys(period_months.values()))
 
     rows = {}
     conn = db.connect()
     cur = conn.cursor()
     try:
         ph_u = ",".join("?" * len(all_units))
+        ph_m = ",".join("?" * len(all_months))
         cur.execute(
             f"SELECT unit, report_month, techno_json FROM techno_data "
-            f"WHERE plant=? AND unit IN ({ph_u}) AND report_month IN (?, ?)",
-            (plant, *all_units, report_month, prev_fy_end),
+            f"WHERE plant=? AND unit IN ({ph_u}) AND report_month IN ({ph_m})",
+            (plant, *all_units, *all_months),
         )
         for row_unit, rm, tj in cur.fetchall():
             rows[(row_unit, rm)] = _json.loads(tj)
@@ -330,26 +382,29 @@ def _coke_ash_and_sinter_fe(plant, unit, report_month):
             fe = _round(sum(sinter_vals) / len(sinter_vals), 2) if sinter_vals else None
         return ash, fe
 
-    ash_month, fe_month = _resolve(report_month, "month")
-    ash_ytd, fe_ytd = _resolve(report_month, "till_month")
-    ash_prev, fe_prev = _resolve(prev_fy_end, "till_month")
-    return (ash_prev, ash_month, ash_ytd), (fe_prev, fe_month, fe_ytd)
+    ash_out, fe_out = {}, {}
+    for p in periods:
+        rm = period_months[p]
+        period_kind = "month" if p not in ("prev_fy", "ytd") else "till_month"
+        ash_out[p], fe_out[p] = _resolve(rm, period_kind)
+    return ash_out, fe_out
 
 
-def _avg_daily_rate(production_tuple, report_month, ytd_months, prev_fy_months):
-    prev_fy_prod, month_prod, ytd_prod = production_tuple
+def _avg_daily_rate(production_vals, report_month, ytd_months, prev_fy_months):
+    out = {}
     month_days = _days_in_month(report_month)
-    ytd_days = sum(_days_in_month(m) for m in ytd_months) or 1
     prev_fy_days = _days_in_fy(db.get_fy_for_month(prev_fy_months[0])) if prev_fy_months else 1
-    return (
-        _round(prev_fy_prod / prev_fy_days, 0) if prev_fy_prod else None,
-        _round(month_prod / month_days, 0) if month_prod else None,
-        _round(ytd_prod / ytd_days, 0) if ytd_prod else None,
-    )
+    for m in ytd_months:
+        v = production_vals.get(m)
+        out[m] = _round(v / _days_in_month(m), 0) if v else None
+    ytd_days = sum(_days_in_month(m) for m in ytd_months) or 1
+    out["ytd"] = _round(production_vals.get("ytd") / ytd_days, 0) if production_vals.get("ytd") else None
+    out["prev_fy"] = _round(production_vals.get("prev_fy") / prev_fy_days, 0) if production_vals.get("prev_fy") else None
+    return out
 
 
-def _avg_burden_fe(sinter_pct, pellet_pct, lump_pct, sinter_fe, pellet_fe, lump_fe):
-    """(prev_fy, month, ytd) — per direct instruction:
+def _avg_burden_fe(sinter_pct, pellet_pct, lump_pct, sinter_fe, pellet_fe, lump_fe, periods):
+    """{period: value} — per direct instruction:
     (Sinter%×SinterFe + Pellet%×PelletFe + Lump%×LumpOreFe) / 100,
     the same 3-way burden split Total Prepared Burden/Lump in Burden already
     use, weighted by each component's own Fe assay instead of summed as a
@@ -359,12 +414,14 @@ def _avg_burden_fe(sinter_pct, pellet_pct, lump_pct, sinter_fe, pellet_fe, lump_
     (silently treating its Fe as 0 would understate the true average), so
     that period shows blank rather than a misleadingly low figure until the
     missing Fe assay (Sinter Fe / Pellet Fe / Lump Ore Fe row) is entered."""
-    out = []
-    for s, p, l, sf, pf, lf in zip(sinter_pct, pellet_pct, lump_pct, sinter_fe, pellet_fe, lump_fe):
+    out = {}
+    for p in periods:
+        s, pl_, l = sinter_pct.get(p), pellet_pct.get(p), lump_pct.get(p)
+        sf, pf, lf = sinter_fe.get(p), pellet_fe.get(p), lump_fe.get(p)
         total = 0.0
         has_component = False
         computable = True
-        for pct, fe in ((s, sf), (p, pf), (l, lf)):
+        for pct, fe in ((s, sf), (pl_, pf), (l, lf)):
             if not pct:
                 continue
             has_component = True
@@ -372,8 +429,8 @@ def _avg_burden_fe(sinter_pct, pellet_pct, lump_pct, sinter_fe, pellet_fe, lump_
                 computable = False
                 break
             total += pct * fe
-        out.append(_round(total / 100, 2) if has_component and computable else None)
-    return tuple(out)
+        out[p] = _round(total / 100, 2) if has_component and computable else None
+    return out
 
 
 def _dp_for(key):
@@ -409,7 +466,7 @@ _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 
 
 def _month_col_label(report_month: str) -> str:
-    """'2026-07' -> 'Jul-26' — the Month column's own header label."""
+    """'2026-07' -> 'Jul-26' — a single month column's own header label."""
     y, m = int(report_month[:4]), int(report_month[5:7])
     return f"{_MON_ABBR[m]}-{y % 100:02d}"
 
@@ -430,26 +487,39 @@ def generate_bf_large_annexure(report_month: str) -> dict:
     # Short "YY-YY" form, matching page_ipt.py's/page_special_steel_trend.py's
     # own fy_label convention elsewhere in this app.
     prev_fy_col_label = f"{prev_fy_start_year % 100:02d}-{(prev_fy_start_year + 1) % 100:02d}"
-    ytd_months_for_label = [m for m in fy_months if m <= report_month]
+    fy_label = db.get_fy_for_month(report_month)  # e.g. "2026-27"
 
     sail_cols = []
-    sail_values = {}   # {bf_label: {key: (prev_fy, month, ytd)}}
+    sail_values = {}   # {bf_label: {key: {period: value}}}
+    ytd_months = [m for m in fy_months if m <= report_month]
+    periods = ["prev_fy", "abp"] + ytd_months + ["ytd"]
+
     for bf in SAIL_BFS:
         plant, unit, label = bf["plant"], bf["unit"], bf["label"]
         sail_cols.append({"label": label, "plant": plant, "unit": unit})
         vals, ytd_months, prev_fy_months = _sail_bf_values(plant, unit, report_month)
-        vals["_coke_ash"], vals["_sinter_fe"] = _coke_ash_and_sinter_fe(plant, unit, report_month)
-        vals["_avg_daily_rate"] = _avg_daily_rate(vals["production"], report_month, ytd_months, prev_fy_months)
-        sp = vals["sinter_in_burden"]
-        pl = vals["pellet_in_burden"]
-        vals["_total_prepared_burden"] = tuple(
-            _round(s + p, 2) if s is not None and p is not None else None for s, p in zip(sp, pl)
-        )
+        abp = _sail_bf_abp(plant, unit, fy_label)
+        for key in vals:
+            vals[key]["abp"] = None if key in _NO_ABP_KEYS else abp.get(key)
+
+        ash, fe = _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months)
+        vals["_coke_ash"] = {**ash, "abp": None}
+        vals["_sinter_fe"] = {**fe, "abp": None}
+        vals["_avg_daily_rate"] = {**_avg_daily_rate(vals["production"], report_month, ytd_months, prev_fy_months), "abp": None}
+
+        sp, pl_ = vals["sinter_in_burden"], vals["pellet_in_burden"]
+        tpb = {}
+        for p in periods:
+            s, pl2 = sp.get(p), pl_.get(p)
+            tpb[p] = _round(s + pl2, 2) if s is not None and pl2 is not None else None
+        vals["_total_prepared_burden"] = tpb
+
         vals["_avg_burden_fe"] = _avg_burden_fe(
-            sp, pl, vals["lump_in_burden"], vals["_sinter_fe"], vals["pellet_fe"], vals["lump_ore_fe"],
+            sp, pl_, vals["lump_in_burden"], vals["_sinter_fe"], vals["pellet_fe"], vals["lump_ore_fe"], periods,
         )
+
         wv = _sail_static_working_volume(plant, unit)
-        vals["working_volume_m3"] = (wv, wv, wv)
+        vals["working_volume_m3"] = {p: wv for p in periods}
         sail_values[label] = vals
 
     rows = []
@@ -459,31 +529,33 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         sail_out = {}
         for bf in sail_cols:
             bf_label = bf["label"]
-            prev_fy, month, ytd = sail_values[bf_label][key]
+            pvals = sail_values[bf_label][key]
             if key == "production":
-                prev_fy, month, ytd = _fmt_production(prev_fy), _fmt_production(month), _fmt_production(ytd)
-                # Fixed 3dp string, not a plain round — Python drops
-                # trailing zeros on a bare float (2.900 -> 2.9, 0.870 ->
-                # 0.87), which reads as mixed precision across cells in the
-                # same row. Same fix CHM Ratio already applies for its own
-                # always-3dp display.
-                sail_out[bf_label] = {
-                    "prev_fy": f"{prev_fy:.3f}" if prev_fy is not None else None,
-                    "month": f"{month:.3f}" if month is not None else None,
-                    "ytd": f"{ytd:.3f}" if ytd is not None else None,
-                }
+                out = {}
+                for p in periods:
+                    v = _fmt_production(pvals.get(p))
+                    # Fixed 3dp string, not a plain round — Python drops
+                    # trailing zeros on a bare float (2.900 -> 2.9, 0.870 ->
+                    # 0.87), which reads as mixed precision across cells in
+                    # the same row. Same fix CHM Ratio already applies for
+                    # its own always-3dp display.
+                    out[p] = f"{v:.3f}" if v is not None else None
+                sail_out[bf_label] = out
                 continue
-            sail_out[bf_label] = {
-                "prev_fy": _clean(prev_fy, dp), "month": _clean(month, dp), "ytd": _clean(ytd, dp),
-            }
+            sail_out[bf_label] = {p: _clean(pvals.get(p), dp) for p in periods}
         rows.append({"parameter": label, "unit": unit, "sail": sail_out})
+
+    period_defs = [{"key": "prev_fy", "label": prev_fy_col_label, "kind": "prev_fy"},
+                   {"key": "abp", "label": f"ABP Targets for<br/>{fy_label}", "kind": "abp"}]
+    for m in ytd_months:
+        period_defs.append({"key": m, "label": _month_col_label(m), "kind": "month"})
+    period_defs.append({"key": "ytd", "label": _ytd_col_label(ytd_months), "kind": "ytd"})
 
     return {
         "title": "SAIL Large BFs - Performance Snapshot",
         "variant": "bf_large_annexure",
+        "orientation": "landscape",
         "sail_cols": sail_cols,
-        "prev_fy_col_label": prev_fy_col_label,
-        "month_col_label": _month_col_label(report_month),
-        "ytd_col_label": _ytd_col_label(ytd_months_for_label),
+        "periods": period_defs,
         "rows": rows,
     }

@@ -611,6 +611,40 @@ def init_db():
         )
     """)
 
+    # 21. Cost Trend (Report_format/COST TREND.xlsx, sheets HM/CS/SS) — two
+    # tables mirroring the workbook's two distinct granularities: closed-FY
+    # annual figures (entered once per FY, never revised monthly) and
+    # current-FY monthly figures (month + till_month entered directly, same
+    # "both typed in, not auto-summed" convention as techno_data/Demurrage —
+    # a till_month figure a plant reports isn't always a clean sum of its
+    # own monthly figures). product is 'HM'/'CS'/'SS' (Hot Metal/Crude
+    # Steel/Saleable Steel — the workbook's 3 sheets); cost_type is
+    # 'TOTAL'/'VARIABLE'/'FIXED' (the workbook's 3 blocks per sheet); plant
+    # is BSP/DSP/RSP/BSL/ISP plus the workbook's own 'SAIL' aggregate row
+    # (SAIL 5 ISPs) — entered directly like every other row, not computed,
+    # since the source doesn't state it's a simple average/sum of the 5.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cost_trend_annual (
+            fy         TEXT,
+            product    TEXT,
+            cost_type  TEXT,
+            plant      TEXT,
+            value      REAL,
+            PRIMARY KEY (fy, product, cost_type, plant)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cost_trend_monthly (
+            report_month      TEXT,
+            product           TEXT,
+            cost_type         TEXT,
+            plant             TEXT,
+            month_value       REAL,
+            till_month_value  REAL,
+            PRIMARY KEY (report_month, product, cost_type, plant)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -2550,3 +2584,94 @@ def list_techno_plan_fys(plant: str = None) -> List[str]:
     fys = [row[0] for row in cursor.fetchall()]
     conn.close()
     return fys
+
+
+COST_TREND_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
+COST_TREND_COST_TYPES = ["TOTAL", "VARIABLE", "FIXED"]
+
+
+def get_cost_trend_annual(product: str, fys: List[str]) -> Dict[str, Any]:
+    """{fy: {cost_type: {plant: value}}} for the given product ('HM'/'CS'/
+    'SS') across the given FYs — used both by the report page (page_cost_
+    trend.py) and the data-entry form's pre-fill."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {fy: {ct: {} for ct in COST_TREND_COST_TYPES} for fy in fys}
+    if fys:
+        ph = ",".join("?" * len(fys))
+        cur.execute(
+            f"SELECT fy, cost_type, plant, value FROM cost_trend_annual "
+            f"WHERE product=? AND fy IN ({ph})",
+            (product, *fys),
+        )
+        for fy, cost_type, plant, value in cur.fetchall():
+            out.setdefault(fy, {}).setdefault(cost_type, {})[plant] = value
+    conn.close()
+    return out
+
+
+def save_cost_trend_annual(fy: str, product: str, entries: List[Dict[str, Any]]) -> int:
+    """Upsert a batch of {cost_type, plant, value} entries for one FY/product
+    (the data-entry form's Annual tab submits every cell for the FY/product
+    it's editing in one call)."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    saved = 0
+    for e in entries:
+        cur.execute("""
+            INSERT INTO cost_trend_annual (fy, product, cost_type, plant, value)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(fy, product, cost_type, plant)
+            DO UPDATE SET value = excluded.value
+        """, (fy, product, e["cost_type"], e["plant"], e.get("value")))
+        saved += 1
+    conn.commit()
+    conn.close()
+    return saved
+
+
+def get_cost_trend_monthly(product: str, report_months: List[str]) -> Dict[str, Any]:
+    """{report_month: {cost_type: {plant: {"month": v, "till_month": v}}}}
+    for the given product across the given report_months."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {rm: {ct: {} for ct in COST_TREND_COST_TYPES} for rm in report_months}
+    if report_months:
+        ph = ",".join("?" * len(report_months))
+        cur.execute(
+            f"SELECT report_month, cost_type, plant, month_value, till_month_value "
+            f"FROM cost_trend_monthly WHERE product=? AND report_month IN ({ph})",
+            (product, *report_months),
+        )
+        for rm, cost_type, plant, mv, tmv in cur.fetchall():
+            out.setdefault(rm, {}).setdefault(cost_type, {})[plant] = {"month": mv, "till_month": tmv}
+    conn.close()
+    return out
+
+
+def save_cost_trend_monthly(report_month: str, product: str, entries: List[Dict[str, Any]]) -> int:
+    """Upsert a batch of {cost_type, plant, month_value, till_month_value}
+    entries for one report_month/product (the data-entry form's Monthly tab
+    submits every cell for the month/product it's editing in one call).
+    Either value may be None — same "only overwrite what's actually
+    provided" wouldn't apply here since this is a full-grid submit, not a
+    partial merge, so a blank cell is saved as NULL (matches how the grid's
+    own blank state should round-trip)."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    saved = 0
+    for e in entries:
+        cur.execute("""
+            INSERT INTO cost_trend_monthly (report_month, product, cost_type, plant, month_value, till_month_value)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, product, cost_type, plant)
+            DO UPDATE SET month_value = excluded.month_value, till_month_value = excluded.till_month_value
+        """, (report_month, product, e["cost_type"], e["plant"], e.get("month_value"), e.get("till_month_value")))
+        saved += 1
+    conn.commit()
+    conn.close()
+    return saved

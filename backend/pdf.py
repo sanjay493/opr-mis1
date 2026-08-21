@@ -316,8 +316,115 @@ def _apply_dept_badges(main_bytes: bytes, dept_badges: dict, browser, font_famil
     return out.getvalue()
 
 
+def _render_landscape_page_pdf(browser, html: str, font_family: str) -> bytes:
+    """Render one page's HTML standalone at genuine A4-landscape physical
+    dimensions (297x210mm), for a page (e.g. Large BFs) too wide for the
+    fixed A4-portrait `format="A4"` every other main-content page shares in
+    one combined page.pdf() call — Chromium's page.pdf() `format`/`width`/
+    `height` are fixed per call and always win over any @page CSS `size`
+    rule (see _render_pdf's docstring re: margin), so genuine landscape
+    needs its own separate call, spliced into the final document by
+    _generate_pdf_sync. No Chromium-native header/footer here
+    (display_header_footer=False) — _stamp_main_page_numbers draws a
+    matching one afterward for every main-content page uniformly, since
+    Chromium's own pageNumber/totalPages counters reset to 1/1 for this
+    call and can't be offset to match its true position once spliced into
+    the middle of the full document."""
+    page = browser.new_page()
+    page.set_content(html, wait_until="domcontentloaded")
+    page.evaluate("document.fonts.ready")
+    pdf_bytes = page.pdf(
+        format="A4",
+        landscape=True,
+        print_background=True,
+        display_header_footer=False,
+        margin={"top": "12mm", "right": "10mm", "bottom": "10mm", "left": "10mm"},
+    )
+    page.close()
+    return pdf_bytes
+
+
+def _main_header_footer_overlay_html(font_family: str, report_month: str, page_num: int, total_pages: int,
+                                      margin_side: str = "15mm") -> str:
+    """A minimal, transparent-background full-page document containing a
+    header bar (top) and footer bar (bottom) — visually identical to
+    _render_pdf's own header_template/footer_template, but with `page_num`/
+    `total_pages` baked in as plain Python values instead of Chromium's
+    auto-computed pageNumber/totalPages classes. Used by
+    _stamp_main_page_numbers to give every main-content page a CORRECT
+    "Page N of TOTAL" once a genuinely-landscape page (see
+    _render_landscape_page_pdf) has been spliced into the middle of the
+    sequence: Chromium's own counters are per-page.pdf()-call and can't be
+    offset, so once the sequence is assembled from more than one call, only
+    a post-render, Python-computed stamp can get every page's number right."""
+    hdr_font = f"'{font_family}',Arial,sans-serif"
+    return (
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+        'html,body{margin:0;padding:0;background:transparent;}'
+        '</style></head><body>'
+        f'<div style="position:fixed;top:0;left:0;right:0;padding:6mm {margin_side} 0;'
+        f'box-sizing:border-box;font-family:{hdr_font};font-size:7.5pt;font-weight:500;'
+        f'color:#64748b;text-align:center;border-bottom:0.5px solid #e2e8f0;'
+        f'padding-bottom:3px;">OMI - {report_month}</div>'
+        f'<div style="position:fixed;bottom:0;left:0;right:0;padding:0 {margin_side} 4mm;'
+        f'box-sizing:border-box;font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
+        f'display:flex;justify-content:space-between;'
+        f'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
+        f'<span>figures are provision</span>'
+        f'<span>MIS Operations</span>'
+        f'<span>OMI - {report_month}</span>'
+        f'<span>for internal circulation only</span>'
+        f'<span>Page {page_num} of {total_pages}</span>'
+        f'</div></body></html>'
+    )
+
+
+def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report_month: str,
+                              main_start: int, main_count: int) -> bytes:
+    """Post-render overlay pass (same merge_page technique as
+    _apply_dept_badges): draws a correct, Python-computed header+footer
+    (see _main_header_footer_overlay_html) onto every page in the
+    [main_start, main_start+main_count) physical range — the pages that
+    used to get Chromium's own auto pageNumber/totalPages footer from
+    _render_pdf's single main_html call, before a spliced-in landscape page
+    (_render_landscape_page_pdf) made a single call's auto-numbering
+    impossible to keep correct across the whole range. Cover/Index pages
+    outside this range are untouched (they carry no footer either way)."""
+    from pypdf import PdfReader, PdfWriter
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    overlay_cache = {}
+    for k in range(len(reader.pages)):
+        page = reader.pages[k]
+        if main_start <= k < main_start + main_count:
+            page_num = k - main_start + 1
+            w_pt, h_pt = float(page.mediabox.width), float(page.mediabox.height)
+            cache_key = (page_num, main_count, round(w_pt), round(h_pt))
+            overlay_page = overlay_cache.get(cache_key)
+            if overlay_page is None:
+                margin_side = "15mm" if round(w_pt) < round(h_pt) else "10mm"
+                html = _main_header_footer_overlay_html(font_family, report_month, page_num, main_count, margin_side)
+                op = browser.new_page()
+                op.set_content(html, wait_until="domcontentloaded")
+                stamp_pdf = op.pdf(
+                    width=f"{w_pt * 25.4 / 72}mm", height=f"{h_pt * 25.4 / 72}mm",
+                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
+                    print_background=True,
+                )
+                op.close()
+                overlay_page = PdfReader(io.BytesIO(stamp_pdf)).pages[0]
+                overlay_cache[cache_key] = overlay_page
+            page.merge_page(overlay_page)
+        writer.add_page(page)
+
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
 def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DEFAULT_FONT, report_month: str = "",
-                 dept_badges: dict = None, cover_html: str = "") -> bytes:
+                 dept_badges: dict = None, cover_html: str = "", main_header_footer: bool = True) -> bytes:
     """Render one PDF using an already-launched Chromium `browser`. Callers
     (the page3-overflow / trend-break measurement passes and the final
     render, see _generate_pdf_sync) all share a single browser instance for
@@ -388,7 +495,7 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
         main_bytes = page.pdf(
             format="A4",
             print_background=True,
-            display_header_footer=True,
+            display_header_footer=main_header_footer,
             header_template=(
                 f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
                 f'font-family:{hdr_font};font-size:7.5pt;font-weight:500;'
@@ -396,7 +503,7 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
                 f'padding-bottom:3px;">'
                 f'OMI - {report_month}'
                 f'</div>'
-            ),
+            ) if main_header_footer else '<span></span>',
             footer_template=(
                 f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
                 f'font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
@@ -409,7 +516,7 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
                 f'<span>Page <span class="pageNumber"></span>'
                 f' of <span class="totalPages"></span></span>'
                 f'</div>'
-            ),
+            ) if main_header_footer else '<span></span>',
             margin=margin,
         )
         page.close()
@@ -624,9 +731,73 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         _other_front_pages = [p for p in front_pages if p.get("page") != 1]
         cover_html = template.render(pages=_cover_pages, **render_kwargs) if _cover_pages else ""
         front_html = template.render(pages=_other_front_pages, **render_kwargs) if _other_front_pages else ""
-        main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
         dept_badges = {p.get("page"): p.get("dept_badge") for p in main_pages if p.get("dept_badge")}
-        pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month, dept_badges=dept_badges, cover_html=cover_html)
+
+        # "Large BFs" (bf_large_annexure) is the one main-content page that
+        # needs a genuinely wider physical page (see _render_landscape_page_
+        # pdf's docstring — Chromium's page.pdf() format is fixed per call,
+        # so this can't share the single portrait main_html call every other
+        # page does). Split it out, render it separately at true A4-
+        # landscape dimensions, splice it into the merged document at its
+        # original position, then re-stamp every main-content page's
+        # header/footer from scratch (_stamp_main_page_numbers) — Chromium's
+        # own pageNumber/totalPages counters are per-call and reset to 1/1
+        # for the spliced-in page, so nothing downstream of it would show a
+        # correct "Page N of TOTAL" without this.
+        _landscape_pages = [p for p in main_pages if p.get("type") == "bf_large_annexure"]
+        if not _landscape_pages:
+            main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
+            pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month,
+                                     dept_badges=dept_badges, cover_html=cover_html)
+        else:
+            from pypdf import PdfReader, PdfWriter
+
+            _landscape_idx = main_pages.index(_landscape_pages[0])
+            _next_page = main_pages[_landscape_idx + len(_landscape_pages)] if _landscape_idx + len(_landscape_pages) < len(main_pages) else None
+            _rest_pages = [p for p in main_pages if p.get("type") != "bf_large_annexure"]
+
+            main_html_rest = template.render(pages=_rest_pages, **render_kwargs) if _rest_pages else ""
+            base_bytes = _render_pdf(browser, front_html, main_html_rest, font_family, report_month,
+                                      dept_badges=None, cover_html=cover_html, main_header_footer=False)
+
+            landscape_html = template.render(pages=_landscape_pages, **render_kwargs)
+            landscape_bytes = _render_landscape_page_pdf(browser, landscape_html, font_family)
+
+            base_reader = PdfReader(io.BytesIO(base_bytes))
+            landscape_reader = PdfReader(io.BytesIO(landscape_bytes))
+
+            def _marker_index(reader, page_id):
+                marker = f"@@PGSTART_{page_id}@@"
+                for k, pg in enumerate(reader.pages):
+                    if marker in (pg.extract_text() or ""):
+                        return k
+                return None
+
+            insert_at = _marker_index(base_reader, _next_page.get("page")) if _next_page else len(base_reader.pages)
+            if insert_at is None:
+                insert_at = len(base_reader.pages)
+            main_start = _marker_index(base_reader, _rest_pages[0].get("page")) if _rest_pages else 0
+            if main_start is None:
+                main_start = 0
+
+            writer = PdfWriter()
+            for k in range(insert_at):
+                writer.add_page(base_reader.pages[k])
+            for p in landscape_reader.pages:
+                writer.add_page(p)
+            for k in range(insert_at, len(base_reader.pages)):
+                writer.add_page(base_reader.pages[k])
+
+            out = io.BytesIO()
+            writer.write(out)
+            spliced_bytes = out.getvalue()
+
+            main_count = len(base_reader.pages) + len(landscape_reader.pages) - main_start
+            spliced_bytes = _stamp_main_page_numbers(spliced_bytes, browser, font_family, report_month,
+                                                      main_start, main_count)
+            if dept_badges:
+                spliced_bytes = _apply_dept_badges(spliced_bytes, dept_badges, browser, font_family)
+            pdf_bytes = spliced_bytes
 
         browser.close()
 

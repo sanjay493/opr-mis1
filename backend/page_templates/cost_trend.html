@@ -1,0 +1,28 @@
+        <div style="padding:6px;font-family:Arial,sans-serif;font-size:8pt;">
+          <div style="text-align:center;font-weight:700;font-size:12.5pt;margin-bottom:2px;">{{ page.title }}</div>
+          <div style="text-align:center;font-size:8.5pt;font-style:italic;color:{{ colors.text_secondary }};margin-bottom:8px;">Unit: {{ page.unit }}</div>
+          {% for block in page.blocks %}
+          <div style="font-weight:700;font-size:9.5pt;color:{{ colors.text_heading_dark }};margin:8px 0 3px;">{{ block.label }}</div>
+          <table style="border-collapse:collapse;border:1px solid {{ colors.border_darkest }};font-size:7.6pt;width:100%;margin-bottom:2px;">
+            <thead>
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+                <th style="padding:3px 6px;border:1px solid {{ colors.border_dark }};text-align:left;">Plant</th>
+                {% for period in page.periods %}
+                <th style="padding:3px 4px;border:1px solid {{ colors.border_dark }};{% if period.kind == 'till' %}background:{{ colors.highlight_cumulative_bg }};{% elif period.kind == 'annual' %}background:{{ colors.highlight_target_band_bg }};{% endif %}">{{ period.label }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in block.rows %}
+              <tr style="{{ 'font-weight:700;background:' ~ colors.highlight_bold_row_bg ~ ';' if row.plant == 'SAIL 5 ISPs' else '' }}">
+                <td style="padding:2px 6px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;">{{ row.plant }}</td>
+                {% for period in page.periods %}
+                <td style="padding:2px 4px;border:1px solid {{ colors.border_medium }};text-align:right;{% if period.kind == 'till' %}background:{{ colors.highlight_cumulative_bg }}66;{% elif period.kind == 'annual' %}background:{{ colors.highlight_target_band_bg }}66;{% endif %}">{{ row.cells[period.key] if row.cells[period.key] is not none else '—' }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% endfor %}
+          <div style="font-size:7.5pt;font-style:italic;color:{{ colors.text_secondary }};margin-top:4px;">(-) indicates decrease in cost</div>
+        </div>

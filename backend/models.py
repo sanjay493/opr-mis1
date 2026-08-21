@@ -108,3 +108,28 @@ class SpecialSteelAbpEntry(BaseModel):
 class SpecialSteelAbpSaveRequest(BaseModel):
     financial_year: str
     entries: List[SpecialSteelAbpEntry]
+
+
+class CostTrendAnnualEntry(BaseModel):
+    cost_type: str
+    plant: str
+    value: Optional[float] = None
+
+
+class CostTrendAnnualSaveRequest(BaseModel):
+    fy: str
+    product: str
+    entries: List[CostTrendAnnualEntry]
+
+
+class CostTrendMonthlyEntry(BaseModel):
+    cost_type: str
+    plant: str
+    month_value: Optional[float] = None
+    till_month_value: Optional[float] = None
+
+
+class CostTrendMonthlySaveRequest(BaseModel):
+    report_month: str
+    product: str
+    entries: List[CostTrendMonthlyEntry]

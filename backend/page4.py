@@ -27,9 +27,9 @@ PAGE4_ITEMS = [
     {
         "display": "CRUDE STEEL",
         "db_item": "Total Crude Steel",
-        "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "ASP", "SSP", "VISL", "SAIL"],
+        "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "ASP", "SSP", "SAIL"],
         "five_plants": _5P,
-        "sail_set": _5P + ["ASP", "SSP", "VISL"],
+        "sail_set": _5P + ["ASP", "SSP"],
         "has_capacity": True,
     },
     {
@@ -43,9 +43,9 @@ PAGE4_ITEMS = [
     {
         "display": "PIG IRON",
         "db_item": "Pig Iron",
-        "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "VISL", "SAIL"],
+        "plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"],
         "five_plants": _5P,
-        "sail_set": _5P + ["VISL"],
+        "sail_set": _5P,
     },
     {
         "display": "FINISHED STEEL",

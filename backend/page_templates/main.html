@@ -27,7 +27,18 @@
         }
 
         @page {
-            size: A4 portrait;
+            /* No `size:` here (deliberately) — page.pdf()'s format/width/
+               height always wins over any @page size anyway (see pdf.py's
+               _render_pdf docstring re: margin), but Chromium's print
+               engine still reads this rule's mere PRESENCE as a size hint:
+               with `size: A4 portrait` declared here, a *separate*
+               page.pdf() call elsewhere with `landscape=True` (see pdf.py's
+               _render_landscape_page_pdf, used to splice the Large BFs page
+               in genuinely landscape) silently came out portrait anyway —
+               confirmed empirically by diffing the exact same HTML with and
+               without this line. Every other page is unaffected: they all
+               go through page.pdf(format="A4") without landscape=True,
+               which was never in question. */
             margin: 12mm 15mm 12mm 15mm;
         }
 
@@ -925,8 +936,8 @@
         }
 
         .page4-table { table-layout: fixed; width: 100%; border: 2.5px solid {{ colors.border_darkest }}; }
-        .page4-table th { font-size: 8.5pt; padding: 1.5px 2px; line-height: 1.0; background-color: {{ colors.table_header_bg }}; }
-        .page4-table td { font-size: 8.5pt; padding: 1.5px 2px; line-height: 1.0; }
+        .page4-table th { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; background-color: {{ colors.table_header_bg }}; }
+        .page4-table td { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; }
         .page4-table col.c-items    { width:  8%; }
         .page4-table col.c-plant    { width:  6%; }
         .page4-table col.c-cap      { width:5.5%; }
@@ -1250,7 +1261,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance', 'sail_mines') %} content-page{% elif page.type in ('epi', 'key_highlights') %} coal-landscape-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance', 'sail_mines', 'cost_trend') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure') %} coal-landscape-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
@@ -1281,6 +1292,7 @@
         {% elif page.type == 'power_data' %}{% include 'power_data.html' %}
         {% elif page.type == 'steel_sector_performance' %}{% include 'steel_sector_performance.html' %}
         {% elif page.type == 'sail_mines' %}{% include 'sail_mines.html' %}
+        {% elif page.type == 'cost_trend' %}{% include 'cost_trend.html' %}
         {% else %}
             <div class="report-title-section">
                 <h2>{{ page.title }}</h2>

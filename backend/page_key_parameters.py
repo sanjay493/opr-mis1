@@ -300,22 +300,25 @@ def _semi_finished_actual(cur, ytd_months: list, plant: str) -> float:
     return t or 0.0
 
 
-def _value_added_pct_of_finished(plant, ytd_months, production, dp):
-    """% Value Added Product of Finished Steel = (plant's Total Value Added
-    Steel despatch minus its Semi-Finished Value Added despatch) / plant's
-    own Finished Steel production, over the Apr-report_month YTD period
-    this table's every other row covers — isolating the FINISHED portion of
-    value-added product before comparing it against Finished Steel
-    production, per direct instruction (the un-subtracted total routinely
-    exceeded 100% for plants with a large semis component, e.g. DSP/ISP,
-    since that numerator included product that was never finished steel to
-    begin with). Total reuses the same Value Added Steel figure page 24's
-    Special Steel report and the At-a-Glance VA chart both already compute
+def _value_added_qty_and_pct(plant, ytd_months, production):
+    """(qty_tonnes, pct_of_finished_steel) — plant's Value Added Product
+    actually within Finished Steel (Total Value Added Steel despatch minus
+    its Semi-Finished Value Added despatch, isolating the FINISHED portion
+    before comparing it against Finished Steel production — the
+    un-subtracted total routinely exceeded 100% for plants with a large
+    semis component, e.g. DSP/ISP, since that numerator included product
+    that was never finished steel to begin with), and that same qty as a %
+    of the plant's own Finished Steel production — both over the
+    Apr-report_month YTD period this table's every other row covers.
+    Total reuses the same Value Added Steel figure page 24's Special Steel
+    report and the At-a-Glance VA chart both already compute
     (page_special_steel_trend._sum_actual, plant-scoped); denominator reuses
     the `production` dict every other production-sourced row here already
     reads (_prod_val), rather than the plant's Saleable Steel — the
     denominator _sum_actual's callers elsewhere in the app use — per direct
-    instruction for this specific row."""
+    instruction for this specific row. Computed together (not as two
+    separate lookups) since both rows share the same qty/finished-steel
+    inputs."""
     from page_special_steel_trend import _sum_actual
     conn = db.connect()
     cur = conn.cursor()
@@ -325,11 +328,13 @@ def _value_added_pct_of_finished(plant, ytd_months, production, dp):
     finally:
         conn.close()
     if not has:
-        return None
+        return None, None
     finished_000T = _prod_val(plant, ["Finished Steel"], production, 6, ytd_months)
     if not finished_000T:
-        return None
-    return _round((qty - semi_qty) / (finished_000T * 1000) * 100, dp)
+        return None, None
+    vap_qty = qty - semi_qty
+    pct = vap_qty / (finished_000T * 1000) * 100
+    return vap_qty, pct
 
 
 # Placeholder swapped for "Demurrage (Apr-<latest month with data>)" in
@@ -447,7 +452,13 @@ _ROWS = [
     # an expense rate (Rs Cr per '000T of Crude Steel produced, YTD).
     (_DEMURRAGE_LABEL,          "Rs Cr",    "general", "demurrage", 2, {"label_rowspan": 2}),
     (None,                      "Rs/TCS",   "demurrage_per_tcs", None, 4, {"continuation": True}),
-    ("% Value Added Product of Finished Steel", "%", "special", None, 0, {}),
+    # Split into two data rows sharing one parameter-name cell (same
+    # label_rowspan/continuation pattern as Demurrage above): the raw Value
+    # Added Product qty within Finished Steel, then that same qty expressed
+    # as a % of the plant's own Finished Steel production.
+    ("Value Added Products in Finished Steel", "MT", "vap_qty", None, 0,
+     {"label_rowspan": 2, "note": "despatch of value added FS/Total Production of FS"}),
+    (None,                                     "%",  "vap_pct", None, 0, {"continuation": True}),
 ]
 
 
@@ -475,6 +486,11 @@ def generate_key_parameters(report_month: str) -> dict:
         dem_period += f"'{demurrage_latest[2:4]}"
     else:
         dem_period = f"{period_label}'{report_year_2d}"
+
+    # Precomputed once per plant (not per row) since the qty and % rows
+    # below both derive from the same underlying figures — see
+    # _value_added_qty_and_pct's docstring.
+    vap_by_plant = {p: _value_added_qty_and_pct(p, ytd_months, production) for p in PLANTS}
 
     # Rows between the "Major Blast Furnace Techno-economic Parameters"
     # section header and whatever ends it (the next section header, or the
@@ -535,13 +551,26 @@ def generate_key_parameters(report_month: str) -> dict:
                     raw, _src_month = demurrage_by_plant.get(plant, (None, None))
                     v = _round(raw / 100, dp) if raw is not None else None
             elif kind == "demurrage_per_tcs":
-                # Demurrage expense rate = the same Rs Cr figure the row
-                # above shows (same latest-available-month fallback via
-                # demurrage_by_plant), divided by this plant's own YTD
-                # Crude Steel production — per direct instruction.
-                raw, _src_month = demurrage_by_plant.get(plant, (None, None))
-                crude_000t = _prod_val(plant, ["Total Crude Steel"], production, 6, ytd_months)
-                v = _round(raw / 100 / crude_000t, dp) if raw is not None and crude_000t else None
+                # Demurrage expense rate = this plant's Demurrage (Rs Cr,
+                # same latest-available-month fallback via
+                # demurrage_by_plant) converted to actual Rupees, divided by
+                # actual tonnes of Crude Steel produced over that SAME
+                # Apr-to-<demurrage's own latest month> window (not the
+                # report month's full YTD, which would count production
+                # from months Demurrage hasn't caught up to yet) — per
+                # direct instruction: Rs = Rs_Cr x 1e7, Tonnes = '000T x
+                # 1000, e.g. BSP Jul'26: 0.79 Cr x 1e7 = Rs 79,00,000 over
+                # 1509.737 '000T (Apr-Jun'26) x 1000 = 15,09,737 T ->
+                # 5.23 Rs/TCS.
+                raw, src_month = demurrage_by_plant.get(plant, (None, None))
+                matched_months = [m for m in ytd_months if m <= src_month] if src_month else []
+                crude_000t = _prod_val(plant, ["Total Crude Steel"], production, 6, matched_months)
+                if raw is not None and crude_000t:
+                    raw_rs = (raw / 100) * 1e7
+                    crude_tonnes = crude_000t * 1000
+                    v = _round(raw_rs / crude_tonnes, dp)
+                else:
+                    v = None
             elif kind == "sms_join":
                 v = _sms_joined(plant, spec, techno, dp)
             elif kind == "coal_blend":
@@ -574,8 +603,12 @@ def generate_key_parameters(report_month: str) -> dict:
                 num = _general_val(plant, gkey, techno, 6)
                 den = _prod_val(plant, prod_items, production, 6, ytd_months)
                 v = _round(num / den * 100, dp) if num is not None and den else None
-            elif kind == "special":
-                v = _value_added_pct_of_finished(plant, ytd_months, production, dp)
+            elif kind == "vap_qty":
+                qty, _pct = vap_by_plant.get(plant, (None, None))
+                v = f"{qty:,.0f}" if qty is not None else None
+            elif kind == "vap_pct":
+                _qty, pct = vap_by_plant.get(plant, (None, None))
+                v = _round(pct, dp) if pct is not None else None
             else:
                 v = None
             values[plant] = v
@@ -585,6 +618,8 @@ def generate_key_parameters(report_month: str) -> dict:
         row = {"type": "data", "parameter": label, "unit": unit, "plant_values": values}
         if flags.get("highlight"):
             row["highlight"] = True
+        if flags.get("note"):
+            row["note"] = flags["note"]
         # Max/min cell highlighting within the BF techno section (per direct
         # instruction) — parsed from the same displayed value (a plain
         # float for every row here except CHM Ratio, already formatted to

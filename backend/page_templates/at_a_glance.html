@@ -32,17 +32,17 @@
           </div>
 
           {# ── Techno-Economic snapshot ── #}
-          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">Techno-Economic Snapshot — SAIL</div>
-          <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;margin-bottom:3px;">
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;">Techno-Economic Snapshot — SAIL</div>
+          <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:4px;margin-bottom:2px;">
             {% for t in page.techno %}
             {% set tbg = colors[t.bg_key] if t.bg_key else colors.highlight_default_row_bg %}
-            <div style="background:{{ tbg }};border-radius:4px;padding:4px 7px;">
-              <div style="font-size:7.6pt;font-weight:700;color:{{ colors.text_heading_dark }};">{{ t.parameter }}</div>
-              <div style="font-size:6.8pt;color:{{ colors.text_secondary }};font-style:italic;">{{ t.unit }}</div>
-              <div style="font-size:11pt;font-weight:700;color:{{ colors.text_primary }};">{{ t.month_actual if t.month_actual else '—' }}</div>
-              <div style="font-size:7pt;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</div>
+            <div style="background:{{ tbg }};border-radius:4px;padding:3px 5px;">
+              <div style="font-size:11pt;font-weight:700;line-height:1.05;color:{{ colors.text_heading_dark }};">{{ t.parameter }}</div>
+              <div style="font-size:11pt;line-height:1.05;color:{{ colors.text_secondary }};font-style:italic;">{{ t.unit }}</div>
+              <div style="font-size:11pt;line-height:1.05;font-weight:700;color:{{ colors.text_primary }};">{{ t.month_actual if t.month_actual else '—' }}</div>
+              <div style="font-size:11pt;line-height:1.05;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</div>
               {% if t.delta_pct is not none %}
-              <div style="font-size:7.4pt;font-weight:700;color:{{ colors.text_variance_green if t.good else colors.text_variance_red }};">{{ '%+.1f'|format(t.delta_pct) }}% vs target</div>
+              <div style="font-size:11pt;line-height:1.05;font-weight:700;color:{{ colors.text_variance_green if t.good else colors.text_variance_red }};">{{ '%+.1f'|format(t.delta_pct) }}% vs target</div>
               {% endif %}
             </div>
             {% endfor %}
