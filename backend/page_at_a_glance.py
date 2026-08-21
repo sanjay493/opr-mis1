@@ -280,7 +280,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
 
     for i, label in enumerate(labels):
         lines.append(f'<text x="{xs(i):.1f}" y="{base + 12:.1f}" text-anchor="middle" '
-                     f'font-size="6.6" font-family="Arial,sans-serif" fill="#64748b">{label}</text>')
+                     f'font-size="6.6" font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)

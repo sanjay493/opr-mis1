@@ -33,6 +33,8 @@ from page_special_steel import generate_special_steel_plant, generate_special_st
 from page_special_steel_trend import generate_special_steel_trend
 from page_at_a_glance import generate_at_a_glance
 from page_key_highlights import generate_key_highlights
+from page_best_ever import generate_best_ever_highlights
+from page_best_calendar_month import generate_best_calendar_month
 from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
 from page_cost_trend import generate_cost_trend
@@ -149,6 +151,8 @@ _INDEX_SECTIONS = [
     ("Indian Steel Sector Performance", 3),
     ("SAIL Performance - At a Glance", 1),
     ("SAIL Performance - 1 Page Summary", 1),
+    ("Production Highlights - Best-Ever Records", 1),
+    ("Production Highlights - Best Calendar Month", 1),
     ("Inter Plant Performance Comparison", 1),
     ("SAIL Large BFs - Performance Snapshot", 1),
     ("SAIL Mines Production & Despatch Performance", 1),
@@ -312,6 +316,21 @@ AT_A_GLANCE_PAGE_ID = 2.5
 # _DEPT_BADGE_EXPLICIT_GROUP and frontend PAGE_LABELS — see git history for
 # the exact diff.
 KEY_HIGHLIGHTS_PAGE_ID = 3.1
+
+# "Best-Ever Highlights" / "Best Calendar Month" — print versions of the
+# /reports/highlights "Best-Ever Records" table and the /reports/records-
+# matrix page (page_records.py's generate_group_records(), narrowed to the
+# sail5/all8 group scopes and a fixed 6-item list — see page_best_ever.py /
+# page_best_calendar_month.py). Sit right after "SAIL Performance Summary"
+# (page 3), ahead of Key Parameters — the same conceptual slot
+# KEY_HIGHLIGHTS_PAGE_ID above would occupy if it were wired back in, per
+# direct instruction to place them "right after Key Highlights". Same
+# sentinel-float treatment as KEY_PARAMS_PAGE_ID below (numbered main flow,
+# group-1 dept-badge, landscape via the coal-landscape-page CSS class —
+# same simple mechanism as EPI/Key Highlights, not BF_LARGE_ANNEXURE's
+# genuine-landscape splice).
+BEST_EVER_PAGE_ID = 3.2
+BEST_CAL_MONTH_PAGE_ID = 3.3
 
 # "Key Parameters" quarterly summary table (Report_format/key_parameters.jpeg)
 # — sits right after "SAIL Performance Summary" (page 3 internally, "Page 2"
@@ -604,7 +623,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config = blank_out_page_data(pages_config)
 
         if page_number is not None:
-            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID, KEY_PARAMS_PAGE_ID,
+            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
+                                BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
                                 COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
                                 SAIL_MINES_PAGE_ID,
@@ -743,6 +763,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
                             if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
+                                                      BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID,
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
                                                       SAIL_MINES_PAGE_ID,
@@ -775,12 +796,16 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 # currently wired into the report pending a design rework).
                 # Still listed in the strip-tuple just above so any stale
                 # cached page:3.1 entry from while this WAS wired in gets
-                # cleaned out rather than lingering.
-                pages_config.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
-                pages_config.insert(_idx3 + 2, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
-                pages_config.insert(_idx3 + 3, {"page": COST_TREND_HM_PAGE_ID})
-                pages_config.insert(_idx3 + 4, {"page": COST_TREND_CS_PAGE_ID})
-                pages_config.insert(_idx3 + 5, {"page": COST_TREND_SS_PAGE_ID})
+                # cleaned out rather than lingering. BEST_EVER_PAGE_ID /
+                # BEST_CAL_MONTH_PAGE_ID sit in that same conceptual slot
+                # (see their comment above main.py's constant definitions).
+                pages_config.insert(_idx3 + 1, {"page": BEST_EVER_PAGE_ID})
+                pages_config.insert(_idx3 + 2, {"page": BEST_CAL_MONTH_PAGE_ID})
+                pages_config.insert(_idx3 + 3, {"page": KEY_PARAMS_PAGE_ID})
+                pages_config.insert(_idx3 + 4, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
+                pages_config.insert(_idx3 + 5, {"page": COST_TREND_HM_PAGE_ID})
+                pages_config.insert(_idx3 + 6, {"page": COST_TREND_CS_PAGE_ID})
+                pages_config.insert(_idx3 + 7, {"page": COST_TREND_SS_PAGE_ID})
             # "SAIL Mines Production & Despatch Performance" sentinel page:
             # always inserted right after fixed page 4, ahead of fixed page 5.
             _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
@@ -816,6 +841,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == KEY_HIGHLIGHTS_PAGE_ID:
                 page.update(generate_key_highlights(month))
                 page["orientation"] = "landscape"
+            if pg == BEST_EVER_PAGE_ID:
+                page.update(generate_best_ever_highlights(month))
+                page["type"] = "best_ever_highlights"
+            if pg == BEST_CAL_MONTH_PAGE_ID:
+                page.update(generate_best_calendar_month(month))
+                page["type"] = "best_calendar_month"
             if pg == KEY_PARAMS_PAGE_ID:
                 page.update(generate_key_parameters(month))
                 page["type"] = "key_parameters"
@@ -963,10 +994,23 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if _idx_aag is not None:
             for _i, _pg in enumerate(sorted(STEEL_SECTOR_PAGES)):
                 _pages_list.insert(_idx_aag + _i, {"page": _pg})
-    # "Key Parameters" sentinel page: always inserted right after "SAIL
-    # Performance Summary" (page 3), so it becomes "Page 3".
-    if not any(p.get("page") == KEY_PARAMS_PAGE_ID for p in _pages_list):
+    # "Best-Ever Highlights" / "Best Calendar Month" sentinel pages: always
+    # inserted right after "SAIL Performance Summary" (page 3), ahead of
+    # Key Parameters — see their comment above main.py's constant
+    # definitions.
+    if not any(p.get("page") == BEST_EVER_PAGE_ID for p in _pages_list):
         _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 3), None)
+        if _idx3 is not None:
+            _pages_list.insert(_idx3 + 1, {"page": BEST_EVER_PAGE_ID})
+    if not any(p.get("page") == BEST_CAL_MONTH_PAGE_ID for p in _pages_list):
+        _idxbe = next((i for i, p in enumerate(_pages_list) if p.get("page") == BEST_EVER_PAGE_ID), None)
+        if _idxbe is not None:
+            _pages_list.insert(_idxbe + 1, {"page": BEST_CAL_MONTH_PAGE_ID})
+    # "Key Parameters" sentinel page: always inserted right after "Best
+    # Calendar Month" (chained off it, rather than off page 3 directly, so
+    # it lands after both new pages above regardless of insertion order).
+    if not any(p.get("page") == KEY_PARAMS_PAGE_ID for p in _pages_list):
+        _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == BEST_CAL_MONTH_PAGE_ID), None)
         if _idx3 is not None:
             _pages_list.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
     # "Large BFs" sentinel page: always inserted right after Key Parameters.
@@ -1073,6 +1117,12 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == KEY_HIGHLIGHTS_PAGE_ID:
             p.update(generate_key_highlights(request.month))
             p["orientation"] = "landscape"
+        if pg == BEST_EVER_PAGE_ID:
+            p.update(generate_best_ever_highlights(request.month))
+            p["type"] = "best_ever_highlights"
+        if pg == BEST_CAL_MONTH_PAGE_ID:
+            p.update(generate_best_calendar_month(request.month))
+            p["type"] = "best_calendar_month"
         if pg == KEY_PARAMS_PAGE_ID:
             p.update(generate_key_parameters(request.month))
             p["type"] = "key_parameters"

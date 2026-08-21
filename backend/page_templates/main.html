@@ -559,6 +559,25 @@
             padding: 1mm 0;
         }
 
+        /* Best-Ever Highlights / Best Calendar Month — dense item x period
+           tables, same tight top/bottom padding treatment as at-a-glance-
+           page. NOT .coal-landscape-page: that class's `page: coal-
+           landscape-layout` (size: A4 landscape) silently has no effect in
+           this merged single-document render (confirmed empirically — EPI/
+           Key Highlights, which also carry it, render at plain A4 portrait
+           dimensions too; only bf_large_annexure gets genuine landscape,
+           via pdf.py's separate splice-render mechanism). Both new pages
+           were designed and verified to fit comfortably at portrait width,
+           so reusing that class here would just be a misleading label with
+           a latent hazard: if that landscape rule is ever fixed to actually
+           work, EPI/Key Highlights/these pages would all silently jump to
+           landscape at once, without anyone having re-checked column
+           widths for the new page. A page-type-specific class keeps that
+           decision independent. */
+        .highlights-page {
+            padding: 1mm 0;
+        }
+
         /* Corner department badge (pages 3+) is NOT rendered here — Chromium
            hard-clips anything positioned outside the printable area (the
            fixed 12mm/15mm band pdf.py reserves for header/footer), so it
@@ -1261,13 +1280,15 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance', 'sail_mines', 'cost_trend') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure') %} coal-landscape-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance', 'sail_mines', 'cost_trend') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
         {% else %}
         {% if page.type == 'index' %}{% include 'index.html' %}
         {% elif page.type == 'at_a_glance' %}{% include 'at_a_glance.html' %}
+        {% elif page.type == 'best_ever_highlights' %}{% include 'best_ever_highlights.html' %}
+        {% elif page.type == 'best_calendar_month' %}{% include 'best_calendar_month.html' %}
         {% elif page.type == 'summary' %}{% include 'summary.html' %}
         {% elif page.type == 'trend' %}{% include 'trend.html' %}
         {% elif page.type == 'trend_yearly' %}{% include 'trend_yearly.html' %}

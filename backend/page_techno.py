@@ -959,9 +959,10 @@ def _param_svg(p: dict, vw: int = 290, vh: int = 230) -> str:
     # real page-3 (confirmed empirically: this chart's viewBox-to-rendered-
     # width ratio is ~1.346, same for the data-label and x-axis-label code
     # paths since they share one viewBox). Scaled up here to actually
-    # measure ~11pt once Chromium shrinks the 290-wide viewBox down to this
-    # chart's real on-page width (~half of page 3's content column).
-    label_fs = 14.8
+    # measure the target true point size once Chromium shrinks the
+    # 290-wide viewBox down to this chart's real on-page width (~half of
+    # page 3's content column).
+    label_fs = 12.78  # true ~9.5pt on the page (was 14.8 / ~11pt, -1.5pt per direct instruction)
     mt   = 30
     mb   = 85
     ml   = 16

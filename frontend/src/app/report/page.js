@@ -14,6 +14,8 @@ const PAGE_LABELS = {
    2.3: 'Indian Steel Sector Performance — Policy & Green Steel Initiatives',
    2.5: 'SAIL Performance - At a Glance',
    3: 'SAIL Performance - 1 Page Summary',
+   3.2: 'Production Highlights - Best-Ever Records',
+   3.3: 'Production Highlights - Best Calendar Month',
    3.5: 'Inter Plant Performance Comparison',
    3.6: 'SAIL Large BFs - Performance Snapshot',
    3.61: 'Cost Trend – Hot Metal',

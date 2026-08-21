@@ -1,6 +1,8 @@
 import React from 'react';
 import CoverTemplate from './CoverTemplate';
 import AtAGlanceTemplate from './AtAGlanceTemplate';
+import BestEverHighlightsTemplate from './BestEverHighlightsTemplate';
+import BestCalendarMonthTemplate from './BestCalendarMonthTemplate';
 import SummaryTemplate from './SummaryTemplate';
 import TableTemplate from './TableTemplate';
 import TrendTemplate from './TrendTemplate';
@@ -114,6 +116,10 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <IndexTemplate data={pageData} onCellChange={onCellChange} />;
       case 'at_a_glance':
         return <AtAGlanceTemplate data={pageData} />;
+      case 'best_ever_highlights':
+        return <BestEverHighlightsTemplate data={pageData} />;
+      case 'best_calendar_month':
+        return <BestCalendarMonthTemplate data={pageData} />;
       case 'summary':
         return <SummaryTemplate data={pageData} onCellChange={onCellChange} selectedMonth={selectedMonth} />;
       case 'page4_table':
