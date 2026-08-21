@@ -75,7 +75,7 @@ function TechnoTiles({ techno }) {
             <div style={{ fontSize: '8pt', fontWeight: 700, lineHeight: 1.15, color: C.textHeadingDark }}>
               {t.parameter} <span style={{ fontWeight: 400, fontStyle: 'italic', color: C.textSecondary }}>({t.unit})</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 1 }}>
               <span style={{ fontSize: '12.5pt', fontWeight: 700, lineHeight: 1.2, color: C.textPrimary }}>{t.month_actual || '—'}</span>
               <span style={{ fontSize: '11.5pt', fontWeight: 400, lineHeight: 1.2, color: C.textSecondary }}>Target: {t.target || '—'}</span>
             </div>

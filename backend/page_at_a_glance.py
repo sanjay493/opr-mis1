@@ -380,7 +380,7 @@ def _bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
 
 def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
                         vw: int = 980, vh: int = 250) -> str:
-    ml, mr, mt, mb = 34, 10, 46, 66
+    ml, mr, mt, mb = 34, 10, 46, 40
     cw, ch = vw - ml - mr, vh - mt - mb
 
     all_vals = [v for item in items for (_, v) in data[item] if v is not None]
@@ -457,15 +457,14 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
                              f'fill="{tfill}">{val_str}</text>')
         lxc = gx + group_w / 2
         lyc = mt + ch + 26
-        lines.append(f'<text x="{lxc:.1f}" y="{lyc:.1f}" text-anchor="middle" font-size="{fs:.1f}" '
-                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{item}</text>')
         g = growth.get(item, {})
+        label_svg = item
         if g.get("pct") is not None:
             arrow = "▲" if g["good"] else "▼"
             gcolor = "#059669" if g["good"] else "#b91c1c"
-            lines.append(f'<text x="{lxc:.1f}" y="{lyc + 28:.1f}" text-anchor="middle" font-size="{fs:.1f}" '
-                         f'font-weight="bold" font-family="Arial,sans-serif" fill="{gcolor}">'
-                         f'{arrow} {abs(g["pct"]):.1f}%</text>')
+            label_svg += f'<tspan dx="8" fill="{gcolor}">{arrow} {abs(g["pct"]):.1f}%</tspan>'
+        lines.append(f'<text x="{lxc:.1f}" y="{lyc:.1f}" text-anchor="middle" font-size="{fs:.1f}" '
+                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label_svg}</text>')
         gx += group_w + group_gap
 
     lines.append("</svg>")
@@ -515,7 +514,7 @@ def _ytd_trend_section(report_month: str) -> dict:
     return {
         "fy_labels": fy_labels,
         "period_label": period_label,
-        "svg": _ytd_bar_chart_svg(_PROD_ITEMS, data, fy_labels, growth, vh=180),
+        "svg": _ytd_bar_chart_svg(_PROD_ITEMS, data, fy_labels, growth, vh=215),
     }
 
 
