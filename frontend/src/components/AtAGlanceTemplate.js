@@ -67,20 +67,20 @@ function YtdTrendChart({ ytdTrend }) {
 
 function TechnoTiles({ techno }) {
   return (
-    <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
+    <div style={{ display: 'flex', gap: 9, marginBottom: 12 }}>
       {techno.map((t) => {
         const bg = (t.bg_key && TECHNO_CAT_BG[t.bg_key]) || C.defaultRowBg;
         return (
-          <div key={t.parameter} style={{ flex: 1, background: bg, borderRadius: 4, padding: '6px 8px' }}>
+          <div key={t.parameter} style={{ flex: 1, background: bg, borderRadius: 4, padding: '10px 13px' }}>
             <div style={{ fontSize: '8pt', fontWeight: 700, lineHeight: 1.15, color: C.textHeadingDark }}>
               {t.parameter} <span style={{ fontWeight: 400, fontStyle: 'italic', color: C.textSecondary }}>({t.unit})</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 }}>
               <span style={{ fontSize: '12.5pt', fontWeight: 700, lineHeight: 1.2, color: C.textPrimary }}>{t.month_actual || '—'}</span>
               <span style={{ fontSize: '11.5pt', fontWeight: 400, lineHeight: 1.2, color: C.textSecondary }}>Target: {t.target || '—'}</span>
             </div>
             {t.delta_pct !== null && t.delta_pct !== undefined && (
-              <div style={{ fontSize: '7.8pt', lineHeight: 1.15, fontWeight: 700, color: t.good ? C.textVarianceGreen : C.textVarianceRed }}>
+              <div style={{ fontSize: '7.8pt', lineHeight: 1.15, fontWeight: 700, marginTop: 2, color: t.good ? C.textVarianceGreen : C.textVarianceRed }}>
                 {t.delta_pct > 0 ? '+' : ''}{t.delta_pct.toFixed(1)}% vs target
               </div>
             )}
@@ -122,9 +122,11 @@ export default function AtAGlanceTemplate({ data }) {
 
   return (
     <div style={{ padding: '2px 4px', fontFamily: "'Arial Narrow', Arial, sans-serif", fontSize: '7.8pt', color: C.textPrimary }}>
-      <div style={{ background: C.accentBlue, color: C.textWhite, padding: '8px 16px', borderRadius: 5, marginBottom: 6, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-        <div style={{ fontSize: '17pt', fontWeight: 700 }}>{title}</div>
-        <div style={{ fontSize: '11pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
+      <div style={{ background: `linear-gradient(to right, ${C.textWhite}, ${C.accentBlue})`, padding: 2, borderRadius: 6, marginBottom: 6 }}>
+        <div style={{ background: `linear-gradient(to right, ${C.accentBlue}, ${C.textWhite})`, color: C.textWhite, padding: '8px 16px', borderRadius: 5, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ fontSize: '17pt', fontWeight: 700 }}>{title}</div>
+          <div style={{ fontSize: '11pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
+        </div>
       </div>
 
       <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>

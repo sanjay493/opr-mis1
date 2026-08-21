@@ -348,7 +348,7 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
         f'<div style="margin-top:2px;display:flex;justify-content:space-between;align-items:baseline;">'
         f'<div style="font-size:8.5pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px;">'
         f'Semis by plant (\'000T &amp; %)</div>'
-        f'<div style="font-size:6.5pt;font-style:italic;color:{_SEMIS_OWN_PCT_COLOR};">'
+        f'<div style="font-size:6.5pt;font-style:italic;font-weight:600;color:{_SEMIS_OWN_PCT_COLOR};">'
         f'% = share of plant\'s own Saleable Steel</div>'
         f'</div>'
         f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:7.5pt;">'
@@ -723,12 +723,14 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     general formula from vw alone, since final rendered width also depends
     on the surrounding flex layout's own proportions, not just this SVG's
     own viewBox."""
-    # Header is title + 2 legend rows stacked vertically (not side by side —
-    # at label_fs's size, "% of Saleable Steel" alone is wider than the
-    # entire quarter_svg chart (vw=300), so a side-by-side legend simply
-    # had nowhere to put the 2nd item except on top of the 1st). row_gap is
-    # this chart's own line-height in its viewBox units; mt reserves enough
-    # for title + both legend rows plus clearance before the chart itself.
+    # Header is title, then both legend items — side by side on one row when
+    # they fit (label_fs is now calibrated to a true ~7.5pt, small enough
+    # that "% of Saleable Steel" + "Qty (Million T)" fit side by side within
+    # the wider five_year_svg), falling back to 2 rows stacked when they
+    # don't (the narrower quarter_svg, vw=300, still can't fit both on one
+    # line even at this smaller size). row_gap is this chart's own
+    # line-height in its viewBox units; mt reserves enough for title + the
+    # legend row(s) plus clearance before the chart itself.
     row_gap = round(label_fs * 1.35)
     title_y = 18
     # Wrap the title onto a 2nd line when it's too wide for this chart's own
@@ -740,8 +742,24 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     import textwrap as _textwrap
     max_chars = max(8, int((vw - 20) / (label_fs * 0.52)))
     title_lines = _textwrap.wrap(title, width=max_chars, max_lines=2) or [title]
-    legend1_y = title_y + row_gap * len(title_lines)
-    legend2_y = legend1_y + row_gap
+    legend_y = title_y + row_gap * len(title_lines)
+
+    # Same width-estimate style used throughout this function (~0.52em/char)
+    # — only to decide whether both legend items fit on one row, not to
+    # size anything that needs to be pixel-exact.
+    sw = round(label_fs * 0.42)  # legend swatch size, scaled with label_fs
+    legend1_text, legend2_text = "% of Saleable Steel", "Qty (Million T)"
+    legend_gap = round(label_fs * 1.4)  # visible breathing room between the two legend items
+    legend1_w = sw + 6 + len(legend1_text) * label_fs * 0.52
+    legend2_w = sw + 10 + len(legend2_text) * label_fs * 0.52
+    legend_one_row = 10 + legend1_w + legend_gap + legend2_w <= vw - 10
+    if legend_one_row:
+        legend2_y = legend_y
+        lx2 = 10 + legend1_w + legend_gap
+    else:
+        legend2_y = legend_y + row_gap
+        lx2 = 10
+
     ml, mr, mt, mb = 10, 10, legend2_y + 34, 80
     cw, ch = vw - ml - mr, vh - mt - mb
     sub_fs = round(label_fs * 7.5 / 11, 1)  # keep the (YTD rate)-style sub-annotation's size proportional to label_fs, same ratio as the original 7.5-vs-11 pair
@@ -779,14 +797,13 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     for _i, _tline in enumerate(title_lines):
         lines.append(f'<text x="{ml}" y="{title_y + _i * row_gap}" text-anchor="start" font-size="{label_fs}" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_tline}</text>')
-    sw = round(label_fs * 0.42)  # legend swatch size, scaled with label_fs
-    lines.append(f'<rect x="{ml}" y="{legend1_y - sw + 1}" width="{sw + 2}" height="{sw}" fill="{bar_colors[-1]}"/>')
-    lines.append(f'<text x="{ml + sw + 6}" y="{legend1_y}" font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
-                 f'fill="#475569">% of Saleable Steel</text>')
-    lines.append(f'<line x1="{ml}" y1="{legend2_y - sw / 2:.1f}" x2="{ml + sw + 4}" y2="{legend2_y - sw / 2:.1f}" stroke="{_VA_LINE_COLOR}" stroke-width="1.8"/>')
-    lines.append(f'<circle cx="{ml + sw / 2 + 2:.1f}" cy="{legend2_y - sw / 2:.1f}" r="2.2" fill="{_VA_LINE_COLOR}"/>')
-    lines.append(f'<text x="{ml + sw + 10}" y="{legend2_y}" font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
-                 f'fill="#475569">Qty (Million T)</text>')
+    lines.append(f'<rect x="{ml}" y="{legend_y - sw + 1}" width="{sw + 2}" height="{sw}" fill="{bar_colors[-1]}"/>')
+    lines.append(f'<text x="{ml + sw + 6}" y="{legend_y}" font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
+                 f'fill="#475569">{legend1_text}</text>')
+    lines.append(f'<line x1="{lx2:.1f}" y1="{legend2_y - sw / 2:.1f}" x2="{lx2 + sw + 4:.1f}" y2="{legend2_y - sw / 2:.1f}" stroke="{_VA_LINE_COLOR}" stroke-width="1.8"/>')
+    lines.append(f'<circle cx="{lx2 + sw / 2 + 2:.1f}" cy="{legend2_y - sw / 2:.1f}" r="2.2" fill="{_VA_LINE_COLOR}"/>')
+    lines.append(f'<text x="{lx2 + sw + 10:.1f}" y="{legend2_y}" font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
+                 f'fill="#475569">{legend2_text}</text>')
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
 
@@ -885,10 +902,10 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
         "month_qty": month_qty,
         "five_year_svg": _value_added_combo_svg(
             fy_cats, fy_pct, fy_qty, [_VA_ORANGE] * len(fy_cats),
-            "Last 5 Years", vw=560, vh=270, label_fs=25.6),
+            "Last 5 Years", vw=560, vh=350, label_fs=17.4),
         "quarter_svg": _value_added_combo_svg(
             q_cats, q_pct, q_qty, [_VA_ORANGE_LIGHT, _VA_ORANGE],
-            "Quarter Just Ended vs CPLY", vw=300, vh=270, label_fs=24.2),
+            "Quarter Just Ended vs CPLY", vw=300, vh=350, label_fs=16.5),
     }
 
 

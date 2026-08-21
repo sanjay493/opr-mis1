@@ -1,10 +1,18 @@
         {# ── MIS at a Glance — infographic snapshot, right after the Cover page ── #}
         <div style="padding:2px 4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.8pt;color:{{ colors.text_primary }};">
 
-          {# Banner #}
-          <div style="background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};padding:4px 14px;border-radius:5px;margin-bottom:3px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;">
-            <div style="font-size:17pt;font-weight:700;">{{ page.title }}</div>
-            <div style="font-size:11pt;font-weight:700;color:{{ colors.khv_assessment_amber }};white-space:nowrap;">{{ page.month_label }}</div>
+          {# Banner — the 2px "border" ring is really an outer div whose own
+             background is a gradient running opposite to the inner banner's
+             (white on the left fading to accent-blue on the right, vs. the
+             inner banner's blue-to-white), inset by the ring's own padding.
+             A real `border` can't carry a gradient with a radius that still
+             clips cleanly in Chromium's print renderer, so this two-div
+             technique is used instead. #}
+          <div style="background:linear-gradient(to right, {{ colors.text_white }}, {{ colors.misc_accent_blue }});padding:2px;border-radius:6px;margin-bottom:3px;">
+            <div style="background:linear-gradient(to right, {{ colors.misc_accent_blue }}, {{ colors.text_white }});color:{{ colors.text_white }};padding:4px 14px;border-radius:5px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;">
+              <div style="font-size:17pt;font-weight:700;">{{ page.title }}</div>
+              <div style="font-size:11pt;font-weight:700;color:{{ colors.khv_assessment_amber }};white-space:nowrap;">{{ page.month_label }}</div>
+            </div>
           </div>
 
           {# ── Production KPI tiles ── #}
@@ -33,17 +41,17 @@
 
           {# ── Techno-Economic snapshot ── #}
           <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;">Techno-Economic Snapshot — SAIL</div>
-          <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:4px;margin-bottom:2px;">
+          <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;margin-bottom:4px;">
             {% for t in page.techno %}
             {% set tbg = colors[t.bg_key] if t.bg_key else colors.highlight_default_row_bg %}
-            <div style="background:{{ tbg }};border-radius:4px;padding:3px 5px;">
+            <div style="background:{{ tbg }};border-radius:4px;padding:7px 10px;">
               <div style="font-size:8pt;font-weight:700;line-height:1.15;color:{{ colors.text_heading_dark }};">{{ t.parameter }} <span style="font-weight:400;font-style:italic;color:{{ colors.text_secondary }};">({{ t.unit }})</span></div>
-              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:1px;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:4px;">
                 <span style="font-size:12.5pt;line-height:1.2;font-weight:700;color:{{ colors.text_primary }};">{{ t.month_actual if t.month_actual else '—' }}</span>
                 <span style="font-size:11.5pt;line-height:1.2;font-weight:400;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</span>
               </div>
               {% if t.delta_pct is not none %}
-              <div style="font-size:7.8pt;line-height:1.15;font-weight:700;color:{{ colors.text_variance_green if t.good else colors.text_variance_red }};">{{ '%+.1f'|format(t.delta_pct) }}% vs target</div>
+              <div style="font-size:7.8pt;line-height:1.15;font-weight:700;margin-top:2px;color:{{ colors.text_variance_green if t.good else colors.text_variance_red }};">{{ '%+.1f'|format(t.delta_pct) }}% vs target</div>
               {% endif %}
             </div>
             {% endfor %}
