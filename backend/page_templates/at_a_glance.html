@@ -2,9 +2,9 @@
         <div style="padding:2px 4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.8pt;color:{{ colors.text_primary }};">
 
           {# Banner #}
-          <div style="background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};padding:4px 14px;border-radius:5px;margin-bottom:3px;">
+          <div style="background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};padding:4px 14px;border-radius:5px;margin-bottom:3px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;">
             <div style="font-size:17pt;font-weight:700;">{{ page.title }}</div>
-            <div style="font-size:10.5pt;font-weight:500;opacity:0.92;">{{ page.month_label }}</div>
+            <div style="font-size:11pt;font-weight:700;color:{{ colors.khv_assessment_amber }};white-space:nowrap;">{{ page.month_label }}</div>
           </div>
 
           {# ── Production KPI tiles ── #}
@@ -13,10 +13,10 @@
             {% for row in page.production %}
             <div style="flex:1;position:relative;border:1px solid {{ colors.border_light }};border-radius:4px;padding:5px 8px 5px 12px;overflow:hidden;">
               <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg, {{ colors.misc_accent_blue }} 0 25%, {{ colors.khv_assessment_green }} 25% 50%, {{ colors.khv_assessment_amber }} 50% 75%, {{ colors.cover_molten_red }} 75% 100%);"></div>
-              <div style="font-size:11.5pt;color:{{ colors.text_secondary }};text-transform:uppercase;font-weight:600;">{{ row.item }}</div>
-              <div style="font-size:15pt;font-weight:700;color:{{ colors.text_primary }};line-height:1.15;">{{ row.month_act if row.month_act else '—' }}</div>
-              <div style="font-size:11.5pt;color:{{ colors.text_secondary }};">%Ful: <b style="color:{{ colors.text_primary }};">{{ row.month_pct_ful if row.month_pct_ful else '—' }}%</b></div>
-              <div style="font-size:11.5pt;color:{{ colors.text_secondary }};">vs CPLY:
+              <div style="font-size:8.5pt;color:{{ colors.text_secondary }};text-transform:uppercase;font-weight:700;letter-spacing:0.2px;">{{ row.item }}</div>
+              <div style="font-size:16pt;font-weight:700;color:{{ colors.text_primary }};line-height:1.2;">{{ row.month_act if row.month_act else '—' }}</div>
+              <div style="font-size:8pt;color:{{ colors.text_secondary }};">%Ful: <b style="color:{{ colors.text_primary }};">{{ row.month_pct_ful if row.month_pct_ful else '—' }}%</b></div>
+              <div style="font-size:8pt;color:{{ colors.text_secondary }};">vs CPLY:
                 {% if row.growth_good == true %}<b style="color:{{ colors.text_variance_green }};">+{{ row.pct_growth_cply }}%</b>
                 {% elif row.growth_good == false %}<b style="color:{{ colors.text_variance_red }};">{{ row.pct_growth_cply }}%</b>
                 {% else %}<b>—</b>{% endif %}
@@ -26,7 +26,7 @@
           </div>
 
           {# ── YTD-by-FY bar chart (last 4 years, Apr-to-month) ── #}
-          <div style="font-size:12pt;font-weight:900;color:{{ colors.text_heading_dark }};margin-bottom:3px;">Production Trend — Last 4 Years ({{ page.ytd_trend.period_label }}, '000 T)</div>
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">Production Trend — Last 4 Years ({{ page.ytd_trend.period_label }}, '000 T)</div>
           <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:3px 8px;margin-bottom:3px;">
             {{ page.ytd_trend.svg }}
           </div>
@@ -37,12 +37,13 @@
             {% for t in page.techno %}
             {% set tbg = colors[t.bg_key] if t.bg_key else colors.highlight_default_row_bg %}
             <div style="background:{{ tbg }};border-radius:4px;padding:3px 5px;">
-              <div style="font-size:11pt;font-weight:700;line-height:1.05;color:{{ colors.text_heading_dark }};">{{ t.parameter }}</div>
-              <div style="font-size:11pt;line-height:1.05;color:{{ colors.text_secondary }};font-style:italic;">{{ t.unit }}</div>
-              <div style="font-size:11pt;line-height:1.05;font-weight:700;color:{{ colors.text_primary }};">{{ t.month_actual if t.month_actual else '—' }}</div>
-              <div style="font-size:11pt;line-height:1.05;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</div>
+              <div style="font-size:8pt;font-weight:700;line-height:1.15;color:{{ colors.text_heading_dark }};">{{ t.parameter }} <span style="font-weight:400;font-style:italic;color:{{ colors.text_secondary }};">({{ t.unit }})</span></div>
+              <div style="display:flex;align-items:baseline;gap:5px;margin-top:1px;">
+                <span style="font-size:12.5pt;line-height:1.2;font-weight:700;color:{{ colors.text_primary }};">{{ t.month_actual if t.month_actual else '—' }}</span>
+                <span style="font-size:11.5pt;line-height:1.2;font-weight:400;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</span>
+              </div>
               {% if t.delta_pct is not none %}
-              <div style="font-size:11pt;line-height:1.05;font-weight:700;color:{{ colors.text_variance_green if t.good else colors.text_variance_red }};">{{ '%+.1f'|format(t.delta_pct) }}% vs target</div>
+              <div style="font-size:7.8pt;line-height:1.15;font-weight:700;color:{{ colors.text_variance_green if t.good else colors.text_variance_red }};">{{ '%+.1f'|format(t.delta_pct) }}% vs target</div>
               {% endif %}
             </div>
             {% endfor %}

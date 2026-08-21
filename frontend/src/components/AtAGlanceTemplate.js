@@ -17,6 +17,7 @@ const C = {
   defaultRowBg: 'transparent',
   borderLight: '#cbd5e1',
   borderDivider: '#e2e8f0',
+  khvAssessmentAmber: '#d97706',
 };
 
 // Techno-Economic Snapshot tile backgrounds by category — mirrors the
@@ -40,13 +41,17 @@ function ProductionTiles({ production }) {
     <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
       {production.map((row) => (
         <div key={row.item} style={{
-          flex: 1, border: `1px solid ${C.borderLight}`, borderLeft: `4px solid ${C.accentBlue}`,
-          borderRadius: 4, padding: '7px 9px',
+          flex: 1, position: 'relative', border: `1px solid ${C.borderLight}`,
+          borderRadius: 4, padding: '7px 9px 7px 13px', overflow: 'hidden',
         }}>
-          <div style={{ fontSize: '7.6pt', color: C.textSecondary, textTransform: 'uppercase', fontWeight: 600 }}>{row.item}</div>
-          <div style={{ fontSize: '15pt', fontWeight: 700, color: C.textPrimary, lineHeight: 1.3 }}>{row.month_act || '—'}</div>
-          <div style={{ fontSize: '7.4pt', color: C.textSecondary }}>%Ful: <b style={{ color: C.textPrimary }}>{row.month_pct_ful || '—'}%</b></div>
-          <div style={{ fontSize: '7.4pt', color: C.textSecondary }}>vs CPLY: <GrowthText value={row.pct_growth_cply} good={row.growth_good} /></div>
+          <div style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0, width: 4,
+            background: `linear-gradient(180deg, ${C.accentBlue} 0 25%, #16a34a 25% 50%, #d97706 50% 75%, #b91c1c 75% 100%)`,
+          }} />
+          <div style={{ fontSize: '8.5pt', color: C.textSecondary, textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.2 }}>{row.item}</div>
+          <div style={{ fontSize: '16pt', fontWeight: 700, color: C.textPrimary, lineHeight: 1.2 }}>{row.month_act || '—'}</div>
+          <div style={{ fontSize: '8pt', color: C.textSecondary }}>%Ful: <b style={{ color: C.textPrimary }}>{row.month_pct_ful || '—'}%</b></div>
+          <div style={{ fontSize: '8pt', color: C.textSecondary }}>vs CPLY: <GrowthText value={row.pct_growth_cply} good={row.growth_good} /></div>
         </div>
       ))}
     </div>
@@ -67,12 +72,15 @@ function TechnoTiles({ techno }) {
         const bg = (t.bg_key && TECHNO_CAT_BG[t.bg_key]) || C.defaultRowBg;
         return (
           <div key={t.parameter} style={{ flex: 1, background: bg, borderRadius: 4, padding: '6px 8px' }}>
-            <div style={{ fontSize: '7.6pt', fontWeight: 700, color: C.textHeadingDark }}>{t.parameter}</div>
-            <div style={{ fontSize: '6.8pt', color: C.textSecondary, fontStyle: 'italic' }}>{t.unit}</div>
-            <div style={{ fontSize: '11pt', fontWeight: 700, color: C.textPrimary }}>{t.month_actual || '—'}</div>
-            <div style={{ fontSize: '7pt', color: C.textSecondary }}>Target: {t.target || '—'}</div>
+            <div style={{ fontSize: '8pt', fontWeight: 700, lineHeight: 1.15, color: C.textHeadingDark }}>
+              {t.parameter} <span style={{ fontWeight: 400, fontStyle: 'italic', color: C.textSecondary }}>({t.unit})</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 1 }}>
+              <span style={{ fontSize: '12.5pt', fontWeight: 700, lineHeight: 1.2, color: C.textPrimary }}>{t.month_actual || '—'}</span>
+              <span style={{ fontSize: '11.5pt', fontWeight: 400, lineHeight: 1.2, color: C.textSecondary }}>Target: {t.target || '—'}</span>
+            </div>
             {t.delta_pct !== null && t.delta_pct !== undefined && (
-              <div style={{ fontSize: '7.4pt', fontWeight: 700, color: t.good ? C.textVarianceGreen : C.textVarianceRed }}>
+              <div style={{ fontSize: '7.8pt', lineHeight: 1.15, fontWeight: 700, color: t.good ? C.textVarianceGreen : C.textVarianceRed }}>
                 {t.delta_pct > 0 ? '+' : ''}{t.delta_pct.toFixed(1)}% vs target
               </div>
             )}
@@ -114,9 +122,9 @@ export default function AtAGlanceTemplate({ data }) {
 
   return (
     <div style={{ padding: '2px 4px', fontFamily: "'Arial Narrow', Arial, sans-serif", fontSize: '7.8pt', color: C.textPrimary }}>
-      <div style={{ background: C.accentBlue, color: C.textWhite, padding: '8px 16px', borderRadius: 5, marginBottom: 6 }}>
+      <div style={{ background: C.accentBlue, color: C.textWhite, padding: '8px 16px', borderRadius: 5, marginBottom: 6, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ fontSize: '17pt', fontWeight: 700 }}>{title}</div>
-        <div style={{ fontSize: '10.5pt', fontWeight: 500, opacity: 0.92 }}>{monthLabel}</div>
+        <div style={{ fontSize: '11pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
       </div>
 
       <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
@@ -124,7 +132,7 @@ export default function AtAGlanceTemplate({ data }) {
       </div>
       <ProductionTiles production={production} />
 
-      <div style={{ fontSize: '12pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
         Production Trend — Last 4 Years ({ytdTrend.period_label || ''} each year, &apos;000 T)
       </div>
       <YtdTrendChart ytdTrend={ytdTrend} />

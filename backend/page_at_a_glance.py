@@ -47,6 +47,16 @@ _TE_PARAMS = [
 # import blend), not by whether it's over/under target — that comparison is
 # already carried by the delta_pct text color, so the tile fill is free to
 # encode identity instead. Keys are colors_config.json entries.
+# Display-only label overrides for the At-a-Glance tile — the parameter's
+# own name (used as its lookup key throughout this section, incl.
+# _TE_LOWER_IS_BETTER/_TE_CATEGORY_BG/te dict) stays unabbreviated; only the
+# tile's rendered heading is shortened, to fit the tile width now that the
+# parameter clubs its unit onto the same line (e.g. "Specific Energy
+# Consumption (Gcal/tcs)" no longer fits in one line otherwise).
+_TE_DISPLAY_NAME = {
+    "Specific Energy Consumption": "SEC",
+}
+
 _TE_CATEGORY_BG = {
     "Coke Rate": "techno_cat_fuel_bg",
     "Fuel Rate": "techno_cat_fuel_bg",
@@ -391,14 +401,14 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
     cluster_pad = (group_w - cluster_w) / 2
 
     # fs is this chart's own SVG-viewBox font-size, NOT points — a literal
-    # 11 here rendered at only ~5.5pt on a real page (confirmed empirically:
-    # this chart's viewBox-to-rendered-width ratio is ~1.99), so it's scaled
-    # up here to actually measure ~11pt once Chromium shrinks the whole
-    # 980-wide viewBox down to this chart's real on-page width. data_fs
-    # (in-bar value labels) is left at its original scale — not part of
-    # this legibility fix.
-    fs = 22.0        # item name / growth labels / legend — true ~11pt on the page
-    data_fs = 14.0   # in-bar data value labels — larger, read against the bar's own fill
+    # value here does not render at that many points on the page (confirmed
+    # empirically: this chart's viewBox-to-rendered-width ratio is ~1.99),
+    # so it's scaled up here to actually measure the target true point size
+    # once Chromium shrinks the whole 980-wide viewBox down to this chart's
+    # real on-page width. data_fs (in-bar value labels) is left at its own
+    # original scale, independent of fs.
+    fs = 15.0        # item name / growth labels / legend — true ~7.5pt on the page
+    data_fs = 14.0   # in-bar data value labels — true ~7.0pt, read against the bar's own fill
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
@@ -595,7 +605,7 @@ def _techno_section(report_month: str) -> list:
             if name in _TE_LOWER_IS_BETTER:
                 delta = -delta
         out.append({
-            "parameter": name, "unit": row["unit"],
+            "parameter": _TE_DISPLAY_NAME.get(name, name), "unit": row["unit"],
             "target": target, "month_actual": month_actual,
             "delta_pct": None if delta is None else round(delta, 1),
             "good": None if delta is None else delta >= 0,
