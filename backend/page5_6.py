@@ -652,14 +652,14 @@ def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title
     # above it.
     return (
         '<div style="margin-top:16px;">'
-        f'<div style="font-size:9px;font-weight:bold;font-family:Arial,sans-serif;'
+        f'<div style="font-size:12pt;font-weight:bold;font-family:Arial,sans-serif;'
         f'color:#1e293b;margin-bottom:6px;">{title}</div>'
         '<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">'
         f'<thead><tr><th style="padding:2.5px 4px;border:1px solid {_GRID_BORDER};font-size:6.8px;">PLANT</th>'
         f'{head_cells}</tr></thead>'
         f'<tbody>{"".join(body_rows)}</tbody>'
         '</table>'
-        '<div style="text-align:center;font-size:7px;font-weight:bold;color:#1e293b;'
+        '<div style="text-align:center;font-size:10.5pt;font-weight:bold;color:#1e293b;'
         'font-family:Arial,sans-serif;margin-top:6px;">'
         'CS to HM Ratio = CS / (Total HM Production &minus; HM sent to PCM/Sandpit &minus; HM sent to ASP)'
         '</div>'

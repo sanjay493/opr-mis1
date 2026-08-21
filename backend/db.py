@@ -2589,6 +2589,12 @@ def list_techno_plan_fys(plant: str = None) -> List[str]:
 COST_TREND_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
 COST_TREND_COST_TYPES = ["TOTAL", "VARIABLE", "FIXED"]
 
+# Entry-only subsets: "SAIL 5 ISPs" is always the sum of the other 5 plants,
+# and "TOTAL COST" is always VARIABLE + FIXED — neither is entered directly,
+# both are computed by page_cost_trend.py from these entered values.
+COST_TREND_ENTRY_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+COST_TREND_ENTRY_COST_TYPES = ["VARIABLE", "FIXED"]
+
 
 def get_cost_trend_annual(product: str, fys: List[str]) -> Dict[str, Any]:
     """{fy: {cost_type: {plant: value}}} for the given product ('HM'/'CS'/

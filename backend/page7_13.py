@@ -22,6 +22,8 @@ _PIG_IRON_CFG = {
     "db_item": "Pig Iron",
     "is_nos": False,
     "groups": [("SAIL", _SAIL_8)],
+    # See _FINISHED_STEEL_CFG's comment — same combined-page code path.
+    "show_all_rows": True,
 }
 
 _FINISHED_STEEL_CFG = {
@@ -30,6 +32,14 @@ _FINISHED_STEEL_CFG = {
     "db_item": "Finished Steel",
     "is_nos": False,
     "groups": [("SAIL", _SAIL_8)],
+    # Required for the SAIL row to actually use _live_sum_or_sail_fallback
+    # (see prefer_live_sum below) instead of silently summing only
+    # whichever of the 8 plants happen to have a Finished Steel entry for
+    # a given month — without this, months where some plants have no
+    # entry (routine in older years; RSP/BSL/ISP/ASP have none at all
+    # historically) undercount badly instead of falling back to the
+    # historically-recorded SAIL total.
+    "show_all_rows": True,
 }
 
 TREND_PAGES = {

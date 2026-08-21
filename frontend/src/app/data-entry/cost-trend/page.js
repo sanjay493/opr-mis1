@@ -6,20 +6,21 @@ import GlobalNavbar from '@/components/GlobalNavbar';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
-// Must match db.py's COST_TREND_PLANTS / COST_TREND_COST_TYPES and
-// page_cost_trend.py's _PRODUCT_TITLE / _COST_TYPE_LABEL.
+// Must match db.py's COST_TREND_ENTRY_PLANTS / COST_TREND_ENTRY_COST_TYPES
+// and page_cost_trend.py's _PRODUCT_TITLE / _COST_TYPE_LABEL. TOTAL COST and
+// the "SAIL 5 ISPs" row are computed on the report page (TOTAL = VARIABLE +
+// FIXED, SAIL = sum of these 5 plants) — never entered here.
 const PRODUCTS = [
   { value: 'HM', label: 'Hot Metal' },
   { value: 'CS', label: 'Crude Steel' },
   { value: 'SS', label: 'Saleable Steel' },
 ];
 const COST_TYPES = [
-  { value: 'TOTAL', label: 'Total Cost' },
   { value: 'VARIABLE', label: 'Variable Cost' },
   { value: 'FIXED', label: 'Fixed Cost' },
 ];
-const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
-const PLANT_LABEL = { SAIL: 'SAIL 5 ISPs' };
+const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
+const PLANT_LABEL = {};
 const FY_LIST = ['2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29'];
 
 const keyOf = (costType, plant) => `${costType}|${plant}`;
@@ -156,16 +157,16 @@ function CostTrendPageInner() {
   });
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
       <GlobalNavbar />
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '22px 20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', maxWidth: 1200, width: '100%', margin: '0 auto', padding: '22px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
             Cost Trend Entry — Pages 3.61-3.63
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Trend in Cost of Production (Hot Metal / Crude Steel / Saleable Steel) — Total / Variable / Fixed Cost per plant, annual history and current-FY month + till-month
+            Trend in Cost of Production (Hot Metal / Crude Steel / Saleable Steel) — Variable / Fixed Cost per plant (BSP/DSP/RSP/BSL/ISP), annual history and current-FY month + till-month. Total Cost and SAIL 5 ISPs are computed automatically on the report.
           </span>
         </div>
 

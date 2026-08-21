@@ -5,10 +5,8 @@ inserted right after "SAIL Large BFs - Performance Snapshot" (page 3.6):
 3.61 (Hot Metal), 3.62 (Crude Steel), 3.63 (Saleable Steel).
 
 Each page reproduces its sheet's 3 blocks (Total/Variable/Fixed Cost), one
-row per plant (BSP/DSP/RSP/BSL/ISP, plus the workbook's own "SAIL 5 ISPs"
-aggregate row — entered directly like every other row, not computed, since
-the source doesn't state whether it's a simple average or a weighted one),
-with dynamic columns per direct instruction:
+row per plant (BSP/DSP/RSP/BSL/ISP, plus a "SAIL 5 ISPs" aggregate row), with
+dynamic columns per direct instruction:
   - N closed FYs immediately before the report month's own FY (6, matching
     the source workbook's Apr'20-Mar'26 span for a Jul'26 report month —
     recalculated from report_month every time, never hardcoded to those
@@ -18,13 +16,21 @@ with dynamic columns per direct instruction:
     source workbook, added per direct instruction alongside the monthly
     columns).
 
-Data is 100% DB-sourced (db.cost_trend_annual / db.cost_trend_monthly),
-entered via the Cost Trend Entry data-entry page (frontend/src/app/
-data-entry/cost-trend) — nothing computed or hardcoded here; a period/
-plant/cost-type with no entry shows "—". till_month is entered directly
-(same convention as techno_data / Demurrage elsewhere in this app), not
-auto-summed from the monthly columns, since a plant's own reported
-cumulative doesn't always tie out to a clean sum of its monthly figures.
+Data is DB-sourced (db.cost_trend_annual / db.cost_trend_monthly), entered
+via the Cost Trend Entry data-entry page (frontend/src/app/data-entry/
+cost-trend) for VARIABLE and FIXED cost, BSP/DSP/RSP/BSL/ISP only — a
+period/plant with no entry shows "—". till_month is entered directly (same
+convention as techno_data / Demurrage elsewhere in this app), not auto-
+summed from the monthly columns, since a plant's own reported cumulative
+doesn't always tie out to a clean sum of its monthly figures.
+
+TOTAL COST and the "SAIL 5 ISPs" row are never entered — both are computed
+here per direct instruction: TOTAL = VARIABLE + FIXED for a given plant, and
+SAIL = sum of BSP/DSP/RSP/BSL/ISP for a given cost type (so SAIL's own TOTAL
+comes out the same either way it's derived). A computed value is None only
+if every one of its inputs is missing; otherwise missing inputs are treated
+as 0, matching this app's existing SQL SUM(...) plant-aggregation convention
+(db.get_sail_production_actual) of summing whatever is present.
 """
 import db
 
@@ -66,6 +72,27 @@ def _annual_fys(report_month: str, n: int = 6) -> list:
     return [f"{y}-{(y + 1) % 100:02d}" for y in range(fy_start_year - n, fy_start_year)]
 
 
+def _sum_or_none(values: list) -> "float | None":
+    present = [v for v in values if v is not None]
+    return sum(present) if present else None
+
+
+def _cost_value(cost_type: str, plant: str, get_raw) -> "float | None":
+    """Resolves one (cost_type, plant) cell. get_raw(cost_type, plant) must
+    return the raw DB value for cost_type in ('VARIABLE', 'FIXED') and plant
+    in db.COST_TREND_ENTRY_PLANTS — the only cells actually entered. TOTAL
+    and the SAIL row are computed per the module docstring."""
+    if plant == "SAIL":
+        if cost_type == "TOTAL":
+            parts = [_cost_value("TOTAL", p, get_raw) for p in db.COST_TREND_ENTRY_PLANTS]
+        else:
+            parts = [get_raw(cost_type, p) for p in db.COST_TREND_ENTRY_PLANTS]
+        return _sum_or_none(parts)
+    if cost_type == "TOTAL":
+        return _sum_or_none([get_raw("VARIABLE", plant), get_raw("FIXED", plant)])
+    return get_raw(cost_type, plant)
+
+
 def generate_cost_trend(report_month: str, product: str) -> dict:
     fy_months = db.get_fy_months(report_month)
     ytd_months = [m for m in fy_months if m <= report_month]
@@ -86,12 +113,13 @@ def generate_cost_trend(report_month: str, product: str) -> dict:
         for plant in db.COST_TREND_PLANTS:
             cells = {}
             for fy in annual_fys:
-                cells[f"annual:{fy}"] = _fmt(annual_data.get(fy, {}).get(cost_type, {}).get(plant))
+                get_raw = lambda ct, p, fy=fy: annual_data.get(fy, {}).get(ct, {}).get(p)
+                cells[f"annual:{fy}"] = _fmt(_cost_value(cost_type, plant, get_raw))
             for m in ytd_months:
-                v = monthly_data.get(m, {}).get(cost_type, {}).get(plant, {}).get("month")
-                cells[f"month:{m}"] = _fmt(v)
-            tv = monthly_data.get(report_month, {}).get(cost_type, {}).get(plant, {}).get("till_month")
-            cells["till_month"] = _fmt(tv)
+                get_raw = lambda ct, p, m=m: monthly_data.get(m, {}).get(ct, {}).get(p, {}).get("month")
+                cells[f"month:{m}"] = _fmt(_cost_value(cost_type, plant, get_raw))
+            get_raw_till = lambda ct, p: monthly_data.get(report_month, {}).get(ct, {}).get(p, {}).get("till_month")
+            cells["till_month"] = _fmt(_cost_value(cost_type, plant, get_raw_till))
             rows.append({"plant": _PLANT_LABEL[plant], "cells": cells})
         blocks.append({"label": _COST_TYPE_LABEL[cost_type], "rows": rows})
 

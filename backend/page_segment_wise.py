@@ -212,13 +212,13 @@ def generate_segment_wise(report_month: str) -> dict:
                        _ytd_one(cur,"act","BSL","CR Sheets",ytd),
                        _ytd_one(cur,"act","BSL","CR Sheets",cply_ytd)))
         rows.append(_r("Thick Plates", "data", "FLAT", "BSL",
-                       _ann(cur,"BSL","CRSALE",fy),
-                       _one(cur,"plan","BSL","CRSALE",report_month),
-                       _one(cur,"act","BSL","CRSALE",report_month),
-                       _one(cur,"act","BSL","CRSALE",prev_month),
-                       _ytd_one(cur,"plan","BSL","CRSALE",ytd),
-                       _ytd_one(cur,"act","BSL","CRSALE",ytd),
-                       _ytd_one(cur,"act","BSL","CRSALE",cply_ytd)))
+                       _ann(cur,"BSL","Thick Plate",fy),
+                       _one(cur,"plan","BSL","Thick Plate",report_month),
+                       _one(cur,"act","BSL","Thick Plate",report_month),
+                       _one(cur,"act","BSL","Thick Plate",prev_month),
+                       _ytd_one(cur,"plan","BSL","Thick Plate",ytd),
+                       _ytd_one(cur,"act","BSL","Thick Plate",ytd),
+                       _ytd_one(cur,"act","BSL","Thick Plate",cply_ytd)))
 
         # GP/GC total for BSL = GP/GC + GPC3
         gp_ann   = (_ann(cur,"BSL","GP/GC",fy) or 0) + (_ann(cur,"BSL","GPC3",fy) or 0)
