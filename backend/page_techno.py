@@ -2474,40 +2474,11 @@ _TECHNO_DB_SCHEMA = {
     },
     29.5: {
         "type": "param",
-        # The 16 sections below (Nut Coke Rate .. Fce Utilisation) were added
-        # to give "SAIL Large BFs - Performance Snapshot" (page_bf_large_
-        # annexure.py, ABP Targets column) an actual entry point — every one
-        # of these params is already shown per-furnace on that report page,
-        # but had no Target/Norm anywhere in techno_plan_fy for BF-8/BF-5
-        # (only the 8 params already listed above + on page 29 did). Same
-        # reused techno-page-targets mechanism, not a new endpoint — matches
-        # how the Mill Norms (pages 31-35) entry was added. "Fce
-        # Availability" lists both the canonical key and ISP's own upload
-        # alias (furnace_availability) since _key_available here only
-        # resolves _COKE_OVEN_PARAM_ALIASES, not this key's separate
-        # KEY_ALIASES entry.
         "sections": [
             ("BF Productivity",      "t/m³/day", [("BF-1", "bf_productivity"), ("BF-2", "bf_productivity"), ("BF-3", "bf_productivity"), ("BF-4", "bf_productivity"), ("BF-5", "bf_productivity"), ("BF-6", "bf_productivity"), ("BF-7", "bf_productivity"), ("BF-8", "bf_productivity"), ("BF_Shop", "bf_productivity")]),
             ("Oxygen Enrichment",   "%",         [("BF-1", "o2_enrichment"), ("BF-2", "o2_enrichment"), ("BF-3", "o2_enrichment"), ("BF-4", "o2_enrichment"), ("BF-5", "o2_enrichment"), ("BF-6", "o2_enrichment"), ("BF-7", "o2_enrichment"), ("BF-8", "o2_enrichment"), ("BF_Shop", "o2_enrichment")]),
             ("Pellet in Burden",     "%",        [("BF-1", "pellet_in_burden"), ("BF-2", "pellet_in_burden"), ("BF-3", "pellet_in_burden"), ("BF-4", "pellet_in_burden"), ("BF-5", "pellet_in_burden"), ("BF-6", "pellet_in_burden"), ("BF-7", "pellet_in_burden"), ("BF-8", "pellet_in_burden"), ("BF_Shop", "pellet_in_burden")]),
             ("Slag Rate",            "kg/thm",   [("BF-1", "slag_rate"), ("BF-2", "slag_rate"), ("BF-3", "slag_rate"), ("BF-4", "slag_rate"), ("BF-5", "slag_rate"), ("BF-6", "slag_rate"), ("BF-7", "slag_rate"), ("BF-8", "slag_rate"), ("BF_Shop", "slag_rate")]),
-            ("Nut Coke Rate",        "kg/thm",   [("BF-1", "nut_coke_rate"), ("BF-2", "nut_coke_rate"), ("BF-3", "nut_coke_rate"), ("BF-4", "nut_coke_rate"), ("BF-5", "nut_coke_rate"), ("BF-6", "nut_coke_rate"), ("BF-7", "nut_coke_rate"), ("BF-8", "nut_coke_rate"), ("BF_Shop", "nut_coke_rate")]),
-            ("Sinter in Burden",     "%",        [("BF-1", "sinter_in_burden"), ("BF-2", "sinter_in_burden"), ("BF-3", "sinter_in_burden"), ("BF-4", "sinter_in_burden"), ("BF-5", "sinter_in_burden"), ("BF-6", "sinter_in_burden"), ("BF-7", "sinter_in_burden"), ("BF-8", "sinter_in_burden"), ("BF_Shop", "sinter_in_burden")]),
-            ("Lump in Burden",       "%",        [("BF-1", "lump_in_burden"), ("BF-2", "lump_in_burden"), ("BF-3", "lump_in_burden"), ("BF-4", "lump_in_burden"), ("BF-5", "lump_in_burden"), ("BF-6", "lump_in_burden"), ("BF-7", "lump_in_burden"), ("BF-8", "lump_in_burden"), ("BF_Shop", "lump_in_burden")]),
-            ("HM Silicon",           "%",        [("BF-1", "silicon_in_hm"), ("BF-2", "silicon_in_hm"), ("BF-3", "silicon_in_hm"), ("BF-4", "silicon_in_hm"), ("BF-5", "silicon_in_hm"), ("BF-6", "silicon_in_hm"), ("BF-7", "silicon_in_hm"), ("BF-8", "silicon_in_hm"), ("BF_Shop", "silicon_in_hm")]),
-            ("HM Sulphur",           "%",        [("BF-1", "sulphur_in_hm"), ("BF-2", "sulphur_in_hm"), ("BF-3", "sulphur_in_hm"), ("BF-4", "sulphur_in_hm"), ("BF-5", "sulphur_in_hm"), ("BF-6", "sulphur_in_hm"), ("BF-7", "sulphur_in_hm"), ("BF-8", "sulphur_in_hm"), ("BF_Shop", "sulphur_in_hm")]),
-            ("Hot Metal Temperature", "°C",      [("BF-1", "avg_hot_metal_temperature"), ("BF-2", "avg_hot_metal_temperature"), ("BF-3", "avg_hot_metal_temperature"), ("BF-4", "avg_hot_metal_temperature"), ("BF-5", "avg_hot_metal_temperature"), ("BF-6", "avg_hot_metal_temperature"), ("BF-7", "avg_hot_metal_temperature"), ("BF-8", "avg_hot_metal_temperature"), ("BF_Shop", "avg_hot_metal_temperature")]),
-            ("Top Pressure",         "kg/cm²",   [("BF-1", "top_pressure"), ("BF-2", "top_pressure"), ("BF-3", "top_pressure"), ("BF-4", "top_pressure"), ("BF-5", "top_pressure"), ("BF-6", "top_pressure"), ("BF-7", "top_pressure"), ("BF-8", "top_pressure"), ("BF_Shop", "top_pressure")]),
-            ("Slag MgO",             "%",        [("BF-1", "slag_mgo"), ("BF-2", "slag_mgo"), ("BF-3", "slag_mgo"), ("BF-4", "slag_mgo"), ("BF-5", "slag_mgo"), ("BF-6", "slag_mgo"), ("BF-7", "slag_mgo"), ("BF-8", "slag_mgo"), ("BF_Shop", "slag_mgo")]),
-            ("Slag Al2O3",           "%",        [("BF-1", "slag_al2o3"), ("BF-2", "slag_al2o3"), ("BF-3", "slag_al2o3"), ("BF-4", "slag_al2o3"), ("BF-5", "slag_al2o3"), ("BF-6", "slag_al2o3"), ("BF-7", "slag_al2o3"), ("BF-8", "slag_al2o3"), ("BF_Shop", "slag_al2o3")]),
-            ("Slag B2",              "Ratio",    [("BF-1", "slag_b2"), ("BF-2", "slag_b2"), ("BF-3", "slag_b2"), ("BF-4", "slag_b2"), ("BF-5", "slag_b2"), ("BF-6", "slag_b2"), ("BF-7", "slag_b2"), ("BF-8", "slag_b2"), ("BF_Shop", "slag_b2")]),
-            ("Eta CO",               "%",        [("BF-1", "eta_co"), ("BF-2", "eta_co"), ("BF-3", "eta_co"), ("BF-4", "eta_co"), ("BF-5", "eta_co"), ("BF-6", "eta_co"), ("BF-7", "eta_co"), ("BF-8", "eta_co"), ("BF_Shop", "eta_co")]),
-            ("Steam Rate",           "T/Hr",     [("BF-1", "steam_rate_hr"), ("BF-2", "steam_rate_hr"), ("BF-3", "steam_rate_hr"), ("BF-4", "steam_rate_hr"), ("BF-5", "steam_rate_hr"), ("BF-6", "steam_rate_hr"), ("BF-7", "steam_rate_hr"), ("BF-8", "steam_rate_hr"), ("BF_Shop", "steam_rate_hr")]),
-            ("Heat Load/Flux",       "MJ/hr",    [("BF-1", "heat_load_flux"), ("BF-2", "heat_load_flux"), ("BF-3", "heat_load_flux"), ("BF-4", "heat_load_flux"), ("BF-5", "heat_load_flux"), ("BF-6", "heat_load_flux"), ("BF-7", "heat_load_flux"), ("BF-8", "heat_load_flux"), ("BF_Shop", "heat_load_flux")]),
-            ("Tapping Duration",     "Hrs",      [("BF-1", "tapping_duration"), ("BF-2", "tapping_duration"), ("BF-3", "tapping_duration"), ("BF-4", "tapping_duration"), ("BF-5", "tapping_duration"), ("BF-6", "tapping_duration"), ("BF-7", "tapping_duration"), ("BF-8", "tapping_duration"), ("BF_Shop", "tapping_duration")]),
-            ("Fce Availability",     "%",        [("BF-1", "availability"), ("BF-2", "availability"), ("BF-3", "availability"), ("BF-4", "availability"), ("BF-5", "availability"), ("BF-6", "availability"), ("BF-7", "availability"), ("BF-8", "availability"), ("BF_Shop", "availability"),
-                                                   ("BF-1", "furnace_availability"), ("BF-2", "furnace_availability"), ("BF-3", "furnace_availability"), ("BF-4", "furnace_availability"), ("BF-5", "furnace_availability"), ("BF-6", "furnace_availability"), ("BF-7", "furnace_availability"), ("BF-8", "furnace_availability"), ("BF_Shop", "furnace_availability")]),
-            ("Fce Utilisation",      "%",        [("BF-1", "utilisation"), ("BF-2", "utilisation"), ("BF-3", "utilisation"), ("BF-4", "utilisation"), ("BF-5", "utilisation"), ("BF-6", "utilisation"), ("BF-7", "utilisation"), ("BF-8", "utilisation"), ("BF_Shop", "utilisation")]),
         ],
     },
     30: {
@@ -2884,6 +2855,44 @@ def _resolve_target_column_label(page_no, plant, src_unit, src_key, sec_label):
     return label
 
 
+# Target-entry-only sections, layered onto _TECHNO_DB_SCHEMA's own sections
+# by generate_techno_target_columns() below — kept OUT of _TECHNO_DB_SCHEMA
+# itself because that dict is also read by generate_techno_from_db() to
+# decide what rows the actual printed report shows: an earlier attempt at
+# this feature added these sections directly into _TECHNO_DB_SCHEMA[29.5]
+# and inadvertently added 16 unwanted rows to the real "Iron Making
+# (contd.)" report page along with it. These 16 params are all shown per-
+# furnace on "SAIL Large BFs - Performance Snapshot" (page_bf_large_
+# annexure.py, ABP Targets column) and had no Target/Norm entry point
+# anywhere for BF-8/BF-5 (only the params in _TECHNO_DB_SCHEMA[29]/[29.5]
+# did) — this gives them one without changing what page 29.5 itself
+# prints. "Fce Availability" lists both the canonical key and ISP's own
+# upload alias (furnace_availability) since _key_available below only
+# resolves _COKE_OVEN_PARAM_ALIASES, not this key's separate KEY_ALIASES
+# entry.
+_TECHNO_TARGET_EXTRA_SECTIONS = {
+    29.5: [
+        ("Nut Coke Rate",        "kg/thm",   [("BF-1", "nut_coke_rate"), ("BF-2", "nut_coke_rate"), ("BF-3", "nut_coke_rate"), ("BF-4", "nut_coke_rate"), ("BF-5", "nut_coke_rate"), ("BF-6", "nut_coke_rate"), ("BF-7", "nut_coke_rate"), ("BF-8", "nut_coke_rate"), ("BF_Shop", "nut_coke_rate")]),
+        ("Sinter in Burden",     "%",        [("BF-1", "sinter_in_burden"), ("BF-2", "sinter_in_burden"), ("BF-3", "sinter_in_burden"), ("BF-4", "sinter_in_burden"), ("BF-5", "sinter_in_burden"), ("BF-6", "sinter_in_burden"), ("BF-7", "sinter_in_burden"), ("BF-8", "sinter_in_burden"), ("BF_Shop", "sinter_in_burden")]),
+        ("Lump in Burden",       "%",        [("BF-1", "lump_in_burden"), ("BF-2", "lump_in_burden"), ("BF-3", "lump_in_burden"), ("BF-4", "lump_in_burden"), ("BF-5", "lump_in_burden"), ("BF-6", "lump_in_burden"), ("BF-7", "lump_in_burden"), ("BF-8", "lump_in_burden"), ("BF_Shop", "lump_in_burden")]),
+        ("HM Silicon",           "%",        [("BF-1", "silicon_in_hm"), ("BF-2", "silicon_in_hm"), ("BF-3", "silicon_in_hm"), ("BF-4", "silicon_in_hm"), ("BF-5", "silicon_in_hm"), ("BF-6", "silicon_in_hm"), ("BF-7", "silicon_in_hm"), ("BF-8", "silicon_in_hm"), ("BF_Shop", "silicon_in_hm")]),
+        ("HM Sulphur",           "%",        [("BF-1", "sulphur_in_hm"), ("BF-2", "sulphur_in_hm"), ("BF-3", "sulphur_in_hm"), ("BF-4", "sulphur_in_hm"), ("BF-5", "sulphur_in_hm"), ("BF-6", "sulphur_in_hm"), ("BF-7", "sulphur_in_hm"), ("BF-8", "sulphur_in_hm"), ("BF_Shop", "sulphur_in_hm")]),
+        ("Hot Metal Temperature", "°C",      [("BF-1", "avg_hot_metal_temperature"), ("BF-2", "avg_hot_metal_temperature"), ("BF-3", "avg_hot_metal_temperature"), ("BF-4", "avg_hot_metal_temperature"), ("BF-5", "avg_hot_metal_temperature"), ("BF-6", "avg_hot_metal_temperature"), ("BF-7", "avg_hot_metal_temperature"), ("BF-8", "avg_hot_metal_temperature"), ("BF_Shop", "avg_hot_metal_temperature")]),
+        ("Top Pressure",         "kg/cm²",   [("BF-1", "top_pressure"), ("BF-2", "top_pressure"), ("BF-3", "top_pressure"), ("BF-4", "top_pressure"), ("BF-5", "top_pressure"), ("BF-6", "top_pressure"), ("BF-7", "top_pressure"), ("BF-8", "top_pressure"), ("BF_Shop", "top_pressure")]),
+        ("Slag MgO",             "%",        [("BF-1", "slag_mgo"), ("BF-2", "slag_mgo"), ("BF-3", "slag_mgo"), ("BF-4", "slag_mgo"), ("BF-5", "slag_mgo"), ("BF-6", "slag_mgo"), ("BF-7", "slag_mgo"), ("BF-8", "slag_mgo"), ("BF_Shop", "slag_mgo")]),
+        ("Slag Al2O3",           "%",        [("BF-1", "slag_al2o3"), ("BF-2", "slag_al2o3"), ("BF-3", "slag_al2o3"), ("BF-4", "slag_al2o3"), ("BF-5", "slag_al2o3"), ("BF-6", "slag_al2o3"), ("BF-7", "slag_al2o3"), ("BF-8", "slag_al2o3"), ("BF_Shop", "slag_al2o3")]),
+        ("Slag B2",              "Ratio",    [("BF-1", "slag_b2"), ("BF-2", "slag_b2"), ("BF-3", "slag_b2"), ("BF-4", "slag_b2"), ("BF-5", "slag_b2"), ("BF-6", "slag_b2"), ("BF-7", "slag_b2"), ("BF-8", "slag_b2"), ("BF_Shop", "slag_b2")]),
+        ("Eta CO",               "%",        [("BF-1", "eta_co"), ("BF-2", "eta_co"), ("BF-3", "eta_co"), ("BF-4", "eta_co"), ("BF-5", "eta_co"), ("BF-6", "eta_co"), ("BF-7", "eta_co"), ("BF-8", "eta_co"), ("BF_Shop", "eta_co")]),
+        ("Steam Rate",           "T/Hr",     [("BF-1", "steam_rate_hr"), ("BF-2", "steam_rate_hr"), ("BF-3", "steam_rate_hr"), ("BF-4", "steam_rate_hr"), ("BF-5", "steam_rate_hr"), ("BF-6", "steam_rate_hr"), ("BF-7", "steam_rate_hr"), ("BF-8", "steam_rate_hr"), ("BF_Shop", "steam_rate_hr")]),
+        ("Heat Load/Flux",       "MJ/hr",    [("BF-1", "heat_load_flux"), ("BF-2", "heat_load_flux"), ("BF-3", "heat_load_flux"), ("BF-4", "heat_load_flux"), ("BF-5", "heat_load_flux"), ("BF-6", "heat_load_flux"), ("BF-7", "heat_load_flux"), ("BF-8", "heat_load_flux"), ("BF_Shop", "heat_load_flux")]),
+        ("Tapping Duration",     "Hrs",      [("BF-1", "tapping_duration"), ("BF-2", "tapping_duration"), ("BF-3", "tapping_duration"), ("BF-4", "tapping_duration"), ("BF-5", "tapping_duration"), ("BF-6", "tapping_duration"), ("BF-7", "tapping_duration"), ("BF-8", "tapping_duration"), ("BF_Shop", "tapping_duration")]),
+        ("Fce Availability",     "%",        [("BF-1", "availability"), ("BF-2", "availability"), ("BF-3", "availability"), ("BF-4", "availability"), ("BF-5", "availability"), ("BF-6", "availability"), ("BF-7", "availability"), ("BF-8", "availability"), ("BF_Shop", "availability"),
+                                               ("BF-1", "furnace_availability"), ("BF-2", "furnace_availability"), ("BF-3", "furnace_availability"), ("BF-4", "furnace_availability"), ("BF-5", "furnace_availability"), ("BF-6", "furnace_availability"), ("BF-7", "furnace_availability"), ("BF-8", "furnace_availability"), ("BF_Shop", "furnace_availability")]),
+        ("Fce Utilisation",      "%",        [("BF-1", "utilisation"), ("BF-2", "utilisation"), ("BF-3", "utilisation"), ("BF-4", "utilisation"), ("BF-5", "utilisation"), ("BF-6", "utilisation"), ("BF-7", "utilisation"), ("BF-8", "utilisation"), ("BF_Shop", "utilisation")]),
+    ],
+}
+
+
 def generate_techno_target_columns(page_no: int) -> dict:
     """For pages 28-30 (type='param') and 31-35 (type='mill') in
     _TECHNO_DB_SCHEMA: discover every (plant, unit, param_key) column that
@@ -2933,7 +2942,7 @@ def generate_techno_target_columns(page_no: int) -> dict:
 
     sections = []
     if cfg["type"] == "param":
-        for (sec_label, unit_str, unit_specs) in cfg["sections"]:
+        for (sec_label, unit_str, unit_specs) in cfg["sections"] + _TECHNO_TARGET_EXTRA_SECTIONS.get(page_no, []):
             columns = []
             seen = set()
             for plant in plants_present:
