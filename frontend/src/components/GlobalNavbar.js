@@ -35,6 +35,7 @@ export default function GlobalNavbar() {
             { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
             { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' },
             { label: 'Large BF Benchmarking Entry', link: '/data-entry/bf-benchmark', icon: '🏗️' },
+            { label: 'SAIL Mines Entry (Page 4.5)', link: '/data-entry/sail-mines', icon: '⛏️' },
           ]
         },
         {
@@ -61,6 +62,7 @@ export default function GlobalNavbar() {
             { label: 'TE Targets (Pages 30-38)', link: '/data-entry/annual-target', icon: '🎯' },
             { label: 'Special Steel ABP (Page 24)', link: '/data-entry/special-steel-abp', icon: '🎯' },
             { label: 'Cost Trend (Pages 3.61-3.63)', link: '/data-entry/cost-trend', icon: '💰' },
+            { label: 'Cost Trend Excel Extractor', link: '/data-entry/cost-trend-extract', icon: '📊' },
             { label: 'Annual Capacity', link: '/data-entry/annual-capacity', icon: '🏭' },
           ]
         },

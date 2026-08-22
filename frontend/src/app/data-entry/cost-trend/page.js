@@ -7,9 +7,10 @@ import GlobalNavbar from '@/components/GlobalNavbar';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Must match db.py's COST_TREND_ENTRY_PLANTS / COST_TREND_ENTRY_COST_TYPES
-// and page_cost_trend.py's _PRODUCT_TITLE / _COST_TYPE_LABEL. TOTAL COST and
-// the "SAIL 5 ISPs" row are computed on the report page (TOTAL = VARIABLE +
-// FIXED, SAIL = sum of these 5 plants) — never entered here.
+// and page_cost_trend.py's _PRODUCT_TITLE / _COST_TYPE_LABEL. TOTAL COST is
+// computed on the report page (TOTAL = VARIABLE + FIXED) — never entered
+// here. SAIL 5 ISPs is its own directly-entered row like every other
+// plant, NOT a sum of the other 5 (that was tried and reverted).
 const PRODUCTS = [
   { value: 'HM', label: 'Hot Metal' },
   { value: 'CS', label: 'Crude Steel' },
@@ -19,8 +20,8 @@ const COST_TYPES = [
   { value: 'VARIABLE', label: 'Variable Cost' },
   { value: 'FIXED', label: 'Fixed Cost' },
 ];
-const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
-const PLANT_LABEL = {};
+const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
+const PLANT_LABEL = { SAIL: 'SAIL 5 ISPs' };
 const FY_LIST = ['2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29'];
 
 const keyOf = (costType, plant) => `${costType}|${plant}`;
@@ -166,7 +167,7 @@ function CostTrendPageInner() {
             Cost Trend Entry — Pages 3.61-3.63
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Trend in Cost of Production (Hot Metal / Crude Steel / Saleable Steel) — Variable / Fixed Cost per plant (BSP/DSP/RSP/BSL/ISP), annual history and current-FY month + till-month. Total Cost and SAIL 5 ISPs are computed automatically on the report.
+            Trend in Cost of Production (Hot Metal / Crude Steel / Saleable Steel) — Variable / Fixed Cost per plant, including SAIL 5 ISPs (entered directly, not summed from the plants), annual history and current-FY month + till-month. Total Cost is computed automatically on the report. Have an "ELHM CS SS ..." workbook instead? Use the <a href="/data-entry/cost-trend-extract" style={{ color: '#1a73e8' }}>Excel Extractor</a> to pull these values automatically.
           </span>
         </div>
 

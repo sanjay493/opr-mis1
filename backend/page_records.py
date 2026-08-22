@@ -16,9 +16,8 @@ ALL8  = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'VISL']
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-_Q_LABELS = {1: 'Q1 (Apr-Jun)', 2: 'Q2 (Jul-Sep)',
-             3: 'Q3 (Oct-Dec)',  4: 'Q4 (Jan-Mar)'}
-_H_LABELS = {1: 'H1 (Apr-Sep)', 2: 'H2 (Oct-Mar)'}
+_Q_LABELS = {1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4'}
+_H_LABELS = {1: 'H1', 2: 'H2'}
 
 
 def _ph(lst):

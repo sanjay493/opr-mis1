@@ -6,13 +6,18 @@ Metal, Crude Steel, Finished Steel, Saleable Steel) and 5 period types
 table already on the /reports/highlights on-screen tool (see that page's
 `recordRows` useMemo — this module ports the same derivation to Python so
 it can render server-side into the PDF), narrowed to just the two plant-
-group scopes and this fixed item list per direct instruction.
+group scopes and this fixed item list per direct instruction. SAIL (8
+Plants) is further narrowed to just Crude Steel/Finished Steel/Saleable
+Steel (see _ALL8_ITEMS, same rule as page_best_calendar_month.py) — the
+other 3 items are BF-route figures ASP/SSP/VISL don't produce.
 """
 import datetime as _dt
 
 from page_records import generate_group_records, HIGHLIGHT_ITEMS, HIGHLIGHT_LABELS
 
 _GROUPS = [('sail5', 'SAIL (5 Plants)'), ('all8', 'SAIL (8 Plants)')]
+
+_ALL8_ITEMS = {'Total Crude Steel', 'Finished Steel', 'Saleable Steel'}
 
 _PERIOD_KEYS = ['month', 'quarter', 'half', 'fy', 'cy']
 
@@ -81,11 +86,18 @@ def _period_records(grp: dict, key: str, latest_month: str) -> dict:
         'fy':      {'best': fy_rows[0] if fy_rows else None, 'second': fy_rows[1] if len(fy_rows) > 1 else None},
         'cy':      {'best': cy_rows[0] if cy_rows else None, 'second': cy_rows[1] if len(cy_rows) > 1 else None},
     }
+    # Report unit is T (tonnes); production_table stores everything except
+    # Oven Pushing in '000 T, so every item but Oven Pushing (already a
+    # nos/day rate, not a tonnage) is scaled up ×1000 here — the one place
+    # both the PDF and the web preview's numbers come from.
+    scale = 1 if key == 'Oven Pushing (nos/day)' else 1000
     for pk in _PERIOD_KEYS:
         for slot in ('best', 'second'):
             rec = periods[pk][slot]
             if rec is not None:
                 rec['fresh'] = _is_fresh(latest_month, rec)
+                if rec['total'] is not None:
+                    rec['total'] *= scale
     return periods
 
 
@@ -98,13 +110,14 @@ def generate_best_ever_highlights(report_month: str) -> dict:
     groups = []
     for gkey, glabel in _GROUPS:
         grp = data.get(gkey, {})
+        items = [i for i in HIGHLIGHT_ITEMS if gkey != 'all8' or i in _ALL8_ITEMS]
         rows = [
             {
                 'label': HIGHLIGHT_LABELS.get(item, item),
                 'key': item,
                 'periods': _period_records(grp, item, latest_month),
             }
-            for item in HIGHLIGHT_ITEMS
+            for item in items
         ]
         groups.append({'key': gkey, 'label': glabel, 'rows': rows})
 
@@ -113,5 +126,6 @@ def generate_best_ever_highlights(report_month: str) -> dict:
         'title': 'Production Highlights — Best-Ever Records',
         'month_label': month_label,
         'latest_month': latest_month,
+        'unit_note': 'Unit: T, except Oven Pushing – Nos./day',
         'groups': groups,
     }

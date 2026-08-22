@@ -463,3 +463,12 @@ CREATE TABLE IF NOT EXISTS cost_trend_monthly (
     till_month_value  DOUBLE,
     PRIMARY KEY (report_month, product, cost_type, plant)
 ) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS sail_mines_monthly (
+    report_month  CHAR(7)     NOT NULL,
+    section       VARCHAR(24) NOT NULL,
+    item          VARCHAR(32) NOT NULL,
+    month_actual  DOUBLE,
+    month_plan    DOUBLE,
+    PRIMARY KEY (report_month, section, item)
+) ENGINE=InnoDB;

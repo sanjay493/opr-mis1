@@ -1,5 +1,40 @@
 <div class="coal-title">{{ page.title }}</div>
+<div style="text-align:right;font-size:8pt;font-style:italic;color:{{ colors.text_secondary }};margin-bottom:6px;">
+    {{ page.period_label }} &nbsp;|&nbsp; Unit: {{ page.unit }} (Washery Yield in %)
+</div>
 
-<div style="padding: 40px 20px; text-align: center; color: #64748b; font-size: 9pt;">
-    Content pending — data source not yet available.
+{% for t in page.tables %}
+<div class="coal-c-heading">{{ t.title }}</div>
+<table class="coal-table" style="margin-bottom:8px;">
+    <thead>
+        <tr>
+            <th class="coal-label-cell">Item</th>
+            {% for c in t.columns %}<th>{{ c }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in t.rows %}
+        <tr{% if r.bold %} class="coal-bold-row"{% endif %}>
+            <td class="coal-label-cell">{{ r.label }}</td>
+            {% if t.kind == 'production' %}
+            <td class="coal-num">{{ r.app if r.app is not none else '—' }}</td>
+            <td class="coal-num">{{ r.actual if r.actual is not none else '—' }}</td>
+            <td class="coal-num">{{ (r.pct_ful ~ '%') if r.pct_ful is not none else '—' }}</td>
+            <td class="coal-num">{{ r.cply if r.cply is not none else '—' }}</td>
+            <td class="coal-num">{{ (r.pct_growth ~ '%') if r.pct_growth is not none else '—' }}</td>
+            {% else %}
+            <td class="coal-num">{{ r.actual if r.actual is not none else '—' }}</td>
+            <td class="coal-num">{{ r.cply if r.cply is not none else '—' }}</td>
+            <td class="coal-num">{{ (r.pct_growth ~ '%') if r.pct_growth is not none else '—' }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+
+<div class="coal-note">
+    Cumulative figures for {{ page.period_label }}. APP = Annual Plan (year-to-date); CPLY = Corresponding Period Last Year.
+    Iron Ore Production's SAIL row is its own reported figure, not a sum of CGoM/OGoM/JGoM. Coal Mines Production's Total and
+    Washery's Yield (Clean Coal/Raw Coal) rows are computed from the rows above them.
 </div>

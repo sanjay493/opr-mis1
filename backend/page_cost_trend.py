@@ -18,19 +18,22 @@ dynamic columns per direct instruction:
 
 Data is DB-sourced (db.cost_trend_annual / db.cost_trend_monthly), entered
 via the Cost Trend Entry data-entry page (frontend/src/app/data-entry/
-cost-trend) for VARIABLE and FIXED cost, BSP/DSP/RSP/BSL/ISP only — a
-period/plant with no entry shows "—". till_month is entered directly (same
-convention as techno_data / Demurrage elsewhere in this app), not auto-
-summed from the monthly columns, since a plant's own reported cumulative
-doesn't always tie out to a clean sum of its monthly figures.
+cost-trend) for VARIABLE and FIXED cost, one entry per plant including SAIL
+5 ISPs — a period/plant with no entry shows "—". till_month is entered
+directly (same convention as techno_data / Demurrage elsewhere in this
+app), not auto-summed from the monthly columns, since a plant's own
+reported cumulative doesn't always tie out to a clean sum of its monthly
+figures.
 
-TOTAL COST and the "SAIL 5 ISPs" row are never entered — both are computed
-here per direct instruction: TOTAL = VARIABLE + FIXED for a given plant, and
-SAIL = sum of BSP/DSP/RSP/BSL/ISP for a given cost type (so SAIL's own TOTAL
-comes out the same either way it's derived). A computed value is None only
-if every one of its inputs is missing; otherwise missing inputs are treated
-as 0, matching this app's existing SQL SUM(...) plant-aggregation convention
-(db.get_sail_production_actual) of summing whatever is present.
+TOTAL COST is never entered — it's computed here as VARIABLE + FIXED for
+each row (including SAIL's own row), per direct instruction. A computed
+TOTAL is None only if both its inputs are missing.
+
+SAIL 5 ISPs was previously computed as a sum of the other 5 plants — per
+direct instruction (2026-08-22, prior instruction was a mistake) SAIL is
+now its own directly-entered figure like any other plant, since SAIL's
+own cost of production isn't necessarily the arithmetic sum of the 5
+plants' figures.
 """
 import db
 
@@ -81,13 +84,8 @@ def _cost_value(cost_type: str, plant: str, get_raw) -> "float | None":
     """Resolves one (cost_type, plant) cell. get_raw(cost_type, plant) must
     return the raw DB value for cost_type in ('VARIABLE', 'FIXED') and plant
     in db.COST_TREND_ENTRY_PLANTS — the only cells actually entered. TOTAL
-    and the SAIL row are computed per the module docstring."""
-    if plant == "SAIL":
-        if cost_type == "TOTAL":
-            parts = [_cost_value("TOTAL", p, get_raw) for p in db.COST_TREND_ENTRY_PLANTS]
-        else:
-            parts = [get_raw(cost_type, p) for p in db.COST_TREND_ENTRY_PLANTS]
-        return _sum_or_none(parts)
+    is computed per the module docstring; every other cell (including SAIL's
+    VARIABLE/FIXED) is entered directly."""
     if cost_type == "TOTAL":
         return _sum_or_none([get_raw("VARIABLE", plant), get_raw("FIXED", plant)])
     return get_raw(cost_type, plant)
@@ -129,4 +127,19 @@ def generate_cost_trend(report_month: str, product: str) -> dict:
         "unit": "Rs/T",
         "periods": periods,
         "blocks": blocks,
+    }
+
+
+def generate_cost_trend_combined(report_month: str, products: list) -> dict:
+    """Crude Steel + Saleable Steel share one physical PDF page per direct
+    instruction (Hot Metal stays on its own page) — reuses generate_cost_
+    trend() per product unchanged, cost_trend_combined.html just renders
+    both compactly on one sheet via cost_trend_macro.html. "title" is
+    required here (not just "type") — this dict round-trips through the
+    PDFRequest/PageData model on the PDF-export request, which requires it."""
+    sub_pages = [generate_cost_trend(report_month, p) for p in products]
+    return {
+        "type": "cost_trend_combined",
+        "title": " & ".join(sp["title"] for sp in sub_pages),
+        "pages": sub_pages,
     }

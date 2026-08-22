@@ -645,6 +645,25 @@ def init_db():
         )
     """)
 
+    # SAIL Mines Production & Despatch — one shared monthly table across
+    # every section (Iron Ore Production, Sales of Iron Ore, Coal Mines
+    # Production, Washery, Coal Despatch, Flux Production, Flux Despatch).
+    # See page_sail_mines.py's SAIL_MINES_SECTIONS for the section->item
+    # registry and all derived rows (Total, Yield) — those are computed at
+    # read time from these leaf items, never stored. month_plan is entered
+    # for 'production'-kind sections only (APP/%Ful columns); 'flow'-kind
+    # despatch/sales sections leave it NULL (no APP column on those tables).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sail_mines_monthly (
+            report_month  TEXT,
+            section       TEXT,
+            item          TEXT,
+            month_actual  REAL,
+            month_plan    REAL,
+            PRIMARY KEY (report_month, section, item)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -2589,10 +2608,13 @@ def list_techno_plan_fys(plant: str = None) -> List[str]:
 COST_TREND_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
 COST_TREND_COST_TYPES = ["TOTAL", "VARIABLE", "FIXED"]
 
-# Entry-only subsets: "SAIL 5 ISPs" is always the sum of the other 5 plants,
-# and "TOTAL COST" is always VARIABLE + FIXED — neither is entered directly,
-# both are computed by page_cost_trend.py from these entered values.
-COST_TREND_ENTRY_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+# Entry-only subset of COST_TREND_COST_TYPES: "TOTAL COST" is always
+# VARIABLE + FIXED, computed by page_cost_trend.py, never entered directly.
+# Every plant in COST_TREND_PLANTS (including SAIL 5 ISPs) is entered
+# directly for VARIABLE/FIXED — SAIL is its own reported figure, not a sum
+# of the other 5 plants (that was tried and reverted; a plant-level rollup
+# doesn't necessarily match SAIL's own cost of production).
+COST_TREND_ENTRY_PLANTS = COST_TREND_PLANTS
 COST_TREND_ENTRY_COST_TYPES = ["VARIABLE", "FIXED"]
 
 
@@ -2677,6 +2699,76 @@ def save_cost_trend_monthly(report_month: str, product: str, entries: List[Dict[
             ON CONFLICT(report_month, product, cost_type, plant)
             DO UPDATE SET month_value = excluded.month_value, till_month_value = excluded.till_month_value
         """, (report_month, product, e["cost_type"], e["plant"], e.get("month_value"), e.get("till_month_value")))
+        saved += 1
+    conn.commit()
+    conn.close()
+    return saved
+
+
+def save_cost_trend_monthly_field(report_month: str, product: str, entries: List[Dict[str, Any]], field: str) -> int:
+    """Upsert a batch of {cost_type, plant, value} entries into ONE column
+    (field: 'month_value' or 'till_month_value') of cost_trend_monthly,
+    leaving the other column untouched on an existing row. Used by the Cost
+    Trend Excel extractor (excel_extractors/excel_extractor_cost_trend.py),
+    which reads the month figure and the till-month figure from two
+    separate source workbooks — unlike save_cost_trend_monthly's full-grid
+    submit, writing both columns unconditionally here would blank out
+    whichever one wasn't part of this particular extraction."""
+    if field not in ("month_value", "till_month_value"):
+        raise ValueError(f"field must be 'month_value' or 'till_month_value', got {field!r}")
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    saved = 0
+    for e in entries:
+        cur.execute(f"""
+            INSERT INTO cost_trend_monthly (report_month, product, cost_type, plant, {field})
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, product, cost_type, plant)
+            DO UPDATE SET {field} = excluded.{field}
+        """, (report_month, product, e["cost_type"], e["plant"], e.get("value")))
+        saved += 1
+    conn.commit()
+    conn.close()
+    return saved
+
+
+def get_sail_mines_monthly(report_months: List[str]) -> Dict[str, Any]:
+    """{report_month: {section: {item: {"actual": v, "plan": v}}}} for the
+    given months — used both by page_sail_mines.py (YTD/CPLY roll-up) and
+    the data-entry form's pre-fill."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {m: {} for m in report_months}
+    if report_months:
+        ph = ",".join("?" * len(report_months))
+        cur.execute(
+            f"SELECT report_month, section, item, month_actual, month_plan "
+            f"FROM sail_mines_monthly WHERE report_month IN ({ph})",
+            report_months,
+        )
+        for rm, section, item, act, plan in cur.fetchall():
+            out.setdefault(rm, {}).setdefault(section, {})[item] = {"actual": act, "plan": plan}
+    conn.close()
+    return out
+
+
+def save_sail_mines_monthly(report_month: str, entries: List[Dict[str, Any]]) -> int:
+    """Upsert a batch of {section, item, actual, plan} entries for one
+    report_month (the data-entry form submits every cell it's editing in
+    one call)."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    saved = 0
+    for e in entries:
+        cur.execute("""
+            INSERT INTO sail_mines_monthly (report_month, section, item, month_actual, month_plan)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, section, item)
+            DO UPDATE SET month_actual = excluded.month_actual, month_plan = excluded.month_plan
+        """, (report_month, e["section"], e["item"], e.get("actual"), e.get("plan")))
         saved += 1
     conn.commit()
     conn.close()

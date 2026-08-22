@@ -1,0 +1,47 @@
+{# Shared renderer for one Cost Trend product (title + Total/Variable/Fixed
+   blocks) — used by both cost_trend.html (standalone Hot Metal page) and
+   cost_trend_combined.html (Crude Steel + Saleable Steel sharing one
+   physical page). compact=true shrinks header/block/table sizing so two
+   products' worth of tables fit on one sheet — see cost_trend_combined.html.
+   Column widths are computed here from page.periods|length so HM/CS/SS
+   always share identical proportions for the same report month (they always
+   have the same period count, since all 3 use the same report_month). #}
+{% macro cost_trend_product(page, colors, compact=false) %}
+{% set title_size = compact and '10pt' or '12.5pt' %}
+{% set block_margin = compact and '4px 0 2px' or '8px 0 3px' %}
+{% set block_label_size = compact and '8pt' or '9.5pt' %}
+{% set table_font = compact and '7pt' or '7.6pt' %}
+{% set th_pad = compact and '2px 4px' or '3px 6px' %}
+{% set td_pad = compact and '1.5px 4px' or '2px 4px' %}
+{% set plant_pct = 9 %}
+{% set period_pct = (100 - plant_pct) / page.periods|length %}
+<div style="text-align:center;font-weight:700;font-size:{{ title_size }};margin-bottom:2px;">
+  {{ page.title }}
+  <span style="font-weight:500;font-style:italic;font-size:{{ compact and '8pt' or '8.5pt' }};color:{{ colors.text_secondary }};">&nbsp;(Unit: {{ page.unit }})</span>
+</div>
+{% for block in page.blocks %}
+<div style="font-weight:700;font-size:{{ block_label_size }};color:{{ colors.text_heading_dark }};margin:{{ block_margin }};">{{ block.label }}</div>
+<table style="border-collapse:collapse;border:1px solid {{ colors.border_darkest }};font-size:{{ table_font }};width:100%;margin-bottom:2px;table-layout:fixed;">
+  <colgroup>
+    <col style="width:{{ plant_pct }}%"/>
+    {% for period in page.periods %}<col style="width:{{ period_pct }}%"/>{% endfor %}
+  </colgroup>
+  <thead>
+    <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+      <th style="padding:{{ th_pad }};border:1px solid {{ colors.border_dark }};text-align:left;">Plant</th>
+      {% for period in page.periods %}
+      <th style="padding:{{ th_pad }};border:1px solid {{ colors.border_dark }};{% if period.kind == 'till' %}background:{{ colors.highlight_cumulative_bg }};{% elif period.kind == 'annual' %}background:{{ colors.highlight_target_band_bg }};{% endif %}">{{ period.label }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in block.rows %}
+    <tr style="{{ 'font-weight:700;background:' ~ colors.highlight_bold_row_bg ~ ';' if row.plant == 'SAIL 5 ISPs' else '' }}">
+      <td style="padding:{{ td_pad }};border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;">{{ row.plant }}</td>
+      {% for period in page.periods %}<td style="padding:{{ td_pad }};border:1px solid {{ colors.border_medium }};text-align:right;{% if period.kind == 'till' %}background:{{ colors.highlight_cumulative_bg }}66;{% elif period.kind == 'annual' %}background:{{ colors.highlight_target_band_bg }}66;{% endif %}">{{ row.cells[period.key] if row.cells[period.key] is not none else '—' }}</td>{% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% endmacro %}

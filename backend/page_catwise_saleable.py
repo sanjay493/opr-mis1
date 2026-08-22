@@ -387,18 +387,17 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
 
     rows.append(_section_hdr("FINISHED STEEL"))
 
-    # Total Flat products still sums the bundled CRC&S(1&2)/CRC(3) items (not
-    # the Coil-Sale-only ones displayed below) — CRC&S(1&2) includes the CR
-    # Sheet quantity that has no visible row of its own (see "CR Sheets"
-    # zero-row below), so summing the Coil-only figures instead would silently
-    # drop CR Sheet out of the page total. Thick Plate and Chequered Plate
-    # (mapped to production_table's "Checkered plate") are their own
-    # independent mill outputs, not bundled into any other item here — both
-    # were previously displayed under the FLAT category but left out of
-    # this sum, silently undercounting the page total by their quantity.
-    flat_items_bsl = ["HSM HR Coil (Sale)", "HSM HR Plate", "HR Sheet",
-                      "CRC&S(1&2)", "CRC(3)", "GP/GC", "GPC3",
-                      "Thick Plate", "Checkered plate"]
+    # Total Flat products = the exact sum of every FLAT row actually shown
+    # above (per direct instruction). Previously summed the bundled
+    # CRC&S(1&2)/CRC(3) items instead of the displayed CR I/II, CR III and
+    # CR Sheets rows, on the assumption CRC&S(1&2) always equalled
+    # CR-I/II-Coil-Sale + CR-Sheets — true for Apr-Jul'26 but confirmed to
+    # diverge (sometimes badly, e.g. Sep'25: 35.7 vs the rows' true 47.4)
+    # across most of FY2025-26, silently understating the FY/YTD "Total
+    # Flat" figures by that gap.
+    flat_items_bsl = ["HSM HR Coil (Sale)", "HSM HR Plate", "Checkered plate", "HR Sheet",
+                      "CR I/II CR(Coil) Sale", "CR III CR(Coil) Sale", "CR Sheets", "New CR Sheet",
+                      "Thick Plate", "GP/GC", "GPC3"]
 
     for label, item in [
         ("HR Coils",               "HSM HR Coil (Sale)"),

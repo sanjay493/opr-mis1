@@ -209,7 +209,7 @@ export default function SteelSectorPerformanceTemplate({ data }) {
       <Header data={data} />
       <div style={sectionHeading}>1. Steel Production &amp; Prices</div>
       <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px' }}>
-        1a. Production Overview (in Mt) — with SAIL &amp; Share of India
+        1a Production Overview (in Mt)
       </div>
       <ProductionOverviewTable headers={tables['1a']?.headers} groups={production_overview_1a} />
       <div style={note}>Bracketed value under each SAIL figure: SAIL's % share of India.</div>

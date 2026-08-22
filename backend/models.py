@@ -133,3 +133,15 @@ class CostTrendMonthlySaveRequest(BaseModel):
     report_month: str
     product: str
     entries: List[CostTrendMonthlyEntry]
+
+
+class SailMinesEntry(BaseModel):
+    section: str
+    item: str
+    actual: Optional[float] = None
+    plan: Optional[float] = None
+
+
+class SailMinesSaveRequest(BaseModel):
+    report_month: str
+    entries: List[SailMinesEntry]

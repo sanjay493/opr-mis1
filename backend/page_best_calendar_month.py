@@ -4,13 +4,20 @@ matrix of best/2nd-best-ever production, for SAIL (5 Plants) then SAIL (8
 Plants). A print version of the /reports/records-matrix on-screen tool
 (same cal_months/best_month data page_records.py already computes),
 narrowed to just the two plant-group scopes and the 6-item highlight list
-per direct instruction.
+per direct instruction. SAIL (8 Plants) is further narrowed to just Crude
+Steel/Finished Steel/Saleable Steel (see _ALL8_ITEMS) — the other 3 items
+are BF-route figures ASP/SSP/VISL don't produce.
 """
 import datetime as _dt
 
 from page_records import generate_group_records, HIGHLIGHT_ITEMS, HIGHLIGHT_LABELS
 
 _GROUPS = [('sail5', 'SAIL (5 Plants)'), ('all8', 'SAIL (8 Plants)')]
+
+# SAIL (8 Plants) only makes sense for the 3 steel-stage items — Oven
+# Pushing/Sinter/Hot Metal are 5-plant (BF route) items ASP/SSP/VISL don't
+# produce, so per direct instruction the 8-plant block is narrowed to these.
+_ALL8_ITEMS = {'Total Crude Steel', 'Finished Steel', 'Saleable Steel'}
 
 _MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -40,7 +47,8 @@ def generate_best_calendar_month(report_month: str) -> dict:
     for gkey, glabel in _GROUPS:
         grp = data.get(gkey, {})
         rows = []
-        for item in HIGHLIGHT_ITEMS:
+        items = [i for i in HIGHLIGHT_ITEMS if gkey != 'all8' or i in _ALL8_ITEMS]
+        for item in items:
             cal = grp.get('cal_months', {}).get(item, {})
             best_month = grp.get('best_month', {}).get(item, {}).get('month')
             months = {
@@ -54,6 +62,7 @@ def generate_best_calendar_month(report_month: str) -> dict:
         'type': 'best_calendar_month',
         'title': 'Production Highlights — Best Calendar Month',
         'month_label': month_label,
+        'unit': "'000 T",
         'month_names': _MONTH_NAMES,
         'groups': groups,
     }

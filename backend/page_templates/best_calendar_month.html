@@ -1,40 +1,43 @@
 {# ── Best Calendar Month — items x Jan-Dec matrix, SAIL (5 Plants) then SAIL (8 Plants) ── #}
-<div style="padding:2px 4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:7.5pt;color:{{ colors.text_primary }};">
+<div style="padding:2px 4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:10pt;color:{{ colors.text_primary }};">
 
   {# Banner — same gradient treatment as MIS at a Glance's banner #}
   <div style="background:linear-gradient(to right, {{ colors.text_white }}, {{ colors.misc_accent_blue }});padding:2px;border-radius:6px;margin-bottom:5px;">
     <div style="background:linear-gradient(to right, {{ colors.misc_accent_blue }}, {{ colors.text_white }});color:{{ colors.text_white }};padding:4px 14px;border-radius:5px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;">
       <div style="font-size:15pt;font-weight:700;">{{ page.title }}</div>
-      <div style="font-size:9.5pt;font-weight:700;color:{{ colors.khv_assessment_amber }};white-space:nowrap;">{{ page.month_label }}</div>
+      <div style="font-size:10pt;font-weight:700;color:{{ colors.khv_assessment_amber }};white-space:nowrap;">{{ page.month_label }}</div>
     </div>
   </div>
 
+  <div style="text-align:right;font-size:10pt;font-weight:700;font-style:italic;color:{{ colors.text_secondary }};margin-bottom:4px;">Unit: {{ page.unit }}</div>
+
   {% for g in page.groups %}
-  <div style="font-size:9.5pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;{% if not loop.first %}margin-top:8px;{% endif %}">{{ g.label }}</div>
+  <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;{% if not loop.first %}margin-top:8px;{% endif %}">{{ g.label }}</div>
   <table style="width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid {{ colors.border_light }};border-radius:4px;overflow:hidden;">
     <thead>
       <tr>
-        <th style="width:11%;text-align:left;background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};font-size:7.3pt;font-weight:700;padding:6px 8px;">Item</th>
+        <th style="width:11%;text-align:left;background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};font-size:10pt;font-weight:700;padding:4px 6px;">Item</th>
         {% for m in page.month_names %}
-        <th style="text-align:center;background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};font-size:7pt;font-weight:700;padding:6px 4px;">{{ m }}</th>
+        <th style="text-align:center;background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};font-size:10pt;font-weight:700;padding:4px 3px;">{{ m }}</th>
         {% endfor %}
       </tr>
     </thead>
     <tbody>
       {% for row in g.rows %}
       <tr style="background:{{ colors.text_white if loop.index0 % 2 == 0 else colors.misc_highlights_box_bg }};">
-        <td style="text-align:left;font-weight:700;color:{{ colors.text_heading_dark }};padding:6px 8px;border-top:1px solid {{ colors.border_divider }};font-size:7pt;">{{ row.label }}</td>
+        <td style="text-align:left;font-weight:700;color:{{ colors.text_heading_dark }};padding:4px 6px;border-top:1px solid {{ colors.border_divider }};font-size:10pt;">{{ row.label }}</td>
         {% for mnum in range(1, 13) %}
         {% set cell = row.months[mnum] %}
-        <td style="text-align:center;vertical-align:top;padding:5px 3px;border-top:1px solid {{ colors.border_divider }};border-left:1px solid {{ colors.border_divider }};">
+        <td style="text-align:center;vertical-align:top;padding:3px 2px;border-top:1px solid {{ colors.border_divider }};border-left:1px solid {{ colors.border_divider }};">
           {% if cell %}
-            <span style="font-size:7.3pt;font-weight:800;color:{{ colors.khv_assessment_red if cell.best.is_all_time_best else '#4682b4' }};">{{ '%.0f'|format(cell.best.total) }}{{ ' ★' if cell.best.is_all_time_best else '' }}</span>
-            <div style="font-size:7pt;font-style:italic;font-weight:700;color:{{ colors.text_secondary }};opacity:0.85;">[{{ cell.best.year }}]</div>
+            <span style="font-size:10pt;font-weight:800;color:{{ colors.khv_assessment_red if cell.best.is_all_time_best else '#4682b4' }};">{{ '%.0f'|format(cell.best.total) }}{{ ' ★' if cell.best.is_all_time_best else '' }}</span>
+            <div style="font-size:10pt;font-style:italic;font-weight:700;color:{{ colors.text_secondary }};opacity:0.85;">[{{ cell.best.year }}]</div>
             {% if cell.second %}
-            <div style="margin-top:1px;font-size:7pt;color:{{ colors.text_secondary }};">{{ '%.0f'|format(cell.second.total) }} <span style="font-size:6.8pt;font-style:italic;">[{{ cell.second.year }}]</span></div>
+            <div style="margin-top:2px;padding-top:2px;border-top:1px dashed {{ colors.border_divider }};font-size:10pt;color:{{ colors.text_secondary }};">{{ '%.0f'|format(cell.second.total) }}</div>
+            <div style="font-size:10pt;font-style:italic;color:{{ colors.text_secondary }};">[{{ cell.second.year }}]</div>
             {% endif %}
           {% else %}
-          <span style="color:{{ colors.text_faint }};font-size:7pt;">—</span>
+          <span style="color:{{ colors.text_faint }};font-size:10pt;">—</span>
           {% endif %}
         </td>
         {% endfor %}
@@ -45,8 +48,8 @@
   {% endfor %}
 
   <div style="margin-top:6px;font-size:6pt;color:{{ colors.text_secondary }};line-height:1.5;">
-    Best and 2nd-best ever figure for every calendar month, in '000 tonnes.
+    Best and 2nd-best ever figure for every calendar month.
     <span style="color:{{ colors.khv_assessment_amber }};font-weight:800;">★</span> marks the single all-time-best month for that item (across all 12 calendar months).
-    SAIL (5 Plants) = BSP, DSP, RSP, BSL, ISP; SAIL (8 Plants) adds ASP, SSP, VISL.
+    SAIL (5 Plants) = BSP, DSP, RSP, BSL, ISP; SAIL (8 Plants) adds ASP, SSP, VISL and is shown for Crude Steel, Finished Steel and Saleable Steel only.
   </div>
 </div>

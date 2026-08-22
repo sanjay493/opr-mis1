@@ -416,22 +416,44 @@ def generate_segment_wise(report_month: str) -> dict:
                        _ytd_one(cur,"plan","DSP","Saleable Semis",ytd),
                        _ytd_one(cur,"act","DSP","Saleable Semis",ytd),
                        _ytd_one(cur,"act","DSP","Saleable Semis",cply_ytd)))
+        # Rounds for DSP = MM (Merchant Mill) + SPU Jagdishpur — the
+        # Jagdishpur satellite unit's own rounds output was missing here,
+        # understating Rounds by however much Jagdishpur produces/plans.
+        rnd_ann   = (_ann(cur,"DSP","MM",fy) or 0) + (_ann(cur,"DSP","SPU Jagdishpur",fy) or 0)
+        rnd_plan  = ((_one(cur,"plan","DSP","MM",report_month) or 0) +
+                     (_one(cur,"plan","DSP","SPU Jagdishpur",report_month) or 0))
+        rnd_act   = ((_one(cur,"act","DSP","MM",report_month) or 0) +
+                     (_one(cur,"act","DSP","SPU Jagdishpur",report_month) or 0))
+        rnd_cply  = ((_one(cur,"act","DSP","MM",prev_month) or 0) +
+                     (_one(cur,"act","DSP","SPU Jagdishpur",prev_month) or 0))
+        rnd_cplan = ((_ytd_one(cur,"plan","DSP","MM",ytd) or 0) +
+                     (_ytd_one(cur,"plan","DSP","SPU Jagdishpur",ytd) or 0))
+        rnd_cact  = ((_ytd_one(cur,"act","DSP","MM",ytd) or 0) +
+                     (_ytd_one(cur,"act","DSP","SPU Jagdishpur",ytd) or 0))
+        rnd_ccply = ((_ytd_one(cur,"act","DSP","MM",cply_ytd) or 0) +
+                     (_ytd_one(cur,"act","DSP","SPU Jagdishpur",cply_ytd) or 0))
         rows.append(_r("Rounds", "data", "LONG", "DSP",
-                       _ann(cur,"DSP","MM",fy),
-                       _one(cur,"plan","DSP","MM",report_month),
-                       _one(cur,"act","DSP","MM",report_month),
-                       _one(cur,"act","DSP","MM",prev_month),
-                       _ytd_one(cur,"plan","DSP","MM",ytd),
-                       _ytd_one(cur,"act","DSP","MM",ytd),
-                       _ytd_one(cur,"act","DSP","MM",cply_ytd)))
+                       rnd_ann or None, rnd_plan or None, rnd_act or None, rnd_cply or None,
+                       rnd_cplan or None, rnd_cact or None, rnd_ccply or None))
+        # Med.Structurals for DSP = MSM + SM (Section Mill) — SM has been
+        # reporting zero since Nov'25 and has no FY26-27 entries yet, but
+        # this keeps it correctly included the moment it resumes.
+        ms_ann   = (_ann(cur,"DSP","MSM",fy) or 0) + (_ann(cur,"DSP","SM",fy) or 0)
+        ms_plan  = ((_one(cur,"plan","DSP","MSM",report_month) or 0) +
+                    (_one(cur,"plan","DSP","SM",report_month) or 0))
+        ms_act   = ((_one(cur,"act","DSP","MSM",report_month) or 0) +
+                    (_one(cur,"act","DSP","SM",report_month) or 0))
+        ms_cply  = ((_one(cur,"act","DSP","MSM",prev_month) or 0) +
+                    (_one(cur,"act","DSP","SM",prev_month) or 0))
+        ms_cplan = ((_ytd_one(cur,"plan","DSP","MSM",ytd) or 0) +
+                    (_ytd_one(cur,"plan","DSP","SM",ytd) or 0))
+        ms_cact  = ((_ytd_one(cur,"act","DSP","MSM",ytd) or 0) +
+                    (_ytd_one(cur,"act","DSP","SM",ytd) or 0))
+        ms_ccply = ((_ytd_one(cur,"act","DSP","MSM",cply_ytd) or 0) +
+                    (_ytd_one(cur,"act","DSP","SM",cply_ytd) or 0))
         rows.append(_r("Med.Structurals", "data", "LONG", "DSP",
-                       _ann(cur,"DSP","MSM",fy),
-                       _one(cur,"plan","DSP","MSM",report_month),
-                       _one(cur,"act","DSP","MSM",report_month),
-                       _one(cur,"act","DSP","MSM",prev_month),
-                       _ytd_one(cur,"plan","DSP","MSM",ytd),
-                       _ytd_one(cur,"act","DSP","MSM",ytd),
-                       _ytd_one(cur,"act","DSP","MSM",cply_ytd)))
+                       ms_ann or None, ms_plan or None, ms_act or None, ms_cply or None,
+                       ms_cplan or None, ms_cact or None, ms_ccply or None))
         rows.append(_r("Wheel & Axles", "data", "LONG", "DSP",
                        _ann(cur,"DSP","WAP",fy),
                        _one(cur,"plan","DSP","WAP",report_month),

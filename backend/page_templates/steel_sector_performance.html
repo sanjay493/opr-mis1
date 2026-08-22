@@ -74,7 +74,7 @@
 {% set cols_1a = headers_1a if headers_1a and headers_1a|length == 7
     else ['Production', 'Report Month', 'CPLY Month', 'YoY %', 'Apr-Report Month', 'CPLY Apr-Report Month', 'CPLY %'] %}
 <div class="ssp-section-heading">1. Steel Production &amp; Prices</div>
-<div class="ssp-table-heading">1a. Production Overview (in Mt) — with SAIL &amp; Share of India</div>
+<div class="ssp-table-heading">1a Production Overview (in Mt)</div>
 <table class="ssp-table">
     <thead><tr><th>{{ cols_1a[0] }}</th><th></th>{% for h in cols_1a[1:] %}<th>{{ h }}</th>{% endfor %}</tr></thead>
     <tbody>

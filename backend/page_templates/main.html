@@ -954,7 +954,7 @@
             margin-bottom: 2px;
         }
 
-        .page4-table { table-layout: fixed; width: 100%; border: 2.5px solid {{ colors.border_darkest }}; }
+        .page4-table { table-layout: fixed; width: 100%; border: 1.5px solid {{ colors.border_darkest }}; }
         .page4-table th { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; background-color: {{ colors.table_header_bg }}; }
         .page4-table td { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; }
         .page4-table col.c-items    { width:  8%; }
@@ -965,7 +965,7 @@
         .page4-table col.c-num-sm   { width:5.5%; }
 
         /* item-group block separator */
-        .page4-table tr.group-first td { border-top: 2px solid {{ colors.border_group_top }}; }
+        .page4-table tr.group-first td { border-top: 1px solid {{ colors.border_group_top }}; }
 
         /* Annual APP column */
         .page4-table td.col-ann,
@@ -981,7 +981,7 @@
 
         /* Cumulative section left wall */
         .page4-table td.col-ytd-app,
-        .page4-table thead th.col-ytd-app { border-left: 2.5px solid {{ colors.border_darkest }}; }
+        .page4-table thead th.col-ytd-app { border-left: 1.5px solid {{ colors.border_darkest }}; }
 
         /* Cumulative Actual column */
         .page4-table td.col-ytd-act,
@@ -1015,7 +1015,7 @@
             color: {{ colors.text_secondary }};
         }
 
-        .page5-6-table { table-layout: fixed; width: 100%; border: 2.5px solid {{ colors.border_darkest }}; }
+        .page5-6-table { table-layout: fixed; width: 100%; border: 1.5px solid {{ colors.border_darkest }}; }
         .page5-6-table th { font-size: 8.5pt; padding: 4px 4px; line-height: 1; vertical-align: middle; }
         .page5-6-table td { font-size: 8.5pt; padding: 4px 4px; line-height: 1; }
 
@@ -1027,7 +1027,7 @@
         }
 
         /* plant group separator */
-        .page5-6-table tr.plant-first td { border-top: 2px solid {{ colors.border_group_top }}; }
+        .page5-6-table tr.plant-first td { border-top: 1px solid {{ colors.border_group_top }}; }
 
         /* Annual Plan column */
         .page5-6-table td.col-ann,
@@ -1043,7 +1043,7 @@
 
         /* Cumulative section left wall */
         .page5-6-table td.col-ytd-plan,
-        .page5-6-table thead th.col-ytd-plan { border-left: 2.5px solid {{ colors.border_darkest }}; }
+        .page5-6-table thead th.col-ytd-plan { border-left: 1.5px solid {{ colors.border_darkest }}; }
 
         /* Cumulative Actual column */
         .page5-6-table td.col-ytd-act,
@@ -1280,7 +1280,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance', 'sail_mines', 'cost_trend') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance', 'sail_mines', 'cost_trend', 'cost_trend_combined') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
@@ -1314,6 +1314,7 @@
         {% elif page.type == 'steel_sector_performance' %}{% include 'steel_sector_performance.html' %}
         {% elif page.type == 'sail_mines' %}{% include 'sail_mines.html' %}
         {% elif page.type == 'cost_trend' %}{% include 'cost_trend.html' %}
+        {% elif page.type == 'cost_trend_combined' %}{% include 'cost_trend_combined.html' %}
         {% else %}
             <div class="report-title-section">
                 <h2>{{ page.title }}</h2>
