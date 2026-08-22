@@ -611,6 +611,18 @@ def generate_key_parameters(report_month: str) -> dict:
                 v = _round(pct, dp) if pct is not None else None
             else:
                 v = None
+            # _round()/the branches above return a plain float for most
+            # rows (a few, like coal_to_hm/vap_qty, already format their
+            # own string) — Python's default str(float) drops a trailing
+            # ".0" for nothing (round(780.0, 0) is still 780.0, not 780),
+            # which the template's bare {{ }} then prints verbatim as
+            # "780.0" regardless of this row's own dp. Fix it here, at the
+            # single point every kind's value funnels through, rather than
+            # in _round() itself — _round() is also used for intermediate
+            # arithmetic (e.g. bf_sum, burden_complement) where callers
+            # need a real number back, not a formatted string.
+            if isinstance(v, (int, float)):
+                v = f"{v:.{dp}f}"
             values[plant] = v
         # NOT "values" - Jinja2's dot-notation resolves that to dict.values
         # (the built-in method) before falling back to item lookup, since
