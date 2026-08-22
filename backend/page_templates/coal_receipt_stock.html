@@ -85,4 +85,24 @@
             </table>
             {% endif %}
 
+            {% for t in page.stock_history_tables %}
+            <div class="coal-c-heading">Month-wise Opening Stock — {{ t.label }} ('000 T)</div>
+            <table class="coal-table">
+                <thead>
+                    <tr>
+                        <th class="coal-label-cell">FY</th>
+                        {% for m in page.stock_history_month_names %}<th>{{ m }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in t.rows %}
+                    <tr>
+                        <td class="coal-label-cell">{{ row.fy }}</td>
+                        {% for v in row['values'] %}<td class="coal-num">{{ '%.0f'|format(v) if v is not none else '—' }}</td>{% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endfor %}
+
             <div class="coal-note">Note: The above information is based on reports from Plants/CCSO and is provisional</div>

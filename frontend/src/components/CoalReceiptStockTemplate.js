@@ -65,10 +65,34 @@ function StockTable({ cols, gapAfter }) {
   );
 }
 
+function StockHistoryTable({ table, monthNames }) {
+  const th = { ...cellStyle, fontWeight: 700, fontSize: '8pt' };
+  const td = { ...cellStyle, fontSize: '8pt' };
+  return (
+    <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', marginBottom: 4 }}>
+      <thead>
+        <tr>
+          <th style={{ ...th, textAlign: 'left', width: 70 }}>FY</th>
+          {monthNames.map((m) => <th key={m} style={th}>{m}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {table.rows.map((row) => (
+          <tr key={row.fy}>
+            <td style={{ ...td, textAlign: 'left', fontWeight: 600, width: 70 }}>{row.fy}</td>
+            {row.values.map((v, i) => <td key={i} style={td}>{fmt0(v)}</td>)}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export default function CoalReceiptStockTemplate({ data }) {
   const {
     title = '', receipt_rows: receiptRows = [], consumption_rows: consumptionRows = [],
     stock_cols_1: stockCols1 = [], stock_cols_2: stockCols2 = [], stock_gap_after: stockGapAfter,
+    stock_history_tables: stockHistoryTables = [], stock_history_month_names: stockHistoryMonthNames = [],
   } = data || {};
 
   const abTh = { ...cellStyle, fontWeight: 700, fontSize: '8.5pt' };
@@ -141,6 +165,15 @@ export default function CoalReceiptStockTemplate({ data }) {
           <StockTable cols={stockCols2} />
         </div>
       )}
+
+      {stockHistoryTables.map((t) => (
+        <div key={t.key} style={{ marginTop: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: '9.5pt', margin: '6px 0 4px' }}>
+            Month-wise Opening Stock — {t.label} (&apos;000 T)
+          </div>
+          <StockHistoryTable table={t} monthNames={stockHistoryMonthNames} />
+        </div>
+      ))}
 
       <div style={{ fontSize: '7.5pt', marginTop: 6, color: NOTE_COLOR }}>
         Note: The above information is based on reports from Plants/CCSO and is provisional

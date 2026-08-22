@@ -15,6 +15,13 @@ _all_stock_snapshots). A month with no data anywhere on record (including
 any not-yet-reached this FY) is OMITTED from table (C) entirely rather
 than shown as a blank column, so the table only ever grows out to
 whatever's actually been reported.
+
+Below (C), 3 more tables (Indigenous/Imported/Total Coking Coal, one FY
+per row x Apr-Mar columns) show that same opening-stock history across the
+last 4 FYs per direct instruction (see _stock_history_tables) — unlike
+(C), a month with nothing on record here just shows "—" rather than being
+dropped, since these are meant to visibly grow as older months get
+backfilled rather than reflow column-by-column as they fill in.
 """
 import json as _json
 
@@ -84,6 +91,47 @@ def _fy_stock_months(report_month: str) -> list:
     return fy_months + [f"{next_year}-04"]
 
 
+_STOCK_HISTORY_MONTH_NAMES = ["Apr", "May", "Jun", "Jul", "Aug", "Sep",
+                              "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
+
+
+def _stock_history_fy_starts(report_month: str, n: int = 4) -> list:
+    """N FY start years ending with report_month's own FY, oldest first —
+    default 4 (report_month's FY + the 3 before it), per direct instruction
+    ("last 3 years" i.e. FY2023-24 through FY2026-27 for a report_month
+    inside FY2026-27). Recalculated from report_month every time, same
+    convention as page_cost_trend.py's _annual_fys — never hardcoded to
+    specific years, so this keeps sliding forward on its own in future
+    report months."""
+    fy_start_year = int(db.get_fy_months(report_month)[0][:4])
+    return list(range(fy_start_year - (n - 1), fy_start_year + 1))
+
+
+def _stock_history_tables(report_month: str) -> list:
+    """Month-wise opening stock, one row per FY x one column per month
+    (Apr-Mar), for the last 4 FYs (see _stock_history_fy_starts) — a
+    separate table per coal category (Indigenous/Imported/Total) per
+    direct instruction. Filled with whatever's already in
+    _all_stock_snapshots() (the same merged-from-every-upload source (C)
+    uses); a month with nothing on record yet just shows "—" until that
+    history is backfilled."""
+    snapshots = _all_stock_snapshots()
+    fy_starts = _stock_history_fy_starts(report_month)
+
+    tables = []
+    for label, key in [("Indigenous Coking Coal", "indigenous"),
+                        ("Imported Coking Coal", "imported"),
+                        ("Total Coking Coal", "total")]:
+        rows = []
+        for fy_start in fy_starts:
+            fy_label = f"{fy_start}-{(fy_start + 1) % 100:02d}"
+            fy_months = db.get_fy_months(f"{fy_start}-04")  # April always falls in FY fy_start
+            values = [snapshots.get(mo, {}).get(key) for mo in fy_months]
+            rows.append({"fy": fy_label, "values": values})
+        tables.append({"label": label, "key": key, "rows": rows})
+    return tables
+
+
 def generate_coal_receipts_sail(report_month: str) -> dict:
     stored = db.get_techno_data("SAIL", report_month, unit=_UNIT).get(_UNIT, {})
     m = stored.get("month") or {}
@@ -130,6 +178,8 @@ def generate_coal_receipts_sail(report_month: str) -> dict:
         "stock_cols_1": stock_cols_1,
         "stock_cols_2": stock_cols_2,
         "stock_gap_after": stock_gap_after,
+        "stock_history_month_names": _STOCK_HISTORY_MONTH_NAMES,
+        "stock_history_tables": _stock_history_tables(report_month),
     }
 
 
