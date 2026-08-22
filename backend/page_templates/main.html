@@ -956,7 +956,14 @@
             margin-bottom: 2px;
         }
 
-        .page4-table { table-layout: fixed; width: 100%; border: 1px solid {{ colors.border_black }}; }
+        /* box-shadow (not border) for the outer frame: with border-collapse,
+           the individual th/td borders (border_medium/border_light, both
+           grayish) win the collapse conflict at the table's own edge over
+           this element's own `border`, so a plain `border: ... black` here
+           was getting silently overridden right at the outline that's
+           supposed to show it — box-shadow draws outside the collapsed
+           border model entirely, so it can't lose that fight. */
+        .page4-table { table-layout: fixed; width: 100%; box-shadow: 0 0 0 1px {{ colors.border_black }}; }
         .page4-table th { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; background-color: {{ colors.table_header_bg }}; }
         .page4-table td { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; }
         .page4-table col.c-items    { width:  8%; }
@@ -1003,10 +1010,13 @@
         }
 
         /* "5 Plants" aggregate rows — same light-yellow + bold convention as
-           pages 7-13's fp-row and Concast's "5 Plants" row. */
+           pages 7-13's fp-row and Concast's "5 Plants" row, boxed in thin
+           black top/bottom same as sail-row above, per direct instruction. */
         .page4-table tr.fp-row td {
             font-weight: 700;
             background-color: {{ colors.highlight_target_band_bg }} !important;
+            border-top: 1px solid {{ colors.border_black }} !important;
+            border-bottom: 1px solid {{ colors.border_black }} !important;
         }
 
         /* ─── Pages 5–6 – Plant-Wise Performance ─────────────── */
