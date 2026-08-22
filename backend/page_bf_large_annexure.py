@@ -556,7 +556,13 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         ash, fe = _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months)
         vals["_coke_ash"] = {**ash, "abp": None}
         vals["_sinter_fe"] = {**fe, "abp": None}
-        vals["_avg_daily_rate"] = {**_avg_daily_rate(vals["production"], report_month, ytd_months, prev_fy_months), "abp": None}
+        # Avg. Daily Rate's ABP = the same annual ABP Total HM Prod figure
+        # (now computed, see _production_plan_annual_tonnes above) divided
+        # by the FY's own day count — same "production / days-in-period"
+        # rule every other period on this row already uses.
+        abp_production = vals["production"].get("abp")
+        abp_avg_daily_rate = _round(abp_production / _days_in_fy(fy_label), 0) if abp_production else None
+        vals["_avg_daily_rate"] = {**_avg_daily_rate(vals["production"], report_month, ytd_months, prev_fy_months), "abp": abp_avg_daily_rate}
 
         sp, pl_ = vals["sinter_in_burden"], vals["pellet_in_burden"]
         tpb = {}
