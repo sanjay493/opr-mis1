@@ -99,19 +99,35 @@ function BackupRestoreInner() {
     setNotice('');
     setRestoringFile(filename);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/backups/${encodeURIComponent(filename)}/restore`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Restore failed.');
-      setNotice(`Restored from ${data.restored_from}. Pre-restore snapshot saved as ${data.prerestore_snapshot}.`);
-      await load();
+      await doRestore(filename, false);
     } catch (err) {
       setError(err.message);
     } finally {
       setRestoringFile('');
     }
+  };
+
+  // confirmDataLoss=false first: the backend checks whether this file would
+  // empty any table that currently has data and, if so, 409s with which
+  // ones instead of silently doing it (see api_admin_backup.py's
+  // _tables_at_risk — added after a restore did exactly that to
+  // capital_repair_table on 2026-08-21). A second explicit confirm from the
+  // operator re-sends with confirmDataLoss=true to proceed anyway.
+  const doRestore = async (filename, confirmDataLoss) => {
+    const url = `${API_BASE_URL}/api/admin/backups/${encodeURIComponent(filename)}/restore`
+      + (confirmDataLoss ? '?confirm_data_loss=true' : '');
+    const res = await fetch(url, { method: 'POST', credentials: 'include' });
+    const data = await res.json();
+    if (res.status === 409 && !confirmDataLoss) {
+      if (confirm(`${data.detail}\n\nRestore anyway?`)) {
+        await doRestore(filename, true);
+        return;
+      }
+      throw new Error('Restore cancelled — would have emptied tables that currently have data.');
+    }
+    if (!res.ok) throw new Error(data.detail || 'Restore failed.');
+    setNotice(`Restored from ${data.restored_from}. Pre-restore snapshot saved as ${data.prerestore_snapshot}.`);
+    await load();
   };
 
   return (

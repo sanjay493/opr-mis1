@@ -151,6 +151,23 @@ def cum_mlabel_from_report_month(report_month: str) -> str:
     return f"Apr-{mlabel_from_report_month(report_month)}"
 
 
+def _cum_label_matches(found, expected: str) -> bool:
+    """True if a sheet's own FY-cumulative row label means the same thing as
+    expected (from cum_mlabel_from_report_month), tolerating cosmetic
+    variance seen across older workbooks: extra/missing spaces around the
+    dash ("Apr - Jul'25" vs "Apr-Jul'25"), and an explicit FY-start year
+    tacked onto "Apr" when the range crosses a calendar year ("Apr'24 -
+    Jan'25" vs "Apr-Jan'25"). Whitespace and the optional "'YY" right after
+    "Apr" are stripped from both sides before comparing — the target
+    month/year token itself still has to match exactly, so this can only
+    accept labels that were already unambiguously correct, never a
+    genuinely wrong month."""
+    if not isinstance(found, str):
+        return False
+    norm = lambda s: re.sub(r"^Apr'\d{2}-", "Apr-", re.sub(r"\s+", "", s))
+    return norm(found) == norm(expected)
+
+
 def _num(v):
     if v is None or v == "":
         return None
@@ -204,7 +221,7 @@ def extract_ois1(path, report_month: str) -> dict:
             cum_vals = dict(month_vals)
         else:
             cum_label = ws.cell(cum_row, _OIS1_MONTH_COL).value
-            if cum_label != cum_mlabel:
+            if not _cum_label_matches(cum_label, cum_mlabel):
                 raise ValueError(
                     f"OIS-1 row {cum_row} col C expected '{cum_mlabel}', found {cum_label!r}."
                 )
@@ -269,7 +286,7 @@ def extract_ois1_detail(path, report_month: str) -> dict:
             till_month_detail = dict(month_detail)
         else:
             cum_label = ws.cell(cum_row, _OIS1_MONTH_COL).value
-            if cum_label != cum_mlabel:
+            if not _cum_label_matches(cum_label, cum_mlabel):
                 raise ValueError(
                     f"OIS-1 row {cum_row} col C expected '{cum_mlabel}', found {cum_label!r}."
                 )

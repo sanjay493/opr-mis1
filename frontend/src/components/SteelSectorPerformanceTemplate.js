@@ -11,24 +11,25 @@ import React from 'react';
 // Crude Steel/Hot Metal/Finished Steel actuals + % share of India, computed
 // server-side (see page_steel_sector_performance.py).
 const BORDER = '#334155';
-const TITLE_COLOR = '#1e3a5f';
+const BLACK = '#000000';
+const TITLE_COLOR = BLACK;
 
 const wrap = { fontFamily: 'inherit' };
 const pageTitle = {
   textAlign: 'center', fontWeight: 700, fontSize: '14pt', color: TITLE_COLOR, marginBottom: 2,
 };
 const pageSubtitle = {
-  textAlign: 'center', fontSize: '10pt', color: '#64748b', marginBottom: 10,
+  textAlign: 'center', fontSize: '10pt', color: BLACK, marginBottom: 10,
 };
 const sectionHeading = {
   fontWeight: 700, fontSize: '12pt', color: TITLE_COLOR, margin: '10px 0 4px',
   borderBottom: `1px solid ${BORDER}`, paddingBottom: 2,
 };
-const table = { width: '100%', borderCollapse: 'collapse', marginBottom: 6, fontSize: '11pt' };
-const th = { border: `1px solid ${BORDER}`, padding: '7px 9px', background: '#e2e8f0', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' };
-const td = { border: `1px solid ${BORDER}`, padding: '7px 9px', textAlign: 'center', verticalAlign: 'middle' };
+const table = { width: '100%', borderCollapse: 'collapse', marginBottom: 6, fontSize: '11pt', color: BLACK };
+const th = { border: `1px solid ${BORDER}`, padding: '7px 9px', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle', color: BLACK };
+const td = { border: `1px solid ${BORDER}`, padding: '7px 9px', textAlign: 'center', verticalAlign: 'middle', color: BLACK };
 const tdLabel = td;
-const note = { fontSize: '10.5pt', fontStyle: 'italic', color: '#475569', marginTop: 2 };
+const note = { fontSize: '10.5pt', fontStyle: 'italic', color: BLACK, marginTop: 2 };
 
 function fmtCell(v) {
   return v === null || v === undefined || v === '' ? '—' : v;
@@ -39,7 +40,7 @@ function GenericTable({ tableData }) {
   const { heading, headers = [], row_groups: rowGroups = [], footnotes = [] } = tableData;
   return (
     <div>
-      {heading && <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px' }}>{heading}</div>}
+      {heading && <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px', color: BLACK }}>{heading}</div>}
       <table style={table}>
         <thead>
           <tr>{headers.map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
@@ -64,8 +65,8 @@ function GenericTable({ tableData }) {
   );
 }
 
-const shareBracket = { display: 'block', fontSize: '10.5pt', color: '#1d4ed8', fontWeight: 400 };
-const sailRowStyle = { fontStyle: 'italic', background: '#f8fafc' };
+const shareBracket = { display: 'block', fontSize: '10.5pt', color: BLACK, fontWeight: 400 };
+const sailRowStyle = { fontStyle: 'italic' };
 
 function ValueCell({ value, share }) {
   return (
@@ -144,7 +145,7 @@ function TextSection({ section }) {
     <div>
       {heading && <div style={sectionHeading}>{heading}</div>}
       {paragraphs.map((p, i) => (
-        <p key={i} style={{ fontSize: '11pt', lineHeight: 1.4, margin: '0 0 6px', textAlign: 'justify' }}>{p}</p>
+        <p key={i} style={{ fontSize: '11pt', lineHeight: 1.4, margin: '0 0 6px', textAlign: 'justify', color: BLACK }}>{p}</p>
       ))}
     </div>
   );
@@ -168,7 +169,7 @@ export default function SteelSectorPerformanceTemplate({ data }) {
     return (
       <div style={wrap}>
         <Header data={data || {}} />
-        <div style={{ padding: 20, textAlign: 'center', color: '#64748b', fontSize: '9pt' }}>
+        <div style={{ padding: 20, textAlign: 'center', color: BLACK, fontSize: '9pt' }}>
           No "Indian Steel Sector Performance" release has been uploaded yet for this month.
         </div>
       </div>
@@ -208,7 +209,7 @@ export default function SteelSectorPerformanceTemplate({ data }) {
     <div style={wrap}>
       <Header data={data} />
       <div style={sectionHeading}>1. Steel Production &amp; Prices</div>
-      <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px' }}>
+      <div style={{ fontWeight: 700, fontSize: '11pt', margin: '6px 0 3px', color: BLACK }}>
         1a Production Overview (in Mt)
       </div>
       <ProductionOverviewTable headers={tables['1a']?.headers} groups={production_overview_1a} />

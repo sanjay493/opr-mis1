@@ -287,3 +287,34 @@ async def insert_coal_omi(payload: dict):
         "saved": saved,
         "replaced_existing": bool(conflicts),
     }
+
+
+@router.post("/opening-stock")
+async def save_opening_stock(payload: dict):
+    """Manual entry for a single month's Coking Coal opening stock
+    (Indigenous/Imported/Total, '000 T) — the same three techno_data keys
+    /preview + /insert write from the Coal OMI workbook's OIS-2 sheet (see
+    _build_ois2_record), but reachable without needing that month's own
+    workbook on hand. Lets a month be filled in (or corrected) directly, so
+    page_coal_receipts_stock.py's 4-FY opening-stock-history tables can be
+    backfilled for months whose source workbook isn't available.
+
+    Body: { report_month, stock_indigenous, stock_imported, stock_total }
+    (any of the three may be omitted/null to leave that figure untouched).
+    """
+    report_month = payload.get("report_month", "")
+    _validate_month(report_month)
+
+    month_fields = {}
+    for key in ("stock_indigenous", "stock_imported", "stock_total"):
+        v = payload.get(key)
+        if v is not None:
+            month_fields[key] = float(v)
+    if not month_fields:
+        raise HTTPException(status_code=400, detail="Provide at least one of stock_indigenous/stock_imported/stock_total.")
+
+    merge_upsert_techno_data(
+        plant="SAIL", report_month=report_month, unit="Coal_Receipt_Stock",
+        new_techno_json={"month": month_fields}, source_file="manual-entry",
+    )
+    return {"status": "ok", "report_month": report_month, "saved": month_fields}

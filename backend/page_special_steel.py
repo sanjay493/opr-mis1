@@ -606,53 +606,71 @@ def _gen_bsl(cur, month, cply_month, ytd_months, cply_ytd_months):
 
 
 def _gen_isp(cur, month, cply_month, ytd_months, cply_ytd_months):
-    """ISP: product-wise (WR COIL, TMT COIL, TMT BAR, STRUCTURALS, 150 BLT, 200 BLM).
+    """ISP: mill-group-wise. The 6 raw source mills (WR COIL, TMT COIL,
+    TMT BAR, STRUCTURALS, 150 BLT, 200 BLM — still the literal `product`
+    values stored in special_steel_orders, and still what
+    page_key_parameters.py's _SEMI_FINISHED_GROUPS['ISP'] matches against)
+    are clubbed into 4 displayed rows per direct instruction: Bar Mill
+    (TMT COIL + TMT BAR), WR Mill (WR COIL alone, renamed), Semis
+    (150 BLT + 200 BLM), US Mill (STRUCTURALS alone, renamed).
 
     ISP's mill data arrives from the source plant as one consolidated figure
     per mill, with no quality/grade split — so unlike the other four plants
-    there's no Quality/Grade column here, just one row per mill (see the
-    'isp_summary' branch in special_steel.html / SpecialSteelTemplate.js)."""
-    mills   = ["WR COIL", "TMT COIL", "TMT BAR", "STRUCTURALS", "150 BLT", "200 BLM"]
+    there's no Quality/Grade column here, just one row per mill group (see
+    the 'isp_summary' branch in special_steel.html / SpecialSteelTemplate.js)."""
+    mill_groups = [
+        ("Bar Mill", ["TMT COIL", "TMT BAR"]),
+        ("WR Mill",  ["WR COIL"]),
+        ("Semis",    ["150 BLT", "200 BLM"]),
+        ("US Mill",  ["STRUCTURALS"]),
+    ]
     ph_ytd  = ",".join("?" * len(ytd_months))
     ph_cytd = ",".join("?" * len(cply_ytd_months))
     rows    = []
     tot_o = tot_a = tot_c = tot_co = tot_ca = tot_cc = 0.0
 
-    for mill in mills:
-        cur.execute("""
-            SELECT order_qty, actual_despatch FROM special_steel_orders
-            WHERE report_month=? AND plant_name='ISP' AND product=?
-        """, (month, mill))
-        r = cur.fetchone()
-        o, a = (r[0] or 0, r[1] or 0) if r else (0, 0)
+    for label, mills in mill_groups:
+        o = a = co = ca = 0.0
+        c = cc = None
+        for mill in mills:
+            cur.execute("""
+                SELECT order_qty, actual_despatch FROM special_steel_orders
+                WHERE report_month=? AND plant_name='ISP' AND product=?
+            """, (month, mill))
+            r = cur.fetchone()
+            o += (r[0] or 0) if r else 0
+            a += (r[1] or 0) if r else 0
 
-        cur.execute("""
-            SELECT actual_despatch FROM special_steel_orders
-            WHERE report_month=? AND plant_name='ISP' AND product=?
-        """, (cply_month, mill))
-        rc = cur.fetchone()
-        c = rc[0] if rc and rc[0] is not None else None
+            cur.execute("""
+                SELECT actual_despatch FROM special_steel_orders
+                WHERE report_month=? AND plant_name='ISP' AND product=?
+            """, (cply_month, mill))
+            rc = cur.fetchone()
+            if rc and rc[0] is not None:
+                c = (c or 0) + rc[0]
 
-        cur.execute(f"""
-            SELECT COALESCE(SUM(order_qty),0), COALESCE(SUM(actual_despatch),0)
-            FROM special_steel_orders
-            WHERE report_month IN ({ph_ytd}) AND plant_name='ISP' AND product=?
-        """, (*ytd_months, mill))
-        ry = cur.fetchone()
-        co, ca = (ry[0] or 0, ry[1] or 0) if ry else (0, 0)
+            cur.execute(f"""
+                SELECT COALESCE(SUM(order_qty),0), COALESCE(SUM(actual_despatch),0)
+                FROM special_steel_orders
+                WHERE report_month IN ({ph_ytd}) AND plant_name='ISP' AND product=?
+            """, (*ytd_months, mill))
+            ry = cur.fetchone()
+            co += (ry[0] or 0) if ry else 0
+            ca += (ry[1] or 0) if ry else 0
 
-        cur.execute(f"""
-            SELECT COALESCE(SUM(actual_despatch),0)
-            FROM special_steel_orders
-            WHERE report_month IN ({ph_cytd}) AND plant_name='ISP' AND product=?
-        """, (*cply_ytd_months, mill))
-        ryc = cur.fetchone()
-        cc = ryc[0] if ryc and ryc[0] else None
+            cur.execute(f"""
+                SELECT COALESCE(SUM(actual_despatch),0)
+                FROM special_steel_orders
+                WHERE report_month IN ({ph_cytd}) AND plant_name='ISP' AND product=?
+            """, (*cply_ytd_months, mill))
+            ryc = cur.fetchone()
+            if ryc and ryc[0]:
+                cc = (cc or 0) + ryc[0]
 
         tot_o += o; tot_a += a; tot_co += co; tot_ca += ca
         if c  is not None: tot_c  += c
         if cc is not None: tot_cc += cc
-        rows.append(_grade(mill, o, a, c, co, ca, cc))
+        rows.append(_grade(label, o, a, c, co, ca, cc))
 
     rows.append(_total("TOTAL SPECIAL STEEL",
                        tot_o, tot_a, tot_c or None, "grand-total",

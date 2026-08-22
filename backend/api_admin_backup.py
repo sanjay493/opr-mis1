@@ -25,9 +25,9 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 import auth
+import db
 from dbengine import DB_ENGINE
 
 router = APIRouter(prefix="/api/admin/backups", tags=["admin-backup"], dependencies=[Depends(auth.require_admin)])
@@ -54,10 +54,6 @@ _MYSQL_CFG = {
     "user": os.environ.get("MYSQL_USER", "mis_app"),
     "password": os.environ.get("MYSQL_PASSWORD", ""),
 }
-
-
-class RestoreRequest(BaseModel):
-    filename: str
 
 
 def _require_mysql():
@@ -176,6 +172,66 @@ def _sanitize_for_restore(src: Path) -> Path:
     return Path(path)
 
 
+# Data-loss guard for restore, added after an incident (2026-08-21) where a
+# restore silently emptied capital_repair_table: every OTHER table matched
+# that same evening's row counts almost exactly, so a same-day admin backup
+# still isn't proof a given table survived in it — mysqldump simply omits
+# the INSERT entirely for a table with zero rows, and nothing before this
+# surfaced that difference to whoever clicked Restore. See docs/SETUP.md.
+_INSERT_LINE_RE = re.compile(r"^INSERT INTO `(\w+)` VALUES (.*);\s*$")
+
+
+def _source_table_counts(path: Path) -> dict:
+    """{table: row_count} parsed from a mysqldump .sql file's own INSERT
+    statements — no DB connection needed, so this works against the backup
+    file exactly as it sits on disk. mysqldump's --extended-insert (the
+    default) writes one INSERT per table as a single very long line, but
+    sums across every matching line regardless, in case a table's data was
+    ever split across more than one statement."""
+    counts: dict = {}
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            m = _INSERT_LINE_RE.match(line.rstrip("\n"))
+            if not m:
+                continue
+            table, values = m.group(1), m.group(2)
+            counts[table] = counts.get(table, 0) + values.count("),(") + 1
+    return counts
+
+
+def _live_table_counts() -> dict:
+    """{table: row_count} for every table currently in mis_reports, via the
+    app's own MySQL connection (db.py) rather than shelling out — a plain
+    SHOW TABLES / SELECT COUNT(*) needs no SQLite-dialect translation."""
+    conn = db.connect()
+    try:
+        cur = conn.cursor()
+        cur.execute("SHOW TABLES")
+        tables = [r[0] for r in cur.fetchall()]
+        counts = {}
+        for t in tables:
+            cur.execute(f"SELECT COUNT(*) FROM `{t}`")
+            counts[t] = cur.fetchone()[0]
+        return counts
+    finally:
+        conn.close()
+
+
+def _tables_at_risk(src: Path) -> list:
+    """Tables that currently hold data but would come back EMPTY if `src`
+    were restored — the exact failure mode from the 2026-08-21 incident.
+    Returns [(table, live_count), ...] sorted by live_count descending, or
+    [] if nothing would be lost."""
+    source_counts = _source_table_counts(src)
+    live_counts = _live_table_counts()
+    at_risk = [
+        (t, live_counts[t]) for t in live_counts
+        if live_counts[t] > 0 and source_counts.get(t, 0) == 0
+    ]
+    at_risk.sort(key=lambda x: -x[1])
+    return at_risk
+
+
 @router.get("")
 def list_backups():
     _require_mysql()
@@ -204,11 +260,29 @@ def create_backup(admin: dict = Depends(auth.require_admin)):
 
 
 @router.post("/{filename}/restore")
-def restore_backup(filename: str, admin: dict = Depends(auth.require_admin)):
+def restore_backup(filename: str, confirm_data_loss: bool = False, admin: dict = Depends(auth.require_admin)):
     _require_mysql()
     src = _safe_path(filename)
     if not src.exists():
         raise HTTPException(status_code=404, detail="Backup file not found.")
+
+    # Refuse (unless explicitly confirmed) to restore a file that would wipe
+    # out any table that currently has data — this is what actually happened
+    # on 2026-08-21: the chosen backup was missing capital_repair_table
+    # entirely while every other table matched that day's data almost
+    # exactly, so nothing about the file list or its size gave any hint.
+    if not confirm_data_loss:
+        at_risk = _tables_at_risk(src)
+        if at_risk:
+            summary = ", ".join(f"{t} ({n} rows)" for t, n in at_risk[:10])
+            more = f" and {len(at_risk) - 10} more" if len(at_risk) > 10 else ""
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Restoring \"{filename}\" would empty {len(at_risk)} table(s) that currently "
+                    f"have data: {summary}{more}. If this is intentional, confirm to proceed anyway."
+                ),
+            )
 
     # Safety net: snapshot current state before overwriting anything.
     prerestore_stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
@@ -247,8 +321,8 @@ def restore_backup(filename: str, admin: dict = Depends(auth.require_admin)):
         os.remove(ini_path)
         sanitized.unlink(missing_ok=True)
 
-    auth.log_activity(
-        admin, "restore", "mis_reports",
-        f"restored from {filename}; pre-restore snapshot saved as {prerestore_name}",
-    )
+    note = f"restored from {filename}; pre-restore snapshot saved as {prerestore_name}"
+    if confirm_data_loss:
+        note += " (confirmed despite data-loss warning)"
+    auth.log_activity(admin, "restore", "mis_reports", note)
     return {"status": "ok", "restored_from": filename, "prerestore_snapshot": prerestore_name}

@@ -28,6 +28,7 @@ SAIL row computation (MAJOR page + Summary page te_table):
 from decimal import Decimal, ROUND_HALF_UP
 import db
 from techno_cumulative import compute_cumulative_preview, compute_cumulative_from_values
+from bf_benchmark_registry import compute_fuel_rate
 
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -3054,6 +3055,17 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
                 if alt_v is not None and alt_v != 0:
                     v = alt_v
                     break
+        # Fuel Rate on-the-fly fallback (same rule as _get_plan_value's
+        # Target column, bf_benchmark_registry.compute_fuel_rate, and
+        # db._maybe_recompute_derived_params' stored-value recompute):
+        # Fuel Rate = Coke Rate + Nut Coke Rate + CDI Rate. Some older
+        # techno_data rows — mainly previous-FY till_month rows, saved
+        # before the recompute-on-save logic existed — still hold a null
+        # stored fuel_rate despite having real coke_rate/cdi, which showed
+        # up as a blank furnace-wise Fuel Rate for the fy3/fy2/fy1 (previous
+        # years) and cum/cum_cply columns specifically.
+        if v is None and key == "fuel_rate":
+            v = compute_fuel_rate(d)
         return v
 
     def _get_plan_value(plant, unit, param_key):
