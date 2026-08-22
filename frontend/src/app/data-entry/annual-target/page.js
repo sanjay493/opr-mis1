@@ -112,7 +112,19 @@ function TechnoPageTargetsPageInner() {
     (data?.sections || []).forEach((sec) => {
       sec.columns.forEach((col) => {
         const val = edits[keyOf(col)];
-        if (val === '' || val === undefined) return;
+        if (val === '' || val === undefined) {
+          // A field cleared back to blank from a previously-saved value is
+          // a delete request, not a no-op — send value: null explicitly so
+          // the backend removes the stored key. A field that was already
+          // blank and stays blank has nothing to say, so it's left out of
+          // the payload entirely (same as before).
+          if (col.target != null) {
+            entries.push(isCoalBlend
+              ? { plant: col.plant, kind: col.param_key, value: null }
+              : { plant: col.plant, unit: col.unit, param_key: col.param_key, unit_str: sec.unit, value: null });
+          }
+          return;
+        }
         const num = parseFloat(val);
         if (Number.isNaN(num)) return;
         entries.push(isCoalBlend
