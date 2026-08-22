@@ -11,8 +11,13 @@ import db
 _ACT = {
     "BSP":  ["SMS-2", "SMS-3"],
     "DSP":  "SMS Total Caster",
-    "RSP":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
-    "BSL":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2"],
+    # RSP/BSL: Concast actual = Total Crude Steel - SMS-1 Ingot, rather than
+    # summing individual CCM items — "Total Crude Steel" is the authoritative
+    # DPR figure and this ties Concast + Ingot back to it exactly, instead of
+    # depending on every CCM sub-item being entered (e.g. BSL has no
+    # SMS-2 CCM-3/CCM-4 items at all).
+    "RSP":  ("Total Crude Steel", "-", "SMS-1 Ingot"),
+    "BSL":  ("Total Crude Steel", "-", "SMS-1 Ingot"),
     "ISP":  ["SMS CCM-1&2", "SMS CCM-3"],
     "ASP":  "Total Caster",        # DSP & ASP produce crude steel via both
                                     # Concast and Ingot routes — "Total Caster"
@@ -43,6 +48,13 @@ _ROWS  = ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "ASP", "SSP", "VISL", "
 
 def _fetch(cur, tbl, plant, item, month):
     table = "production_table" if tbl == "act" else "production_plan_table"
+    if isinstance(item, tuple) and len(item) == 3 and item[1] == "-":
+        minuend_item, _, subtrahend_item = item
+        minuend = _fetch(cur, tbl, plant, minuend_item, month)
+        if minuend is None:
+            return None
+        subtrahend = _fetch(cur, tbl, plant, subtrahend_item, month)
+        return minuend - (subtrahend or 0.0)
     if isinstance(item, list):
         total, found = 0.0, False
         for it in item:
