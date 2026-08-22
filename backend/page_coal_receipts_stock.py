@@ -116,7 +116,10 @@ def _stock_history_tables(report_month: str) -> list:
     uses); a month with nothing on record yet just shows "—" until that
     history is backfilled."""
     snapshots = _all_stock_snapshots()
-    fy_starts = _stock_history_fy_starts(report_month)
+    # Reversed for display — most recent/current FY on top, oldest at the
+    # bottom, per direct instruction (_stock_history_fy_starts itself stays
+    # oldest-first, since that's the natural order to compute it in).
+    fy_starts = list(reversed(_stock_history_fy_starts(report_month)))
 
     tables = []
     for label, key in [("Indigenous Coking Coal", "indigenous"),

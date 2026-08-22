@@ -954,7 +954,7 @@
             margin-bottom: 2px;
         }
 
-        .page4-table { table-layout: fixed; width: 100%; border: 2px solid {{ colors.border_black }}; }
+        .page4-table { table-layout: fixed; width: 100%; border: 1px solid {{ colors.border_black }}; }
         .page4-table th { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; background-color: {{ colors.table_header_bg }}; }
         .page4-table td { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; }
         .page4-table col.c-items    { width:  8%; }
@@ -991,13 +991,13 @@
         .page4-table td.col-ytd-act,
         .page4-table thead th.col-ytd-act { background-color: {{ colors.highlight_cumulative_bg }} !important; }
 
-        /* SAIL aggregate rows — boxed in black top/bottom per direct
+        /* SAIL aggregate rows — boxed in thin black top/bottom per direct
            instruction, on top of the shared thin cell borders. */
         .page4-table tr.sail-row td {
             font-weight: 700;
             background-color: {{ colors.highlight_planned_band_bg }} !important;
-            border-top: 1.5px solid {{ colors.border_black }} !important;
-            border-bottom: 1.5px solid {{ colors.border_black }} !important;
+            border-top: 1px solid {{ colors.border_black }} !important;
+            border-bottom: 1px solid {{ colors.border_black }} !important;
         }
 
         /* "5 Plants" aggregate rows — same light-yellow + bold convention as
@@ -1022,7 +1022,7 @@
             color: {{ colors.text_secondary }};
         }
 
-        .page5-6-table { table-layout: fixed; width: 100%; border: 2px solid {{ colors.border_black }}; }
+        .page5-6-table { table-layout: fixed; width: 100%; border: 1px solid {{ colors.border_black }}; }
         .page5-6-table th { font-size: 8.5pt; padding: 4px 4px; line-height: 1; vertical-align: middle; }
         .page5-6-table td { font-size: 8.5pt; padding: 4px 4px; line-height: 1; }
 
@@ -1056,12 +1056,12 @@
         .page5-6-table td.col-ytd-act,
         .page5-6-table thead th.col-ytd-act { background-color: {{ colors.highlight_cumulative_bg }} !important; }
 
-        /* SAIL plant rows — boxed in black top/bottom per direct instruction */
+        /* SAIL plant rows — boxed in thin black top/bottom per direct instruction */
         .page5-6-table tr.sail-row td {
             font-weight: 700;
             background-color: {{ colors.highlight_planned_band_bg }} !important;
-            border-top: 1.5px solid {{ colors.border_black }} !important;
-            border-bottom: 1.5px solid {{ colors.border_black }} !important;
+            border-top: 1px solid {{ colors.border_black }} !important;
+            border-bottom: 1px solid {{ colors.border_black }} !important;
         }
 
         /* ─── Pages 7–13 – Month-wise Production Trend ──────── */
