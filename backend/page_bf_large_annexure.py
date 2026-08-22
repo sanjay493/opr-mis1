@@ -533,6 +533,19 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         sail_cols.append({"label": label, "plant": plant, "unit": unit})
         vals, ytd_months, prev_fy_months = _sail_bf_values(plant, unit, report_month)
         abp = _sail_bf_abp(plant, unit, fy_label)
+        # Fuel Rate is never entered directly as its own ABP target (same
+        # rule as everywhere else in this app — bf_benchmark_registry.py's
+        # compute_fuel_rate, db._maybe_recompute_derived_params,
+        # page_techno.py's Iron Making Norm/Target column): Coke Rate + Nut
+        # Coke Rate + CDI Rate, computed on the fly from those three's own
+        # ABP entries when nothing was stored under "fuel_rate" itself
+        # directly (which only happened to be true for ISP here, leaving
+        # BSP/RSP blank despite having real Coke/CDI targets to derive it
+        # from).
+        if abp.get("fuel_rate") is None:
+            computed_fuel_rate = compute_fuel_rate(abp)
+            if computed_fuel_rate is not None:
+                abp["fuel_rate"] = computed_fuel_rate
         for key in vals:
             vals[key]["abp"] = None if key in _NO_ABP_KEYS else abp.get(key)
         # Total HM Prod's ABP target is computed (Apr-Mar sum of
