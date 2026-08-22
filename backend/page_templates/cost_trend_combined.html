@@ -6,7 +6,7 @@
 <div style="padding:4px;font-family:Arial,sans-serif;font-size:8pt;">
   {% for p in page.pages %}
   {{ cost_trend_product(p, colors, compact=true) }}
-  {% if not loop.last %}<div style="border-top:1px solid {{ colors.border_light }};margin:5px 0;"></div>{% endif %}
+  {% if not loop.last %}<div style="border-top:1px solid {{ colors.border_light }};margin:5px 0 9px 0;"></div>{% endif %}
   {% endfor %}
-  <div style="font-size:7pt;font-style:italic;color:{{ colors.text_secondary }};margin-top:3px;">(-) indicates decrease in cost</div>
+  <div style="font-size:7.5pt;font-style:italic;color:{{ colors.text_secondary }};margin-top:4px;">(-) indicates decrease in cost</div>
 </div>

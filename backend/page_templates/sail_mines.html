@@ -7,16 +7,38 @@
 <div class="coal-c-heading">{{ t.title }}</div>
 <table class="coal-table" style="margin-bottom:8px;">
     <thead>
+        {% if t.kind == 'production_despatch' %}
+        <tr>
+            <th rowspan="2" class="coal-label-cell">Item</th>
+            {% for grp in t.column_groups %}<th colspan="{{ grp.columns|length }}"{% if not loop.first %} style="border-left:1.5px solid {{ colors.border_dark }};"{% endif %}>{{ grp.label }}</th>{% endfor %}
+        </tr>
+        <tr>
+            {% for grp in t.column_groups %}
+            {% set outer_first = loop.first %}
+            {% for c in grp.columns %}<th{% if loop.first and not outer_first %} style="border-left:1.5px solid {{ colors.border_dark }};"{% endif %}>{{ c }}</th>{% endfor %}
+            {% endfor %}
+        </tr>
+        {% else %}
         <tr>
             <th class="coal-label-cell">Item</th>
             {% for c in t.columns %}<th>{{ c }}</th>{% endfor %}
         </tr>
+        {% endif %}
     </thead>
     <tbody>
         {% for r in t.rows %}
         <tr{% if r.bold %} class="coal-bold-row"{% endif %}>
             <td class="coal-label-cell">{{ r.label }}</td>
-            {% if t.kind == 'production' %}
+            {% if t.kind == 'production_despatch' %}
+            <td class="coal-num">{{ r.app if r.app is not none else '—' }}</td>
+            <td class="coal-num">{{ r.actual if r.actual is not none else '—' }}</td>
+            <td class="coal-num">{{ (r.pct_ful ~ '%') if r.pct_ful is not none else '—' }}</td>
+            <td class="coal-num">{{ r.cply if r.cply is not none else '—' }}</td>
+            <td class="coal-num">{{ (r.pct_growth ~ '%') if r.pct_growth is not none else '—' }}</td>
+            <td class="coal-num" style="border-left:1.5px solid {{ colors.border_dark }};">{{ r.d_actual if r.d_actual is not none else '—' }}</td>
+            <td class="coal-num">{{ r.d_cply if r.d_cply is not none else '—' }}</td>
+            <td class="coal-num">{{ (r.d_pct_growth ~ '%') if r.d_pct_growth is not none else '—' }}</td>
+            {% elif t.kind == 'production' %}
             <td class="coal-num">{{ r.app if r.app is not none else '—' }}</td>
             <td class="coal-num">{{ r.actual if r.actual is not none else '—' }}</td>
             <td class="coal-num">{{ (r.pct_ful ~ '%') if r.pct_ful is not none else '—' }}</td>

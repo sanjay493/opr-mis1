@@ -1,43 +1,61 @@
 """
 "SAIL Mines Production & Despatch Performance" — 7 tables covering Iron Ore
-(production + sales), Coal (mines production, washery, despatch) and Flux
-(limestone/dolomite production + despatch), each a cumulative April-<report
-month> view against Annual Plan (APP) and the corresponding period last
-year (CPLY), per direct instruction.
+(production+despatch, plus sales), Coal (mines production, washery,
+despatch) and Flux (limestone/dolomite production + despatch), each a
+cumulative April-<report month> view against Annual Plan (APP) and the
+corresponding period last year (CPLY), per direct instruction.
 
-Every "production"-kind table's row (APP, Actual, % Fulfillment, CPLY, %
-Growth) is built from monthly Actual + Plan entered via the SAIL Mines
-Entry data-entry page (db.sail_mines_monthly) — APP/Actual are the entered
-monthly figures summed April->report_month (same YTD convention as
-page4.py's "YTD APP"/"YTD Actual" columns), CPLY is the same sum for last
-FY's April->same month (db.get_cply_month, one call per YTD month so a
-report month early in the FY still gets the right prior-year months).
-"flow"-kind tables (despatch/sales) skip APP/% Fulfillment entirely — those
-have no plan figure, just Actual/CPLY/% Growth.
+Every "production"-kind table's row (APP, Act., %FF, CPLY, %Grth) is built
+from monthly Actual + Plan entered via the SAIL Mines Entry data-entry page
+(db.sail_mines_monthly) — APP/Actual are the entered monthly figures summed
+April->report_month (same YTD convention as page4.py's "YTD APP"/"YTD
+Actual" columns), CPLY is the same sum for last FY's April->same month
+(db.get_cply_month, one call per YTD month so a report month early in the
+FY still gets the right prior-year months). "flow"-kind tables (despatch/
+sales) skip APP/%FF entirely — those have no plan figure, just Act./CPLY/
+%Grth.
+
+Iron Ore Production (table 1) additionally carries a DESPATCH column group
+per mine group (per direct instruction) — a second "flow"-kind section
+(iron_ore_despatch, same 4 items) whose rows are merged into table 1's
+rows as extra columns rather than rendered as their own table (see
+"merge_into" below); the resulting table has kind='production_despatch'
+and a "column_groups" list (PRODUCTION + DESPATCH) instead of a flat
+"columns" list. This is a separate concept from table 2 (Sales of Iron
+Ore), which tracks disposal CHANNEL (Auction vs Despatch) rather than
+per-mine-group despatch.
 
 A few rows are computed, never entered directly:
   - Coal Mines Production's "Total" = Raw Coking Coal + Thermal Coal.
   - Washery's "Yield (Clean Coal/Raw Coal)" = Clean Coal / Input Raw Coal
-    x100 — computed for Actual/APP/CPLY the same way, before % Fulfillment/
-    % Growth are derived from those (not an independently entered %), and
-    displayed with 1 decimal (a %) rather than the tonnage tables' whole T.
-Iron Ore Production's "SAIL" row is its own directly-entered figure, NOT a
-sum of CGoM/OGoM/JGoM — same reasoning as Cost Trend's SAIL row (see
-page_cost_trend.py): a mine group's own reported/blended total isn't
-necessarily the arithmetic sum of the individual mines.
+    x100 — computed for Actual/APP/CPLY the same way, before %FF/%Grth are
+    derived from those (not an independently entered %), and displayed
+    with 1 decimal (a %) rather than the tonnage tables' whole T.
+Iron Ore Production's "SAIL" row (both production and despatch) is its own
+directly-entered figure, NOT a sum of CGoM/OGoM/JGoM — same reasoning as
+Cost Trend's SAIL row (see page_cost_trend.py): a mine group's own
+reported/blended total isn't necessarily the arithmetic sum of the
+individual mines.
 """
 import db
 
 # Every (section key, item) pair listed under "items" is entered directly
 # via the SAIL Mines Entry data-entry page; "derived" rows are computed
 # from those and never entered (see module docstring). kind='production'
-# tables show APP/Actual/%Ful/CPLY/%Growth; kind='flow' tables (despatch/
-# sales) show just Actual/CPLY/%Growth.
+# tables show APP/Act./%FF/CPLY/%Grth; kind='flow' tables (despatch/sales)
+# show just Act./CPLY/%Grth. A section with "merge_into" set is never its
+# own table — its rows fold into the named section's table as an extra
+# DESPATCH column group instead (see _merge_despatch_columns).
 SAIL_MINES_SECTIONS = [
     {
         "key": "iron_ore_prod", "title": "IRON ORE PRODUCTION", "kind": "production",
         "items": ["CGoM", "OGoM", "JGoM", "SAIL"],
         "derived": [],
+    },
+    {
+        "key": "iron_ore_despatch", "kind": "flow",
+        "items": ["CGoM", "OGoM", "JGoM", "SAIL"],
+        "derived": [], "merge_into": "iron_ore_prod",
     },
     {
         "key": "iron_ore_sales", "title": "SALES OF IRON ORE", "kind": "flow",
@@ -149,16 +167,18 @@ def generate_sail_mines(report_month: str) -> dict:
     y, m = int(report_month[:4]), int(report_month[5:7])
     period_label = f"April-{_MON_ABBR[m]}'{y % 100:02d}"
 
-    tables = []
+    # Pass 1: compute every section's rows (by label) regardless of whether
+    # it ends up as its own table or gets folded into another one below.
+    section_rows = {}
     for section in SAIL_MINES_SECTIONS:
         raw = {}  # item/derived label -> (app, actual, cply) raw numbers
-        rows = []
+        rows = {}
         for item in section["items"]:
             app, actual, cply = _leaf_values(
                 monthly, cply_monthly, section["key"], item, ytd_months, cply_months, section["kind"]
             )
             raw[item] = (app, actual, cply)
-            rows.append(_row(item, app, actual, cply, section["kind"], bold=(item == "SAIL")))
+            rows[item] = _row(item, app, actual, cply, section["kind"], bold=(item == "SAIL"))
 
         for d in section.get("derived", []):
             value_fmt = d.get("value_fmt", "t")
@@ -172,16 +192,50 @@ def generate_sail_mines(report_month: str) -> dict:
                 app = _ratio(num[0], den[0]) if section["kind"] == "production" else None
                 actual = _ratio(num[1], den[1])
                 cply = _ratio(num[2], den[2])
-            rows.append(_row(d["label"], app, actual, cply, section["kind"], value_fmt, bold=True))
+            rows[d["label"]] = _row(d["label"], app, actual, cply, section["kind"], value_fmt, bold=True)
 
-        columns = (
-            ["APP", "Actual", "% Fulfillment", "CPLY", "% Growth"] if section["kind"] == "production"
-            else ["Actual", "CPLY", "% Growth"]
-        )
-        tables.append({
-            "key": section["key"], "title": section["title"], "kind": section["kind"],
-            "columns": columns, "rows": rows,
-        })
+        section_rows[section["key"]] = rows
+
+    # Pass 2: emit one table per section, except sections with "merge_into"
+    # (folded into the named section's table as a DESPATCH column group —
+    # see iron_ore_despatch/iron_ore_prod in SAIL_MINES_SECTIONS above).
+    tables = []
+    for section in SAIL_MINES_SECTIONS:
+        if "merge_into" in section:
+            continue
+        item_order = list(section["items"]) + [d["label"] for d in section.get("derived", [])]
+        merge_section = next((s for s in SAIL_MINES_SECTIONS if s.get("merge_into") == section["key"]), None)
+
+        if merge_section:
+            rows = []
+            for label in item_order:
+                prod_row = section_rows[section["key"]][label]
+                desp_row = section_rows[merge_section["key"]].get(label, {})
+                rows.append({
+                    "label": label, "bold": prod_row["bold"],
+                    "app": prod_row.get("app"), "actual": prod_row.get("actual"),
+                    "pct_ful": prod_row.get("pct_ful"), "cply": prod_row.get("cply"),
+                    "pct_growth": prod_row.get("pct_growth"),
+                    "d_actual": desp_row.get("actual"), "d_cply": desp_row.get("cply"),
+                    "d_pct_growth": desp_row.get("pct_growth"),
+                })
+            tables.append({
+                "key": section["key"], "title": section["title"], "kind": "production_despatch",
+                "column_groups": [
+                    {"label": "PRODUCTION", "columns": ["APP", "Act.", "%FF", "CPLY", "%Grth"]},
+                    {"label": "DESPATCH", "columns": ["Act.", "CPLY", "%Grth"]},
+                ],
+                "rows": rows,
+            })
+        else:
+            columns = (
+                ["APP", "Act.", "%FF", "CPLY", "%Grth"] if section["kind"] == "production"
+                else ["Act.", "CPLY", "%Grth"]
+            )
+            tables.append({
+                "key": section["key"], "title": section["title"], "kind": section["kind"],
+                "columns": columns, "rows": [section_rows[section["key"]][label] for label in item_order],
+            })
 
     return {
         "type": "sail_mines",

@@ -26,7 +26,7 @@
                     <tr>
                         <th rowspan="2" style="vertical-align: middle; text-align: left; padding-left: 3px;">Items</th>
                         <th rowspan="2" style="vertical-align: middle;">Plant</th>
-                        <th rowspan="2" style="vertical-align: middle;">Ann.<br/>Cap.</th>
+                        <th rowspan="2" class="col-cap" style="vertical-align: middle;">Ann.<br/>Cap.</th>
                         <th rowspan="2" class="col-ann" style="vertical-align: middle;">APP<br/>{{ target_header.split()[1] }}</th>
                         <th colspan="4">{{ short_m }}'{{ short_y }}</th>
                         <th rowspan="2" style="vertical-align: middle;">{{ short_m }}'{{ short_prev_y }}<br/>Act.</th>
@@ -58,7 +58,7 @@
                                    padding: 1.8px 2px 1.8px 4px; font-family: inherit;">
                             SAIL incl. conversion
                         </td>
-                        <td class="label-cell" style="text-align: center;">{{ row.capacity }}</td>
+                        <td class="label-cell col-cap" style="text-align: center;">{{ row.capacity }}</td>
                         {% else %}
                         {% if row.is_first_in_group %}
                         <td class="label-cell" rowspan="{{ row.group_size }}"
@@ -75,7 +75,7 @@
                                    white-space: nowrap; overflow: hidden;">
                             {{ row.plant }}
                         </td>
-                        <td class="label-cell" style="text-align: center;">{{ row.capacity }}</td>
+                        <td class="label-cell col-cap" style="text-align: center;">{{ row.capacity }}</td>
                         {% endif %}
                         {% for val in row['values'] %}<td{% if col_cls[loop.index0] %} class="{{ col_cls[loop.index0] }}"{% endif %}>{{ val }}</td>{% endfor %}
                     </tr>
