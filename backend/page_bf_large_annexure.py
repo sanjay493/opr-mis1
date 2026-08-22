@@ -37,7 +37,12 @@ Data sources, per row:
     fy=report_month's FY) — the same store the Techno Manual Entry form's
     annual-target tab already writes into (BF-8/BF-5 tabs), so whatever's
     already been entered there shows up here for free; a key with no entry
-    shows "—" rather than being computed or guessed.
+    shows "—" rather than being computed or guessed. "Production"'s own ABP
+    is the one exception — techno_plan_fy has no per-furnace HM target
+    field, so it's computed instead as the Apr-Mar sum of
+    production_plan_table's monthly plan for that furnace's own item (see
+    _production_plan_annual_tonnes), the same plan data every other
+    production page's own ABP/APP column already reads.
   - "Coke Ash" and "Sinter Fe" reuse the same plant-level (not per-furnace)
     figures page_key_parameters.py's Key Parameters page already shows
     (Coke-Ovens shop's ash_in_coke, and tfe_in_sinter — RSP split across
@@ -158,6 +163,35 @@ def _production_table_tonnes(plant: str, months: list) -> dict:
             (plant, item, *months),
         )
         return {rm: v * 1000 for rm, v in cur.fetchall() if v is not None}
+    finally:
+        conn.close()
+
+
+def _production_plan_annual_tonnes(plant: str, fy_months: list) -> float:
+    """Sum of production_plan_table's monthly plan figures (same per-BF
+    item_name as _production_table_tonnes' actual figures, same '000T ->
+    tonnes scaling) across the full FY — the "ABP Target <FY>" figure for
+    Total HM Prod, computed here rather than read from techno_plan_fy: that
+    store is the Techno Manual Entry form's own annual-target tab, and
+    nobody enters a per-furnace HM production target there, so abp.get(
+    "production") was always None. production_plan_table already carries
+    a real monthly plan per furnace (the same ABP feeding every other
+    production page's own "APP"/plan columns), so this just sums Apr-Mar
+    of it instead of requiring a second, redundant manual entry."""
+    item = _PRODUCTION_ITEM.get(plant)
+    if not fy_months or not item:
+        return None
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        ph = ",".join("?" * len(fy_months))
+        cur.execute(
+            f"SELECT SUM(month_actual) FROM production_plan_table "
+            f"WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+            (plant, item, *fy_months),
+        )
+        r = cur.fetchone()
+        return r[0] * 1000 if r and r[0] is not None else None
     finally:
         conn.close()
 
@@ -501,6 +535,10 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         abp = _sail_bf_abp(plant, unit, fy_label)
         for key in vals:
             vals[key]["abp"] = None if key in _NO_ABP_KEYS else abp.get(key)
+        # Total HM Prod's ABP target is computed (Apr-Mar sum of
+        # production_plan_table), not read from techno_plan_fy — see
+        # _production_plan_annual_tonnes' docstring.
+        vals["production"]["abp"] = _production_plan_annual_tonnes(plant, fy_months)
 
         ash, fe = _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months)
         vals["_coke_ash"] = {**ash, "abp": None}
