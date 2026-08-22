@@ -944,7 +944,7 @@
         .page4-heading {
             font-size: 10pt;
             font-weight: 700;
-            color: {{ colors.text_accent_navy }};
+            color: {{ colors.text_black }};
             margin: 0;
             text-transform: uppercase;
         }
@@ -952,7 +952,7 @@
         .page4-meta {
             font-size: 8.5pt;
             font-weight: 500;
-            color: {{ colors.text_secondary }};
+            color: {{ colors.text_black }};
             margin-bottom: 2px;
         }
 
@@ -964,8 +964,9 @@
            supposed to show it — box-shadow draws outside the collapsed
            border model entirely, so it can't lose that fight. */
         .page4-table { table-layout: fixed; width: 100%; box-shadow: 0 0 0 1px {{ colors.border_black }}; }
-        .page4-table th { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; background-color: {{ colors.table_header_bg }}; }
+        .page4-table th { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; }
         .page4-table td { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; }
+        .page4-table th, .page4-table td { color: {{ colors.text_black }} !important; }
         .page4-table col.c-items    { width:  8%; }
         .page4-table col.c-plant    { width:  6%; }
         .page4-table col.c-cap      { width:5.5%; }
@@ -973,12 +974,59 @@
         .page4-table col.c-num      { width:  6%; }
         .page4-table col.c-num-sm   { width:5.5%; }
 
+        /* Same doubled-line issue as item-group-cell above, but for every
+           other cell touching the table's outer edge: the header row's own
+           top border, every row's first/last actual cell (left/right), and
+           the last row's bottom border all sit on the exact same physical
+           line as the table's own box-shadow frame, so each needs its own
+           border switched off on that side to leave box-shadow as the sole
+           renderer there. :first-child/:last-child correctly track the
+           true left/right edge per row even with rowspan, since a rowspan
+           cell here only ever appears as a row's first child, never
+           mid-row or last. */
+        .page4-table thead tr:first-child th { border-top: none !important; }
+        .page4-table tr th:first-child,
+        .page4-table tr td:first-child        { border-left: none !important; }
+        .page4-table tr th:last-child,
+        .page4-table tr td:last-child         { border-right: none !important; }
+        .page4-table tbody tr:last-child td   { border-bottom: none !important; }
+
+        /* Header/body divider — dark black rule under the heading rows,
+           same weight as the outer frame, per direct instruction. Row 1's
+           row-spanning th's (Items/Plant/Ann.Cap/APP-2026-27 and the 6
+           rowspan="2" summary columns) reach all the way to the body too,
+           but :last-child only ever sees row 2's own th's — th[rowspan]
+           catches the rest, while the two colspan="4" block headers
+           (Jul'26 / Apr-Jul'26) are correctly skipped since they don't
+           carry rowspan and their bottom edge is the row1/row2 divider,
+           not the header/body one. */
+        .page4-table thead tr:last-child th { border-bottom: 1px solid {{ colors.border_black }} !important; }
+        .page4-table thead tr:first-child th[rowspan] { border-bottom: 1px solid {{ colors.border_black }} !important; }
+
         /* item-group block separator */
         .page4-table tr.group-first td { border-top: 1px solid {{ colors.border_black }}; }
 
-        /* Annual Capacity column */
+        /* Each item group's own rowspan'd label cell — boxed in thin black
+           per direct instruction. Only right/bottom declared here: top is
+           already covered by .group-first td below (this cell only ever
+           renders on a group-first row), and left is already covered by
+           the :first-child rule above (this cell is always the table's
+           first column) — redeclaring either here would just be dead
+           weight. Its own rowspan already makes this one border span the
+           whole group's height, so right+bottom alone completes the box
+           around each item (OVEN PUSHING, SINTER, HOT METAL, ...) without
+           adding a spurious line partway through the group. */
+        .page4-table td.item-group-cell {
+            border-right:  1px solid {{ colors.border_black }} !important;
+            border-bottom: 1px solid {{ colors.border_black }} !important;
+        }
+
+        /* Annual Capacity column — slightly more intense than the shared
+           khv_shortfall_box_bg token (which key_highlights.html also uses,
+           so retinting that shared token would've changed that other page
+           too) via its own dedicated highlight_capacity_bg entry. */
         .page4-table td.col-cap,
-        .page4-table thead th.col-cap { background-color: {{ colors.khv_shortfall_box_bg }} !important; }
+        .page4-table thead th.col-cap { background-color: {{ colors.highlight_capacity_bg }} !important; }
 
         /* Annual APP column */
         .page4-table td.col-ann,
@@ -988,42 +1036,63 @@
             border-right: 1px solid {{ colors.border_black }};
         }
 
-        /* Month Actual column */
-        .page4-table td.col-m-act,
-        .page4-table thead th.col-m-act { background-color: {{ colors.highlight_cumulative_bg }} !important; }
+        /* Actual columns (month + cumulative) — identical treatment, one
+           shared class instead of two near-duplicate rules/classes. */
+        .page4-table td.col-act-highlight,
+        .page4-table thead th.col-act-highlight { background-color: {{ colors.highlight_cumulative_bg }} !important; }
 
         /* Cumulative section left wall */
         .page4-table td.col-ytd-app,
         .page4-table thead th.col-ytd-app { border-left: 1px solid {{ colors.border_black }}; }
 
-        /* Cumulative Actual column */
-        .page4-table td.col-ytd-act,
-        .page4-table thead th.col-ytd-act { background-color: {{ colors.highlight_cumulative_bg }} !important; }
-
-        /* SAIL aggregate rows — boxed in thin black top/bottom per direct
-           instruction, on top of the shared thin cell borders. */
+        /* SAIL aggregate rows — top/bottom rule only (standard total-row
+           convention), not a full per-cell box: a full border on every td
+           drew black lines between all ~15 columns too, gridding the row
+           and clashing with the pastel column-tint coding. No row fill
+           per direct instruction — only the column highlights (col-cap/
+           col-ann/col-m-act/col-ytd-act) keep a background now; bold text
+           + the rule lines are what marks this as a total row. */
         .page4-table tr.sail-row td {
             font-weight: 700;
-            background-color: {{ colors.highlight_planned_band_bg }} !important;
             border-top: 1px solid {{ colors.border_black }} !important;
             border-bottom: 1px solid {{ colors.border_black }} !important;
         }
 
-        /* "5 Plants" aggregate rows — same light-yellow + bold convention as
-           pages 7-13's fp-row and Concast's "5 Plants" row, boxed in thin
-           black top/bottom same as sail-row above, per direct instruction. */
+        /* "5 Plants" aggregate rows — same bold-row convention as pages
+           7-13's fp-row and Concast's "5 Plants" row; same top/bottom-only
+           rule and no fill, for the same reasons as sail-row above. */
         .page4-table tr.fp-row td {
             font-weight: 700;
-            background-color: {{ colors.highlight_target_band_bg }} !important;
             border-top: 1px solid {{ colors.border_black }} !important;
+            border-bottom: 1px solid {{ colors.border_black }} !important;
+        }
+
+        /* border-collapse tie-break bug: at the boundary right above a
+           sail-row/fp-row, that row's own `border-top: black` and the
+           plain plant row just before it (border-bottom: default gray,
+           same 1px width/style) are exactly tied — Chromium's collapse
+           algorithm silently picked the gray one, regardless of
+           !important (which only decides each cell's OWN declared border,
+           not which side wins a tied shared edge), so the black rule
+           never actually rendered. Forcing the row ABOVE to also declare
+           black removes the tie entirely — both sides agree now, so
+           whichever wins, the line is black. */
+        .page4-table tr:has(+ tr.sail-row) td,
+        .page4-table tr:has(+ tr.fp-row) td {
             border-bottom: 1px solid {{ colors.border_black }} !important;
         }
 
         /* ─── Pages 5–6 – Plant-Wise Performance ─────────────── */
+        /* ─── Pages 5-6 styling mirrors page4's (see above for the full
+           rationale on each point — same fixes, same reasons, just plant-
+           grouped instead of item-grouped: .plant-first/.page5-6-plant-cell
+           are this page's .group-first/.item-group-cell equivalents, and
+           there's no "5 Plants" aggregate sub-row here since a plant-wise
+           page has no cross-plant rollup row to box separately from SAIL. */
         .page5-6-heading {
             font-size: 12pt;
             font-weight: 700;
-            color: {{ colors.text_accent_navy }};
+            color: {{ colors.text_black }};
             margin: 0;
             text-transform: uppercase;
         }
@@ -1031,22 +1100,45 @@
         .page5-6-unit {
             font-size: 10pt;
             font-weight: 500;
-            color: {{ colors.text_secondary }};
+            color: {{ colors.text_black }};
         }
 
-        .page5-6-table { table-layout: fixed; width: 100%; border: 1px solid {{ colors.border_black }}; }
+        /* box-shadow, not border: see page4-table's own note above — a
+           plain `border` here loses the border-collapse conflict to the
+           th/td's own (grayish) borders right at the table's edge. */
+        .page5-6-table { table-layout: fixed; width: 100%; box-shadow: 0 0 0 1px {{ colors.border_black }}; }
         .page5-6-table th { font-size: 8.5pt; padding: 4px 4px; line-height: 1; vertical-align: middle; }
         .page5-6-table td { font-size: 8.5pt; padding: 4px 4px; line-height: 1; }
+        .page5-6-table th, .page5-6-table td { color: {{ colors.text_black }} !important; }
 
+        /* Outer-edge doubled-line prevention — see page4-table's matching
+           block above for why each side needs switching off individually. */
+        .page5-6-table thead tr:first-child th { border-top: none !important; }
+        .page5-6-table tr th:first-child,
+        .page5-6-table tr td:first-child       { border-left: none !important; }
+        .page5-6-table tr th:last-child,
+        .page5-6-table tr td:last-child        { border-right: none !important; }
+        .page5-6-table tbody tr:last-child td  { border-bottom: none !important; }
+
+        /* Header/body divider */
+        .page5-6-table thead tr:last-child th { border-bottom: 1px solid {{ colors.border_black }} !important; }
+        .page5-6-table thead tr:first-child th[rowspan] { border-bottom: 1px solid {{ colors.border_black }} !important; }
+
+        /* plant group separator */
+        .page5-6-table tr.plant-first td { border-top: 1px solid {{ colors.border_black }}; }
+
+        /* Each plant group's own rowspan'd label cell — only right/bottom
+           declared: top comes from .plant-first td (this cell only ever
+           renders on a plant-first row), left from the :first-child rule
+           above (always the table's first column). */
         .page5-6-plant-cell {
             font-size: 8.5pt;
             font-weight: 700;
             text-align: center;
             vertical-align: middle;
+            border-right:  1px solid {{ colors.border_black }} !important;
+            border-bottom: 1px solid {{ colors.border_black }} !important;
         }
-
-        /* plant group separator */
-        .page5-6-table tr.plant-first td { border-top: 1px solid {{ colors.border_black }}; }
 
         /* Annual Plan column */
         .page5-6-table td.col-ann,
@@ -1056,25 +1148,25 @@
             border-right: 1px solid {{ colors.border_black }};
         }
 
-        /* Month Actual column */
-        .page5-6-table td.col-m-act,
-        .page5-6-table thead th.col-m-act { background-color: {{ colors.highlight_cumulative_bg }} !important; }
+        /* Actual columns (month + cumulative) — one shared class, same as page4 */
+        .page5-6-table td.col-act-highlight,
+        .page5-6-table thead th.col-act-highlight { background-color: {{ colors.highlight_cumulative_bg }} !important; }
 
         /* Cumulative section left wall */
         .page5-6-table td.col-ytd-plan,
         .page5-6-table thead th.col-ytd-plan { border-left: 1px solid {{ colors.border_black }}; }
 
-        /* Cumulative Actual column */
-        .page5-6-table td.col-ytd-act,
-        .page5-6-table thead th.col-ytd-act { background-color: {{ colors.highlight_cumulative_bg }} !important; }
-
-        /* SAIL plant rows — boxed in thin black top/bottom per direct instruction */
-        .page5-6-table tr.sail-row td {
-            font-weight: 700;
-            background-color: {{ colors.highlight_planned_band_bg }} !important;
-            border-top: 1px solid {{ colors.border_black }} !important;
-            border-bottom: 1px solid {{ colors.border_black }} !important;
-        }
+        /* SAIL rows — bold text only, no border/fill of their own. Unlike
+           page4 (where sail-row marks ONE aggregate row inside a group of
+           several individual plant rows, needing its own top/bottom rule
+           to set it apart), on pages 5-6 "SAIL" is used as an entire
+           plant-group on page 5 (every one of its rows carries this
+           class), so a per-row top+bottom rule here would draw a border
+           between every single row in that block — a dense black ladder,
+           not a highlighted total. SAIL's group box comes from the same
+           .plant-first/.page5-6-plant-cell mechanism every other plant
+           group already uses; bold text alone is what marks it as SAIL. */
+        .page5-6-table tr.sail-row td { font-weight: 700; }
 
         /* ─── Pages 7–13 – Month-wise Production Trend ──────── */
         .page7-13-heading {

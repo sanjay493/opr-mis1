@@ -34,14 +34,14 @@
                     </tr>
                     <tr>
                         <th style="padding:3px 3px;">Plan</th>
-                        <th class="col-m-act" style="padding:3px 3px;">Actual</th>
+                        <th class="col-act-highlight" style="padding:3px 3px;">Actual</th>
                         <th style="padding:3px 3px;">%Ful</th>
                         <th class="col-ytd-plan" style="padding:3px 3px;">Plan</th>
-                        <th class="col-ytd-act" style="padding:3px 3px;">Actual</th>
+                        <th class="col-act-highlight" style="padding:3px 3px;">Actual</th>
                         <th style="padding:3px 3px;">%Ful</th>
                     </tr>
                 </thead>
-                {% set col_cls = ['col-ann','','col-m-act','','','','col-ytd-plan','col-ytd-act','','',''] %}
+                {% set col_cls = ['col-ann','','col-act-highlight','','','','col-ytd-plan','col-act-highlight','','',''] %}
                 <tbody>
                     {% set ns = namespace(cur_plant='', plant_rows={}) %}
                     {% for row in page.rows %}

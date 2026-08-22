@@ -10,6 +10,7 @@
 
   "_doc_highlights": "Backgrounds that carry real meaning (a comparison column, a total/aggregate row, a target band) — these are the 'highlighted rows and columns' kept by design. Change a value to retint that specific highlight everywhere it's used.",
 
+  "highlight_capacity_bg":      "#fee2e2",
   "highlight_actual_bg":        "#dbeafe",
   "highlight_actual_border":    "#1d4ed8",
   "highlight_cumulative_bg":    "#d1fae5",
