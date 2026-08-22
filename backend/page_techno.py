@@ -2871,6 +2871,16 @@ def _resolve_target_column_label(page_no, plant, src_unit, src_key, sec_label):
         return f"{plant} {_SINTER_MACHINE_LABEL[src_key]}"
     if src_key in _CASTER_YIELD_LABEL:
         return f"{plant} {_CASTER_YIELD_LABEL[src_key]}"
+    # Iron Making's furnace-wise rows (page_no 29/29.5) get a bare unit name
+    # ("BF-1") from _row_label_and_bold — correct for the REPORT page (each
+    # furnace row sits directly under its own plant's bold shop-total row
+    # there, so the plant is already visually obvious) but wrong here:
+    # target-entry columns have no such grouping, so every plant with a
+    # "BF-1" collided on the identical bare label, and the disambiguation
+    # step below then appended the unit back on top of itself
+    # ("BF-1 (BF-1)") without ever actually showing which plant it was.
+    if page_no in (29, 29.5) and label == src_unit:
+        return f"{plant} {src_unit}"
     return label
 
 
