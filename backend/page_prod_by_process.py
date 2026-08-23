@@ -122,23 +122,15 @@ def _row(plant: str, bof, eaf, cc, cs) -> dict:
     else:
         bof_pct = _pct(bof, cs)
 
-    # Every tonne of Crude Steel not cast on a Concast (CC) machine is cast
-    # as Ingot instead (the steel-foundry/ingot route) — same "CS minus CC"
-    # relationship page17_concast.py already relies on for RSP/BSL, applied
-    # here generically since this page already has both cc and cs in hand.
-    ingot = (cs - cc) if (cs is not None and cc is not None) else None
-
     return {
-        "plant":     plant,
-        "bold":      plant in ("5 Plants", "SAIL"),
-        "bof":       "" if is_eaf else _T(bof),
-        "eaf":       _T(eaf) if (is_eaf or is_sail) else "",
-        "cc":        _T(cc),
-        "ingot":     _T(ingot),
-        "cs":        _T(cs),
-        "bof_pct":   bof_pct,
-        "cc_pct":    _pct(cc, cs),
-        "ingot_pct": _pct(ingot, cs),
+        "plant":   plant,
+        "bold":    plant in ("5 Plants", "SAIL"),
+        "bof":     "" if is_eaf else _T(bof),
+        "eaf":     _T(eaf) if (is_eaf or is_sail) else "",
+        "cc":      _T(cc),
+        "cs":      _T(cs),
+        "bof_pct": bof_pct,
+        "cc_pct":  _pct(cc, cs),
     }
 
 
