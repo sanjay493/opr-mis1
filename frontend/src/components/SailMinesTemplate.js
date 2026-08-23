@@ -59,7 +59,9 @@ function Table({ table }) {
                   <td style={thtd}>{r.pct_ful != null ? `${r.pct_ful}%` : '—'}</td>
                   <td style={thtd}>{r.cply ?? '—'}</td>
                   <td style={thtd}>{r.pct_growth != null ? `${r.pct_growth}%` : '—'}</td>
-                  <td style={{ ...thtd, borderLeft: `1.5px solid ${C.borderDark}` }}>{r.d_actual ?? '—'}</td>
+                  <td style={{ ...thtd, borderLeft: `1.5px solid ${C.borderDark}` }}>{r.d_app ?? '—'}</td>
+                  <td style={thtd}>{r.d_actual ?? '—'}</td>
+                  <td style={thtd}>{r.d_pct_ful != null ? `${r.d_pct_ful}%` : '—'}</td>
                   <td style={thtd}>{r.d_cply ?? '—'}</td>
                   <td style={thtd}>{r.d_pct_growth != null ? `${r.d_pct_growth}%` : '—'}</td>
                 </>

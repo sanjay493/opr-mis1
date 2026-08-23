@@ -16,12 +16,12 @@
           </div>
 
           {# ── Production KPI tiles ── #}
-          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">Production Performance — ('000 T)</div>
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:capitalize;margin-bottom:3px;">Production Performance — ('000 T)</div>
           <div style="display:flex;gap:7px;margin-bottom:3px;">
             {% for row in page.production %}
             <div style="flex:1;position:relative;border:1px solid {{ colors.border_light }};border-radius:4px;padding:5px 8px 5px 12px;overflow:hidden;">
               <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg, {{ colors.misc_accent_blue }} 0 25%, {{ colors.khv_assessment_green }} 25% 50%, {{ colors.khv_assessment_amber }} 50% 75%, {{ colors.cover_molten_red }} 75% 100%);"></div>
-              <div style="font-size:8.5pt;color:{{ colors.text_secondary }};text-transform:uppercase;font-weight:700;letter-spacing:0.2px;">{{ row.item }}</div>
+              <div style="font-size:8.5pt;color:{{ colors.text_secondary }};text-transform:capitalize;font-weight:700;letter-spacing:0.2px;">{{ row.item }}</div>
               <div style="font-size:16pt;font-weight:700;color:{{ colors.text_primary }};line-height:1.2;">{{ row.month_act if row.month_act else '—' }}</div>
               <div style="font-size:8pt;color:{{ colors.text_secondary }};">%Ful: <b style="color:{{ colors.text_primary }};">{{ row.month_pct_ful if row.month_pct_ful else '—' }}%</b></div>
               <div style="font-size:8pt;color:{{ colors.text_secondary }};">vs CPLY:
@@ -34,21 +34,21 @@
           </div>
 
           {# ── YTD-by-FY bar chart (last 4 years, Apr-to-month) ── #}
-          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">Production Trend — Last 4 Years ({{ page.ytd_trend.period_label }}, '000 T)</div>
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:capitalize;margin-bottom:3px;">Production Trend — Last 4 Years ({{ page.ytd_trend.period_label }}, '000 T)</div>
           <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:3px 8px;margin-bottom:3px;">
             {{ page.ytd_trend.svg }}
           </div>
 
           {# ── Techno-Economic snapshot ── #}
-          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;">Techno-Economic Snapshot — SAIL</div>
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:capitalize;margin-bottom:2px;">Techno-Economic Snapshot — SAIL</div>
           <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;margin-bottom:4px;">
             {% for t in page.techno %}
             {% set tbg = colors[t.bg_key] if t.bg_key else colors.highlight_default_row_bg %}
-            <div style="background:{{ tbg }};border-radius:4px;padding:7px 10px;">
-              <div style="font-size:8pt;font-weight:700;line-height:1.15;color:{{ colors.text_heading_dark }};">{{ t.parameter }} <span style="font-weight:400;font-style:italic;color:{{ colors.text_secondary }};">({{ t.unit }})</span></div>
+            <div class="techno-tile" style="background:{{ tbg }};border-radius:4px;padding:7px 10px;">
+              <div style="font-size:8pt;font-weight:700;line-height:1.15;color:{{ colors.text_heading_dark }};">{{ t.parameter }} <span style="font-weight:600;font-style:italic;color:{{ colors.text_black }};">({{ t.unit }})</span></div>
               <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:4px;">
-                <span style="font-size:12.5pt;line-height:1.2;font-weight:700;color:{{ colors.text_primary }};">{{ t.month_actual if t.month_actual else '—' }}</span>
-                <span style="font-size:11.5pt;line-height:1.2;font-weight:400;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</span>
+                <span style="font-size:12.5pt;line-height:1.2;font-weight:700;color:{{ colors.text_black }};">{{ t.month_actual if t.month_actual else '—' }}</span>
+                <span style="font-size:11pt;line-height:1.2;font-weight:400;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</span>
               </div>
               {% if t.delta_pct is not none %}
               <div style="font-size:7.8pt;line-height:1.15;font-weight:700;margin-top:2px;color:{{ colors.text_variance_green if t.good else colors.text_variance_red }};">{{ '%+.1f'|format(t.delta_pct) }}% vs target</div>
@@ -59,7 +59,7 @@
 
           {# ── Value Added Steel (formerly "Special Steel") ── #}
           <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:2px 6px;margin-bottom:3px;">
-            <div style="font-size:11pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;">Value Added Steel Performance (SAIL)</div>
+            <div style="font-size:11pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:capitalize;margin-bottom:2px;">Value Added Steel Performance (SAIL)</div>
             <div style="display:flex;gap:9px;align-items:center;">
               <div style="flex:1.5;">{{ page.special_steel.five_year_svg }}</div>
               <div style="flex:0.85;border-left:1px solid {{ colors.border_divider }};padding-left:9px;">{{ page.special_steel.quarter_svg }}</div>
@@ -78,7 +78,7 @@
           </div>
 
           {# ── Trend strip ── #}
-          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:3px;">Saleable Steel &amp; Finished Steel Production Trend — Last 6 Months ('000 T)</div>
+          <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:capitalize;margin-bottom:3px;">Saleable Steel &amp; Finished Steel Production Trend — Last 6 Months ('000 T)</div>
           <div style="border:1px solid {{ colors.border_light }};border-radius:4px;padding:4px 8px;">
             {{ page.trend.svg }}
           </div>

@@ -48,7 +48,7 @@ function ProductionTiles({ production }) {
             position: 'absolute', left: 0, top: 0, bottom: 0, width: 4,
             background: `linear-gradient(180deg, ${C.accentBlue} 0 25%, #16a34a 25% 50%, #d97706 50% 75%, #b91c1c 75% 100%)`,
           }} />
-          <div style={{ fontSize: '8.5pt', color: C.textSecondary, textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.2 }}>{row.item}</div>
+          <div style={{ fontSize: '8.5pt', color: C.textBlack, textTransform: 'capitalize', fontWeight: 700, letterSpacing: 0.2 }}>{row.item}</div>
           <div style={{ fontSize: '16pt', fontWeight: 700, color: C.textPrimary, lineHeight: 1.2 }}>{row.month_act || '—'}</div>
           <div style={{ fontSize: '8pt', color: C.textSecondary }}>%Ful: <b style={{ color: C.textPrimary }}>{row.month_pct_ful || '—'}%</b></div>
           <div style={{ fontSize: '8pt', color: C.textSecondary }}>vs CPLY: <GrowthText value={row.pct_growth_cply} good={row.growth_good} /></div>
@@ -65,13 +65,42 @@ function YtdTrendChart({ ytdTrend }) {
   );
 }
 
+// 3D "raised card" look (shadow hugging the left/bottom edges, as if lit
+// from the top-right) plus a small folded-paper flap in the top-left
+// corner, per direct instruction — mirrors the .techno-tile class added to
+// backend/page_templates/main.html. React inline styles can't express
+// ::before, so this is the one place in this component that needs a real
+// <style> tag rather than a style object.
+const TECHNO_TILE_CSS = `
+  .techno-tile {
+    position: relative;
+    overflow: hidden;
+    box-shadow: -3px 3px 6px rgba(15, 23, 42, 0.22), 0 1px 0 rgba(15, 23, 42, 0.08);
+    border-left: 1px solid rgba(15, 23, 42, 0.14);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.14);
+  }
+  .techno-tile::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 13px 13px 0 0;
+    border-color: rgba(255, 255, 255, 0.8) transparent transparent transparent;
+    filter: drop-shadow(1px 1.5px 1.5px rgba(15, 23, 42, 0.35));
+  }
+`;
+
 function TechnoTiles({ techno }) {
   return (
     <div style={{ display: 'flex', gap: 9, marginBottom: 12 }}>
+      <style>{TECHNO_TILE_CSS}</style>
       {techno.map((t) => {
         const bg = (t.bg_key && TECHNO_CAT_BG[t.bg_key]) || C.defaultRowBg;
         return (
-          <div key={t.parameter} style={{ flex: 1, background: bg, borderRadius: 4, padding: '10px 13px' }}>
+          <div key={t.parameter} className="techno-tile" style={{ flex: 1, background: bg, borderRadius: 4, padding: '10px 13px' }}>
             <div style={{ fontSize: '8pt', fontWeight: 700, lineHeight: 1.15, color: C.textHeadingDark }}>
               {t.parameter} <span style={{ fontWeight: 400, fontStyle: 'italic', color: C.textSecondary }}>({t.unit})</span>
             </div>
@@ -94,7 +123,7 @@ function TechnoTiles({ techno }) {
 function ValueAddedSteelPanel({ specialSteel }) {
   return (
     <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '5px 8px' }}>
-      <div style={{ fontSize: '11pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ fontSize: '11pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'capitalize', marginBottom: 4 }}>
         Value Added Steel Performance (SAIL)
       </div>
       <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
@@ -129,17 +158,17 @@ export default function AtAGlanceTemplate({ data }) {
         </div>
       </div>
 
-      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'capitalize', marginBottom: 4 }}>
         Production Performance — Month (&apos;000 T)
       </div>
       <ProductionTiles production={production} />
 
-      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
-        Production Trend — Last 4 Years ({ytdTrend.period_label || ''} each year, &apos;000 T)
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'capitalize', marginBottom: 4 }}>
+        Production Trend — Last 4 Years ({ytdTrend.period_label || ''} , &apos;000 T)
       </div>
       <YtdTrendChart ytdTrend={ytdTrend} />
 
-      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'capitalize', marginBottom: 4 }}>
         Techno-Economic Snapshot — SAIL
       </div>
       <TechnoTiles techno={techno} />
@@ -148,7 +177,7 @@ export default function AtAGlanceTemplate({ data }) {
         <ValueAddedSteelPanel specialSteel={specialSteel} />
       </div>
 
-      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'capitalize', marginBottom: 4 }}>
         Saleable Steel &amp; Finished Steel Production Trend — Last 6 Months (&apos;000 T)
       </div>
       <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '5px 9px' }}

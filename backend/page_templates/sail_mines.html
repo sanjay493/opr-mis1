@@ -35,7 +35,9 @@
             <td class="coal-num">{{ (r.pct_ful ~ '%') if r.pct_ful is not none else '—' }}</td>
             <td class="coal-num">{{ r.cply if r.cply is not none else '—' }}</td>
             <td class="coal-num">{{ (r.pct_growth ~ '%') if r.pct_growth is not none else '—' }}</td>
-            <td class="coal-num" style="border-left:1.5px solid {{ colors.border_dark }};">{{ r.d_actual if r.d_actual is not none else '—' }}</td>
+            <td class="coal-num" style="border-left:1.5px solid {{ colors.border_dark }};">{{ r.d_app if r.d_app is not none else '—' }}</td>
+            <td class="coal-num">{{ r.d_actual if r.d_actual is not none else '—' }}</td>
+            <td class="coal-num">{{ (r.d_pct_ful ~ '%') if r.d_pct_ful is not none else '—' }}</td>
             <td class="coal-num">{{ r.d_cply if r.d_cply is not none else '—' }}</td>
             <td class="coal-num">{{ (r.d_pct_growth ~ '%') if r.d_pct_growth is not none else '—' }}</td>
             {% elif t.kind == 'production' %}

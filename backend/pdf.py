@@ -828,7 +828,7 @@ async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, p
             family=       _g.get("font_family",  "IBM Plex Sans"),
             td_size=      _g_table.get("td",      11.5),  # Increased from 9.5 for better readability
             th_size=      _g_table.get("th",      11.0),  # Increased from 9.0 for better readability
-            title_size=   _g.get("title_size",   15.0),  # Increased from 13.0 for better readability
+            title_size=   _g.get("title_size",   13.0),  # Increased from 13.0 for better readability
             heading_size= _g.get("heading_size", 12.0),  # Increased from 10.5 for consistency
         )
         fc = font_config or request.font_config or _cfg_fc
@@ -847,7 +847,7 @@ async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, p
         # its @font-face CSS as before.
         _catalog_entry = FONT_CATALOG.get(fc.family)
         _font_imports   = _catalog_entry["import"] if _catalog_entry else ""
-        _font_family_css = f"'{fc.family}', Arial, Helvetica, sans-serif"
+        _font_family_css = f"'{fc.family}', sans-serif"
         _mono_name = _catalog_entry["mono"] if _catalog_entry else "Courier New"
         _mono_family_css = f"'{_mono_name}', 'Courier New', monospace"
 

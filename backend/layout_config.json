@@ -6,7 +6,7 @@
   "_doc_groups": "Page keys under 'pages' may be a single page number (\"9\"), a hyphen range (\"7-13\"), or a comma list (\"5,6,9\") — all are expanded to one entry per page. If a specific page number also has its own key, it overrides the group's values for that page only.",
 
   "global": {
-    "font_family":  "Arial Narrow",
+    "font_family":  "Aptos",
     "title_size":   13.0,
     "heading_size": 12.0,
     "table": { "th": 11.0, "td": 11.5 }
@@ -17,7 +17,7 @@
     "4":    { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 5,  "marginBottom": 3, "marginLR": 7 },
     "5-6":  { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 7,  "marginBottom": 5, "marginLR": 7 },
     "7-13": { "marginTop": 7, "marginBottom": 5, "marginLR": 7 },
-    "27":   { "fontFamily": "Arial Narrow", "table": { "th": 8, "td":  8}, "fontWeight": 300, "marginTop": 3, "marginBottom": 1.5, "marginLR": 4, "fitToPage": true },
+    "27":   { "fontFamily": "Aptos", "table": { "th": 8, "td":  8}, "fontWeight": 300, "marginTop": 3, "marginBottom": 1.5, "marginLR": 4, "fitToPage": true },
     "28-30": { "table": { "th": 9, "td": 9 },    "marginTop": 4,  "marginBottom": 3, "marginLR": 4, "fitToPage": true },
     "31-35": { "table": { "th": 8, "td": 8 },    "marginTop": 4,  "marginBottom": 3, "marginLR": 6, "fitToPage": true }
   }

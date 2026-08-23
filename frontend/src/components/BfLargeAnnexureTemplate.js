@@ -2,43 +2,34 @@
 
 // Mirrors backend/page_templates/bf_large_annexure.html — SAIL's 3 largest
 // BFs only (no non-SAIL comparison columns — see /reports/bf-benchmark for
-// that, a separate standalone tool). Each of the 3 periods (Previous FY /
-// Month / YTD) is its own parent header group, dynamically labeled for
-// report_month (e.g. "25-26" / "Jul-26" / "Apr-Jul'26"); each group's 3
-// sub-columns are the 3 SAIL BFs, plant name wrapped over furnace name. See
-// page_bf_large_annexure.py for exactly what each row reads from.
-// Previous FY and YTD each get their own light, contrasting column-group
-// tint (amber / green — same tokens as colors_config.json's
-// highlight_target_band_bg / highlight_cumulative_bg) so the 3 periods
-// read apart at a glance; Month stays untinted, with the usual row-zebra
-// striping instead (matching the Parameter/Unit columns).
-const PERIODS = ['prev_fy', 'month', 'ytd'];
-const PREV_FY_BG = '#fef9c3';
-const YTD_BG = '#d1fae5';
-const ZEBRA_BG = '#f8fafc';
+// that, a separate standalone tool). Columns come entirely from data.periods
+// (backend/page_bf_large_annexure.py's period_defs): Previous FY, ABP
+// Target, one column per YTD month so far, then YTD cumulative — dynamic in
+// count (a March report_month has 4 more month columns than an April one),
+// so this reads that list directly rather than assuming a fixed shape.
+// Each period's own dept-badge-style tint (prev_fy amber / abp light green /
+// ytd darker green — same colors_config.json tokens the PDF template uses)
+// makes the 3 "kinds" read apart at a glance; plain month columns stay
+// untinted. See page_bf_large_annexure.py for exactly what each row reads
+// from.
+const KIND_BG = {
+  prev_fy: '#fef9c3',
+  abp: '#dcfce7',
+  ytd: '#d1fae5',
+};
 
-const CELL = { padding: '7px 8px', border: '1px solid #94a3b8' };
+const CELL = { padding: '1.5px 4px', border: '1px solid #94a3b8', lineHeight: 1.1 };
 const NUM = { ...CELL, textAlign: 'right' };
 const LBL = { ...CELL, textAlign: 'left', fontWeight: 600 };
 const TH = {
-  color: '#000', padding: '5px 6px',
+  color: '#000', padding: '2px 5px',
   textAlign: 'center', verticalAlign: 'middle',
-  border: '1px solid #334155', fontSize: '0.72rem', lineHeight: 1.25, fontWeight: 600,
+  border: '1px solid #334155', fontSize: '0.72rem', lineHeight: 1.2, fontWeight: 600,
 };
-
-function periodBg(period, alpha) {
-  if (period === 'prev_fy') return PREV_FY_BG + alpha;
-  if (period === 'ytd') return YTD_BG + alpha;
-  return undefined;
-}
 
 export default function BfLargeAnnexureTemplate({ data }) {
   if (!data) return null;
-  const {
-    title, prev_fy_col_label = '', month_col_label = '', ytd_col_label = '',
-    sail_cols = [], rows = [],
-  } = data;
-  const periodLabels = { prev_fy: prev_fy_col_label, month: month_col_label, ytd: ytd_col_label };
+  const { title, sail_cols = [], periods = [], rows = [] } = data;
 
   return (
     <div style={{ padding: '8px', fontFamily: 'Arial, sans-serif', fontSize: '0.72rem' }}>
@@ -52,13 +43,18 @@ export default function BfLargeAnnexureTemplate({ data }) {
             <tr>
               <th rowSpan={2} style={{ ...TH, textAlign: 'left' }}>Parameter</th>
               <th rowSpan={2} style={TH}>Unit</th>
-              {PERIODS.map((p) => (
-                <th key={p} colSpan={sail_cols.length} style={{ ...TH, backgroundColor: periodBg(p, '') }}>{periodLabels[p]}</th>
+              {periods.map((p) => (
+                <th
+                  key={p.key}
+                  colSpan={sail_cols.length}
+                  style={{ ...TH, backgroundColor: KIND_BG[p.kind] }}
+                  dangerouslySetInnerHTML={{ __html: p.label }}
+                />
               ))}
             </tr>
             <tr>
-              {PERIODS.map((p) => sail_cols.map((bf) => (
-                <th key={`${p}-${bf.label}`} style={{ ...TH, lineHeight: 1.25, backgroundColor: periodBg(p, '') }}>
+              {periods.map((p) => sail_cols.map((bf) => (
+                <th key={`${p.key}-${bf.label}`} style={{ ...TH, lineHeight: 1.15, backgroundColor: KIND_BG[p.kind] }}>
                   {bf.plant}<br />{bf.unit}
                 </th>
               )))}
@@ -66,16 +62,17 @@ export default function BfLargeAnnexureTemplate({ data }) {
           </thead>
           <tbody>
             {rows.map((row, ri) => {
-              const zebra = ri % 2 ? ZEBRA_BG : undefined;
+              const zebra = ri % 2 ? undefined : undefined; // highlight_alt_section_bg is transparent — no zebra fill
               return (
                 <tr key={ri}>
                   <td style={{ ...LBL, backgroundColor: zebra }}>{row.parameter}</td>
                   <td style={{ ...CELL, textAlign: 'center', fontStyle: 'italic', color: '#475569', backgroundColor: zebra }}>{row.unit}</td>
-                  {PERIODS.map((p) => sail_cols.map((bf) => {
-                    const v = row.sail[bf.label]?.[p];
+                  {periods.map((p) => sail_cols.map((bf) => {
+                    const v = row.sail?.[bf.label]?.[p.key];
+                    const tint = KIND_BG[p.kind];
                     return (
-                      <td key={`${p}-${bf.label}`} style={{ ...NUM, backgroundColor: periodBg(p, '66') || zebra }}>
-                        {v ?? '—'}
+                      <td key={`${p.key}-${bf.label}`} style={{ ...NUM, backgroundColor: tint ? `${tint}66` : zebra }}>
+                        {v !== null && v !== undefined ? v : '—'}
                       </td>
                     );
                   }))}

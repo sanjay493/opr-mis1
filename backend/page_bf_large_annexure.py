@@ -333,6 +333,17 @@ def _sail_bf_abp(plant, unit, fy_label):
     out = {}
     for key in PARAM_BY_KEY:
         v = data.get(key)
+        if v is None:
+            # Target-entry (_TECHNO_TARGET_EXTRA_SECTIONS) offers both a
+            # key's canonical name and its KEY_ALIASES (e.g. ISP's own
+            # upload alias "furnace_availability" for "availability"), so a
+            # target saved under the alias must resolve here too — same
+            # fallback _period_value already does for the Norm/Actual
+            # columns above, just missing on this one.
+            for alt in KEY_ALIASES.get(key, []):
+                v = data.get(alt)
+                if v is not None:
+                    break
         out[key] = v.get("value") if isinstance(v, dict) else v
     return out
 

@@ -11,19 +11,23 @@ from monthly Actual + Plan entered via the SAIL Mines Entry data-entry page
 April->report_month (same YTD convention as page4.py's "YTD APP"/"YTD
 Actual" columns), CPLY is the same sum for last FY's April->same month
 (db.get_cply_month, one call per YTD month so a report month early in the
-FY still gets the right prior-year months). "flow"-kind tables (despatch/
-sales) skip APP/%FF entirely — those have no plan figure, just Act./CPLY/
-%Grth.
+FY still gets the right prior-year months). "flow"-kind tables would skip
+APP/%FF entirely (just Act./CPLY/%Grth) — per direct instruction, every
+despatch/sales section now carries its own Plan too, so every section here
+is currently 'production'-kind; 'flow' stays supported (not deleted) in
+case a future section genuinely has no plan figure.
 
 Iron Ore Production (table 1) additionally carries a DESPATCH column group
-per mine group (per direct instruction) — a second "flow"-kind section
-(iron_ore_despatch, same 4 items) whose rows are merged into table 1's
-rows as extra columns rather than rendered as their own table (see
-"merge_into" below); the resulting table has kind='production_despatch'
-and a "column_groups" list (PRODUCTION + DESPATCH) instead of a flat
-"columns" list. This is a separate concept from table 2 (Sales of Iron
-Ore), which tracks disposal CHANNEL (Auction vs Despatch) rather than
-per-mine-group despatch.
+per mine group (per direct instruction) — a second section (iron_ore_
+despatch, same 4 items) whose rows are merged into table 1's rows as extra
+columns rather than rendered as their own table (see "merge_into" below);
+the resulting table has kind='production_despatch' and a "column_groups"
+list (PRODUCTION + DESPATCH) instead of a flat "columns" list. Both groups
+now carry the full APP/Act./%FF/CPLY/%Grth span (per direct instruction,
+the despatch side previously only had Act./CPLY/%Grth) since iron_ore_
+despatch is 'production'-kind too. This is a separate concept from table 2
+(Sales of Iron Ore), which tracks disposal CHANNEL (Auction vs Despatch)
+rather than per-mine-group despatch.
 
 A few rows are computed, never entered directly:
   - Coal Mines Production's "Total" = Raw Coking Coal + Thermal Coal.
@@ -48,17 +52,17 @@ import db
 # DESPATCH column group instead (see _merge_despatch_columns).
 SAIL_MINES_SECTIONS = [
     {
-        "key": "iron_ore_prod", "title": "IRON ORE PRODUCTION", "kind": "production",
+        "key": "iron_ore_prod", "title": "IRON ORE MINES PERFORMANCE", "kind": "production",
         "items": ["CGoM", "OGoM", "JGoM", "SAIL"],
         "derived": [],
     },
     {
-        "key": "iron_ore_despatch", "kind": "flow",
+        "key": "iron_ore_despatch", "kind": "production",
         "items": ["CGoM", "OGoM", "JGoM", "SAIL"],
         "derived": [], "merge_into": "iron_ore_prod",
     },
     {
-        "key": "iron_ore_sales", "title": "SALES OF IRON ORE", "kind": "flow",
+        "key": "iron_ore_sales", "title": "SALES OF IRON ORE", "kind": "production",
         "items": ["Auction", "Despatch"],
         "derived": [],
     },
@@ -76,7 +80,7 @@ SAIL_MINES_SECTIONS = [
         }],
     },
     {
-        "key": "coal_despatch", "title": "DESPATCH OF CLEAN COAL, THERMAL & MIDDLINGS", "kind": "flow",
+        "key": "coal_despatch", "title": "DESPATCH OF CLEAN COAL, THERMAL & MIDDLINGS", "kind": "production",
         "items": ["Clean Coal", "Thermal", "Middlings"],
         "derived": [],
     },
@@ -86,7 +90,7 @@ SAIL_MINES_SECTIONS = [
         "derived": [],
     },
     {
-        "key": "flux_despatch", "title": "FLUX DESPATCH (LIMESTONE & DOLOMITE)", "kind": "flow",
+        "key": "flux_despatch", "title": "FLUX DESPATCH (LIMESTONE & DOLOMITE)", "kind": "production",
         "items": ["Limestone", "Dolomite"],
         "derived": [],
     },
@@ -140,6 +144,10 @@ def _ratio(numerator, denominator):
     if numerator is None or denominator in (None, 0):
         return None
     return numerator / denominator * 100
+
+
+def _columns_for(kind: str) -> list:
+    return ["APP", "Act.", "%FF", "CPLY", "%Grth"] if kind == "production" else ["Act.", "CPLY", "%Grth"]
 
 
 def _row(label: str, app, actual, cply, kind: str, value_fmt: str = "t", bold: bool = False) -> dict:
@@ -207,6 +215,7 @@ def generate_sail_mines(report_month: str) -> dict:
         merge_section = next((s for s in SAIL_MINES_SECTIONS if s.get("merge_into") == section["key"]), None)
 
         if merge_section:
+            desp_columns = _columns_for(merge_section["kind"])
             rows = []
             for label in item_order:
                 prod_row = section_rows[section["key"]][label]
@@ -216,25 +225,23 @@ def generate_sail_mines(report_month: str) -> dict:
                     "app": prod_row.get("app"), "actual": prod_row.get("actual"),
                     "pct_ful": prod_row.get("pct_ful"), "cply": prod_row.get("cply"),
                     "pct_growth": prod_row.get("pct_growth"),
-                    "d_actual": desp_row.get("actual"), "d_cply": desp_row.get("cply"),
+                    "d_app": desp_row.get("app"), "d_actual": desp_row.get("actual"),
+                    "d_pct_ful": desp_row.get("pct_ful"), "d_cply": desp_row.get("cply"),
                     "d_pct_growth": desp_row.get("pct_growth"),
                 })
             tables.append({
                 "key": section["key"], "title": section["title"], "kind": "production_despatch",
                 "column_groups": [
-                    {"label": "PRODUCTION", "columns": ["APP", "Act.", "%FF", "CPLY", "%Grth"]},
-                    {"label": "DESPATCH", "columns": ["Act.", "CPLY", "%Grth"]},
+                    {"label": "PRODUCTION", "columns": _columns_for(section["kind"])},
+                    {"label": "DESPATCH", "columns": desp_columns},
                 ],
                 "rows": rows,
             })
         else:
-            columns = (
-                ["APP", "Act.", "%FF", "CPLY", "%Grth"] if section["kind"] == "production"
-                else ["Act.", "CPLY", "%Grth"]
-            )
             tables.append({
                 "key": section["key"], "title": section["title"], "kind": section["kind"],
-                "columns": columns, "rows": [section_rows[section["key"]][label] for label in item_order],
+                "columns": _columns_for(section["kind"]),
+                "rows": [section_rows[section["key"]][label] for label in item_order],
             })
 
     return {

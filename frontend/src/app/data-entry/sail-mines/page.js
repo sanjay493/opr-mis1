@@ -8,22 +8,24 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Must match backend/page_sail_mines.py's SAIL_MINES_SECTIONS (items only —
 // Total/Yield rows there are computed, never entered). kind='production'
-// sections get an Actual + Plan (APP) input per item; kind='flow'
-// (despatch/sales) sections get Actual only — no plan/%Fulfillment column
-// on those tables. iron_ore_despatch is `hidden` here (not its own table
-// block) because the report merges it into Iron Ore Production as a extra
-// DESPATCH column group (see iron_ore_prod's `despatchSection`) — it's
-// still a normal SECTIONS entry so load/save pick its data up like any
-// other section, just rendered inline instead of as its own table.
+// sections get an Actual + Plan (APP) input per item; kind='flow' sections
+// would get Actual only, but every despatch/sales section now carries its
+// own Plan too (per direct instruction), so every section here is
+// currently 'production'. iron_ore_despatch is `hidden` here (not its own
+// table block) because the report merges it into Iron Ore Mines
+// Performance as an extra DESPATCH column group (see iron_ore_prod's
+// `despatchSection`) — it's still a normal SECTIONS entry so load/save
+// pick its data up like any other section, just rendered inline (Actual +
+// Plan, since it's 'production'-kind) instead of as its own table.
 const SECTIONS = [
-  { key: 'iron_ore_prod', title: 'Iron Ore Production', kind: 'production', items: ['CGoM', 'OGoM', 'JGoM', 'SAIL'], despatchSection: 'iron_ore_despatch' },
-  { key: 'iron_ore_despatch', kind: 'flow', items: ['CGoM', 'OGoM', 'JGoM', 'SAIL'], hidden: true },
-  { key: 'iron_ore_sales', title: 'Sales of Iron Ore', kind: 'flow', items: ['Auction', 'Despatch'] },
+  { key: 'iron_ore_prod', title: 'Iron Ore Mines Performance', kind: 'production', items: ['CGoM', 'OGoM', 'JGoM', 'SAIL'], despatchSection: 'iron_ore_despatch' },
+  { key: 'iron_ore_despatch', kind: 'production', items: ['CGoM', 'OGoM', 'JGoM', 'SAIL'], hidden: true },
+  { key: 'iron_ore_sales', title: 'Sales of Iron Ore', kind: 'production', items: ['Auction', 'Despatch'] },
   { key: 'coal_prod', title: 'Coal Mines Production', kind: 'production', items: ['Raw Coking Coal', 'Thermal Coal'] },
   { key: 'washery', title: 'Washery Performance', kind: 'production', items: ['Input Raw Coal', 'Clean Coal'] },
-  { key: 'coal_despatch', title: 'Despatch of Clean Coal, Thermal & Middlings', kind: 'flow', items: ['Clean Coal', 'Thermal', 'Middlings'] },
+  { key: 'coal_despatch', title: 'Despatch of Clean Coal, Thermal & Middlings', kind: 'production', items: ['Clean Coal', 'Thermal', 'Middlings'] },
   { key: 'flux_prod', title: 'Flux Production (Limestone & Dolomite)', kind: 'production', items: ['Limestone', 'Dolomite'] },
-  { key: 'flux_despatch', title: 'Flux Despatch (Limestone & Dolomite)', kind: 'flow', items: ['Limestone', 'Dolomite'] },
+  { key: 'flux_despatch', title: 'Flux Despatch (Limestone & Dolomite)', kind: 'production', items: ['Limestone', 'Dolomite'] },
 ];
 
 const keyOf = (section, item) => `${section}|${item}`;
@@ -178,7 +180,10 @@ function SailMinesPageInner() {
 
         {loading && <div style={{ color: '#5f6368', fontSize: 14, padding: '30px 0', textAlign: 'center' }}>Loading…</div>}
 
-        {!loading && SECTIONS.filter((s) => !s.hidden).map(({ key: section, title, kind, items, despatchSection }) => (
+        {!loading && SECTIONS.filter((s) => !s.hidden).map(({ key: section, title, kind, items, despatchSection }) => {
+          const despatchDef = despatchSection ? SECTIONS.find((s) => s.key === despatchSection) : null;
+          const despatchIsProduction = despatchDef?.kind === 'production';
+          return (
           <div key={section} style={{ marginBottom: 22 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{title}</div>
             <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
@@ -195,7 +200,10 @@ function SailMinesPageInner() {
                       <th style={{ padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc', borderBottom: '1px solid #dadce0', borderRight: despatchSection ? '1px solid #eef1f4' : 'none', textAlign: 'center' }}>Plan / APP ({reportMonth})</th>
                     )}
                     {despatchSection && (
-                      <th style={{ padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc', borderBottom: '1px solid #dadce0', textAlign: 'center' }}>Despatch Actual ({reportMonth})</th>
+                      <th style={{ padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc', borderBottom: '1px solid #dadce0', borderRight: despatchIsProduction ? '1px solid #eef1f4' : 'none', textAlign: 'center' }}>Despatch Actual ({reportMonth})</th>
+                    )}
+                    {despatchSection && despatchIsProduction && (
+                      <th style={{ padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc', borderBottom: '1px solid #dadce0', textAlign: 'center' }}>Despatch Plan / APP ({reportMonth})</th>
                     )}
                   </tr>
                 </thead>
@@ -224,10 +232,17 @@ function SailMinesPageInner() {
                           </td>
                         )}
                         {despatchSection && (
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f3f4', textAlign: 'center' }}>
+                          <td style={{ padding: '6px 8px', borderRight: despatchIsProduction ? '1px solid #eef1f4' : 'none', borderBottom: '1px solid #f1f3f4', textAlign: 'center' }}>
                             <input type="number" step="any" value={dEdit.actual ?? ''} placeholder="–"
                                    onChange={(ev) => handleChange(despatchSection, item, 'actual', ev.target.value)}
                                    style={inputStyle(dChanged, dEdit.actual)} />
+                          </td>
+                        )}
+                        {despatchSection && despatchIsProduction && (
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f3f4', textAlign: 'center' }}>
+                            <input type="number" step="any" value={dEdit.plan ?? ''} placeholder="–"
+                                   onChange={(ev) => handleChange(despatchSection, item, 'plan', ev.target.value)}
+                                   style={inputStyle(dChanged, dEdit.plan)} />
                           </td>
                         )}
                       </tr>
@@ -237,7 +252,8 @@ function SailMinesPageInner() {
               </table>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -426,7 +426,7 @@ _ROWS = [
     ("HM Sent to PCM/Sand Pit/Dry Pit", "'000 T", "general", "hm_to_pcm_sandpit_drypit", 1, {"label_rowspan": 2}),
     (None,                  "%",        "ratio_general_prod", ("hm_to_pcm_sandpit_drypit", ["Hot Metal"]), 1, {"continuation": True}),
 
-    ("TMI",                       "kg/TCS",   "sms_join", "tmi", 1, {}),
+    ("TMI",                       "kg/TCS",   "sms_join", "tmi", 0, {}),
     ("CHM Ratio",                 "",         "general", "coal_to_hm", 3, {}),
     # Unit is kWh/TSS (per Tonne Saleable Steel), not /TCS like its
     # neighbors — confirmed against every plant's own source workbook/PDF
@@ -451,14 +451,14 @@ _ROWS = [
     # Pit" above): the raw Rs Cr figure, then that same figure expressed as
     # an expense rate (Rs Cr per '000T of Crude Steel produced, YTD).
     (_DEMURRAGE_LABEL,          "Rs Cr",    "general", "demurrage", 2, {"label_rowspan": 2}),
-    (None,                      "Rs/TCS",   "demurrage_per_tcs", None, 4, {"continuation": True}),
+    (None,                      "Rs/TCS",   "demurrage_per_tcs", None, 2, {"continuation": True}),
     # Split into two data rows sharing one parameter-name cell (same
     # label_rowspan/continuation pattern as Demurrage above): the raw Value
     # Added Product qty within Finished Steel, then that same qty expressed
     # as a % of the plant's own Finished Steel production.
-    ("Value Added Products in Finished Steel", "MT", "vap_qty", None, 0,
+    ("Value Added Finished Steel", "T", "vap_qty", None, 0,
      {"label_rowspan": 2, "note": "despatch of value added FS/Total Production of FS"}),
-    (None,                                     "%",  "vap_pct", None, 0, {"continuation": True}),
+    (None,                                     "%",  "vap_pct", None, 1, {"continuation": True}),
 ]
 
 

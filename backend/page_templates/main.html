@@ -561,6 +561,33 @@
             padding: 1mm 0;
         }
 
+        /* Techno-Economic Snapshot tiles (at_a_glance.html) — a "raised
+           card" 3D look (shadow hugging the left/bottom edges, as if each
+           tile is lit from the top-right) plus a small folded-paper flap
+           in the top-left corner, per direct instruction. Kept as a class
+           here rather than inline (the flap needs ::before, which inline
+           style="" can't express) — background/border-radius/padding stay
+           inline per-tile in at_a_glance.html since those vary by category. */
+        .techno-tile {
+            position: relative;
+            overflow: hidden;
+            box-shadow: -3px 3px 6px rgba(15, 23, 42, 0.22), 0 1px 0 rgba(15, 23, 42, 0.08);
+            border-left: 1px solid rgba(15, 23, 42, 0.14);
+            border-bottom: 1px solid rgba(15, 23, 42, 0.14);
+        }
+        .techno-tile::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 13px 13px 0 0;
+            border-color: rgba(255, 255, 255, 0.8) transparent transparent transparent;
+            filter: drop-shadow(1px 1.5px 1.5px rgba(15, 23, 42, 0.35));
+        }
+
         /* Best-Ever Highlights / Best Calendar Month — dense item x period
            tables, same tight top/bottom padding treatment as at-a-glance-
            page. NOT .coal-landscape-page: that class's `page: coal-
