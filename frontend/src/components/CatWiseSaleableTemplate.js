@@ -99,7 +99,6 @@ function PlantTable({ section, monthLabel, cplyLabel }) {
 
 export default function CatWiseSaleableTemplate({ data }) {
   const title      = data?.title       || '';
-  const subtitle   = data?.subtitle    || '';
   const monthLabel = data?.month_label || '';
   const cplyLabel  = data?.cply_label  || '';
   const sections   = data?.sections    || [];
@@ -107,14 +106,13 @@ export default function CatWiseSaleableTemplate({ data }) {
   return (
     <div style={{ padding: '8px 8px 0', fontFamily: 'Arial, sans-serif' }}>
       {title && (
-        <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.9rem',
-                      textDecoration: 'underline', marginBottom: 2 }}>
+        <div style={{
+          textAlign: 'center', fontWeight: 700, fontSize: '12pt',
+          color: '#060177', textTransform: 'uppercase',
+          fontFamily: "'Roboto', Arial, Helvetica, sans-serif",
+          marginBottom: 4,
+        }}>
           {title}
-        </div>
-      )}
-      {subtitle && (
-        <div style={{ textAlign: 'center', fontWeight: 600, fontSize: '0.85rem', marginBottom: 5 }}>
-          {subtitle}
         </div>
       )}
       {sections.map((section, i) => (

@@ -2,8 +2,10 @@
         {% set cum_cply_lbl = 'Apr-' ~ page.cply_label %}
         {# Compact title (not .report-title-section's h2 + 15px margin-bottom)
            — this page's ~48-row table already runs close to the one-page
-           budget; every bit of header/footer gap fed back into it. #}
-        <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;">{{ page.title }}</div>
+           budget; every bit of header/footer gap fed back into it. Font/size/
+           color/case match the other pages in this Category-Wise -> Segment-
+           Wise run (pages 15-18), per direct instruction. #}
+        <div style="text-align:center;font-weight:700;font-size:12pt;color:{{ colors.text_accent_navy }};text-transform:uppercase;margin-bottom:4px;">{{ page.title }}</div>
         <table class="segwise-table">
             <colgroup>
                 <col style="width:5%"><col style="width:5%"><col style="width:13%">

@@ -686,13 +686,20 @@ _GENERATORS = {
     "ISP": _gen_isp,
 }
 
-_PLANT_TITLES = {
-    "BSP": "SPECIAL STEEL REPORT FOR : BHILAI STEEL PLANT",
-    "DSP": "SPECIAL STEEL REPORT FOR : DURGAPUR STEEL PLANT",
-    "RSP": "SPECIAL STEEL REPORT FOR : ROURKELA STEEL PLANT",
-    "BSL": "SPECIAL STEEL REPORT FOR : BOKARO STEEL PLANT",
-    "ISP": "SPECIAL STEEL REPORT FOR : ISP",
+_TITLE_PREFIX = "SPECIAL STEEL REPORT FOR : "
+
+# Plant name split out from the fixed prefix above so the template can
+# highlight just the plant name in "steel red" — see plant_display/
+# title_prefix in generate_special_steel_plant()'s return dict.
+_PLANT_DISPLAY_NAMES = {
+    "BSP": "BHILAI STEEL PLANT",
+    "DSP": "DURGAPUR STEEL PLANT",
+    "RSP": "ROURKELA STEEL PLANT",
+    "BSL": "BOKARO STEEL PLANT",
+    "ISP": "ISP",
 }
+
+_PLANT_TITLES = {p: _TITLE_PREFIX + name for p, name in _PLANT_DISPLAY_NAMES.items()}
 
 
 # ── per-page density tiering ──────────────────────────────────────────────────
@@ -803,7 +810,9 @@ def generate_special_steel_plant(report_month: str, plant: str) -> dict:
         ss_ccum = _t(_get_prod_ytd(cur, cply_ytd_months, plant, "Saleable Steel"))
 
         return {
-            "title":   _PLANT_TITLES.get(plant, f"SPECIAL STEEL — {plant}"),
+            "title":         _PLANT_TITLES.get(plant, f"SPECIAL STEEL — {plant}"),
+            "title_prefix":  _TITLE_PREFIX,
+            "plant_display": _PLANT_DISPLAY_NAMES.get(plant, plant),
             "unit":    "Tonnes",
             "plant":   plant,
             "variant": "isp_summary" if plant == "ISP" else "plant_detail",

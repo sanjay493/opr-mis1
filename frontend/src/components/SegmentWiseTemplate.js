@@ -82,8 +82,13 @@ export default function SegmentWiseTemplate({ data }) {
 
   return (
     <div style={{ padding: '6px', fontFamily: 'Arial, sans-serif', fontSize: 'var(--report-font-size)' }}>
-      <div className="report-title-section">
-        <h2>{title}</h2>
+      <div style={{
+        textAlign: 'center', fontWeight: 700, fontSize: '12pt',
+        color: '#060177', textTransform: 'uppercase',
+        fontFamily: "'Roboto', Arial, Helvetica, sans-serif",
+        marginBottom: 4,
+      }}>
+        {title}
       </div>
       <table style={{
         width: '100%', borderCollapse: 'collapse',

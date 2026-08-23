@@ -2,6 +2,21 @@
 
 // ── shared style tokens ───────────────────────────────────────────────────────
 const FONT = "'Arial Narrow', Arial, sans-serif";
+// "Steel red" — same molten-steel accent CoverTemplate.js uses (MOLTEN_RED) —
+// highlights just the plant name in "SPECIAL STEEL REPORT FOR : <plant>".
+const STEEL_RED = '#e8380d';
+
+function PlantTitle({ title, titlePrefix, plantDisplay }) {
+  if (titlePrefix && plantDisplay) {
+    return (
+      <>
+        {titlePrefix}
+        <span style={{ color: STEEL_RED, textTransform: 'uppercase' }}>{plantDisplay}</span>
+      </>
+    );
+  }
+  return title;
+}
 const CELL = { padding: '1.5px 3px', border: '1px solid #cbd5e1', lineHeight: 1.2, fontSize: 'var(--report-font-size)' };
 const NUM  = { ...CELL, textAlign: 'right' };
 const LBL  = { ...CELL, textAlign: 'left' };
@@ -85,7 +100,7 @@ function DetailRow({ row, hasProd }) {
 
 function DetailTable({ data }) {
   const {
-    title, unit = 'Tonnes', rows = [],
+    title, title_prefix, plant_display, unit = 'Tonnes', rows = [],
     saleable_production = {}, special_pct = {},
     month_label = '', cply_label = '',
     cum_label = '', cum_cply_label = '',
@@ -97,7 +112,7 @@ function DetailTable({ data }) {
   return (
     <div style={{ padding: '4px 6px', fontFamily: FONT }}>
       <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>
-        {title}
+        <PlantTitle title={title} titlePrefix={title_prefix} plantDisplay={plant_display} />
       </div>
       <div style={{ textAlign: 'right', fontSize: '0.65rem', marginBottom: 2 }}>Unit: {unit}</div>
 
@@ -192,7 +207,7 @@ function IspRow({ row }) {
 
 function IspTable({ data }) {
   const {
-    title, unit = 'Tonnes', rows = [],
+    title, title_prefix, plant_display, unit = 'Tonnes', rows = [],
     saleable_production = {}, special_pct = {},
     month_label = '', cply_label = '',
     cum_label = '', cum_cply_label = '',
@@ -203,7 +218,7 @@ function IspTable({ data }) {
   return (
     <div style={{ padding: '4px 6px', fontFamily: FONT }}>
       <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>
-        {title}
+        <PlantTitle title={title} titlePrefix={title_prefix} plantDisplay={plant_display} />
       </div>
       <div style={{ textAlign: 'right', fontSize: '0.65rem', marginBottom: 2 }}>Unit: {unit}</div>
 

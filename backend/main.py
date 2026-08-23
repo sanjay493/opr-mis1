@@ -720,17 +720,14 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 if pg == 15:
                     page["type"]     = "catwise_saleable"
                     page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
-                    page["subtitle"] = "BHILAI STEEL PLANT"
                     page["sections"] = generate_catwise_saleable(month, ["BSP"])
                 if pg == 16:
                     page["type"]     = "catwise_saleable"
                     page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
-                    page["subtitle"] = ""
                     page["sections"] = generate_catwise_saleable(month, ["DSP", "RSP"])
                 if pg == 17:
                     page["type"]     = "catwise_saleable"
                     page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
-                    page["subtitle"] = ""
                     page["sections"] = generate_catwise_saleable(month, ["BSL", "ISP"])
                 if pg == 18:
                     page["type"]        = "segment_wise"
