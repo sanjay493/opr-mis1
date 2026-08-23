@@ -38,7 +38,7 @@ function getDefaultPeriod() {
   return { monthName: names[d.getMonth()], year: String(d.getFullYear()) };
 }
 
-// Manual counterpart to CoalCo2ExtractRow (data-entry/techno/page.js) — that
+// Manual counterpart to CoalCo2ExtractRow (data-entry/uploads/page.js) — that
 // component only ever fills these 3 keys via an uploaded EPI report; this
 // page lets someone type the figures straight in when no report is
 // available yet (or to correct one), using the same techno_data keys/unit
