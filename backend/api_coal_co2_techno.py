@@ -68,7 +68,7 @@ def _existing_conflicts(report_month: str, plant_records: list) -> list:
 
 @router.post("/preview")
 async def preview_coal_co2(
-    file: UploadFile = File(..., description="Coal Consumption & CO2/Water/PM EPI report (.pdf or .docx)"),
+    file: UploadFile = File(..., description="Coal Consumption & CO2/Water/PM EPI report (.pdf, .docx or .xlsx)"),
     report_month: str = Form(..., description="Selected month YYYY-MM — must match a column in the report"),
 ):
     _validate_month(report_month)

@@ -1,7 +1,7 @@
 """
 Coal Consumption & Environmental Performance Indicators (EPI) Extractor —
 pulls plant-level monthly figures from EMD's monthly environmental report,
-which comes in three source formats:
+which comes in four source formats:
 
 PDF, old "Major Environmental Performance Indicators" style (2 pages,
   page-1 title has NO "EMD Flash Report" text) —
@@ -56,14 +56,21 @@ PDF, "EMD Flash Report" style (2 pages, page-1 title HAS "EMD Flash Report"
   section heading in BOTH PDF styles, extract_pdf() distinguishes them by
   the presence of "EMD Flash Report" on that same page, not by title alone.
 
-All three formats carry no Sp. PM Emission when they lack that table (the
-old PDF always has it; the Flash Report docx/PDF never do) — enviro's "pm"
-key is simply absent then, and plant_techno_json()/plant_till_techno_json()
-treat every param key as optional so whatever a given report doesn't carry
-is left unset (not overwritten to None) rather than erroring. Likewise
-"coal" is {} for any report with no Coal Consumption table (e.g. a
-standalone "Coal OMI" PDF, which has that table as its own page 1 - see
-extract_pdf()'s page-detection-by-title, not fixed index).
+XLSX, "Major EPIs <Mon>'<YY>.xlsx" workbook — see extract_xlsx()'s own
+  docstring for the row/column layout. Reachable the same way as the other
+  three formats via extract_report()/extract_pdf()'s callers (e.g.
+  api_coal_co2_techno.py's /preview and /insert), not just the standalone
+  load_xlsx() script entry point.
+
+Every format but the old PDF carries no Sp. PM Emission (the old PDF always
+has it) — enviro's "pm" key is simply absent then, and neither format but
+the old/Flash PDF carries a Coal Consumption table, and
+plant_techno_json()/plant_till_techno_json() treat every param key as
+optional so whatever a given report doesn't carry is left unset (not
+overwritten to None) rather than erroring. Likewise "coal" is {} for any
+report with no Coal Consumption table (e.g. a standalone "Coal OMI" PDF,
+which has that table as its own page 1 - see extract_pdf()'s
+page-detection-by-title, not fixed index).
 
 Values land in techno_data (unit='General', techno_json["month"]) via
 db.merge_upsert_techno_data — plant-level only; SAIL is intentionally never
@@ -647,13 +654,21 @@ def load_xlsx(xlsx_path, report_month: str, write: bool = True) -> dict:
 
 
 def extract_report(path, report_month: str, mlabel: str) -> dict:
-    """Dispatches to the PDF or .docx extractor by file extension.
-    -> {"enviro": {...}, "coal": {...}} — for .docx, "enviro" has no "pm"
-    key and "coal" is always {}, since that report doesn't carry those
-    figures; plant_techno_json() treats both as optional."""
+    """Dispatches to the PDF, .docx or .xlsx extractor by file extension.
+    -> {"enviro": {...}, "coal": {...}} — for .docx and .xlsx, "enviro" has
+    no "pm"/"target" (.docx) or no "target" (.xlsx) keys and "coal" is
+    always {}, since those reports don't carry those figures;
+    plant_techno_json()/plant_till_techno_json() treat every key as
+    optional. For .xlsx, extract_xlsx() also returns the comparable-prior-
+    year month's figures (see its docstring) - this entry point only
+    surfaces report_month's own data, matching the one-file-one-month shape
+    every other extract_* here returns; the API/UI have no way to act on a
+    second report_month from a single upload anyway."""
     suffix = Path(path).suffix.lower()
     if suffix == ".docx":
         return {"enviro": extract_docx(path, report_month, mlabel), "coal": {}}
+    if suffix in (".xlsx", ".xlsm"):
+        return {"enviro": extract_xlsx(path, report_month, mlabel)[report_month], "coal": {}}
     return extract_pdf(path, report_month, mlabel)
 
 
