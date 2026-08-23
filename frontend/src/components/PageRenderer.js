@@ -27,6 +27,8 @@ import CoalReceiptStockTemplate from './CoalReceiptStockTemplate';
 import PowerDataTemplate from './PowerDataTemplate';
 import EpiTemplate from './EpiTemplate';
 import SteelSectorPerformanceTemplate from './SteelSectorPerformanceTemplate';
+import CostTrendTemplate from './CostTrendTemplate';
+import CostTrendCombinedTemplate from './CostTrendCombinedTemplate';
 
 function IndexTemplate({ data, onCellChange }) {
   const { rows = [] } = data || {};
@@ -169,6 +171,10 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <EpiTemplate data={pageData} />;
       case 'steel_sector_performance':
         return <SteelSectorPerformanceTemplate data={pageData} />;
+      case 'cost_trend':
+        return <CostTrendTemplate data={pageData} />;
+      case 'cost_trend_combined':
+        return <CostTrendCombinedTemplate data={pageData} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>
@@ -218,7 +224,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'at_a_glance' && pageData.type !== 'summary' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && pageData.type !== 'special_steel' && pageData.type !== 'opening_stock' && pageData.type !== 'ipt_status' && pageData.type !== 'techno_params' && pageData.type !== 'capital_repair' && pageData.type !== 'key_highlights' && pageData.type !== 'key_parameters' && pageData.type !== 'bf_large_annexure' && pageData.type !== 'coal_consumption' && pageData.type !== 'coal_receipt_stock' && pageData.type !== 'power_data' && pageData.type !== 'epi' && pageData.type !== 'steel_sector_performance' && pageData.type !== 'sail_mines' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'at_a_glance' && pageData.type !== 'summary' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && pageData.type !== 'special_steel' && pageData.type !== 'opening_stock' && pageData.type !== 'ipt_status' && pageData.type !== 'techno_params' && pageData.type !== 'capital_repair' && pageData.type !== 'key_highlights' && pageData.type !== 'key_parameters' && pageData.type !== 'bf_large_annexure' && pageData.type !== 'coal_consumption' && pageData.type !== 'coal_receipt_stock' && pageData.type !== 'power_data' && pageData.type !== 'epi' && pageData.type !== 'steel_sector_performance' && pageData.type !== 'sail_mines' && pageData.type !== 'best_ever_highlights' && pageData.type !== 'best_calendar_month' && pageData.type !== 'cost_trend' && pageData.type !== 'cost_trend_combined' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}
