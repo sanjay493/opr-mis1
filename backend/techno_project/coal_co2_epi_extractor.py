@@ -484,6 +484,168 @@ def extract_docx(docx_path, report_month: str, mlabel: str) -> dict:
     }
 
 
+def _xlsx_norm(v) -> str:
+    return _norm(str(v)) if v is not None else ""
+
+
+def _xlsx_find_col(ws, header_row: int, label: str):
+    for col in range(1, ws.max_column + 1):
+        if _xlsx_norm(ws.cell(row=header_row, column=col).value).strip() == label:
+            return col
+    return None
+
+
+def _xlsx_block_starts(ws, plant_col: int = 2, label: str = "BSP") -> list:
+    return [r for r in range(1, ws.max_row + 1)
+            if _xlsx_norm(ws.cell(row=r, column=plant_col).value).strip() == label]
+
+
+def extract_xlsx(xlsx_path, report_month: str, mlabel: str) -> dict:
+    """Extract from the "Major EPIs <Mon>'<YY>.xlsx" workbook — a different
+    source format from the PDF/.docx EMD reports above (single "Table 1"
+    sheet, one column per period located by its own header text in row 4,
+    e.g. "Jul'26"/"Jul'25"/"Apr.- Jul'26"/"Apr.- Jul'25" — column position
+    isn't fixed, the sheet just grows another month-column each release,
+    same resilience approach as the PDF/docx paths above).
+
+    Unlike the PDF/docx reports (one file = one month), this workbook carries
+    BOTH the current month AND the same month last year side by side in the
+    same row (its own year-over-year comparison), plus each one's own
+    Apr-to-month cumulative column — so a single call here extracts TWO
+    report_months worth of data at once, keyed by report_month string.
+
+    Row layout: 3 fixed parameter blocks (Sp. CO2 Emission, Sp. Water
+    Consumption, Sp. PM Emission — same ENVIRO_PARAM_ORDER as the other
+    formats), each block located by its own "BSP" cell in column B (the
+    first plant row of that block) rather than a fixed row range, since one
+    seen file has a quirk the others don't: the Water block's RSP and BSL
+    rows are merged into a single "RSP BSL" cell with a 2-line ("<RSP>
+    value>\\n<BSL value>") value in every data column instead of one row
+    each — parse_block below handles both the normal 1-row-1-plant case and
+    this 1-row-2-plants case generically (whichever labels are present),
+    so it isn't tied to RSP+BSL specifically if a future month merges a
+    different pair.
+
+    No Target/Coal Consumption data is read here (this workbook's own
+    "Target 2026-27" column exists but isn't wired to techno_plant_plan —
+    only month/till_month is needed today).
+
+    -> {report_month: {key: {"month":{plant:val}, "till_month":{plant:val}}},
+        cply_report_month: {key: {...}}}
+    (key = "co2"/"water"/"pm", same as every other extract_* here)."""
+    import openpyxl
+    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
+    ws = wb.worksheets[0]
+
+    header_row = None
+    for r in range(1, min(ws.max_row, 10) + 1):
+        if any(_xlsx_norm(ws.cell(row=r, column=c).value).strip() == mlabel
+               for c in range(1, ws.max_column + 1)):
+            header_row = r
+            break
+    if header_row is None:
+        raise ValueError(
+            f"'{mlabel}' column not found in {xlsx_path} — "
+            f"check the selected month matches the uploaded file")
+
+    year, mon_num = report_month.split("-")
+    cply_report_month = f"{int(year) - 1}-{mon_num}"
+    cply_mlabel = mlabel_from_report_month(cply_report_month)
+    # April has no "Apr.- Apr'YY" cumulative column in this workbook (same
+    # edge case as till_mlabel_from_report_month above) — cumulative simply
+    # isn't extracted for an April report_month.
+    till_label      = f"Apr.- {mlabel}"      if int(mon_num) != 4 else None
+    cply_till_label = f"Apr.- {cply_mlabel}" if int(mon_num) != 4 else None
+
+    cols = {
+        "month":      _xlsx_find_col(ws, header_row, mlabel),
+        "cply_month": _xlsx_find_col(ws, header_row, cply_mlabel),
+        "till_month": _xlsx_find_col(ws, header_row, till_label) if till_label else None,
+        "cply_till":  _xlsx_find_col(ws, header_row, cply_till_label) if cply_till_label else None,
+    }
+    if cols["month"] is None:
+        raise ValueError(
+            f"'{mlabel}' column not found — check the selected month matches the uploaded file")
+    if cols["cply_month"] is None:
+        raise ValueError(f"comparable-prior-year column '{cply_mlabel}' not found in {xlsx_path}")
+
+    block_starts = _xlsx_block_starts(ws)
+    if len(block_starts) != len(ENVIRO_PARAM_ORDER):
+        raise ValueError(
+            f"expected {len(ENVIRO_PARAM_ORDER)} parameter blocks (one 'BSP' row each "
+            f"in column B), found {len(block_starts)} in {xlsx_path}")
+
+    plants_seq = PLANTS + ["SAIL"]
+
+    def parse_block(start_row):
+        out = {k: {} for k in cols}
+        r, pi = start_row, 0
+        while pi < len(plants_seq):
+            label = _xlsx_norm(ws.cell(row=r, column=2).value).strip()
+            two_ahead = plants_seq[pi:pi + 2]
+            if len(two_ahead) == 2 and label == " ".join(two_ahead):
+                plants_here = two_ahead
+            elif label == plants_seq[pi]:
+                plants_here = [plants_seq[pi]]
+            else:
+                raise ValueError(
+                    f"unexpected plant label {label!r} at row {r} "
+                    f"(expected {plants_seq[pi]!r}) in {xlsx_path}")
+            for key, col in cols.items():
+                if col is None:
+                    continue
+                raw = ws.cell(row=r, column=col).value
+                if raw is None:
+                    continue
+                parts = [p.strip() for p in str(raw).split("\n")]
+                if len(parts) != len(plants_here):
+                    continue
+                for plant, part in zip(plants_here, parts):
+                    try:
+                        out[key][plant] = float(part)
+                    except ValueError:
+                        pass
+            pi += len(plants_here)
+            r += 1
+        return out
+
+    enviro_cur, enviro_cply = {}, {}
+    for (key, _label, _jk), start_row in zip(ENVIRO_PARAM_ORDER, block_starts):
+        parsed = parse_block(start_row)
+        enviro_cur[key]  = {"month": parsed["month"],      "till_month": parsed["till_month"]}
+        enviro_cply[key] = {"month": parsed["cply_month"], "till_month": parsed["cply_till"]}
+
+    return {report_month: enviro_cur, cply_report_month: enviro_cply}
+
+
+def load_xlsx(xlsx_path, report_month: str, write: bool = True) -> dict:
+    """(Re-)load one "Major EPIs <Mon>'<YY>.xlsx" workbook — see extract_xlsx
+    for the format. Writes both the current report_month AND its
+    comparable-prior-year month (both month + till_month figures) into
+    techno_data, per plant, unit='General' — same target table/shape as
+    load_folder's PDF/.docx writes, just two report_months from one file
+    instead of one. No target/plan data is written (see extract_xlsx).
+    Returns {report_month: {...}, cply_report_month: {...}} for inspection
+    either way, mirroring load_folder's return shape."""
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    import db  # noqa: E402
+
+    mlabel = mlabel_from_report_month(report_month)
+    results = extract_xlsx(xlsx_path, report_month, mlabel)
+
+    if write:
+        for rm, enviro in results.items():
+            for plant in PLANTS:
+                month_json = plant_techno_json(enviro, {}, plant)
+                till_json = plant_till_techno_json(enviro, plant)
+                if month_json or till_json:
+                    db.merge_upsert_techno_data(
+                        plant, rm, "General", {"month": month_json, "till_month": till_json},
+                        source_file=f"Coal_co2/{Path(xlsx_path).name}")
+
+    return results
+
+
 def extract_report(path, report_month: str, mlabel: str) -> dict:
     """Dispatches to the PDF or .docx extractor by file extension.
     -> {"enviro": {...}, "coal": {...}} — for .docx, "enviro" has no "pm"
