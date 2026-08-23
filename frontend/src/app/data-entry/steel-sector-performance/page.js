@@ -331,9 +331,9 @@ export default function SteelSectorPerformancePage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
-      <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px' }}>
+      <main style={{ flex: 1, overflow: 'auto', maxWidth: '1100px', margin: '0 auto', padding: '32px', width: '100%', boxSizing: 'border-box' }}>
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
             Indian Steel Sector Performance
