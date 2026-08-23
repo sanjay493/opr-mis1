@@ -16,12 +16,16 @@ _ROWS = ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "ASP", "SSP", "VISL", "S
 
 _CS = "Total Crude Steel"
 
-# CC item names per plant (same approach as page17_concast._ACT)
+# CC item names per plant (same approach as page17_concast._ACT).
+# RSP/BSL: Concast actual = Total Crude Steel - SMS-1 Ingot, rather than
+# summing individual CCM items — mirrors page17_concast.py's own fix
+# (understated BSL, which has no SMS-2 CCM-3/CCM-4 items, and didn't
+# reconcile to the authoritative Total Crude Steel DPR figure).
 _CC: dict = {
     "BSP":  ["SMS-2", "SMS-3"],
     "DSP":  "SMS Total Caster",
-    "RSP":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"],
-    "BSL":  ["SMS-1 CCM-1", "SMS-2 CCM-1&2"],
+    "RSP":  ("Total Crude Steel", "-", "SMS-1 Ingot"),
+    "BSL":  ("Total Crude Steel", "-", "SMS-1 Ingot"),
     "ISP":  ["SMS CCM-1&2", "SMS CCM-3"],
     "ASP":  "Total Caster",   # returns 0 if absent from DB
     "SSP":  _CS,              # SSP is 100 % CC
@@ -44,6 +48,13 @@ def _pct(a, b) -> str:
 
 
 def _fetch(cur, plant: str, item, month: str):
+    if isinstance(item, tuple) and len(item) == 3 and item[1] == "-":
+        minuend_item, _, subtrahend_item = item
+        minuend = _fetch(cur, plant, minuend_item, month)
+        if minuend is None:
+            return None
+        subtrahend = _fetch(cur, plant, subtrahend_item, month)
+        return minuend - (subtrahend or 0.0)
     if isinstance(item, list):
         tot, ok = 0.0, False
         for it in item:
@@ -111,15 +122,23 @@ def _row(plant: str, bof, eaf, cc, cs) -> dict:
     else:
         bof_pct = _pct(bof, cs)
 
+    # Every tonne of Crude Steel not cast on a Concast (CC) machine is cast
+    # as Ingot instead (the steel-foundry/ingot route) — same "CS minus CC"
+    # relationship page17_concast.py already relies on for RSP/BSL, applied
+    # here generically since this page already has both cc and cs in hand.
+    ingot = (cs - cc) if (cs is not None and cc is not None) else None
+
     return {
-        "plant":   plant,
-        "bold":    plant in ("5 Plants", "SAIL"),
-        "bof":     "" if is_eaf else _T(bof),
-        "eaf":     _T(eaf) if (is_eaf or is_sail) else "",
-        "cc":      _T(cc),
-        "cs":      _T(cs),
-        "bof_pct": bof_pct,
-        "cc_pct":  _pct(cc, cs),
+        "plant":     plant,
+        "bold":      plant in ("5 Plants", "SAIL"),
+        "bof":       "" if is_eaf else _T(bof),
+        "eaf":       _T(eaf) if (is_eaf or is_sail) else "",
+        "cc":        _T(cc),
+        "ingot":     _T(ingot),
+        "cs":        _T(cs),
+        "bof_pct":   bof_pct,
+        "cc_pct":    _pct(cc, cs),
+        "ingot_pct": _pct(ingot, cs),
     }
 
 

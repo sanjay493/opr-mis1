@@ -8,19 +8,19 @@
             {# ── Monthly Table ── #}
             <table class="page14-table" style="margin-bottom:22pt;">
                 <colgroup>
-                    <col style="width:9%"/>
-                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
-                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                    <col style="width:8%"/>
+                    <col style="width:6%"/><col style="width:5%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/>
+                    <col style="width:6%"/><col style="width:5%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/>
                 </colgroup>
                 <thead>
                     <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
                         <th rowspan="2">PLANT</th>
-                        <th colspan="6">{{ short_m }}'{{ short_y }}</th>
-                        <th colspan="6" style="border-left:2.5px solid {{ colors.border_slate_sep }};">{{ short_m }}'{{ short_prev_y }}</th>
+                        <th colspan="8">{{ short_m }}'{{ short_y }}</th>
+                        <th colspan="8" style="border-left:2.5px solid {{ colors.border_slate_sep }};">{{ short_m }}'{{ short_prev_y }}</th>
                     </tr>
                     <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
-                        <th>BOF</th><th>EAF</th><th style="color:{{ colors.text_variance_green }};">CC</th><th style="color:{{ colors.text_variance_blue }};">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
-                        <th style="border-left:2.5px solid {{ colors.border_slate_sep }};">BOF</th><th>EAF</th><th style="color:{{ colors.text_variance_green }};">CC</th><th style="color:{{ colors.text_variance_blue }};">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                        <th>BOF</th><th>EAF</th><th style="color:{{ colors.text_variance_green }};">CC</th><th style="color:{{ colors.text_variance_red }};">Ingot</th><th style="color:{{ colors.text_variance_blue }};">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th><th>Ingot<br/>%CS</th>
+                        <th style="border-left:2.5px solid {{ colors.border_slate_sep }};">BOF</th><th>EAF</th><th style="color:{{ colors.text_variance_green }};">CC</th><th style="color:{{ colors.text_variance_red }};">Ingot</th><th style="color:{{ colors.text_variance_blue }};">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th><th>Ingot<br/>%CS</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -29,11 +29,11 @@
                     <tr class="{% if row.plant == 'SAIL' %}sail-row{% elif row.bold %}agg-row{% endif %}">
                         <td class="plant-col">{{ row.plant }}</td>
                         <td>{{ row.bof }}</td><td>{{ row.eaf }}</td>
-                        <td>{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
-                        <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td>
+                        <td>{{ row.cc }}</td><td>{{ row.ingot }}</td><td class="cs-col">{{ row.cs }}</td>
+                        <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td><td>{{ row.ingot_pct }}</td>
                         <td class="prev-sep">{{ pr.bof }}</td><td>{{ pr.eaf }}</td>
-                        <td>{{ pr.cc }}</td><td>{{ pr.cs }}</td>
-                        <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td>
+                        <td>{{ pr.cc }}</td><td>{{ pr.ingot }}</td><td>{{ pr.cs }}</td>
+                        <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td><td>{{ pr.ingot_pct }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -42,19 +42,19 @@
             {# ── YTD Table ── #}
             <table class="page14-table">
                 <colgroup>
-                    <col style="width:9%"/>
-                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
-                    <col style="width:7%"/><col style="width:6%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/><col style="width:7%"/>
+                    <col style="width:8%"/>
+                    <col style="width:6%"/><col style="width:5%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/>
+                    <col style="width:6%"/><col style="width:5%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/><col style="width:6%"/>
                 </colgroup>
                 <thead>
                     <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
                         <th rowspan="2">PLANT</th>
-                        <th colspan="6">Apr-{{ short_m }}'{{ short_y }}</th>
-                        <th colspan="6" style="border-left:2.5px solid {{ colors.border_slate_sep }};">Apr-{{ short_m }}'{{ short_prev_y }}</th>
+                        <th colspan="8">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th colspan="8" style="border-left:2.5px solid {{ colors.border_slate_sep }};">Apr-{{ short_m }}'{{ short_prev_y }}</th>
                     </tr>
                     <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
-                        <th>BOF</th><th>EAF</th><th style="color:{{ colors.text_variance_green }};">CC</th><th style="color:{{ colors.text_variance_blue }};">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
-                        <th style="border-left:2.5px solid {{ colors.border_slate_sep }};">BOF</th><th>EAF</th><th style="color:{{ colors.text_variance_green }};">CC</th><th style="color:{{ colors.text_variance_blue }};">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th>
+                        <th>BOF</th><th>EAF</th><th style="color:{{ colors.text_variance_green }};">CC</th><th style="color:{{ colors.text_variance_red }};">Ingot</th><th style="color:{{ colors.text_variance_blue }};">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th><th>Ingot<br/>%CS</th>
+                        <th style="border-left:2.5px solid {{ colors.border_slate_sep }};">BOF</th><th>EAF</th><th style="color:{{ colors.text_variance_green }};">CC</th><th style="color:{{ colors.text_variance_red }};">Ingot</th><th style="color:{{ colors.text_variance_blue }};">CS</th><th>BOF<br/>%CS</th><th>CC<br/>%CS</th><th>Ingot<br/>%CS</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -63,11 +63,11 @@
                     <tr class="{% if row.plant == 'SAIL' %}sail-row{% elif row.bold %}agg-row{% endif %}">
                         <td class="plant-col">{{ row.plant }}</td>
                         <td>{{ row.bof }}</td><td>{{ row.eaf }}</td>
-                        <td>{{ row.cc }}</td><td class="cs-col">{{ row.cs }}</td>
-                        <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td>
+                        <td>{{ row.cc }}</td><td>{{ row.ingot }}</td><td class="cs-col">{{ row.cs }}</td>
+                        <td>{{ row.bof_pct }}</td><td>{{ row.cc_pct }}</td><td>{{ row.ingot_pct }}</td>
                         <td class="prev-sep">{{ pr.bof }}</td><td>{{ pr.eaf }}</td>
-                        <td>{{ pr.cc }}</td><td>{{ pr.cs }}</td>
-                        <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td>
+                        <td>{{ pr.cc }}</td><td>{{ pr.ingot }}</td><td>{{ pr.cs }}</td>
+                        <td>{{ pr.bof_pct }}</td><td>{{ pr.cc_pct }}</td><td>{{ pr.ingot_pct }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

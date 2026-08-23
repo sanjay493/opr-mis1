@@ -24,16 +24,20 @@ PAGE5_PLANTS = [
         ("Oven Pushing (nos/day)", ("AGG_NOS", "Oven Pushing (nos/day)", _5P),  False, True),
         ("Sinter",              ("AGG",     "Total Sinter",         _5P),  False, False),
         ("Hot Metal",           ("AGG",     "Hot Metal",            _5PV), True,  False),
-        # Ingot route is only used by DSP ("Bottom Pouring Ingot") and ASP
-        # ("Ingot Steel") — the other plants cast everything via Concast.
-        ("Ingot",               ("AGG",     {"DSP": "Bottom Pouring Ingot", "ASP": "Ingot Steel"},
+        # Ingot route: DSP ("Bottom Pouring Ingot"), RSP/BSL ("SMS-1 Ingot" —
+        # see page17_concast.py's own RSP/BSL Concast-as-difference derivation,
+        # same item), and ASP ("Ingot Steel") — the other plants cast
+        # everything via Concast.
+        ("Ingot",               ("AGG",     {"DSP": "Bottom Pouring Ingot", "RSP": "SMS-1 Ingot",
+                                              "BSL": "SMS-1 Ingot", "ASP": "Ingot Steel"},
                                              _5P + ["ASP"]),               False, False),
         # Concast is derived as Crude Steel(Tot) - Ingot rather than summed
         # per-plant: Total Crude Steel = Ingot + Concast, and Crude Steel(Tot)
         # is the authoritative, directly-tracked figure.
         ("Concast",             ("AGG_DIFF",
                                      ("AGG", "Total Crude Steel", _ALL),
-                                     ("AGG", {"DSP": "Bottom Pouring Ingot", "ASP": "Ingot Steel"}, _5P + ["ASP"]),
+                                     ("AGG", {"DSP": "Bottom Pouring Ingot", "RSP": "SMS-1 Ingot",
+                                               "BSL": "SMS-1 Ingot", "ASP": "Ingot Steel"}, _5P + ["ASP"]),
                                  ),                                        False, False),
         ("Crude Steel(Tot)",    ("AGG",     "Total Crude Steel",    _ALL), True,  False),
         ("Saleable Steel",      ("AGG",     "Saleable Steel",       _ALL), True,  False),

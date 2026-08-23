@@ -37,9 +37,10 @@ const PLANT_COL = { width: '9%' };
 const DATA_COL  = { width: '7%' };
 const SMALL_COL = { width: '6%' };
 
-const CC_BG  = '#d1fae5';
-const CS_BG  = '#dbeafe';
-const SEP    = '2.5px solid #1e293b';
+const CC_BG    = '#d1fae5';
+const INGOT_BG = '#fef3c7';
+const CS_BG    = '#dbeafe';
+const SEP      = '2.5px solid #1e293b';
 
 function rowStyle(plant, bold) {
   if (plant === 'SAIL')    return { background: '#dcfce7', fontWeight: 700 };
@@ -57,30 +58,36 @@ function ProcessTable({ curRows, prevRows, periodCur, periodPrev }) {
         <col style={PLANT_COL} />
         {/* current period */}
         <col style={DATA_COL} /><col style={SMALL_COL} /><col style={DATA_COL} />
-        <col style={DATA_COL} /><col style={DATA_COL} /><col style={DATA_COL} />
+        <col style={DATA_COL} /><col style={DATA_COL} /><col style={SMALL_COL} />
+        <col style={SMALL_COL} /><col style={SMALL_COL} />
         {/* previous period */}
         <col style={DATA_COL} /><col style={SMALL_COL} /><col style={DATA_COL} />
-        <col style={DATA_COL} /><col style={DATA_COL} /><col style={DATA_COL} />
+        <col style={DATA_COL} /><col style={DATA_COL} /><col style={SMALL_COL} />
+        <col style={SMALL_COL} /><col style={SMALL_COL} />
       </colgroup>
       <thead>
         <tr style={{ color: 'black' }}>
           <th rowSpan={2} style={th}>PLANT</th>
-          <th colSpan={6} style={th}>{periodCur}</th>
-          <th colSpan={6} style={{ ...th, borderLeft: SEP }}>{periodPrev}</th>
+          <th colSpan={8} style={th}>{periodCur}</th>
+          <th colSpan={8} style={{ ...th, borderLeft: SEP }}>{periodPrev}</th>
         </tr>
         <tr style={{ color: 'black' }}>
           <th style={th}>BOF</th>
           <th style={th}>EAF</th>
           <th style={{ ...th, color: '#064e3b' }}>CC</th>
+          <th style={{ ...th, color: '#92400e' }}>Ingot</th>
           <th style={{ ...th, color: '#1e40af' }}>CS</th>
           <th style={th}>BOF<br/>%CS</th>
           <th style={th}>CC<br/>%CS</th>
+          <th style={th}>Ingot<br/>%CS</th>
           <th style={{ ...th, borderLeft: SEP }}>BOF</th>
           <th style={th}>EAF</th>
           <th style={{ ...th, color: '#064e3b' }}>CC</th>
+          <th style={{ ...th, color: '#92400e' }}>Ingot</th>
           <th style={{ ...th, color: '#1e40af' }}>CS</th>
           <th style={th}>BOF<br/>%CS</th>
           <th style={th}>CC<br/>%CS</th>
+          <th style={th}>Ingot<br/>%CS</th>
         </tr>
       </thead>
       <tbody>
@@ -95,15 +102,19 @@ function ProcessTable({ curRows, prevRows, periodCur, periodPrev }) {
               <td style={td()}>{row.bof}</td>
               <td style={td()}>{row.eaf}</td>
               <td style={td({ background: CC_BG })}>{row.cc}</td>
+              <td style={td({ background: INGOT_BG })}>{row.ingot}</td>
               <td style={td({ background: CS_BG })}>{row.cs}</td>
               <td style={td()}>{row.bof_pct}</td>
               <td style={td()}>{row.cc_pct}</td>
+              <td style={td()}>{row.ingot_pct}</td>
               <td style={td({ borderLeft: SEP })}>{pr.bof}</td>
               <td style={td()}>{pr.eaf}</td>
               <td style={td({ background: CC_BG })}>{pr.cc}</td>
+              <td style={td({ background: INGOT_BG })}>{pr.ingot}</td>
               <td style={td({ background: CS_BG })}>{pr.cs}</td>
               <td style={td()}>{pr.bof_pct}</td>
               <td style={td()}>{pr.cc_pct}</td>
+              <td style={td()}>{pr.ingot_pct}</td>
             </tr>
           );
         })}
