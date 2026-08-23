@@ -80,12 +80,26 @@ function ValueCell({ value, share }) {
 // India's row has no share bracket of its own, but still needs a hidden
 // placeholder line matching the SAIL row's — otherwise the India row
 // renders one line shorter than the SAIL row below it (which does show a
-// bracket), making the two rows visibly uneven heights.
+// bracket), making the two rows visibly uneven heights. That invisible
+// spacer sits as a normal sibling of the visible value so it still
+// contributes to the cell's layout height, but `verticalAlign: middle`
+// would then center the whole (visible + invisible) 2-line block, pushing
+// the one visible line above true center — so the real value is instead
+// layered on top as an absolutely-positioned overlay that self-centers via
+// flex, independent of the invisible spacer beneath it.
 function IndiaValueCell({ value }) {
   return (
-    <td style={td}>
-      {fmtCell(value)}
-      <span style={{ ...shareBracket, visibility: 'hidden' }}>&nbsp;</span>
+    <td style={{ ...td, position: 'relative' }}>
+      <span style={{ visibility: 'hidden' }}>
+        {fmtCell(value)}
+        <span style={shareBracket}>&nbsp;</span>
+      </span>
+      <span style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {fmtCell(value)}
+      </span>
     </td>
   );
 }

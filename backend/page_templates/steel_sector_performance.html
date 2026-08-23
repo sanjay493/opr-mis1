@@ -29,7 +29,10 @@
 {% endmacro %}
 
 {% macro india_value_cell(value) %}
-<td>{{ value if value is not none else '—' }}<span class="ssp-share-bracket" style="visibility:hidden;">&nbsp;</span></td>
+<td class="ssp-india-cell">
+    <span class="ssp-height-spacer">{{ value if value is not none else '—' }}<span class="ssp-share-bracket">&nbsp;</span></span>
+    <span class="ssp-india-value">{{ value if value is not none else '—' }}</span>
+</td>
 {% endmacro %}
 
 {% macro text_section(s) %}

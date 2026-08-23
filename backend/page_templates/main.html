@@ -488,6 +488,27 @@
             color: {{ colors.text_black }};
             font-weight: 400;
         }
+        /* india_value_cell (steel_sector_performance.html): the invisible
+           value+bracket copy below sets the CELL'S height to match the SAIL
+           row's real 2-line content, but as a normal sibling of the visible
+           value it would count toward `vertical-align: middle`'s content
+           box, pushing the one visible line above true center. Layering the
+           real value as an absolutely-positioned, self-centering overlay
+           (independent of vertical-align entirely) keeps it centered on the
+           cell's own padding box regardless of the invisible spacer below it. */
+        .ssp-india-cell {
+            position: relative;
+        }
+        .ssp-india-cell .ssp-height-spacer {
+            visibility: hidden;
+        }
+        .ssp-india-cell .ssp-india-value {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         .ssp-table-heading {
             font-weight: 700;
             font-size: 11pt;
