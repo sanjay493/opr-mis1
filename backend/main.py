@@ -56,7 +56,9 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           _BF_PLANTS as _SAIL_DASHBOARD_PLANTS)
 from page_records import generate_records
 from page_jpc_report import build_jpc_report_bytes
-from page_finished_steel_report import build_finished_steel_report_csv
+from page_finished_steel_report import (
+    build_finished_steel_report_csv, list_finished_steel_fys, build_finished_steel_fy_data,
+)
 from page_do_letter import build_do_letter_docx_bytes, build_do_annexure_xlsx_bytes
 import page_production_fy_export
 import page_special_steel_fy_export
@@ -4343,19 +4345,39 @@ async def production_query_pdf(payload: dict):
 
 
 @app.get("/api/finished-steel-report")
-async def finished_steel_report():
+async def finished_steel_report(fy_start: Optional[int] = Query(None)):
     """Download Finished Steel, month-wise and unit(plant)-wise (.csv) —
     every report_month's production_table 'Finished Steel' figure per plant,
-    plus the SAIL total column. See page_finished_steel_report.py."""
+    plus the SAIL total column. Full history by default; pass fy_start to
+    scope the download to one financial year instead. See
+    page_finished_steel_report.py."""
     try:
-        content = build_finished_steel_report_csv()
+        content = build_finished_steel_report_csv(fy_start)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Finished Steel report generation failed: {e}")
+    filename = (
+        f"finished_steel_FY{fy_start}-{str(fy_start + 1)[2:]}.csv" if fy_start is not None
+        else "finished_steel_month_plant_wise.csv"
+    )
     return Response(
         content=content,
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="finished_steel_month_plant_wise.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/api/finished-steel-fys")
+async def list_finished_steel_fys_endpoint():
+    """List financial years that have at least one 'Finished Steel' figure.
+    Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
+    return {"fys": list_finished_steel_fys()}
+
+
+@app.get("/api/finished-steel-report/fy")
+async def finished_steel_report_fy(fy_start: int = Query(...)):
+    """One financial year's Finished Steel, month-wise/plant-wise, for the
+    on-screen table (see page_finished_steel_report.build_finished_steel_fy_data)."""
+    return build_finished_steel_fy_data(fy_start)
 
 
 # ---------------------------------------------------------------------------
