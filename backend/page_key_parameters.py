@@ -13,7 +13,7 @@ computes/saves), production items are summed (day-weighted average for
 Oven Pushings, a Nos./day rate) across the FY-to-date months.
 
 Rows grouped under two section-header bands (Major Production Performance /
-Major Blast Furnace Techno-economic Parameters), matching the sample
+Major Efficiency Parameters), matching the sample
 layout (its own third band, Recovery of Process Gases COG/BFG/LDG, was
 dropped — those three keys were never wired to a real data source; see
 frontend/src/app/data-entry/key-parameters-manual/page.js for the fields
@@ -266,75 +266,31 @@ def _coal_blend_pct(plant, kind, report_month, dp):
     return _round(numer / total * 100, dp)
 
 
-# Product groups within each plant's own special_steel_orders breakdown
-# (page_special_steel.py's _gen_* generators) that are semi-finished value
-# added product rather than finished — literal `product` column values,
-# copied from those generators' own group lists so a rename there can't
-# silently desync this classification. DSP already separates these two
-# categories explicitly in its own report ("TOTAL SEMI-FINISHED" vs "TOTAL
-# FINISHED STEEL"); BSP's is its "Semis" group. BSL's "SLAB" and ISP's
-# "150 BLT"/"200 BLM" mills are semi-finished shapes (billet/bloom/slab) by
-# the same metallurgical convention. RSP's own groups (PM/HR Plates, HR
-# Coils, Pipes/CRNO, SPP) are all finished mill products — no semi-finished
-# group for RSP.
-_SEMI_FINISHED_GROUPS = {
-    "BSP": ["Semis"],
-    "DSP": ["CC BILLET", "CC Bloom", "CC Round"],
-    "RSP": [],
-    "BSL": ["SLAB"],
-    "ISP": ["150 BLT", "200 BLM"],
-}
-
-
-def _semi_finished_actual(cur, ytd_months: list, plant: str) -> float:
-    groups = _SEMI_FINISHED_GROUPS.get(plant) or []
-    if not groups:
-        return 0.0
-    ph_m = ",".join("?" * len(ytd_months))
-    ph_g = ",".join("?" * len(groups))
-    cur.execute(f"""
-        SELECT COALESCE(SUM(actual_despatch),0) FROM special_steel_orders
-        WHERE report_month IN ({ph_m}) AND plant_name=? AND product IN ({ph_g})
-    """, (*ytd_months, plant, *groups))
-    (t,) = cur.fetchone()
-    return t or 0.0
-
-
 def _value_added_qty_and_pct(plant, ytd_months, production):
-    """(qty_tonnes, pct_of_finished_steel) — plant's Value Added Product
-    actually within Finished Steel (Total Value Added Steel despatch minus
-    its Semi-Finished Value Added despatch, isolating the FINISHED portion
-    before comparing it against Finished Steel production — the
-    un-subtracted total routinely exceeded 100% for plants with a large
-    semis component, e.g. DSP/ISP, since that numerator included product
-    that was never finished steel to begin with), and that same qty as a %
-    of the plant's own Finished Steel production — both over the
-    Apr-report_month YTD period this table's every other row covers.
-    Total reuses the same Value Added Steel figure page 24's Special Steel
-    report and the At-a-Glance VA chart both already compute
-    (page_special_steel_trend._sum_actual, plant-scoped); denominator reuses
-    the `production` dict every other production-sourced row here already
-    reads (_prod_val), rather than the plant's Saleable Steel — the
-    denominator _sum_actual's callers elsewhere in the app use — per direct
-    instruction for this specific row. Computed together (not as two
-    separate lookups) since both rows share the same qty/finished-steel
-    inputs."""
+    """(qty_tonnes, pct_of_saleable_steel) — plant's Value Added Steel
+    despatch (Total Value Added Steel despatch, unadjusted) as a % of the
+    plant's own Saleable Steel production — both over the Apr-report_month
+    YTD period this table's every other row covers. Mirrors page 24's
+    Special Steel report / At-a-Glance VA chart exactly
+    (page_special_steel_trend._sum_actual for the qty,
+    page_special_steel_trend._saleable_steel-equivalent Saleable Steel
+    production as denominator), so this row and those stay consistent.
+    Computed together (not as two separate lookups) since both rows share
+    the same qty/saleable-steel inputs."""
     from page_special_steel_trend import _sum_actual
     conn = db.connect()
     cur = conn.cursor()
     try:
         qty, has = _sum_actual(cur, ytd_months, plant)
-        semi_qty = _semi_finished_actual(cur, ytd_months, plant)
     finally:
         conn.close()
     if not has:
         return None, None
-    finished_000T = _prod_val(plant, ["Finished Steel"], production, 6, ytd_months)
-    if not finished_000T:
+    saleable_000T = _prod_val(plant, ["Saleable Steel"], production, 6, ytd_months)
+    if not saleable_000T:
         return None, None
-    vap_qty = qty - semi_qty
-    pct = vap_qty / (finished_000T * 1000) * 100
-    return vap_qty, pct
+    pct = qty / (saleable_000T * 1000) * 100
+    return qty, pct
 
 
 # Placeholder swapped for "Demurrage (Apr-<latest month with data>)" in
@@ -404,10 +360,12 @@ _ROWS = [
     ("Finished Steel",       "'000 T",  "prod", ["Finished Steel"], 0, {}),
     ("Saleable Steel",       "'000 T",  "prod", ["Saleable Steel"], 0, {}),
     ("Finished in Total SS", "%",       "ratio_prod", ("Finished Steel", "Saleable Steel"), 1, {"highlight": True}),
+
+("Major Efficiency Parameters", "", _SECTION, None, 0, {}),
     ("Imported Coking Coal in Blend",      "%", "coal_blend", "total", 1, {}),
     ("Imported Soft Coking Coal in Blend", "%", "coal_blend", "soft", 1, {}),
 
-    ("Major Blast Furnace Techno-economic Parameters", "", _SECTION, None, 0, {}),
+    
     ("BF Productivity",     "t/m³/day", "bf", "bf_productivity", 2, {}),
     ("BF Coke Rate",        "kg/THM",   "bf", "coke_rate", 0, {}),
     ("Nut Coke Rate",       "kg/THM",   "bf", "nut_coke_rate", 0, {}),
@@ -456,8 +414,8 @@ _ROWS = [
     # label_rowspan/continuation pattern as Demurrage above): the raw Value
     # Added Product qty within Finished Steel, then that same qty expressed
     # as a % of the plant's own Finished Steel production.
-    ("Value Added Finished Steel", "T", "vap_qty", None, 0,
-     {"label_rowspan": 2, "note": "despatch of value added FS/Total Production of FS"}),
+    ("Value Added Saleable Steel", "T", "vap_qty", None, 0,
+     {"label_rowspan": 2, "note": "despatch of value added SS/Total Production of SS"}),
     (None,                                     "%",  "vap_pct", None, 1, {"continuation": True}),
 ]
 
@@ -492,7 +450,7 @@ def generate_key_parameters(report_month: str) -> dict:
     # _value_added_qty_and_pct's docstring.
     vap_by_plant = {p: _value_added_qty_and_pct(p, ytd_months, production) for p in PLANTS}
 
-    # Rows between the "Major Blast Furnace Techno-economic Parameters"
+    # Rows between the "Major Efficiency Parameters"
     # section header and whatever ends it (the next section header, or the
     # spacer before CAPEX) get their per-plant max/min value highlighted,
     # per direct instruction. Toggled on entering that section, off again
@@ -504,7 +462,7 @@ def generate_key_parameters(report_month: str) -> dict:
         if label == _DEMURRAGE_LABEL:
             label = _DEMURRAGE_LABEL.format(period=dem_period)
         if kind == _SECTION:
-            in_bf_section = (label == "Major Blast Furnace Techno-economic Parameters")
+            in_bf_section = (label == "Major Efficiency Parameters")
             rows.append({"type": "section", "label": label})
             continue
         if kind == _SPACER:

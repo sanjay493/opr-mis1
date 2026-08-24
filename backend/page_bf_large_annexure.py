@@ -619,6 +619,14 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         period_defs.append({"key": m, "label": _month_col_label(m), "kind": "month"})
     period_defs.append({"key": "ytd", "label": _ytd_col_label(ytd_months), "kind": "ytd"})
 
+    # group_start/group_end mark the first/last column of each of the four
+    # column groups (Years / ABP Target / Months / Till Months) so the
+    # template can draw a bold black divider around each group, regardless
+    # of how many individual month columns fall in between.
+    for i, p in enumerate(period_defs):
+        p["group_start"] = (i == 0) or (period_defs[i - 1]["kind"] != p["kind"])
+        p["group_end"] = (i == len(period_defs) - 1) or (period_defs[i + 1]["kind"] != p["kind"])
+
     return {
         "title": "SAIL Large BFs - Performance Snapshot",
         "variant": "bf_large_annexure",

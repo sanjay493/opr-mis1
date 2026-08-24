@@ -128,18 +128,3 @@ def generate_cost_trend(report_month: str, product: str) -> dict:
         "periods": periods,
         "blocks": blocks,
     }
-
-
-def generate_cost_trend_combined(report_month: str, products: list) -> dict:
-    """Crude Steel + Saleable Steel share one physical PDF page per direct
-    instruction (Hot Metal stays on its own page) — reuses generate_cost_
-    trend() per product unchanged, cost_trend_combined.html just renders
-    both compactly on one sheet via cost_trend_macro.html. "title" is
-    required here (not just "type") — this dict round-trips through the
-    PDFRequest/PageData model on the PDF-export request, which requires it."""
-    sub_pages = [generate_cost_trend(report_month, p) for p in products]
-    return {
-        "type": "cost_trend_combined",
-        "title": " & ".join(sp["title"] for sp in sub_pages),
-        "pages": sub_pages,
-    }

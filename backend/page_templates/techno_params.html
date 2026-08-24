@@ -16,7 +16,7 @@
            way - it keeps its original Roboto regardless of table layout. #}
         {% set _font_family = "'Roboto',sans-serif" if _major27 else "'Arial Narrow',Arial,sans-serif" %}
         <div style="padding:4px;font-family:{{ _font_family }};font-size:{{ _tsz }};">
-          <div style="text-align:center;font-weight:700;font-size:{{ _tsz }};">{{ page.title }}</div>
+          <div style="text-align:center;font-weight:700;font-size:{{ _tsz }};color:rgb(0,0,255);">{{ page.title }}</div>
           {% if page.subtitle %}
           <div style="text-align:center;font-weight:600;font-size:{{ _tsz }};margin-bottom:3px;">{{ page.subtitle }}</div>
           {% endif %}

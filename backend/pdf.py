@@ -733,18 +733,22 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         front_html = template.render(pages=_other_front_pages, **render_kwargs) if _other_front_pages else ""
         dept_badges = {p.get("page"): p.get("dept_badge") for p in main_pages if p.get("dept_badge")}
 
-        # "Large BFs" (bf_large_annexure) is the one main-content page that
-        # needs a genuinely wider physical page (see _render_landscape_page_
-        # pdf's docstring — Chromium's page.pdf() format is fixed per call,
-        # so this can't share the single portrait main_html call every other
-        # page does). Split it out, render it separately at true A4-
+        # "Large BFs" (bf_large_annexure) and the 3 Cost Trend pages right
+        # after it (cost_trend: 3.61/3.62/3.63, per direct instruction) are
+        # the main-content pages that need a genuinely wider physical page
+        # (see _render_landscape_page_pdf's docstring — Chromium's
+        # page.pdf() format is fixed per call, so this can't share the
+        # single portrait main_html call every other page does). Split them
+        # out as one contiguous block (they're inserted contiguously — see
+        # main.py's page-list assembly), render it separately at true A4-
         # landscape dimensions, splice it into the merged document at its
         # original position, then re-stamp every main-content page's
         # header/footer from scratch (_stamp_main_page_numbers) — Chromium's
         # own pageNumber/totalPages counters are per-call and reset to 1/1
-        # for the spliced-in page, so nothing downstream of it would show a
-        # correct "Page N of TOTAL" without this.
-        _landscape_pages = [p for p in main_pages if p.get("type") == "bf_large_annexure"]
+        # for the spliced-in pages, so nothing downstream of them would show
+        # a correct "Page N of TOTAL" without this.
+        _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend")
+        _landscape_pages = [p for p in main_pages if p.get("type") in _LANDSCAPE_TYPES]
         if not _landscape_pages:
             main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
             pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month,
@@ -754,7 +758,7 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
 
             _landscape_idx = main_pages.index(_landscape_pages[0])
             _next_page = main_pages[_landscape_idx + len(_landscape_pages)] if _landscape_idx + len(_landscape_pages) < len(main_pages) else None
-            _rest_pages = [p for p in main_pages if p.get("type") != "bf_large_annexure"]
+            _rest_pages = [p for p in main_pages if p.get("type") not in _LANDSCAPE_TYPES]
 
             main_html_rest = template.render(pages=_rest_pages, **render_kwargs) if _rest_pages else ""
             base_bytes = _render_pdf(browser, front_html, main_html_rest, font_family, report_month,

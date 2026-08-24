@@ -216,7 +216,7 @@
             font-size: 11pt;
             text-decoration: underline;
             margin-bottom: 6px;
-            color: {{ colors.text_dark_gray }};
+            color: rgb(0,0,255);
         }
         .coal-table {
             width: 100%;
@@ -426,7 +426,7 @@
             font-size: 11pt;
             text-decoration: underline;
             margin-bottom: 4px;
-            color: {{ colors.text_dark_gray }};
+            color: rgb(0,0,255);
         }
         .pwr-table {
             width: 100%;
@@ -477,7 +477,7 @@
             text-align: center;
             font-weight: 700;
             font-size: 15pt;
-            color: {{ colors.text_black }};
+            color: rgb(0,0,255);
             margin-bottom: 2px;
         }
         .ssp-subtitle {
@@ -516,6 +516,9 @@
         }
         .ssp-table tr.ssp-sail {
             font-style: italic;
+            font-weight: 700;
+            color: {{ colors.text_accent_navy }};
+            background: {{ colors.highlight_target_band_bg }};
         }
         .ssp-share-bracket {
             display: block;
@@ -713,7 +716,7 @@
         .report-title-section h2 {
             font-size: var(--sz-title);
             font-weight: 700;
-            color: {{ colors.text_primary }};
+            color: rgb(0,0,255);
             text-transform: uppercase;
             margin: 0;
         }
@@ -945,7 +948,7 @@
         .page2-heading {
             font-size: 20pt;
             font-weight: bold;
-            color: {{ colors.text_dark_gray }};
+            color: rgb(0,0,255);
             padding-bottom: 8px;
             border-bottom: 2px solid {{ colors.border_black }};
             margin-bottom: 14px;
@@ -1027,7 +1030,7 @@
         .page4-heading {
             font-size: 10pt;
             font-weight: 700;
-            color: {{ colors.text_black }};
+            color: rgb(0,0,255);
             margin: 0;
             text-transform: uppercase;
         }
@@ -1048,7 +1051,7 @@
            border model entirely, so it can't lose that fight. */
         .page4-table { table-layout: fixed; width: 100%; box-shadow: 0 0 0 1px {{ colors.border_black }}; }
         .page4-table th { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; }
-        .page4-table td { font-size: 8.5pt; padding: 1.8px 2px; line-height: 1.05; }
+        .page4-table td { font-size: 8.2pt; padding: 1.8px 2px; line-height: 1.05; }
         .page4-table th, .page4-table td { color: {{ colors.text_black }} !important; }
         .page4-table col.c-items    { width:  8%; }
         .page4-table col.c-plant    { width:  6%; }
@@ -1124,7 +1127,12 @@
         .page4-table td.col-act-highlight,
         .page4-table thead th.col-act-highlight { background-color: {{ colors.highlight_cumulative_bg }} !important; }
 
-        /* Cumulative section left wall */
+        /* Cumulative section left wall — full table height (both header
+           rows down through every body row): the class is on both the
+           top-row "Apr-<mon>'<yy>" colspan-4 header cell AND the sub-header
+           "APP" cell right below it, not just the latter, so the line
+           doesn't stop partway down like it did when only the sub-header
+           carried it. */
         .page4-table td.col-ytd-app,
         .page4-table thead th.col-ytd-app { border-left: 1px solid {{ colors.border_black }}; }
 
@@ -1476,7 +1484,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance', 'sail_mines', 'cost_trend', 'cost_trend_combined') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'key_parameters', 'steel_sector_performance', 'sail_mines') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
@@ -1510,7 +1518,6 @@
         {% elif page.type == 'steel_sector_performance' %}{% include 'steel_sector_performance.html' %}
         {% elif page.type == 'sail_mines' %}{% include 'sail_mines.html' %}
         {% elif page.type == 'cost_trend' %}{% include 'cost_trend.html' %}
-        {% elif page.type == 'cost_trend_combined' %}{% include 'cost_trend_combined.html' %}
         {% else %}
             <div class="report-title-section">
                 <h2>{{ page.title }}</h2>

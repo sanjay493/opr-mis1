@@ -72,6 +72,7 @@
   "text_variance_blue":  "#1e40af",
   "text_plant_cell":     "#1e3a5f",
   "text_heading_dark":   "#1e293b",
+  "text_rust_brown":     "#B7410E",
 
   "_doc_misc": "Cover-page accent, callout box, and other non-table chrome.",
 

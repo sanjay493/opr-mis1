@@ -37,7 +37,7 @@ from page_best_ever import generate_best_ever_highlights
 from page_best_calendar_month import generate_best_calendar_month
 from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
-from page_cost_trend import generate_cost_trend, generate_cost_trend_combined
+from page_cost_trend import generate_cost_trend
 from page_sail_mines import generate_sail_mines
 from page_cover import generate_cover
 from page_coal_receipts_stock import generate_coal_receipts_sail
@@ -157,6 +157,11 @@ _INDEX_SECTIONS = [
     ("Production Highlights - Best Calendar Month", 1),
     ("Inter Plant Performance Comparison", 1),
     ("SAIL Large BFs - Performance Snapshot", 1),
+    # Cost Trend (Hot Metal / Crude Steel / Saleable Steel) — 3 separate
+    # physical pages (COST_TREND_HM/CS/SS_PAGE_ID = 3.61/3.62/3.63), always
+    # inserted right after Large BFs — see the "Cost Trend" comment above
+    # COST_TREND_HM_PAGE_ID's own definition.
+    ("Trend in Cost of Production (Hot Metal/Crude Steel/Saleable Steel)", 3),
     ("SAIL Mines Production & Despatch Performance", 1),
     ("Plant Wise Performance of Main Items (w.r.t. ABP)", 1),
     ("Plant Wise Item Wise Production & CS to HM Ratio", 2),
@@ -351,11 +356,12 @@ BF_LARGE_ANNEXURE_PAGE_ID = 3.6
 
 # "Cost Trend" — TREND IN COST OF PRODUCTION OF HOT METAL/CRUDE STEEL/
 # SALEABLE STEEL (Report_format/COST TREND.xlsx, sheets HM/CS/SS), 3 pages
-# inserted right after Large BFs, per direct instruction. Same sentinel-
-# float treatment as BF_LARGE_ANNEXURE_PAGE_ID above (numbered main flow,
-# group-1 dept-badge); kept as three separate ids (not one page carrying a
-# list) so each page gets its own @@PGSTART_N@@ marker/physical position,
-# same as every other multi-page section in this app.
+# inserted right after Large BFs, per direct instruction, each product on
+# its own separate physical page. Same sentinel-float treatment as
+# BF_LARGE_ANNEXURE_PAGE_ID above (numbered main flow, group-1 dept-badge);
+# kept as three separate ids (not one page carrying a list) so each page
+# gets its own @@PGSTART_N@@ marker/physical position, same as every other
+# multi-page section in this app.
 COST_TREND_HM_PAGE_ID = 3.61
 COST_TREND_CS_PAGE_ID = 3.62
 COST_TREND_SS_PAGE_ID = 3.63
@@ -804,11 +810,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 pages_config.insert(_idx3 + 3, {"page": KEY_PARAMS_PAGE_ID})
                 pages_config.insert(_idx3 + 4, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
                 pages_config.insert(_idx3 + 5, {"page": COST_TREND_HM_PAGE_ID})
-                # Crude Steel + Saleable Steel render together on ONE
-                # physical page (cost_trend_combined.html) — see
-                # generate_cost_trend_combined(); COST_TREND_SS_PAGE_ID
-                # itself is no longer inserted as its own page-list entry.
                 pages_config.insert(_idx3 + 6, {"page": COST_TREND_CS_PAGE_ID})
+                pages_config.insert(_idx3 + 7, {"page": COST_TREND_SS_PAGE_ID})
             # "SAIL Mines Production & Despatch Performance" sentinel page:
             # always inserted right after fixed page 4, ahead of fixed page 5.
             _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
@@ -859,9 +862,15 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == COST_TREND_HM_PAGE_ID:
                 page.update(generate_cost_trend(month, "HM"))
                 page["type"] = "cost_trend"
+                page["orientation"] = "landscape"
             if pg == COST_TREND_CS_PAGE_ID:
-                page.update(generate_cost_trend_combined(month, ["CS", "SS"]))
-                page["type"] = "cost_trend_combined"
+                page.update(generate_cost_trend(month, "CS"))
+                page["type"] = "cost_trend"
+                page["orientation"] = "landscape"
+            if pg == COST_TREND_SS_PAGE_ID:
+                page.update(generate_cost_trend(month, "SS"))
+                page["type"] = "cost_trend"
+                page["orientation"] = "landscape"
             if pg == SAIL_MINES_PAGE_ID:
                 page.update(generate_sail_mines(month))
                 page["type"] = "sail_mines"
@@ -1018,15 +1027,14 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idxkp = next((i for i, p in enumerate(_pages_list) if p.get("page") == KEY_PARAMS_PAGE_ID), None)
         if _idxkp is not None:
             _pages_list.insert(_idxkp + 1, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
-    # "Cost Trend" sentinel pages: HM on its own page, then CS+SS together
-    # on one physical page (cost_trend_combined.html) — always inserted
-    # right after Large BFs, in that order. COST_TREND_SS_PAGE_ID is not
-    # inserted as its own page-list entry; see generate_cost_trend_combined().
+    # "Cost Trend" sentinel pages: HM, CS, SS each on their own physical
+    # page, always inserted right after Large BFs, in that order.
     if not any(p.get("page") == COST_TREND_HM_PAGE_ID for p in _pages_list):
         _idxbf = next((i for i, p in enumerate(_pages_list) if p.get("page") == BF_LARGE_ANNEXURE_PAGE_ID), None)
         if _idxbf is not None:
             _pages_list.insert(_idxbf + 1, {"page": COST_TREND_HM_PAGE_ID})
             _pages_list.insert(_idxbf + 2, {"page": COST_TREND_CS_PAGE_ID})
+            _pages_list.insert(_idxbf + 3, {"page": COST_TREND_SS_PAGE_ID})
     # "SAIL Mines Production & Despatch Performance" sentinel page: always
     # inserted right after fixed page 4.
     if not any(p.get("page") == SAIL_MINES_PAGE_ID for p in _pages_list):
@@ -1133,9 +1141,15 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == COST_TREND_HM_PAGE_ID:
             p.update(generate_cost_trend(request.month, "HM"))
             p["type"] = "cost_trend"
+            p["orientation"] = "landscape"
         if pg == COST_TREND_CS_PAGE_ID:
-            p.update(generate_cost_trend_combined(request.month, ["CS", "SS"]))
-            p["type"] = "cost_trend_combined"
+            p.update(generate_cost_trend(request.month, "CS"))
+            p["type"] = "cost_trend"
+            p["orientation"] = "landscape"
+        if pg == COST_TREND_SS_PAGE_ID:
+            p.update(generate_cost_trend(request.month, "SS"))
+            p["type"] = "cost_trend"
+            p["orientation"] = "landscape"
         if pg == SAIL_MINES_PAGE_ID:
             p.update(generate_sail_mines(request.month))
             p["type"] = "sail_mines"

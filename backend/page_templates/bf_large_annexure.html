@@ -1,19 +1,19 @@
         <div style="padding:3px;font-family:Arial,sans-serif;font-size:7.5pt;">
-          <div style="text-align:center;font-weight:700;font-size:11pt;margin-bottom:3px;">{{ page.title }}</div>
+          <div style="text-align:center;font-weight:700;font-size:11pt;margin-bottom:3px;color:rgb(0,0,255);">{{ page.title }}</div>
           <div style="overflow-x:auto;">
-          <table style="border-collapse:collapse;border:1px solid {{ colors.border_darkest }};font-size:7.5pt;width:100%;">
+          <table style="border-collapse:collapse;font-size:7.5pt;width:100%;border:2px solid {{ colors.border_darkest }};">
             <thead>
-              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_rust_brown }};">
                 <th rowspan="2" style="padding:3px 6px;border:1px solid {{ colors.border_dark }};text-align:left;">Parameter</th>
-                <th rowspan="2" style="padding:3px 6px;border:1px solid {{ colors.border_dark }};">Unit</th>
+                <th rowspan="2" style="padding:3px 6px;border:1px solid {{ colors.border_dark }};border-right:1px solid {{ colors.border_darkest }};">Unit</th>
                 {% for period in page.periods %}
-                <th colspan="{{ page.sail_cols|length }}" style="padding:2px 5px;border:1px solid {{ colors.border_dark }};line-height:1.2;{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ period.label }}</th>
+                <th colspan="{{ page.sail_cols|length }}" style="padding:2px 5px;border:1px solid {{ colors.border_dark }};line-height:1.2;{% if period.group_start %}border-left:1px solid {{ colors.border_darkest }};{% endif %}{% if period.group_end %}border-right:1px solid {{ colors.border_darkest }};{% endif %}{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ period.label }}</th>
                 {% endfor %}
               </tr>
-              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
+              <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_rust_brown }};">
                 {% for period in page.periods %}
                 {% for bf in page.sail_cols %}
-                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};line-height:1.15;{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ bf.plant }}<br/>{{ bf.unit }}</th>
+                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};line-height:1.15;{% if period.group_start and loop.first %}border-left:1px solid {{ colors.border_darkest }};{% endif %}{% if period.group_end and loop.last %}border-right:1px solid {{ colors.border_darkest }};{% endif %}{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ bf.plant }}<br/>{{ bf.unit }}</th>
                 {% endfor %}
                 {% endfor %}
               </tr>
@@ -21,12 +21,12 @@
             <tbody>
             {% for row in page.rows %}
               <tr>
-                <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;line-height:1.1;background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.parameter }}</td>
-                <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};line-height:1.1;background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.unit }}</td>
+                <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;line-height:1.1;color:{{ colors.text_rust_brown }};background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.parameter }}</td>
+                <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};border-right:1px solid {{ colors.border_darkest }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};line-height:1.1;background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.unit }}</td>
                 {% for period in page.periods %}
                 {% for bf in page.sail_cols %}
                 {% set v = row.sail[bf.label][period.key] %}
-                <td style="padding:1.5px 4px;border:1px solid {{ colors.border_medium }};text-align:right;line-height:1.1;{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }}66;{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }}66;{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }}66;{% else %}background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};{% endif %}">{{ v if v is not none else '—' }}</td>
+                <td style="padding:1.5px 4px;border:1px solid {{ colors.border_medium }};text-align:right;line-height:1.1;{% if period.group_start and loop.first %}border-left:1px solid {{ colors.border_darkest }};{% endif %}{% if period.group_end and loop.last %}border-right:1px solid {{ colors.border_darkest }};{% endif %}{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }}66;{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }}66;{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }}66;{% else %}background:transparent;{% endif %}">{{ v if v is not none else '—' }}</td>
                 {% endfor %}
                 {% endfor %}
               </tr>

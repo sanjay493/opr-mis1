@@ -60,7 +60,7 @@ def generate_best_calendar_month(report_month: str) -> dict:
 
     return {
         'type': 'best_calendar_month',
-        'title': 'Production Highlights — Best Calendar Month',
+        'title': 'Production Highlights — Best Calendar Month (Best & 2nd Best)',
         'month_label': month_label,
         'unit': "'000 T",
         'month_names': _MONTH_NAMES,

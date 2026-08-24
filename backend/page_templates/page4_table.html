@@ -32,7 +32,7 @@
                         <th rowspan="2" style="vertical-align: middle;">{{ short_m }}'{{ short_prev_y }}<br/>Act.</th>
                         <th rowspan="2" style="vertical-align: middle;">%Gr.<br/>{{ short_m }}'{{ short_prev_y }}</th>
                         <th rowspan="2" style="vertical-align: middle;">CU%</th>
-                        <th colspan="4">Apr-{{ short_m }}'{{ short_y }}</th>
+                        <th colspan="4" class="col-ytd-app">Apr-{{ short_m }}'{{ short_y }}</th>
                         <th rowspan="2" style="vertical-align: middle;">Apr-{{ short_m }}'{{ short_prev_y }}<br/>Act.</th>
                         <th rowspan="2" style="vertical-align: middle;">%Gr.<br/>Apr-{{ short_m }}'{{ short_prev_y }}</th>
                         <th rowspan="2" style="vertical-align: middle;">CU%</th>
@@ -48,13 +48,13 @@
                     <tr class="{% if row.is_first_in_group %}group-first {% endif %}{% if row.plant == 'SAIL' %}sail-row{% elif row.plant == '5 Plants' %}fp-row{% endif %}">
                         {% if row.is_conversion %}
                         <td colspan="3" class="label-cell"
-                            style="font-weight: 700; font-size: 8pt; vertical-align: middle;
+                            style="font-weight: 700; font-size: 7.7pt; vertical-align: middle;
                                    padding: 1.8px 2px 1.8px 4px; font-family: inherit;">
                             Conversion
                         </td>
                         {% elif row.is_sail_incl_conv %}
                         <td colspan="2" class="label-cell"
-                            style="font-weight: 700; font-size: 8pt; vertical-align: middle;
+                            style="font-weight: 700; font-size: 7.7pt; vertical-align: middle;
                                    padding: 1.8px 2px 1.8px 4px; font-family: inherit;">
                             SAIL incl. conversion
                         </td>
@@ -62,14 +62,14 @@
                         {% else %}
                         {% if row.is_first_in_group %}
                         <td class="label-cell item-group-cell" rowspan="{{ row.group_size }}"
-                            style="font-weight: 700; font-size: 8pt; vertical-align: middle;
+                            style="font-weight: 700; font-size: 7.7pt; vertical-align: middle;
                                    padding: 1.8px 2px 1.8px 4px;
                                    overflow: hidden; font-family: inherit;">
                             {{ row.item }}
                         </td>
                         {% endif %}
                         <td class="label-cell"
-                            style="font-weight: 600; font-size: 8pt; text-align: center;
+                            style="font-weight: 600; font-size: 7.7pt; text-align: center;
                                    padding: 1.8px 2px;
                                    font-family: inherit;
                                    white-space: nowrap; overflow: hidden;">

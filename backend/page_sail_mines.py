@@ -35,11 +35,10 @@ A few rows are computed, never entered directly:
     x100 — computed for Actual/APP/CPLY the same way, before %FF/%Grth are
     derived from those (not an independently entered %), and displayed
     with 1 decimal (a %) rather than the tonnage tables' whole T.
-Iron Ore Production's "SAIL" row (both production and despatch) is its own
-directly-entered figure, NOT a sum of CGoM/OGoM/JGoM — same reasoning as
-Cost Trend's SAIL row (see page_cost_trend.py): a mine group's own
-reported/blended total isn't necessarily the arithmetic sum of the
-individual mines.
+  - Iron Ore Production's "SAIL" row (both production and despatch column
+    groups) = CGoM + OGoM + JGoM, per direct instruction (2026-08-24) —
+    unlike Cost Trend's SAIL row (see page_cost_trend.py), which stays a
+    directly-entered figure.
 """
 import db
 from page_at_a_glance import _trend_line_svg
@@ -65,13 +64,13 @@ _MINES_CHART_COLORS = {
 SAIL_MINES_SECTIONS = [
     {
         "key": "iron_ore_prod", "title": "IRON ORE MINES PERFORMANCE", "kind": "production",
-        "items": ["CGoM", "OGoM", "JGoM", "SAIL"],
-        "derived": [],
+        "items": ["CGoM", "OGoM", "JGoM"],
+        "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}],
     },
     {
         "key": "iron_ore_despatch", "kind": "production",
-        "items": ["CGoM", "OGoM", "JGoM", "SAIL"],
-        "derived": [], "merge_into": "iron_ore_prod",
+        "items": ["CGoM", "OGoM", "JGoM"],
+        "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_prod",
     },
     {
         "key": "iron_ore_sales", "title": "SALES OF IRON ORE", "kind": "production",
@@ -92,8 +91,8 @@ SAIL_MINES_SECTIONS = [
         }],
     },
     {
-        "key": "coal_despatch", "title": "DESPATCH OF CLEAN COAL, THERMAL & MIDDLINGS", "kind": "production",
-        "items": ["Clean Coal", "Thermal", "Middlings"],
+        "key": "coal_despatch", "title": "DESPATCH OF CLEAN COAL & THERMAL COAL (INCL. MIDDLINGS)", "kind": "production",
+        "items": ["Clean Coal", "Thermal"],
         "derived": [],
     },
     {
