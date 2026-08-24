@@ -221,12 +221,20 @@ export default function IptFYPage() {
               <tbody>
                 {sections.map((section) => (
                   <React.Fragment key={section.item}>
-                    {/* Item section header */}
+                    {/* Item section header — a single colSpan cell here isn't reliably
+                        kept on-screen by `position: sticky` while scrolling right (unlike
+                        the single-column Item/From/To/Unit cells below, which stick fine) —
+                        Chromium doesn't stick column-spanning sticky table cells the same
+                        way. Split into its own sticky, non-spanned "Item" cell (so the
+                        label itself stays pinned like From/To/Unit do) plus a second,
+                        ordinary spanning cell that just continues the banner's background
+                        across the rest of the row. */}
                     <tr>
-                      <td colSpan={4 + months.length * 2 + 2} style={{
+                      <td style={{
                         ...cellBase,
                         position: 'sticky',
                         left: 0,
+                        zIndex: 1,
                         backgroundColor: '#174ea6',
                         color: '#ffffff',
                         fontWeight: 800,
@@ -235,6 +243,10 @@ export default function IptFYPage() {
                       }}>
                         {section.item}
                       </td>
+                      <td colSpan={3 + months.length * 2 + 2} style={{
+                        ...cellBase,
+                        backgroundColor: '#174ea6',
+                      }} />
                     </tr>
                     {section.routes.map((route, idx) => {
                       const planTotal = rowTotal(route.plan, months);
