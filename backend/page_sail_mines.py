@@ -42,6 +42,18 @@ reported/blended total isn't necessarily the arithmetic sum of the
 individual mines.
 """
 import db
+from page_at_a_glance import _trend_line_svg
+
+# Same fixed-order categorical hues as pdf.py's _BADGE_COLORS / globals.css's
+# .dept-badge.grp-N (already validated per the dataviz skill's six-check
+# gate) — reused here rather than picking new colors, so this chart's
+# palette is consistent with the rest of the report and doesn't need its
+# own separate validation pass.
+_MINES_CHART_COLORS = {
+    "Iron Ore": "#2a78d6",   # blue
+    "Coal": "#eb6834",       # orange
+    "Flux": "#1baf7a",       # aqua
+}
 
 # Every (section key, item) pair listed under "items" is entered directly
 # via the SAIL Mines Entry data-entry page; "derived" rows are computed
@@ -85,14 +97,14 @@ SAIL_MINES_SECTIONS = [
         "derived": [],
     },
     {
-        "key": "flux_prod", "title": "FLUX PRODUCTION (LIMESTONE & DOLOMITE)", "kind": "production",
+        "key": "flux_prod", "title": "FLUX PRODUCTION & DESPATCH (LIMESTONE & DOLOMITE)", "kind": "production",
         "items": ["Limestone", "Dolomite"],
         "derived": [],
     },
     {
-        "key": "flux_despatch", "title": "FLUX DESPATCH (LIMESTONE & DOLOMITE)", "kind": "production",
+        "key": "flux_despatch", "kind": "production",
         "items": ["Limestone", "Dolomite"],
-        "derived": [],
+        "derived": [], "merge_into": "flux_prod",
     },
 ]
 
@@ -163,6 +175,23 @@ def _row(label: str, app, actual, cply, kind: str, value_fmt: str = "t", bold: b
         row["app"] = fmt(app)
         row["pct_ful"] = _fmt_pct(_pct_ful(app, actual))
     return row
+
+
+def _mines_performance_chart_svg(ytd_months: list) -> str:
+    """Illustrative placeholder ONLY — not wired to real mines figures yet
+    (per direct instruction: fills the space freed up by narrowing the
+    Sales/Coal-Production/Washery/Despatch tables, to be mapped to real
+    Iron Ore/Coal/Flux production data once that's decided). Kept as its
+    own function so swapping in real series later only touches this one
+    spot, not the layout around it."""
+    labels = [_MON_ABBR[int(m.split("-")[1])] for m in ytd_months]
+    n = len(labels)
+    series = {
+        "Iron Ore": [420 + 18 * i for i in range(n)],
+        "Coal": [140 + 6 * ((i * 3) % 7) for i in range(n)],
+        "Flux": [60 + 4 * ((i * 5) % 5) for i in range(n)],
+    }
+    return _trend_line_svg(labels, series, _MINES_CHART_COLORS)
 
 
 def generate_sail_mines(report_month: str) -> dict:
@@ -250,4 +279,5 @@ def generate_sail_mines(report_month: str) -> dict:
         "period_label": period_label,
         "unit": "'000 T",
         "tables": tables,
+        "mines_chart_svg": _mines_performance_chart_svg(ytd_months),
     }

@@ -1,9 +1,4 @@
-<div class="coal-title">{{ page.title }}</div>
-<div style="text-align:right;font-size:8pt;font-style:italic;color:{{ colors.text_secondary }};margin-bottom:6px;">
-    {{ page.period_label }} &nbsp;|&nbsp; Unit: {{ page.unit }} (Washery Yield in %)
-</div>
-
-{% for t in page.tables %}
+{% macro sail_mines_table(t) %}
 <div class="coal-c-heading">{{ t.title }}</div>
 <table class="coal-table" style="margin-bottom:8px;">
     <thead>
@@ -55,10 +50,40 @@
         {% endfor %}
     </tbody>
 </table>
-{% endfor %}
+{% endmacro %}
 
-<div class="coal-note">
-    Cumulative figures for {{ page.period_label }}. APP = Annual Plan (year-to-date); CPLY = Corresponding Period Last Year.
-    Iron Ore Production's SAIL row is its own reported figure, not a sum of CGoM/OGoM/JGoM. Coal Mines Production's Total and
-    Washery's Yield (Clean Coal/Raw Coal) rows are computed from the rows above them.
+<div class="coal-title">{{ page.title }}</div>
+<div style="text-align:right;font-size:8pt;font-style:italic;color:{{ colors.text_secondary }};margin-bottom:6px;">
+    {{ page.period_label }} &nbsp;|&nbsp; Unit: {{ page.unit }} (Washery Yield in %)
 </div>
+
+{% set tables_by_key = {} %}
+{% for t in page.tables %}{% set _ = tables_by_key.update({t.key: t}) %}{% endfor %}
+
+{# Iron Ore Production+Despatch — full-width 11-column table, unchanged. #}
+{{ sail_mines_table(tables_by_key['iron_ore_prod']) }}
+
+{# The four plain 6-column tables (Item + APP/Act./%FF/CPLY/%Grth) share one
+   fixed, equal width on the left (per direct instruction: left-aligned,
+   truncated at the same right edge rather than each stretching to fill the
+   full page width) — the space freed up on the right holds a mines-
+   performance chart (page.mines_chart_svg: illustrative only for now, see
+   page_sail_mines.py's _mines_performance_chart_svg). #}
+<div class="sail-mines-narrow-row">
+    <div class="sail-mines-narrow-tables">
+        {{ sail_mines_table(tables_by_key['iron_ore_sales']) }}
+        {{ sail_mines_table(tables_by_key['coal_prod']) }}
+        {{ sail_mines_table(tables_by_key['washery']) }}
+        {{ sail_mines_table(tables_by_key['coal_despatch']) }}
+    </div>
+    <div class="sail-mines-chart">
+        <div class="sail-mines-chart-heading">
+            Mines Performance <span class="sail-mines-chart-note">(illustrative — pending data)</span>
+        </div>
+        {{ page.mines_chart_svg }}
+    </div>
+</div>
+
+{# Flux Production+Despatch — merged the same way as Iron Ore, moved to the
+   bottom of the page per direct instruction. #}
+{{ sail_mines_table(tables_by_key['flux_prod']) }}
