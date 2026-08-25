@@ -316,14 +316,14 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
         for mk in month_keys:
             seg = next((s for s in semis_by_month[mk]["plants"] if s["plant"] == p), None)
             if seg is None:
-                cells.append(f'<td style="{cell}text-align:center;color:#94a3b8;">—</td>')
+                cells.append(f'<td style="{cell}text-align:center;color:#94a3b8;"></td>')
             else:
                 present = True
-                own_pct = (f' <span style="color:{_SEMIS_OWN_PCT_COLOR};font-weight:700;">'
+                own_pct = (f' <span style="color:{_SEMIS_OWN_PCT_COLOR};font-weight:700; padding-left:1px;">'
                            f'{seg["own_pct"]:.0f}%</span>') if seg["own_pct"] is not None else ""
                 cells.append(
                     f'<td style="{cell}text-align:center;white-space:nowrap;">'
-                    f'{seg["qty"]:.0f}{own_pct}</td>'
+                    f'{seg["qty"]:.0f} ({own_pct})</td>'
                 )
         if not present:
             continue  # plant reports no semis anywhere in this window — omit its row entirely

@@ -1285,25 +1285,38 @@
             background: {{ colors.table_header_bg }}; color: {{ colors.text_primary }}; text-align: center; white-space: nowrap; font-weight: 700;
         }
         .page7-13-yearly-table th.qtr-hdr { background: {{ colors.table_header_bg_qtr }}; }
+        .page7-13-yearly-table th.hh-hdr { background: {{ colors.table_header_bg_hh }}; }
         .page7-13-yearly-table th.tot-hdr { background: {{ colors.table_header_bg_total }}; }
         .page7-13-yearly-table td {
             font-size: 10pt; padding: 3.5px 3px; line-height: 1;
             text-align: right; border: 0.3pt solid {{ colors.border_light }};
         }
         .page7-13-yearly-table td.plant-cell {
-            font-size: 10pt; font-weight: 700; text-align: center;
-            vertical-align: middle; background: {{ colors.highlight_plant_label_bg }}; color: {{ colors.text_plant_cell }};
+            /* Letter-per-line (one character per row) rather than the whole
+               name sideways, so the column shrinks to a single character's
+               width — freeing horizontal room for the H1/H2 columns — while
+               still reading top-to-bottom normally. */
+            font-size: 8.5pt; font-weight: 700; text-align: center;
+            vertical-align: middle; padding: 3.5px 1px; line-height: 1.15;
+            background: {{ colors.highlight_plant_label_bg }}; color: {{ colors.text_plant_cell }};
         }
+        /* A group with an abbreviated 1-2 letter plant label (see
+           page7_13.py's plant_label_overrides — currently just VISL -> VI
+           on Hot Metal/Crude Steel, where it's usually a single-row group)
+           gets a smaller font so that one row doesn't grow taller than its
+           neighbours just to fit the vertically-stacked letters. */
+        .page7-13-yearly-table td.plant-cell.compact { font-size: 6.5pt; }
         .page7-13-yearly-table td.plant-cell.agg-sail  { background: {{ colors.highlight_agg_sail_bg }}; }
         .page7-13-yearly-table td.plant-cell.agg-5p    { background: {{ colors.highlight_agg_5plants_bg }}; }
         .page7-13-yearly-table td.year-cell {
-            font-size: 10pt; text-align: left; padding-left: 4px; white-space: nowrap;
+            font-size: 9pt; text-align: left; padding-left: 3px; white-space: nowrap;
         }
         .page7-13-yearly-table tr.plan-row   { background: {{ colors.highlight_actual_bg }}; font-weight: 700; }
         .page7-13-yearly-table tr.sail-row   { background: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
         .page7-13-yearly-table tr.fp-row     { background: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
         .page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid {{ colors.border_heavy }}; }
         .page7-13-yearly-table td.qtr-cell   { background: {{ colors.highlight_qtr_col_bg }}; font-weight: 600; }
+        .page7-13-yearly-table td.hh-cell    { background: {{ colors.highlight_hh_col_bg }}; font-weight: 600; }
         .page7-13-yearly-table td.total-cell { background: {{ colors.highlight_total_col_bg }}; font-weight: 700; }
         /* Two record flags: best-ever (all-time record, month/quarter/
            annual) is a background fill only — no border, so it doesn't

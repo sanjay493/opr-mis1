@@ -4991,6 +4991,21 @@ def get_ipt_entries(month: str = Query(..., description="YYYY-MM")):
     return {"month": month, "rows": rows}
 
 
+# The IPT data-entry page (frontend/src/app/data-entry/ipt/page.js) only
+# ever offers these plants in its from/to dropdowns — enforced here too so
+# a direct API call can't smuggle an arbitrary string into from_plant/
+# to_plant, which ends up rendered as an SVG node label on the IPT Status
+# report (see page_ipt.py's _item_sankey_svg / page_prod_by_process.py's
+# _sankey_svg).
+_IPT_PLANTS = {'BSP', 'DSP', 'ISP', 'RSP', 'BSL', 'ASP', 'SSP', 'VISL', 'CFP'}
+
+
+def _check_ipt_plants(*plants):
+    bad = [p for p in plants if p not in _IPT_PLANTS]
+    if bad:
+        raise HTTPException(status_code=400, detail=f"Unknown plant(s): {', '.join(bad)}")
+
+
 @app.post("/api/ipt-entry")
 async def save_ipt_entry_api(payload: dict):
     month = payload.get("month", "")
@@ -5004,6 +5019,7 @@ async def save_ipt_entry_api(payload: dict):
             return None
 
     try:
+        _check_ipt_plants(payload["from_plant"], payload["to_plant"])
         db.save_ipt_entry(
             month=month,
             item=payload["item"],
@@ -5019,6 +5035,8 @@ async def save_ipt_entry_api(payload: dict):
         return {"status": "ok", "message": "Saved."}
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Missing field: {e}")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -5048,6 +5066,7 @@ async def save_ipt_entries_bulk(payload: dict):
             to_plant = e.get("to_plant") or ""
             if not item or not from_plant or not to_plant or from_plant == to_plant:
                 continue
+            _check_ipt_plants(from_plant, to_plant)
 
             orig_item = e.get("orig_item")
             orig_from = e.get("orig_from_plant")
@@ -5063,6 +5082,8 @@ async def save_ipt_entries_bulk(payload: dict):
             )
             saved += 1
         return {"status": "ok", "saved": saved, "skipped": len(entries) - saved}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

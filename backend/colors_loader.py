@@ -11,6 +11,7 @@ _RESERVED_KEYS_PREFIX = "_doc"
 _DEFAULTS: Dict[str, str] = {
     "table_header_bg":             "transparent",
     "table_header_bg_qtr":         "transparent",
+    "table_header_bg_hh":          "transparent",
     "table_header_bg_total":       "transparent",
     "table_header_bg_section":     "transparent",
 
@@ -25,6 +26,7 @@ _DEFAULTS: Dict[str, str] = {
     "highlight_agg_sail_bg":       "#bbf7d0",
     "highlight_agg_5plants_bg":    "#fef08a",
     "highlight_qtr_col_bg":        "#f0f5ff",
+    "highlight_hh_col_bg":         "#d1fae5",
     "highlight_total_col_bg":      "#e8f0fb",
     "highlight_plant_label_bg":    "#e8edf3",
     "highlight_group_label_bg":    "#f8fafc",

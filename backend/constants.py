@@ -129,4 +129,61 @@ PAGE_MODULES = {
             ("DELETE", "/api/capacity/{entry_id}", True),
         ],
     },
+    "key_highlights": {
+        "label": "Key Highlights",
+        "routes": [
+            ("POST", "/api/page3-narrative", False),
+        ],
+    },
+    "cost_trend": {
+        "label": "Cost Trend",
+        "routes": [
+            ("POST", "/api/cost-trend/annual", False),
+            ("POST", "/api/cost-trend/monthly", False),
+            ("POST", "/api/cost-trend-extract/confirm", False),
+        ],
+    },
+    "sail_mines": {
+        "label": "SAIL Mines",
+        "routes": [
+            ("POST", "/api/sail-mines/monthly", False),
+        ],
+    },
+    "sail_1page": {
+        "label": "SAIL One-Page Report",
+        "routes": [
+            ("POST", "/api/sail-1page/confirm", False),
+        ],
+    },
+    "steel_sector_performance": {
+        "label": "Steel Sector Performance",
+        "routes": [
+            ("POST", "/api/steel-sector-performance/confirm", False),
+        ],
+    },
+    "do_letter": {
+        "label": "DO Letter",
+        "routes": [
+            ("POST", "/api/do-letter/remarks", False),
+        ],
+    },
+    "coal_blend_targets": {
+        "label": "Coal Blend Targets",
+        "routes": [
+            ("POST", "/api/coal-blend-targets", False),
+        ],
+    },
+    "coal_omi": {
+        "label": "Coal OMI",
+        "routes": [
+            ("POST", "/api/coal-omi/insert", False),
+            ("POST", "/api/coal-omi/opening-stock", False),
+        ],
+    },
+    "power_omi": {
+        "label": "Power OMI",
+        "routes": [
+            ("POST", "/api/power-omi/insert", False),
+        ],
+    },
 }

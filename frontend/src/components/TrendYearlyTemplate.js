@@ -4,18 +4,21 @@ import React from 'react';
 // Header cell styles
 const HDR  = { fontSize: 'var(--report-font-size)', padding: '3px 2px', background: '#1e3a5f', color: '#fff',    textAlign: 'center', border: '0.4px solid #334155', whiteSpace: 'nowrap', fontWeight: '700' };
 const QHDR = { ...HDR, background: '#2d4f7f' };
+const HHDR = { ...HDR, background: '#68a87e' };
 const THDR = { ...HDR, background: '#1a3050' };
 
 // Data cell styles
 const CELL  = { fontSize: 'var(--report-font-size)', padding: '2px 3px',  textAlign: 'right',  border: '0.3px solid #e2e8f0' };
 const QCELL = { ...CELL, background: '#f0f5ff', fontWeight: '600' };
 const TCELL = { ...CELL, background: '#e8f0fb', fontWeight: '700' };
+const HHCELL = { ...CELL, background: '#d1fae5', fontWeight: '700' };
 const YCELL = { ...CELL, fontSize: 'var(--report-font-size)', textAlign: 'left', paddingLeft: '3px', whiteSpace: 'nowrap', fontWeight: '400' };
 
 // Colours for aggregate / special rows
 const PLAN_BG = '#dbeafe';   // light blue  — plan row
 const SAIL_BG = '#dcfce7';   // light green — SAIL / aggregate row
 const FP_BG   = '#fef9c3';   // light yellow — 5 Plants aggregate
+const HH_BG   = '#d1fae5';   // light teal — Half Yearly aggregate
 
 // Cell highlight for the record flags — keep these in sync with
 // colors_config.json's highlight_best_ever_bg and
@@ -60,27 +63,29 @@ function TrendTable({ rows, item_display, unit }) {
       {/* Table */}
       <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
         <colgroup>
-          <col style={{ width: '4.5%' }} />
-          <col style={{ width: '10%' }} />
-          <col style={{ width: '4.5%' }} /><col style={{ width: '4.5%' }} /><col style={{ width: '4.5%' }} /><col style={{ width: '5%' }} />
-          <col style={{ width: '4.5%' }} /><col style={{ width: '4.5%' }} /><col style={{ width: '4.5%' }} /><col style={{ width: '5%' }} />
-          <col style={{ width: '4.5%' }} /><col style={{ width: '4.5%' }} /><col style={{ width: '4.5%' }} /><col style={{ width: '5%' }} />
-          <col style={{ width: '4.5%' }} /><col style={{ width: '4.5%' }} /><col style={{ width: '4.5%' }} /><col style={{ width: '5%' }} />
+          <col style={{ width: '1.8%' }} />
           <col style={{ width: '5.5%' }} />
+          <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} />
+          <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} /><col style={{ width: '5.6%' }} />
+          <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} />
+          <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} /><col style={{ width: '5.6%' }} />
+          <col style={{ width: '5.9%' }} />
         </colgroup>
 
         <thead>
           <tr>
-            <th style={HDR}>Plant</th>
+            <th style={HDR}></th>
             <th style={HDR}>Year</th>
             <th style={HDR}>Apr</th><th style={HDR}>May</th><th style={HDR}>Jun</th>
             <th style={QHDR}>Q1</th>
             <th style={HDR}>Jul</th><th style={HDR}>Aug</th><th style={HDR}>Sep</th>
             <th style={QHDR}>Q2</th>
+            <th style={HHDR}>H1</th>
             <th style={HDR}>Oct</th><th style={HDR}>Nov</th><th style={HDR}>Dec</th>
             <th style={QHDR}>Q3</th>
             <th style={HDR}>Jan</th><th style={HDR}>Feb</th><th style={HDR}>Mar</th>
             <th style={QHDR}>Q4</th>
+            <th style={HHDR}>H2</th>
             <th style={THDR}>Total</th>
           </tr>
         </thead>
@@ -91,6 +96,7 @@ function TrendTable({ rows, item_display, unit }) {
             const cf = row.cell_flags || [];
             const cellStyle  = i => ({ ...CELL,  ...bestFlagStyle(cf[i]) });
             const qcellStyle = i => ({ ...QCELL, ...bestFlagStyle(cf[i]) });
+            const hcellStyle = i => ({ ...HHCELL, ...bestFlagStyle(cf[i]) }); 
             const tcellStyle = i => ({ ...TCELL, ...bestFlagStyle(cf[i]) });
             const { bg, fw } = rowColors(row);
             const isAggregate = AGGREGATES.has(row.plant);
@@ -105,14 +111,19 @@ function TrendTable({ rows, item_display, unit }) {
               color: '#1e3a5f',
               border: '0.5px solid #94a3b8',
               padding: '2px 1px',
-              lineHeight: '1.2',
+              lineHeight: '1.15',
             };
 
             return (
               <tr key={idx} style={{ background: bg, fontWeight: fw, borderTop: topBorder }}>
                 {row.rowspan_start && (
                   <td rowSpan={row.plant_row_count} style={plantCellStyle}>
-                    {row.plant}
+                    {row.plant.split('').map((ch, i) => (
+                      <React.Fragment key={i}>
+                        {ch}
+                        {i < row.plant.length - 1 && <br />}
+                      </React.Fragment>
+                    ))}
                   </td>
                 )}
                 <td style={{ ...YCELL, fontWeight: row.is_plan ? '700' : '400' }}>{row.year_label}</td>
@@ -124,15 +135,17 @@ function TrendTable({ rows, item_display, unit }) {
                 <td style={cellStyle(5)}>{v[5]}</td>
                 <td style={cellStyle(6)}>{v[6]}</td>
                 <td style={qcellStyle(7)}>{v[7]}</td>
-                <td style={cellStyle(8)}>{v[8]}</td>
+                <td style={hcellStyle(8)}>{v[8]}</td>
                 <td style={cellStyle(9)}>{v[9]}</td>
                 <td style={cellStyle(10)}>{v[10]}</td>
-                <td style={qcellStyle(11)}>{v[11]}</td>
-                <td style={cellStyle(12)}>{v[12]}</td>
+                <td style={cellStyle(11)}>{v[11]}</td>
+                <td style={qcellStyle(12)}>{v[12]}</td>
                 <td style={cellStyle(13)}>{v[13]}</td>
                 <td style={cellStyle(14)}>{v[14]}</td>
-                <td style={qcellStyle(15)}>{v[15]}</td>
-                <td style={tcellStyle(16)}>{v[16]}</td>
+                <td style={cellStyle(15)}>{v[15]}</td>
+                <td style={qcellStyle(16)}>{v[16]}</td>
+                <td style={hcellStyle(17)}>{v[17]}</td>
+                <td style={tcellStyle(18)}>{v[18]}</td>
               </tr>
             );
           })}
@@ -140,10 +153,10 @@ function TrendTable({ rows, item_display, unit }) {
       </table>
       <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
         <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: BEST_EVER_BG }} />
-        Best Ever (month / quarter / annual record)
+        Best Ever (month / quarter / Half yearly / annual record)
         &nbsp;&nbsp;
         <span style={{ display: 'inline-block', width: 8, height: 8, marginRight: 3, verticalAlign: 'middle', background: 'transparent', border: `1px solid ${LIGHT_BORDER}` }} />
-        Best for that Calendar Month/Quarter (e.g. best April, best Q3)
+        Best for that Calendar Month/Quarter/Half Year (e.g. best April, best Q3)
       </div>
     </div>
   );

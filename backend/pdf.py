@@ -642,8 +642,29 @@ def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
     cell is split at every point page_of shows a page-index change — one
     merged, vertically-centered label per physical page instead of one for
     the whole group (which would leave later pages blank when the group
-    spills over). A group with any row missing a measurement is left as a
-    single whole-group merge — the pre-existing, safe default.
+    spills over).
+
+    page_of is built by scanning each physical page's extracted PDF text
+    for a per-row marker (see _measure_trend_page_breaks) — occasionally a
+    row's marker doesn't get picked up (a text-extraction gap, not a real
+    page break), leaving a hole. Filled per ITEM, across group boundaries,
+    not per plant-group: a hole is near-certain to share its immediate
+    neighbour's page (real breaks are rare, isolated events; a missed
+    marker is far more likely than an undetected break sitting exactly on
+    a missing row) — true whether that neighbour is the row right before
+    it in the same group, or the last/first row of the adjacent group.
+    Filling within each group only (an earlier version of this) still left
+    a group with NO successful measurement of its own — e.g. every row of
+    a shortish group happening to fall in the extraction gap — with
+    nothing to fall back to and gave up on it entirely, regressing to one
+    un-split merge for that group: safe when it genuinely fits on one
+    page, but exactly what produces a merge that starts mid-page (or is
+    missing outright on a continuation page) once a group that size is
+    long enough to actually need a split — a 10-year group already can;
+    5/15-year windows only make it more likely. A global forward+backward
+    fill across the whole item's row list first, before splitting any
+    individual group, recovers that case too — the empty group simply
+    inherits its neighbours' page like any other hole would.
 
     Deliberately does NOT touch is_first_in_plant: that field marks the
     group's true first row (drives trend_section.html's thick .plant-first
@@ -654,14 +675,29 @@ def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
     top of a page."""
     for ii, it in enumerate(trend_page.get("items", [])):
         rows = it.get("rows", [])
+        n = len(rows)
+        page_for_row = [page_of.get((ii, k)) for k in range(n)]
+        last_known = None
+        for k in range(n):
+            if page_for_row[k] is None:
+                page_for_row[k] = last_known
+            else:
+                last_known = page_for_row[k]
+        next_known = None
+        for k in range(n - 1, -1, -1):
+            if page_for_row[k] is None:
+                page_for_row[k] = next_known
+            else:
+                next_known = page_for_row[k]
+
         i = 0
-        while i < len(rows):
+        while i < n:
             plant = rows[i]["plant"]
             j = i
-            while j < len(rows) and rows[j]["plant"] == plant:
+            while j < n and rows[j]["plant"] == plant:
                 j += 1
-            pages = [page_of.get((ii, k)) for k in range(i, j)]
-            if all(p is not None for p in pages):
+            pages = page_for_row[i:j]
+            if pages and all(p is not None for p in pages):
                 seg_start = i
                 for k in range(i, j):
                     if k > i and pages[k - i] != pages[k - i - 1]:

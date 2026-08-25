@@ -87,6 +87,14 @@ TREND_PAGES = {
             ("VISL",     ["VISL"]),
             ("SAIL",     _SAIL_8),
         ],
+        # VISL has only ever reported one or two non-blank years for Hot
+        # Metal (a tiny BF-route sideline for it), so its group is usually
+        # a single row — the vertical letter-per-line plant label (V/I/S/L,
+        # 4 lines) then forces that one row far taller than its neighbours
+        # just to fit the name. Abbreviated + smaller font (see
+        # trend_yearly.html/trend_section.html's plant-cell rendering)
+        # keeps a lone VISL row the same height as everyone else's.
+        "plant_label_overrides": {"VISL": "VI"},
     },
     10: {
         "display": "CRUDE STEEL",
@@ -106,6 +114,9 @@ TREND_PAGES = {
             ("VISL",     ["VISL"]),
             ("SAIL",     _SAIL_8),
         ],
+        # See HOT METAL's own comment above — VISL is a single-row group
+        # here too.
+        "plant_label_overrides": {"VISL": "VI"},
     },
     11: {
         # Combined page: Pig Iron + Finished Steel (SAIL only, full 12 rows each)
@@ -144,11 +155,11 @@ def _fy_months(fy_start_year: int):
 def _compute_row(monthly_vals, is_nos: bool):
     """
     monthly_vals: list of 12 values (Apr..Mar), each may be None.
-    Returns 17 formatted strings:
-      Apr May Jun Q1  Jul Aug Sep Q2  Oct Nov Dec Q3  Jan Feb Mar Q4  Total
+    Returns 19 formatted strings:
+      Apr May Jun Q1  Jul Aug Sep Q2 H1  Oct Nov Dec Q3  Jan Feb Mar Q4 H2  Total
 
-    Oven Pushing (is_nos=True):  quarters/Total = arithmetic average of available months.
-    Tonnage      (is_nos=False): quarters/Total = sum of available months.
+    Oven Pushing (is_nos=True):  quarters/halves/Total = arithmetic average of available months.
+    Tonnage      (is_nos=False): quarters/halves/Total = sum of available months.
     """
     def agg(vals):
         nz = [v for v in vals if v is not None]
@@ -162,13 +173,14 @@ def _compute_row(monthly_vals, is_nos: bool):
     m = list(monthly_vals)
     q1, q2 = agg(m[0:3]), agg(m[3:6])
     q3, q4 = agg(m[6:9]), agg(m[9:12])
+    h1, h2 = agg(m[0:6]), agg(m[6:12])
     tot = agg(m)
 
     return [
         fmt(m[0]),  fmt(m[1]),  fmt(m[2]),  fmt(q1),
-        fmt(m[3]),  fmt(m[4]),  fmt(m[5]),  fmt(q2),
+        fmt(m[3]),  fmt(m[4]),  fmt(m[5]),  fmt(q2), fmt(h1),
         fmt(m[6]),  fmt(m[7]),  fmt(m[8]),  fmt(q3),
-        fmt(m[9]),  fmt(m[10]), fmt(m[11]), fmt(q4),
+        fmt(m[9]),  fmt(m[10]), fmt(m[11]), fmt(q4), fmt(h2),
         fmt(tot),
     ]
 
@@ -239,14 +251,17 @@ def _live_sum_or_sail_fallback(sail_direct: dict, data_by_plant: dict, plant_lis
 
 def _is_blank(values: list) -> bool:
     """True when all 12 monthly values are empty or zero (no meaningful production)."""
-    monthly_idx = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]
+    monthly_idx = [0, 1, 2, 4, 5, 6, 9, 10, 11, 13, 14, 15]
     return all(values[i] in ("", "0") for i in monthly_idx)
 
 
-# Column indices into a row's 17-value list.
-_MONTH_IDX = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]
-_QTR_IDX   = [3, 7, 11, 15]
-_TOTAL_IDX = 16
+# Column indices into a row's 19-value list:
+#   Apr May Jun Q1  Jul Aug Sep Q2 H1  Oct Nov Dec Q3  Jan Feb Mar Q4 H2  Total
+#    0   1   2  3    4   5   6  7  8    9  10  11 12   13  14  15 16 17    18
+_MONTH_IDX = [0, 1, 2, 4, 5, 6, 9, 10, 11, 13, 14, 15]
+_QTR_IDX   = [3, 7, 12, 16]
+_HALF_IDX  = [8, 17]
+_TOTAL_IDX = 18
 
 
 def _num(s):
@@ -255,25 +270,27 @@ def _num(s):
 
 def _tag_best_flags(group_rows: list) -> None:
     """
-    Mark each row's `cell_flags` (17 entries, '' | 'best_ever' | 'best_month')
+    Mark each row's `cell_flags` (19 entries, '' | 'best_ever' | 'best_month')
     in place:
       - 'best_ever' : the single highest month, the single highest quarter,
-        and the single highest FY total, each across every actual (non-plan)
-        year shown for this plant/group — an all-time record.
+        the single highest half (H1/H2), and the single highest FY total,
+        each across every actual (non-plan) year shown for this plant/group
+        — an all-time record.
       - 'best_month': per individual column — each calendar month (Apr, May,
-        ... Mar) and each quarter (Q1..Q4) separately — the highest value
-        ever recorded in THAT specific column across all actual years shown,
-        e.g. the best April on record, the best Q3 on record, etc. (Total
-        has only one column, so its record is already the 'best_ever' total
-        tagged above — no separate pass needed.) A column already carrying
-        'best_ever' keeps that flag instead, but note a 'best_ever' cell is
-        *always* also that column's record by definition (the single
-        highest value across every month/quarter is necessarily ≥ every
-        other value in its own column).
+        ... Mar), each quarter (Q1..Q4), and each half (H1, H2) separately —
+        the highest value ever recorded in THAT specific column across all
+        actual years shown, e.g. the best April on record, the best Q3 on
+        record, the best H1 on record, etc. (Total has only one column, so
+        its record is already the 'best_ever' total tagged above — no
+        separate pass needed.) A column already carrying 'best_ever' keeps
+        that flag instead, but note a 'best_ever' cell is *always* also that
+        column's record by definition (the single highest value across
+        every month/quarter/half is necessarily ≥ every other value in its
+        own column).
     Plan rows are excluded from ranking (they're a target, not an actual).
     """
     for r in group_rows:
-        r["cell_flags"] = [""] * 17
+        r["cell_flags"] = [""] * 19
 
     actual_rows = [r for r in group_rows if not r["is_plan"]]
     if not actual_rows:
@@ -288,15 +305,15 @@ def _tag_best_flags(group_rows: list) -> None:
                     best_val, best_row, best_idx = v, r, i
         return best_row, best_idx
 
-    for idxs in (_MONTH_IDX, _QTR_IDX, [_TOTAL_IDX]):
+    for idxs in (_MONTH_IDX, _QTR_IDX, _HALF_IDX, [_TOTAL_IDX]):
         row, idx = best_cell(idxs)
         if row is not None:
             row["cell_flags"][idx] = "best_ever"
 
     # Per-column record: best April ever, best May ever, ... best Q1 ever,
-    # best Q2 ever, etc., independent of how that column stacks up against
-    # its neighbours.
-    for idx in _MONTH_IDX + _QTR_IDX:
+    # best Q2 ever, ... best H1 ever, best H2 ever, etc., independent of how
+    # that column stacks up against its neighbours.
+    for idx in _MONTH_IDX + _QTR_IDX + _HALF_IDX:
         row, _ = best_cell([idx])
         if row is not None and row["cell_flags"][idx] != "best_ever":
             row["cell_flags"][idx] = "best_month"
@@ -309,7 +326,10 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     """
     y, m_num = int(report_month[:4]), int(report_month[5:7])
     cur_fy = y if m_num >= 4 else y - 1
-    fy_lbl_cur      = f"{cur_fy}-{(cur_fy + 1) % 100:02d}"
+    # Short "yy-yy" FY labels throughout (Plan gets a "P " prefix instead of
+    # the full word) — frees up horizontal space in the narrow Year column
+    # for the new H1/H2 columns.
+    fy_lbl_cur      = f"{cur_fy % 100:02d}-{(cur_fy + 1) % 100:02d}"
     fy_lbl_cur_plan = f"{cur_fy % 100:02d}-{(cur_fy + 1) % 100:02d}"
     hist_fys = list(range(cur_fy - 1, cur_fy - 11, -1))
 
@@ -418,8 +438,11 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     # added here, unlike Page 3/4's "incl. Conv." row.
     prefer_live_sum = (db_item == "Finished Steel")
 
+    label_overrides = config.get("plant_label_overrides", {})
+
     for label, plant_list in groups:
         group_rows = []
+        disp_label = label_overrides.get(label, label)
         use_sail_direct = show_all and label == "SAIL"
 
         def _resolve(direct, data, months, cap=None):
@@ -434,7 +457,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         plan_values = _compute_row(plan_vals, is_nos)
         if show_all or not _is_blank(plan_values):
             group_rows.append({
-                "plant": label, "year_label": f"Plan {fy_lbl_cur_plan}",
+                "plant": disp_label, "year_label": f"P {fy_lbl_cur_plan}",
                 "is_plan": True, "values": plan_values,
             })
 
@@ -443,20 +466,20 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         act_cur_values = _compute_row(act_cur, is_nos)
         if show_all or not _is_blank(act_cur_values):
             group_rows.append({
-                "plant": label, "year_label": f"{fy_lbl_cur}",   # f"Actual {fy_lbl_cur}"
+                "plant": disp_label, "year_label": f"{fy_lbl_cur}",   # f"Actual {fy_lbl_cur}"
                 "is_plan": False, "values": act_cur_values,
             })
 
         # 10 historical FYs
         for fy_start in hist_fys:
             fy_mo  = _fy_months(fy_start)
-            fy_lbl = f"{fy_start}-{(fy_start + 1) % 100:02d}"
+            fy_lbl = f"{fy_start % 100:02d}-{(fy_start + 1) % 100:02d}"
             act_vals = _resolve(sail_act_direct, act_data, fy_mo)
             values = _compute_row(act_vals, is_nos)
             if not show_all and _is_blank(values):
                 continue
             group_rows.append({
-                "plant": label, "year_label": f"{fy_lbl}",
+                "plant": disp_label, "year_label": f"{fy_lbl}",
                 "is_plan": False, "values": values,
             })
 

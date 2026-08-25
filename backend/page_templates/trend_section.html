@@ -4,42 +4,44 @@
         <div class="page7-13-item-block">
             <table class="page7-13-yearly-table">
                 <colgroup>
-                    <col style="width:4.5%"/>
-                    <col style="width:10%"/>
-                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
-                    <col style="width:5%"/>
-                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
-                    <col style="width:5%"/>
-                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
-                    <col style="width:5%"/>
-                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
-                    <col style="width:5%"/>
+                    <col style="width:1.8%"/>
                     <col style="width:5.5%"/>
+                    <col style="width:4.6%"/><col style="width:4.6%"/><col style="width:4.6%"/>
+                    <col style="width:5.1%"/>
+                    <col style="width:4.6%"/><col style="width:4.6%"/><col style="width:4.6%"/>
+                    <col style="width:5.1%"/>
+                    <col style="width:5.6%"/>
+                    <col style="width:4.6%"/><col style="width:4.6%"/><col style="width:4.6%"/>
+                    <col style="width:5.1%"/>
+                    <col style="width:4.6%"/><col style="width:4.6%"/><col style="width:4.6%"/>
+                    <col style="width:5.1%"/>
+                    <col style="width:5.6%"/>
+                    <col style="width:5.9%"/>
                 </colgroup>
                 <thead>
                     <tr class="item-heading-row">
-                        <th colspan="15" class="heading-title">10 YEARS MONTH WISE PRODUCTION : {{ item.item_display }}</th>
+                        <th colspan="17" class="heading-title">10 YEARS MONTH WISE PRODUCTION : {{ item.item_display }}</th>
                         <th colspan="4" class="heading-unit">Unit: {{ item.unit }}</th>
                     </tr>
                     <tr>
-                        <th>Plant</th><th>Year</th>
+                        <th></th><th>Year</th>
                         <th>Apr</th><th>May</th><th>Jun</th><th class="qtr-hdr">Q1</th>
-                        <th>Jul</th><th>Aug</th><th>Sep</th><th class="qtr-hdr">Q2</th>
+                        <th>Jul</th><th>Aug</th><th>Sep</th><th class="qtr-hdr">Q2</th><th class="hh-hdr">H1</th>
                         <th>Oct</th><th>Nov</th><th>Dec</th><th class="qtr-hdr">Q3</th>
-                        <th>Jan</th><th>Feb</th><th>Mar</th><th class="qtr-hdr">Q4</th>
+                        <th>Jan</th><th>Feb</th><th>Mar</th><th class="qtr-hdr">Q4</th><th class="hh-hdr">H2</th>
                         <th class="tot-hdr">Total</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in item.rows %}
                     {% set v = row['values'] %}
-                    {% set cf = row['cell_flags'] or ([''] * 17) %}
+                    {% set cf = row['cell_flags'] or ([''] * 19) %}
                     {% set plant = row['plant'] %}
                     {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
                     <tr class="{{ row_cls }}">
                         {% if row['rowspan_start'] %}
-                        {% set pcls %}plant-cell{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{% endset %}
-                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{{ plant }}</td>
+                        {% set pcls %}plant-cell{{ ' compact' if plant|length <= 2 else '' }}{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{% endset %}
+                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{% for ch in plant %}{{ ch }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         {% endif %}
                         <td class="year-cell" style="{{ 'font-weight:700;' if row['is_plan'] else '' }}">{{ row['year_label'] }}</td>
                         {% for i in range(0, 3) %}
@@ -50,23 +52,25 @@
                         <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('best-month' if cf[i] == 'best_month' else '') }}">{{ v[i] }}</td>
                         {% endfor %}
                         <td class="qtr-cell {{ 'best-ever' if cf[7] == 'best_ever' else ('best-month' if cf[7] == 'best_month' else '') }}">{{ v[7] }}</td>
-                        {% for i in range(8, 11) %}
+                        <td class="hh-cell {{ 'best-ever' if cf[8] == 'best_ever' else ('best-month' if cf[8] == 'best_month' else '') }}">{{ v[8] }}</td>
+                        {% for i in range(9, 12) %}
                         <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('best-month' if cf[i] == 'best_month' else '') }}">{{ v[i] }}</td>
                         {% endfor %}
-                        <td class="qtr-cell {{ 'best-ever' if cf[11] == 'best_ever' else ('best-month' if cf[11] == 'best_month' else '') }}">{{ v[11] }}</td>
-                        {% for i in range(12, 15) %}
+                        <td class="qtr-cell {{ 'best-ever' if cf[12] == 'best_ever' else ('best-month' if cf[12] == 'best_month' else '') }}">{{ v[12] }}</td>
+                        {% for i in range(13, 16) %}
                         <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('best-month' if cf[i] == 'best_month' else '') }}">{{ v[i] }}</td>
                         {% endfor %}
-                        <td class="qtr-cell {{ 'best-ever' if cf[15] == 'best_ever' else ('best-month' if cf[15] == 'best_month' else '') }}">{{ v[15] }}</td>
-                        <td class="total-cell {{ 'best-ever' if cf[16] == 'best_ever' else '' }}">{{ v[16] }}</td>
+                        <td class="qtr-cell {{ 'best-ever' if cf[16] == 'best_ever' else ('best-month' if cf[16] == 'best_month' else '') }}">{{ v[16] }}</td>
+                        <td class="hh-cell {{ 'best-ever' if cf[17] == 'best_ever' else ('best-month' if cf[17] == 'best_month' else '') }}">{{ v[17] }}</td>
+                        <td class="total-cell {{ 'best-ever' if cf[18] == 'best_ever' else '' }}">{{ v[18] }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
             <div class="page7-13-legend">
-                <span class="swatch" style="background:{{ colors.highlight_best_ever_bg }};"></span>Best Ever (month / quarter / annual record)
+                <span class="swatch" style="background:{{ colors.highlight_best_ever_bg }};"></span>Best Ever (month / quarter / Half yearly / annual record)
                 &nbsp;&nbsp;
-                <span style="text-decoration:underline;text-decoration-color:{{ colors.highlight_best_month_border_light }};text-decoration-thickness:1.5pt;font-weight:700;margin-right:3px;">123</span>Best for that Calendar Month/Quarter (e.g. best April, best Q3)
+                <span style="text-decoration:underline;text-decoration-color:{{ colors.highlight_best_month_border_light }};text-decoration-thickness:1.5pt;font-weight:700;margin-right:3px;">123</span>Best for that Calendar Month/Quarter/Half Year (e.g. best April, best Q3)
             </div>
         </div>
         {% endfor %}
