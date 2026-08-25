@@ -104,7 +104,7 @@ function ParamBarChart({ paramData }) {
       elements.push(
         <text key={`val-${idx}`}
           x={(bx + barW / 2).toFixed(1)} y={(by - 3).toFixed(1)}
-          textAnchor="middle" fontSize="7" fontWeight="bold" fill={e.color}>
+          textAnchor="middle" fontSize="6.2" fontWeight="bold" fill={e.color}>
           {fmtBarVal(v)}
         </text>
       );
@@ -119,7 +119,7 @@ function ParamBarChart({ paramData }) {
         const ly = mt + ch + 7;
         elements.push(
           <text key={`lbl-${idx}`} x={lx.toFixed(1)} y={ly.toFixed(1)}
-            textAnchor="end" fontSize="6" fill="#374151"
+            textAnchor="end" fontSize="5.2" fill="#374151"
             transform={`rotate(-40,${lx.toFixed(1)},${ly.toFixed(1)})`}>
             {lbl}
           </text>
@@ -127,7 +127,7 @@ function ParamBarChart({ paramData }) {
       } else {
         elements.push(
           <text key={`lbl-${idx}`} x={lx.toFixed(1)} y={(mt + ch + 10).toFixed(1)}
-            textAnchor="middle" fontSize="6.5" fill="#374151">
+            textAnchor="middle" fontSize="5.7" fill="#374151">
             {lbl}
           </text>
         );
@@ -136,11 +136,11 @@ function ParamBarChart({ paramData }) {
       // Two-line label (target bar)
       elements.push(
         <text key={`lbl1-${idx}`} x={lx.toFixed(1)} y={(mt + ch + 10).toFixed(1)}
-          textAnchor="middle" fontSize="6.5" fill="#374151">{parts[0]}</text>
+          textAnchor="middle" fontSize="5.7" fill="#374151">{parts[0]}</text>
       );
       elements.push(
         <text key={`lbl2-${idx}`} x={lx.toFixed(1)} y={(mt + ch + 19).toFixed(1)}
-          textAnchor="middle" fontSize="6.5" fill="#374151">{parts[1]}</text>
+          textAnchor="middle" fontSize="5.7" fill="#374151">{parts[1]}</text>
       );
     }
     x += slotW;

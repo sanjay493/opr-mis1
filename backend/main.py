@@ -6406,10 +6406,18 @@ _RADAR_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 # plant's 'General' unit; Fuel Rate is a Blast Furnace param under 'BF_Shop'
 # (ISP has no separate shop-level row — its one furnace unit 'BF-5' doubles as
 # the shop figure, same fallback api_techno_manual.py's _get_bf_shop_data uses).
+#
+# CO2 uses "sp_co2_emission" (from the EMD monthly EPI report — see
+# techno_project/coal_co2_epi_extractor.py), not the older "specific_co2_emissions"
+# key some plants' own self-reported extractors write — that legacy key is
+# never populated for DSP (its PDF extractor never mapped a CO2 row at all)
+# and is not currently populated for ISP either, which left both plants blank
+# on this chart. Same "sole source, populated across all 5 plants" key
+# page_techno.py's BF_SAIL_SPECS already uses for "Sp. CO2 Emission".
 _RADAR_PARAMS = {
     "coal_to_hm":                   ("General", ["coal_to_hm"]),
     "specific_energy_consumption":  ("General", ["specific_energy_consumption", "sp_energy", "specific_energy"]),
-    "specific_co2_emissions":       ("General", ["specific_co2_emissions"]),
+    "specific_co2_emissions":       ("General", ["sp_co2_emission"]),
     "fuel_rate":                    ("BF_Shop", ["fuel_rate"]),
 }
 

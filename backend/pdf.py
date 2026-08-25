@@ -29,6 +29,13 @@ def _split_label(label, threshold: int = 20, tail_scale: float = 0.82) -> str:
 
 _jinja_env.filters['split_label'] = _split_label
 
+# The print margin main_html (pages 3+) is always rendered with — a single
+# source of truth shared by _render_pdf's page.pdf() call and
+# _measure_trend_rows_live's page-height arithmetic, which must agree on the
+# exact same content-area height or its computed page breaks won't match
+# what page.pdf() actually produces.
+_MAIN_MARGIN = {"top": "12mm", "right": "15mm", "bottom": "12mm", "left": "15mm"}
+
 
 def _pgclass(page_num) -> str:
     """CSS-safe page-number class suffix: "29" -> "29", 29.5 -> "29-5".
@@ -83,8 +90,22 @@ def _local_font_face_css(family: str) -> str:
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode("ascii")
         blocks.append(
+            # font-display: block (not swap) — this is a one-shot captured
+            # PDF render, not a live page, so there's no reason to ever
+            # paint with a fallback font: `swap` shows fallback text
+            # immediately and reflows once the embedded font decodes, and
+            # that swap-triggered reflow is exactly the kind of thing that
+            # can make the trend-page-break measurement pass and the final
+            # render pass (two separate page.pdf() calls — see _render_pdf's
+            # own "two separate renders... can land text with slightly
+            # different fallback/final font metrics" comment) disagree on a
+            # row's height by a hair, silently shifting a page break by one
+            # row without leaving anything as visible as a missing marker.
+            # `block` paints invisible text until the (already base64-
+            # embedded, so near-instant) font is ready, so both passes lay
+            # out with the real font's metrics from the start.
             f"@font-face {{ font-family: '{family}'; font-style: {style}; "
-            f"font-weight: {weight}; font-display: swap; "
+            f"font-weight: {weight}; font-display: block; "
             f"src: url(data:font/woff2;base64,{b64}) format('woff2'); }}"
         )
     return "\n".join(blocks)
@@ -424,14 +445,15 @@ def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report
 
 
 def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DEFAULT_FONT, report_month: str = "",
-                 dept_badges: dict = None, cover_html: str = "", main_header_footer: bool = True) -> bytes:
+                 dept_badges: dict = None, cover_html: str = "", main_header_footer: bool = True,
+                 main_pre_pdf_hook=None) -> bytes:
     """Render one PDF using an already-launched Chromium `browser`. Callers
-    (the page3-overflow / trend-break measurement passes and the final
-    render, see _generate_pdf_sync) all share a single browser instance for
-    the whole request instead of each launching/closing its own Chromium
-    process — several passes per request previously meant several full
-    browser launches, which is pure overhead since it's the same renderer
-    doing the same job each time.
+    (the page3-overflow measurement pass and the final render, see
+    _generate_pdf_sync) all share a single browser instance for the whole
+    request instead of each launching/closing its own Chromium process —
+    several passes per request previously meant several full browser
+    launches, which is pure overhead since it's the same renderer doing the
+    same job each time.
 
     Rendered as up to three separate PDF documents, merged together:
     `cover_html` (page 1 alone, if present) is rendered with a zero margin
@@ -446,10 +468,16 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
     CSS, so the cover was silently still getting the standard 12mm/15mm
     margin (a visible gap along the top/side of the full-bleed photo)
     unless it gets its own page.pdf() call with an explicit zero margin.
+
+    main_pre_pdf_hook(page), if given, runs on the live main_html page right
+    after it settles (content loaded, fonts ready) and right before
+    page.pdf() prints it — see _make_trend_split_hook, which uses this to
+    measure real row geometry and swap in a corrected re-render, all within
+    this same page object, before it gets printed.
     """
     from pypdf import PdfReader, PdfWriter
     hdr_font = f"'{font_family}',Arial,sans-serif"
-    margin = {"top": "12mm", "right": "15mm", "bottom": "12mm", "left": "15mm"}
+    margin = _MAIN_MARGIN
     zero_margin = {"top": "0", "right": "0", "bottom": "0", "left": "0"}
 
     writer = PdfWriter()
@@ -485,13 +513,17 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
     if main_html:
         page = browser.new_page()
         page.set_content(main_html, wait_until="domcontentloaded")
-        # Web fonts load asynchronously; without waiting for them, two
-        # separate renders of the same HTML (as the trend-page split
-        # measurement pass and the final render both are) can land text
-        # with slightly different fallback/final font metrics, shifting
-        # row heights just enough to move the real page break away from
-        # the one measured — so both passes need this to agree.
+        # Web fonts load asynchronously; without waiting for them, the
+        # geometry main_pre_pdf_hook measures below could land text with
+        # slightly different fallback/final font metrics than what actually
+        # prints, shifting row heights just enough to move the real page
+        # break away from the one measured.
         page.evaluate("document.fonts.ready")
+        if main_pre_pdf_hook:
+            corrected_html = main_pre_pdf_hook(page)
+            if corrected_html:
+                page.set_content(corrected_html, wait_until="domcontentloaded")
+                page.evaluate("document.fonts.ready")
         main_bytes = page.pdf(
             format="A4",
             print_background=True,
@@ -582,58 +614,125 @@ def _measure_page3_overflow(browser, main_pages: list, template, render_kwargs: 
     return (next_physical - p3_physical) > 1
 
 
-def _measure_trend_page_breaks(browser, trend_page: dict, main_pages: list, template, render_kwargs: dict,
-                                font_family: str, report_month: str) -> dict:
-    """Render the *entire* main document (all of main_pages, not just the
-    trend section) with a unique marker appended to each trend row's
-    year-label, then inspect the produced PDF to see which physical page
-    each row actually lands on. Returns {(item_index, row_index): page_index}.
+def _measure_trend_rows_live(page, margin: dict) -> list:
+    """Measure trend-table row geometry directly on the live Playwright
+    `page` that is about to be printed (main_html, already loaded with
+    `document.fonts.ready` settled) — no separate render, no PDF-text
+    extraction. Returns one list per '.page7-13-section-page' found in the
+    DOM, each a list of {"item": table_index, "row": row_index, "page":
+    local_page_index} dicts (local_page_index is 0-based *within that
+    section* — absolute physical page numbers are never needed since
+    _apply_trend_page_splits only compares consecutive rows for equality).
 
-    Measuring the trend section in isolation (its own standalone render) does
-    NOT reliably reproduce the same page breaks it gets when embedded after
-    pages 3-6 — verified empirically, root cause not fully pinned down but
-    the effect is real and large enough to move a group across a page
-    boundary. Rendering the same main_pages list here as the final render
-    uses removes that gap; only the trend rows' text differs (the markers),
-    which does not itself shift the breaks (verified separately).
+    Replicates Chromium's own print pagination for these tables arithmetically:
+    walk each item's table in document order, track the vertical budget left
+    on the current physical page (content height = A4 height minus the same
+    top/bottom print margins page.pdf() is called with below), and cut to a
+    new page whenever the next row wouldn't fit — crediting the repeated
+    <thead> a fresh page always pays for first. table-layout:fixed and a
+    '.page7-13-section-page { page-break-before: always }' rule mean the
+    section always starts flush at a fresh page's top, so no absolute
+    document offset is needed — everything is relative to the section's own
+    start.
 
-    Table cells use table-layout:fixed and white-space:nowrap (see
-    trend_yearly.html/main.html), so the extra marker text doesn't wrap or
-    change row height either.
+    This replaces an earlier design that rendered a *second*, separate
+    Chromium document with per-row text markers baked into the row labels,
+    then inferred each row's physical page by extracting text from the
+    resulting PDF. That was unreliable: two otherwise-identical measurement
+    renders were observed to disagree about where a group's page break
+    fell, even though the real final render was byte-for-byte reproducible
+    — meaning the two-render design itself, not the splitting logic, was
+    the source of the bug (a plant-label rowspan cell split in the middle of
+    a group with no actual page break under it). Measuring the exact page
+    that becomes the PDF removes that gap entirely: the only thing that
+    differs between this measurement and the corrected re-render is the
+    plant-label column's own cell boundaries, which (per trend_section.html)
+    contribute no height of their own — row height is governed solely by
+    the ordinary data cells, identical in both passes."""
+    top_mm = float(str(margin["top"]).rstrip("mm"))
+    bottom_mm = float(str(margin["bottom"]).rstrip("mm"))
+    return page.evaluate(
+        """([topMM, bottomMM]) => {
+            const pxPerMM = 96 / 25.4;
+            const pageHeightMM = 297;
+            const contentHeightPx = (pageHeightMM - topMM - bottomMM) * pxPerMM;
+            const sections = document.querySelectorAll('.page7-13-section-page');
+            const out = [];
+            sections.forEach((section) => {
+                let budget = contentHeightPx;
+                let prevBottom = section.getBoundingClientRect().top;
+                let pageIdx = 0;
+                const rows = [];
+                const tables = section.querySelectorAll('.page7-13-item-block .page7-13-yearly-table');
+                tables.forEach((table, tIdx) => {
+                    const thead = table.querySelector('thead');
+                    const theadRect = thead.getBoundingClientRect();
+                    let size = (theadRect.top - prevBottom) + theadRect.height;
+                    if (size > budget && budget < contentHeightPx) {
+                        pageIdx += 1;
+                        budget = contentHeightPx;
+                        size = theadRect.height;
+                    }
+                    budget -= size;
+                    prevBottom = theadRect.bottom;
+                    table.querySelectorAll('tbody tr').forEach((tr, rIdx) => {
+                        const r = tr.getBoundingClientRect();
+                        let s = (r.top - prevBottom) + r.height;
+                        if (s > budget) {
+                            pageIdx += 1;
+                            budget = contentHeightPx - theadRect.height;
+                            s = r.height;
+                        }
+                        budget -= s;
+                        prevBottom = r.bottom;
+                        rows.push({item: tIdx, row: rIdx, page: pageIdx});
+                    });
+                    const legend = table.parentElement.querySelector('.page7-13-legend');
+                    if (legend) {
+                        const lr = legend.getBoundingClientRect();
+                        let ls = (lr.top - prevBottom) + lr.height;
+                        if (ls > budget) {
+                            pageIdx += 1;
+                            budget = contentHeightPx;
+                            ls = lr.height;
+                        }
+                        budget -= ls;
+                        prevBottom = lr.bottom;
+                    }
+                });
+                out.push(rows);
+            });
+            return out;
+        }""",
+        [top_mm, bottom_mm],
+    )
 
-    Only renders main_pages up through the trend section itself, dropping
-    everything after it (the ~25-30 techno/special-steel/capital-repair
-    pages on a full report) — pagination flows top-to-bottom, so content
-    after the trend section can't move where its own rows land, only
-    content before it can (which stays intact here)."""
-    import re
-    from pypdf import PdfReader
 
-    marker_re = re.compile(r"@@(\d+)_(\d+)@@")
-    marked_items = []
-    for ii, it in enumerate(trend_page.get("items", [])):
-        new_rows = []
-        for ri, row in enumerate(it.get("rows", [])):
-            r = dict(row)
-            r["year_label"] = f'{row.get("year_label", "")} @@{ii}_{ri}@@'
-            new_rows.append(r)
-        marked_items.append({**it, "rows": new_rows})
-    marked_page = {**trend_page, "items": marked_items}
-    trend_idx = next(i for i, p in enumerate(main_pages) if p is trend_page)
-    marked_main_pages = [
-        marked_page if p is trend_page else p for p in main_pages[:trend_idx + 1]
-    ]
+def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, margin: dict):
+    """Builds a main_pre_pdf_hook (see _render_pdf) that measures and
+    corrects trend-table rowspan splits in place on the live page about to
+    be printed. Returns None (no hook needed) if pages_list has no
+    trend_section page."""
+    trend_pages = [p for p in pages_list if p.get("type") == "trend_section"]
+    if not trend_pages:
+        return None
 
-    html = template.render(pages=marked_main_pages, **render_kwargs)
-    pdf_bytes = _render_pdf(browser, "", html, font_family, report_month)
+    def hook(page):
+        sections = _measure_trend_rows_live(page, margin)
+        if len(sections) != len(trend_pages):
+            # DOM didn't match expectations — leave the default (unsplit,
+            # one rowspan per whole group) rather than risk applying a
+            # wrong split.
+            return None
+        changed = False
+        for _tp, _rows in zip(trend_pages, sections):
+            page_of = {(r["item"], r["row"]): r["page"] for r in _rows}
+            if page_of:
+                _apply_trend_page_splits(_tp, page_of)
+                changed = True
+        return template.render(pages=pages_list, **render_kwargs) if changed else None
 
-    page_of = {}
-    reader = PdfReader(io.BytesIO(pdf_bytes))
-    for pi, p in enumerate(reader.pages):
-        text = p.extract_text() or ""
-        for m in marker_re.finditer(text):
-            page_of[(int(m.group(1)), int(m.group(2)))] = pi
-    return page_of
+    return hook
 
 
 def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
@@ -644,27 +743,12 @@ def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
     the whole group (which would leave later pages blank when the group
     spills over).
 
-    page_of is built by scanning each physical page's extracted PDF text
-    for a per-row marker (see _measure_trend_page_breaks) — occasionally a
-    row's marker doesn't get picked up (a text-extraction gap, not a real
-    page break), leaving a hole. Filled per ITEM, across group boundaries,
-    not per plant-group: a hole is near-certain to share its immediate
-    neighbour's page (real breaks are rare, isolated events; a missed
-    marker is far more likely than an undetected break sitting exactly on
-    a missing row) — true whether that neighbour is the row right before
-    it in the same group, or the last/first row of the adjacent group.
-    Filling within each group only (an earlier version of this) still left
-    a group with NO successful measurement of its own — e.g. every row of
-    a shortish group happening to fall in the extraction gap — with
-    nothing to fall back to and gave up on it entirely, regressing to one
-    un-split merge for that group: safe when it genuinely fits on one
-    page, but exactly what produces a merge that starts mid-page (or is
-    missing outright on a continuation page) once a group that size is
-    long enough to actually need a split — a 10-year group already can;
-    5/15-year windows only make it more likely. A global forward+backward
-    fill across the whole item's row list first, before splitting any
-    individual group, recovers that case too — the empty group simply
-    inherits its neighbours' page like any other hole would.
+    page_of comes from _measure_trend_rows_live, which measures every row's
+    real geometry directly (no PDF-text extraction, so no risk of a missed
+    marker/hole) — a group with any row missing from page_of just falls back
+    to its default single, un-split rowspan for the whole group, safe as
+    long as that group genuinely doesn't cross a page (true whenever
+    page_of is complete, which it always is for a matched section).
 
     Deliberately does NOT touch is_first_in_plant: that field marks the
     group's true first row (drives trend_section.html's thick .plant-first
@@ -677,18 +761,6 @@ def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
         rows = it.get("rows", [])
         n = len(rows)
         page_for_row = [page_of.get((ii, k)) for k in range(n)]
-        last_known = None
-        for k in range(n):
-            if page_for_row[k] is None:
-                page_for_row[k] = last_known
-            else:
-                last_known = page_for_row[k]
-        next_known = None
-        for k in range(n - 1, -1, -1):
-            if page_for_row[k] is None:
-                page_for_row[k] = next_known
-            else:
-                next_known = page_for_row[k]
 
         i = 0
         while i < n:
