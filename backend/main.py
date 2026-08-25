@@ -168,7 +168,7 @@ _INDEX_SECTIONS = [
     # Trend pages (6 items: Oven Pushing/Sinter/Hot Metal/Crude Steel/
     # Pig Iron & Finished Steel/Saleable Steel) flow as one continuous
     # section rather than one physical page each (see pdf.py's trend_section
-    # merge + _measure_trend_page_breaks) — some items spill onto a 2nd
+    # merge + _make_trend_split_hook) — some items spill onto a 2nd
     # physical page. Empirically 11 physical pages (5 of the 6 items
     # 2-paged, 1 still fitting on its own single page) — measured identical
     # at both 1 YTD month (April) and 4 YTD months (July), so the split

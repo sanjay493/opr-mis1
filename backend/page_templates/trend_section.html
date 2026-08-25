@@ -39,25 +39,7 @@
                     {% set plant = row['plant'] %}
                     {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
                     <tr class="{{ row_cls }}">
-                        {% if measuring_trend %}
-                        {# Page-break measurement pass (see pdf.py's
-                           _measure_trend_page_breaks): every row gets its own
-                           plain, single-line, un-merged label cell instead of
-                           the real multi-line rowspan-merged one below. A tall
-                           rowspan cell stacks its plant-code letters one per
-                           line via vertical-align:middle across every row it
-                           covers — PDF text extraction's line-reconstruction
-                           can misattribute or drop a nearby row's own marker
-                           text when its baseline sits close to one of those
-                           stacked letters, which is exactly the failure this
-                           measurement is trying to avoid feeding into
-                           _apply_trend_page_splits. A blank rowspan="1" cell
-                           adds no extra text runs and keeps this row's height
-                           identical to the real render (governed by the
-                           ordinary data cells either way), so page breaks
-                           measure the same without the extraction risk. #}
-                        <td class="plant-cell" rowspan="1"></td>
-                        {% elif row['rowspan_start'] %}
+                        {% if row['rowspan_start'] %}
                         {% set pcls %}plant-cell{{ ' compact' if plant|length <= 2 else '' }}{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{% endset %}
                         <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{% for ch in plant %}{{ ch }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         {% endif %}

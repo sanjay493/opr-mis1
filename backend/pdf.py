@@ -55,8 +55,8 @@ _jinja_env.filters['pgclass'] = _pgclass
 
 # Self-hosted from Google Fonts (Latin subset only) rather than the previous
 # @import url('https://fonts.googleapis.com/...') — that hit the network on
-# every Chromium launch (several per PDF, see _measure_page3_overflow /
-# _measure_trend_page_breaks) even though request.font_config is always
+# every Chromium launch (see _measure_page3_overflow) even though
+# request.font_config is always
 # None in practice today (backend/main.py always calls build_pdf_response
 # with font_config=None, so _DEFAULT_FONT/layout_config.json's "Arial
 # Narrow" is what actually renders) — but the picker exists in the schema,
@@ -564,9 +564,9 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
 
 def _measure_page3_overflow(browser, main_pages: list, template, render_kwargs: dict,
                              font_family: str, report_month: str) -> bool:
-    """Render the *entire* main document (mirrors _measure_trend_page_breaks
-    below — rendering page 3 in isolation was tried first and does NOT
-    reliably reproduce the break it gets embedded after pages 1-2; verified
+    """Render the *entire* main document (rendering page 3 in isolation was
+    tried first and does NOT reliably reproduce the break it gets embedded
+    after pages 1-2; verified
     empirically the same way that function's own docstring already found
     for trend pages, root cause equally unpinned) and report whether page 3
     spills onto a 2nd physical page for this month's content. Narrative
@@ -787,10 +787,14 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                         merged_page_layouts: dict, font_family: str, report_month: str) -> bytes:
     """Single Playwright entry point for a whole PDF request: launches
     Chromium exactly once and reuses it for every pass — the page-3 overflow
-    check, the trend-page-break measurement, and the final render — instead
-    of each of those launching (and closing) its own browser process. This
-    is purely an execution-plumbing change (same HTML, same measurements,
-    same output); it does not affect layout, fonts, or page counts.
+    check and the final render — instead of each of those launching (and
+    closing) its own browser process. This is purely an execution-plumbing
+    change (same HTML, same measurements, same output); it does not affect
+    layout, fonts, or page counts.
+
+    The trend-table rowspan split (see _make_trend_split_hook) happens
+    inline inside the final render's own _render_pdf call, measured on the
+    exact page that becomes the PDF — not as a separate pass here.
 
     Mutates main_pages/merged_page_layouts in place exactly as the previous
     per-pass functions did (trend row is_first_in_plant/plant_row_count, and
@@ -815,21 +819,6 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                 _p3_entry["marginBottom"] = 1
                 _p3_entry["tablePaddingV"] = 0.5
                 merged_page_layouts["3"] = _p3_entry
-
-        # Trend pages (7-12) flow continuously and can spill a plant/SAIL
-        # group across two physical pages. A merged rowspan cell only shows
-        # its label on the page the group started on, leaving the
-        # continuation blank — so measure the real page breaks first (using
-        # the full main_pages document, not an isolated slice — see
-        # _measure_trend_page_breaks) and split the rowspan at that exact
-        # row, one merged/centered label per physical page instead of one
-        # for the whole group.
-        for _tp in main_pages:
-            if _tp.get("type") == "trend_section":
-                _page_of = _measure_trend_page_breaks(
-                    browser, _tp, main_pages, template, render_kwargs, font_family, report_month,
-                )
-                _apply_trend_page_splits(_tp, _page_of)
 
         # Page 1 (Cover) is rendered as its own document with a zero page
         # margin (see _render_pdf's docstring — page.pdf()'s margin option
@@ -859,8 +848,10 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         _landscape_pages = [p for p in main_pages if p.get("type") in _LANDSCAPE_TYPES]
         if not _landscape_pages:
             main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
+            _trend_hook = _make_trend_split_hook(main_pages, template, render_kwargs, _MAIN_MARGIN)
             pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month,
-                                     dept_badges=dept_badges, cover_html=cover_html)
+                                     dept_badges=dept_badges, cover_html=cover_html,
+                                     main_pre_pdf_hook=_trend_hook)
         else:
             from pypdf import PdfReader, PdfWriter
 
@@ -869,8 +860,10 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
             _rest_pages = [p for p in main_pages if p.get("type") not in _LANDSCAPE_TYPES]
 
             main_html_rest = template.render(pages=_rest_pages, **render_kwargs) if _rest_pages else ""
+            _trend_hook = _make_trend_split_hook(_rest_pages, template, render_kwargs, _MAIN_MARGIN)
             base_bytes = _render_pdf(browser, front_html, main_html_rest, font_family, report_month,
-                                      dept_badges=None, cover_html=cover_html, main_header_footer=False)
+                                      dept_badges=None, cover_html=cover_html, main_header_footer=False,
+                                      main_pre_pdf_hook=_trend_hook)
 
             landscape_html = template.render(pages=_landscape_pages, **render_kwargs)
             landscape_bytes = _render_landscape_page_pdf(browser, landscape_html, font_family)
