@@ -331,7 +331,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     # for the new H1/H2 columns.
     fy_lbl_cur      = f"{cur_fy % 100:02d}-{(cur_fy + 1) % 100:02d}"
     fy_lbl_cur_plan = f"{cur_fy % 100:02d}-{(cur_fy + 1) % 100:02d}"
-#
+
 
     hist_fys = list(range(cur_fy - 1, cur_fy - 11, -1))
 

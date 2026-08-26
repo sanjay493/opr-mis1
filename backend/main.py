@@ -5689,18 +5689,23 @@ async def list_techno_plan_fys(plant: str = Query(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ISP is the one plant with a single furnace (BF-5) doubling as its own
-# BF-shop — so its "Shop"-level annual target (entered on /data-entry/
-# targets, page 27) and its "BF-5" furnace-level target (entered on
-# /data-entry/annual-target, pages 29/29.5) are conceptually the exact same
-# figure, but were being stored as two independent techno_plan_fy rows with
-# nothing keeping them in sync: confirmed live, ISP's Fuel Rate target had
-# already drifted to two different values (525 under Shop, 514 under BF-5)
-# from being entered once on each page. Only these params (the ones both
-# pages' schemas actually share) need reconciling — Shop-only concepts like
-# Specific Energy Consumption or the Sp. CO2/Water/PM Emission rows have no
-# BF-5 equivalent at all and are left alone. {Title Case label used by the
-# Shop-level store: snake_case key used by the BF-5-level store}.
+# Every plant's "Shop"-level annual target (entered on /data-entry/targets,
+# page 27) and its BF-shop-level furnace target (entered on /data-entry/
+# annual-target, pages 29/29.5) are conceptually the exact same figures for
+# the params they share, but were being stored as independent techno_plan_fy
+# rows with nothing keeping them in sync: confirmed live, ISP's Fuel Rate
+# target had already drifted to two different values (525 under Shop, 514
+# under BF-5) from being entered once on each page, and the same drift was
+# then found for BSP/DSP/RSP/BSL's Fuel Rate norm (Shop vs BF_Shop) — same
+# root cause, just missing the Nut Coke Rate side of the sync since only
+# ISP had one at all. Originally ISP-only (its single furnace, BF-5, IS its
+# own shop); generalized via _PLANT_SHOP_UNIT below so every plant's
+# BF-shop-level unit reconciles with its Shop-level store the same way. Only
+# these params (the ones both pages' schemas actually share) need
+# reconciling — Shop-only concepts like Specific Energy Consumption or the
+# Sp. CO2/Water/PM Emission rows have no BF-shop equivalent at all and are
+# left alone. {Title Case label used by the Shop-level store: snake_case key
+# used by the BF-shop-level store}.
 _ISP_SHOP_BF5_OVERLAP = {
     "Coke Rate": "coke_rate",
     "Nut Coke Rate": "nut_coke_rate",
@@ -5710,6 +5715,13 @@ _ISP_SHOP_BF5_OVERLAP = {
     "Pellet in Burden": "pellet_in_burden",
     "BF Productivity": "bf_productivity",
 }
+
+# Every plant's BF-shop-level unit name in techno_plan_fy — ISP's single
+# furnace (BF-5) doubles as its own shop; every other plant reports a
+# separate combined "BF_Shop" unit alongside its individual furnaces (see
+# page_techno.py's BF_UNITS = ["BF_Shop", "BF-5"], the same search order
+# used everywhere else a plant's shop-equivalent unit is looked up).
+_PLANT_SHOP_UNIT = {"BSP": "BF_Shop", "DSP": "BF_Shop", "RSP": "BF_Shop", "BSL": "BF_Shop", "ISP": "BF-5"}
 
 
 @app.get("/api/techno-major-parameters")
@@ -5863,13 +5875,15 @@ async def get_techno_plant_targets(fy: str = Query("2026-27"), plant: str = Quer
                 if value is not None:
                     result[p][param_name] = value
 
-            # ISP's BF-5 row is the canonical value for the params it
-            # shares with the Shop-level store (see _ISP_SHOP_BF5_OVERLAP)
-            # — override with it here whenever present, so this page always
-            # shows whatever Iron Making's own target-entry page last saved
-            # instead of a possibly-stale Shop-level figure.
-            if p == "ISP":
-                bf5_data = db.get_techno_plan("ISP", fy, unit="BF-5").get("data", {})
+            # This plant's BF-shop-level row (see _PLANT_SHOP_UNIT) is the
+            # canonical value for the params it shares with the Shop-level
+            # store (see _ISP_SHOP_BF5_OVERLAP) — override with it here
+            # whenever present, so this page always shows whatever Iron
+            # Making's own target-entry page last saved instead of a
+            # possibly-stale Shop-level figure.
+            shop_unit = _PLANT_SHOP_UNIT.get(p)
+            if shop_unit:
+                bf5_data = db.get_techno_plan(p, fy, unit=shop_unit).get("data", {})
                 for label, key in _ISP_SHOP_BF5_OVERLAP.items():
                     v = bf5_data.get(key)
                     if v is not None:
@@ -5908,26 +5922,28 @@ async def save_techno_plant_targets(payload: dict):
                 db.save_techno_plant_plan(plant, fy, formatted_params, is_user_supplied=True)
                 saved_count += 1
 
-                # Keep ISP's BF-5 row (Iron Making's own target-entry page)
-                # in sync for whichever params the two stores share — see
-                # _ISP_SHOP_BF5_OVERLAP. Merge into the existing BF-5 blob
-                # (save_techno_plan replaces the whole thing) so BF-5-only
+                # Keep this plant's BF-shop-level row (Iron Making's own
+                # target-entry page — see _PLANT_SHOP_UNIT) in sync for
+                # whichever params the two stores share — see
+                # _ISP_SHOP_BF5_OVERLAP. Merge into the existing blob
+                # (save_techno_plan replaces the whole thing) so BF-shop-only
                 # keys like slag_rate/hot_blast_temp aren't wiped out.
-                if plant == "ISP":
-                    bf5_data = dict(db.get_techno_plan("ISP", fy, unit="BF-5").get("data", {}))
-                    bf5_changed = False
+                shop_unit = _PLANT_SHOP_UNIT.get(plant)
+                if shop_unit:
+                    bf_data = dict(db.get_techno_plan(plant, fy, unit=shop_unit).get("data", {}))
+                    bf_changed = False
                     for label, key in _ISP_SHOP_BF5_OVERLAP.items():
                         if label not in formatted_params:
                             continue
                         val = formatted_params[label].get("value")
                         if val is None:
                             continue
-                        existing = bf5_data.get(key)
+                        existing = bf_data.get(key)
                         unit_str = existing.get("unit", "") if isinstance(existing, dict) else ""
-                        bf5_data[key] = {"value": val, "unit": unit_str}
-                        bf5_changed = True
-                    if bf5_changed:
-                        db.save_techno_plan("ISP", fy, "BF-5", bf5_data, is_user_supplied=True)
+                        bf_data[key] = {"value": val, "unit": unit_str}
+                        bf_changed = True
+                    if bf_changed:
+                        db.save_techno_plan(plant, fy, shop_unit, bf_data, is_user_supplied=True)
 
         return {"status": "success", "fy": fy, "plants_saved": saved_count}
     except Exception as e:
@@ -5983,13 +5999,14 @@ async def save_techno_page_targets(payload: dict):
     for e in entries:
         grouped.setdefault((e["plant"], e["unit"]), []).append(e)
 
-    _isp_bf5_to_shop = {key: label for label, key in _ISP_SHOP_BF5_OVERLAP.items()}
+    _bf_shop_to_plant_shop = {key: label for label, key in _ISP_SHOP_BF5_OVERLAP.items()}
 
     saved = 0
     for (plant, unit), rows in grouped.items():
         existing = db.get_techno_plan(plant, fy, unit)
         merged = dict(existing.get("data", {}))
-        isp_shop_updates = {}
+        is_shop_unit = unit == _PLANT_SHOP_UNIT.get(plant)
+        plant_shop_updates = {}
         for e in rows:
             v = e.get("value")
             if v == "":
@@ -6001,8 +6018,8 @@ async def save_techno_page_targets(payload: dict):
                 if e["param_key"] in merged:
                     del merged[e["param_key"]]
                     saved += 1
-                if plant == "ISP" and unit == "BF-5" and e["param_key"] in _isp_bf5_to_shop:
-                    isp_shop_updates[_isp_bf5_to_shop[e["param_key"]]] = None
+                if is_shop_unit and e["param_key"] in _bf_shop_to_plant_shop:
+                    plant_shop_updates[_bf_shop_to_plant_shop[e["param_key"]]] = None
                 continue
             try:
                 fv = float(v)
@@ -6010,24 +6027,25 @@ async def save_techno_page_targets(payload: dict):
                 continue
             merged[e["param_key"]] = {"value": fv, "unit": e.get("unit_str", "")}
             saved += 1
-            # Vice versa of the sync in /api/techno-plant-targets' POST:
-            # ISP's BF-5 IS its Shop, so a target entered here needs to
+            # Vice versa of the sync in /api/techno-plant-targets' POST: this
+            # plant's BF-shop-level unit (see _PLANT_SHOP_UNIT) IS its Shop
+            # for the params they share, so a target entered here needs to
             # reach page 27's own store too, or the two would drift apart
             # again the moment either page is used on its own.
-            if plant == "ISP" and unit == "BF-5" and e["param_key"] in _isp_bf5_to_shop:
-                isp_shop_updates[_isp_bf5_to_shop[e["param_key"]]] = fv
+            if is_shop_unit and e["param_key"] in _bf_shop_to_plant_shop:
+                plant_shop_updates[_bf_shop_to_plant_shop[e["param_key"]]] = fv
         db.save_techno_plan(plant, fy, unit, merged, is_user_supplied=True)
 
-        if isp_shop_updates:
-            shop_existing = dict(db.get_techno_plan("ISP", fy, unit="Shop").get("data", {}))
-            for label, fv in isp_shop_updates.items():
+        if plant_shop_updates:
+            shop_existing = dict(db.get_techno_plan(plant, fy, unit="Shop").get("data", {}))
+            for label, fv in plant_shop_updates.items():
                 if fv is None:
                     shop_existing.pop(label, None)
                     continue
                 existing_obj = shop_existing.get(label)
                 unit_str = existing_obj.get("unit", "") if isinstance(existing_obj, dict) else ""
                 shop_existing[label] = {"value": fv, "unit": unit_str}
-            db.save_techno_plan("ISP", fy, "Shop", shop_existing, is_user_supplied=True)
+            db.save_techno_plan(plant, fy, "Shop", shop_existing, is_user_supplied=True)
 
     return {"status": "success", "fy": fy, "saved": saved}
 
