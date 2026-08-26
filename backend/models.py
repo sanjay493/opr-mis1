@@ -145,3 +145,43 @@ class SailMinesEntry(BaseModel):
 class SailMinesSaveRequest(BaseModel):
     report_month: str
     entries: List[SailMinesEntry]
+
+
+class MinesProductionEntry(BaseModel):
+    material_code: str
+    actual: Optional[float] = None
+    plan: Optional[float] = None
+
+
+class MinesDespatchEntry(BaseModel):
+    material_code: str
+    transport_mode: str
+    end_use_code: str
+    actual: Optional[float] = None
+
+
+class MinesDespatchPlanEntry(BaseModel):
+    material_code: str
+    end_use_code: str
+    plan: Optional[float] = None
+
+
+class MinesBookedQtyEntry(BaseModel):
+    material_code: str
+    transport_mode: str
+    actual: Optional[float] = None
+
+
+class MinesBookedQtyPlanEntry(BaseModel):
+    material_code: str
+    plan: Optional[float] = None
+
+
+class MinesProductionDespatchSaveRequest(BaseModel):
+    report_month: str
+    mine_code: str
+    production: List[MinesProductionEntry] = []
+    despatch: List[MinesDespatchEntry] = []
+    despatch_plan: List[MinesDespatchPlanEntry] = []
+    booked_qty: List[MinesBookedQtyEntry] = []
+    booked_qty_plan: List[MinesBookedQtyPlanEntry] = []

@@ -65,6 +65,14 @@ function DataEntryPageInner() {
       bgColor: 'rgba(8, 145, 178, 0.1)'
     },
     {
+      title: 'Iron Ore Mines Production & Despatch',
+      description: 'Enter mine-level fresh production (Lump/Fines) and despatch (all materials, incl. legacy Dump Fines/Pellets/Tailings) by Rail/Road to Captive, Sales, or Pellet Conversion.',
+      icon: '⛏️',
+      link: '/data-entry/mines-production-despatch',
+      color: '#0d9488',
+      bgColor: 'rgba(13, 148, 136, 0.1)'
+    },
+    {
       title: 'Special Steel Grade Clubbing',
       description: 'Combine near-duplicate quality grades into one report row for BSP/DSP/RSP/BSL.',
       icon: '🔗',

@@ -7,22 +7,25 @@ import GlobalNavbar from '@/components/GlobalNavbar';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Must match backend/page_sail_mines.py's SAIL_MINES_SECTIONS (items only —
-// Total/Yield/SAIL rows there are computed, never entered: Iron Ore Mines
-// Performance's "SAIL" = CGoM + OGoM + JGoM, per direct instruction).
+// Total/Yield/SAIL rows there are computed, never entered).
 // kind='production' sections get an Actual + Plan (APP) input per item;
 // kind='flow' sections would get Actual only, but every despatch/sales
 // section now carries its own Plan too (per direct instruction), so every
-// section here is currently 'production'. iron_ore_despatch is `hidden`
-// here (not its own table block) because the report merges it into Iron
-// Ore Mines Performance as an extra DESPATCH column group (see
-// iron_ore_prod's `despatchSection`) — it's still a normal SECTIONS entry
-// so load/save pick its data up like any other section, just rendered
-// inline (Actual + Plan, since it's 'production'-kind) instead of as its
-// own table.
+// section here is currently 'production'.
+//
+// "Iron Ore Mines Performance" (production+despatch) and "Sales of Iron
+// Ore" were REMOVED from this form (per direct instruction, 2026-08-26):
+// Iron Ore Production/Despatch moved to the mine-level Iron Ore Mines
+// Production & Despatch form (/data-entry/mines-production-despatch,
+// 11 mines' worth of detail) — page_sail_mines.py now rolls that up to
+// group level itself (db.get_iron_ore_group_rollup_monthly) instead of
+// reading sail_mines_monthly's iron_ore_prod/iron_ore_despatch sections.
+// Sales of Iron Ore's Auction vs Despatch channel split has no mine-level
+// equivalent and currently has NO entry path at all — its report table
+// will keep showing whatever was already saved in sail_mines_monthly but
+// can no longer be updated for new months until a replacement entry point
+// is built.
 const SECTIONS = [
-  { key: 'iron_ore_prod', title: 'Iron Ore Mines Performance', kind: 'production', items: ['CGoM', 'OGoM', 'JGoM'], despatchSection: 'iron_ore_despatch' },
-  { key: 'iron_ore_despatch', kind: 'production', items: ['CGoM', 'OGoM', 'JGoM'], hidden: true },
-  { key: 'iron_ore_sales', title: 'Sales of Iron Ore', kind: 'production', items: ['Auction', 'Despatch'] },
   { key: 'coal_prod', title: 'Coal Mines Production', kind: 'production', items: ['Raw Coking Coal', 'Thermal Coal'] },
   { key: 'washery', title: 'Washery Performance', kind: 'production', items: ['Input Raw Coal', 'Clean Coal'] },
   { key: 'coal_despatch', title: 'Despatch of Clean Coal & Thermal Coal (incl. Middlings)', kind: 'production', items: ['Clean Coal', 'Thermal'] },
@@ -146,9 +149,10 @@ function SailMinesPageInner() {
             SAIL Mines Entry — Page 4.5
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Monthly Actual (and Plan, where the report shows an APP/%Fulfillment column) per item — Iron Ore Production/Sales,
-            Coal Mines Production, Washery, Coal Despatch, Flux Production/Despatch. The report cumulates April-&lt;report month&gt;
-            from these monthly entries; Total and Yield rows are computed automatically.
+            Monthly Actual (and Plan, where the report shows an APP/%Fulfillment column) per item — Coal Mines Production,
+            Washery, Coal Despatch, Flux Production/Despatch. The report cumulates April-&lt;report month&gt;
+            from these monthly entries; Total and Yield rows are computed automatically. Iron Ore Production/Despatch now
+            has its own mine-level form under Data Entry → Iron Ore Mines Production &amp; Despatch.
           </span>
         </div>
 

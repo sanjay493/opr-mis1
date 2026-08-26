@@ -664,6 +664,168 @@ def init_db():
         )
     """)
 
+    # Iron Ore Mines Production & Despatch — mine-level detail (11 mines
+    # under JGoM/OGoM/CGoM), a finer grain than sail_mines_monthly's
+    # iron_ore_prod/iron_ore_despatch sections (which stay at group level).
+    # Master tables (groups/mines/materials/end_uses) are DB-backed rather
+    # than a Python registry (unlike plant_registry.py's PLANT_UNITS) so a
+    # mine/material/end-use can be added, renamed, or deactivated later via
+    # a data change, not a code change. mines_production_monthly holds
+    # fresh production only (Lump/Fines — material rows with
+    # has_production=1).
+    #
+    # Despatch Actual and Plan live at DIFFERENT grains (per direct
+    # instruction): Actual is tracked per transport_mode (Rail/Road actually
+    # despatched), but Plan is a single target per material x end_use with
+    # no Rail/Road split (the target doesn't commit to a mode in advance).
+    # So despatch is two tables, not one — mines_despatch_actual_monthly
+    # (report_month, mine_code, material_code, transport_mode, end_use_code)
+    # and mines_despatch_plan_monthly (report_month, mine_code,
+    # material_code, end_use_code — no transport_mode). Both cover ALL five
+    # materials (fresh + legacy Dump Fines/Pellets/Tailings). "Total
+    # Production" (fresh Lump+Fines production + legacy despatch ACTUAL,
+    # per direct instruction) is computed at read time from
+    # mine_materials_master.counts_in_total_production, never stored.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mine_groups_master (
+            group_code  TEXT PRIMARY KEY,
+            group_name  TEXT NOT NULL,
+            sort_order  INTEGER NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mines_master (
+            mine_code   TEXT PRIMARY KEY,
+            mine_name   TEXT NOT NULL,
+            group_code  TEXT NOT NULL,
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            sort_order  INTEGER NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mine_materials_master (
+            material_code                TEXT PRIMARY KEY,
+            material_name                TEXT NOT NULL,
+            material_category            TEXT NOT NULL,
+            has_production                INTEGER NOT NULL DEFAULT 0,
+            counts_in_total_production    INTEGER NOT NULL DEFAULT 0,
+            sort_order                    INTEGER NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mine_end_uses_master (
+            end_use_code  TEXT PRIMARY KEY,
+            end_use_name  TEXT NOT NULL,
+            sort_order    INTEGER NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mines_production_monthly (
+            report_month  TEXT,
+            mine_code     TEXT,
+            material_code TEXT,
+            qty_actual    REAL,
+            qty_plan      REAL,
+            PRIMARY KEY (report_month, mine_code, material_code)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mines_despatch_actual_monthly (
+            report_month    TEXT,
+            mine_code       TEXT,
+            material_code   TEXT,
+            transport_mode  TEXT,
+            end_use_code    TEXT,
+            qty_actual      REAL,
+            PRIMARY KEY (report_month, mine_code, material_code, transport_mode, end_use_code)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mines_despatch_plan_monthly (
+            report_month    TEXT,
+            mine_code       TEXT,
+            material_code   TEXT,
+            end_use_code    TEXT,
+            qty_plan        REAL,
+            PRIMARY KEY (report_month, mine_code, material_code, end_use_code)
+        )
+    """)
+
+    # Booked Quantity — Sales to 3rd Party (per direct instruction,
+    # 2026-08-26): replaces the old flat "Auction" item on the SAIL Mines
+    # Entry form's Sales of Iron Ore table. Implicitly scoped to the SALES
+    # end-use only (booking a sale doesn't apply to Captive transfers or
+    # Pellet Conversion, so there's no end_use_code column here — unlike
+    # despatch, which needs one). Same Actual/Plan grain split as despatch:
+    # Actual is per transport_mode, Plan is a single target per material
+    # with no Rail/Road split.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mines_booked_qty_actual_monthly (
+            report_month    TEXT,
+            mine_code       TEXT,
+            material_code   TEXT,
+            transport_mode  TEXT,
+            qty_actual      REAL,
+            PRIMARY KEY (report_month, mine_code, material_code, transport_mode)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mines_booked_qty_plan_monthly (
+            report_month  TEXT,
+            mine_code     TEXT,
+            material_code TEXT,
+            qty_plan      REAL,
+            PRIMARY KEY (report_month, mine_code, material_code)
+        )
+    """)
+
+    cursor.execute("SELECT COUNT(*) FROM mines_master")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany(
+            "INSERT INTO mine_groups_master (group_code, group_name, sort_order) VALUES (?, ?, ?)",
+            [
+                ("JGoM", "Jharkhand Group of Mines", 1),
+                ("OGoM", "Orissa Group of Mines", 2),
+                ("CGoM", "Chhattisgarh Group of Mines", 3),
+            ],
+        )
+        cursor.executemany(
+            "INSERT INTO mines_master (mine_code, mine_name, group_code, sort_order) VALUES (?, ?, ?, ?)",
+            [
+                ("KIRIBURU", "Kiriburu", "JGoM", 1),
+                ("MEGHAHATUBURU", "Meghahatuburu", "JGoM", 2),
+                ("GUA", "Gua", "JGoM", 3),
+                ("MANOHARPUR", "Manoharpur", "JGoM", 4),
+                ("BOLANI", "Bolani", "OGoM", 5),
+                ("BARSUA", "Barsua", "OGoM", 6),
+                ("TALDIH", "Taldih", "OGoM", 7),
+                ("KALTA", "Kalta", "OGoM", 8),
+                ("RAJHARA", "Rajhara", "CGoM", 9),
+                ("DALLI", "Dalli", "CGoM", 10),
+                ("ROWGHAT", "Rowghat", "CGoM", 11),
+            ],
+        )
+        cursor.executemany(
+            "INSERT INTO mine_materials_master "
+            "(material_code, material_name, material_category, has_production, counts_in_total_production, sort_order) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                ("LUMP", "Lump", "FRESH", 1, 1, 1),
+                ("FINES", "Fines", "FRESH", 1, 1, 2),
+                ("DUMP_FINES", "Dump Fines", "LEGACY", 0, 1, 3),
+                ("PELLETS", "Pellets", "LEGACY", 0, 1, 4),
+                ("TAILINGS", "Tailings", "LEGACY", 0, 1, 5),
+            ],
+        )
+        cursor.executemany(
+            "INSERT INTO mine_end_uses_master (end_use_code, end_use_name, sort_order) VALUES (?, ?, ?)",
+            [
+                ("CAPTIVE", "Captive Plants", 1),
+                ("SALES", "Sales to 3rd Party", 2),
+                ("PELLET_CONV", "Pellet Conversion Agents", 3),
+            ],
+        )
+
     conn.commit()
     conn.close()
 
@@ -2773,3 +2935,336 @@ def save_sail_mines_monthly(report_month: str, entries: List[Dict[str, Any]]) ->
     conn.commit()
     conn.close()
     return saved
+
+
+def get_mines_masters() -> Dict[str, Any]:
+    """Groups/mines/materials/end-uses (+ the fixed Rail/Road transport
+    modes) for the Mines Production & Despatch entry form and reports.
+    DB-backed (not a Python registry) so a mine/material/end-use can be
+    added or deactivated later without a code change."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT group_code, group_name FROM mine_groups_master ORDER BY sort_order")
+    groups = [{"group_code": r[0], "group_name": r[1]} for r in cur.fetchall()]
+    cur.execute("SELECT mine_code, mine_name, group_code, is_active FROM mines_master ORDER BY sort_order")
+    mines = [{"mine_code": r[0], "mine_name": r[1], "group_code": r[2], "is_active": bool(r[3])} for r in cur.fetchall()]
+    cur.execute(
+        "SELECT material_code, material_name, material_category, has_production, counts_in_total_production "
+        "FROM mine_materials_master ORDER BY sort_order"
+    )
+    materials = [
+        {
+            "material_code": r[0], "material_name": r[1], "material_category": r[2],
+            "has_production": bool(r[3]), "counts_in_total_production": bool(r[4]),
+        }
+        for r in cur.fetchall()
+    ]
+    cur.execute("SELECT end_use_code, end_use_name FROM mine_end_uses_master ORDER BY sort_order")
+    end_uses = [{"end_use_code": r[0], "end_use_name": r[1]} for r in cur.fetchall()]
+    conn.close()
+    return {
+        "groups": groups, "mines": mines, "materials": materials, "end_uses": end_uses,
+        "transport_modes": [{"mode_code": "RAIL", "mode_name": "Rail"}, {"mode_code": "ROAD", "mode_name": "Road"}],
+    }
+
+
+def get_mines_production_despatch_monthly(report_month: str, mine_code: str) -> Dict[str, Any]:
+    """{"production": {material_code: {"actual": v, "plan": v}},
+        "despatch": {material_code: {mode_code: {end_use_code: {"actual": v}}}},
+        "despatch_plan": {material_code: {end_use_code: v}},
+        "booked_qty": {material_code: {mode_code: {"actual": v}}},
+        "booked_qty_plan": {material_code: v}}
+    for one mine/report_month — used to pre-fill the entry form. despatch
+    (Actual) is per transport_mode; despatch_plan is per material x end_use
+    only — Plan doesn't split Rail/Road, per direct instruction. booked_qty
+    (Sales only — no end_use dimension, see mines_booked_qty_actual_monthly)
+    follows the same Actual-per-mode / Plan-with-no-mode-split shape."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+
+    production = {}
+    cur.execute(
+        "SELECT material_code, qty_actual, qty_plan FROM mines_production_monthly WHERE report_month=? AND mine_code=?",
+        (report_month, mine_code),
+    )
+    for material_code, actual, plan in cur.fetchall():
+        production[material_code] = {"actual": actual, "plan": plan}
+
+    despatch = {}
+    cur.execute(
+        "SELECT material_code, transport_mode, end_use_code, qty_actual "
+        "FROM mines_despatch_actual_monthly WHERE report_month=? AND mine_code=?",
+        (report_month, mine_code),
+    )
+    for material_code, mode, end_use, actual in cur.fetchall():
+        despatch.setdefault(material_code, {}).setdefault(mode, {})[end_use] = {"actual": actual}
+
+    despatch_plan = {}
+    cur.execute(
+        "SELECT material_code, end_use_code, qty_plan "
+        "FROM mines_despatch_plan_monthly WHERE report_month=? AND mine_code=?",
+        (report_month, mine_code),
+    )
+    for material_code, end_use, plan in cur.fetchall():
+        despatch_plan.setdefault(material_code, {})[end_use] = plan
+
+    booked_qty = {}
+    cur.execute(
+        "SELECT material_code, transport_mode, qty_actual "
+        "FROM mines_booked_qty_actual_monthly WHERE report_month=? AND mine_code=?",
+        (report_month, mine_code),
+    )
+    for material_code, mode, actual in cur.fetchall():
+        booked_qty.setdefault(material_code, {})[mode] = {"actual": actual}
+
+    booked_qty_plan = {}
+    cur.execute(
+        "SELECT material_code, qty_plan FROM mines_booked_qty_plan_monthly WHERE report_month=? AND mine_code=?",
+        (report_month, mine_code),
+    )
+    for material_code, plan in cur.fetchall():
+        booked_qty_plan[material_code] = plan
+
+    conn.close()
+    return {
+        "production": production, "despatch": despatch, "despatch_plan": despatch_plan,
+        "booked_qty": booked_qty, "booked_qty_plan": booked_qty_plan,
+    }
+
+
+def save_mines_production_despatch_monthly(
+    report_month: str, mine_code: str,
+    production_entries: List[Dict[str, Any]], despatch_entries: List[Dict[str, Any]],
+    despatch_plan_entries: List[Dict[str, Any]],
+    booked_qty_entries: List[Dict[str, Any]] = None,
+    booked_qty_plan_entries: List[Dict[str, Any]] = None,
+) -> int:
+    """Upsert one mine/month's changed production rows ({material_code,
+    actual, plan}), despatch Actual rows ({material_code, transport_mode,
+    end_use_code, actual}), despatch Plan rows ({material_code,
+    end_use_code, plan}), booked-quantity Actual rows ({material_code,
+    transport_mode, actual}), and booked-quantity Plan rows ({material_code,
+    plan}) in one call — the entry form submits every cell it's editing,
+    mirroring save_sail_mines_monthly's batch shape. Actual and Plan are
+    separate tables/params because they're different grains: Actual is per
+    transport_mode, Plan has no Rail/Road split (true for both despatch and
+    booked quantity)."""
+    booked_qty_entries = booked_qty_entries or []
+    booked_qty_plan_entries = booked_qty_plan_entries or []
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    saved = 0
+    for e in production_entries:
+        cur.execute("""
+            INSERT INTO mines_production_monthly (report_month, mine_code, material_code, qty_actual, qty_plan)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, mine_code, material_code)
+            DO UPDATE SET qty_actual = excluded.qty_actual, qty_plan = excluded.qty_plan
+        """, (report_month, mine_code, e["material_code"], e.get("actual"), e.get("plan")))
+        saved += 1
+    for e in despatch_entries:
+        cur.execute("""
+            INSERT INTO mines_despatch_actual_monthly
+                (report_month, mine_code, material_code, transport_mode, end_use_code, qty_actual)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, mine_code, material_code, transport_mode, end_use_code)
+            DO UPDATE SET qty_actual = excluded.qty_actual
+        """, (
+            report_month, mine_code, e["material_code"], e["transport_mode"], e["end_use_code"], e.get("actual"),
+        ))
+        saved += 1
+    for e in despatch_plan_entries:
+        cur.execute("""
+            INSERT INTO mines_despatch_plan_monthly
+                (report_month, mine_code, material_code, end_use_code, qty_plan)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, mine_code, material_code, end_use_code)
+            DO UPDATE SET qty_plan = excluded.qty_plan
+        """, (report_month, mine_code, e["material_code"], e["end_use_code"], e.get("plan")))
+        saved += 1
+    for e in booked_qty_entries:
+        cur.execute("""
+            INSERT INTO mines_booked_qty_actual_monthly
+                (report_month, mine_code, material_code, transport_mode, qty_actual)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(report_month, mine_code, material_code, transport_mode)
+            DO UPDATE SET qty_actual = excluded.qty_actual
+        """, (report_month, mine_code, e["material_code"], e["transport_mode"], e.get("actual")))
+        saved += 1
+    for e in booked_qty_plan_entries:
+        cur.execute("""
+            INSERT INTO mines_booked_qty_plan_monthly (report_month, mine_code, material_code, qty_plan)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(report_month, mine_code, material_code)
+            DO UPDATE SET qty_plan = excluded.qty_plan
+        """, (report_month, mine_code, e["material_code"], e.get("plan")))
+        saved += 1
+    conn.commit()
+    conn.close()
+    return saved
+
+
+def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any]:
+    """Group-level (JGoM/OGoM/CGoM) Iron Ore Production & Despatch, rolled
+    up from the mine-level tables (mines_production_monthly,
+    mines_despatch_actual_monthly, mines_despatch_plan_monthly) via
+    mines_master.group_code. Returns the same
+    {report_month: {section: {item: {"actual": v, "plan": v}}}} shape as
+    get_sail_mines_monthly (item = group_code) so page_sail_mines.py's
+    existing YTD/CPLY roll-up logic (_leaf_values/_ytd_sum) works
+    unchanged against it.
+
+    This REPLACES sail_mines_monthly as the source for the 'iron_ore_prod'
+    and 'iron_ore_despatch' sections only (per direct instruction,
+    2026-08-26 — the mine-level entry form is now the single source of
+    truth for Iron Ore Production/Despatch; every other section still comes
+    from sail_mines_monthly as before). Production = fresh Lump+Fines
+    actual/plan, summed per group. Despatch = ALL materials' (fresh +
+    legacy) despatch Actual summed per group (Rail+Road combined) and Plan
+    summed per group (Plan has no Rail/Road split — see
+    mines_despatch_plan_monthly)."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {m: {"iron_ore_prod": {}, "iron_ore_despatch": {}} for m in report_months}
+    if not report_months:
+        conn.close()
+        return out
+    ph = ",".join("?" * len(report_months))
+
+    cur.execute(f"""
+        SELECT p.report_month, mm.group_code, SUM(p.qty_actual), SUM(p.qty_plan)
+        FROM mines_production_monthly p
+        JOIN mines_master mm ON mm.mine_code = p.mine_code
+        WHERE p.report_month IN ({ph})
+        GROUP BY p.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, actual, plan in cur.fetchall():
+        out[rm]["iron_ore_prod"][group_code] = {"actual": actual, "plan": plan}
+
+    despatch_actual = {}
+    cur.execute(f"""
+        SELECT d.report_month, mm.group_code, SUM(d.qty_actual)
+        FROM mines_despatch_actual_monthly d
+        JOIN mines_master mm ON mm.mine_code = d.mine_code
+        WHERE d.report_month IN ({ph})
+        GROUP BY d.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, actual in cur.fetchall():
+        despatch_actual.setdefault(rm, {})[group_code] = actual
+
+    despatch_plan = {}
+    cur.execute(f"""
+        SELECT pl.report_month, mm.group_code, SUM(pl.qty_plan)
+        FROM mines_despatch_plan_monthly pl
+        JOIN mines_master mm ON mm.mine_code = pl.mine_code
+        WHERE pl.report_month IN ({ph})
+        GROUP BY pl.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, plan in cur.fetchall():
+        despatch_plan.setdefault(rm, {})[group_code] = plan
+
+    for rm in report_months:
+        groups = set(despatch_actual.get(rm, {})) | set(despatch_plan.get(rm, {}))
+        for group_code in groups:
+            out[rm]["iron_ore_despatch"][group_code] = {
+                "actual": despatch_actual.get(rm, {}).get(group_code),
+                "plan": despatch_plan.get(rm, {}).get(group_code),
+            }
+
+    conn.close()
+    return out
+
+
+def get_iron_ore_sales_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any]:
+    """Group-level (JGoM/OGoM/CGoM) Sales of Iron Ore — Booked Quantity &
+    Despatch, rolled up via mines_master.group_code. Same
+    {report_month: {section: {item: {"actual": v, "plan": v}}}} shape as
+    get_iron_ore_group_rollup_monthly (item = group_code).
+
+    REPLACES the old flat sail_mines_monthly 'iron_ore_sales' section
+    (which had 2 SAIL-wide rows, "Auction"/"Despatch", no per-group
+    breakdown) with a per-group breakdown for both rows, per direct
+    instruction (2026-08-26) — "Auction" is renamed "Booked Quantity" and
+    now comes from mines_booked_qty_actual_monthly /
+    mines_booked_qty_plan_monthly (all materials/modes summed per group).
+    "Despatch" here means despatch to the SALES end-use specifically (NOT
+    all end-uses like get_iron_ore_group_rollup_monthly's despatch section)
+    — it's mines_despatch_actual_monthly/mines_despatch_plan_monthly
+    filtered to end_use_code='SALES' and summed per group, reusing data
+    already entered on the Despatch — Sales to 3rd Party table rather than
+    needing any new input."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {m: {"iron_ore_sales": {}, "iron_ore_sales_despatch": {}} for m in report_months}
+    if not report_months:
+        conn.close()
+        return out
+    ph = ",".join("?" * len(report_months))
+
+    booked_actual = {}
+    cur.execute(f"""
+        SELECT b.report_month, mm.group_code, SUM(b.qty_actual)
+        FROM mines_booked_qty_actual_monthly b
+        JOIN mines_master mm ON mm.mine_code = b.mine_code
+        WHERE b.report_month IN ({ph})
+        GROUP BY b.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, actual in cur.fetchall():
+        booked_actual.setdefault(rm, {})[group_code] = actual
+
+    booked_plan = {}
+    cur.execute(f"""
+        SELECT p.report_month, mm.group_code, SUM(p.qty_plan)
+        FROM mines_booked_qty_plan_monthly p
+        JOIN mines_master mm ON mm.mine_code = p.mine_code
+        WHERE p.report_month IN ({ph})
+        GROUP BY p.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, plan in cur.fetchall():
+        booked_plan.setdefault(rm, {})[group_code] = plan
+
+    for rm in report_months:
+        groups = set(booked_actual.get(rm, {})) | set(booked_plan.get(rm, {}))
+        for group_code in groups:
+            out[rm]["iron_ore_sales"][group_code] = {
+                "actual": booked_actual.get(rm, {}).get(group_code),
+                "plan": booked_plan.get(rm, {}).get(group_code),
+            }
+
+    sales_desp_actual = {}
+    cur.execute(f"""
+        SELECT d.report_month, mm.group_code, SUM(d.qty_actual)
+        FROM mines_despatch_actual_monthly d
+        JOIN mines_master mm ON mm.mine_code = d.mine_code
+        WHERE d.report_month IN ({ph}) AND d.end_use_code = 'SALES'
+        GROUP BY d.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, actual in cur.fetchall():
+        sales_desp_actual.setdefault(rm, {})[group_code] = actual
+
+    sales_desp_plan = {}
+    cur.execute(f"""
+        SELECT pl.report_month, mm.group_code, SUM(pl.qty_plan)
+        FROM mines_despatch_plan_monthly pl
+        JOIN mines_master mm ON mm.mine_code = pl.mine_code
+        WHERE pl.report_month IN ({ph}) AND pl.end_use_code = 'SALES'
+        GROUP BY pl.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, plan in cur.fetchall():
+        sales_desp_plan.setdefault(rm, {})[group_code] = plan
+
+    for rm in report_months:
+        groups = set(sales_desp_actual.get(rm, {})) | set(sales_desp_plan.get(rm, {}))
+        for group_code in groups:
+            out[rm]["iron_ore_sales_despatch"][group_code] = {
+                "actual": sales_desp_actual.get(rm, {}).get(group_code),
+                "plan": sales_desp_plan.get(rm, {}).get(group_code),
+            }
+
+    conn.close()
+    return out

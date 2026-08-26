@@ -6,16 +6,31 @@ cumulative April-<report month> view against Annual Plan (APP) and the
 corresponding period last year (CPLY), per direct instruction.
 
 Every "production"-kind table's row (APP, Act., %FF, CPLY, %Grth) is built
-from monthly Actual + Plan entered via the SAIL Mines Entry data-entry page
-(db.sail_mines_monthly) — APP/Actual are the entered monthly figures summed
-April->report_month (same YTD convention as page4.py's "YTD APP"/"YTD
-Actual" columns), CPLY is the same sum for last FY's April->same month
-(db.get_cply_month, one call per YTD month so a report month early in the
-FY still gets the right prior-year months). "flow"-kind tables would skip
-APP/%FF entirely (just Act./CPLY/%Grth) — per direct instruction, every
-despatch/sales section now carries its own Plan too, so every section here
-is currently 'production'-kind; 'flow' stays supported (not deleted) in
-case a future section genuinely has no plan figure.
+from monthly Actual + Plan summed April->report_month (same YTD convention
+as page4.py's "YTD APP"/"YTD Actual" columns), CPLY is the same sum for
+last FY's April->same month (db.get_cply_month, one call per YTD month so a
+report month early in the FY still gets the right prior-year months).
+"flow"-kind tables would skip APP/%FF entirely (just Act./CPLY/%Grth) — per
+direct instruction, every despatch/sales section now carries its own Plan
+too, so every section here is currently 'production'-kind; 'flow' stays
+supported (not deleted) in case a future section genuinely has no plan
+figure.
+
+Every section except Iron Ore Production/Despatch is entered via the SAIL
+Mines Entry data-entry page (db.sail_mines_monthly). Iron Ore Production
+and Iron Ore Despatch are the odd ones out (per direct instruction,
+2026-08-26): they're rolled up at read time from the mine-level tables
+(11 mines' worth of Lump/Fines production and all-materials despatch,
+entered via the separate Iron Ore Mines Production & Despatch form) via
+db.get_iron_ore_group_rollup_monthly, NOT from sail_mines_monthly — see
+that function's docstring for exactly what Production vs Despatch mean at
+this rolled-up group level. The SAIL Mines Entry form no longer has "Iron
+Ore Mines Performance" or "Sales of Iron Ore" inputs — both moved to the
+mine-level form above (Iron Ore Production/Despatch AND Sales' Booked
+Quantity/Despatch are now entered there, then rolled up to group level
+here; only Sales' old "Auction" item, renamed "Booked Quantity", needed a
+brand new mine-level table — see mines_booked_qty_actual_monthly /
+mines_booked_qty_plan_monthly).
 
 Iron Ore Production (table 1) additionally carries a DESPATCH column group
 per mine group (per direct instruction) — a second section (iron_ore_
@@ -25,9 +40,16 @@ the resulting table has kind='production_despatch' and a "column_groups"
 list (PRODUCTION + DESPATCH) instead of a flat "columns" list. Both groups
 now carry the full APP/Act./%FF/CPLY/%Grth span (per direct instruction,
 the despatch side previously only had Act./CPLY/%Grth) since iron_ore_
-despatch is 'production'-kind too. This is a separate concept from table 2
-(Sales of Iron Ore), which tracks disposal CHANNEL (Auction vs Despatch)
-rather than per-mine-group despatch.
+despatch is 'production'-kind too.
+
+Table 2 (Sales of Iron Ore) uses the exact same merge_into mechanism (per
+direct instruction, 2026-08-26) — its two column groups are labelled
+BOOKED QTY / DESPATCH instead of PRODUCTION / DESPATCH (see each section's
+"group_label", defaulting to "PRODUCTION"/"DESPATCH" when unset) since
+"Booked Quantity" replaced the old flat "Auction" item. Its Despatch column
+means despatch to the SALES end-use specifically (a subset of table 1's
+Despatch, which sums every end-use) — see
+db.get_iron_ore_sales_group_rollup_monthly's docstring.
 
 A few rows are computed, never entered directly:
   - Coal Mines Production's "Total" = Raw Coking Coal + Thermal Coal.
@@ -73,9 +95,14 @@ SAIL_MINES_SECTIONS = [
         "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_prod",
     },
     {
-        "key": "iron_ore_sales", "title": "SALES OF IRON ORE", "kind": "production",
-        "items": ["Auction", "Despatch"],
-        "derived": [],
+        "key": "iron_ore_sales", "title": "SALES OF IRON ORE", "kind": "production", "group_label": "BOOKED QTY",
+        "items": ["CGoM", "OGoM", "JGoM"],
+        "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}],
+    },
+    {
+        "key": "iron_ore_sales_despatch", "kind": "production",
+        "items": ["CGoM", "OGoM", "JGoM"],
+        "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_sales",
     },
     {
         "key": "coal_prod", "title": "COAL MINES PRODUCTION PERFORMANCE", "kind": "production",
@@ -200,6 +227,35 @@ def generate_sail_mines(report_month: str) -> dict:
     monthly = db.get_sail_mines_monthly(ytd_months)
     cply_monthly = db.get_sail_mines_monthly(cply_months)
 
+    # Iron Ore Production/Despatch are sourced from the mine-level tables
+    # (11 mines' worth of detail entered via the Iron Ore Mines Production &
+    # Despatch form), not from sail_mines_monthly, per direct instruction
+    # (2026-08-26) — overriding those two sections here keeps every section
+    # below (Sales of Iron Ore, Coal, Washery, Flux) on sail_mines_monthly
+    # unchanged while replacing just these two. See
+    # db.get_iron_ore_group_rollup_monthly's docstring for what Production
+    # vs Despatch mean at this rolled-up group level.
+    iron_ore_monthly = db.get_iron_ore_group_rollup_monthly(ytd_months)
+    iron_ore_cply_monthly = db.get_iron_ore_group_rollup_monthly(cply_months)
+    for m in ytd_months:
+        monthly.setdefault(m, {})["iron_ore_prod"] = iron_ore_monthly[m]["iron_ore_prod"]
+        monthly[m]["iron_ore_despatch"] = iron_ore_monthly[m]["iron_ore_despatch"]
+    for m in cply_months:
+        cply_monthly.setdefault(m, {})["iron_ore_prod"] = iron_ore_cply_monthly[m]["iron_ore_prod"]
+        cply_monthly[m]["iron_ore_despatch"] = iron_ore_cply_monthly[m]["iron_ore_despatch"]
+
+    # Sales of Iron Ore (Booked Quantity / Despatch) — same replace-at-read
+    # pattern as above, per direct instruction (2026-08-26). See
+    # db.get_iron_ore_sales_group_rollup_monthly's docstring.
+    iron_ore_sales_monthly = db.get_iron_ore_sales_group_rollup_monthly(ytd_months)
+    iron_ore_sales_cply_monthly = db.get_iron_ore_sales_group_rollup_monthly(cply_months)
+    for m in ytd_months:
+        monthly[m]["iron_ore_sales"] = iron_ore_sales_monthly[m]["iron_ore_sales"]
+        monthly[m]["iron_ore_sales_despatch"] = iron_ore_sales_monthly[m]["iron_ore_sales_despatch"]
+    for m in cply_months:
+        cply_monthly[m]["iron_ore_sales"] = iron_ore_sales_cply_monthly[m]["iron_ore_sales"]
+        cply_monthly[m]["iron_ore_sales_despatch"] = iron_ore_sales_cply_monthly[m]["iron_ore_sales_despatch"]
+
     y, m = int(report_month[:4]), int(report_month[5:7])
     period_label = f"April-{_MON_ABBR[m]}'{y % 100:02d}"
 
@@ -260,8 +316,8 @@ def generate_sail_mines(report_month: str) -> dict:
             tables.append({
                 "key": section["key"], "title": section["title"], "kind": "production_despatch",
                 "column_groups": [
-                    {"label": "PRODUCTION", "columns": _columns_for(section["kind"])},
-                    {"label": "DESPATCH", "columns": desp_columns},
+                    {"label": section.get("group_label", "PRODUCTION"), "columns": _columns_for(section["kind"])},
+                    {"label": merge_section.get("group_label", "DESPATCH"), "columns": desp_columns},
                 ],
                 "rows": rows,
             })

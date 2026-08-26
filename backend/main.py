@@ -19,7 +19,7 @@ from pathlib import Path
 import db
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
-from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest
+from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
 from report_utils import compute_item_row, build_production_narrative, assign_dept_badges, blank_out_page_data
 from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
@@ -1654,6 +1654,57 @@ def save_sail_mines_monthly_api(request: SailMinesSaveRequest):
     for one report_month."""
     entries = [{"section": e.section, "item": e.item, "actual": e.actual, "plan": e.plan} for e in request.entries]
     saved = db.save_sail_mines_monthly(request.report_month, entries)
+    return {"status": "success", "saved": saved}
+
+
+# Iron Ore Mines Production & Despatch — mine-level detail (11 mines under
+# JGoM/OGoM/CGoM). See db.py's mines_production_monthly/mines_despatch_monthly
+# and get_mines_masters for the schema/registry (DB-backed masters, not a
+# Python registry, so mines/materials/end-uses can change without a deploy).
+@app.get("/api/mines-master")
+def get_mines_master_api():
+    """Groups/mines/materials/end-uses/transport-modes for the Mines
+    Production & Despatch entry form and reports."""
+    return db.get_mines_masters()
+
+
+@app.get("/api/mines-production-despatch/monthly")
+def get_mines_production_despatch_monthly_api(report_month: str = Query(...), mine_code: str = Query(...)):
+    """Existing production, despatch, and booked-quantity (Sales) entries
+    for one mine/report_month, for pre-filling the entry form."""
+    data = db.get_mines_production_despatch_monthly(report_month, mine_code)
+    return {"report_month": report_month, "mine_code": mine_code, **data}
+
+
+@app.post("/api/mines-production-despatch/monthly")
+def save_mines_production_despatch_monthly_api(request: MinesProductionDespatchSaveRequest):
+    """Upsert a batch of production, despatch Actual (material x mode x
+    end-use), despatch Plan (material x end-use — no mode split), booked
+    quantity Actual (material x mode, Sales-only), and booked quantity Plan
+    (material only) entries for one mine/report_month."""
+    production_entries = [{"material_code": e.material_code, "actual": e.actual, "plan": e.plan} for e in request.production]
+    despatch_entries = [
+        {
+            "material_code": e.material_code, "transport_mode": e.transport_mode,
+            "end_use_code": e.end_use_code, "actual": e.actual,
+        }
+        for e in request.despatch
+    ]
+    despatch_plan_entries = [
+        {"material_code": e.material_code, "end_use_code": e.end_use_code, "plan": e.plan}
+        for e in request.despatch_plan
+    ]
+    booked_qty_entries = [
+        {"material_code": e.material_code, "transport_mode": e.transport_mode, "actual": e.actual}
+        for e in request.booked_qty
+    ]
+    booked_qty_plan_entries = [
+        {"material_code": e.material_code, "plan": e.plan} for e in request.booked_qty_plan
+    ]
+    saved = db.save_mines_production_despatch_monthly(
+        request.report_month, request.mine_code, production_entries, despatch_entries, despatch_plan_entries,
+        booked_qty_entries, booked_qty_plan_entries,
+    )
     return {"status": "success", "saved": saved}
 
 
