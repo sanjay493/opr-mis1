@@ -20,8 +20,10 @@ Data sources:
     /data-entry/special-steel-physical and /data-entry/special-steel-ipt).
   - prev-FY annual actual and the cur-FY YTD block (Actual / CPLY / APP):
     production_table / production_plan_table, summed over the relevant months
-    (plant VISP <- VISL; Stainless Steel has no clean production_table item so
-    it falls back to the stored figure and shows a blank YTD block).
+    (plant VISP <- VISL). SSP "Stainless Steel" has no item of its own — it is
+    Saleable Steel − Carbon Steel Production (per direct instruction), used
+    only when both components have data for the period (a full 12 months for
+    the prev-FY annual actual); otherwise the stored figure stands.
 Stored figures are '000 T; this page displays Tonnes (× 1000).
 """
 import db
@@ -150,7 +152,15 @@ def generate_special_steel_physical(report_month: str) -> dict:
     def _db(store, plant, series, min_months=1):
         """DB value in T, or None when the series has no production_table item
         or fewer than `min_months` months are present (used to require a
-        complete 12-month set for the prev-FY annual actual)."""
+        complete 12-month set for the prev-FY annual actual).
+
+        SSP "Stainless Steel" has no production_table item of its own — it is
+        derived as Saleable Steel − Carbon Steel Production (per direct
+        instruction), and only when BOTH components clear `min_months`."""
+        if series == "STAINLESS":
+            sal = _db(store, plant, "SALEABLE", min_months)
+            carbon = _db(store, plant, "CARBON", min_months)
+            return None if sal is None or carbon is None else sal - carbon
         item = _SERIES_ITEM.get(series)
         if item is None:
             return None
