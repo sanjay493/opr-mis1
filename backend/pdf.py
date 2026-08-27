@@ -1132,7 +1132,14 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                 _runs[-1]["_end"] = _i + 1
                 _prev_i = _i
             for _r in _runs:
+                _start = _r["_end"] - len(_r["pages"])
                 _r["next_page"] = next((p.get("page") for p in main_pages[_r["_end"]:]
+                                        if p.get("type") not in _LANDSCAPE_TYPES), None)
+                # the non-landscape page immediately before this run — used
+                # to detect a "marker leak" (next_page's @@PGSTART@@ landing
+                # at the bottom of prev_page's own physical page), which would
+                # otherwise splice the run one page too early.
+                _r["prev_page"] = next((p.get("page") for p in reversed(main_pages[:_start])
                                         if p.get("type") not in _LANDSCAPE_TYPES), None)
 
             _rest_pages = [p for p in main_pages if p.get("type") not in _LANDSCAPE_TYPES]
@@ -1167,6 +1174,14 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                 at = _marker_index(base_reader, r["next_page"]) if r["next_page"] else len(base_reader.pages)
                 if at is None:
                     at = len(base_reader.pages)
+                # If next_page's marker leaked onto the previous non-landscape
+                # page's own physical page (i.e. that page carries BOTH
+                # markers), splice after it rather than before — otherwise
+                # the landscape run lands a page too early, ahead of content
+                # that visually belongs before it.
+                elif r["prev_page"] is not None and at < len(base_reader.pages) \
+                        and f"@@PGSTART_{r['prev_page']}@@" in (base_reader.pages[at].extract_text() or ""):
+                    at += 1
                 _inserts.setdefault(at, []).append(rr)
 
             writer = PdfWriter()

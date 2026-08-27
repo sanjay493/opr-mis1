@@ -207,23 +207,21 @@ _INDEX_SECTIONS = [
     # inserted right after Large BFs — see the "Cost Trend" comment above
     # COST_TREND_HM_PAGE_ID's own definition.
     ("Trend in Cost of Production (Hot Metal/Crude Steel/Saleable Steel)", 3),
-    ("SAIL Mines Production & Despatch Performance", 1),
+    # Physical order is page 4 (Plant Wise Perf of Main Items) then the
+    # SAIL_MINES_PAGE_ID = 4.5 sentinel — listed in that order here.
     ("Plant Wise Performance of Main Items (w.r.t. ABP)", 1),
+    ("SAIL Mines Production & Despatch Performance", 1),
     ("Plant Wise Item Wise Production & CS to HM Ratio", 2),
     # Trend pages (6 items: Oven Pushing/Sinter/Hot Metal/Crude Steel/
     # Pig Iron & Finished Steel/Saleable Steel) flow as one continuous
     # section rather than one physical page each (see pdf.py's trend_section
     # merge + _make_trend_split_hook) — some items spill onto a 2nd
-    # physical page. Empirically 11 physical pages (5 of the 6 items
-    # 2-paged, 1 still fitting on its own single page) — measured identical
-    # at both 1 YTD month (April) and 4 YTD months (July), so the split
-    # looks driven by each item's fixed per-plant row content rather than
-    # by how many YTD month columns are in play, and should hold across the
-    # FY. Not a structural guarantee though — recheck (render the pages
-    # around this section for a given month and read off where the
-    # Concast marker lands) if page7_13.py's plant list or item count
-    # ever changes.
-    ("10 Years Month Wise Production (Main Item Plant Wise)", 11),
+    # physical page. Currently 12 physical pages (measured 2026-07 against a
+    # real generated PDF — @@PGSTART_7@@ on the section's 1st page,
+    # @@PGSTART_13@@ 12 pages later). Not a structural guarantee — recheck
+    # (regenerate and read off where the Concast marker lands) if
+    # page7_13.py's plant list / item count or _MAIN_MARGIN changes.
+    ("10 Years Month Wise Production (Main Item Plant Wise)", 12),
     ("Crude Steel Production Details - Concast & Process Type", 2),
     # Category-wise (3 plant-group pages: BSP / DSP&RSP / BSL&ISP) +
     # Segment Wise Production (1 page) - one Index entry covering all 4.
