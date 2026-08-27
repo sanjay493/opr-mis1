@@ -62,18 +62,36 @@ A few rows are computed, never entered directly:
     unlike Cost Trend's SAIL row (see page_cost_trend.py), which stays a
     directly-entered figure.
 """
-import db
-from page_at_a_glance import _trend_line_svg
+import math
 
-# Same fixed-order categorical hues as pdf.py's _BADGE_COLORS / globals.css's
+import db
+
+# Fixed-order categorical hues from pdf.py's _BADGE_COLORS / globals.css's
 # .dept-badge.grp-N (already validated per the dataviz skill's six-check
-# gate) — reused here rather than picking new colors, so this chart's
-# palette is consistent with the rest of the report and doesn't need its
-# own separate validation pass.
-_MINES_CHART_COLORS = {
-    "Iron Ore": "#2a78d6",   # blue
-    "Coal": "#eb6834",       # orange
-    "Flux": "#1baf7a",       # aqua
+# gate) — reused here so this page's charts stay consistent with the rest of
+# the report. Re-checked as a 4-slot categorical palette
+# (validate_palette.js "#2a78d6,#eb6834,#1baf7a,#eda100" --mode light → all
+# pass; the sub-3:1 surface-contrast WARN is covered by the direct value/
+# %-labels every chart carries).
+_C_IRON_ORE = "#2a78d6"   # blue
+_C_CLEAN_COAL = "#eb6834"  # orange
+_C_FLUX = "#1baf7a"        # aqua
+_C_SALES = "#eda100"       # yellow
+
+# ── Hard-coded chart data (million tonnes) — per direct instruction
+# (2026-08-27), a stopgap until real series exist. Update here.
+_TREND_FYS = ["FY 23-24", "FY 24-25", "FY 25-26"]
+_IRON_ORE_PROD_MT = [25.4, 34.8, 38.1]
+_CLEAN_COAL_PROD_MT = [0.484, 0.376, 0.345]
+_FLUX_PROD_MT = [2.018, 1.715, 1.279]
+_SALES_BOOKING_MT = [1.16, 0.54, 3.01]
+
+# Iron-ore despatch mix by end-use (Captive / Conversion Agent / Sales), Mt.
+_DESPATCH_MIX_CATS = ["Captive", "Conversion Agent", "Sales"]
+_DESPATCH_MIX_COLORS = [_C_IRON_ORE, _C_CLEAN_COAL, _C_SALES]
+_DESPATCH_MIX = {
+    "FY 2025-26":  [31.014, 4.024, 2.492],
+    "Apr-Jul'26":  [10.560, 1.802, 1.598],
 }
 
 # Every (section key, item) pair listed under "items" is entered directly
@@ -217,21 +235,132 @@ def _row(label: str, app, actual, cply, kind: str, value_fmt: str = "t", bold: b
     return row
 
 
-def _mines_performance_chart_svg(ytd_months: list) -> str:
-    """Illustrative placeholder ONLY — not wired to real mines figures yet
-    (per direct instruction: fills the space freed up by narrowing the
-    Sales/Coal-Production/Washery/Despatch tables, to be mapped to real
-    Iron Ore/Coal/Flux production data once that's decided). Kept as its
-    own function so swapping in real series later only touches this one
-    spot, not the layout around it."""
-    labels = [_MON_ABBR[int(m.split("-")[1])] for m in ytd_months]
-    n = len(labels)
-    series = {
-        "Iron Ore": [420 + 18 * i for i in range(n)],
-        "Coal": [140 + 6 * ((i * 3) % 7) for i in range(n)],
-        "Flux": [60 + 4 * ((i * 5) % 5) for i in range(n)],
-    }
-    return _trend_line_svg(labels, series, _MINES_CHART_COLORS)
+def _num(v: float) -> str:
+    """Compact number: drop trailing zeros (25.4, 0.345, 3), keep >=2 sig
+    figs for sub-1 values."""
+    if v == int(v):
+        return f"{int(v)}"
+    return f"{v:.3f}".rstrip("0").rstrip(".")
+
+
+def _mini_bar_svg(title: str, labels: list, values: list, color: str) -> str:
+    """One small single-series bar chart with its own y-scale — the title
+    names the series so no legend is needed; each bar carries a direct value
+    label (dataviz: selective direct labels, not a grid). vw/vh are a
+    viewBox only; the SVG scales to its grid cell."""
+    vw, vh = 170, 116
+    ml, mr, mt, mb = 6, 6, 24, 15
+    cw, ch = vw - ml - mr, vh - mt - mb
+    yhi = max(values) * 1.30 if any(values) else 1.0
+    n = len(values)
+    slot = cw / n
+    bw = min(34.0, slot * 0.5)
+    baseline = mt + ch
+
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
+           f'style="width:100%;height:auto;display:block;">']
+    out.append(f'<text x="{vw / 2:.0f}" y="10" text-anchor="middle" font-size="8.3" font-weight="bold" '
+               f'font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
+    out.append(f'<line x1="{ml}" y1="{baseline:.1f}" x2="{vw - mr}" y2="{baseline:.1f}" '
+               f'stroke="#94a3b8" stroke-width="0.6"/>')
+    for i, (lab, v) in enumerate(zip(labels, values)):
+        cx = ml + i * slot + slot / 2
+        bh = max(1.5, ch * v / yhi)
+        by = baseline - bh
+        r = min(3.0, bw / 2, bh)
+        out.append(
+            f'<path d="M{cx - bw / 2:.1f},{baseline:.1f} L{cx - bw / 2:.1f},{by + r:.1f} '
+            f'Q{cx - bw / 2:.1f},{by:.1f} {cx - bw / 2 + r:.1f},{by:.1f} '
+            f'L{cx + bw / 2 - r:.1f},{by:.1f} Q{cx + bw / 2:.1f},{by:.1f} {cx + bw / 2:.1f},{by + r:.1f} '
+            f'L{cx + bw / 2:.1f},{baseline:.1f} Z" fill="{color}"/>')
+        out.append(f'<text x="{cx:.1f}" y="{by - 3:.1f}" text-anchor="middle" font-size="7.4" '
+                   f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_num(v)}</text>')
+        out.append(f'<text x="{cx:.1f}" y="{baseline + 11:.1f}" text-anchor="middle" font-size="6.6" '
+                   f'font-family="Arial,sans-serif" fill="#475569">{lab}</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _share_donut_svg(title: str, cats: list, values: list, colors: list) -> str:
+    """Composition donut (3 slices) with a side legend (swatch · category ·
+    value). 2px white ring between slices (dataviz mark spec); % labels only
+    on slices with room; the FY/period total sits in the hole. Landscape
+    viewBox — donut left, legend right."""
+    vw, vh = 262, 128
+    cx, cy, r_out, r_in = 62.0, 70.0, 40.0, 22.0
+    total = sum(values) or 1.0
+
+    def polar(r, deg):
+        a = math.radians(deg)
+        return cx + r * math.sin(a), cy - r * math.cos(a)
+
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
+           f'style="width:100%;height:auto;display:block;">']
+    out.append(f'<text x="{vw / 2:.0f}" y="11" text-anchor="middle" font-size="8.3" font-weight="bold" '
+               f'font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
+    ang = 0.0
+    for cat, v, col in zip(cats, values, colors):
+        sweep = v / total * 360.0
+        a0, a1 = ang, ang + sweep
+        large = 1 if sweep > 180 else 0
+        x1o, y1o = polar(r_out, a0)
+        x2o, y2o = polar(r_out, a1)
+        x1i, y1i = polar(r_in, a1)
+        x2i, y2i = polar(r_in, a0)
+        out.append(f'<path d="M {x1o:.2f} {y1o:.2f} A {r_out} {r_out} 0 {large} 1 {x2o:.2f} {y2o:.2f} '
+                   f'L {x1i:.2f} {y1i:.2f} A {r_in} {r_in} 0 {large} 0 {x2i:.2f} {y2i:.2f} Z" '
+                   f'fill="{col}" stroke="#ffffff" stroke-width="2"/>')
+        if sweep >= 26:
+            lx, ly = polar((r_out + r_in) / 2, (a0 + a1) / 2)
+            out.append(f'<text x="{lx:.1f}" y="{ly + 3:.1f}" text-anchor="middle" font-size="8" '
+                       f'font-weight="bold" font-family="Arial,sans-serif" fill="#ffffff">'
+                       f'{v / total * 100:.0f}%</text>')
+        ang = a1
+    out.append(f'<text x="{cx:.1f}" y="{cy + 3:.1f}" text-anchor="middle" font-size="9" font-weight="bold" '
+               f'font-family="Arial,sans-serif" fill="#1e293b">{_num(round(total, 2))}</text>')
+
+    lx0, ly0 = 122, 44
+    for i, (cat, v) in enumerate(zip(cats, values)):
+        y = ly0 + i * 20
+        out.append(f'<rect x="{lx0}" y="{y - 7:.0f}" width="9" height="9" rx="1.5" fill="{colors[i]}"/>')
+        out.append(f'<text x="{lx0 + 14}" y="{y:.0f}" font-size="7.4" font-family="Arial,sans-serif" '
+                   f'fill="#334155">{cat}</text>')
+        out.append(f'<text x="{vw - 6}" y="{y:.0f}" text-anchor="end" font-size="7.6" '
+                   f'font-family="Arial,sans-serif" font-weight="bold" fill="#1e293b">'
+                   f'{_num(v)}  ({v / total * 100:.0f}%)</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _mines_charts_html() -> str:
+    """The chart cluster for this page: four independent single-series bar
+    charts (Iron Ore / Clean Coal / Flux production + Sales booking, 3 FYs
+    each, each on its own scale) and two despatch-mix donuts (FY 2025-26 vs
+    Apr-Jul'26). All hard-coded — see the module-level data constants. One
+    self-contained HTML fragment (inline styles only) so both the React view
+    and the Jinja PDF template can drop it in verbatim."""
+    bars = [
+        _mini_bar_svg("Iron Ore Production", _TREND_FYS, _IRON_ORE_PROD_MT, _C_IRON_ORE),
+        _mini_bar_svg("Clean Coal Production", _TREND_FYS, _CLEAN_COAL_PROD_MT, _C_CLEAN_COAL),
+        _mini_bar_svg("Flux Production", _TREND_FYS, _FLUX_PROD_MT, _C_FLUX),
+        _mini_bar_svg("Sales Booking", _TREND_FYS, _SALES_BOOKING_MT, _C_SALES),
+    ]
+    donuts = [
+        _share_donut_svg(f"Despatch Mix — {label}", _DESPATCH_MIX_CATS, vals, _DESPATCH_MIX_COLORS)
+        for label, vals in _DESPATCH_MIX.items()
+    ]
+    cell = 'border:1px solid #e2e8f0;border-radius:4px;padding:3px 4px;'
+    grid = "".join(f'<div style="{cell}">{s}</div>' for s in bars)
+    drow = "".join(f'<div style="{cell}">{s}</div>' for s in donuts)
+    return (
+        '<div style="font-family:Arial,sans-serif;margin-top:8px;">'
+        '<div style="font-weight:700;font-size:9.5pt;margin:2px 0 5px;">Mines Performance'
+        '<span style="font-weight:400;font-style:italic;font-size:7.5pt;color:#64748b;">'
+        ' — 3-year trend &amp; iron-ore despatch mix (million tonnes)</span></div>'
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;">{grid}</div>'
+        f'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:6px;">{drow}</div>'
+        '</div>'
+    )
 
 
 def generate_sail_mines(report_month: str) -> dict:
@@ -340,5 +469,5 @@ def generate_sail_mines(report_month: str) -> dict:
         "period_label": period_label,
         "unit": "'000 T",
         "tables": tables,
-        "mines_chart_svg": _mines_performance_chart_svg(ytd_months),
+        "mines_charts_html": _mines_charts_html(),
     }

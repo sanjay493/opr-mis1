@@ -90,7 +90,7 @@ function Table({ table }) {
 }
 
 export default function SailMinesTemplate({ data }) {
-  const { title = '', period_label: periodLabel, unit, tables = [], mines_chart_svg: chartSvg } = data || {};
+  const { title = '', period_label: periodLabel, unit, tables = [], mines_charts_html: chartsHtml } = data || {};
   const byKey = Object.fromEntries(tables.map((t) => [t.key, t]));
 
   return (
@@ -105,31 +105,20 @@ export default function SailMinesTemplate({ data }) {
       {/* Iron Ore Production+Despatch — full-width 11-column table, unchanged. */}
       {byKey.iron_ore_prod && <Table table={byKey.iron_ore_prod} />}
 
-      {/* The four plain 6-column tables share one fixed, equal width on the
-          left (left-aligned, truncated at the same right edge rather than
-          each stretching to fill the full page width) — the freed-up space
-          on the right holds a mines-performance chart (illustrative only
-          for now — see page_sail_mines.py's _mines_performance_chart_svg). */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ flex: '0 0 60%', maxWidth: '60%' }}>
-          {byKey.iron_ore_sales && <Table table={byKey.iron_ore_sales} />}
-          {byKey.coal_prod && <Table table={byKey.coal_prod} />}
-          {byKey.washery && <Table table={byKey.washery} />}
-          {byKey.coal_despatch && <Table table={byKey.coal_despatch} />}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: '9.5pt', margin: '6px 0 4px' }}>
-            Mines Performance{' '}
-            <span style={{ fontWeight: 400, fontStyle: 'italic', fontSize: '7.5pt', color: C.textSecondary }}>
-              (illustrative — pending data)
-            </span>
-          </div>
-          {chartSvg && <div dangerouslySetInnerHTML={{ __html: chartSvg }} />}
-        </div>
-      </div>
+      {/* Sales of Iron Ore + the three Coal tables — full width, stacked. */}
+      {byKey.iron_ore_sales && <Table table={byKey.iron_ore_sales} />}
+      {byKey.coal_prod && <Table table={byKey.coal_prod} />}
+      {byKey.washery && <Table table={byKey.washery} />}
+      {byKey.coal_despatch && <Table table={byKey.coal_despatch} />}
 
-      {/* Flux Production+Despatch — merged the same way as Iron Ore, moved
-          to the bottom of the page. */}
+      {/* Mines Performance chart cluster — full width: 4 single-series bar
+          charts (Iron Ore / Clean Coal / Flux production + Sales booking,
+          3 FYs each on its own scale) + 2 iron-ore despatch-mix donuts.
+          Hard-coded data — see page_sail_mines.py's _mines_charts_html. */}
+      {chartsHtml && <div dangerouslySetInnerHTML={{ __html: chartsHtml }} />}
+
+      {/* Flux Production+Despatch — merged the same way as Iron Ore, at the
+          bottom of the page. */}
       {byKey.flux_prod && <Table table={byKey.flux_prod} />}
     </div>
   );

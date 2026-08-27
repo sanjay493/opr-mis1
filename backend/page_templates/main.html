@@ -295,39 +295,12 @@
             color: {{ colors.text_secondary }};
         }
 
-        /* SAIL Mines (page 4.5) — the four plain 6-column tables (Sales of
-           Iron Ore / Coal Mines Production / Washery / Despatch of Clean
-           Coal etc.) get a shared fixed width instead of each stretching to
-           the full page width, so they read as one aligned block; the space
-           freed on the right holds the mines-performance chart. Scoped to
-           this page only — every other .coal-table page (Consumption of
-           Coking Coal, Receipt/Stock, EPI) is unaffected. */
-        .pg-4-5 .sail-mines-narrow-row {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-        }
-        .pg-4-5 .sail-mines-narrow-tables {
-            flex: 0 0 60%;
-            max-width: 60%;
-        }
-        .pg-4-5 .sail-mines-narrow-tables .coal-table {
-            width: 100%;
-        }
+        /* SAIL Mines (page 4.5) — the Mines Performance chart cluster
+           (4 bar charts + 2 despatch-mix donuts, page.mines_charts_html)
+           sits full width below the Coal tables and above the Flux table. */
         .pg-4-5 .sail-mines-chart {
-            flex: 1;
-            min-width: 0;
-        }
-        .pg-4-5 .sail-mines-chart-heading {
-            font-weight: 700;
-            font-size: 9.5pt;
-            margin: 6px 0 4px;
-        }
-        .pg-4-5 .sail-mines-chart-note {
-            font-weight: 400;
-            font-style: italic;
-            font-size: 7.5pt;
-            color: {{ colors.text_secondary }};
+            width: 100%;
+            page-break-inside: avoid;
         }
 
         .coal-ab-row {
