@@ -255,6 +255,11 @@ _INDEX_SECTIONS = [
     # above, this is Index-row-only until a rake-detention data source
     # exists and the real per-page split is known.
     ("Details of Rakes Detention Plant Wise", 4),
+    # Annexures — reference "ready reckoner" documents. Listed in the Index
+    # with their stated page counts but no generated pages behind them yet
+    # (Index-row-only, same as "Details of Rakes Detention" above).
+    ("Annexure-1 : 5 ISPs Ready Reckoner", 10),
+    ("Annexure-2 : 3 SSPs Ready Reckoner", 15),
 ]
 
 

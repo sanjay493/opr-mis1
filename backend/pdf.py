@@ -34,7 +34,11 @@ _jinja_env.filters['split_label'] = _split_label
 # trend-table rowspan "probe" print in _make_trend_split_hook, which must
 # use this exact same margin so its measured page breaks match what the
 # final page.pdf() call actually produces.
-_MAIN_MARGIN = {"top": "12mm", "right": "15mm", "bottom": "12mm", "left": "15mm"}
+_MAIN_MARGIN = {"top": "10mm", "right": "15mm", "bottom": "9mm", "left": "15mm"}
+# The Index (page 2) is rendered without a Chromium header/footer, so it
+# doesn't need the ~9-10mm the main pages reserve for those bars — a tighter
+# top/bottom keeps the (now longer) contents list on one page.
+_FRONT_MARGIN = {"top": "8mm", "right": "13mm", "bottom": "8mm", "left": "13mm"}
 
 
 def _pgclass(page_num) -> str:
@@ -504,7 +508,7 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
             format="A4",
             print_background=True,
             display_header_footer=False,
-            margin=margin,
+            margin=_FRONT_MARGIN,
         )
         page.close()
         for p in PdfReader(io.BytesIO(front_bytes)).pages:
