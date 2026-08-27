@@ -105,8 +105,7 @@ export default function SailMinesTemplate({ data }) {
       {/* Iron Ore Production+Despatch — full-width 11-column table, unchanged. */}
       {byKey.iron_ore_prod && <Table table={byKey.iron_ore_prod} />}
 
-      {/* Sales of Iron Ore + the three Coal tables — full width, stacked. */}
-      {byKey.iron_ore_sales && <Table table={byKey.iron_ore_sales} />}
+      {/* The three Coal tables — full width, stacked. */}
       {byKey.coal_prod && <Table table={byKey.coal_prod} />}
       {byKey.washery && <Table table={byKey.washery} />}
       {byKey.coal_despatch && <Table table={byKey.coal_despatch} />}

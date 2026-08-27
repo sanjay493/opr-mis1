@@ -138,6 +138,20 @@
             margin-left: 10mm;
         }
 
+        /* SAIL Mines Production & Despatch Performance (page 4.5) — tighter
+           top/bottom margins than the shared content-layout so all the
+           tables + the 6-chart cluster fit one page. Side unchanged. */
+        @page sail-mines-layout {
+            size: A4 portrait;
+            margin-top: 6mm;
+            margin-right: 10mm;
+            margin-bottom: 8mm;
+            margin-left: 10mm;
+        }
+        .pg-4-5.content-page {
+            page: sail-mines-layout;
+        }
+
         .key-parameters-page {
             page: key-parameters-layout;
             padding-top: 0;

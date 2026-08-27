@@ -112,16 +112,10 @@ SAIL_MINES_SECTIONS = [
         "items": ["CGoM", "OGoM", "JGoM"],
         "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_prod",
     },
-    {
-        "key": "iron_ore_sales", "title": "Sales of Iron Ore", "kind": "production", "group_label": "BOOKED QTY",
-        "items": ["CGoM", "OGoM", "JGoM"],
-        "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}],
-    },
-    {
-        "key": "iron_ore_sales_despatch", "kind": "production",
-        "items": ["CGoM", "OGoM", "JGoM"],
-        "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_sales",
-    },
+    # "Sales of Iron Ore" (iron_ore_sales / iron_ore_sales_despatch) was
+    # removed from this page per direct instruction (2026-08-27). Its
+    # mine-level source tables and db.get_iron_ore_sales_group_rollup_monthly
+    # still exist — just not surfaced here.
     {
         "key": "coal_prod", "title": "Coal Mines Production Performance", "kind": "production",
         "items": ["Raw Coking Coal", "Thermal Coal"],
@@ -374,18 +368,6 @@ def generate_sail_mines(report_month: str) -> dict:
     # read from the DB — they're hard-coded group-wise in _IRON_ORE_HARDCODED
     # and injected directly into section_rows in Pass 1 below (per direct
     # instruction, 2026-08-27). Every other section stays on sail_mines_monthly.
-
-    # Sales of Iron Ore (Booked Quantity / Despatch) — same replace-at-read
-    # pattern as above, per direct instruction (2026-08-26). See
-    # db.get_iron_ore_sales_group_rollup_monthly's docstring.
-    iron_ore_sales_monthly = db.get_iron_ore_sales_group_rollup_monthly(ytd_months)
-    iron_ore_sales_cply_monthly = db.get_iron_ore_sales_group_rollup_monthly(cply_months)
-    for m in ytd_months:
-        monthly[m]["iron_ore_sales"] = iron_ore_sales_monthly[m]["iron_ore_sales"]
-        monthly[m]["iron_ore_sales_despatch"] = iron_ore_sales_monthly[m]["iron_ore_sales_despatch"]
-    for m in cply_months:
-        cply_monthly[m]["iron_ore_sales"] = iron_ore_sales_cply_monthly[m]["iron_ore_sales"]
-        cply_monthly[m]["iron_ore_sales_despatch"] = iron_ore_sales_cply_monthly[m]["iron_ore_sales_despatch"]
 
     y, m = int(report_month[:4]), int(report_month[5:7])
     period_label = f"April-{_MON_ABBR[m]}'{y % 100:02d}"
