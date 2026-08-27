@@ -99,9 +99,9 @@
                 {% set _sec_unit = sec.rows[0].unit if sec.rows else '' %}
                 {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
                 {% set _sec_valign = 'middle' if page.group == 'IRON_MAKING' else 'top' %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;vertical-align:{{ _sec_valign }};word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label | chemsub }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;vertical-align:{{ _sec_valign }};word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label }}</td>
                 {% else %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:2px 1.5px;border:1px solid {{ colors.border_black }};text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label | chemsub }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:2px 1.5px;border:1px solid {{ colors.border_black }};text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label }}</td>
                 {% endif %}
                 {% endif %}
                 {% set _row_label = (row.label ~ ' (' ~ row.unit ~ ')') if (not _is_major and row.unit) else row.label %}
@@ -111,7 +111,7 @@
                    column carries the longer combined-shop labels ("BSP
                    SMS-2", "RSP SMS-1", ...) that do need to wrap onto 2
                    lines rather than force the column wide. #}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;{% if _major27 %}white-space:nowrap;{% else %}word-wrap:break-word;overflow-wrap:break-word;{% endif %}">{{ _row_label | chemsub }}</td>
+                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;{% if _major27 %}white-space:nowrap;{% else %}word-wrap:break-word;overflow-wrap:break-word;{% endif %}">{{ _row_label }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy3 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy2 }}</td>
                 <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy1 }}</td>

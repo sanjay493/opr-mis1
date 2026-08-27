@@ -18,7 +18,7 @@
               {% for row in page.rows %}
               {% if row.type == 'section' %}
               <tr>
-                <td colspan="{{ 2 + page.plants|length }}" style="padding:3.5px 6px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;background:{{ colors.highlight_group_label_bg }};">{{ row.label | chemsub }}</td>
+                <td colspan="{{ 2 + page.plants|length }}" style="padding:3.5px 6px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;background:{{ colors.highlight_group_label_bg }};">{{ row.label }}</td>
               </tr>
               {% elif row.type == 'spacer' %}
               <tr>
@@ -28,11 +28,11 @@
               <tr style="{{ 'background:' ~ colors.highlight_bold_row_bg ~ ';' if row.highlight else ('background:' ~ colors.highlight_default_row_bg ~ ';' if loop.index is even else '') }}">
                 {% if not row.continuation %}
                 <td {% if row.label_rowspan %}rowspan="{{ row.label_rowspan }}"{% endif %} style="padding:3.5px 6px;border:1px solid {{ colors.border_black }};text-align:left;">
-                  {{ row.parameter | chemsub }}
-                  {% if row.note %}<div style="font-size:6.5pt;font-style:italic;font-weight:400;color:{{ colors.text_secondary }};">{{ row.note | chemsub }}</div>{% endif %}
+                  {{ row.parameter }}
+                  {% if row.note %}<div style="font-size:6.5pt;font-style:italic;font-weight:400;color:{{ colors.text_secondary }};">{{ row.note }}</div>{% endif %}
                 </td>
                 {% endif %}
-                <td style="padding:3.5px 6px;border:1px solid {{ colors.border_black }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ row.unit | chemsub }}</td>
+                <td style="padding:3.5px 6px;border:1px solid {{ colors.border_black }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ row.unit }}</td>
                 {% for p in page.plants %}
                 {% set cell_bg = (colors.highlight_actual_bg if row.max_plants and p in row.max_plants else (colors.highlight_target_band_bg if row.min_plants and p in row.min_plants else '')) %}
                 <td style="padding:3.5px 6px;border:1px solid {{ colors.border_black }};text-align:center;{% if cell_bg %}background:{{ cell_bg }};font-weight:700;{% endif %}">{{ row.plant_values[p] if row.plant_values[p] is not none else '—' }}</td>

@@ -1,5 +1,4 @@
 import React from 'react';
-import { chemSub } from '@/lib/chemFormat';
 
 // Mirrors backend/page_templates/key_parameters.html — plain data table, no
 // editing (every value here is computed from other tables' data, not a
@@ -50,7 +49,7 @@ export default function KeyParametersTemplate({ data }) {
               return (
                 <tr key={i}>
                   <td colSpan={colSpan} style={{ ...cellStyle, textAlign: 'left', fontWeight: 700, background: C.sectionBg }}>
-                    {chemSub(row.label)}
+                    {row.label}
                   </td>
                 </tr>
               );
@@ -66,10 +65,10 @@ export default function KeyParametersTemplate({ data }) {
               <tr key={i} style={{ background: row.highlight ? C.highlightBg : undefined }}>
                 {!row.continuation && (
                   <td rowSpan={row.label_rowspan || undefined} style={{ ...cellStyle, textAlign: 'left' }}>
-                    {chemSub(row.parameter)}
+                    {row.parameter}
                   </td>
                 )}
-                <td style={{ ...cellStyle, fontStyle: 'italic', color: C.textSecondary }}>{chemSub(row.unit)}</td>
+                <td style={{ ...cellStyle, fontStyle: 'italic', color: C.textSecondary }}>{row.unit}</td>
                 {plants.map((p) => {
                   const isMax = row.max_plants && row.max_plants.includes(p);
                   const isMin = row.min_plants && row.min_plants.includes(p);

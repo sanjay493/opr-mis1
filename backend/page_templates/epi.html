@@ -23,7 +23,7 @@
                     {% for sec in page.sections %}
                     {% for row in sec.rows %}
                     <tr class="{% if loop.index == sec.rows|length %}coal-group-last{% endif %} {% if row.label == 'SAIL' %}coal-bold-row{% endif %}">
-                        {% if loop.first %}<td rowspan="{{ sec.rows|length }}" class="coal-plant-cell">{{ sec.label | chemsub }}<br/><span class="epi-unit">({{ row.unit | chemsub }})</span></td>{% endif %}
+                        {% if loop.first %}<td rowspan="{{ sec.rows|length }}" class="coal-plant-cell">{{ sec.label }}<br/><span class="epi-unit">({{ row.unit }})</span></td>{% endif %}
                         <td class="coal-period-cell">{{ row.label }}</td>
                         <td class="coal-num">{{ row.fy2 or '—' }}</td>
                         <td class="coal-num">{{ row.fy1 or '—' }}</td>

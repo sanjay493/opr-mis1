@@ -12,7 +12,7 @@
             {% for row in page.production %}
             <div style="flex:1;position:relative;border:1px solid {{ colors.border_light }};border-radius:4px;padding:5px 8px 5px 12px;overflow:hidden;">
               <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg, {{ colors.misc_accent_blue }} 0 25%, {{ colors.khv_assessment_green }} 25% 50%, {{ colors.khv_assessment_amber }} 50% 75%, {{ colors.cover_molten_red }} 75% 100%);"></div>
-              <div style="font-size:8.5pt;color:{{ colors.text_secondary }};text-transform:capitalize;font-weight:700;letter-spacing:0.2px;">{{ row.item | chemsub }}</div>
+              <div style="font-size:8.5pt;color:{{ colors.text_secondary }};text-transform:capitalize;font-weight:700;letter-spacing:0.2px;">{{ row.item }}</div>
               <div style="font-size:16pt;font-weight:700;color:{{ colors.text_primary }};line-height:1.2;">{{ row.month_act if row.month_act else '—' }}</div>
               <div style="font-size:8pt;color:{{ colors.text_secondary }};">%Ful: <b style="color:{{ colors.text_primary }};">{{ row.month_pct_ful if row.month_pct_ful else '—' }}%</b></div>
               <div style="font-size:8pt;color:{{ colors.text_secondary }};">vs CPLY:
@@ -36,7 +36,7 @@
             {% for t in page.techno %}
             {% set tbg = colors[t.bg_key] if t.bg_key else colors.highlight_default_row_bg %}
             <div class="techno-tile" style="background:{{ tbg }};border-radius:4px;padding:7px 10px;">
-              <div style="font-size:8pt;font-weight:700;line-height:1.15;color:{{ colors.text_heading_dark }};">{{ t.parameter | chemsub }} <span style="font-weight:600;font-style:italic;color:{{ colors.text_black }};">({{ t.unit | chemsub }})</span></div>
+              <div style="font-size:8pt;font-weight:700;line-height:1.15;color:{{ colors.text_heading_dark }};">{{ t.parameter }} <span style="font-weight:600;font-style:italic;color:{{ colors.text_black }};">({{ t.unit }})</span></div>
               <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:4px;">
                 <span style="font-size:12.5pt;line-height:1.2;font-weight:700;color:{{ colors.text_black }};">{{ t.month_actual if t.month_actual else '—' }}</span>
                 <span style="font-size:11pt;line-height:1.2;font-weight:400;color:{{ colors.text_secondary }};">Target: {{ t.target if t.target else '—' }}</span>
