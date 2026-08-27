@@ -125,14 +125,28 @@ SAIL_MINES_SECTIONS = [
     {
         "key": "flux_prod", "title": "Flux Production & Despatch (Limestone & Dolomite)", "kind": "production",
         "items": ["Limestone", "Dolomite"],
-        "derived": [],
+        "derived": [{"label": "Total", "kind": "sum", "of": ["Limestone", "Dolomite"]}],
     },
     {
         "key": "flux_despatch", "kind": "production",
         "items": ["Limestone", "Dolomite"],
-        "derived": [], "merge_into": "flux_prod",
+        "derived": [{"label": "Total", "kind": "sum", "of": ["Limestone", "Dolomite"]}],
+        "merge_into": "flux_prod",
     },
 ]
+
+# Iron Ore Production/Despatch (CGoM/OGoM/JGoM) are hard-coded here — delinked
+# from the mine-level rollup (db.get_iron_ore_group_rollup_monthly) per direct
+# instruction (2026-08-27): mine-level despatch actuals were never entered, so
+# the rollup's Despatch side rendered blank. Each tuple is '000 T
+# (APP, YTD Actual Apr-Jul'26, YTD CPLY). The "SAIL" row is still derived (sum
+# of the three groups). Update this dict — or restore the
+# get_iron_ore_group_rollup_monthly calls in generate_sail_mines() — once real
+# figures are available.
+_IRON_ORE_HARDCODED = {
+    "iron_ore_prod":     {"CGoM": (3675, 3126, 2841), "OGoM": (7507, 6532, 5279), "JGoM": (5138, 3914, 3645)},
+    "iron_ore_despatch": {"CGoM": (3675, 2996, 2878), "OGoM": (7507, 6940, 5410), "JGoM": (5138, 4026, 3785)},
+}
 
 _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -227,22 +241,10 @@ def generate_sail_mines(report_month: str) -> dict:
     monthly = db.get_sail_mines_monthly(ytd_months)
     cply_monthly = db.get_sail_mines_monthly(cply_months)
 
-    # Iron Ore Production/Despatch are sourced from the mine-level tables
-    # (11 mines' worth of detail entered via the Iron Ore Mines Production &
-    # Despatch form), not from sail_mines_monthly, per direct instruction
-    # (2026-08-26) — overriding those two sections here keeps every section
-    # below (Sales of Iron Ore, Coal, Washery, Flux) on sail_mines_monthly
-    # unchanged while replacing just these two. See
-    # db.get_iron_ore_group_rollup_monthly's docstring for what Production
-    # vs Despatch mean at this rolled-up group level.
-    iron_ore_monthly = db.get_iron_ore_group_rollup_monthly(ytd_months)
-    iron_ore_cply_monthly = db.get_iron_ore_group_rollup_monthly(cply_months)
-    for m in ytd_months:
-        monthly.setdefault(m, {})["iron_ore_prod"] = iron_ore_monthly[m]["iron_ore_prod"]
-        monthly[m]["iron_ore_despatch"] = iron_ore_monthly[m]["iron_ore_despatch"]
-    for m in cply_months:
-        cply_monthly.setdefault(m, {})["iron_ore_prod"] = iron_ore_cply_monthly[m]["iron_ore_prod"]
-        cply_monthly[m]["iron_ore_despatch"] = iron_ore_cply_monthly[m]["iron_ore_despatch"]
+    # Iron Ore Production/Despatch (iron_ore_prod / iron_ore_despatch) are NOT
+    # read from the DB — they're hard-coded group-wise in _IRON_ORE_HARDCODED
+    # and injected directly into section_rows in Pass 1 below (per direct
+    # instruction, 2026-08-27). Every other section stays on sail_mines_monthly.
 
     # Sales of Iron Ore (Booked Quantity / Despatch) — same replace-at-read
     # pattern as above, per direct instruction (2026-08-26). See
@@ -265,10 +267,14 @@ def generate_sail_mines(report_month: str) -> dict:
     for section in SAIL_MINES_SECTIONS:
         raw = {}  # item/derived label -> (app, actual, cply) raw numbers
         rows = {}
+        hardcoded = _IRON_ORE_HARDCODED.get(section["key"])
         for item in section["items"]:
-            app, actual, cply = _leaf_values(
-                monthly, cply_monthly, section["key"], item, ytd_months, cply_months, section["kind"]
-            )
+            if hardcoded is not None:
+                app, actual, cply = hardcoded[item]
+            else:
+                app, actual, cply = _leaf_values(
+                    monthly, cply_monthly, section["key"], item, ytd_months, cply_months, section["kind"]
+                )
             raw[item] = (app, actual, cply)
             rows[item] = _row(item, app, actual, cply, section["kind"], bold=(item == "SAIL"))
 
