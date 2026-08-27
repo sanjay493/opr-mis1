@@ -29,13 +29,12 @@
 
 <table class="ssp-phys-table">
     <colgroup>
-        <col style="width:3%"><col style="width:6%">
-        <col style="width:3.8%"><col style="width:3.8%"><col style="width:3.2%">
-        {% for fy in page.history_fys %}<col style="width:3.3%">{% endfor %}
-        <col style="width:3.8%"><col style="width:2.6%">
-        <col style="width:3.8%">
-        <col style="width:3.6%"><col style="width:3.6%"><col style="width:2.6%"><col style="width:3.6%"><col style="width:2.6%">
-        <col style="width:6.5%">
+        <col style="width:3.5%"><col style="width:7%">
+        <col style="width:4.5%"><col style="width:4.5%"><col style="width:3.8%">
+        {% for fy in page.history_fys %}<col style="width:3.8%">{% endfor %}
+        <col style="width:4.5%">
+        <col style="width:4.5%">
+        <col style="width:4.3%"><col style="width:4.3%"><col style="width:3%"><col style="width:4.3%"><col style="width:3%">
     </colgroup>
     <thead>
         <tr>
@@ -44,14 +43,12 @@
             <th rowspan="2">Capacity</th>
             <th colspan="2">Best Achieved</th>
             {% for fy in page.history_fys %}<th rowspan="2">{{ fy }}</th>{% endfor %}
-            <th colspan="2" class="ssp-sep">{{ page.prev_fy }}</th>
+            <th rowspan="2" class="ssp-sep">{{ page.prev_fy }}<br/>Actual</th>
             <th rowspan="2" class="ssp-sep">{{ page.cur_fy }}<br/>ABP</th>
             <th colspan="5" class="ssp-sep">{{ page.ytd_label }}</th>
-            <th rowspan="2">Remarks</th>
         </tr>
         <tr>
             <th>Actual</th><th>Year</th>
-            <th class="ssp-sep">Actual</th><th>%Gr</th>
             <th class="ssp-sep">APP</th><th>Actual</th><th>%FF</th><th>CPLY</th><th>%Gr</th>
         </tr>
     </thead>
@@ -66,14 +63,12 @@
             <td>{{ r.best_year or '' }}</td>
             {% for fy in page.history_fys %}<td class="ssp-num">{{ r.history[fy] or '' }}</td>{% endfor %}
             <td class="ssp-num ssp-sep">{{ r.prev_actual or '' }}</td>
-            <td class="ssp-num">{{ r.prev_pct_growth or '' }}</td>
             <td class="ssp-num ssp-sep">{{ r.cur_abp or '' }}</td>
             <td class="ssp-num ssp-sep">{{ r.ytd_app or '' }}</td>
             <td class="ssp-num">{{ r.ytd_actual or '' }}</td>
             <td class="ssp-num">{{ r.ytd_pct_ful or '' }}</td>
             <td class="ssp-num">{{ r.ytd_cply or '' }}</td>
             <td class="ssp-num">{{ r.ytd_growth or '' }}</td>
-            <td class="ssp-remark">{{ r.remark or '' }}</td>
         </tr>
         {% endfor %}
         {% endfor %}

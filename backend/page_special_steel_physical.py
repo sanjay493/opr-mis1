@@ -10,8 +10,8 @@ Per plant, one row per series:
 
 Columns: Capacity · Best Achieved (Actual + FY) · FY actuals 14-15 →
 (prev-FY − 1) · prev FY actual (annual) · cur-FY ABP (annual plan) ·
-cur-FY YTD block Apr-<report month> (APP · Actual · %FF · CPLY · %Growth) ·
-Remarks. Years are shown yy-yy.
+cur-FY YTD block Apr-<report month> (APP · Actual · %FF · CPLY · %Growth).
+Years are shown yy-yy.
 
 Data sources:
   - History / Capacity / Best-Achieved / ABP / notes / IPT list: the editable
@@ -128,7 +128,6 @@ def generate_special_steel_physical(report_month: str) -> dict:
     cur_fy = db.get_fy_for_month(report_month)
     cur_start = _fy_start_year(cur_fy)
     prev_start = cur_start - 1
-    prev_prev_start = cur_start - 2
     history_starts = list(range(HISTORY_START_FY_YEAR, prev_start))
     history_fys = [_fy_label(y) for y in history_starts]        # full keys
     history_fys_disp = [_yy(fy) for fy in history_fys]          # yy-yy display
@@ -187,7 +186,6 @@ def generate_special_steel_physical(report_month: str) -> dict:
             prev_actual = _db(db_prev_fy, plant, series, min_months=12)
             if prev_actual is None:
                 prev_actual = seed_actual(_fy_label(prev_start))
-            prev_prev_actual = seed_actual(_fy_label(prev_prev_start))
 
             ytd_actual = _db(db_ytd_act, plant, series)
             ytd_cply = _db(db_ytd_cply, plant, series)
@@ -199,10 +197,8 @@ def generate_special_steel_physical(report_month: str) -> dict:
                 "capacity": _fmt(_t(m["capacity_kt"])),
                 "best_actual": _fmt(_t(m["best_actual_kt"])),
                 "best_year": _yy(m["best_year"]),
-                "remark": m["remark"] or "",
                 "history": {_yy(fy): _fmt(seed_actual(fy)) for fy in history_fys},
                 "prev_actual": _fmt(prev_actual),
-                "prev_pct_growth": _growth(prev_actual, prev_prev_actual),
                 "cur_abp": _fmt(cur_abp),
                 "ytd_app": _fmt(ytd_app),
                 "ytd_actual": _fmt(ytd_actual),

@@ -51,16 +51,13 @@ export default function SpecialSteelPhysicalTemplate({ data }) {
               <th rowSpan={2} style={th}>Capacity</th>
               <th colSpan={2} style={th}>Best Achieved</th>
               {historyFys.map((fy) => <th key={fy} rowSpan={2} style={th}>{fy}</th>)}
-              <th colSpan={2} style={{ ...th, ...sep }}>{prevFy}</th>
+              <th rowSpan={2} style={{ ...th, ...sep }}>{prevFy} Actual</th>
               <th rowSpan={2} style={{ ...th, ...sep }}>{curFy} ABP</th>
               <th colSpan={5} style={{ ...th, ...sep }}>{ytdLabel}</th>
-              <th rowSpan={2} style={th}>Remarks</th>
             </tr>
             <tr>
               <th style={th}>Actual</th>
               <th style={th}>Year</th>
-              <th style={{ ...th, ...sep }}>Actual</th>
-              <th style={th}>%Gr</th>
               <th style={{ ...th, ...sep }}>APP</th>
               <th style={th}>Actual</th>
               <th style={th}>%FF</th>
@@ -82,14 +79,12 @@ export default function SpecialSteelPhysicalTemplate({ data }) {
                 <td style={cell}>{r.best_year}</td>
                 {historyFys.map((fy) => <td key={fy} style={num}>{r.history[fy]}</td>)}
                 <td style={{ ...num, ...sep }}>{r.prev_actual}</td>
-                <td style={num}>{r.prev_pct_growth}</td>
                 <td style={{ ...num, ...sep }}>{r.cur_abp}</td>
                 <td style={{ ...num, ...sep }}>{r.ytd_app}</td>
                 <td style={num}>{r.ytd_actual}</td>
                 <td style={num}>{r.ytd_pct_ful}</td>
                 <td style={num}>{r.ytd_cply}</td>
                 <td style={num}>{r.ytd_growth}</td>
-                <td style={{ ...cell, textAlign: 'left', fontSize: '6.2pt', color: C.secondary, whiteSpace: 'normal' }}>{r.remark}</td>
               </tr>
             )))}
           </tbody>

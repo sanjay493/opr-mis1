@@ -75,16 +75,13 @@ export default function SpecialSteelPhysicalPage() {
                     <th rowSpan={2} style={HEAD}>Capacity</th>
                     <th colSpan={2} style={HEAD}>Best Achieved</th>
                     {historyFys.map((fy) => <th key={fy} rowSpan={2} style={HEAD}>{fy}</th>)}
-                    <th colSpan={2} style={{ ...HEAD, ...sepLeft }}>{data.prev_fy}</th>
+                    <th rowSpan={2} style={{ ...HEAD, ...sepLeft }}>{data.prev_fy} Actual</th>
                     <th rowSpan={2} style={{ ...HEAD, ...sepLeft }}>{data.cur_fy} ABP</th>
                     <th colSpan={5} style={{ ...HEAD, ...sepLeft }}>{data.ytd_label}</th>
-                    <th rowSpan={2} style={{ ...HEAD, textAlign: 'left', minWidth: 140 }}>Remarks</th>
                   </tr>
                   <tr>
                     <th style={{ ...HEAD, top: 31 }}>Actual</th>
                     <th style={{ ...HEAD, top: 31 }}>Year</th>
-                    <th style={{ ...HEAD, top: 31, ...sepLeft }}>Actual</th>
-                    <th style={{ ...HEAD, top: 31 }}>%Gr</th>
                     <th style={{ ...HEAD, top: 31, ...sepLeft }}>APP</th>
                     <th style={{ ...HEAD, top: 31 }}>Actual</th>
                     <th style={{ ...HEAD, top: 31 }}>%FF</th>
@@ -106,14 +103,12 @@ export default function SpecialSteelPhysicalPage() {
                       <td style={{ ...cellBase, textAlign: 'center' }}>{r.best_year}</td>
                       {historyFys.map((fy) => <td key={fy} style={cellBase}>{r.history[fy]}</td>)}
                       <td style={{ ...cellBase, ...sepLeft }}>{r.prev_actual}</td>
-                      <td style={cellBase}>{r.prev_pct_growth}</td>
                       <td style={{ ...cellBase, ...sepLeft }}>{r.cur_abp}</td>
                       <td style={{ ...cellBase, ...sepLeft }}>{r.ytd_app}</td>
                       <td style={cellBase}>{r.ytd_actual}</td>
                       <td style={cellBase}>{r.ytd_pct_ful}</td>
                       <td style={cellBase}>{r.ytd_cply}</td>
                       <td style={cellBase}>{r.ytd_growth}</td>
-                      <td style={{ ...cellBase, textAlign: 'left', whiteSpace: 'normal', color: '#5f6368', fontSize: '9pt' }}>{r.remark}</td>
                     </tr>
                   )))}
                 </tbody>
