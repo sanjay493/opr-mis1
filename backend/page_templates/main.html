@@ -290,13 +290,18 @@
             color: {{ colors.text_secondary }};
         }
 
-        /* SAIL Mines (page 4.5) — the Mines Performance chart cluster
-           (4 bar charts + 2 despatch-mix donuts, page.mines_charts_html)
-           sits full width below the Coal tables and above the Flux table. */
-        .pg-4-5 .sail-mines-chart {
-            width: 100%;
-            page-break-inside: avoid;
-        }
+        /* SAIL Mines (page 4.5) — 6 stacked tables + a 6-chart cluster +
+           the Flux table on one portrait page: compact every element.
+           The chart cluster is allowed to break across a page boundary
+           between its bar-row and donut-row (no page-break-inside:avoid) so
+           a marginal overflow shaves a few charts onto a 2nd page rather
+           than dumping the whole cluster there and half-emptying page 1. */
+        .pg-4-5 .sail-mines-chart { width: 100%; }
+        .pg-4-5.content-page { padding: 0; }
+        .pg-4-5 .coal-title { font-size: 12pt; margin-bottom: 2px; }
+        .pg-4-5 .coal-c-heading { font-size: 8.5pt; margin: 3px 0 1px; }
+        .pg-4-5 .coal-table { font-size: 7pt; margin-bottom: 3px !important; }
+        .pg-4-5 .coal-table th, .pg-4-5 .coal-table td { padding: 0.6px 4px; }
 
         .coal-ab-row {
             display: flex;

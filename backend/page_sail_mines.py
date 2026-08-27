@@ -250,10 +250,10 @@ def _mini_bar_svg(title: str, labels: list, values: list, color: str) -> str:
     names the series so no legend is needed; each bar carries a direct value
     label (dataviz: selective direct labels, not a grid). vw/vh are a
     viewBox only; the SVG scales to its grid cell."""
-    vw, vh = 170, 116
-    ml, mr, mt, mb = 6, 6, 24, 15
+    vw, vh = 170, 82
+    ml, mr, mt, mb = 6, 6, 17, 12
     cw, ch = vw - ml - mr, vh - mt - mb
-    yhi = max(values) * 1.30 if any(values) else 1.0
+    yhi = max(values) * 1.28 if any(values) else 1.0
     n = len(values)
     slot = cw / n
     bw = min(34.0, slot * 0.5)
@@ -261,7 +261,7 @@ def _mini_bar_svg(title: str, labels: list, values: list, color: str) -> str:
 
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
            f'style="width:100%;height:auto;display:block;">']
-    out.append(f'<text x="{vw / 2:.0f}" y="10" text-anchor="middle" font-size="8.3" font-weight="bold" '
+    out.append(f'<text x="{vw / 2:.0f}" y="9" text-anchor="middle" font-size="8" font-weight="bold" '
                f'font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
     out.append(f'<line x1="{ml}" y1="{baseline:.1f}" x2="{vw - mr}" y2="{baseline:.1f}" '
                f'stroke="#94a3b8" stroke-width="0.6"/>')
@@ -275,9 +275,9 @@ def _mini_bar_svg(title: str, labels: list, values: list, color: str) -> str:
             f'Q{cx - bw / 2:.1f},{by:.1f} {cx - bw / 2 + r:.1f},{by:.1f} '
             f'L{cx + bw / 2 - r:.1f},{by:.1f} Q{cx + bw / 2:.1f},{by:.1f} {cx + bw / 2:.1f},{by + r:.1f} '
             f'L{cx + bw / 2:.1f},{baseline:.1f} Z" fill="{color}"/>')
-        out.append(f'<text x="{cx:.1f}" y="{by - 3:.1f}" text-anchor="middle" font-size="7.4" '
+        out.append(f'<text x="{cx:.1f}" y="{by - 2.5:.1f}" text-anchor="middle" font-size="7" '
                    f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_num(v)}</text>')
-        out.append(f'<text x="{cx:.1f}" y="{baseline + 11:.1f}" text-anchor="middle" font-size="6.6" '
+        out.append(f'<text x="{cx:.1f}" y="{baseline + 9:.1f}" text-anchor="middle" font-size="6.4" '
                    f'font-family="Arial,sans-serif" fill="#475569">{lab}</text>')
     out.append("</svg>")
     return "".join(out)
@@ -288,8 +288,8 @@ def _share_donut_svg(title: str, cats: list, values: list, colors: list) -> str:
     value). 2px white ring between slices (dataviz mark spec); % labels only
     on slices with room; the FY/period total sits in the hole. Landscape
     viewBox — donut left, legend right."""
-    vw, vh = 262, 128
-    cx, cy, r_out, r_in = 62.0, 70.0, 40.0, 22.0
+    vw, vh = 262, 96
+    cx, cy, r_out, r_in = 56.0, 54.0, 32.0, 18.0
     total = sum(values) or 1.0
 
     def polar(r, deg):
@@ -298,7 +298,7 @@ def _share_donut_svg(title: str, cats: list, values: list, colors: list) -> str:
 
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
            f'style="width:100%;height:auto;display:block;">']
-    out.append(f'<text x="{vw / 2:.0f}" y="11" text-anchor="middle" font-size="8.3" font-weight="bold" '
+    out.append(f'<text x="{vw / 2:.0f}" y="10" text-anchor="middle" font-size="8" font-weight="bold" '
                f'font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
     ang = 0.0
     for cat, v, col in zip(cats, values, colors):
@@ -314,20 +314,20 @@ def _share_donut_svg(title: str, cats: list, values: list, colors: list) -> str:
                    f'fill="{col}" stroke="#ffffff" stroke-width="2"/>')
         if sweep >= 26:
             lx, ly = polar((r_out + r_in) / 2, (a0 + a1) / 2)
-            out.append(f'<text x="{lx:.1f}" y="{ly + 3:.1f}" text-anchor="middle" font-size="8" '
+            out.append(f'<text x="{lx:.1f}" y="{ly + 2.5:.1f}" text-anchor="middle" font-size="7" '
                        f'font-weight="bold" font-family="Arial,sans-serif" fill="#ffffff">'
                        f'{v / total * 100:.0f}%</text>')
         ang = a1
-    out.append(f'<text x="{cx:.1f}" y="{cy + 3:.1f}" text-anchor="middle" font-size="9" font-weight="bold" '
+    out.append(f'<text x="{cx:.1f}" y="{cy + 3:.1f}" text-anchor="middle" font-size="8.5" font-weight="bold" '
                f'font-family="Arial,sans-serif" fill="#1e293b">{_num(round(total, 2))}</text>')
 
-    lx0, ly0 = 122, 44
+    lx0, ly0 = 108, 34
     for i, (cat, v) in enumerate(zip(cats, values)):
-        y = ly0 + i * 20
-        out.append(f'<rect x="{lx0}" y="{y - 7:.0f}" width="9" height="9" rx="1.5" fill="{colors[i]}"/>')
-        out.append(f'<text x="{lx0 + 14}" y="{y:.0f}" font-size="7.4" font-family="Arial,sans-serif" '
+        y = ly0 + i * 16
+        out.append(f'<rect x="{lx0}" y="{y - 7:.0f}" width="8" height="8" rx="1.5" fill="{colors[i]}"/>')
+        out.append(f'<text x="{lx0 + 12}" y="{y:.0f}" font-size="7" font-family="Arial,sans-serif" '
                    f'fill="#334155">{cat}</text>')
-        out.append(f'<text x="{vw - 6}" y="{y:.0f}" text-anchor="end" font-size="7.6" '
+        out.append(f'<text x="{vw - 6}" y="{y:.0f}" text-anchor="end" font-size="7.2" '
                    f'font-family="Arial,sans-serif" font-weight="bold" fill="#1e293b">'
                    f'{_num(v)}  ({v / total * 100:.0f}%)</text>')
     out.append("</svg>")
@@ -351,16 +351,16 @@ def _mines_charts_html() -> str:
         _share_donut_svg(f"Despatch Mix — {label}", _DESPATCH_MIX_CATS, vals, _DESPATCH_MIX_COLORS)
         for label, vals in _DESPATCH_MIX.items()
     ]
-    cell = 'border:1px solid #e2e8f0;border-radius:4px;padding:3px 4px;'
+    cell = 'border:1px solid #e2e8f0;border-radius:3px;padding:1px 3px;'
     grid = "".join(f'<div style="{cell}">{s}</div>' for s in bars)
     drow = "".join(f'<div style="{cell}">{s}</div>' for s in donuts)
     return (
-        '<div style="font-family:Arial,sans-serif;margin-top:8px;">'
-        '<div style="font-weight:700;font-size:9.5pt;margin:2px 0 5px;">Mines Performance'
-        '<span style="font-weight:400;font-style:italic;font-size:7.5pt;color:#64748b;">'
+        '<div style="font-family:Arial,sans-serif;margin-top:4px;">'
+        '<div style="font-weight:700;font-size:8.5pt;margin:1px 0 3px;">Mines Performance'
+        '<span style="font-weight:400;font-style:italic;font-size:7pt;color:#64748b;">'
         ' — 3-year trend &amp; iron-ore despatch mix (million tonnes)</span></div>'
-        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;">{grid}</div>'
-        f'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:6px;">{drow}</div>'
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px;">{grid}</div>'
+        f'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:3px;margin-top:3px;">{drow}</div>'
         '</div>'
     )
 
