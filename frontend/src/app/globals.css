@@ -507,6 +507,15 @@ select.form-control {
   overflow: visible;
 }
 
+/* Chemical-formula subscripts (chemSub() on techno / EPI / BF parameter
+   labels) — zero line-height so "CO2"->"CO₂" never adds row height in a
+   dense parameter table. Mirrors backend/page_templates/main.html. */
+sub {
+  font-size: 0.72em;
+  line-height: 0;
+  vertical-align: -0.28em;
+}
+
 .report-table {
   width: 100%;
   border-collapse: collapse;

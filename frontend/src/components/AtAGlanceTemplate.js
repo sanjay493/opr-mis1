@@ -1,4 +1,5 @@
 import React from 'react';
+import { chemSub } from '@/lib/chemFormat';
 
 // Mirrors backend/page_templates/at_a_glance.html section-for-section, and
 // reuses the same colors_config.json hex values (this codebase's React
@@ -48,7 +49,7 @@ function ProductionTiles({ production }) {
             position: 'absolute', left: 0, top: 0, bottom: 0, width: 4,
             background: `linear-gradient(180deg, ${C.accentBlue} 0 25%, #16a34a 25% 50%, #d97706 50% 75%, #b91c1c 75% 100%)`,
           }} />
-          <div style={{ fontSize: '8.5pt', color: C.textBlack, textTransform: 'capitalize', fontWeight: 700, letterSpacing: 0.2 }}>{row.item}</div>
+          <div style={{ fontSize: '8.5pt', color: C.textBlack, textTransform: 'capitalize', fontWeight: 700, letterSpacing: 0.2 }}>{chemSub(row.item)}</div>
           <div style={{ fontSize: '16pt', fontWeight: 700, color: C.textPrimary, lineHeight: 1.2 }}>{row.month_act || '—'}</div>
           <div style={{ fontSize: '8pt', color: C.textSecondary }}>%Ful: <b style={{ color: C.textPrimary }}>{row.month_pct_ful || '—'}%</b></div>
           <div style={{ fontSize: '8pt', color: C.textSecondary }}>vs CPLY: <GrowthText value={row.pct_growth_cply} good={row.growth_good} /></div>
@@ -102,7 +103,7 @@ function TechnoTiles({ techno }) {
         return (
           <div key={t.parameter} className="techno-tile" style={{ flex: 1, background: bg, borderRadius: 4, padding: '10px 13px' }}>
             <div style={{ fontSize: '8pt', fontWeight: 700, lineHeight: 1.15, color: C.textHeadingDark }}>
-              {t.parameter} <span style={{ fontWeight: 400, fontStyle: 'italic', color: C.textSecondary }}>({t.unit})</span>
+              {chemSub(t.parameter)} <span style={{ fontWeight: 400, fontStyle: 'italic', color: C.textSecondary }}>({chemSub(t.unit)})</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 }}>
               <span style={{ fontSize: '12.5pt', fontWeight: 700, lineHeight: 1.2, color: C.textPrimary }}>{t.month_actual || '—'}</span>

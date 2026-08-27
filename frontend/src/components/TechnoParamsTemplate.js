@@ -1,5 +1,7 @@
 'use client';
 
+import { chemSub } from '@/lib/chemFormat';
+
 const B = '1px solid #000';
 
 const cell = (extra = {}) => ({
@@ -129,10 +131,10 @@ export default function TechnoParamsTemplate({ data }) {
                     <td rowSpan={sec.rows.length}
                         style={{ ...LBL, fontWeight: 700, verticalAlign: 'top',
                                  borderTop: B, borderBottom: B }}>
-                      {sec.label}
+                      {chemSub(sec.label)}
                       {sec.rows[0]?.unit && (
                         <div style={{ fontWeight: 400, color: '#374151', marginTop: '1px' }}>
-                          ({sec.rows[0].unit})
+                          ({chemSub(sec.rows[0].unit)})
                         </div>
                       )}
                     </td>
@@ -144,13 +146,13 @@ export default function TechnoParamsTemplate({ data }) {
                         style={{ ...LBL, fontWeight: 700, verticalAlign: 'middle',
                                  textAlign: 'center', borderTop: B, borderBottom: B,
                                  whiteSpace: 'nowrap', writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                      {sec.label}
+                      {chemSub(sec.label)}
                     </td>
                   )}
 
                   {/* Row label: plant/shop for param pages; param name + unit for mill pages */}
                   <td style={{ ...LBL, ...bkSt, ...sailSt, whiteSpace: 'nowrap' }}>
-                    {isMill && row.unit ? `${row.label} (${row.unit})` : row.label}
+                    {isMill && row.unit ? <>{chemSub(row.label)} ({chemSub(row.unit)})</> : chemSub(row.label)}
                   </td>
 
                   {renderDataCells(row, bkSt, sailSt)}

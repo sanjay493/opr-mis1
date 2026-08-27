@@ -17,7 +17,7 @@
   <div style="display:flex;gap:6px;margin-bottom:4px;">
     {% for row in page.kpi %}
     <div style="flex:1;border:1px solid {{ colors.border_light }};border-left:4px solid {{ colors.misc_accent_blue }};border-radius:4px;padding:4px 9px;">
-      <div style="font-size:7.2pt;color:{{ colors.text_secondary }};text-transform:uppercase;font-weight:700;">{{ row.item }}</div>
+      <div style="font-size:7.2pt;color:{{ colors.text_secondary }};text-transform:uppercase;font-weight:700;">{{ row.item | chemsub }}</div>
       <div style="font-size:14pt;font-weight:800;color:{{ colors.text_primary }};line-height:1.15;">{{ row.value_mt if row.value_mt else '—' }} <span style="font-size:7.5pt;font-weight:600;">MT</span></div>
       <div style="font-size:7pt;color:{{ colors.text_secondary }};">{{ row.pct_app if row.pct_app else '—' }}% of APP
         &nbsp;|&nbsp; vs CPLY
@@ -55,7 +55,7 @@
       {% for it in page.ytd.rows %}
       <div style="margin-bottom:3px;">
         <div style="display:flex;justify-content:space-between;font-size:6.6pt;font-weight:700;">
-          <span>{{ it.item }}</span>
+          <span>{{ it.item | chemsub }}</span>
           {% if it.growth_pct %}<span style="{% if it.growth_good %}color:{{ colors.text_variance_green }}{% else %}color:{{ colors.text_variance_red }}{% endif %};">{{ '▲' if it.growth_good else '▼' }} {{ it.growth_pct }}%</span>{% endif %}
         </div>
         <div style="display:flex;align-items:center;gap:3px;">
@@ -140,8 +140,8 @@
         <tbody>
           {% for t in page.techno %}
           <tr>
-            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;font-weight:600;">{{ t.parameter }}</td>
-            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ t.unit }}</td>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;font-weight:600;">{{ t.parameter | chemsub }}</td>
+            <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ t.unit | chemsub }}</td>
             <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:center;color:{{ colors.text_secondary }};">{{ t.better_direction }}</td>
             <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:right;">{{ t.actual }}</td>
             <td style="border:1px solid {{ colors.border_light }};padding:2px 5px;text-align:right;">{{ t.target }}</td>

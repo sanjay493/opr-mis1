@@ -1,4 +1,5 @@
 import React from 'react';
+import { chemSub } from '@/lib/chemFormat';
 
 // Mirrors backend/page_templates/key_highlights.html section-for-section —
 // see page_key_highlights.py for the data shape. The three narrative
@@ -46,7 +47,7 @@ function KpiStrip({ kpi }) {
           flex: 1, border: `1px solid ${C.borderLight}`, borderLeft: `4px solid ${C.accentBlue}`,
           borderRadius: 4, padding: '4px 9px',
         }}>
-          <div style={{ fontSize: '7.2pt', color: C.textSecondary, textTransform: 'uppercase', fontWeight: 700 }}>{row.item}</div>
+          <div style={{ fontSize: '7.2pt', color: C.textSecondary, textTransform: 'uppercase', fontWeight: 700 }}>{chemSub(row.item)}</div>
           <div style={{ fontSize: '14pt', fontWeight: 800, color: C.textPrimary, lineHeight: 1.15 }}>
             {row.value_mt || '—'} <span style={{ fontSize: '7.5pt', fontWeight: 600 }}>MT</span>
           </div>
@@ -127,7 +128,7 @@ function YtdSection({ ytd }) {
       {rows.map((it) => (
         <div key={it.item} style={{ marginBottom: 3 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '6.6pt', fontWeight: 700 }}>
-            <span>{it.item}</span>
+            <span>{chemSub(it.item)}</span>
             {it.growth_pct && (
               <span style={{ color: it.growth_good ? C.textVarianceGreen : C.textVarianceRed }}>
                 {it.growth_good ? '▲' : '▼'} {it.growth_pct}%
@@ -216,8 +217,8 @@ function TechnoTable({ techno, monthLabel }) {
         <tbody>
           {techno.map((t) => (
             <tr key={t.parameter}>
-              <td style={{ ...td, fontWeight: 600 }}>{t.parameter}</td>
-              <td style={{ ...td, textAlign: 'center', fontStyle: 'italic', color: C.textSecondary }}>{t.unit}</td>
+              <td style={{ ...td, fontWeight: 600 }}>{chemSub(t.parameter)}</td>
+              <td style={{ ...td, textAlign: 'center', fontStyle: 'italic', color: C.textSecondary }}>{chemSub(t.unit)}</td>
               <td style={{ ...td, textAlign: 'center', color: C.textSecondary }}>{t.better_direction}</td>
               <td style={{ ...td, textAlign: 'right' }}>{t.actual}</td>
               <td style={{ ...td, textAlign: 'right' }}>{t.target}</td>

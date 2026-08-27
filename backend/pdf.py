@@ -6,9 +6,11 @@ from fastapi.responses import Response
 from jinja2 import Environment, FileSystemLoader
 from models import PDFRequest
 from report_utils import dept_badge_group
+from chem_format import chem_subscript
 
 _TMPL_DIR = os.path.join(os.path.dirname(__file__), 'page_templates')
 _jinja_env = Environment(loader=FileSystemLoader(_TMPL_DIR), autoescape=False)
+_jinja_env.filters['chemsub'] = chem_subscript
 
 
 def _split_label(label, threshold: int = 20, tail_scale: float = 0.82) -> str:

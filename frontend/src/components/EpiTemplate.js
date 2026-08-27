@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { chemSub } from '@/lib/chemFormat';
 
 // Mirrors backend/page_templates/epi.html — see page_epi.py for the data
 // shape (it wraps page_techno.py's already-computed page-27 figures for
@@ -58,7 +59,7 @@ export default function EpiTemplate({ data }) {
                 >
                   {i === 0 && (
                     <td style={{ ...cellStyle, fontWeight: 700, verticalAlign: 'middle' }} rowSpan={sec.rows.length}>
-                      {sec.label}<br /><span style={{ fontWeight: 400, fontSize: '0.85em' }}>({row.unit})</span>
+                      {chemSub(sec.label)}<br /><span style={{ fontWeight: 400, fontSize: '0.85em' }}>({chemSub(row.unit)})</span>
                     </td>
                   )}
                   <td style={{ ...cellStyle, textAlign: 'left', fontWeight: 600 }}>{row.label}</td>

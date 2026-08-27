@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import { chemSub } from '@/lib/chemFormat';
 
 // ---------------------------------------------------------------------------
 // Production narrative sentence — mirrors backend/report_utils.py's
@@ -409,8 +410,8 @@ export default function SummaryTemplate({ data, onCellChange, selectedMonth }) {
           <tbody>
             {te_table.map((row, rIdx) => (
               <tr key={rIdx}>
-                <td className="label-cell" style={{ fontWeight: '600' }}>{row.parameter}</td>
-                <td className="label-cell" style={{ fontStyle: 'italic', color: '#475569', textAlign: 'center' }}>{row.unit}</td>
+                <td className="label-cell" style={{ fontWeight: '600' }}>{chemSub(row.parameter)}</td>
+                <td className="label-cell" style={{ fontStyle: 'italic', color: '#475569', textAlign: 'center' }}>{chemSub(row.unit)}</td>
                 {[0, 1, 2, 3, 4].map(vIdx => (
                   <td key={vIdx} style={{ textAlign: 'right' }}>
                     <input type="text" className="editor-input"

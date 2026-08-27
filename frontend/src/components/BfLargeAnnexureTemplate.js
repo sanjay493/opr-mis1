@@ -1,5 +1,7 @@
 'use client';
 
+import { chemSub } from '@/lib/chemFormat';
+
 // Mirrors backend/page_templates/bf_large_annexure.html — SAIL's 3 largest
 // BFs only (no non-SAIL comparison columns — see /reports/bf-benchmark for
 // that, a separate standalone tool). Columns come entirely from data.periods
@@ -55,7 +57,7 @@ export default function BfLargeAnnexureTemplate({ data }) {
             <tr>
               {periods.map((p) => sail_cols.map((bf) => (
                 <th key={`${p.key}-${bf.label}`} style={{ ...TH, lineHeight: 1.15, backgroundColor: KIND_BG[p.kind] }}>
-                  {bf.plant}<br />{bf.unit}
+                  {bf.plant}<br />{chemSub(bf.unit)}
                 </th>
               )))}
             </tr>
@@ -65,8 +67,8 @@ export default function BfLargeAnnexureTemplate({ data }) {
               const zebra = ri % 2 ? undefined : undefined; // highlight_alt_section_bg is transparent — no zebra fill
               return (
                 <tr key={ri}>
-                  <td style={{ ...LBL, backgroundColor: zebra }}>{row.parameter}</td>
-                  <td style={{ ...CELL, textAlign: 'center', fontStyle: 'italic', color: '#475569', backgroundColor: zebra }}>{row.unit}</td>
+                  <td style={{ ...LBL, backgroundColor: zebra }}>{chemSub(row.parameter)}</td>
+                  <td style={{ ...CELL, textAlign: 'center', fontStyle: 'italic', color: '#475569', backgroundColor: zebra }}>{chemSub(row.unit)}</td>
                   {periods.map((p) => sail_cols.map((bf) => {
                     const v = row.sail?.[bf.label]?.[p.key];
                     const tint = KIND_BG[p.kind];
