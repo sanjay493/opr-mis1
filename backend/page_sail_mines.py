@@ -84,7 +84,7 @@ _TREND_FYS = ["FY 23-24", "FY 24-25", "FY 25-26"]
 _IRON_ORE_PROD_MT = [35.423, 34.8, 38.1]
 _CLEAN_COAL_PROD_MT = [0.484, 0.376, 0.345]
 _FLUX_PROD_MT = [2.018, 1.715, 1.279]
-_SALES_BOOKING_MT = [1.16, 0.54, 3.01]
+_SALES_BOOKING_MT = [1.16, 0.754, 3.01]
 
 # Iron-ore despatch mix by end-use (Captive / Conversion Agent / Sales), Mt.
 _DESPATCH_MIX_CATS = ["Captive", "Conversion Agent", "Sales"]
