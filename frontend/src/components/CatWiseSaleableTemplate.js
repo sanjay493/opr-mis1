@@ -108,7 +108,7 @@ export default function CatWiseSaleableTemplate({ data }) {
       {title && (
         <div style={{
           textAlign: 'center', fontWeight: 700, fontSize: '12pt',
-          color: '#060177', textTransform: 'uppercase',
+          color: '#060177', textTransform: 'none',
           fontFamily: "'Roboto', Arial, Helvetica, sans-serif",
           marginBottom: 4,
         }}>

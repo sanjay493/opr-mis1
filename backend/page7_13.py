@@ -17,7 +17,7 @@ from constants import ALL_PLANTS as _SAIL_8
 import db
 
 _PIG_IRON_CFG = {
-    "display": "PIG IRON",
+    "display": "Pig Iron",
     "unit": "'000 T",
     "db_item": "Pig Iron",
     "is_nos": False,
@@ -27,7 +27,7 @@ _PIG_IRON_CFG = {
 }
 
 _FINISHED_STEEL_CFG = {
-    "display": "FINISHED STEEL (5 ISPs & 3 SSPs)",
+    "display": "Finished Steel (5 ISPs & 3 SSPs)",
     "unit": "'000 T",
     "db_item": "Finished Steel",
     "is_nos": False,
@@ -44,7 +44,7 @@ _FINISHED_STEEL_CFG = {
 
 TREND_PAGES = {
     7: {
-        "display": "OVEN PUSHING",
+        "display": "Oven Pushing",
         "unit": "Nos./day",
         "db_item": "Oven Pushing (nos/day)",
         "is_nos": True,
@@ -58,7 +58,7 @@ TREND_PAGES = {
         ],
     },
     8: {
-        "display": "SINTER",
+        "display": "Sinter",
         "unit": "'000 T",
         "db_item": "Total Sinter",
         "is_nos": False,
@@ -72,7 +72,7 @@ TREND_PAGES = {
         ],
     },
     9: {
-        "display": "HOT METAL",
+        "display": "Hot Metal",
         "unit": "'000 T",
         "db_item": "Hot Metal",
         "is_nos": False,
@@ -97,7 +97,7 @@ TREND_PAGES = {
         "plant_label_overrides": {"VISL": "VI"},
     },
     10: {
-        "display": "CRUDE STEEL",
+        "display": "Crude Steel",
         "unit": "'000 T",
         "db_item": "Total Crude Steel",
         "is_nos": False,
@@ -120,11 +120,11 @@ TREND_PAGES = {
     },
     11: {
         # Combined page: Pig Iron + Finished Steel (SAIL only, full 12 rows each)
-        "display": "PIG IRON & FINISHED STEEL",
+        "display": "Pig Iron & Finished Steel",
         "combined_items": [_PIG_IRON_CFG, _FINISHED_STEEL_CFG],
     },
     12: {
-        "display": "SALEABLE STEEL",
+        "display": "Saleable Steel",
         "unit": "'000 T",
         "db_item": "Saleable Steel",
         "is_nos": False,

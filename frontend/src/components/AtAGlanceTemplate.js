@@ -151,11 +151,9 @@ export default function AtAGlanceTemplate({ data }) {
 
   return (
     <div style={{ padding: '2px 4px', fontFamily: "'Arial Narrow', Arial, sans-serif", fontSize: '7.8pt', color: C.textPrimary }}>
-      <div style={{ background: `linear-gradient(to right, ${C.textWhite}, ${C.accentBlue})`, padding: 2, borderRadius: 6, marginBottom: 6 }}>
-        <div style={{ background: `linear-gradient(to right, ${C.accentBlue}, ${C.textWhite})`, color: C.textWhite, padding: '8px 16px', borderRadius: 5, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{ fontSize: '17pt', fontWeight: 700 }}>{title}</div>
-          <div style={{ fontSize: '11pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+        <div style={{ fontSize: '17pt', fontWeight: 700, color: C.textHeadingDark }}>{title}</div>
+        <div style={{ fontSize: '11pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
       </div>
 
       <div style={{ fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'capitalize', marginBottom: 4 }}>

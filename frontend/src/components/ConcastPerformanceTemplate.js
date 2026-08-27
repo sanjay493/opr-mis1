@@ -101,7 +101,7 @@ export default function ConcastPerformanceTemplate({ data, selectedMonth }) {
   return (
     <div style={{ fontFamily: "'Roboto', Arial, Helvetica, sans-serif" }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '6px' }}>
-        <h2 style={{ fontSize: '13pt', fontWeight: 700, color: '#060177', margin: 0, textTransform: 'uppercase' }}>
+        <h2 style={{ fontSize: '13pt', fontWeight: 700, color: '#060177', margin: 0, textTransform: 'none' }}>
           {title} – {monthLabel}
         </h2>
         <span style={{ fontSize: '8.5pt', color: '#475569', fontWeight: 500 }}>Unit: Tonnes</span>

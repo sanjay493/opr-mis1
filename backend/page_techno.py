@@ -40,15 +40,15 @@ _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 
 TECHNO_PAGES = {
     27: ("MAJOR",       "Plant Wise Major TEPs (Major 12 Parameters)", ""),
-    28: ("COKE_SINTER", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "COKE AND COAL CHEMICALS, SINTER PLANT"),
-    29: ("IRON_MAKING", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "IRON MAKING"),
-    29.5: ("IRON_MAKING", "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "IRON MAKING (CONTD.)"),
-    30: ("SMS",         "MONTH-WISE TECHNO-ECONOMIC PARAMETERS", "SMS SHOP"),
-    31: ("MILL_BSP",    "MILL WISE TECHNO-ECONOMIC PARAMETERS", "Bhilai Steel Plant"),
-    32: ("MILL_DSP",    "MILL WISE TECHNO-ECONOMIC PARAMETERS", "Durgapur Steel Plant"),
-    33: ("MILL_RSP",    "MILL WISE TECHNO-ECONOMIC PARAMETERS", "Rourkela Steel Plant"),
-    34: ("MILL_BSL",    "MILL WISE TECHNO-ECONOMIC PARAMETERS", "Bokaro Steel Plant"),
-    35: ("MILL_ISP",    "MILL WISE TECHNO-ECONOMIC PARAMETERS", "IISCO Steel Plant"),
+    28: ("COKE_SINTER", "Month-Wise Techno-Economic Parameters", "Coke and Coal Chemicals, Sinter Plant"),
+    29: ("IRON_MAKING", "Month-Wise Techno-Economic Parameters", "Iron Making"),
+    29.5: ("IRON_MAKING", "Month-Wise Techno-Economic Parameters", "Iron Making (Contd.)"),
+    30: ("SMS",         "Month-Wise Techno-Economic Parameters", "SMS Shop"),
+    31: ("MILL_BSP",    "Mill Wise Techno-Economic Parameters", "Bhilai Steel Plant"),
+    32: ("MILL_DSP",    "Mill Wise Techno-Economic Parameters", "Durgapur Steel Plant"),
+    33: ("MILL_RSP",    "Mill Wise Techno-Economic Parameters", "Rourkela Steel Plant"),
+    34: ("MILL_BSL",    "Mill Wise Techno-Economic Parameters", "Bokaro Steel Plant"),
+    35: ("MILL_ISP",    "Mill Wise Techno-Economic Parameters", "IISCO Steel Plant"),
 }
 
 
@@ -2394,7 +2394,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
             sections.append({"label": param_name, "unit": unit_str, "rows": rows})
 
     return {
-        "title":        "MAJOR TECHNO-ECONOMIC PARAMETERS — VERIFICATION",
+        "title":        "Major Techno-Economic Parameters — Verification",
         "subtitle":     "Reported (stored) vs Calculated (recomputed from monthly actuals)",
         "report_month": report_month,
         "month_labels": [_mlabel(m) for m in ytd],

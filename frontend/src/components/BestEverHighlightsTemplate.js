@@ -39,7 +39,7 @@ function RecordCell({ rec, itemKey }) {
   const fresh = best?.fresh;
   return (
     <td style={{
-      textAlign: 'center', verticalAlign: 'middle', padding: '6px 7px',
+      textAlign: 'center', verticalAlign: 'middle', padding: '9px 7px',
       borderTop: `1px solid ${C.borderDivider}`, borderLeft: `1px solid ${C.borderDivider}`,
       ...(fresh && { background: C.bestEverBg }),
     }}>
@@ -75,24 +75,24 @@ function GroupTable({ group, first }) {
     <>
       <div style={{
         fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase',
-        marginBottom: 2, marginTop: first ? 0 : 8,
+        marginBottom: 4, marginTop: first ? 0 : 20,
       }}>{group.label}</div>
       <table style={{
         width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed',
-        border: `1px solid ${C.borderLight}`, borderRadius: 4, overflow: 'hidden',
+        border: `1px solid ${C.borderLight}`,
       }}>
         <thead>
           <tr>
-            <th style={{ width: '15%', textAlign: 'left', background: C.accentBlue, color: C.textWhite, fontSize: '10pt', fontWeight: 700, padding: '6px 10px' }}>Item</th>
+            <th style={{ width: '15%', textAlign: 'left', background: C.accentBlue, color: C.textWhite, fontSize: '10pt', fontWeight: 700, padding: '9px 10px' }}>Item</th>
             {PERIOD_COLS.map(({ key, label }) => (
-              <th key={key} style={{ width: '17%', textAlign: 'center', background: C.accentBlue, color: C.textWhite, fontSize: '10pt', fontWeight: 700, padding: '6px 8px' }}>{label}</th>
+              <th key={key} style={{ width: '17%', textAlign: 'center', background: C.accentBlue, color: C.textWhite, fontSize: '10pt', fontWeight: 700, padding: '9px 8px' }}>{label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {group.rows.map((row, i) => (
             <tr key={row.key} style={{ background: i % 2 === 0 ? C.textWhite : C.highlightsBoxBg }}>
-              <td style={{ textAlign: 'left', fontWeight: 700, color: C.textAccentNavy, padding: '6px 10px', borderTop: `1px solid ${C.borderDivider}`, fontSize: '10pt' }}>{row.label}</td>
+              <td style={{ textAlign: 'left', fontWeight: 700, color: C.textAccentNavy, padding: '9px 10px', borderTop: `1px solid ${C.borderDivider}`, fontSize: '10pt' }}>{row.label}</td>
               {PERIOD_COLS.map(({ key }) => <RecordCell key={key} rec={row.periods[key]} itemKey={row.key} />)}
             </tr>
           ))}
@@ -108,11 +108,9 @@ export default function BestEverHighlightsTemplate({ data }) {
 
   return (
     <div style={{ padding: '2px 4px', fontFamily: "'Arial Narrow', Arial, sans-serif", fontSize: '10pt', color: C.textPrimary }}>
-      <div style={{ background: `linear-gradient(to right, ${C.textWhite}, ${C.accentBlue})`, padding: 2, borderRadius: 6, marginBottom: 5 }}>
-        <div style={{ background: `linear-gradient(to right, ${C.accentBlue}, ${C.textWhite})`, color: C.textWhite, padding: '4px 14px', borderRadius: 5, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{ fontSize: '15pt', fontWeight: 700 }}>{title}</div>
-          <div style={{ fontSize: '10pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 5 }}>
+        <div style={{ fontSize: '15pt', fontWeight: 700, color: C.textHeadingDark }}>{title}</div>
+        <div style={{ fontSize: '10pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
       </div>
 
       {unitNote && (

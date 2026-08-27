@@ -85,7 +85,7 @@ _MINES_CHART_COLORS = {
 # DESPATCH column group instead (see _merge_despatch_columns).
 SAIL_MINES_SECTIONS = [
     {
-        "key": "iron_ore_prod", "title": "IRON ORE MINES PERFORMANCE", "kind": "production",
+        "key": "iron_ore_prod", "title": "Iron Ore Mines Performance", "kind": "production",
         "items": ["CGoM", "OGoM", "JGoM"],
         "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}],
     },
@@ -95,7 +95,7 @@ SAIL_MINES_SECTIONS = [
         "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_prod",
     },
     {
-        "key": "iron_ore_sales", "title": "SALES OF IRON ORE", "kind": "production", "group_label": "BOOKED QTY",
+        "key": "iron_ore_sales", "title": "Sales of Iron Ore", "kind": "production", "group_label": "BOOKED QTY",
         "items": ["CGoM", "OGoM", "JGoM"],
         "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}],
     },
@@ -105,12 +105,12 @@ SAIL_MINES_SECTIONS = [
         "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_sales",
     },
     {
-        "key": "coal_prod", "title": "COAL MINES PRODUCTION PERFORMANCE", "kind": "production",
+        "key": "coal_prod", "title": "Coal Mines Production Performance", "kind": "production",
         "items": ["Raw Coking Coal", "Thermal Coal"],
         "derived": [{"label": "Total", "kind": "sum", "of": ["Raw Coking Coal", "Thermal Coal"]}],
     },
     {
-        "key": "washery", "title": "WASHERY PERFORMANCE", "kind": "production",
+        "key": "washery", "title": "Washery Performance", "kind": "production",
         "items": ["Input Raw Coal", "Clean Coal"],
         "derived": [{
             "label": "Yield (Clean Coal/Raw Coal)", "kind": "ratio", "value_fmt": "pct",
@@ -118,12 +118,12 @@ SAIL_MINES_SECTIONS = [
         }],
     },
     {
-        "key": "coal_despatch", "title": "DESPATCH OF CLEAN COAL & THERMAL COAL (INCL. MIDDLINGS)", "kind": "production",
+        "key": "coal_despatch", "title": "Despatch of Clean Coal & Thermal Coal (incl. Middlings)", "kind": "production",
         "items": ["Clean Coal", "Thermal"],
         "derived": [],
     },
     {
-        "key": "flux_prod", "title": "FLUX PRODUCTION & DESPATCH (LIMESTONE & DOLOMITE)", "kind": "production",
+        "key": "flux_prod", "title": "Flux Production & Despatch (Limestone & Dolomite)", "kind": "production",
         "items": ["Limestone", "Dolomite"],
         "derived": [],
     },

@@ -38,9 +38,9 @@ plants' figures.
 import db
 
 _PRODUCT_TITLE = {
-    "HM": "TREND IN COST OF PRODUCTION OF HOT METAL",
-    "CS": "TREND IN COST OF PRODUCTION OF CRUDE STEEL",
-    "SS": "TREND IN COST OF PRODUCTION OF SALEABLE STEEL",
+    "HM": "Trend in Cost of Production of Hot Metal",
+    "CS": "Trend in Cost of Production of Crude Steel",
+    "SS": "Trend in Cost of Production of Saleable Steel",
 }
 _COST_TYPE_LABEL = {"TOTAL": "TOTAL COST", "VARIABLE": "VARIABLE COST", "FIXED": "FIXED COST"}
 _PLANT_LABEL = {"BSP": "BSP", "DSP": "DSP", "RSP": "RSP", "BSL": "BSL", "ISP": "ISP", "SAIL": "SAIL 5 ISPs"}

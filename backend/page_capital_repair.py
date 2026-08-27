@@ -25,11 +25,11 @@ CR_PAGES = {
 }
 
 _PLANT_TITLE = {
-    "BSP": "BHILAI STEEL PLANT",
-    "DSP": "DURGAPUR STEEL PLANT",
-    "RSP": "ROURKELA STEEL PLANT",
-    "BSL": "BOKARO STEEL PLANT",
-    "ISP": "IISCO STEEL PLANT",
+    "BSP": "Bhilai Steel Plant",
+    "DSP": "Durgapur Steel Plant",
+    "RSP": "Rourkela Steel Plant",
+    "BSL": "Bokaro Steel Plant",
+    "ISP": "IISCO Steel Plant",
 }
 
 
@@ -88,7 +88,7 @@ def generate_capital_repair(plant: str, fy: str = "2026-27") -> dict:
             by_shop[shop]["rows"].append(row)
 
         return {
-            "title": f"MAJOR REPAIR/ CAPITAL REPAIR PLAN OF SAIL {fy}",
+            "title": f"Major Repair / Capital Repair Plan of SAIL {fy}",
             "subtitle": _PLANT_TITLE.get(plant, plant),
             "plant": plant,
             "fy": fy,

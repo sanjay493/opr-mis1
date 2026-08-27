@@ -84,7 +84,7 @@ export default function SegmentWiseTemplate({ data }) {
     <div style={{ padding: '6px', fontFamily: 'Arial, sans-serif', fontSize: 'var(--report-font-size)' }}>
       <div style={{
         textAlign: 'center', fontWeight: 700, fontSize: '12pt',
-        color: '#060177', textTransform: 'uppercase',
+        color: '#060177', textTransform: 'none',
         fontFamily: "'Roboto', Arial, Helvetica, sans-serif",
         marginBottom: 4,
       }}>

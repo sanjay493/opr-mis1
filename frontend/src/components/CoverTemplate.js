@@ -54,7 +54,7 @@ export default function CoverTemplate({ data }) {
   } = data || {};
 
   return (
-    <div style={{ position: 'relative', zIndex: 0, minHeight: '100%', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', zIndex: 0, minHeight: '100%', overflow: 'hidden', fontFamily: "'Roboto', Arial, Helvetica, sans-serif" }}>
 
       {bg_data_uri && (
         <img src={bg_data_uri} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />

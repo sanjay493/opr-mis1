@@ -23,11 +23,11 @@ function fmt0(v) {
 }
 
 function MonthCell({ cell }) {
-  if (!cell) return <td style={{ textAlign: 'center', padding: '3px 2px', borderTop: `1px solid ${C.borderDivider}`, borderLeft: `1px solid ${C.borderDivider}` }}><span style={{ color: C.textFaint, fontSize: '10pt' }}>—</span></td>;
+  if (!cell) return <td style={{ textAlign: 'center', padding: '5px 2px', borderTop: `1px solid ${C.borderDivider}`, borderLeft: `1px solid ${C.borderDivider}` }}><span style={{ color: C.textFaint, fontSize: '10pt' }}>—</span></td>;
   const { best, second } = cell;
   return (
     <td style={{
-      textAlign: 'center', verticalAlign: 'top', padding: '3px 2px',
+      textAlign: 'center', verticalAlign: 'top', padding: '5px 2px',
       borderTop: `1px solid ${C.borderDivider}`, borderLeft: `1px solid ${C.borderDivider}`,
     }}>
       <span style={{ fontSize: '10pt', fontWeight: 800, color: best.is_all_time_best ? C.khvAssessmentRed : C.steelBlue }}>
@@ -51,24 +51,24 @@ function GroupTable({ group, monthNames, first }) {
     <>
       <div style={{
         fontSize: '10pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'uppercase',
-        marginBottom: 2, marginTop: first ? 0 : 8,
+        marginBottom: 4, marginTop: first ? 0 : 20,
       }}>{group.label}</div>
       <table style={{
         width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed',
-        border: `1px solid ${C.borderLight}`, borderRadius: 4, overflow: 'hidden',
+        border: `1px solid ${C.borderLight}`,
       }}>
         <thead>
           <tr>
-            <th style={{ width: '11%', textAlign: 'left', background: C.accentBlue, color: C.textWhite, fontSize: '10pt', fontWeight: 700, padding: '4px 6px' }}>Item</th>
+            <th style={{ width: '11%', textAlign: 'left', background: C.accentBlue, color: C.textWhite, fontSize: '10pt', fontWeight: 700, padding: '6px 6px' }}>Item</th>
             {monthNames.map((m) => (
-              <th key={m} style={{ textAlign: 'center', background: C.accentBlue, color: C.textWhite, fontSize: '10pt', fontWeight: 700, padding: '4px 3px' }}>{m}</th>
+              <th key={m} style={{ textAlign: 'center', background: C.accentBlue, color: C.textWhite, fontSize: '10pt', fontWeight: 700, padding: '6px 3px' }}>{m}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {group.rows.map((row, i) => (
             <tr key={row.key} style={{ background: i % 2 === 0 ? C.textWhite : C.highlightsBoxBg }}>
-              <td style={{ textAlign: 'left', fontWeight: 700, color: C.textHeadingDark, padding: '4px 6px', borderTop: `1px solid ${C.borderDivider}`, fontSize: '10pt' }}>{row.label}</td>
+              <td style={{ textAlign: 'left', fontWeight: 700, color: C.textHeadingDark, padding: '6px 6px', borderTop: `1px solid ${C.borderDivider}`, fontSize: '10pt' }}>{row.label}</td>
               {Array.from({ length: 12 }, (_, idx) => idx + 1).map((mnum) => (
                 <MonthCell key={mnum} cell={row.months[mnum]} />
               ))}
@@ -86,11 +86,9 @@ export default function BestCalendarMonthTemplate({ data }) {
 
   return (
     <div style={{ padding: '2px 4px', fontFamily: "'Arial Narrow', Arial, sans-serif", fontSize: '10pt', color: C.textPrimary }}>
-      <div style={{ background: `linear-gradient(to right, ${C.textWhite}, ${C.accentBlue})`, padding: 2, borderRadius: 6, marginBottom: 5 }}>
-        <div style={{ background: `linear-gradient(to right, ${C.accentBlue}, ${C.textWhite})`, color: C.textWhite, padding: '4px 14px', borderRadius: 5, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{ fontSize: '15pt', fontWeight: 700 }}>{title}</div>
-          <div style={{ fontSize: '10pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 5 }}>
+        <div style={{ fontSize: '15pt', fontWeight: 700, color: C.textHeadingDark }}>{title}</div>
+        <div style={{ fontSize: '10pt', fontWeight: 700, color: C.khvAssessmentAmber, whiteSpace: 'nowrap' }}>{monthLabel}</div>
       </div>
 
       <div style={{ textAlign: 'right', fontSize: '10pt', fontWeight: 700, fontStyle: 'italic', color: C.textSecondary, marginBottom: 4 }}>Unit: {unit}</div>

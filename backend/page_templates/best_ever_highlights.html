@@ -1,34 +1,31 @@
 {# ── Best-Ever Highlights — all-time records, SAIL (5 Plants) then SAIL (8 Plants) ── #}
 <div style="padding:2px 4px;font-family:'Arial Narrow',Arial,sans-serif;font-size:10pt;color:{{ colors.text_primary }};">
 
-  {# Banner — same gradient-border treatment as MIS at a Glance's banner, inner fill left transparent #}
-  <div style="background:linear-gradient(to right, {{ colors.text_white }}, {{ colors.misc_accent_blue }});padding:2px;border-radius:6px;margin-bottom:5px;">
-    <div style="background:transparent;padding:4px 14px;border-radius:5px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;">
-      <div style="font-size:15pt;font-weight:700;color:rgb(0,0,255);">{{ page.title }}</div>
-      <div style="font-size:10pt;font-weight:700;color:{{ colors.khv_assessment_amber }};white-space:nowrap;">{{ page.month_label }}</div>
-    </div>
+  <div style="padding:4px 14px;margin-bottom:5px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;">
+    <div style="font-size:15pt;font-weight:700;color:rgb(0,0,255);">{{ page.title }}</div>
+    <div style="font-size:10pt;font-weight:700;color:{{ colors.khv_assessment_amber }};white-space:nowrap;">{{ page.month_label }}</div>
   </div>
 
   <div style="text-align:right;font-size:10pt;font-weight:700;font-style:italic;color:{{ colors.text_secondary }};margin-bottom:4px;">{{ page.unit_note }}</div>
 
   {% for g in page.groups %}
-  <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:2px;{% if not loop.first %}margin-top:8px;{% endif %}">{{ g.label }}</div>
-  <table style="width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid {{ colors.border_light }};border-radius:4px;overflow:hidden;">
+  <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:uppercase;margin-bottom:4px;{% if not loop.first %}margin-top:20px;{% endif %}">{{ g.label }}</div>
+  <table style="width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid {{ colors.misc_accent_blue }};">
     <thead>
       <tr>
-        <th style="width:15%;text-align:left;background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};font-size:10pt;font-weight:700;padding:6px 10px;">Item</th>
+        <th style="width:15%;text-align:left;background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};font-size:10pt;font-weight:700;padding:9px 10px;">Item</th>
         {% for h in ['Best Month', 'Best Quarter', 'Best Half', 'Best Financial Year', 'Best Calendar Year'] %}
-        <th style="width:17%;text-align:center;background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};font-size:10pt;font-weight:700;padding:6px 8px;">{{ h }}</th>
+        <th style="width:17%;text-align:center;background:{{ colors.misc_accent_blue }};color:{{ colors.text_white }};font-size:10pt;font-weight:700;padding:9px 8px;">{{ h }}</th>
         {% endfor %}
       </tr>
     </thead>
     <tbody>
       {% for row in g.rows %}
       <tr style="background:{{ colors.text_white if loop.index0 % 2 == 0 else colors.misc_highlights_box_bg }};">
-        <td style="text-align:left;font-weight:700;color:{{ colors.text_accent_navy }};padding:6px 10px;border-top:1px solid {{ colors.border_divider }};font-size:10pt;">{{ row.label }}</td>
+        <td style="text-align:left;font-weight:700;color:{{ colors.text_accent_navy }};padding:9px 10px;border-top:1px solid {{ colors.misc_accent_blue }};font-size:10pt;">{{ row.label }}</td>
         {% for pk in ['month', 'quarter', 'half', 'fy', 'cy'] %}
         {% set rec = row.periods[pk] %}
-        <td style="text-align:center;vertical-align:middle;padding:6px 7px;border-top:1px solid {{ colors.border_divider }};border-left:1px solid {{ colors.border_divider }};
+        <td style="text-align:center;vertical-align:middle;padding:9px 7px;border-top:1px solid {{ colors.misc_accent_blue }};border-left:1px solid {{ colors.misc_accent_blue }};
                    {% if rec.best and rec.best.fresh %}background:{{ colors.highlight_best_ever_bg }};{% endif %}">
           {% if rec.best %}
             {% if rec.best.fresh %}
@@ -37,7 +34,7 @@
             <span style="font-size:10pt;font-weight:700;color:{{ colors.text_primary }};">{% if row.key == 'Oven Pushing (nos/day)' %}{{ '%.3f'|format(rec.best.total) }}{% else %}{{ '{:,.0f}'.format(rec.best.total) }}{% endif %}</span>
             <div style="font-size:10pt;color:{{ colors.text_secondary }};">{{ rec.best.period }}</div>
             {% if rec.second %}
-            <div style="margin-top:2px;padding-top:2px;border-top:1px dashed {{ colors.border_divider }};font-size:10pt;color:{{ colors.text_secondary }};">
+            <div style="margin-top:2px;padding-top:2px;border-top:1px dashed {{ colors.misc_accent_blue  }};font-size:10pt;color:{{ colors.text_secondary }};">
               <span style="font-weight:700;">2nd · {% if row.key == 'Oven Pushing (nos/day)' %}{{ '%.3f'|format(rec.second.total) }}{% else %}{{ '{:,.0f}'.format(rec.second.total) }}{% endif %}</span><br/>
               <span style="font-size:10pt;color:{{ colors.text_secondary }};">{{ rec.second.period }}</span>
             </div>

@@ -33,6 +33,12 @@ const PLANT_BG = {
 
 const BOLD_PLANTS = new Set(['SAIL', 'BSP', 'DSP', 'RSP', 'BSL', 'ISP']);
 
+const NAVY = '#000c48';
+const NAVY_LINE = `1.3px solid ${NAVY}`;
+// value-column indices that get a navy vertical wall on their right edge:
+// 0 = "yy-yy Plan", 5 = "%Gr. <report month>"
+const VWALL_AFTER = new Set([0, 5]);
+
 export default function PlantWisePerformanceTemplate({ data, onCellChange, selectedMonth }) {
   const { rows = [] } = data || {};
 
@@ -77,7 +83,7 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
     let size = 1;
     while (i + size < rows.length && rows[i + size].plant === plant) size++;
     for (let g = 0; g < size; g++) {
-      grouped.push({ row: rows[i + g], rIdx: i + g, isFirst: g === 0, size });
+      grouped.push({ row: rows[i + g], rIdx: i + g, isFirst: g === 0, isLast: g === size - 1, size });
     }
     i += size;
   }
@@ -86,7 +92,7 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
     <div className="report-table-wrapper" style={{ marginTop: '4px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2px' }}>
         <h2 className="page5-6-heading">
-          PLANT WISE ITEM WISE PRODUCTION & CS TO HM RATIO :{shortM}'{shortY} and Apr-{shortM}'{shortY}
+          Plant Wise Item Wise Production & CS to HM Ratio :{shortM}'{shortY} and Apr-{shortM}'{shortY}
         </h2>
         <span className="page5-6-unit">Unit:000 T</span>
       </div>
@@ -112,10 +118,10 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
           <tr>
             <th rowSpan="2" style={TH}></th>
             <th rowSpan="2" style={{ ...TH, textAlign: 'left', paddingLeft: '4px' }}></th>
-            <th rowSpan="2" style={TH}>{fyStr}<br />Plan</th>
+            <th rowSpan="2" style={{ ...TH, borderLeft: NAVY_LINE, borderRight: NAVY_LINE }}>{fyStr}<br />Plan</th>
             <th colSpan="3" style={TH}>{shortM}'{shortY}</th>
             <th rowSpan="2" style={TH}>{shortM}'{prevY}<br />Act</th>
-            <th rowSpan="2" style={TH}>%Gr.<br />{shortM}'{prevY}</th>
+            <th rowSpan="2" style={{ ...TH, borderRight: NAVY_LINE }}>%Gr.<br />{shortM}'{prevY}</th>
             <th colSpan="3" style={TH}>Apr-{shortM}'{shortY}</th>
             <th rowSpan="2" style={TH}>Apr-{shortM}'{prevY}<br />Act</th>
             <th rowSpan="2" style={TH}>%Gr.<br />Apr-{shortM}'{prevY}</th>
@@ -128,9 +134,14 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
         </thead>
 
         <tbody>
-          {grouped.map(({ row, rIdx, isFirst, size }) => {
+          {grouped.map(({ row, rIdx, isFirst, isLast, size }) => {
             const plantBg = PLANT_BG[row.plant] || '#f8fafc';
             const isHighlight = BOLD_PLANTS.has(row.plant);
+            // navy box around each plant block: top on its first row, bottom on its last
+            const rowEdge = {
+              borderTop: isFirst ? NAVY_LINE : undefined,
+              borderBottom: isLast ? NAVY_LINE : undefined,
+            };
             return (
               <tr
                 key={rIdx}
@@ -146,13 +157,15 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
                     style={{
                       ...TD,
                       backgroundColor: plantBg,
-                      borderRight: '1px solid #94a3b8',
+                      borderRight: NAVY_LINE,
+                      borderTop: NAVY_LINE,
+                      borderBottom: NAVY_LINE,
                     }}
                   >
                     {row.plant}
                   </td>
                 )}
-                <td style={{ ...TD, textAlign: 'left', paddingLeft: '4px', fontWeight: 'inherit' }}>
+                <td style={{ ...TD, ...rowEdge, textAlign: 'left', paddingLeft: '4px', fontWeight: 'inherit' }}>
                   <input
                     type="text"
                     className="editor-input"
@@ -162,7 +175,16 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
                   />
                 </td>
                 {(row.values || []).map((val, vIdx) => (
-                  <td key={vIdx} style={{ ...TD, textAlign: 'right' }}>
+                  <td
+                    key={vIdx}
+                    style={{
+                      ...TD,
+                      ...rowEdge,
+                      textAlign: 'right',
+                      ...(VWALL_AFTER.has(vIdx) ? { borderRight: NAVY_LINE } : {}),
+                      ...(vIdx === 0 ? { borderLeft: NAVY_LINE } : {}),
+                    }}
+                  >
                     <input
                       type="text"
                       className="editor-input"

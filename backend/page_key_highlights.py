@@ -195,7 +195,7 @@ def generate_key_highlights(report_month: str) -> dict:
 
     return {
         "type": "key_highlights",
-        "title": "KEY HIGHLIGHTS & VARIANCES",
+        "title": "Key Highlights & Variances",
         "subtitle": f"Major Achievements, Exceptions & Focus Areas — {month_label}",
         "month_label": month_label,
         "kpi": _kpi_section(report_month),

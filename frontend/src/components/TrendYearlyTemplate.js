@@ -9,8 +9,11 @@ const THDR = { ...HDR, background: '#1a3050' };
 
 // Data cell styles
 const CELL  = { fontSize: 'var(--report-font-size)', padding: '2px 3px',  textAlign: 'right',  border: '0.3px solid #e2e8f0' };
-const QCELL = { ...CELL, background: '#f0f5ff', fontWeight: '600' };
-const TCELL = { ...CELL, background: '#e8f0fb', fontWeight: '700' };
+// Quarter columns (blue) and the annual Total column (violet) carry
+// deliberately different hues so they don't read as one band — keep in
+// sync with colors_config.json highlight_qtr_col_bg / highlight_total_col_bg.
+const QCELL = { ...CELL, background: '#dce8fa', fontWeight: '600' };
+const TCELL = { ...CELL, background: '#eae1f5', fontWeight: '700' };
 const HHCELL = { ...CELL, background: '#d1fae5', fontWeight: '700' };
 const YCELL = { ...CELL, fontSize: 'var(--report-font-size)', textAlign: 'left', paddingLeft: '3px', whiteSpace: 'nowrap', fontWeight: '400' };
 
@@ -40,6 +43,20 @@ function bestFlagStyle(flag) {
 
 const AGGREGATES = new Set(['SAIL', '5 Plants']);
 
+// One fixed background per individual plant's stacked-letter label column,
+// same as pages 7-13's colors_config.json plant_color_* entries (kept in
+// sync manually — this preview can't read that file, same reason PLAN_BG/
+// SAIL_BG/FP_BG above are duplicated hex too). SAIL/'5 Plants' use their own
+// aggregate colors in rowColors below instead.
+// Distinct, medium-saturation hue per plant so consecutive plant blocks
+// down the label column clearly contrast with each other (and with the
+// white Year column beside them). Keep in sync with colors_config.json
+// plant_color_*.
+const PLANT_COLORS = {
+  BSP: '#a9c5ec', DSP: '#f1d0a1', RSP: '#cbb5e6', BSL: '#f2b1c7',
+  ISP: '#9fd3e0', ASP: '#b9dd9c', SSP: '#e8bb9c', VI: '#afbdd0',
+};
+
 function rowColors(row) {
   if (row.is_plan)             return { bg: PLAN_BG, fw: '700' };
   if (row.plant === 'SAIL')    return { bg: SAIL_BG, fw: '700' };
@@ -55,7 +72,7 @@ function TrendTable({ rows, item_display, unit }) {
         borderBottom: '2px solid #0f172a', paddingBottom: '4px', marginBottom: '6px',
       }}>
         <h2 className="page7-13-heading">
-          10 YEARS MONTH WISE PRODUCTION : {item_display}
+          10 Years Month Wise Production : {item_display}
         </h2>
         <span className="page7-13-unit">Unit: {unit}</span>
       </div>
@@ -102,31 +119,51 @@ function TrendTable({ rows, item_display, unit }) {
             const isAggregate = AGGREGATES.has(row.plant);
             const topBorder = row.is_first_in_plant ? '2px solid #64748b' : undefined;
 
+            const plantChars = row.plant.replace(/ /g, '');
+            // Font tier is driven by how many stacked letters must fit
+            // within this group's own row count, not by the plant name's
+            // length alone — this preview never splits across pages, so a
+            // long label like "5 Plants" (7 letters) stays full-size as
+            // long as its group actually has that many rows (matches
+            // trend_section.html's PDF-side logic, where a real page
+            // split can leave a segment too short for the label).
+            const nRows = row.plant_row_count || 1;
+            const tight = plantChars.length > nRows + 2;
+            const compact = !tight && plantChars.length > nRows;
             const plantCellStyle = {
               verticalAlign: 'middle',
               fontWeight: '700',
               textAlign: 'center',
-              fontSize: 'var(--report-font-size)',
-              background: isAggregate ? (row.plant === 'SAIL' ? '#bbf7d0' : '#fef08a') : '#e8edf3',
+              fontSize: tight ? '6pt' : (compact ? '6.5pt' : '8.3pt'),
+              background: isAggregate
+                ? (row.plant === 'SAIL' ? '#bbf7d0' : '#fef08a')
+                : (PLANT_COLORS[row.plant] || '#d1d5db'),
               color: '#1e3a5f',
               border: '0.5px solid #94a3b8',
               padding: '2px 1px',
-              lineHeight: '1.15',
+              lineHeight: tight ? '1.05' : '1.15',
             };
 
             return (
               <tr key={idx} style={{ background: bg, fontWeight: fw, borderTop: topBorder }}>
                 {row.rowspan_start && (
                   <td rowSpan={row.plant_row_count} style={plantCellStyle}>
-                    {row.plant.split('').map((ch, i) => (
+                    {plantChars.split('').map((ch, i) => (
                       <React.Fragment key={i}>
                         {ch}
-                        {i < row.plant.length - 1 && <br />}
+                        {i < plantChars.length - 1 && <br />}
                       </React.Fragment>
                     ))}
                   </td>
                 )}
-                <td style={{ ...YCELL, fontWeight: row.is_plan ? '700' : '400' }}>{row.year_label}</td>
+                <td style={{
+                  ...YCELL,
+                  fontWeight: row.is_plan ? '700' : '400',
+                  // "P 26-27" runs 2 characters longer than every other
+                  // row's "26-27" — column-fit fix, scoped to plan rows
+                  // only, matching trend_section.html's tr.plan-row rule.
+                  ...(row.is_plan ? { paddingLeft: 0, paddingRight: 0, fontSize: '8pt' } : null),
+                }}>{row.year_label}</td>
                 <td style={cellStyle(0)}>{v[0]}</td>
                 <td style={cellStyle(1)}>{v[1]}</td>
                 <td style={cellStyle(2)}>{v[2]}</td>

@@ -11,7 +11,7 @@ function PlantTitle({ title, titlePrefix, plantDisplay }) {
     return (
       <>
         {titlePrefix}
-        <span style={{ color: STEEL_RED, textTransform: 'uppercase' }}>{plantDisplay}</span>
+        <span style={{ color: STEEL_RED, textTransform: 'none' }}>{plantDisplay}</span>
       </>
     );
   }

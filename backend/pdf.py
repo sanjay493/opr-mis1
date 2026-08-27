@@ -30,10 +30,10 @@ def _split_label(label, threshold: int = 20, tail_scale: float = 0.82) -> str:
 _jinja_env.filters['split_label'] = _split_label
 
 # The print margin main_html (pages 3+) is always rendered with — a single
-# source of truth shared by _render_pdf's page.pdf() call and
-# _measure_trend_rows_live's page-height arithmetic, which must agree on the
-# exact same content-area height or its computed page breaks won't match
-# what page.pdf() actually produces.
+# source of truth shared by every page.pdf() call for it, including the
+# trend-table rowspan "probe" print in _make_trend_split_hook, which must
+# use this exact same margin so its measured page breaks match what the
+# final page.pdf() call actually produces.
 _MAIN_MARGIN = {"top": "12mm", "right": "15mm", "bottom": "12mm", "left": "15mm"}
 
 
@@ -614,123 +614,310 @@ def _measure_page3_overflow(browser, main_pages: list, template, render_kwargs: 
     return (next_physical - p3_physical) > 1
 
 
-def _measure_trend_rows_live(page, margin: dict) -> list:
-    """Measure trend-table row geometry directly on the live Playwright
-    `page` that is about to be printed (main_html, already loaded with
-    `document.fonts.ready` settled) — no separate render, no PDF-text
-    extraction. Returns one list per '.page7-13-section-page' found in the
-    DOM, each a list of {"item": table_index, "row": row_index, "page":
-    local_page_index} dicts (local_page_index is 0-based *within that
-    section* — absolute physical page numbers are never needed since
-    _apply_trend_page_splits only compares consecutive rows for equality).
+# Cap on _make_trend_split_hook's probe/correct/re-probe loop — each pass is
+# one extra full page.pdf() call, so this bounds worst-case cost; real-world
+# corrections have been observed to stabilize in 2-3 passes (see that
+# function's own docstring).
+_MAX_TREND_SPLIT_PASSES = 5
 
-    Replicates Chromium's own print pagination for these tables arithmetically:
-    walk each item's table in document order, track the vertical budget left
-    on the current physical page (content height = A4 height minus the same
-    top/bottom print margins page.pdf() is called with below), and cut to a
-    new page whenever the next row wouldn't fit — crediting the repeated
-    <thead> a fresh page always pays for first. table-layout:fixed and a
-    '.page7-13-section-page { page-break-before: always }' rule mean the
-    section always starts flush at a fresh page's top, so no absolute
-    document offset is needed — everything is relative to the section's own
-    start.
 
-    This replaces an earlier design that rendered a *second*, separate
-    Chromium document with per-row text markers baked into the row labels,
-    then inferred each row's physical page by extracting text from the
-    resulting PDF. That was unreliable: two otherwise-identical measurement
-    renders were observed to disagree about where a group's page break
-    fell, even though the real final render was byte-for-byte reproducible
-    — meaning the two-render design itself, not the splitting logic, was
-    the source of the bug (a plant-label rowspan cell split in the middle of
-    a group with no actual page break under it). Measuring the exact page
-    that becomes the PDF removes that gap entirely: the only thing that
-    differs between this measurement and the corrected re-render is the
-    plant-label column's own cell boundaries, which (per trend_section.html)
-    contribute no height of their own — row height is governed solely by
-    the ordinary data cells, identical in both passes."""
-    top_mm = float(str(margin["top"]).rstrip("mm"))
-    bottom_mm = float(str(margin["bottom"]).rstrip("mm"))
-    return page.evaluate(
-        """([topMM, bottomMM]) => {
-            const pxPerMM = 96 / 25.4;
-            const pageHeightMM = 297;
-            const contentHeightPx = (pageHeightMM - topMM - bottomMM) * pxPerMM;
-            const sections = document.querySelectorAll('.page7-13-section-page');
-            const out = [];
-            sections.forEach((section) => {
-                let budget = contentHeightPx;
-                let prevBottom = section.getBoundingClientRect().top;
-                let pageIdx = 0;
-                const rows = [];
-                const tables = section.querySelectorAll('.page7-13-item-block .page7-13-yearly-table');
-                tables.forEach((table, tIdx) => {
-                    const thead = table.querySelector('thead');
-                    const theadRect = thead.getBoundingClientRect();
-                    let size = (theadRect.top - prevBottom) + theadRect.height;
-                    if (size > budget && budget < contentHeightPx) {
-                        pageIdx += 1;
-                        budget = contentHeightPx;
-                        size = theadRect.height;
-                    }
-                    budget -= size;
-                    prevBottom = theadRect.bottom;
-                    table.querySelectorAll('tbody tr').forEach((tr, rIdx) => {
-                        const r = tr.getBoundingClientRect();
-                        let s = (r.top - prevBottom) + r.height;
-                        if (s > budget) {
-                            pageIdx += 1;
-                            budget = contentHeightPx - theadRect.height;
-                            s = r.height;
-                        }
-                        budget -= s;
-                        prevBottom = r.bottom;
-                        rows.push({item: tIdx, row: rIdx, page: pageIdx});
-                    });
-                    const legend = table.parentElement.querySelector('.page7-13-legend');
-                    if (legend) {
-                        const lr = legend.getBoundingClientRect();
-                        let ls = (lr.top - prevBottom) + lr.height;
-                        if (ls > budget) {
-                            pageIdx += 1;
-                            budget = contentHeightPx;
-                            ls = lr.height;
-                        }
-                        budget -= ls;
-                        prevBottom = lr.bottom;
-                    }
-                });
-                out.push(rows);
-            });
-            return out;
-        }""",
-        [top_mm, bottom_mm],
+# Reduced top/bottom margin candidates tried by _pick_trend_margins against
+# the trend section's configured defaults (layout_config.json's
+# "7-13".marginTop/marginBottom, currently 7mm/5mm) — whichever combination
+# leaves the fewest orphaned split segments (see _TREND_MIN_SPLIT_SEGMENT_
+# ROWS below), then the fewest split plant groups overall, wins. Neither
+# floor is ever crossed: any tighter risks crowding the printed header/
+# footer.
+_TREND_MIN_TOP_MARGIN_MM = 4
+_TREND_MIN_BOTTOM_MARGIN_MM = 2
+
+# A split group must leave at least this many rows on BOTH sides of any
+# page break — fewer reads as an orphan (a lone plant-label letter or two
+# stranded at the top or bottom of a page). 3 is the smallest acceptable
+# segment (per direct instruction). Two mechanisms use it: _pick_trend_
+# margins treats any smaller segment as a heavy penalty when choosing
+# margins, and _enforce_trend_min_segments then hard-guarantees it by
+# injecting a forced page break (row['break_before']) wherever the probe
+# print still shows a shorter segment.
+_TREND_MIN_SPLIT_SEGMENT_ROWS = 3
+
+
+def _trend_group_page_spans(trend_pages: list, page_texts: list) -> list:
+    """For every plant/SAIL group in every item on every trend_section page,
+    resolve each of its rows' real physical page from its @@TROW_item_row@@
+    marker (same lookup _make_trend_split_hook's own loop does) and return
+    one (item_idx, plant, distinct_page_count) tuple per *complete* group
+    (every row's marker found) — incomplete groups are omitted rather than
+    guessed at. Read-only: unlike _apply_trend_page_splits this never
+    touches rowspan_start/plant_row_count, so it's safe to call while
+    comparing candidate margins before any row has been corrected."""
+    spans = []
+    for tp in trend_pages:
+        for ii, it in enumerate(tp.get("items", [])):
+            rows = it.get("rows", [])
+            n = len(rows)
+            i = 0
+            while i < n:
+                plant = rows[i]["plant"]
+                j = i
+                while j < n and rows[j]["plant"] == plant:
+                    j += 1
+                pages_seen = set()
+                complete = True
+                for k in range(i, j):
+                    marker = f"@@TROW_{ii}_{k}@@"
+                    found = next((pno for pno, text in enumerate(page_texts) if marker in text), None)
+                    if found is None:
+                        complete = False
+                        break
+                    pages_seen.add(found)
+                if complete:
+                    spans.append((ii, plant, len(pages_seen)))
+                i = j
+    return spans
+
+
+def _trend_group_segment_sizes(trend_pages: list, page_texts: list) -> list:
+    """Like _trend_group_page_spans but, for every complete plant/SAIL group
+    that lands on more than one physical page, returns its ordered per-page
+    row counts (e.g. [9, 3] for a 12-row group split 9-then-3) instead of
+    just how many distinct pages it touched. _trend_group_page_spans's bare
+    page count can't tell a 9/3 split (an orphaned 3-row continuation) apart
+    from a 6/6 split (a clean one) — both are "2 pages" — so
+    _pick_trend_margins uses this instead to penalize the former."""
+    out = []
+    for tp in trend_pages:
+        for ii, it in enumerate(tp.get("items", [])):
+            rows = it.get("rows", [])
+            n = len(rows)
+            i = 0
+            while i < n:
+                plant = rows[i]["plant"]
+                j = i
+                while j < n and rows[j]["plant"] == plant:
+                    j += 1
+                pages_for_rows = []
+                complete = True
+                for k in range(i, j):
+                    marker = f"@@TROW_{ii}_{k}@@"
+                    found = next((pno for pno, text in enumerate(page_texts) if marker in text), None)
+                    if found is None:
+                        complete = False
+                        break
+                    pages_for_rows.append(found)
+                if complete and pages_for_rows:
+                    segs = [1]
+                    for prev_pg, cur_pg in zip(pages_for_rows, pages_for_rows[1:]):
+                        if cur_pg == prev_pg:
+                            segs[-1] += 1
+                        else:
+                            segs.append(1)
+                    if len(segs) > 1:
+                        out.append((ii, plant, segs))
+                i = j
+    return out
+
+
+def _trend_orphan_penalty(segment_sizes: list) -> int:
+    """Total shortfall below _TREND_MIN_SPLIT_SEGMENT_ROWS across every
+    segment of every split group — 0 once no split leaves a continuation
+    (on either side of the break) shorter than the minimum."""
+    return sum(
+        max(0, _TREND_MIN_SPLIT_SEGMENT_ROWS - size)
+        for _, _, segs in segment_sizes
+        for size in segs
     )
+
+
+def _pick_trend_margins(page, template, pages_list: list, render_kwargs: dict, margin: dict,
+                         trend_pages: list) -> None:
+    """Tries shrinking the trend section's own configured top/bottom margins
+    (page_layouts["<first_pg>"]["marginTop"]/["marginBottom"], see
+    trend_section.html's inline padding) toward _TREND_MIN_TOP_MARGIN_MM /
+    _TREND_MIN_BOTTOM_MARGIN_MM and keeps whichever (top, bottom)
+    combination scores best — first by fewest orphaned split segments (a
+    continuation shorter than _TREND_MIN_SPLIT_SEGMENT_ROWS rows, see
+    _trend_orphan_penalty), then by fewest split plant groups overall (ties
+    go to the combination with the larger margins, tried first). Mutates
+    render_kwargs["page_layouts"] in place; _make_trend_split_hook runs its
+    own probe/correct loop against whatever this picks. Only top/bottom are
+    tuned (per direct request) — left/right stay at their configured
+    values.
+
+    This does NOT touch any row's rowspan_start/plant_row_count — it only
+    measures, via _trend_group_page_spans/_trend_group_segment_sizes, how
+    each candidate actually paginates. Whichever candidate wins still goes
+    through the normal probe/correct/re-probe convergence afterward to get
+    its rowspan boundaries right; this step only chooses which margins that
+    convergence should run against."""
+    from pypdf import PdfReader
+
+    page_layouts = render_kwargs.setdefault("page_layouts", {})
+    keys = [str(tp.get("page")) for tp in trend_pages]
+    if not keys:
+        return
+    base = dict(page_layouts.get(keys[0], {}))
+    default_top = base.get("marginTop", 7)
+    default_bottom = base.get("marginBottom", 5)
+
+    def _apply(top_mm, bottom_mm):
+        for key in keys:
+            entry = dict(page_layouts.get(key, {}))
+            entry["marginTop"] = top_mm
+            entry["marginBottom"] = bottom_mm
+            page_layouts[key] = entry
+
+    def _severity(top_mm, bottom_mm):
+        _apply(top_mm, bottom_mm)
+        html = template.render(pages=pages_list, **render_kwargs)
+        page.set_content(html, wait_until="domcontentloaded")
+        page.evaluate("document.fonts.ready")
+        probe_bytes = page.pdf(
+            format="A4", print_background=True, display_header_footer=False, margin=margin,
+        )
+        page_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(probe_bytes)).pages]
+        spans = _trend_group_page_spans(trend_pages, page_texts)
+        split_extra_pages = sum(count - 1 for _, _, count in spans if count > 1)
+        orphan_penalty = _trend_orphan_penalty(_trend_group_segment_sizes(trend_pages, page_texts))
+        return (orphan_penalty, split_extra_pages)
+
+    best_margins = (default_top, default_bottom)
+    best_severity = _severity(*best_margins)
+    if best_severity == (0, 0):
+        return  # nothing splits at the default margins -- page already reflects them
+
+    top_floor = min(default_top, _TREND_MIN_TOP_MARGIN_MM)
+    bottom_floor = min(default_bottom, _TREND_MIN_BOTTOM_MARGIN_MM)
+    for candidate in ((default_top, bottom_floor), (top_floor, default_bottom), (top_floor, bottom_floor)):
+        if candidate == best_margins or best_severity == (0, 0):
+            continue
+        severity = _severity(*candidate)
+        if severity < best_severity:
+            best_severity, best_margins = severity, candidate
+
+    # Whichever candidate's _severity() call ran last is what `page`'s live
+    # content currently reflects; re-render/set_content once more so it's
+    # guaranteed in sync with the winning margins before the caller's own
+    # probe/correct loop begins.
+    _apply(*best_margins)
+    html = template.render(pages=pages_list, **render_kwargs)
+    page.set_content(html, wait_until="domcontentloaded")
+    page.evaluate("document.fonts.ready")
+
+
+def _trend_split_snapshot(trend_pages: list) -> tuple:
+    """Cheap fingerprint of every row's current rowspan_start/plant_row_count
+    /break_before across all trend_section pages, used by
+    _make_trend_split_hook to detect when another probe-and-correct
+    iteration would no longer change anything (see that function's docstring
+    for why one iteration isn't always enough). break_before is included so
+    a pass that only adds a forced page-break (see
+    _enforce_trend_min_segments) still keeps the loop going."""
+    out = []
+    for tp in trend_pages:
+        for it in tp.get("items", []):
+            for row in it.get("rows", []):
+                out.append((row.get("rowspan_start"), row.get("plant_row_count"),
+                            row.get("break_before")))
+    return tuple(out)
 
 
 def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, margin: dict):
     """Builds a main_pre_pdf_hook (see _render_pdf) that measures and
     corrects trend-table rowspan splits in place on the live page about to
     be printed. Returns None (no hook needed) if pages_list has no
-    trend_section page."""
+    trend_section page.
+
+    Measures real physical pagination by actually printing the page (a
+    "probe" PDF) and reading back each row's true page from its own text
+    layer via a per-row @@TROW_item_row@@ marker (trend_section.html; same
+    in-flow/near-zero-size/transparent .pg-badge-marker technique
+    @@PGSTART_N@@ already relies on elsewhere in this file — see that
+    class's own comment for why position:absolute and display:block were
+    both rejected for it). This replaces an earlier design that tried to
+    *arithmetically replicate* Chromium's print pagination from live
+    (unpaginated, screen-rendered) row geometry: verified against the
+    actual probe print, that arithmetic was demonstrably wrong for several
+    plant groups (e.g. Sinter/DSP, Hot Metal/SAIL) — it estimated a page
+    break partway through a group that, in the real print, never spilled
+    onto a second page at all, so the corrected render still split the
+    rowspan cell in two for no reason. Reading the break back from an
+    actual print sidesteps needing to replicate Chromium's own
+    layout/fragmentation math (subpixel rounding, orphan handling, etc.)
+    at all.
+
+    A still-earlier design already tried a two-render, marker-based
+    approach and abandoned it as unreliable — but that one baked the
+    per-row markers directly into the *visible* row labels of a *separate*
+    measurement document, which could itself shift layout (or diverge
+    between two nominally-identical renders) relative to the real final
+    render. Here the marker is the same near-zero-size/transparent inline
+    element the file already uses successfully for page-level markers, and
+    the "probe" print is not a separate document — it is one extra
+    page.pdf() call on this exact same live `page`/HTML.
+
+    One probe-and-correct pass is NOT enough on its own: measured directly
+    against a real corrected print, splitting a plant-label rowspan cell
+    into several smaller `<td rowspan>` pieces does very occasionally
+    change that cell's own row-height contribution after all (a short
+    segment's stacked letters, e.g. "D<br>S<br>P", can be taller than that
+    handful of rows' own natural height, forcing them slightly taller) —
+    contrary to what an earlier version of this docstring assumed. That
+    height nudge shifts everything below it, which can move a later
+    group's real page break by a row or more, so a correction computed
+    from a single probe can go stale the moment it's printed. Fixed here by
+    looping: probe, correct, print again, and re-probe *that* corrected
+    print — repeating until a probe's page_of stops changing anything
+    (typically converges in 2-3 rounds), capped at _MAX_TREND_SPLIT_PASSES
+    so a pathological oscillation can't loop forever; whatever the last
+    pass computed is used either way.
+
+    Before that loop starts, _pick_trend_margins gets one shot at shrinking
+    the section's own configured top/bottom margins (down to
+    _TREND_MIN_TOP_MARGIN_MM / _TREND_MIN_BOTTOM_MARGIN_MM) if doing so
+    measurably reduces orphaned split segments (a continuation shorter than
+    _TREND_MIN_SPLIT_SEGMENT_ROWS rows) or how many plant groups end up
+    split across a page break at all — fewer/shorter splits rather than
+    just correctly-placed ones."""
     trend_pages = [p for p in pages_list if p.get("type") == "trend_section"]
     if not trend_pages:
         return None
 
     def hook(page):
-        sections = _measure_trend_rows_live(page, margin)
-        if len(sections) != len(trend_pages):
-            # DOM didn't match expectations — leave the default (unsplit,
-            # one rowspan per whole group) rather than risk applying a
-            # wrong split.
-            return None
-        changed = False
-        for _tp, _rows in zip(trend_pages, sections):
-            page_of = {(r["item"], r["row"]): r["page"] for r in _rows}
-            if page_of:
-                _apply_trend_page_splits(_tp, page_of)
-                changed = True
-        return template.render(pages=pages_list, **render_kwargs) if changed else None
+        from pypdf import PdfReader
+
+        _pick_trend_margins(page, template, pages_list, render_kwargs, margin, trend_pages)
+
+        html = None
+        prev_snapshot = _trend_split_snapshot(trend_pages)
+        for _ in range(_MAX_TREND_SPLIT_PASSES):
+            probe_bytes = page.pdf(
+                format="A4", print_background=True, display_header_footer=False, margin=margin,
+            )
+            page_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(probe_bytes)).pages]
+
+            for tp in trend_pages:
+                page_of = {}
+                for ii, it in enumerate(tp.get("items", [])):
+                    for k in range(len(it.get("rows", []))):
+                        marker = f"@@TROW_{ii}_{k}@@"
+                        for pno, text in enumerate(page_texts):
+                            if marker in text:
+                                page_of[(ii, k)] = pno
+                                break
+                if page_of:
+                    _apply_trend_page_splits(tp, page_of)
+                    _enforce_trend_min_segments(tp, page_of)
+
+            new_snapshot = _trend_split_snapshot(trend_pages)
+            if new_snapshot == prev_snapshot:
+                break
+            prev_snapshot = new_snapshot
+            html = template.render(pages=pages_list, **render_kwargs)
+            page.set_content(html, wait_until="domcontentloaded")
+            page.evaluate("document.fonts.ready")
+
+        return html
 
     return hook
 
@@ -743,12 +930,11 @@ def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
     the whole group (which would leave later pages blank when the group
     spills over).
 
-    page_of comes from _measure_trend_rows_live, which measures every row's
-    real geometry directly (no PDF-text extraction, so no risk of a missed
-    marker/hole) — a group with any row missing from page_of just falls back
-    to its default single, un-split rowspan for the whole group, safe as
-    long as that group genuinely doesn't cross a page (true whenever
-    page_of is complete, which it always is for a matched section).
+    page_of comes from _make_trend_split_hook's probe print, keyed by every
+    row's real physical page as read back from its @@TROW_item_row@@ marker
+    — a group with any row whose marker wasn't found (extraction hiccup)
+    just falls back to its default single, un-split rowspan for the whole
+    group rather than risk an incomplete/wrong split.
 
     Deliberately does NOT touch is_first_in_plant: that field marks the
     group's true first row (drives trend_section.html's thick .plant-first
@@ -780,6 +966,70 @@ def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
                 for m in range(seg_start, j):
                     rows[m]["rowspan_start"] = (m == seg_start)
                     rows[m]["plant_row_count"] = j - seg_start
+            i = j
+
+
+def _enforce_trend_min_segments(trend_page: dict, page_of: dict) -> None:
+    """Mutate trend_page's rows in place: set row['break_before'] on the
+    fewest rows needed so that, wherever a plant/SAIL group splits across a
+    physical page break, neither side of the break carries fewer than
+    _TREND_MIN_SPLIT_SEGMENT_ROWS rows.
+
+    page_of is the same probe-print row->page map _apply_trend_page_splits
+    reads. This function only ever ADDS a forced break (never clears one)
+    and every break it adds pushes rows forward onto a later page, so
+    repeated passes converge: a group with no acceptable interior split just
+    ends up wholly on the later page (any group here is at most ~12 rows, so
+    it always fits once it starts at the top of a fresh page). break_before
+    rides along in _trend_split_snapshot, so _make_trend_split_hook's loop
+    re-probes after a pass that adds one, and its _MAX_TREND_SPLIT_PASSES
+    cap bounds the worst case.
+
+    Handled precisely for the common two-segment split; any 3+ segment
+    group (would need a group taller than a whole page — not possible at
+    these row counts, but guarded anyway) is just shoved wholesale onto the
+    next page and re-probed."""
+    MIN = _TREND_MIN_SPLIT_SEGMENT_ROWS
+    for ii, it in enumerate(trend_page.get("items", [])):
+        rows = it.get("rows", [])
+        n = len(rows)
+        page_for_row = [page_of.get((ii, k)) for k in range(n)]
+
+        i = 0
+        while i < n:
+            plant = rows[i]["plant"]
+            j = i
+            while j < n and rows[j]["plant"] == plant:
+                j += 1
+            pages = page_for_row[i:j]
+            if pages and all(p is not None for p in pages):
+                # segment boundaries within [i, j): (start, end-exclusive)
+                segs = []
+                seg_start = i
+                for k in range(i + 1, j):
+                    if pages[k - i] != pages[k - i - 1]:
+                        segs.append((seg_start, k))
+                        seg_start = k
+                segs.append((seg_start, j))
+
+                def _force(target):
+                    target = max(i, min(target, j - 1))
+                    if not rows[target].get("break_before"):
+                        rows[target]["break_before"] = True
+
+                if len(segs) > 2:
+                    _force(i)  # pathological — move the whole group forward
+                elif len(segs) == 2:
+                    (a0, a1), (b0, b1) = segs
+                    if a1 - a0 < MIN:
+                        # too few rows before the break — move the whole
+                        # group onto the next page (the split, if any, then
+                        # lands deeper into the group)
+                        _force(i)
+                    elif b1 - b0 < MIN:
+                        # too few rows in the continuation — pull the break
+                        # earlier so exactly MIN rows carry over
+                        _force(j - MIN)
             i = j
 
 
@@ -952,6 +1202,13 @@ async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, p
         # its @font-face CSS as before.
         _catalog_entry = FONT_CATALOG.get(fc.family)
         _font_imports   = _catalog_entry["import"] if _catalog_entry else ""
+        # Cover page (.page1-container in main.html) always renders in Roboto
+        # regardless of the report's chosen body font, so its @font-face has
+        # to be embedded unconditionally rather than only when fc.family
+        # itself is "Roboto" (see comment above on _font_imports normally
+        # being a no-op for the "Arial Narrow" default).
+        if fc.family != "Roboto":
+            _font_imports += "\n" + _local_font_face_css("Roboto")
         _font_family_css = f"'{fc.family}', sans-serif"
         _mono_name = _catalog_entry["mono"] if _catalog_entry else "Courier New"
         _mono_family_css = f"'{_mono_name}', 'Courier New', monospace"

@@ -1,6 +1,8 @@
+    {% set _plant_color_map = {'BSP': 'plant-bsp', 'DSP': 'plant-dsp', 'RSP': 'plant-rsp', 'BSL': 'plant-bsl', 'ISP': 'plant-isp', 'ASP': 'plant-asp', 'SSP': 'plant-ssp', 'VI': 'plant-visl'} %}
     <div class="page7-13-section-page pg-{{ page.page|pgclass }}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
         {% for item in page['items'] %}
+        {% set item_idx = loop.index0 %}
         <div class="page7-13-item-block">
             <table class="page7-13-yearly-table">
                 <colgroup>
@@ -20,7 +22,7 @@
                 </colgroup>
                 <thead>
                     <tr class="item-heading-row">
-                        <th colspan="17" class="heading-title">10 YEARS MONTH WISE PRODUCTION : {{ item.item_display }}</th>
+                        <th colspan="17" class="heading-title">10 Years Month Wise Production : {{ item.item_display }}</th>
                         <th colspan="4" class="heading-unit">Unit: {{ item.unit }}</th>
                     </tr>
                     <tr>
@@ -38,12 +40,25 @@
                     {% set cf = row['cell_flags'] or ([''] * 19) %}
                     {% set plant = row['plant'] %}
                     {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
-                    <tr class="{{ row_cls }}">
+                    {# break_before: forced page break so a split plant group never
+                       leaves fewer than 3 rows on either page — set by pdf.py's
+                       _enforce_trend_min_segments from the probe print. #}
+                    <tr class="{{ row_cls }}"{% if row.get('break_before') %} style="break-before:page;page-break-before:always;"{% endif %}>
                         {% if row['rowspan_start'] %}
-                        {% set pcls %}plant-cell{{ ' compact' if plant|length <= 2 else '' }}{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{% endset %}
-                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{% for ch in plant %}{{ ch }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                        {% set plant_chars = plant|replace(' ', '') %}
+                        {% set n_rows = row['plant_row_count'] %}
+                        {% set n_chars = plant_chars|length %}
+                        {% set _color_cls = _plant_color_map.get(plant, '') %}
+                        {# Font tier is driven by how many stacked letters must fit within
+                           THIS page segment's own row count (plant_row_count), not by the
+                           plant name's length alone — a group that isn't split (plenty of
+                           rows for its label) stays at normal size even for a long label
+                           like "5 Plants"; only a segment actually left too short by a page
+                           break (few rows vs. many letters) drops to compact/tight. #}
+                        {% set pcls %}plant-cell{{ ' compact' if (n_chars > n_rows and n_chars <= n_rows + 2) else '' }}{{ ' tight' if n_chars > n_rows + 2 else '' }}{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{{ (' ' ~ _color_cls) if _color_cls else '' }}{% endset %}
+                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{% for ch in plant_chars %}{{ ch }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         {% endif %}
-                        <td class="year-cell" style="{{ 'font-weight:700;' if row['is_plan'] else '' }}">{{ row['year_label'] }}</td>
+                        <td class="year-cell" style="{{ 'font-weight:700;' if row['is_plan'] else '' }}"><span class="pg-badge-marker">@@TROW_{{ item_idx }}_{{ loop.index0 }}@@</span>{{ row['year_label'] }}</td>
                         {% for i in range(0, 3) %}
                         <td class="{{ 'best-ever' if cf[i] == 'best_ever' else ('best-month' if cf[i] == 'best_month' else '') }}">{{ v[i] }}</td>
                         {% endfor %}

@@ -489,7 +489,7 @@ select.form-control {
   font-size: 18pt;
   font-weight: 700;
   color: #0f172a;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: -0.01em;
 }
 
@@ -643,7 +643,7 @@ select.form-control {
 .page3-section-heading {
   font-size: 13pt;
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: none;
   margin-bottom: 6px;
   color: #0f172a;
 }
@@ -653,7 +653,7 @@ select.form-control {
   font-size: 10pt;
   font-weight: 700;
   color: #060177;
-  text-transform: uppercase;
+  text-transform: none;
   margin: 0;
 }
 
@@ -686,7 +686,7 @@ select.form-control {
   font-size: 13pt;
   font-weight: 700;
   color: #060177;
-  text-transform: uppercase;
+  text-transform: none;
   margin: 0;
 }
 
@@ -722,7 +722,7 @@ select.form-control {
   font-size: 10pt;
   font-weight: 800;
   color: #060177;
-  text-transform: uppercase;
+  text-transform: none;
   margin: 0;
 }
 

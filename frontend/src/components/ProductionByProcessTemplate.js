@@ -130,7 +130,7 @@ export default function ProductionByProcessTemplate({ data, selectedMonth }) {
         display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
         borderBottom: '1.5px solid #0f172a', paddingBottom: '3px', marginBottom: '6px',
       }}>
-        <h2 style={{ fontSize: '12pt', fontWeight: 700, color: '#060177', margin: 0, textTransform: 'uppercase' }}>
+        <h2 style={{ fontSize: '12pt', fontWeight: 700, color: '#060177', margin: 0, textTransform: 'none' }}>
           {title}
         </h2>
         <span style={{ fontSize: '8pt', color: '#475569', fontWeight: 500 }}>Unit: Tonnes</span>

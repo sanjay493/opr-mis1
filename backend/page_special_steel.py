@@ -686,16 +686,16 @@ _GENERATORS = {
     "ISP": _gen_isp,
 }
 
-_TITLE_PREFIX = "SPECIAL STEEL REPORT FOR : "
+_TITLE_PREFIX = "Special Steel Report for : "
 
 # Plant name split out from the fixed prefix above so the template can
 # highlight just the plant name in "steel red" — see plant_display/
 # title_prefix in generate_special_steel_plant()'s return dict.
 _PLANT_DISPLAY_NAMES = {
-    "BSP": "BHILAI STEEL PLANT",
-    "DSP": "DURGAPUR STEEL PLANT",
-    "RSP": "ROURKELA STEEL PLANT",
-    "BSL": "BOKARO STEEL PLANT",
+    "BSP": "Bhilai Steel Plant",
+    "DSP": "Durgapur Steel Plant",
+    "RSP": "Rourkela Steel Plant",
+    "BSL": "Bokaro Steel Plant",
     "ISP": "ISP",
 }
 
@@ -810,7 +810,7 @@ def generate_special_steel_plant(report_month: str, plant: str) -> dict:
         ss_ccum = _t(_get_prod_ytd(cur, cply_ytd_months, plant, "Saleable Steel"))
 
         return {
-            "title":         _PLANT_TITLES.get(plant, f"SPECIAL STEEL — {plant}"),
+            "title":         _PLANT_TITLES.get(plant, f"Special Steel — {plant}"),
             "title_prefix":  _TITLE_PREFIX,
             "plant_display": _PLANT_DISPLAY_NAMES.get(plant, plant),
             "unit":    "Tonnes",
@@ -965,7 +965,7 @@ def generate_special_steel_sail(report_month: str) -> dict:
         ss_abp_fy = sum(v * 1000 for m in fy_months for v in [db.get_sail_production_plan(m, "Saleable Steel")] if v)
 
         return {
-            "title":   "SPECIAL STEEL PERFORMANCE OF SAIL",
+            "title":   "Special Steel Performance of SAIL",
             "unit":    "Tonnes",
             "plant":   "SAIL",
             "variant": "sail_summary",

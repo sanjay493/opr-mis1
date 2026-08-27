@@ -96,6 +96,24 @@ def _safe_chart_data(month):
 _MAJOR_TECHNO_EXCLUDE = {"Sp. CO2 Emission", "Sp. Water Consumption", "Sp. PM Emission"}
 
 
+def _subscript_co2(obj):
+    """Recursively render 'CO2' as 'CO₂' (proper subscript) in every string
+    value of a page dict/list, right before it reaches the frontend preview
+    or the PDF renderer. Applied here (display boundary only) rather than to
+    the "CO2" label constants scattered across page_techno.py/page_epi.py/etc,
+    since those strings double as matching keys (_MAJOR_TECHNO_EXCLUDE,
+    _EPI_LABELS, DB param lookups) and must stay plain ASCII internally."""
+    if isinstance(obj, str):
+        if "CO2" not in obj or "<svg" in obj or obj.startswith("data:"):
+            return obj
+        return obj.replace("CO2", "CO₂")
+    if isinstance(obj, dict):
+        return {k: _subscript_co2(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_subscript_co2(v) for v in obj]
+    return obj
+
+
 def _safe_techno(month, pg):
     try:
         if pg == 27:
@@ -691,14 +709,14 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                     if cfg.get("combined_items"):
                         # Page 11: Pig Iron + Finished Steel combined
                         page["type"] = "trend_combined"
-                        page["title"] = f"10 YEARS MONTH WISE PRODUCTION : {cfg.get('display', '')}"
+                        page["title"] = f"10 Years Month Wise Production : {cfg.get('display', '')}"
                         page["item_display"] = cfg.get("display", "")
                         page["unit"] = ""
                         page["rows"] = []
                         page["items"] = generate_combined_trend_items(month, pg)
                     else:
                         page["type"] = "trend_yearly"
-                        page["title"] = f"10 YEARS MONTH WISE PRODUCTION : {cfg.get('display', '')}"
+                        page["title"] = f"10 Years Month Wise Production : {cfg.get('display', '')}"
                         page["item_display"] = cfg.get("display", "")
                         page["unit"] = cfg.get("unit", "")
                         page["rows"] = generate_trend_page_rows(month, pg)
@@ -727,19 +745,19 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                     page["cply_label"]  = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
                 if pg == 15:
                     page["type"]     = "catwise_saleable"
-                    page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
+                    page["title"]    = "Category Wise Production of Saleable Steel"
                     page["sections"] = generate_catwise_saleable(month, ["BSP"])
                 if pg == 16:
                     page["type"]     = "catwise_saleable"
-                    page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
+                    page["title"]    = "Category Wise Production of Saleable Steel"
                     page["sections"] = generate_catwise_saleable(month, ["DSP", "RSP"])
                 if pg == 17:
                     page["type"]     = "catwise_saleable"
-                    page["title"]    = "CATEGORY WISE PRODUCTION OF SALEABLE STEEL"
+                    page["title"]    = "Category Wise Production of Saleable Steel"
                     page["sections"] = generate_catwise_saleable(month, ["BSL", "ISP"])
                 if pg == 18:
                     page["type"]        = "segment_wise"
-                    page["title"]       = "SEGMENT WISE PRODUCTION"
+                    page["title"]       = "Segment Wise Production"
                     sw = generate_segment_wise(month)
                     page["rows"]        = sw["rows"]
 
@@ -910,7 +928,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
         # has_actuals/has_plans branch above.
         assign_dept_badges(pages_config)
 
-        return pages_config
+        return _subscript_co2(pages_config)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -1296,7 +1314,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     # Layout/typography come from backend layout_config.json, plus the
     # dynamic techno month-table font sizes computed just above; frontend
     # overrides are otherwise ignored.
-    return enriched, dynamic_page_layouts
+    return _subscript_co2(enriched), dynamic_page_layouts
 
 
 @app.post("/api/generate-pdf")
