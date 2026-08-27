@@ -31,6 +31,8 @@ from page_catwise_saleable import generate_catwise_saleable
 from page_segment_wise import generate_segment_wise
 from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, _ssps_special_steel
 from page_special_steel_trend import generate_special_steel_trend
+import page_special_steel_physical
+from page_special_steel_physical import generate_special_steel_physical
 from page_at_a_glance import generate_at_a_glance
 from page_key_highlights import generate_key_highlights
 from page_best_ever import generate_best_ever_highlights
@@ -232,6 +234,10 @@ _INDEX_SECTIONS = [
     # (TREND_PAGE_ID, sentinel id 1024, not part of the 1-40 numbering) —
     # merged into one Index row, see module-level comment above.
     ("Plant Wise Special Steel Production & SAIL Trend", 7),
+    # ASP/SSP/VISP multi-year physical-performance grid + annual IPT
+    # requirement list (SS_PHYSICAL_PAGE_ID = 1025, landscape sentinel page
+    # inserted right after the trend page) — see page_special_steel_physical.py.
+    ("Special Steel Plants Physical Performance", 1),
     ("Inventory Status (Pig Iron/Semis/Finished Steel)", 1),
     ("IPT", 1),
     ("Plant Wise Major TEPs (Major 12 Parameters)", 1),
@@ -314,6 +320,14 @@ _IM_AVG_TO_MAJOR = {}
 # never persisted — always stripped from any cached pages_config and
 # resynthesized fresh on every render.
 TREND_PAGE_ID = 1024
+
+# "Special Steel Plants Physical Performance" (ASP/SSP/VISP multi-year
+# crude/saleable/stainless/carbon history + the annual IPT-requirement list —
+# Report_format/Special Steel Production history comprehensive.pdf). Same
+# sentinel-float treatment as TREND_PAGE_ID: no slot in the 1-40 numbering,
+# inserted right after the trend page, landscape, never persisted. See
+# page_special_steel_physical.py.
+SS_PHYSICAL_PAGE_ID = 1025
 
 # "Indian Steel Sector Performance" — 3 pages reproducing the monthly PIB
 # (Ministry of Steel) release (Report_format/"Indian Steel Sector
@@ -675,7 +689,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config = blank_out_page_data(pages_config)
 
         if page_number is not None:
-            if page_number in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
+            if page_number in (24, TREND_PAGE_ID, SS_PHYSICAL_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
                                 BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
                                 COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
@@ -811,7 +825,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             # above — skipped here since pages 2/3/23/29/35 aren't in the
             # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
-                            if p.get("page") not in (24, TREND_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
+                            if p.get("page") not in (24, TREND_PAGE_ID, SS_PHYSICAL_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
                                                       BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID,
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
@@ -826,6 +840,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
                 pages_config.insert(_idx23 + 2, {"page": TREND_PAGE_ID})
+                pages_config.insert(_idx23 + 3, {"page": SS_PHYSICAL_PAGE_ID})
             _idx2 = next((i for i, p in enumerate(pages_config) if p.get("page") == 2), None)
             if _idx2 is not None:
                 pages_config.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
@@ -884,6 +899,10 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page["type"] = "special_steel"
             if pg == TREND_PAGE_ID:
                 page.update(generate_special_steel_trend(month))
+            if pg == SS_PHYSICAL_PAGE_ID:
+                page.update(generate_special_steel_physical(month))
+                page["type"] = "special_steel_physical"
+                page["orientation"] = "landscape"
             if pg == AT_A_GLANCE_PAGE_ID:
                 page.update(generate_at_a_glance(month))
                 page["type"] = "at_a_glance"
@@ -1030,6 +1049,10 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idx24 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 24), None)
         if _idx24 is not None:
             _pages_list.insert(_idx24 + 1, {"page": TREND_PAGE_ID})
+    if not any(p.get("page") == SS_PHYSICAL_PAGE_ID for p in _pages_list):
+        _idxtr = next((i for i, p in enumerate(_pages_list) if p.get("page") == TREND_PAGE_ID), None)
+        if _idxtr is not None:
+            _pages_list.insert(_idxtr + 1, {"page": SS_PHYSICAL_PAGE_ID})
     # "MIS at a Glance" sentinel page: always inserted right after the Index
     # (page 2), so it becomes the first NUMBERED page ("Page 1") — same
     # unconditional-insert pattern as above.
@@ -1163,6 +1186,10 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == TREND_PAGE_ID:
             p.update(generate_special_steel_trend(request.month))
             p["type"] = "special_steel_trend"
+        if pg == SS_PHYSICAL_PAGE_ID:
+            p.update(generate_special_steel_physical(request.month))
+            p["type"] = "special_steel_physical"
+            p["orientation"] = "landscape"
         if pg == AT_A_GLANCE_PAGE_ID:
             p.update(generate_at_a_glance(request.month))
             p["type"] = "at_a_glance"
@@ -5288,6 +5315,144 @@ async def list_ipt_fys():
 @app.get("/api/ipt-fy")
 async def get_ipt_fy(fy_start: int = Query(...)):
     return _ipt_fy_data(fy_start)
+
+
+# ---------------------------------------------------------------------------
+# "Special Steel Plants Physical Performance" — the report data + its two
+# editor surfaces. See page_special_steel_physical.py and
+# scripts/migrate_add_special_steel_physical.sql.
+# ---------------------------------------------------------------------------
+
+def _latest_report_month() -> str:
+    import datetime as _dt
+    conn = db.connect()
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(report_month) FROM production_table "
+                "WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'")
+    row = cur.fetchone()
+    conn.close()
+    return (row[0] if row and row[0] else _dt.date.today().strftime("%Y-%m"))
+
+
+@app.get("/api/special-steel-physical")
+def api_special_steel_physical(report_month: str = Query(default="")):
+    return generate_special_steel_physical(report_month or _latest_report_month())
+
+
+@app.get("/api/special-steel-physical/grid")
+def api_ss_physical_grid(financial_year: str = Query(...)):
+    """Editable grid for one FY as prev-FY / cur-FY:
+    { plant, series, series_label, capacity_kt, best_actual_kt, best_year,
+      remark, history: {fy: actual_kt}, prev_app_kt, prev_actual_kt, abp_kt }."""
+    cur_start = int(financial_year[:4])
+    prev_fy = f"{cur_start - 1}-{cur_start % 100:02d}"
+    history_fys = [f"{y}-{(y + 1) % 100:02d}"
+                   for y in range(page_special_steel_physical.HISTORY_START_FY_YEAR, cur_start - 1)]
+    meta, perf = db.get_ss_phys_perf()
+    rows = []
+    for (plant, series), m in sorted(meta.items(), key=lambda kv: kv[1]["sort_order"]):
+        rows.append({
+            "plant": plant, "series": series,
+            "series_label": page_special_steel_physical._SERIES_LABEL.get(series, series),
+            "capacity_kt": m["capacity_kt"], "best_actual_kt": m["best_actual_kt"],
+            "best_year": m["best_year"], "remark": m["remark"],
+            "history": {fy: perf.get((fy, plant, series, "actual")) for fy in history_fys},
+            "prev_app_kt": perf.get((prev_fy, plant, series, "plan")),
+            "prev_actual_kt": perf.get((prev_fy, plant, series, "actual")),
+            "abp_kt": perf.get((financial_year, plant, series, "plan")),
+        })
+    return {
+        "financial_year": financial_year, "prev_fy": prev_fy,
+        "history_fys": history_fys, "rows": rows,
+        "notes": [{"sort_order": so, "note_text": t} for so, t in db.get_ss_phys_notes(financial_year)],
+    }
+
+
+@app.post("/api/special-steel-physical/grid")
+async def api_ss_physical_grid_save(payload: dict):
+    """Save the grid editor. payload:
+      { financial_year, prev_fy,
+        meta:  [{plant, series, capacity_kt, best_actual_kt, best_year, remark}],
+        perf:  [{financial_year, plant, series, metric, value_kt}],
+        notes: [{sort_order, note_text}] }"""
+    fy = payload.get("financial_year")
+    if not fy:
+        raise HTTPException(status_code=400, detail="financial_year is required")
+
+    def _f(v):
+        try:
+            return float(v) if v not in (None, "", "-") else None
+        except (ValueError, TypeError):
+            return None
+
+    if payload.get("meta"):
+        # sort_order is owned by the seed, not the editor — preserve it.
+        cur_meta, _ = db.get_ss_phys_perf()
+        db.save_ss_phys_meta([{
+            "plant": r["plant"], "series": r["series"],
+            "capacity_kt": _f(r.get("capacity_kt")), "best_actual_kt": _f(r.get("best_actual_kt")),
+            "best_year": (r.get("best_year") or "").strip() or None,
+            "remark": (r.get("remark") or "").strip() or None,
+            "sort_order": cur_meta.get((r["plant"], r["series"]), {}).get("sort_order", 0),
+        } for r in payload["meta"]])
+    if payload.get("perf"):
+        db.save_ss_phys_perf([{
+            "financial_year": r["financial_year"], "plant": r["plant"], "series": r["series"],
+            "metric": r["metric"], "value_kt": _f(r.get("value_kt")),
+        } for r in payload["perf"]])
+    if payload.get("notes") is not None:
+        db.save_ss_phys_notes(fy, payload["notes"])
+    return {"status": "ok"}
+
+
+@app.get("/api/special-steel-ipt-requirement/fys")
+def api_ss_ipt_req_fys():
+    fys = db.list_ss_ipt_requirement_fys()
+    cur_fy = db.get_fy_for_month(_latest_report_month())
+    nxt = int(cur_fy[:4]) + 1
+    for extra in (cur_fy, f"{nxt}-{(nxt + 1) % 100:02d}"):
+        if extra not in fys:
+            fys.append(extra)
+    return {"fys": sorted(set(fys), reverse=True)}
+
+
+@app.get("/api/special-steel-ipt-requirement")
+def api_ss_ipt_req_get(fy: str = Query(...)):
+    return {"fy": fy, "rows": db.get_ss_ipt_requirement(fy)}
+
+
+@app.post("/api/special-steel-ipt-requirement/bulk")
+async def api_ss_ipt_req_bulk(payload: dict):
+    fy = payload.get("fy", "")
+    if not fy:
+        raise HTTPException(status_code=400, detail="fy is required")
+
+    def _f(v):
+        try:
+            return float(v) if v not in (None, "", "-") else None
+        except (ValueError, TypeError):
+            return None
+
+    entries = payload.get("entries", [])
+    for e in entries:
+        _check_ipt_plants(e.get("from_plant", ""), e.get("to_plant", ""))
+    saved = db.save_ss_ipt_requirement(fy, [{
+        "item": e.get("item"), "from_plant": e.get("from_plant"), "to_plant": e.get("to_plant"),
+        "plan_kt": _f(e.get("plan_kt")), "sort_order": int(e.get("sort_order") or 0),
+        "orig_item": e.get("orig_item"), "orig_from_plant": e.get("orig_from_plant"),
+        "orig_to_plant": e.get("orig_to_plant"),
+    } for e in entries])
+    return {"status": "ok", "saved": saved, "skipped": len(entries) - saved}
+
+
+@app.post("/api/special-steel-ipt-requirement/delete")
+async def api_ss_ipt_req_delete(payload: dict):
+    fy = payload.get("fy", "")
+    item, frm, to = payload.get("item", ""), payload.get("from_plant", ""), payload.get("to_plant", "")
+    if not all([fy, item, frm, to]):
+        raise HTTPException(status_code=400, detail="fy, item, from_plant, to_plant required")
+    db.delete_ss_ipt_requirement(fy, item, frm, to)
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------

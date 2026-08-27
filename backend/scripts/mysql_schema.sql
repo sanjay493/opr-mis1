@@ -78,6 +78,47 @@ CREATE TABLE IF NOT EXISTS special_steel_grade_clubs (
     PRIMARY KEY (plant_name, product, quality_grade)
 ) ENGINE=InnoDB;
 
+-- "Special Steel Plants Physical Performance" report (ASP/SSP/VISP multi-year
+-- crude/saleable/stainless/carbon history + annual IPT-requirement list).
+-- See backend/page_special_steel_physical.py and
+-- backend/scripts/migrate_add_special_steel_physical.sql. Values in '000 T.
+CREATE TABLE IF NOT EXISTS special_steel_phys_perf (
+    financial_year CHAR(7)     NOT NULL,
+    plant          VARCHAR(8)  NOT NULL,
+    series         VARCHAR(16) NOT NULL,
+    metric         VARCHAR(8)  NOT NULL,
+    value_kt       DOUBLE,
+    PRIMARY KEY (financial_year, plant, series, metric)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS special_steel_phys_meta (
+    plant          VARCHAR(8)   NOT NULL,
+    series         VARCHAR(16)  NOT NULL,
+    capacity_kt    DOUBLE,
+    best_actual_kt DOUBLE,
+    best_year      CHAR(7),
+    remark         VARCHAR(200),
+    sort_order     INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (plant, series)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS special_steel_phys_note (
+    financial_year CHAR(7)      NOT NULL,
+    sort_order     INT          NOT NULL,
+    note_text      VARCHAR(500) NOT NULL,
+    PRIMARY KEY (financial_year, sort_order)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS special_steel_ipt_requirement (
+    financial_year CHAR(7)     NOT NULL,
+    item           VARCHAR(64) NOT NULL,
+    from_plant     VARCHAR(8)  NOT NULL,
+    to_plant       VARCHAR(8)  NOT NULL,
+    plan_kt        DOUBLE,
+    sort_order     INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (financial_year, item, from_plant, to_plant)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS stock_table (
     stock_month CHAR(7)     NOT NULL,
     plant_name  VARCHAR(32) NOT NULL,

@@ -163,6 +163,50 @@ def init_db():
         )
     """)
 
+    # 5c. "Special Steel Plants Physical Performance" report tables — see
+    # page_special_steel_physical.py and scripts/migrate_add_special_steel_physical.sql.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS special_steel_phys_perf (
+            financial_year TEXT,
+            plant          TEXT,
+            series         TEXT,
+            metric         TEXT,
+            value_kt       REAL,
+            PRIMARY KEY (financial_year, plant, series, metric)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS special_steel_phys_meta (
+            plant          TEXT,
+            series         TEXT,
+            capacity_kt    REAL,
+            best_actual_kt REAL,
+            best_year      TEXT,
+            remark         TEXT,
+            sort_order     INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (plant, series)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS special_steel_phys_note (
+            financial_year TEXT,
+            sort_order     INTEGER,
+            note_text      TEXT NOT NULL,
+            PRIMARY KEY (financial_year, sort_order)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS special_steel_ipt_requirement (
+            financial_year TEXT,
+            item           TEXT,
+            from_plant     TEXT,
+            to_plant       TEXT,
+            plan_kt        REAL,
+            sort_order     INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (financial_year, item, from_plant, to_plant)
+        )
+    """)
+
     # 6. Opening stock table — stock as on 1st of stock_month (tonnes)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stock_table (
@@ -3268,3 +3312,173 @@ def get_iron_ore_sales_group_rollup_monthly(report_months: List[str]) -> Dict[st
 
     conn.close()
     return out
+
+
+# ── "Special Steel Plants Physical Performance" report ────────────────────────
+# Backing store for page_special_steel_physical.py + its two data-entry pages.
+# All physical figures are '000 T. See migrate_add_special_steel_physical.sql.
+
+def get_ss_phys_perf():
+    """-> (meta, perf):
+      meta[(plant, series)] = {capacity_kt, best_actual_kt, best_year, remark, sort_order}
+      perf[(financial_year, plant, series, metric)] = value_kt
+    """
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT plant, series, capacity_kt, best_actual_kt, best_year, remark, sort_order "
+                "FROM special_steel_phys_meta")
+    meta = {
+        (p, s): {"capacity_kt": cap, "best_actual_kt": ba, "best_year": by,
+                 "remark": rm, "sort_order": so or 0}
+        for p, s, cap, ba, by, rm, so in cur.fetchall()
+    }
+    cur.execute("SELECT financial_year, plant, series, metric, value_kt FROM special_steel_phys_perf")
+    perf = {(fy, p, s, m): v for fy, p, s, m, v in cur.fetchall()}
+    conn.close()
+    return meta, perf
+
+
+def save_ss_phys_meta(rows):
+    """Upsert special_steel_phys_meta rows: {plant, series, capacity_kt,
+    best_actual_kt, best_year, remark, sort_order}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    for r in rows:
+        cur.execute("""
+            INSERT INTO special_steel_phys_meta
+                (plant, series, capacity_kt, best_actual_kt, best_year, remark, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(plant, series) DO UPDATE SET
+                capacity_kt = excluded.capacity_kt, best_actual_kt = excluded.best_actual_kt,
+                best_year = excluded.best_year, remark = excluded.remark,
+                sort_order = excluded.sort_order
+        """, (r["plant"], r["series"], r.get("capacity_kt"), r.get("best_actual_kt"),
+              r.get("best_year"), r.get("remark"), int(r.get("sort_order") or 0)))
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def save_ss_phys_perf(rows):
+    """Upsert special_steel_phys_perf rows: {financial_year, plant, series,
+    metric, value_kt}. value_kt None deletes the cell."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    saved = 0
+    for r in rows:
+        key = (r["financial_year"], r["plant"], r["series"], r["metric"])
+        if r.get("value_kt") is None:
+            cur.execute("DELETE FROM special_steel_phys_perf WHERE financial_year=? AND plant=? "
+                        "AND series=? AND metric=?", key)
+        else:
+            cur.execute("""
+                INSERT INTO special_steel_phys_perf
+                    (financial_year, plant, series, metric, value_kt)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(financial_year, plant, series, metric)
+                DO UPDATE SET value_kt = excluded.value_kt
+            """, (*key, r["value_kt"]))
+        saved += 1
+    conn.commit()
+    conn.close()
+    return saved
+
+
+def get_ss_phys_notes(financial_year):
+    """-> [(sort_order, note_text), ...] ordered."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT sort_order, note_text FROM special_steel_phys_note "
+                "WHERE financial_year=? ORDER BY sort_order", (financial_year,))
+    rows = cur.fetchall()
+    conn.close()
+    return [(so, t) for so, t in rows]
+
+
+def save_ss_phys_notes(financial_year, rows):
+    """Replace every note for a FY with `rows`: {sort_order, note_text}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM special_steel_phys_note WHERE financial_year=?", (financial_year,))
+    for r in rows:
+        text = (r.get("note_text") or "").strip()
+        if not text:
+            continue
+        cur.execute("INSERT INTO special_steel_phys_note (financial_year, sort_order, note_text) "
+                    "VALUES (?, ?, ?)", (financial_year, int(r.get("sort_order") or 0), text))
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def get_ss_ipt_requirement(financial_year):
+    """-> [{item, from_plant, to_plant, plan_kt, sort_order}, ...] ordered."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT item, from_plant, to_plant, plan_kt, sort_order
+        FROM special_steel_ipt_requirement WHERE financial_year=?
+        ORDER BY sort_order, item, from_plant, to_plant
+    """, (financial_year,))
+    rows = [{"item": i, "from_plant": f, "to_plant": t, "plan_kt": p, "sort_order": so or 0}
+            for i, f, t, p, so in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def list_ss_ipt_requirement_fys():
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT financial_year FROM special_steel_ipt_requirement "
+                "ORDER BY financial_year DESC")
+    fys = [r[0] for r in cur.fetchall()]
+    conn.close()
+    return fys
+
+
+def save_ss_ipt_requirement(financial_year, rows):
+    """Upsert a batch of IPT-requirement rows for one FY. Each row:
+    {item, from_plant, to_plant, plan_kt, sort_order} plus optional
+    orig_item/orig_from_plant/orig_to_plant — if the natural key changed,
+    the old row is deleted first (same rename handling as ipt_table)."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    saved = 0
+    for r in rows:
+        item = (r.get("item") or "").strip()
+        frm, to = (r.get("from_plant") or "").strip(), (r.get("to_plant") or "").strip()
+        if not item or not frm or not to or frm == to:
+            continue
+        oi, of, ot = r.get("orig_item"), r.get("orig_from_plant"), r.get("orig_to_plant")
+        if oi and (oi != item or of != frm or ot != to):
+            cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=? "
+                        "AND item=? AND from_plant=? AND to_plant=?", (financial_year, oi, of, ot))
+        cur.execute("""
+            INSERT INTO special_steel_ipt_requirement
+                (financial_year, item, from_plant, to_plant, plan_kt, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(financial_year, item, from_plant, to_plant)
+            DO UPDATE SET plan_kt = excluded.plan_kt, sort_order = excluded.sort_order
+        """, (financial_year, item, frm, to, r.get("plan_kt"), int(r.get("sort_order") or 0)))
+        saved += 1
+    conn.commit()
+    conn.close()
+    return saved
+
+
+def delete_ss_ipt_requirement(financial_year, item, from_plant, to_plant):
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=? AND item=? "
+                "AND from_plant=? AND to_plant=?", (financial_year, item, from_plant, to_plant))
+    conn.commit()
+    conn.close()
