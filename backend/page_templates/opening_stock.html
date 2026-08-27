@@ -1,7 +1,22 @@
-        <div style="padding:6px;font-family:Arial,sans-serif;font-size:7pt;">
-          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:3px;color:rgb(0,0,255);">{{ page.title }}</div>
-          <div style="text-align:right;font-size:6.5pt;margin-bottom:2px;">Unit: {{ page.unit }}</div>
-          <table style="width:100%;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:6.3pt;">
+        <div style="padding:4px;font-family:Arial,sans-serif;font-size:7pt;">
+          <div style="text-align:center;font-weight:700;font-size:10.5pt;margin-bottom:2px;color:rgb(0,0,255);">{{ page.title }}</div>
+          <div style="text-align:right;font-size:6.8pt;margin-bottom:1.5px;">Unit: {{ page.unit }}</div>
+          {# height:258mm - not a padding bump: this is deliberately MORE than
+             even the worst realistic month (every plant reporting both Slabs
+             and Bloom/Billets stock, ~78 rows) needs at this font size, so
+             Chromium's table layout stretches every row's height (not just
+             the last one - confirmed empirically) to fill the gap instead of
+             leaving it blank below the table. A month with fewer plant/item
+             combinations reporting data just gets proportionally taller,
+             more breathing-room rows - a hardcoded padding value tuned for
+             one specific row count can't do that, and would either waste
+             the same gap every other month or, sized to close it, overflow
+             the rare full-width month onto a 2nd page. 258mm still leaves
+             ~2mm of the 273mm printable height (297mm A4 minus the 12mm top
+             + 12mm bottom print margins) as a safety margin below the worst
+             case's own ~255mm natural height, verified against a seeded
+             78-row render. #}
+          <table style="width:100%;height:258mm;border-collapse:collapse;border:2px solid {{ colors.border_darkest }};table-layout:fixed;font-size:7.5pt;line-height:1.0;">
             <colgroup>
               <col style="width:7%"/>
               <col style="width:5%"/>
@@ -12,12 +27,12 @@
             </colgroup>
             <thead>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_black }};">
-                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_dark }};"></th>
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">PLANT</th>
+                <th colspan="3" style="padding:1.6px 3px;border:1px solid {{ colors.border_dark }};"></th>
+                <th style="padding:1.6px 3px;border:1px solid {{ colors.border_dark }};">PLANT</th>
                 {% for c in page.col_labels %}
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ c }}</th>
+                <th style="padding:1.6px 3px;border:1px solid {{ colors.border_dark }};">{{ c }}</th>
                 {% endfor %}
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_dark }};">{{ page.var_label }}</th>
+                <th style="padding:1.6px 3px;border:1px solid {{ colors.border_dark }};">{{ page.var_label }}</th>
               </tr>
             </thead>
             <tbody>
@@ -29,23 +44,23 @@
               {% else %}{% set bg = colors.highlight_default_row_bg %}{% endif %}
               <tr style="background:{{ bg }};{% if row.bold %}font-weight:700;{% endif %}">
                 {% if loop.first %}
-                <td rowspan="{{ sec.rows | length }}" style="border:1px solid {{ colors.border_medium }};background:{{ colors.misc_white }};color:{{ colors.text_black }};text-align:center;vertical-align:middle;font-weight:700;font-size:5.6pt;padding:1px 2px;word-break:break-word;overflow-wrap:break-word;line-height:1.3;">{{ sec.label }}</td>
-                <td rowspan="{{ sec.rows | length }}" style="border:1px solid {{ colors.border_medium }};background:{{ colors.misc_white }};color:{{ colors.text_black }};text-align:center;vertical-align:middle;font-size:5.4pt;padding:1px 2px;word-break:break-word;overflow-wrap:break-word;line-height:1.3;">{{ sec.code }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="border:1px solid {{ colors.border_medium }};background:{{ colors.misc_white }};color:{{ colors.text_black }};text-align:center;vertical-align:middle;font-weight:700;font-size:6.4pt;padding:1px 2px;overflow-wrap:break-word;line-height:1.15;">{{ sec.label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="border:1px solid {{ colors.border_medium }};background:{{ colors.misc_white }};color:{{ colors.text_black }};text-align:center;vertical-align:middle;font-size:6.2pt;padding:1px 2px;overflow-wrap:break-word;line-height:1.15;">{{ sec.code }}</td>
                 {% endif %}
-                <td style="padding:1px 3px;border:1px solid {{ colors.border_medium }};text-align:left;font-size:5.8pt;white-space:nowrap;overflow:hidden;">{{ row.sub }}</td>
+                <td style="padding:0.5px 3px;border:1px solid {{ colors.border_medium }};text-align:left;font-size:6.9pt;white-space:nowrap;overflow:hidden;">{{ row.sub }}</td>
                 {% if (row.plant_rowspan | default(1)) > 0 %}
-                <td rowspan="{{ row.plant_rowspan | default(1) }}" style="padding:1px 3px;border:1px solid {{ colors.border_medium }};text-align:left;vertical-align:middle;{% if row.plant == 'SAIL' %}font-weight:700;{% endif %}">{{ row.plant }}</td>
+                <td rowspan="{{ row.plant_rowspan | default(1) }}" style="padding:0.5px 3px;border:1px solid {{ colors.border_medium }};text-align:left;vertical-align:middle;{% if row.plant == 'SAIL' %}font-weight:700;{% endif %}">{{ row.plant }}</td>
                 {% endif %}
                 {% for v in row['values'] %}
-                <td style="padding:1px 3px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ v }}</td>
+                <td style="padding:0.5px 3px;border:1px solid {{ colors.border_medium }};text-align:right;">{{ v }}</td>
                 {% endfor %}
-                <td style="padding:1px 3px;border:1px solid {{ colors.border_medium }};text-align:right;font-weight:600;">{{ row.var }}</td>
+                <td style="padding:0.5px 3px;border:1px solid {{ colors.border_medium }};text-align:right;font-weight:600;">{{ row.var }}</td>
               </tr>
               {% endfor %}
             {% endfor %}
             </tbody>
           </table>
-          <div style="display:flex;justify-content:space-between;font-size:5.8pt;color:{{ colors.text_secondary }};margin-top:2px;">
+          <div style="display:flex;justify-content:space-between;font-size:6pt;color:{{ colors.text_secondary }};margin-top:1.5px;">
             <span>Figures are provisional</span><span>For internal use</span>
           </div>
         </div>

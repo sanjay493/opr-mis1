@@ -27,7 +27,11 @@
                         <th rowspan="2" style="vertical-align: middle; text-align: left; padding-left: 3px;">Items</th>
                         <th rowspan="2" style="vertical-align: middle;">Plant</th>
                         <th rowspan="2" class="col-cap" style="vertical-align: middle;">Ann.<br/>Cap.</th>
-                        <th rowspan="2" class="col-ann" style="vertical-align: middle;">APP<br/>{{ target_header.split()[1] }}</th>
+                        {# target_header is "Target YYYY-YY" (shared with summary.html,
+                           which needs the full 4-digit year) - sliced to just "YY-YY"
+                           here so this column reads "APP 26-27" instead of the wider
+                           "APP 2026-27", without touching the shared variable. #}
+                        <th rowspan="2" class="col-ann" style="vertical-align: middle;">APP<br/>{{ target_header.split()[1][2:] }}</th>
                         <th colspan="4">{{ short_m }}'{{ short_y }}</th>
                         <th rowspan="2" style="vertical-align: middle;">{{ short_m }}'{{ short_prev_y }}<br/>Act.</th>
                         <th rowspan="2" style="vertical-align: middle;">%Gr.<br/>{{ short_m }}'{{ short_prev_y }}</th>

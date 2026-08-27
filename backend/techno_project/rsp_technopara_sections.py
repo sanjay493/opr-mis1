@@ -61,6 +61,15 @@ SECTION_UNITS = {
     "NEW PLATE MILL":         "NPM",
     "HOT STRIP MILL":         "HSM-1",
     "HOT STRIP MILL-2":       "HSM-2",
+    # Some file editions (May/Jun/Jul/Aug-2025 confirmed) drop the hyphen
+    # entirely ("HOT STRIP MILL2") instead of using the "HOT STRIP MILL-2"
+    # spelling Oct-2025 and other months use — since section matching is
+    # exact (never substring, see module docstring), that silently made the
+    # whole HSM-2 section invisible and dropped every row under it, same
+    # failure mode as the "COKE OVENS (BATTERY -1-5)" variants above.
+    # Registered as an additional exact variant rather than changing the
+    # header-matching strategy.
+    "HOT STRIP MILL2":        "HSM-2",
     "SILICON STEEL MILL":     "SSM",
     "ERW PIPE PLANT":         "ERW",
     "SW PIPE PLANT":          "SWP",
@@ -183,6 +192,10 @@ PARAM_ALIASES = {
     "H.R.Coil Production":            ("HSM-1", "specific_power_consumption"),
     "Slabs Rolled -  HSM":            ("HSM-1", "specific_heat_consumption"),
     "H.R.Coil-2 Production":          ("HSM-2", "specific_power_consumption"),
+    # Same file-to-file drift as "HOT STRIP MILL2" above (space instead of a
+    # hyphen before "2" this time) — confirmed in the same May/Jun/Jul/Aug-2025
+    # editions ("H.R.Coil 2 Production", row 331 of the July-2025 sheet).
+    "H.R.Coil 2 Production":          ("HSM-2", "specific_power_consumption"),
     "Slabs Rolled -  HSM2":           ("HSM-2", "specific_heat_consumption"),
 
     # ---- Silicon Steel Mill -------------------------------------------------------

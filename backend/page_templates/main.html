@@ -1132,12 +1132,18 @@
         .page4-table td.col-cap,
         .page4-table thead th.col-cap { background-color: {{ colors.highlight_capacity_bg }} !important; }
 
-        /* Annual APP column */
+        /* Annual APP column — left wall stays a plain dark divider (same
+           weight/colour as the monthly-vs-cumulative wall below, col-ytd-app),
+           marking entry into the highlighted block like any other section
+           break; right wall is highlight_actual_border, the dark pair to
+           this column's own highlight_actual_bg fill (same colour used for
+           page5-6's matching APP wall), so it reads as a deepened edge of
+           the highlight itself rather than a second plain divider. */
         .page4-table td.col-ann,
         .page4-table thead th.col-ann {
             background-color: {{ colors.highlight_actual_bg }} !important;
             border-left:  1px solid {{ colors.border_black }};
-            border-right: 1px solid {{ colors.border_black }};
+            border-right: 1px solid {{ colors.highlight_actual_border }};
         }
 
         /* Actual columns (month + cumulative) — identical treatment, one
@@ -1153,6 +1159,26 @@
            carried it. */
         .page4-table td.col-ytd-app,
         .page4-table thead th.col-ytd-app { border-left: 1px solid {{ colors.border_black }}; }
+
+        /* border-collapse tie-break bug (vertical case): same root cause as
+           the sail-row/fp-row note above, just left-right instead of
+           top-bottom. At an equal-width/style shared vertical edge,
+           Chromium's collapse always paints using the LEFT-hand cell's own
+           contribution - col-ann's/col-ytd-app's `border-left` (declared on
+           the RIGHT-hand cell of that edge) was therefore never actually
+           painted; the plain neighbour's default border_light border-right
+           won every time regardless of !important (which, same as the
+           horizontal case, only decides each cell's OWN declared border,
+           not which side wins a tied shared edge). Declaring the same
+           colour as that plain neighbour's own border-right instead - via
+           :has(), since col-cap/the CU% column have no class of their own
+           to hook a normal selector onto - puts the colour on the side that
+           actually wins, so it renders correctly regardless of which cell
+           "wins" the tie. */
+        .page4-table td:has(+ td.col-ann),
+        .page4-table th:has(+ th.col-ann) { border-right: 1px solid {{ colors.border_black }} !important; }
+        .page4-table td:has(+ td.col-ytd-app),
+        .page4-table th:has(+ th.col-ytd-app) { border-right: 1px solid {{ colors.border_black }} !important; }
 
         /* SAIL aggregate rows — top/bottom rule only (standard total-row
            convention), not a full per-cell box: a full border on every td
@@ -1233,9 +1259,15 @@
         .page5-6-table thead tr:last-child th { border-bottom: 1px solid {{ colors.border_black }} !important; }
         .page5-6-table thead tr:first-child th[rowspan] { border-bottom: 1px solid {{ colors.border_black }} !important; }
 
-        /* plant group separator — navy box top+bottom, 1.3px */
-        .page5-6-table tr.plant-first td { border-top: 1.3px solid {{ colors.cover_navy_dark }}; }
-        .page5-6-table tr.plant-last td  { border-bottom: 1.3px solid {{ colors.cover_navy_dark }} !important; }
+        /* plant group separator — navy box top+bottom. 2px (not the old
+           1.3px): a fractional width redrawn on a whole row's worth of tds
+           still rounds to a whole device pixel per td at print resolution,
+           but not always the SAME whole pixel across every column in that
+           row - Chromium was drawing that top/bottom rule at inconsistent
+           thickness cell-to-cell, reading as a doubled hairline in some
+           columns. A clean integer width removes the rounding ambiguity. */
+        .page5-6-table tr.plant-first td { border-top: 2px solid {{ colors.cover_navy_dark }}; }
+        .page5-6-table tr.plant-last td  { border-bottom: 2px solid {{ colors.cover_navy_dark }} !important; }
 
         /* Each plant group's own rowspan'd label cell — only right/bottom
            declared: top comes from .plant-first td (this cell only ever
@@ -1246,21 +1278,53 @@
             font-weight: 700;
             text-align: center;
             vertical-align: middle;
-            border-right:  1.3px solid {{ colors.cover_navy_dark }} !important;
-            border-bottom: 1.3px solid {{ colors.cover_navy_dark }} !important;
+            border-right:  2px solid {{ colors.cover_navy_dark }} !important;
+            border-bottom: 2px solid {{ colors.cover_navy_dark }} !important;
         }
 
-        /* Annual Plan column — navy vertical walls (line after "yy-yy Plan") */
+        /* Annual Plan ("APP") column — vertical walls (line after "yy-yy
+           Plan"). Left wall is a plain dark divider, same colour/weight as
+           the monthly-vs-cumulative wall below (col-ytd-plan) - marks entry
+           into the highlighted block like any other section break. Right
+           wall is highlight_actual_border, the pre-defined dark pair to
+           this column's own highlight_actual_bg fill (same colour used for
+           page4's matching APP wall), so it reads as a deepened edge of the
+           highlight itself rather than a second plain divider. 1px, not
+           the previous 2px/1.3px - matches the table's own outer-border
+           weight (box-shadow above) and page4's APP wall; still redrawn on
+           every single row (see the plant-group-separator note above for
+           why a fractional width there broke), but 1px is an integer like
+           every other border on this table, so it doesn't reintroduce that
+           rounding mismatch. */
         .page5-6-table td.col-ann,
         .page5-6-table thead th.col-ann {
             background-color: {{ colors.highlight_actual_bg }} !important;
-            border-left:  1.3px solid {{ colors.cover_navy_dark }};
-            border-right: 1.3px solid {{ colors.cover_navy_dark }};
+            border-left:  1px solid {{ colors.border_black }};
+            border-right: 1px solid {{ colors.highlight_actual_border }};
         }
 
-        /* Vertical line after "%Gr. <report month>" column */
+        /* border-collapse tie-break bug (vertical case) — same fix, same
+           reason, as page4-table's matching :has() rule above: col-ann's
+           own `border-left` (declared on the RIGHT-hand cell of that edge)
+           never actually painted, since Chromium's collapse always uses the
+           LEFT-hand cell's contribution at an equal-width/style shared
+           edge. The label cell that precedes col-ann has no class of its
+           own to hook a normal selector onto, hence :has(). */
+        .page5-6-table td:has(+ td.col-ann),
+        .page5-6-table th:has(+ th.col-ann) { border-right: 1px solid {{ colors.border_black }} !important; }
+
+        /* Growth ("%Gr. <report month>") column — same light/dark pairing
+           idea as col-ann: a light bg (highlight_pct_row_bg, already used
+           elsewhere in this report for percentage-row highlighting - an
+           apt reuse for a %Gr column specifically) with its right wall in
+           border_dark, a deepened shade of that same neutral gray, instead
+           of the unrelated navy used for the plant-group box lines. 2px,
+           not 1.3px - same per-row redraw/rounding fix as col-ann above. */
         .page5-6-table td.col-mgr-wall,
-        .page5-6-table thead th.col-mgr-wall { border-right: 1.3px solid {{ colors.cover_navy_dark }}; }
+        .page5-6-table thead th.col-mgr-wall {
+            background-color: {{ colors.highlight_pct_row_bg }} !important;
+            border-right: 2px solid {{ colors.border_dark }};
+        }
 
         /* Actual columns (month + cumulative) — one shared class, same as page4 */
         .page5-6-table td.col-act-highlight,

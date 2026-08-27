@@ -1260,11 +1260,20 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
                         # at all) was landing at a *larger* font than a
                         # late-FY month despite carrying just as many rows,
                         # leaving it the tightest-fitting case of the year
-                        # instead of the roomiest. Capped at 7.8pt for a real
-                        # safety margin above the footer, verified
-                        # empirically against real June/March renders (June
-                        # being the tighter of the two).
-                        font_size = min(font_size, 7.8)
+                        # instead of the roomiest. Capped at 8.0pt (bumped
+                        # from 7.8pt) with the matching tdPaddingV/lineHeight
+                        # bump below - verified empirically (real 72-row/page
+                        # render) to still leave ~10mm of headroom under the
+                        # printable content budget rather than sitting right
+                        # at the boundary.
+                        font_size = min(font_size, 8.0)
+                        # Default fitToPage padding/line-height (0.5px/1.0,
+                        # see main.html) is the floor every other fitToPage
+                        # page falls back to - these two get a hair more
+                        # since the font bump above freed up matching
+                        # vertical room (same empirical check as font_size).
+                        entry["tdPaddingV"] = 0.6
+                        entry["lineHeight"] = 1.02
                     if font_size < base_size:
                         tbl = entry.setdefault("table", {})
                         tbl["th"] = tbl["thead"] = font_size
