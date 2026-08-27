@@ -43,6 +43,16 @@ _SERIES_ITEM = {
     "CARBON": "Carbon Steel Production",
 }
 
+# cur-FY YTD Actual overrides (Tonnes) — hard-coded stopgap per direct
+# instruction (2026-08-27, "will map later"): SSP Stainless / Carbon for
+# Apr-Jul'26. Wins over the derived / production_table figure; %FF stays
+# blank (no APP) and %Gr is recomputed against CPLY. Remove once a real
+# source is wired.
+_YTD_ACTUAL_OVERRIDE = {
+    ("SSP", "STAINLESS"): 85900.0,
+    ("SSP", "CARBON"): 12000.0,
+}
+
 _MON = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -187,7 +197,9 @@ def generate_special_steel_physical(report_month: str) -> dict:
             if prev_actual is None:
                 prev_actual = seed_actual(_fy_label(prev_start))
 
-            ytd_actual = _db(db_ytd_act, plant, series)
+            ytd_actual = _YTD_ACTUAL_OVERRIDE.get((plant, series))
+            if ytd_actual is None:
+                ytd_actual = _db(db_ytd_act, plant, series)
             ytd_cply = _db(db_ytd_cply, plant, series)
             ytd_app = _db(db_ytd_app, plant, series)
             cur_abp = _t(perf.get((cur_fy, plant, series, "plan")))
