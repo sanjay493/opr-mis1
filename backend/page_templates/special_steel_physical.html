@@ -1,5 +1,5 @@
 <style>
-    .ssp-phys-table { border-collapse: collapse; width: 100%; font-size: 6.6pt; table-layout: fixed; }
+    .ssp-phys-table { border-collapse: collapse; width: 100%; font-size: 6.8pt; table-layout: fixed; }
     .ssp-phys-table th, .ssp-phys-table td {
         border: 0.5pt solid {{ colors.border|default('#b0b0b0') }};
         padding: 1.6pt 2pt; text-align: center; overflow: hidden;
@@ -9,14 +9,14 @@
     .ssp-phys-table .ssp-series { text-align: left; white-space: nowrap; font-weight: 600; }
     .ssp-phys-table .ssp-num { text-align: right; font-variant-numeric: tabular-nums; }
     .ssp-phys-table .ssp-sep { border-left: 1.2pt solid {{ colors.border_dark|default('#5f6368') }}; }
-    .ssp-phys-table .ssp-remark { text-align: left; font-size: 6pt; color: {{ colors.text_secondary|default('#5f6368') }}; white-space: normal; }
-    .ssp-phys-notes { margin: 6pt 0 4pt; font-size: 7pt; }
+    .ssp-phys-table .ssp-remark { text-align: left; font-size: 6.2pt; color: {{ colors.text_secondary|default('#5f6368') }}; white-space: normal; }
+    .ssp-phys-notes { margin: 6pt 0 4pt; font-size: 7.5pt; }
     .ssp-phys-notes li { margin-bottom: 1.5pt; }
     .ssp-ipt-wrap { margin-top: 6pt; }
-    .ssp-ipt-title { font-weight: 700; font-size: 8pt; margin-bottom: 3pt; }
-    .ssp-ipt-table { border-collapse: collapse; font-size: 7pt; }
+    .ssp-ipt-title { font-weight: 700; font-size: 8.5pt; margin-bottom: 3pt; }
+    .ssp-ipt-table { border-collapse: collapse; font-size: 7.5pt; }
     .ssp-ipt-table th, .ssp-ipt-table td {
-        border: 0.5pt solid {{ colors.border|default('#b0b0b0') }}; padding: 2pt 8pt;
+        border: 0.5pt solid {{ colors.border|default('#b0b0b0') }}; padding: 2pt 10pt;
     }
     .ssp-ipt-table th { background: {{ colors.header_bg|default('#e8eef7') }}; font-weight: 700; }
     .ssp-ipt-table .ssp-ipt-plan { text-align: right; font-variant-numeric: tabular-nums; }
@@ -29,12 +29,13 @@
 
 <table class="ssp-phys-table">
     <colgroup>
-        <col style="width:3.2%"><col style="width:6.5%">
-        <col style="width:4.2%"><col style="width:4.2%"><col style="width:3.6%">
-        {% for fy in page.history_fys %}<col style="width:3.6%">{% endfor %}
-        <col style="width:4%"><col style="width:4%"><col style="width:2.8%"><col style="width:2.8%">
-        <col style="width:4%"><col style="width:3%"><col style="width:3%">
-        <col style="width:7%">
+        <col style="width:3%"><col style="width:6%">
+        <col style="width:3.8%"><col style="width:3.8%"><col style="width:3.2%">
+        {% for fy in page.history_fys %}<col style="width:3.3%">{% endfor %}
+        <col style="width:3.8%"><col style="width:2.6%">
+        <col style="width:3.8%">
+        <col style="width:3.6%"><col style="width:3.6%"><col style="width:2.6%"><col style="width:3.6%"><col style="width:2.6%">
+        <col style="width:6.5%">
     </colgroup>
     <thead>
         <tr>
@@ -43,14 +44,15 @@
             <th rowspan="2">Capacity</th>
             <th colspan="2">Best Achieved</th>
             {% for fy in page.history_fys %}<th rowspan="2">{{ fy }}</th>{% endfor %}
-            <th colspan="4" class="ssp-sep">{{ page.prev_fy }}</th>
-            <th colspan="3" class="ssp-sep">{{ page.cur_fy }}</th>
+            <th colspan="2" class="ssp-sep">{{ page.prev_fy }}</th>
+            <th rowspan="2" class="ssp-sep">{{ page.cur_fy }}<br/>ABP</th>
+            <th colspan="5" class="ssp-sep">{{ page.ytd_label }}</th>
             <th rowspan="2">Remarks</th>
         </tr>
         <tr>
             <th>Actual</th><th>Year</th>
-            <th class="ssp-sep">APP</th><th>Actual</th><th>%Ful</th><th>%Gr</th>
-            <th class="ssp-sep">ABP</th><th>%Gr vs<br/>{{ page.prev_fy_short }}</th><th>%Gr vs<br/>APP {{ page.prev_fy_short }}</th>
+            <th class="ssp-sep">Actual</th><th>%Gr</th>
+            <th class="ssp-sep">APP</th><th>Actual</th><th>%FF</th><th>CPLY</th><th>%Gr</th>
         </tr>
     </thead>
     <tbody>
@@ -63,13 +65,14 @@
             <td class="ssp-num">{{ r.best_actual or '' }}</td>
             <td>{{ r.best_year or '' }}</td>
             {% for fy in page.history_fys %}<td class="ssp-num">{{ r.history[fy] or '' }}</td>{% endfor %}
-            <td class="ssp-num ssp-sep">{{ r.prev_app or '' }}</td>
-            <td class="ssp-num">{{ r.prev_actual or '' }}</td>
-            <td class="ssp-num">{{ r.prev_pct_ful or '' }}</td>
+            <td class="ssp-num ssp-sep">{{ r.prev_actual or '' }}</td>
             <td class="ssp-num">{{ r.prev_pct_growth or '' }}</td>
             <td class="ssp-num ssp-sep">{{ r.cur_abp or '' }}</td>
-            <td class="ssp-num">{{ r.cur_growth_vs_prev_actual or '' }}</td>
-            <td class="ssp-num">{{ r.cur_growth_vs_prev_app or '' }}</td>
+            <td class="ssp-num ssp-sep">{{ r.ytd_app or '' }}</td>
+            <td class="ssp-num">{{ r.ytd_actual or '' }}</td>
+            <td class="ssp-num">{{ r.ytd_pct_ful or '' }}</td>
+            <td class="ssp-num">{{ r.ytd_cply or '' }}</td>
+            <td class="ssp-num">{{ r.ytd_growth or '' }}</td>
             <td class="ssp-remark">{{ r.remark or '' }}</td>
         </tr>
         {% endfor %}

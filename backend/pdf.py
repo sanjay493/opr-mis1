@@ -1094,7 +1094,15 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         # own pageNumber/totalPages counters are per-call and reset to 1/1
         # for the spliced-in pages, so nothing downstream of them would show
         # a correct "Page N of TOTAL" without this.
-        _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend")
+        # Pages that need a genuinely wider physical page: "Large BFs" +
+        # the 3 Cost Trend pages right after it (one contiguous block near
+        # page 3.6), and "Special Steel Plants Physical Performance" (a
+        # second block near page 24). Each contiguous run is rendered
+        # separately at true A4-landscape and spliced back into the merged
+        # document at its original position, then every main-content page's
+        # header/footer is re-stamped from scratch (Chromium's own
+        # pageNumber/totalPages counters are per-call).
+        _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend", "special_steel_physical")
         _landscape_pages = [p for p in main_pages if p.get("type") in _LANDSCAPE_TYPES]
         if not _landscape_pages:
             main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
@@ -1105,8 +1113,24 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         else:
             from pypdf import PdfReader, PdfWriter
 
-            _landscape_idx = main_pages.index(_landscape_pages[0])
-            _next_page = main_pages[_landscape_idx + len(_landscape_pages)] if _landscape_idx + len(_landscape_pages) < len(main_pages) else None
+            # Group the landscape pages into contiguous runs; each run's
+            # "next_page" is the first non-landscape page after it (or None
+            # if the run ends the document).
+            _runs = []  # [{"pages": [...], "_end": idx, "next_page": id_or_None}]
+            _prev_i = -2
+            for _i, _p in enumerate(main_pages):
+                if _p.get("type") not in _LANDSCAPE_TYPES:
+                    continue
+                if _runs and _prev_i == _i - 1:
+                    _runs[-1]["pages"].append(_p)
+                else:
+                    _runs.append({"pages": [_p]})
+                _runs[-1]["_end"] = _i + 1
+                _prev_i = _i
+            for _r in _runs:
+                _r["next_page"] = next((p.get("page") for p in main_pages[_r["_end"]:]
+                                        if p.get("type") not in _LANDSCAPE_TYPES), None)
+
             _rest_pages = [p for p in main_pages if p.get("type") not in _LANDSCAPE_TYPES]
 
             main_html_rest = template.render(pages=_rest_pages, **render_kwargs) if _rest_pages else ""
@@ -1115,11 +1139,12 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                                       dept_badges=None, cover_html=cover_html, main_header_footer=False,
                                       main_pre_pdf_hook=_trend_hook)
 
-            landscape_html = template.render(pages=_landscape_pages, **render_kwargs)
-            landscape_bytes = _render_landscape_page_pdf(browser, landscape_html, font_family)
-
             base_reader = PdfReader(io.BytesIO(base_bytes))
-            landscape_reader = PdfReader(io.BytesIO(landscape_bytes))
+            run_readers = [
+                PdfReader(io.BytesIO(_render_landscape_page_pdf(
+                    browser, template.render(pages=r["pages"], **render_kwargs), font_family)))
+                for r in _runs
+            ]
 
             def _marker_index(reader, page_id):
                 marker = f"@@PGSTART_{page_id}@@"
@@ -1128,26 +1153,32 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                         return k
                 return None
 
-            insert_at = _marker_index(base_reader, _next_page.get("page")) if _next_page else len(base_reader.pages)
-            if insert_at is None:
-                insert_at = len(base_reader.pages)
             main_start = _marker_index(base_reader, _rest_pages[0].get("page")) if _rest_pages else 0
             if main_start is None:
                 main_start = 0
 
+            # base_reader page index -> list of run readers to insert *before* it
+            _inserts = {}
+            for r, rr in zip(_runs, run_readers):
+                at = _marker_index(base_reader, r["next_page"]) if r["next_page"] else len(base_reader.pages)
+                if at is None:
+                    at = len(base_reader.pages)
+                _inserts.setdefault(at, []).append(rr)
+
             writer = PdfWriter()
-            for k in range(insert_at):
-                writer.add_page(base_reader.pages[k])
-            for p in landscape_reader.pages:
-                writer.add_page(p)
-            for k in range(insert_at, len(base_reader.pages)):
-                writer.add_page(base_reader.pages[k])
+            for k in range(len(base_reader.pages) + 1):
+                for rr in _inserts.get(k, []):
+                    for p in rr.pages:
+                        writer.add_page(p)
+                if k < len(base_reader.pages):
+                    writer.add_page(base_reader.pages[k])
 
             out = io.BytesIO()
             writer.write(out)
             spliced_bytes = out.getvalue()
 
-            main_count = len(base_reader.pages) + len(landscape_reader.pages) - main_start
+            _total_landscape = sum(len(rr.pages) for rr in run_readers)
+            main_count = len(base_reader.pages) + _total_landscape - main_start
             spliced_bytes = _stamp_main_page_numbers(spliced_bytes, browser, font_family, report_month,
                                                       main_start, main_count)
             if dept_badges:
