@@ -297,7 +297,13 @@
            a marginal overflow shaves a few charts onto a 2nd page rather
            than dumping the whole cluster there and half-emptying page 1. */
         .pg-4-5 .sail-mines-chart { width: 100%; }
-        .pg-4-5.content-page { padding: 0; }
+        /* Per direct instruction, SAIL Mines wants a ~5mm top/bottom page
+           margin. _MAIN_MARGIN (pdf.py) is the global 10mm/9mm Chromium
+           print margin and can't be set per page, so this page's own .page
+           div pulls its content up/down into that band with a negative
+           margin — -4mm gives ~6mm top (just below the report header rule)
+           and ~5mm bottom. */
+        .pg-4-5.content-page { padding: 0; margin: -4mm 0; }
         .pg-4-5 .coal-c-heading { margin: 8px 0 3px; }
         .pg-4-5 .coal-table { font-size: 8pt; margin-bottom: 8px !important; }
         .pg-4-5 .coal-table th, .pg-4-5 .coal-table td { padding: 2.4px 5px; }
