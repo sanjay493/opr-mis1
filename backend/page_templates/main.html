@@ -128,34 +128,15 @@
         }
 
         /* Inter Plant Performance Comparison (page 3.5 / key_parameters) —
-           slightly tighter top margin than the shared content-layout so the
-           whole comparison table lands on one page. Side/bottom unchanged. */
-        @page key-parameters-layout {
-            size: A4 portrait;
-            margin-top: 8mm;
-            margin-right: 10mm;
-            margin-bottom: 12mm;
-            margin-left: 10mm;
-        }
-
-        /* SAIL Mines Production & Despatch Performance (page 4.5) — tighter
-           top/bottom margins than the shared content-layout so all the
-           tables + the 6-chart cluster fit one page. Side unchanged. */
-        @page sail-mines-layout {
-            size: A4 portrait;
-            margin-top: 6mm;
-            margin-right: 10mm;
-            margin-bottom: 8mm;
-            margin-left: 10mm;
-        }
-        .pg-4-5.content-page {
-            page: sail-mines-layout;
-        }
-
+           zero in-flow padding (on top of the tight per-cell padding + tiny
+           spacer rows in key_parameters.html) so the ~47-row comparison
+           table + 3 section bands land on one page. NB: @page {margin} rules
+           have no effect in this merged single-doc render (see the
+           .content-page / .highlights-page comments) — the .page padding
+           here and the per-cell padding in key_parameters.html are the real
+           vertical-space levers. */
         .key-parameters-page {
-            page: key-parameters-layout;
-            padding-top: 0;
-            padding-bottom: 0;
+            padding: 0;
         }
 
         /* Pages 19-24: Special Steel — dense grade tables, so side/bottom

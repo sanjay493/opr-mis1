@@ -112,10 +112,16 @@ SAIL_MINES_SECTIONS = [
         "items": ["CGoM", "OGoM", "JGoM"],
         "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_prod",
     },
-    # "Sales of Iron Ore" (iron_ore_sales / iron_ore_sales_despatch) was
-    # removed from this page per direct instruction (2026-08-27). Its
-    # mine-level source tables and db.get_iron_ore_sales_group_rollup_monthly
-    # still exist — just not surfaced here.
+    {
+        "key": "iron_ore_sales", "title": "Sales of Iron Ore", "kind": "production", "group_label": "BOOKED QTY",
+        "items": ["CGoM", "OGoM", "JGoM"],
+        "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}],
+    },
+    {
+        "key": "iron_ore_sales_despatch", "kind": "production",
+        "items": ["CGoM", "OGoM", "JGoM"],
+        "derived": [{"label": "SAIL", "kind": "sum", "of": ["CGoM", "OGoM", "JGoM"]}], "merge_into": "iron_ore_sales",
+    },
     {
         "key": "coal_prod", "title": "Coal Mines Production Performance", "kind": "production",
         "items": ["Raw Coking Coal", "Thermal Coal"],
@@ -147,17 +153,19 @@ SAIL_MINES_SECTIONS = [
     },
 ]
 
-# Iron Ore Production/Despatch (CGoM/OGoM/JGoM) are hard-coded here — delinked
-# from the mine-level rollup (db.get_iron_ore_group_rollup_monthly) per direct
-# instruction (2026-08-27): mine-level despatch actuals were never entered, so
-# the rollup's Despatch side rendered blank. Each tuple is '000 T
-# (APP, YTD Actual Apr-Jul'26, YTD CPLY). The "SAIL" row is still derived (sum
-# of the three groups). Update this dict — or restore the
-# get_iron_ore_group_rollup_monthly calls in generate_sail_mines() — once real
-# figures are available.
+# Iron Ore Production / Despatch and Sales of Iron Ore (Booked Qty / Despatch)
+# — CGoM/OGoM/JGoM — are hard-coded here, delinked from the mine-level rollups
+# (db.get_iron_ore_group_rollup_monthly / _sales_group_rollup_monthly) per
+# direct instruction (2026-08-27): mine-level despatch/sales actuals were never
+# entered, so the rollups' Despatch/Sales sides rendered blank. Each tuple is
+# '000 T (APP, YTD Actual Apr-Jul'26, YTD CPLY). "SAIL" rows stay derived
+# (sum of the three groups). Update this dict — or restore the rollup calls in
+# generate_sail_mines() — once real figures are available.
 _IRON_ORE_HARDCODED = {
-    "iron_ore_prod":     {"CGoM": (3675, 3126, 2841), "OGoM": (7507, 6532, 5279), "JGoM": (5138, 3914, 3645)},
-    "iron_ore_despatch": {"CGoM": (3675, 2996, 2878), "OGoM": (7507, 6940, 5410), "JGoM": (5138, 4026, 3785)},
+    "iron_ore_prod":            {"CGoM": (3675, 3126, 2841), "OGoM": (7507, 6532, 5279), "JGoM": (5138, 3914, 3645)},
+    "iron_ore_despatch":        {"CGoM": (3675, 2996, 2878), "OGoM": (7507, 6940, 5410), "JGoM": (5138, 4026, 3785)},
+    "iron_ore_sales":           {"CGoM": (20, 20, 0),        "OGoM": (2008, 1619, 524),  "JGoM": (0, 0, 0)},
+    "iron_ore_sales_despatch":  {"CGoM": (0, 0, 0),          "OGoM": (2008, 1598, 465),  "JGoM": (443, 0, 0)},
 }
 
 _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",

@@ -27,12 +27,12 @@ const C = {
 
 export default function KeyParametersTemplate({ data }) {
   const { title = '', plants = [], rows = [] } = data || {};
-  const cellStyle = { padding: '6px 5px', border: `1px solid ${C.border}`, textAlign: 'center' };
+  const cellStyle = { padding: '1.6px 5px', border: `1px solid ${C.border}`, textAlign: 'center' };
   const colSpan = 2 + plants.length;
 
   return (
-    <div style={{ padding: 6, fontFamily: "'Roboto', sans-serif", fontSize: '8pt' }}>
-      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '11pt', color: C.textHeadingDark, marginBottom: 6 }}>
+    <div style={{ padding: 2, fontFamily: "'Roboto', sans-serif", fontSize: '8pt' }}>
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '11pt', color: C.textHeadingDark, marginBottom: 3 }}>
         {title}
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', border: `1px solid ${C.border}`, fontSize: '8pt' }}>
@@ -57,7 +57,7 @@ export default function KeyParametersTemplate({ data }) {
             if (row.type === 'spacer') {
               return (
                 <tr key={i}>
-                  <td colSpan={colSpan} style={{ padding: 2, border: `1px solid ${C.border}` }}>&nbsp;</td>
+                  <td colSpan={colSpan} style={{ padding: 0, height: 3, lineHeight: '3px', fontSize: 1, border: `1px solid ${C.border}` }}>&nbsp;</td>
                 </tr>
               );
             }
