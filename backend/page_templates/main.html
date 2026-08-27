@@ -304,6 +304,12 @@
            margin — -4mm gives ~6mm top (just below the report header rule)
            and ~5mm bottom. */
         .pg-4-5.content-page { padding: 0; margin: -4mm 0; }
+
+        /* Inventory Status (page 25 / opening_stock) — same ~5mm top/bottom
+           page-margin treatment as SAIL Mines above (see that note): its
+           height:258mm table + title were spilling to a 2nd page against
+           the global 10mm/9mm _MAIN_MARGIN. */
+        .pg-25.content-page { padding: 0; margin: -4mm 0; }
         .pg-4-5 .coal-c-heading { margin: 8px 0 3px; }
         .pg-4-5 .coal-table { font-size: 8pt; margin-bottom: 8px !important; }
         .pg-4-5 .coal-table th, .pg-4-5 .coal-table td { padding: 2.4px 5px; }
