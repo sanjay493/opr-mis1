@@ -12,10 +12,11 @@ stored "till_month" dict (the same cumulative the Techno Manual Entry form
 computes/saves), production items are summed (day-weighted average for
 Oven Pushings, a Nos./day rate) across the FY-to-date months.
 
-Rows grouped under two section-header bands (Major Production Performance /
-Major Efficiency Parameters), matching the sample
-layout (its own third band, Recovery of Process Gases COG/BFG/LDG, was
-dropped — those three keys were never wired to a real data source; see
+Rows grouped under three section-header bands — Production of Main Items /
+Efficiency Parameters / Cost of Production — matching
+Report_format/"Plant wise Comparative for Apr-Jul'26.pdf" (the sample's own
+Recovery of Process Gases COG/BFG/LDG band was dropped — those three keys
+were never wired to a real data source; see
 frontend/src/app/data-entry/key-parameters-manual/page.js for the fields
 that still have no file-upload source). CAPEX, Labour Productivity, Avg
 Rake Detention Time, Demurrage, and HM Sent to PCM/Sand Pit/Dry Pit read a
@@ -29,6 +30,12 @@ and are now wired up here too. Sinter Fe is plant-dependent: RSP records
 tfe_in_sinter per Sinter Plant unit (SP-1/SP-2/SP-3) and is shown slash-joined
 across the three machines (see _SP_UNIT_MAP/_sinter_fe_val); other plants
 still read the single BF-unit-sourced figure.
+
+Cost of Production: Hot Metal / Crude Steel / Saleable Steel Rs/T come from
+cost_trend_monthly (FIXED + VARIABLE till_month — see _fetch_cop); BF Coke
+and Sinter Rs/T, plus RLTIFR and Special Steel in Finished Steel, have no DB
+source and are transcribed from the comparative PDF into _PDF_VALUES ("pdf"
+kind) — refresh those when a real extractor or a newer sheet lands.
 """
 import calendar as _calendar
 import json as _json
@@ -343,6 +350,44 @@ def _demurrage_by_plant(ytd_months: list) -> dict:
                 break
     return out
 
+
+# Cost of Production (Rs/T) — Hot Metal / Crude Steel / Saleable Steel come
+# from cost_trend_monthly (FIXED + VARIABLE till_month, the same figure
+# page_cost_trend.py's "TOTAL" row shows). "cop" rows pass "HM"/"CS"/"SS" as
+# spec.
+_COP_PRODUCTS = {"HM", "CS", "SS"}
+
+
+def _fetch_cop(report_month: str) -> dict:
+    """{(plant, product): total_rs_per_t} — FIXED + VARIABLE till_month cost
+    of production for HM/CS/SS at report_month."""
+    out = {}
+    for product in _COP_PRODUCTS:
+        data = db.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
+        for cost_type in ("FIXED", "VARIABLE"):
+            for plant, cell in data.get(cost_type, {}).items():
+                v = cell.get("till_month")
+                if v is not None:
+                    out[(plant, product)] = out.get((plant, product), 0.0) + v
+    return out
+
+
+# Values with no DB source yet — transcribed from
+# Report_format/Plant wise Comparative for Apr-Jul'26.pdf per direct
+# instruction (map from the DB where available, fill the rest from that
+# file). {spec: {plant: value}}. Refresh when a real extractor lands, or when
+# a newer comparative sheet supersedes this one.
+_PDF_VALUES = {
+    # RLTIFR (Reportable Lost Time Injury Frequency Rate)
+    "rltifr": {"BSP": 0.19, "DSP": 0.11, "RSP": 0.12, "BSL": 0.05, "ISP": 0.00},
+    # Special Steel in Finished Steel, %
+    "ss_in_finished": {"BSP": 81.5, "DSP": 98.8, "RSP": 39.9, "BSL": 10.3, "ISP": 99.6},
+    # Cost of Production, Rs/T — BF Coke & Sinter only (HM/CS/SS come from the DB)
+    "cop_bf_coke": {"BSP": 33232, "DSP": 33158, "RSP": 36081, "BSL": 31739, "ISP": 36110},
+    "cop_sinter": {"BSP": 5386, "DSP": 6149, "RSP": 5285, "BSL": 5709, "ISP": 6248},
+}
+
+
 # (label, unit, kind, spec, decimal_places, flags)
 #   flags:
 #     highlight       - light background on this data row
@@ -350,8 +395,10 @@ def _demurrage_by_plant(ytd_months: list) -> dict:
 #     continuation    - this row shares its parameter-name cell with the
 #                       row above (part of a label_rowspan group), so it
 #                       renders no parameter cell of its own
+_EFFICIENCY_SECTION = "Efficiency Parameters"
+
 _ROWS = [
-    ("Major Production Performance", "", _SECTION, None, 0, {}),
+    ("Production of Main Items", "", _SECTION, None, 0, {}),
     ("Oven Pushings",       "Nos./day", "prod", ["Oven Pushing (nos/day)", "Oven Pushing(nos/d)"], 0, {}),
     ("Sinter",               "'000 T",  "prod", ["Total Sinter"], 0, {}),
     ("Hot Metal",            "'000 T",  "prod", ["Hot Metal"], 0, {}),
@@ -359,13 +406,10 @@ _ROWS = [
     ("Crude Steel",          "'000 T",  "prod", ["Total Crude Steel"], 0, {}),
     ("Finished Steel",       "'000 T",  "prod", ["Finished Steel"], 0, {}),
     ("Saleable Steel",       "'000 T",  "prod", ["Saleable Steel"], 0, {}),
-    ("Finished in Total SS", "%",       "ratio_prod", ("Finished Steel", "Saleable Steel"), 1, {"highlight": True}),
 
-("Major Efficiency Parameters", "", _SECTION, None, 0, {}),
+    (_EFFICIENCY_SECTION, "", _SECTION, None, 0, {}),
     ("Imported Coking Coal in Blend",      "%", "coal_blend", "total", 1, {}),
     ("Imported Soft Coking Coal in Blend", "%", "coal_blend", "soft", 1, {}),
-
-    
     ("BF Productivity",     "t/m³/day", "bf", "bf_productivity", 2, {}),
     ("BF Coke Rate",        "kg/THM",   "bf", "coke_rate", 0, {}),
     ("Nut Coke Rate",       "kg/THM",   "bf", "nut_coke_rate", 0, {}),
@@ -381,42 +425,48 @@ _ROWS = [
     ("Coke Ash",            "%",        "coke_unit", "ash_in_coke", 2, {}),
     ("Sinter Fe",           "%",        "sinter_fe", None, 2, {}),
     ("BF Slag Rate",        "kg/THM",   "bf", "slag_rate", 0, {}),
+    (None, "", _SPACER, None, 0, {}),
     ("HM Sent to PCM/Sand Pit/Dry Pit", "'000 T", "general", "hm_to_pcm_sandpit_drypit", 1, {"label_rowspan": 2}),
     (None,                  "%",        "ratio_general_prod", ("hm_to_pcm_sandpit_drypit", ["Hot Metal"]), 1, {"continuation": True}),
-
     ("TMI",                       "kg/TCS",   "sms_join", "tmi", 0, {}),
-    ("CHM Ratio",                 "",         "general", "coal_to_hm", 3, {}),
+    ("CHM Ratio",                 "--",       "general", "coal_to_hm", 3, {}),
+    (None, "", _SPACER, None, 0, {}),
     # Unit is kWh/TSS (per Tonne Saleable Steel), not /TCS like its
     # neighbors — confirmed against every plant's own source workbook/PDF
     # (BSP "Plant Operation" row: Kwh/TSS; DSP/RSP/BSL: same; ISP's own
     # sheet even carries a separate TCS-basis sub-row that was NOT the one
     # used here, per direct instruction to read the KwH/TSS row).
-    ("Sp. Power Consumption",     "kWh/TSS",  "general", "sp_power_consumption", 2, {}),
     ("Sp. Energy Consumption",    "Gcal/TCS", "general", "specific_energy_consumption", 2, {}),
+    ("Sp. Power Consumption",     "kWh/TSS",  "general", "sp_power_consumption", 2, {}),
     ("Sp. Water Consumption",     "m³/TCS",   "general", "sp_water_consumption", 2, {}),
     ("Sp CO2 Emission",           "T-CO2/TCS","general", "sp_co2_emission", 2, {}),
-
+    ("Finished in Total SS",      "%",        "ratio_prod", ("Finished Steel", "Saleable Steel"), 1, {"highlight": True}),
+    ("Special Steel in Finished Steel", "%",  "pdf", "ss_in_finished", 1, {}),
+    # Retained from the previous layout (not on the source comparative
+    # sheet): Value Added Steel despatch qty within Finished Steel, then the
+    # same qty as a % of the plant's own Saleable Steel production.
+    ("Value Added Saleable Steel", "T", "vap_qty", None, 0,
+     {"label_rowspan": 2, "note": "despatch of value added SS / Total Production of SS"}),
+    (None,                                     "%",  "vap_pct", None, 1, {"continuation": True}),
     (None, "", _SPACER, None, 0, {}),
-
-    ("CAPEX",                  "Rs Cr",    "general", "capex", 1, {}),
     ("Labour Productivity",    "T/Man-yr", "general", "labour_productivity", 0, {}),
+    ("RLTIFR",                 "--",       "pdf",     "rltifr", 2, {}),
     ("Avg Rake Detention Time","Hrs",      "general", "avg_rake_detention_time", 1, {}),
     # Label's period placeholder is filled in with the same Apr-<report
-    # month> range as the page title (_DEMURRAGE_LABEL below), since this
-    # is a till_month/YTD figure like every other "general" row here.
-    # Split into two data rows sharing one parameter-name cell (same
-    # label_rowspan/continuation pattern as "HM Sent to PCM/Sand Pit/Dry
-    # Pit" above): the raw Rs Cr figure, then that same figure expressed as
-    # an expense rate (Rs Cr per '000T of Crude Steel produced, YTD).
+    # month> range as the page title (_DEMURRAGE_LABEL below). Split into two
+    # data rows sharing one parameter-name cell: the raw Rs Cr figure, then
+    # that same figure expressed as an expense rate (Rs per T of Crude Steel
+    # produced, YTD).
     (_DEMURRAGE_LABEL,          "Rs Cr",    "general", "demurrage", 2, {"label_rowspan": 2}),
     (None,                      "Rs/TCS",   "demurrage_per_tcs", None, 2, {"continuation": True}),
-    # Split into two data rows sharing one parameter-name cell (same
-    # label_rowspan/continuation pattern as Demurrage above): the raw Value
-    # Added Product qty within Finished Steel, then that same qty expressed
-    # as a % of the plant's own Finished Steel production.
-    ("Value Added Saleable Steel", "T", "vap_qty", None, 0,
-     {"label_rowspan": 2, "note": "despatch of value added SS/Total Production of SS"}),
-    (None,                                     "%",  "vap_pct", None, 1, {"continuation": True}),
+    ("CAPEX",                  "Rs Cr",    "general", "capex", 0, {}),
+
+    ("Cost of Production", "", _SECTION, None, 0, {}),
+    ("BF Coke",        "Rs/T", "pdf", "cop_bf_coke", 0, {}),
+    ("Sinter",         "Rs/T", "pdf", "cop_sinter", 0, {}),
+    ("Hot Metal",      "Rs/T", "cop", "HM", 0, {}),
+    ("Crude Steel",    "Rs/T", "cop", "CS", 0, {}),
+    ("Saleable Steel", "Rs/T", "cop", "SS", 0, {}),
 ]
 
 
@@ -424,6 +474,7 @@ def generate_key_parameters(report_month: str) -> dict:
     ytd_months = db.get_ytd_months(report_month)
     techno = _fetch_techno(report_month)
     production = _fetch_production(ytd_months)
+    cop = _fetch_cop(report_month)
 
     import datetime as _dt
     period_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")
@@ -462,7 +513,7 @@ def generate_key_parameters(report_month: str) -> dict:
         if label == _DEMURRAGE_LABEL:
             label = _DEMURRAGE_LABEL.format(period=dem_period)
         if kind == _SECTION:
-            in_bf_section = (label == "Major Efficiency Parameters")
+            in_bf_section = (label == _EFFICIENCY_SECTION)
             rows.append({"type": "section", "label": label})
             continue
         if kind == _SPACER:
@@ -567,6 +618,10 @@ def generate_key_parameters(report_month: str) -> dict:
             elif kind == "vap_pct":
                 _qty, pct = vap_by_plant.get(plant, (None, None))
                 v = _round(pct, dp) if pct is not None else None
+            elif kind == "cop":
+                v = _round(cop.get((plant, spec)), dp)
+            elif kind == "pdf":
+                v = _round(_PDF_VALUES.get(spec, {}).get(plant), dp)
             else:
                 v = None
             # _round()/the branches above return a plain float for most

@@ -66,6 +66,11 @@ export default function KeyParametersTemplate({ data }) {
                 {!row.continuation && (
                   <td rowSpan={row.label_rowspan || undefined} style={{ ...cellStyle, textAlign: 'left' }}>
                     {row.parameter}
+                    {row.note && (
+                      <div style={{ fontSize: '6.5pt', fontStyle: 'italic', fontWeight: 400, color: C.textSecondary }}>
+                        {row.note}
+                      </div>
+                    )}
                   </td>
                 )}
                 <td style={{ ...cellStyle, fontStyle: 'italic', color: C.textSecondary }}>{row.unit}</td>
