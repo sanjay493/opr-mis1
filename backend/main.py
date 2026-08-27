@@ -96,17 +96,42 @@ def _safe_chart_data(month):
 _MAJOR_TECHNO_EXCLUDE = {"Sp. CO2 Emission", "Sp. Water Consumption", "Sp. PM Emission"}
 
 
+# Chemical formulae whose digit runs render as Unicode subscripts (CO₂,
+# Al₂O₃, O₂, …) wherever they appear in a page's display strings. Whitelist
+# only — a formula not listed here is left untouched, so tokens like
+# "12 Parameters", "BF-8", "M40" are never affected. Bare "H2" is
+# deliberately excluded (it collides with the half-year "H2" label on the
+# best-ever page); the hydrogen compounds (H2O/H2S/H2SO4/H2O2) are still
+# covered. Longest first so "H2SO4" wins over "H2O", "Fe3O4" over "Fe3".
+_CHEM_FORMULAE = sorted([
+    "H2SO4", "H2O2", "H3PO4",
+    "Al2O3", "Fe2O3", "Fe3O4", "Cr2O3", "V2O5", "P2O5", "SiO2", "TiO2",
+    "MnO2", "Mn3O4", "Na2O", "K2O",
+    "CaCO3", "MgCO3", "Na2CO3",
+    "CO2", "SO2", "SO3", "NO2", "N2O", "NH3", "CH4", "C2H2", "C2H4", "C2H6",
+    "H2O", "H2S", "N2", "O2",
+], key=len, reverse=True)
+_CHEM_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:" + "|".join(re.escape(f) for f in _CHEM_FORMULAE) + r")(?![A-Za-z0-9])"
+)
+_SUBSCRIPT_DIGITS = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+
+
 def _subscript_co2(obj):
-    """Recursively render 'CO2' as 'CO₂' (proper subscript) in every string
-    value of a page dict/list, right before it reaches the frontend preview
-    or the PDF renderer. Applied here (display boundary only) rather than to
-    the "CO2" label constants scattered across page_techno.py/page_epi.py/etc,
-    since those strings double as matching keys (_MAJOR_TECHNO_EXCLUDE,
-    _EPI_LABELS, DB param lookups) and must stay plain ASCII internally."""
+    """Recursively render known chemical formulae with Unicode-subscript
+    digits (CO2 -> CO₂, Al2O3 -> Al₂O₃, O2 -> O₂, ...) in every string value
+    of a page dict/list, right before it reaches the frontend preview or the
+    PDF renderer. Applied here (display boundary only) rather than to the
+    formula constants scattered across page_techno.py/page_epi.py/etc, since
+    those strings double as matching keys (_MAJOR_TECHNO_EXCLUDE,
+    _EPI_LABELS, DB param lookups) and must stay plain ASCII internally.
+    Only whitelisted formulae (see _CHEM_FORMULAE) are touched, and only at
+    a non-alphanumeric boundary, so a half-year "H2" / "12 Parameters" /
+    "BF-8" is left alone."""
     if isinstance(obj, str):
-        if "CO2" not in obj or "<svg" in obj or obj.startswith("data:"):
+        if "<svg" in obj or obj.startswith("data:"):
             return obj
-        return obj.replace("CO2", "CO₂")
+        return _CHEM_RE.sub(lambda m: m.group(0).translate(_SUBSCRIPT_DIGITS), obj)
     if isinstance(obj, dict):
         return {k: _subscript_co2(v) for k, v in obj.items()}
     if isinstance(obj, list):
