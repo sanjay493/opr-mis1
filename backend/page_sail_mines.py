@@ -81,7 +81,7 @@ _C_SALES = "#eda100"       # yellow
 # ── Hard-coded chart data (million tonnes) — per direct instruction
 # (2026-08-27), a stopgap until real series exist. Update here.
 _TREND_FYS = ["FY 23-24", "FY 24-25", "FY 25-26"]
-_IRON_ORE_PROD_MT = [25.4, 34.8, 38.1]
+_IRON_ORE_PROD_MT = [35.423, 34.8, 38.1]
 _CLEAN_COAL_PROD_MT = [0.484, 0.376, 0.345]
 _FLUX_PROD_MT = [2.018, 1.715, 1.279]
 _SALES_BOOKING_MT = [1.16, 0.54, 3.01]
