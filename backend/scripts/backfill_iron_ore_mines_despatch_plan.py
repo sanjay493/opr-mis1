@@ -9,26 +9,37 @@ this workbook (qty_plan per report_month x mine x material x end_use — Plan
 has no Rail/Road split, matching mines_despatch_plan_monthly's grain).
 Despatch Actual and Booked Quantity are still not provided.
 
-Sheet1 has 6 stacked blocks, all covering 12 months Apr'26-Mar'27:
+Sheet1 stacked blocks, all covering 12 months Apr'26-Mar'27:
 
-  row  2  "Tailing sales despatch plan"      rows 3-5    TAILINGS  / SALES
-  row  8  "Dump Fines sale Despatch plan"    rows 9-12   DUMP_FINES/ SALES
-  row 15  "Pellets despatch to captive"      row 16      PELLETS   / CAPTIVE
-  row 20  "Dump Despatch Captive"            row 21      DUMP_FINES/ CAPTIVE
-  row 25  "Lump Fines Despatch Captive"      rows 28-38  LUMP+FINES/ CAPTIVE
-  row 42  "conversion agent"                 rows 44-47  LUMP+FINES/ PELLET_CONV
+  row  2  "Tailing sales despatch plan"       rows  3-5   TAILINGS  / SALES
+  row  8  "Dump Fines sale Despatch plan"     rows  9-12  DUMP_FINES/ SALES
+  row 15  "Pellets despatch to captive"       row  16     PELLETS   / CAPTIVE
+  row 20  "Dump Despatch Captive"             row  21     DUMP_FINES/ CAPTIVE
+  row 42  "conversion agent"                  rows 44-47  LUMP+FINES/ PELLET_CONV
+  row 52  "despatch plan Sales lump & Fines"  rows 54-66  LUMP+FINES/ SALES
+  row 69  "Lump Fines depatch plan captive"   rows 71-83  LUMP+FINES/ CAPTIVE
 
-Blocks 1-4 are a single 12-wide row of months (cols B..M) per mine.
-Blocks 5-6 are 24 wide: a (Lump, Fines) column pair per month, month dates on
-the block's first row at cols B,D,F,... and a Lump/Fines sub-header row below.
-In block 6 only the Fines column is populated (conversion agents take fines).
+NOT read: the older "Lump Fines Despatch Captive" block at rows 25-38 — the
+rows 71-83 block is its corrected revision (per direct instruction,
+2026-08-27: ROWGHAT Sep'26 Fines -29 -> 1, BOLANI Nov'26 Fines 205 -> 195),
+and rows 71-83 is used as the single source for LUMP/FINES -> CAPTIVE.
+
+Layouts:
+  - "narrow" (rows 2/8/15/20): one 12-wide row of months, cols B..M, dates on
+    the title row itself.
+  - "wide-hdr" (row 42): a (Lump, Fines) column pair per month (cols B..Y),
+    month dates on the title row at B,D,F,..., a Lump/Fines sub-header below.
+    Only the Fines column is populated (conversion agents take fines).
+  - "wide" (rows 54-66, 71-83): same (Lump, Fines) pair-per-month grid but NO
+    date row and NO Lump/Fines sub-header — months are assumed Apr'26..Mar'27
+    left to right (MONTHS_APR26). "JHR TOTAL" / "ODISHA TOTAL" subtotal rows
+    are skipped; "BARSUA rail" / "KALTA road" / "... GROUP" name variants map
+    to the plain mine (Plan has no Rail/Road split).
 
 Values in this workbook are already in '000 T (unlike
 Report_format/iron ore production.xlsx which was raw tonnes) — magnitudes
 match mines_production_monthly's '000 T figures for the same mines/materials,
-so NO scaling is applied here. The one negative source cell (ROWGHAT Sep'26
-Fines Captive = -29) is a data-entry error in the sheet and is skipped
-(left empty in the DB) per direct instruction (2026-08-27).
+so NO scaling is applied here.
 
 Run once: python scripts/backfill_iron_ore_mines_despatch_plan.py [--apply]
 Without --apply, only prints the diff against current DB values (dry run).
@@ -50,32 +61,33 @@ WORKBOOK_PATH = os.path.join(
 # This workbook is already in '000 T (see module docstring).
 UNIT_SCALE = 1
 
-# Source cells to skip entirely (leave NULL/absent in the DB), keyed
-# (report_month, mine_code, material_code, end_use_code). ROWGHAT Sep'26
-# Fines Captive is -29 in the sheet — a data-entry error, not a real plan.
-EXCLUDE = {("2026-09", "ROWGHAT", "FINES", "CAPTIVE")}
+MONTHS_APR26 = (
+    [f"2026-{m:02d}" for m in range(4, 13)] + [f"2027-{m:02d}" for m in range(1, 4)]
+)
 
 MINE_NAME_TO_CODE = {
-    "kiriburu": "KIRIBURU", "meghahatuburu": "MEGHAHATUBURU", "gua": "GUA",
-    "manoharpur": "MANOHARPUR", "bolani": "BOLANI", "barsua": "BARSUA",
+    "kiriburu": "KIRIBURU", "mburu": "MEGHAHATUBURU", "meghahatuburu": "MEGHAHATUBURU",
+    "gua": "GUA", "manoharpur": "MANOHARPUR", "bolani": "BOLANI", "barsua": "BARSUA",
     "taldih": "TALDIH", "kalta": "KALTA", "rajhara": "RAJHARA",
     "dalli": "DALLI", "rowghat": "ROWGHAT",
 }
+SKIP_ROWS = {"jhr total", "odisha total", "total"}
 
-# (title_row, first_data_row, last_data_row, layout, [(material_code, end_use_code), ...])
-#   layout "narrow": one 12-wide row of months, cols B..M
-#   layout "wide":   (Lump, Fines) column pair per month, months on title_row
+# "narrow" blocks: (title_row, first_data_row, last_data_row, (material, end_use))
 SINGLE_BLOCKS = [
-    (2, 3, 5, "narrow", ("TAILINGS", "SALES")),
-    (8, 9, 12, "narrow", ("DUMP_FINES", "SALES")),
-    (15, 16, 16, "narrow", ("PELLETS", "CAPTIVE")),
-    (20, 21, 21, "narrow", ("DUMP_FINES", "CAPTIVE")),
+    (2, 3, 5, ("TAILINGS", "SALES")),
+    (8, 9, 12, ("DUMP_FINES", "SALES")),
+    (15, 16, 16, ("PELLETS", "CAPTIVE")),
+    (20, 21, 21, ("DUMP_FINES", "CAPTIVE")),
 ]
-# (date_row, first_data_row, last_data_row, end_use_code) — month dates sit on
-# date_row at cols B,D,F,...; a Lump/Fines sub-header row sits just below it.
-WIDE_BLOCKS = [
-    (26, 28, 38, "CAPTIVE"),
+# "wide-hdr" blocks: (date_row, first_data_row, last_data_row, end_use)
+WIDE_HDR_BLOCKS = [
     (42, 44, 47, "PELLET_CONV"),
+]
+# "wide" blocks (no date/sub-header row): (first_data_row, last_data_row, end_use)
+WIDE_BLOCKS = [
+    (54, 66, "SALES"),
+    (71, 83, "CAPTIVE"),
 ]
 
 
@@ -84,7 +96,15 @@ def _month_str(dt) -> str:
 
 
 def _mine_code(name):
-    return MINE_NAME_TO_CODE[str(name).strip().lower()]
+    """Normalise a workbook row label to a mines_master code, or None for a
+    subtotal row that should be skipped."""
+    n = str(name).strip().lower().replace("'", "")
+    for suffix in (" group", " rail", " road"):
+        if n.endswith(suffix):
+            n = n[: -len(suffix)].strip()
+    if n in SKIP_ROWS:
+        return None
+    return MINE_NAME_TO_CODE[n]
 
 
 def _num(v):
@@ -100,15 +120,13 @@ def build_entries():
     out = {}  # (rm, mine_code) -> list
 
     def add(rm, mine_code, material_code, end_use_code, plan):
-        if plan is None:
-            return
-        if (rm, mine_code, material_code, end_use_code) in EXCLUDE:
+        if plan is None or mine_code is None:
             return
         out.setdefault((rm, mine_code), []).append({
             "material_code": material_code, "end_use_code": end_use_code, "plan": plan,
         })
 
-    for title_row, first_row, last_row, _layout, (material_code, end_use_code) in SINGLE_BLOCKS:
+    for title_row, first_row, last_row, (material_code, end_use_code) in SINGLE_BLOCKS:
         months = []
         col = 2
         while ws.cell(row=title_row, column=col).value is not None:
@@ -122,7 +140,7 @@ def build_entries():
             for col, rm in months:
                 add(rm, mc, material_code, end_use_code, _num(ws.cell(row=r, column=col).value))
 
-    for date_row, first_row, last_row, end_use_code in WIDE_BLOCKS:
+    for date_row, first_row, last_row, end_use_code in WIDE_HDR_BLOCKS:
         months = []
         col = 2
         while ws.cell(row=date_row, column=col).value is not None:
@@ -134,6 +152,17 @@ def build_entries():
                 continue
             mc = _mine_code(name)
             for col, rm in months:
+                add(rm, mc, "LUMP", end_use_code, _num(ws.cell(row=r, column=col).value))
+                add(rm, mc, "FINES", end_use_code, _num(ws.cell(row=r, column=col + 1).value))
+
+    for first_row, last_row, end_use_code in WIDE_BLOCKS:
+        for r in range(first_row, last_row + 1):
+            name = ws.cell(row=r, column=1).value
+            if name is None:
+                continue
+            mc = _mine_code(name)
+            for i, rm in enumerate(MONTHS_APR26):
+                col = 2 + 2 * i
                 add(rm, mc, "LUMP", end_use_code, _num(ws.cell(row=r, column=col).value))
                 add(rm, mc, "FINES", end_use_code, _num(ws.cell(row=r, column=col + 1).value))
 
