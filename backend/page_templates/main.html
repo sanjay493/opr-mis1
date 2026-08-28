@@ -839,15 +839,15 @@
         }
         /* The image's white content zone narrows to a "waist" around
            55-65% down the page (just below "Prepared By") before widening
-           again lower down where the map watermark sits — so the banner
-           has to sit in that lower, wider band to actually reach the photo
-           edge full-width without bleeding onto the photo itself. */
+           again lower down where the map watermark sits. The month banner
+           is short (one word + year) so it clears the waist; the KPI
+           honeycomb below it sits in the wider map-watermark band. */
         .page1-month-banner {
             position: absolute;
-            top: 70.5%;
-            left: 4%;
+            top: 65%;
+            left: 12%;
             width: 48%;
-            font-size: 52pt;
+            font-size: 38pt;
             font-weight: 900;
             line-height: 1;
             letter-spacing: -0.01em;
@@ -857,9 +857,9 @@
 
         .page1-kpi-section {
             position: absolute;
-            top: 77%;
-            left: 4%;
-            width: 58%;
+            top: 72%;
+            left: 8%;
+            width: 44%;
         }
         .page1-kpi-heading {
             font-size: 9.5pt;
@@ -877,61 +877,89 @@
             margin-top: 3px;
             margin-bottom: 5px;
         }
-        .page1-kpi-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 5px 12px;
+        /* ── Report-month KPI honeycomb ──────────────────────────────
+           Six flat-top hexagons in a 3-column / 2-row honeycomb (middle
+           column dropped half a cell). The grid's own height comes from
+           aspect-ratio (3:2 = 2.5W by 2.5H for W:H = 3:2 hexes) so it
+           needs no resolvable parent height; each hex is 40% x 40% of
+           the grid, positioned by .page1-hex-{0..5}. Order follows
+           page.kpis: HM, CS, FS, SS, Iron Ore Prod, Iron Ore Sales
+           Despatch (see page_cover.py). */
+        .page1-hexgrid {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 3 / 2;
+            margin-top: 6px;
         }
-        .page1-kpi-card {
-            background: rgba(255,255,255,0.72);
-            border: 1px solid transparent;
-            border-image: linear-gradient(to right, {{ colors.cover_kpi_card_border }}, transparent) 1;
-            border-radius: 6px;
-            padding: 5px 10px;
+        .page1-hex {
+            position: absolute;
+            width: 40%;
+            height: 40%;
+        }
+        .page1-hex-0 { left: 0;   top: 0;   }
+        .page1-hex-1 { left: 0;   top: 40%; }
+        .page1-hex-2 { left: 30%; top: 20%; }
+        .page1-hex-3 { left: 30%; top: 60%; }
+        .page1-hex-4 { left: 60%; top: 0;   }
+        .page1-hex-5 { left: 60%; top: 40%; }
+        .page1-hex-border {
+            position: absolute;
+            inset: 0;
+            background: {{ colors.cover_royal_blue }};
+            clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+            filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.4));
+        }
+        .page1-hex-inner {
+            position: absolute;
+            inset: 1.2px;
+            background: linear-gradient(155deg, #ffffff 45%, #e5edfb);
+            clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: space-between;
-            gap: 6px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            justify-content: center;
+            text-align: center;
+            padding: 0 9%;
         }
-        .page1-kpi-main {
-            flex: 1 1 auto;
-            min-width: 0;
+        /* Iron Ore Mines hexes — warm rust tint + accent to set them apart
+           from the cool-blue steel hexes. */
+        .page1-hex--ore .page1-hex-border { background: #b4530a; }
+        .page1-hex--ore .page1-hex-inner  { background: linear-gradient(155deg, #ffffff 42%, #fbe6d0); }
+        .page1-hex--ore .page1-hex-value  { color: #b4530a; }
+        .page1-hex-icon {
+            width: 15px;
+            height: 15px;
+            margin-bottom: 1px;
         }
-        .page1-kpi-label {
-            font-size: 11.3pt;
+        .page1-hex-label {
+            font-size: 8.5pt;
             font-weight: 700;
-            color: {{ colors.text_secondary }};
-            text-transform: uppercase;
-            margin-bottom: 0;
-            line-height: 1.3;
+            color: {{ colors.cover_navy_dark }};
+            text-transform: capitalize;
+            letter-spacing: 0.01em;
+            line-height: 1.03;
         }
-        .page1-kpi-value {
-            font-size: 11.3pt;
+        .page1-hex-value {
+            font-size: 13pt;
             font-weight: 800;
             color: {{ colors.cover_royal_blue }};
-            line-height: 1.3;
+            line-height: 1.28;
         }
-        .page1-kpi-unit {
-            font-size: 11.3pt;
+        .page1-hex-unit {
+            font-size: 8pt;
             font-weight: 600;
             color: {{ colors.text_muted }};
+            margin-left: 1px;
         }
-        .page1-kpi-side {
-            flex: 1 1 auto;
-            text-align: right;
-            border-left: 1px dashed {{ colors.border_divider }};
-            padding-left: 6px;
-            font-size: 11pt;
+        .page1-hex-sub {
+            font-size: 8.5pt;
             font-weight: 700;
             color: {{ colors.text_secondary }};
-            line-height: 1.3;
+            line-height: 1.15;
             white-space: nowrap;
         }
-        .page1-kpi-side span {
-            font-size: 0.72em;
-            font-weight: 500;
-        }
+        .page1-hex-sub .up   { color: {{ colors.text_variance_green }}; }
+        .page1-hex-sub .down { color: {{ colors.text_variance_red }}; }
 
         .page1-bottombar {
             position: absolute;
