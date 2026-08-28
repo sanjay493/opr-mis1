@@ -520,3 +520,113 @@ dict when adding a field.
    comment at the top of each `*Template.js`).
 5. Regenerate a test month (both `/report` preview and PDF) and diff.
 
+---
+
+## 9. Data-entry pages — `frontend/src/app/data-entry/<x>/page.js`
+
+These are the manual-entry / file-upload UIs. They are the **only** way to
+populate the tables that have no extractor (Demurrage, CAPEX, RLTIFR, ABP,
+capital-repair, breakdown, SAIL mines, cost trend, narratives, …) and the
+correction path for tables that do.
+
+### 9.1 The common pattern
+
+Every page is a client component wrapped like:
+
+```jsx
+export default function XPage() {
+  return <RequireEditor><XPageInner/></RequireEditor>;   // components/RequireEditor.js
+}
+```
+
+- **`RequireEditor`** gates the whole page to `role ∈ {editor, admin}`.
+  Per-*module* restriction (an editor limited to e.g. only "techno") is enforced
+  **server-side** by `main.py:EditorAdminGateMiddleware` against
+  `constants.py:PAGE_MODULES` — the client gate is UX only.
+- **`GlobalNavbar`** (`components/GlobalNavbar.js`) at the top; content in a
+  `flex:1; overflow:auto` scroll container (because `globals.css` sets
+  `html,body{overflow:hidden}`).
+- **Load → edit → save** loop: `load()` fetches current values into `saved` +
+  `edits` state; a `countChanges()` / `isChanged()` helper drives a changed-cell
+  highlight (amber border/bg) and the `Save (N changes)` button label; `save()`
+  POSTs only the changed cells, then re-loads to reset the baseline.
+- Period pickers use **FY-ordered** month lists (April first) and a
+  `getDefaultPeriod()` = last calendar month.
+- No React Router state — the month/plant/FY selectors are local `useState`.
+- Backend endpoints live in `main.py` or a dedicated `backend/api_<x>.py` router
+  (registered in `main.py`); each write route is listed in
+  `constants.py:PAGE_MODULES` under its module key.
+
+### 9.2 Shared building blocks
+
+| File | Used by | Role |
+|---|---|---|
+| `components/RequireEditor.js` / `RequireAdmin.js` / `RequireAuth.js` | all | client-side role gate |
+| `components/GlobalNavbar.js` | all | top nav; also the canonical link list to every data-entry & report route |
+| `hooks/useDataEntryAPI.js` | opening-stock, ipt, conversion, targets | thin fetch wrappers (`/api/opening-stock`, `/api/stock-entry`, `/api/ipt`, `/api/conversion-data`, `/api/targets`) |
+| `hooks/useReportAPI.js` | (report viewer) | `useReportData` → `/api/data` |
+| `components/SpecialSteelManualEntry.js` | `special-steel/` | the actual grade grid (ISP + corrections) → `/api/special-steel-manual/save` |
+| `components/TechnoExtractedParams.js` | `co2-water-pm/` | generic "N params × 5 plants, month + till-month" grid over `techno_data` General unit; the page just passes `paramRows` |
+| `components/BSLBFTechnoExtractor.jsx` | `techno/` | BSL blast-furnace techno sheet parse/preview |
+| `components/HotMetalConsumptionEntry.js` | `techno-manual/` | HM-consumption sub-form |
+| `components/SailSmsParamsDisplay.js`, `TechnoPerformanceCharts.js`, `TechnoExtractedParams.js` | techno pages | display helpers |
+| `lib/technoParamRegistry.js` | techno-manual, techno-correction, key-parameters-manual | param key ↔ label ↔ shop-area registry (single source of truth for the forms) |
+
+### 9.3 Per-page reference
+
+| Route (`/data-entry/…`) | Purpose | Endpoint(s) | Target table(s) |
+|---|---|---|---|
+| `production` | Enter/correct monthly actual (and plan) production per item/plant; item-name alias suggestions | `/api/production-entry`, `/api/production-items`, `/api/item-mapping-suggestions` | `production_table`, `production_plan_table`, `pdf_item_alias` |
+| `opening-stock` | Opening stock per plant/item/type as-on 1st of month | `/api/opening-stock`, `/api/stock-entry`, `/api/stock-data` (via `useDataEntryAPI`) | `stock_table` |
+| `ipt` | Inter-plant transfer plan/actual per route; bulk paste; delete | `/api/ipt-entries`, `/api/ipt-entries/bulk`, `/api/ipt-delete`, `/api/ipt-items` | `ipt_table` |
+| `conversion` | Monthly conversion figures (SAIL consolidated) | `/api/conversion-data`, `/api/conversion-entry` | `production_table` (conversion items) |
+| `legacy-sms-crude` | Upload/preview/confirm a legacy SMS crude-steel workbook | `/api/legacy-sms-crude/{template,preview,confirm}` | `production_table` |
+| `targets` | Annual TE targets by plant (BF / SMS / major params); SAIL weighted recompute | `/api/techno-plant-targets`, `/api/techno-sail-targets`, `/api/techno-sms-targets`, `/api/techno-major-parameters`, `/api/techno-recalculate-sail-weighted` | `techno_plan_fy` |
+| `annual-target` | Per-page techno Norm/Target columns (pages 27–35) + coal-blend targets | `/api/techno-page-targets`, `/api/coal-blend-targets` | `techno_plan_fy` |
+| `annual-capacity` | Rated annual capacity per plant/item with mid-FY effective-dated changes | `/api/capacity`, `/api/capacity/{id}` (PATCH/DELETE) | `item_capacity_table` |
+| `techno` | Multi-plant techno **file** extraction: BSP flash-PDF / OISCO / 3-page-Tech, DSP MCR, generic techno preview + insert, 12-month backfill | `/api/bsp-techno/*`, `/api/mcr-techno/*`, `/api/techno/{preview,insert,preview-months,insert-months,data}`, `/api/extraction-log` | `techno_data` |
+| `techno-manual` | Full manual techno grid per plant/unit/month, auto YTD-cumulative preview, SAIL BF aggregate calculate/preview | `/api/techno/manual/{entry,save,cumulative-preview,sail/calculate,sail/preview}` | `techno_data` |
+| `techno-correction` | Find one param across a plant + month range, inline-edit | `/api/techno/manual/param-history`, `/api/techno/manual/save` | `techno_data` |
+| `key-parameters-manual` | The Inter-Plant-page fields with no extractor: CAPEX, Labour Productivity, Avg Rake Detention, Demurrage, HM-to-PCM, **RLTIFR**, Sinter Fe override | `/api/techno/manual/{entry,save}` | `techno_data` (`General` unit; RSP `SP-1/2/3` for Sinter Fe) |
+| `co2-water-pm` | Sp. CO₂ / Water / PM emission, 5 plants, month + till-month (wraps `TechnoExtractedParams`) | `/api/techno/data`, `/api/techno/manual/save` (via component) | `techno_data` (`General`) |
+| `co2-water-pm-manual` | Same three params, plain manual grid | `/api/techno/manual/{entry,save}` | `techno_data` (`General`) |
+| `coal-consumption` | Coal blend / consumption + coal-OMI opening stock | `/api/techno/data`, `/api/coal-omi/opening-stock` | `techno_data` (coal keys) |
+| `uploads` | Coal-CO₂, Coal-OMI and Power-OMI **file** extraction (preview + insert) | `/api/coal-co2/{preview,insert}`, `/api/coal-omi/{preview,insert}`, `/api/power-omi/{preview,insert}` | `techno_data`, `power_data_table` |
+| `special-steel` | ISP special-steel manual entry + corrections (grade grid) | `/api/special-steel-manual/save` (+ grades/products) | `special_steel_orders` |
+| `special-steel-abp` | Special-steel ABP, 12 months per plant at once | `/api/special-steel-abp` | `special_steel_abp_table` |
+| `special-steel-grade-clubs` | Combine near-duplicate quality grades into one report row | `/api/special-steel/grade-clubs`, `/api/special-steel/{grades,products}` | `special_steel_grade_clubs` |
+| `special-steel-ipt` | Special-steel IPT requirement per FY (item/from/to/plan), bulk + delete | `/api/special-steel-ipt-requirement`, `.../bulk`, `.../delete`, `.../fys` | `special_steel_ipt_requirement` |
+| `special-steel-physical` | ASP/SSP/VISP physical-performance grid (history, capacity, best, ABP, notes) | `/api/special-steel-physical/grid` | `special_steel_phys_perf` / `_meta` / `_note` |
+| `cost-trend` | Cost of Production — HM/CS/SS/COKE/SINTER × Variable/Fixed × plant; Annual + Monthly(+till-month) tabs | `/api/cost-trend/annual`, `/api/cost-trend/monthly` | `cost_trend_annual`, `cost_trend_monthly` |
+| `cost-trend-extract` | Extract cost trend from an "ELHM CS SS" workbook (preview + confirm) | `/api/cost-trend-extract/{preview,confirm}` | `cost_trend_monthly` |
+| `sail-mines` | SAIL Mines monthly actual + plan per section/item (Coal, Washery, Flux, …) | `/api/sail-mines/monthly` | `sail_mines_monthly` |
+| `mines-production-despatch` | Mine-level fresh production (Lump/Fines) + despatch (Rail/Road × end-use) + booked qty | `/api/mines-production-despatch/monthly`, `/api/mines-master` | `mines_production_monthly`, `mines_despatch_actual_monthly`, `mines_despatch_plan_monthly`, `mines_booked_qty_*` |
+| `steel-sector-performance` | Extract the PIB steel-sector-performance PDF (preview + confirm) | `/api/steel-sector-performance/{preview,confirm}` | `steel_sector_performance_table` |
+| `capital-repair` | Annual capital-repair plan rows per plant/FY; `actual` progress; unit classification | `/api/capital-repair`, `/api/capital-repair-entry`, `/api/plant-units` | `capital_repair_table` |
+| `breakdown` | Ad-hoc unplanned-downtime events (plant/unit/start/end/cause), full CRUD | `/api/breakdown`, `/api/breakdown/{id}`, `/api/plant-units` | `breakdown_table` |
+| `bf-benchmark` | Non-SAIL BF registry + per-FY figures + SAIL working-volume meta; compare | `/api/bf-benchmark/{external-bfs,external-bfs/{id},params,sail-meta,compare}` | `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta` |
+| `key-highlights` | Major Achievements / Shortfalls / Focus Areas narrative for the month | `/api/key-highlights`, `/api/key-highlights/save` | `key_highlights_narrative` |
+| `techno-summary` | Read-only techno performance summary dashboard | `/api/techno-summary` | (reads `techno_data`) |
+
+### Not under `data-entry/` but same family
+
+| Route | Purpose | Endpoint | Table |
+|---|---|---|---|
+| `/upload` (`frontend/src/app/upload/page.js`) | The primary production Excel/PDF ingestion: Actuals / Preview & Insert / ABP Plan tabs | `/api/upload-excel`, `/api/extract-preview` → `/api/confirm-extraction`, `/api/upload-excel-plan` | `production_table`, `production_plan_table`, `techno_data`, `special_steel_orders` |
+| `/reports/do-letter` | Also lets the user enter Annexure remarks | `/api/do-letter/remarks` | `do_letter_remark_table` |
+| `/report` (page 3 inline edit) | Production narrative + highlights text | `/api/page3-narrative` | `page3_narrative` |
+| `/report` (any cell) | Inline override of a computed value | `/api/data` (POST) | `page_configs` |
+
+### 9.4 Adding a new data-entry page
+1. `backend/db.py`: table + `get_*`/`save_*` accessors (§5.3).
+2. `backend/api_<x>.py`: an `APIRouter`; register it in `main.py`
+   (`app.include_router(...)`).
+3. `backend/constants.py:PAGE_MODULES`: add each write route under a module key
+   (existing or new) so editor gating works.
+4. `frontend/src/app/data-entry/<x>/page.js`: copy the closest existing page
+   (they share the load/edit/`countChanges`/save shape); wrap in `RequireEditor`.
+5. `frontend/src/components/GlobalNavbar.js`: add the nav link. Optionally add a
+   card to `frontend/src/app/data-entry/page.js` (the hub — it currently lists
+   only a curated subset).
+6. Consume the new table in the relevant `page_<x>.py` generator (§5.1).
+
