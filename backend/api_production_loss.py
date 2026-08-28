@@ -52,12 +52,12 @@ def _cr_rows_for_plant(plant: str):
     try:
         cur = conn.execute("""
             SELECT id, shop, equipment, activity, unit_type, unit_name, sms_subtag,
-                   actual_start, actual_end, actual_ongoing, planned_days
+                   actual_start, actual_end, actual_ongoing, planned_days, period
             FROM capital_repair_table
             WHERE plant=?
         """, (plant,))
         cols = ["id", "shop", "equipment", "activity", "unit_type", "unit_name", "sms_subtag",
-                "actual_start", "actual_end", "actual_ongoing", "planned_days"]
+                "actual_start", "actual_end", "actual_ongoing", "planned_days", "abp_period"]
         return [dict(zip(cols, r)) for r in cur.fetchall()]
     finally:
         conn.close()

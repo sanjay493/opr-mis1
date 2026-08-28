@@ -166,10 +166,10 @@ function unitLabel(ev) {
   return `${ev.unit_name} (${ev.sms_subtag.charAt(0)}${ev.sms_subtag.slice(1).toLowerCase()})`;
 }
 
-// Crisp one-line summary: "<unit> under CR/BD for <detail> — <days> ...",
-// with the overrun day count called out specifically for CR (that's the
-// only source where "days" is ambiguous between total duration and the
-// days that actually count toward loss).
+// Crisp one-line summary. `category` (from dedupeEvents) picks the framing:
+//   relevant — this event drives a loss this month
+//   planned  — the ABP scheduled this CR for the month, but it wasn't run
+//   context  — a CR that ran this month on schedule (no loss)
 function crispEventText(ev) {
   const unit = unitLabel(ev);
   if (ev.source === 'cr') {
@@ -177,85 +177,119 @@ function crispEventText(ev) {
     if (ev.overrun_days_this_month) {
       return `${unit} under CR for ${detail} — ${ev.overrun_days_this_month} day(s) overrun`;
     }
+    if (ev.category === 'planned') {
+      const slot = ev.abp_period ? ` (ABP: ${ev.abp_period})` : '';
+      return `${unit} — ${detail}: planned this month per ABP${slot}, not executed`;
+    }
     if (ev.planned_days_missing) {
       return `${unit} under CR for ${detail} — planned days not set, can't assess overrun`;
     }
-    if (ev.status === 'overrun') return `${unit} under CR for ${detail} — overrun (outside this period)`;
     if (ev.status === 'ongoing') return `${unit} under CR for ${detail} — ongoing, within schedule`;
-    if (ev.status === 'on-schedule') return `${unit} under CR for ${detail} — on schedule (no loss)`;
+    if (ev.status === 'on-schedule') return `${unit} under CR for ${detail} — ran on schedule (no loss)`;
     return `${unit} under CR for ${detail} — not started`;
   }
   const detail = ev.cause_text || 'breakdown';
   if (ev.days_this_month) {
     return `${unit} under BD for ${detail} — ${ev.days_this_month} day(s)`;
   }
-  return `${unit} under BD for ${detail} — ${ev.is_ongoing ? 'ongoing, outside this period' : 'outside this period'}`;
+  return `${unit} under BD for ${detail} — ${ev.is_ongoing ? 'ongoing' : 'no overlap with this period'}`;
 }
 
-// A CR/breakdown row is repeated across every month of the report (so its
-// per-month overlap can be attributed), which would otherwise flood the list
-// with "outside this period" duplicates for events that never contribute a
-// loss. Keep one line per (event, month) only where the event is actually
-// relevant that month; collapse everything else — CR rows that stay
-// on-schedule all period, breakdowns outside this date range — into a
-// single summary line per event, so nothing is dropped but nothing repeats
-// needlessly either.
+// The engine attaches every plant CR/breakdown row to every analysed month
+// (so per-month overlap can be computed), which without dedup floods the
+// list — and, in a compare view, buries the real events under a wall of
+// other-period rows. Keep only what connects to the analysed months:
+//   relevant — a loss-driving (event, month) pair — one row each
+//   planned  — a CR the ABP slotted into an analysed month that wasn't run
+//   context  — a CR that actually ran in an analysed month, on schedule
+// Everything else (rows whose dates / ABP slot fall entirely outside the
+// window) is dropped and only counted.
+function eventCategory(ev, lossThisMonth) {
+  if (lossThisMonth) return 'relevant';
+  // Only CR rows for a unit that can affect this item get the planned /
+  // context treatment — a Blast Furnace CR is noise in a Finished Steel run.
+  if (ev.source === 'cr' && ev.cause_relevant) {
+    if (ev.abp_planned_here && !ev.executed_this_month) return 'planned';
+    if (ev.executed_this_month) return 'context';
+  }
+  return 'none';
+}
+
 function dedupeEvents(monthly) {
-  const isRelevant = ev => (ev.source === 'cr' ? !!ev.overrun_days_this_month : !!ev.days_this_month);
+  const lossOf = ev => (ev.source === 'cr' ? !!ev.overrun_days_this_month : !!ev.days_this_month);
 
-  // Pass 1 — every (event, month) where the event actually contributes a
-  // loss that month, plus the set of event keys that are relevant *somewhere*.
-  const relevantRows = [];
-  const relevantKeys = new Set();
-  monthly.forEach(m => {
-    m.events.forEach(ev => {
-      if (!isRelevant(ev)) return;
-      relevantRows.push({ month: m.month, relevant: true, ...ev });
-      relevantKeys.add(`${ev.source}-${ev.id}`);
-    });
-  });
+  // Keys that land a 'relevant' or 'planned' row somewhere — so a weaker
+  // ('context'/'none') month-iteration of the same event is suppressed.
+  const strongKeys = new Set();
+  monthly.forEach(m => m.events.forEach(ev => {
+    const cat = eventCategory(ev, lossOf(ev));
+    if (cat === 'relevant' || cat === 'planned') strongKeys.add(`${ev.source}-${ev.id}`);
+  }));
 
-  // Pass 2 — one summary line for events that never contribute a loss in
-  // this period. An event already shown in pass 1 is skipped entirely, so
-  // it never doubles up as a greyed "outside this period" row.
-  const seenNonRelevant = new Map();
+  const rows = [];
+  const seen = new Set();
+  const dropped = new Set();
   monthly.forEach(m => {
     m.events.forEach(ev => {
       const key = `${ev.source}-${ev.id}`;
-      if (relevantKeys.has(key) || seenNonRelevant.has(key)) return;
-      seenNonRelevant.set(key, { month: null, relevant: false, ...ev });
+      const cat = eventCategory(ev, lossOf(ev));
+      if (cat === 'relevant' || cat === 'planned') {
+        rows.push({ month: m.month, category: cat, ...ev });      // one per (event, month)
+      } else if (strongKeys.has(key) || seen.has(key)) {
+        // already represented, or will be — skip
+      } else if (cat === 'context') {
+        seen.add(key);
+        rows.push({ month: m.month, category: 'context', ...ev });
+      } else {
+        seen.add(key);
+        dropped.add(key);
+      }
     });
   });
 
-  const rows = [...relevantRows, ...seenNonRelevant.values()];
-  rows.sort((a, b) => (b.relevant - a.relevant) || (b.month || '').localeCompare(a.month || ''));
-  return rows;
+  const order = { relevant: 0, planned: 1, context: 2 };
+  rows.sort((a, b) => (order[a.category] - order[b.category]) || (b.month || '').localeCompare(a.month || ''));
+  return { rows, droppedTotal: dropped.size };
 }
 
+const CAT_STYLE = {
+  relevant: { border: (ev) => (ev.source === 'cr' ? C.crOverrun : C.breakdown), bg: (ev) => (ev.source === 'cr' ? '#fff7ed' : '#f0fdfa'), text: '#202124', weight: 600 },
+  planned: { border: () => '#d97706', bg: () => '#fffbeb', text: '#92400e', weight: 600 },
+  context: { border: () => '#e1e0d9', bg: () => '#fff', text: '#9aa0a6', weight: 400 },
+};
+
 function EventsList({ monthly, label }) {
-  const rows = useMemo(() => dedupeEvents(monthly), [monthly]);
+  const { rows, droppedTotal } = useMemo(() => dedupeEvents(monthly), [monthly]);
 
   return (
     <div>
       {label && <div style={{ fontWeight: 700, fontSize: 13, color: '#374151', marginBottom: 8 }}>{label}</div>}
       {rows.length === 0 ? (
         <div style={{ padding: 20, textAlign: 'center', color: '#5f6368', fontSize: 13 }}>
-          No Capital Repair or Breakdown events found for these months.
+          No Capital Repair or Breakdown events land in these months.
+          {droppedTotal > 0 && <div style={{ marginTop: 4, fontSize: 12, color: '#9aa0a6' }}>({droppedTotal} row(s) for this plant fall outside the analysed window)</div>}
         </div>
       ) : (
         <div style={{ maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {rows.map((ev, i) => (
-            <div key={i} style={{
-              display: 'flex', gap: 8, alignItems: 'baseline', padding: '6px 8px',
-              borderLeft: `3px solid ${ev.relevant ? (ev.source === 'cr' ? C.crOverrun : C.breakdown) : '#e1e0d9'}`,
-              background: ev.relevant ? (ev.source === 'cr' ? '#fff7ed' : '#f0fdfa') : '#fff',
-            }}>
-              <span style={{ fontSize: 11, color: '#9aa0a6', minWidth: 62, flexShrink: 0 }}>{ev.month || '—'}</span>
-              <span style={{ fontSize: 13, lineHeight: 1.4, maxWidth: 820, fontWeight: ev.relevant ? 600 : 400, color: ev.relevant ? '#202124' : '#9aa0a6' }}>
-                {crispEventText(ev)}
-              </span>
+          {rows.map((ev, i) => {
+            const st = CAT_STYLE[ev.category];
+            return (
+              <div key={i} style={{
+                display: 'flex', gap: 8, alignItems: 'baseline', padding: '6px 8px',
+                borderLeft: `3px solid ${st.border(ev)}`, background: st.bg(ev),
+              }}>
+                <span style={{ fontSize: 11, color: '#9aa0a6', minWidth: 62, flexShrink: 0 }}>{ev.month || '—'}</span>
+                <span style={{ fontSize: 13, lineHeight: 1.4, maxWidth: 820, fontWeight: st.weight, color: st.text }}>
+                  {crispEventText(ev)}
+                </span>
+              </div>
+            );
+          })}
+          {droppedTotal > 0 && (
+            <div style={{ padding: '6px 8px', fontSize: 11.5, color: '#9aa0a6', fontStyle: 'italic' }}>
+              + {droppedTotal} other CR / breakdown row(s) for this plant, outside the analysed months.
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
@@ -526,7 +560,8 @@ function ProductionLossAnalysisInner() {
             <div style={{ fontSize: 11.5, color: '#9aa0a6', marginTop: -10, marginBottom: 18 }}>
               Shortfall vs Plan = CR Overrun Loss + Breakdown Loss + Residual. Residual is a{' '}
               <em>net</em> figure — months that beat plan offset months that miss it; a negative value
-              means Actual ran ahead of Plan overall.
+              means Actual ran ahead of Plan overall (e.g. a Capital Repair the ABP scheduled but the
+              plant didn&apos;t take — shown in amber in the events list below).
             </div>
 
             {unclassifiedCount > 0 && (

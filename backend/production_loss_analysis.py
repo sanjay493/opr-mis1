@@ -31,11 +31,25 @@ actuals), tonnage loss is necessarily an approximation: a "self-referencing"
 daily rate (that unit's own actual output ÷ its own running days that
 month), falling back to the ABP rate only when affected days consume the
 entire month.
+
+Each CR event also carries its ABP schedule slot (the free-text `period`
+column, parsed by parse_abp_period) and two flags — `abp_planned_here`
+(the ABP planned this CR for the month under analysis) and
+`executed_this_month`. A CR planned for the month but not executed then is
+surfaced in the events list as context (it doesn't move the loss numbers —
+if anything the un-taken downtime lifts actual above plan, showing up as a
+negative residual).
 """
 
+import re
 from datetime import date, timedelta
 from calendar import monthrange
 from typing import Optional, List, Dict, Any, Callable, Tuple
+
+_MONTH_ABBR_NUM = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "july": 7, "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+}
 
 # Cause classes, in Crude Steel attribution priority (lower number wins).
 CAUSE_PRIORITY = {"BF": 0, "CONVERTER": 1, "CASTER": 2, "MILL": 0}
@@ -124,6 +138,40 @@ def _months_in_range(start_month: str, end_month: str) -> List[str]:
     return out
 
 
+def parse_abp_period(text: Optional[str]) -> List[str]:
+    """The Capital Repair `period` column is a free-text ABP schedule slot:
+    "Aug'26", "Sep-Oct'26", "July'26/Nov'26", "Apr'26, Jan'27". Return the
+    sorted 'YYYY-MM' months it names — used to flag a CR the ABP planned for
+    the month under analysis that wasn't actually executed then."""
+    if not text:
+        return []
+    months: set = set()
+    for clause in re.split(r"[,/]", text):
+        yr = re.search(r"(\d{2})(?!\d)", clause)
+        if not yr:
+            continue
+        year = 2000 + int(yr.group(1))
+        nums = [_MONTH_ABBR_NUM[w.lower()] for w in re.findall(r"[A-Za-z]+", clause)
+                if w.lower() in _MONTH_ABBR_NUM]
+        if not nums:
+            continue
+        head = clause.split("'")[0]
+        if len(nums) >= 2 and "-" in head:  # a "May-Jun'26" style range
+            a, b = nums[0], nums[-1]
+            m, y = a, (year - 1 if b < a else year)   # "Dec-Jan'27" -> Dec'26, Jan'27
+            while True:
+                months.add(f"{y:04d}-{m:02d}")
+                if m == b:
+                    break
+                m = m % 12 + 1
+                if m == 1:
+                    y += 1
+        else:
+            for n in nums:
+                months.add(f"{year:04d}-{n:02d}")
+    return sorted(months)
+
+
 # ---------------------------------------------------------------------------
 # Cause classification
 # ---------------------------------------------------------------------------
@@ -203,13 +251,26 @@ def affected_days_for_item(item: str, plant: str, month: str,
         planned_days_missing = row.get("actual_start") is not None and row.get("planned_days") is None
         status = "overrun" if overrun else ("ongoing" if row.get("actual_ongoing") else
                  ("on-schedule" if row.get("actual_start") else "not-started"))
+
+        # ABP schedule slot vs. what actually happened this month.
+        abp_months = parse_abp_period(row.get("abp_period"))
+        a_start = row.get("actual_start")
+        a_end_eff = row.get("actual_end") or (today if row.get("actual_ongoing") else a_start)
+        executed_this_month = bool(a_start and a_end_eff
+                                   and _clip(a_start, a_end_eff, month_start, month_end))
+        abp_planned_here = month in abp_months
+
         ev = {
             "source": "cr", "id": row.get("id"), "cause": cause,
+            "cause_relevant": cause in relevant,
             "unit_name": row.get("unit_name"), "sms_subtag": row.get("sms_subtag"),
             "activity": row.get("activity"),
             "actual_start": row.get("actual_start"), "actual_end": row.get("actual_end"),
             "actual_ongoing": bool(row.get("actual_ongoing")), "planned_days": row.get("planned_days"),
             "status": status, "planned_days_missing": planned_days_missing,
+            "abp_period": row.get("abp_period"),
+            "abp_planned_here": abp_planned_here,
+            "executed_this_month": executed_this_month,
         }
         if cause in relevant and overrun:
             clipped = _clip(overrun[0], overrun[1], month_start, month_end)
