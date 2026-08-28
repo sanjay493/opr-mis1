@@ -14,10 +14,16 @@ cur-FY YTD block Apr-<report month> (APP · Actual · %FF · CPLY · %Growth).
 Years are shown yy-yy.
 
 Data sources:
-  - History / Capacity / Best-Achieved / ABP / notes / IPT list: the editable
-    tables special_steel_phys_perf / _meta / _note / special_steel_ipt_requirement
-    (seeded by scripts/backfill_special_steel_physical.py, maintained via
+  - Capacity / notes / IPT list: the editable tables special_steel_phys_meta
+    / _note / special_steel_ipt_requirement (seeded by
+    scripts/backfill_special_steel_physical.py, maintained via
     /data-entry/special-steel-physical and /data-entry/special-steel-ipt).
+  - History FY actuals + Best-Achieved (Crude Steel / Saleable Steel, all
+    plants): production_table FY-sums (Apr–Mar) when a full 12 months are
+    present, else the stored special_steel_phys_perf / _meta seed. Carbon /
+    Stainless history + best stay on the seed (Carbon Steel Production only
+    exists from Apr-2022). Best-Achieved treats the seed value/year as a
+    floor — production_table only raises it when a complete FY tops it.
   - cur-FY ABP (annual plan), prev-FY annual actual, and the cur-FY YTD block
     (Actual / CPLY / APP): production_plan_table / production_table, summed
     over the relevant months (plant VISP <- VISL). SSP "Stainless Steel" has
@@ -121,6 +127,33 @@ def _prod_sum(cur, table: str, months: list) -> dict:
     return {(p, i): (v, n) for p, i, v, n in cur.fetchall()}
 
 
+def _prod_fy_sums(cur, table: str, from_fy_start: int) -> dict:
+    """{(plant_db, item, fy_start): (sum(month_actual), n_months_present)} for
+    every financial year (Apr–Mar) from `from_fy_start` onward, restricted to
+    the special-steel plants + series items. One query, bucketed by FY in
+    Python — feeds the History columns and the Best-Achieved all-time max."""
+    plants = list(_PLANT_DB.values())
+    items = list(_SERIES_ITEM.values())
+    ph_p = ",".join("?" * len(plants))
+    ph_i = ",".join("?" * len(items))
+    cur.execute(
+        f"SELECT report_month, plant_name, item_name, month_actual FROM {table} "
+        f"WHERE plant_name IN ({ph_p}) AND item_name IN ({ph_i}) "
+        f"  AND month_actual IS NOT NULL AND report_month >= ?",
+        [*plants, *items, f"{from_fy_start}-04"],
+    )
+    agg = {}  # (plant, item, fy_start) -> [sum, {months}]
+    for rm, p, item, val in cur.fetchall():
+        y, mo = int(rm[:4]), int(rm[5:7])
+        fy_start = y if mo >= 4 else y - 1
+        if fy_start < from_fy_start:
+            continue
+        e = agg.setdefault((p, item, fy_start), [0.0, set()])
+        e[0] += val
+        e[1].add(rm)
+    return {k: (v[0], len(v[1])) for k, v in agg.items()}
+
+
 def _ipt_item_rowspans(rows):
     """In place: first row of a run sharing `item` gets item_rowspan = run
     length, the rest get 0 (cell merged into the first)."""
@@ -153,13 +186,30 @@ def generate_special_steel_physical(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        db_prev_fy = _prod_sum(cur, "production_table", _fy_months(prev_start))
+        db_fy = _prod_fy_sums(cur, "production_table", 2000)
         db_cur_fy_app = _prod_sum(cur, "production_plan_table", _fy_months(cur_start))
         db_ytd_act = _prod_sum(cur, "production_table", ytd_months)
         db_ytd_cply = _prod_sum(cur, "production_table", cply_months)
         db_ytd_app = _prod_sum(cur, "production_plan_table", ytd_months)
     finally:
         conn.close()
+
+    def _db_fy(plant, series, fy_start, min_months=12):
+        """production_table FY-sum in T for one (plant, series, financial
+        year), or None when the item is absent or fewer than `min_months`
+        months are present. Stainless = Saleable − Carbon (both must
+        resolve) — same rule as _db()."""
+        if series == "STAINLESS":
+            sal = _db_fy(plant, "SALEABLE", fy_start, min_months)
+            carbon = _db_fy(plant, "CARBON", fy_start, min_months)
+            return None if sal is None or carbon is None else sal - carbon
+        item = _SERIES_ITEM.get(series)
+        if item is None:
+            return None
+        cell = db_fy.get((_PLANT_DB[plant], item, fy_start))
+        if cell is None or cell[1] < min_months:
+            return None
+        return _t(cell[0])
 
     def _db(store, plant, series, min_months=1):
         """DB value in T, or None when the series has no production_table item
@@ -194,11 +244,28 @@ def generate_special_steel_physical(report_month: str) -> dict:
             def seed_actual(fy_label):
                 return _t(perf.get((fy_label, plant, series, "actual")))
 
-            # prev-FY annual actual: DB only when a full 12 months are present,
-            # else the stored (seed / manually maintained) figure.
-            prev_actual = _db(db_prev_fy, plant, series, min_months=12)
+            def hist_val(fy_label):
+                """History-column actual: production_table FY-sum when a full
+                12 months are present, else the stored seed figure."""
+                v = _db_fy(plant, series, _fy_start_year(fy_label))
+                return v if v is not None else seed_actual(fy_label)
+
+            # prev-FY annual actual: DB FY-sum when a full 12 months are
+            # present, else the stored (seed / manually maintained) figure.
+            prev_actual = _db_fy(plant, series, prev_start)
             if prev_actual is None:
                 prev_actual = seed_actual(_fy_label(prev_start))
+
+            # Best Achieved: the seed value/year is a floor — production_table
+            # only raises it when a complete FY tops it (Crude / Saleable
+            # only; Carbon Steel Production has no pre-2022 record).
+            best_t = _t(m["best_actual_kt"])
+            best_yr = m["best_year"]
+            if series in ("CRUDE", "SALEABLE"):
+                for fy_start in range(2000, cur_start):
+                    v = _db_fy(plant, series, fy_start)
+                    if v is not None and (best_t is None or v > best_t):
+                        best_t, best_yr = v, _fy_label(fy_start)
 
             ytd_actual = ytd_actual_override.get(plant, {}).get(series)
             if ytd_actual is None:
@@ -217,9 +284,9 @@ def generate_special_steel_physical(report_month: str) -> dict:
             rows.append({
                 "series_label": _SERIES_LABEL.get(series, series),
                 "capacity": _fmt(_t(m["capacity_kt"])),
-                "best_actual": _fmt(_t(m["best_actual_kt"])),
-                "best_year": _yy(m["best_year"]),
-                "history": {_yy(fy): _fmt(seed_actual(fy)) for fy in history_fys},
+                "best_actual": _fmt(best_t),
+                "best_year": _yy(best_yr),
+                "history": {_yy(fy): _fmt(hist_val(fy)) for fy in history_fys},
                 "prev_actual": _fmt(prev_actual),
                 "cur_abp": _fmt(cur_abp),
                 "ytd_app": _fmt(ytd_app),
