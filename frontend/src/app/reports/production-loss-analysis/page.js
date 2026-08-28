@@ -201,19 +201,32 @@ function crispEventText(ev) {
 // single summary line per event, so nothing is dropped but nothing repeats
 // needlessly either.
 function dedupeEvents(monthly) {
+  const isRelevant = ev => (ev.source === 'cr' ? !!ev.overrun_days_this_month : !!ev.days_this_month);
+
+  // Pass 1 — every (event, month) where the event actually contributes a
+  // loss that month, plus the set of event keys that are relevant *somewhere*.
   const relevantRows = [];
+  const relevantKeys = new Set();
+  monthly.forEach(m => {
+    m.events.forEach(ev => {
+      if (!isRelevant(ev)) return;
+      relevantRows.push({ month: m.month, relevant: true, ...ev });
+      relevantKeys.add(`${ev.source}-${ev.id}`);
+    });
+  });
+
+  // Pass 2 — one summary line for events that never contribute a loss in
+  // this period. An event already shown in pass 1 is skipped entirely, so
+  // it never doubles up as a greyed "outside this period" row.
   const seenNonRelevant = new Map();
   monthly.forEach(m => {
     m.events.forEach(ev => {
-      const relevant = ev.source === 'cr' ? !!ev.overrun_days_this_month : !!ev.days_this_month;
       const key = `${ev.source}-${ev.id}`;
-      if (relevant) {
-        relevantRows.push({ month: m.month, relevant: true, ...ev });
-      } else if (!seenNonRelevant.has(key)) {
-        seenNonRelevant.set(key, { month: null, relevant: false, ...ev });
-      }
+      if (relevantKeys.has(key) || seenNonRelevant.has(key)) return;
+      seenNonRelevant.set(key, { month: null, relevant: false, ...ev });
     });
   });
+
   const rows = [...relevantRows, ...seenNonRelevant.values()];
   rows.sort((a, b) => (b.relevant - a.relevant) || (b.month || '').localeCompare(a.month || ''));
   return rows;
@@ -238,7 +251,7 @@ function EventsList({ monthly, label }) {
               background: ev.relevant ? (ev.source === 'cr' ? '#fff7ed' : '#f0fdfa') : '#fff',
             }}>
               <span style={{ fontSize: 11, color: '#9aa0a6', minWidth: 62, flexShrink: 0 }}>{ev.month || '—'}</span>
-              <span style={{ fontSize: 13, fontWeight: ev.relevant ? 600 : 400, color: ev.relevant ? '#202124' : '#9aa0a6' }}>
+              <span style={{ fontSize: 13, lineHeight: 1.4, maxWidth: 820, fontWeight: ev.relevant ? 600 : 400, color: ev.relevant ? '#202124' : '#9aa0a6' }}>
                 {crispEventText(ev)}
               </span>
             </div>
@@ -370,16 +383,24 @@ function ProductionLossAnalysisInner() {
     if (!report) return [];
     const a = report.series_a.monthly;
     const b = report.series_b?.monthly || [];
-    return a.map((m, i) => ({
-      x: monthLabel(m.month),
-      plan: m.plan,
-      actual: m.actual,
-      cr_overrun_loss_t: m.cr_overrun_loss_t,
-      breakdown_loss_t: m.breakdown_loss_t,
-      residual_t: m.residual_t != null ? Math.max(0, m.residual_t) : null,
-      compareActual: b[i] ? b[i].actual : null,
-      compareMonth: b[i] ? b[i].month : null,
-    }));
+    return a.map((m, i) => {
+      // A month with no reported Actual yet contributes nothing to the
+      // stacked bar or the to-date totals — only its Plan point and any
+      // comparison Actual are still meaningful. (The loss the engine can
+      // derive off the ABP rate for such a month would otherwise draw a
+      // bar the totals row deliberately excludes — see `totals`.)
+      const reported = m.actual !== null && m.actual !== undefined;
+      return {
+        x: monthLabel(m.month),
+        plan: m.plan,
+        actual: reported ? m.actual : null,
+        cr_overrun_loss_t: reported ? m.cr_overrun_loss_t : null,
+        breakdown_loss_t: reported ? m.breakdown_loss_t : null,
+        residual_t: reported && m.residual_t != null ? Math.max(0, m.residual_t) : null,
+        compareActual: b[i] ? b[i].actual : null,
+        compareMonth: b[i] ? b[i].month : null,
+      };
+    });
   }, [report]);
 
   const totals = useMemo(() => {
@@ -430,7 +451,7 @@ function ProductionLossAnalysisInner() {
           </span>
         </div>
 
-        <div style={{ ...S.card, display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 18 }}>
+        <div style={{ ...S.card, display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 18 }}>
           <div>
             <div style={S.label}>Plant</div>
             <select style={S.select} value={plant} onChange={e => setPlant(e.target.value)}>
@@ -463,13 +484,16 @@ function ProductionLossAnalysisInner() {
               </div>
             )}
           </div>
-          <button onClick={load} disabled={loading} style={{
-            padding: '8px 22px', fontSize: 14, fontWeight: 600,
-            background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 4,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}>
-            {loading ? 'Loading…' : 'Load Analysis'}
-          </button>
+          <div>
+            <div style={{ ...S.label, visibility: 'hidden' }}>Run</div>
+            <button onClick={load} disabled={loading} style={{
+              padding: '8px 22px', fontSize: 14, fontWeight: 600,
+              background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 4,
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}>
+              {loading ? 'Loading…' : 'Load Analysis'}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -494,9 +518,15 @@ function ProductionLossAnalysisInner() {
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
               <StatTile label={`Plan to-date — ${plantLabel} (${itemLabel})`} value={totals.plan} />
               <StatTile label="Actual to-date" value={totals.actual} color={C.actual} />
+              <StatTile label="Shortfall vs Plan" value={totals.plan - totals.actual} color="#6b6a64" />
               <StatTile label="CR Overrun Loss" value={totals.cr_overrun_loss_t} color={C.crOverrun} />
               <StatTile label="Breakdown Loss" value={totals.breakdown_loss_t} color={C.breakdown} />
-              <StatTile label="Residual (unexplained)" value={totals.residual_t} color="#6b6a64" />
+              <StatTile label="Residual — net, unexplained" value={totals.residual_t} color="#6b6a64" />
+            </div>
+            <div style={{ fontSize: 11.5, color: '#9aa0a6', marginTop: -10, marginBottom: 18 }}>
+              Shortfall vs Plan = CR Overrun Loss + Breakdown Loss + Residual. Residual is a{' '}
+              <em>net</em> figure — months that beat plan offset months that miss it; a negative value
+              means Actual ran ahead of Plan overall.
             </div>
 
             {unclassifiedCount > 0 && (
@@ -527,7 +557,7 @@ function ProductionLossAnalysisInner() {
                   <Bar dataKey="actual" name="Actual" stackId="s" fill={C.actual} maxBarSize={24} />
                   <Bar dataKey="cr_overrun_loss_t" name="CR Overrun Loss" stackId="s" fill={C.crOverrun} maxBarSize={24} />
                   <Bar dataKey="breakdown_loss_t" name="Breakdown Loss" stackId="s" fill={C.breakdown} maxBarSize={24} />
-                  <Bar dataKey="residual_t" name="Residual (unexplained)" stackId="s" fill={C.residual} maxBarSize={24} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="residual_t" name="Residual (net, unexplained)" stackId="s" fill={C.residual} maxBarSize={24} radius={[4, 4, 0, 0]} />
                   <Line dataKey="plan" name="Plan (ABP)" stroke={C.plan} strokeWidth={2} strokeDasharray="4 3" dot={false} />
                   {report.series_b && (
                     <Line dataKey="compareActual" name={`Actual (${loadedLabelB})`}

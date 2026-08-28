@@ -31,6 +31,10 @@ router = APIRouter(prefix="/api/production-loss-analysis", tags=["production-los
 
 
 def _production_value(table: str, plant: str, month: str, item_name: str) -> Optional[float]:
+    """Monthly plan/actual in TONNES. production_table / production_plan_table
+    store this in '000 T (repo-wide convention); the loss engine and the
+    frontend both work in plain tonnes (fields named *_t, axis/tiles labelled
+    "T"), so scale up here — the one place the two units meet."""
     conn = _db.connect()
     try:
         cur = conn.execute(
@@ -38,7 +42,7 @@ def _production_value(table: str, plant: str, month: str, item_name: str) -> Opt
             (plant, item_name, month),
         )
         row = cur.fetchone()
-        return float(row[0]) if row and row[0] is not None else None
+        return round(float(row[0]) * 1000, 3) if row and row[0] is not None else None
     finally:
         conn.close()
 
