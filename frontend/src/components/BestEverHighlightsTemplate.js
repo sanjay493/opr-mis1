@@ -30,7 +30,7 @@ const OVEN_PUSHING_KEY = 'Oven Pushing (nos/day)';
 
 function fmt(v, itemKey) {
   if (v == null) return '—';
-  return itemKey === OVEN_PUSHING_KEY ? v.toFixed(3) : Math.round(v).toLocaleString('en-IN');
+  return itemKey === OVEN_PUSHING_KEY ? v.toFixed(0) : Math.round(v).toLocaleString('en-IN');
 }
 
 function RecordCell({ rec, itemKey }) {

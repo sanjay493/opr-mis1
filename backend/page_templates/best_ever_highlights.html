@@ -31,11 +31,11 @@
             {% if rec.best.fresh %}
             <div style="display:inline-block;margin-bottom:1px;padding:0 4px;border-radius:6px;background:{{ colors.khv_assessment_amber }};color:{{ colors.text_white }};font-size:10pt;font-weight:800;">★ NEW</div><br/>
             {% endif %}
-            <span style="font-size:10pt;font-weight:700;color:{{ colors.text_primary }};">{% if row.key == 'Oven Pushing (nos/day)' %}{{ '%.3f'|format(rec.best.total) }}{% else %}{{ '{:,.0f}'.format(rec.best.total) }}{% endif %}</span>
+            <span style="font-size:10pt;font-weight:700;color:{{ colors.text_primary }};">{% if row.key == 'Oven Pushing (nos/day)' %}{{ '%.0f'|format(rec.best.total) }}{% else %}{{ '{:,.0f}'.format(rec.best.total) }}{% endif %}</span>
             <div style="font-size:10pt;color:{{ colors.text_secondary }};">{{ rec.best.period }}</div>
             {% if rec.second %}
             <div style="margin-top:2px;padding-top:2px;border-top:1px dashed {{ colors.misc_accent_blue  }};font-size:10pt;color:{{ colors.text_secondary }};">
-              <span style="font-weight:700;">2nd · {% if row.key == 'Oven Pushing (nos/day)' %}{{ '%.3f'|format(rec.second.total) }}{% else %}{{ '{:,.0f}'.format(rec.second.total) }}{% endif %}</span><br/>
+              <span style="font-weight:700;">2nd · {% if row.key == 'Oven Pushing (nos/day)' %}{{ '%.0f'|format(rec.second.total) }}{% else %}{{ '{:,.0f}'.format(rec.second.total) }}{% endif %}</span><br/>
               <span style="font-size:10pt;color:{{ colors.text_secondary }};">{{ rec.second.period }}</span>
             </div>
             {% endif %}
