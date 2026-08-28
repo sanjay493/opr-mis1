@@ -65,6 +65,7 @@ A few rows are computed, never entered directly:
 import math
 
 import db
+import hardcoded_loader
 
 # Fixed-order categorical hues from pdf.py's _BADGE_COLORS / globals.css's
 # .dept-badge.grp-N (already validated per the dataviz skill's six-check
@@ -78,21 +79,13 @@ _C_CLEAN_COAL = "#eb6834"  # orange
 _C_FLUX = "#1baf7a"        # aqua
 _C_SALES = "#eda100"       # yellow
 
-# ── Hard-coded chart data (million tonnes) — per direct instruction
-# (2026-08-27), a stopgap until real series exist. Update here.
-_TREND_FYS = ["FY 23-24", "FY 24-25", "FY 25-26"]
-_IRON_ORE_PROD_MT = [35.423, 34.8, 38.1]
-_CLEAN_COAL_PROD_MT = [0.484, 0.376, 0.345]
-_FLUX_PROD_MT = [2.018, 1.715, 1.279]
-_SALES_BOOKING_MT = [1.16, 0.754, 3.01]
-
-# Iron-ore despatch mix by end-use (Captive / Conversion Agent / Sales), Mt.
-_DESPATCH_MIX_CATS = ["Captive", "Conversion Agent", "Sales"]
+# All figures on this page that have no DB source yet (the 3-year trend bars,
+# the despatch-mix donuts, and the iron-ore group table) are hand-maintained
+# in hardcoded_config.json's "sail_mines" section — a stopgap per direct
+# instruction (2026-08-27) until real series / mine-level actuals exist. Read
+# via hardcoded_loader inside the functions below so edits need no restart.
+# Only the despatch-mix slice colours stay here (presentation, not data).
 _DESPATCH_MIX_COLORS = [_C_IRON_ORE, _C_CLEAN_COAL, _C_SALES]
-_DESPATCH_MIX = {
-    "FY 2025-26":  [31.014, 4.024, 2.492],
-    "Apr-Jul'26":  [10.560, 1.802, 1.598],
-}
 
 # Every (section key, item) pair listed under "items" is entered directly
 # via the SAIL Mines Entry data-entry page; "derived" rows are computed
@@ -154,19 +147,14 @@ SAIL_MINES_SECTIONS = [
 ]
 
 # Iron Ore Production / Despatch and Sales of Iron Ore (Booked Qty / Despatch)
-# — CGoM/OGoM/JGoM — are hard-coded here, delinked from the mine-level rollups
+# — CGoM/OGoM/JGoM — are hard-coded, delinked from the mine-level rollups
 # (db.get_iron_ore_group_rollup_monthly / _sales_group_rollup_monthly) per
 # direct instruction (2026-08-27): mine-level despatch/sales actuals were never
-# entered, so the rollups' Despatch/Sales sides rendered blank. Each tuple is
-# '000 T (APP, YTD Actual Apr-Jul'26, YTD CPLY). "SAIL" rows stay derived
-# (sum of the three groups). Update this dict — or restore the rollup calls in
-# generate_sail_mines() — once real figures are available.
-_IRON_ORE_HARDCODED = {
-    "iron_ore_prod":            {"CGoM": (3675, 3126, 2841), "OGoM": (7507, 6532, 5279), "JGoM": (5138, 3914, 3645)},
-    "iron_ore_despatch":        {"CGoM": (3675, 2996, 2878), "OGoM": (7507, 6940, 5410), "JGoM": (5138, 4026, 3785)},
-    "iron_ore_sales":           {"CGoM": (20, 20, 0),        "OGoM": (2008, 1619, 524),  "JGoM": (0, 0, 0)},
-    "iron_ore_sales_despatch":  {"CGoM": (0, 0, 0),          "OGoM": (2008, 1598, 465),  "JGoM": (443, 0, 0)},
-}
+# entered, so the rollups' Despatch/Sales sides rendered blank. The figures now
+# live in hardcoded_config.json ("sail_mines" -> "iron_ore_group_kt"), each
+# item -> [APP, YTD Actual Apr-Jul'26, YTD CPLY] in '000 T. "SAIL" rows stay
+# derived (sum of the three groups). Update that file — or restore the rollup
+# calls in generate_sail_mines() — once real figures are available.
 
 _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -338,18 +326,20 @@ def _mines_charts_html() -> str:
     """The chart cluster for this page: four independent single-series bar
     charts (Iron Ore / Clean Coal / Flux production + Sales booking, 3 FYs
     each, each on its own scale) and two despatch-mix donuts (FY 2025-26 vs
-    Apr-Jul'26). All hard-coded — see the module-level data constants. One
-    self-contained HTML fragment (inline styles only) so both the React view
-    and the Jinja PDF template can drop it in verbatim."""
+    Apr-Jul'26). All hard-coded — see hardcoded_config.json's "sail_mines"
+    section. One self-contained HTML fragment (inline styles only) so both the
+    React view and the Jinja PDF template can drop it in verbatim."""
+    cfg = hardcoded_loader.section("sail_mines")
+    fys = cfg["trend_fys"]
     bars = [
-        _mini_bar_svg("Iron Ore Production", _TREND_FYS, _IRON_ORE_PROD_MT, _C_IRON_ORE),
-        _mini_bar_svg("Clean Coal Production", _TREND_FYS, _CLEAN_COAL_PROD_MT, _C_CLEAN_COAL),
-        _mini_bar_svg("Flux Production", _TREND_FYS, _FLUX_PROD_MT, _C_FLUX),
-        _mini_bar_svg("Sales Booking", _TREND_FYS, _SALES_BOOKING_MT, _C_SALES),
+        _mini_bar_svg("Iron Ore Production", fys, cfg["iron_ore_prod_mt"], _C_IRON_ORE),
+        _mini_bar_svg("Clean Coal Production", fys, cfg["clean_coal_prod_mt"], _C_CLEAN_COAL),
+        _mini_bar_svg("Flux Production", fys, cfg["flux_prod_mt"], _C_FLUX),
+        _mini_bar_svg("Sales Booking", fys, cfg["sales_booking_mt"], _C_SALES),
     ]
     donuts = [
-        _share_donut_svg(f"Despatch Mix — {label}", _DESPATCH_MIX_CATS, vals, _DESPATCH_MIX_COLORS)
-        for label, vals in _DESPATCH_MIX.items()
+        _share_donut_svg(f"Despatch Mix — {label}", cfg["despatch_mix_cats"], vals, _DESPATCH_MIX_COLORS)
+        for label, vals in cfg["despatch_mix"].items()
     ]
     cell = 'border:1px solid #e2e8f0;border-radius:3px;padding:2px 4px;'
     grid = "".join(f'<div style="{cell}">{s}</div>' for s in bars)
@@ -373,9 +363,11 @@ def generate_sail_mines(report_month: str) -> dict:
     cply_monthly = db.get_sail_mines_monthly(cply_months)
 
     # Iron Ore Production/Despatch (iron_ore_prod / iron_ore_despatch) are NOT
-    # read from the DB — they're hard-coded group-wise in _IRON_ORE_HARDCODED
-    # and injected directly into section_rows in Pass 1 below (per direct
-    # instruction, 2026-08-27). Every other section stays on sail_mines_monthly.
+    # read from the DB — they're hard-coded group-wise in hardcoded_config.json
+    # ("sail_mines" -> "iron_ore_group_kt") and injected directly into
+    # section_rows in Pass 1 below (per direct instruction, 2026-08-27). Every
+    # other section stays on sail_mines_monthly.
+    iron_ore_group = hardcoded_loader.section("sail_mines")["iron_ore_group_kt"]
 
     y, m = int(report_month[:4]), int(report_month[5:7])
     period_label = f"April-{_MON_ABBR[m]}'{y % 100:02d}"
@@ -386,7 +378,7 @@ def generate_sail_mines(report_month: str) -> dict:
     for section in SAIL_MINES_SECTIONS:
         raw = {}  # item/derived label -> (app, actual, cply) raw numbers
         rows = {}
-        hardcoded = _IRON_ORE_HARDCODED.get(section["key"])
+        hardcoded = iron_ore_group.get(section["key"])
         for item in section["items"]:
             if hardcoded is not None:
                 app, actual, cply = hardcoded[item]

@@ -50,6 +50,9 @@ const GENERAL_PARAMS = [
   { key: 'avg_rake_detention_time', label: 'Avg Rake Detention Time', unit: 'Hrs' },
   { key: 'demurrage', label: 'Demurrage', unit: 'Rs Cr', scale: 100 },
   { key: 'hm_to_pcm_sandpit_drypit', label: 'HM Sent to PCM/Sand Pit/Dry Pit', unit: "'000 T" },
+  // RLTIFR — Reportable Lost Time Injury Frequency Rate. Report page reads
+  // the till-month value; monthly is kept too for a future extractor.
+  { key: 'rltifr', label: 'RLTIFR', unit: '--' },
 ];
 
 // Sinter Fe is different: the report page's "Sinter Fe" row reads
@@ -267,8 +270,8 @@ function KeyParametersManualInner() {
         <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px', marginBottom: '24px' }}>
           Fields on the <a href="/report" style={{ color: '#1a73e8' }}>Key Parameters</a> report page with no
           file-upload source — CAPEX, Labour Productivity, Avg Rake Detention Time, Demurrage, HM Sent to
-          PCM/Sand Pit/Dry Pit, and Sinter Fe (a correction/override for RSP, whose own techno upload already
-          fills it each month; the only source for every other plant).
+          PCM/Sand Pit/Dry Pit, RLTIFR, and Sinter Fe (a correction/override for RSP, whose own techno upload
+          already fills it each month; the only source for every other plant).
         </p>
 
         <div style={{

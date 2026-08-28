@@ -19,8 +19,8 @@ Recovery of Process Gases COG/BFG/LDG band was dropped — those three keys
 were never wired to a real data source; see
 frontend/src/app/data-entry/key-parameters-manual/page.js for the fields
 that still have no file-upload source). CAPEX, Labour Productivity, Avg
-Rake Detention Time, Demurrage, and HM Sent to PCM/Sand Pit/Dry Pit read a
-`techno_data` "General"-unit key with no extractor behind it — filled in
+Rake Detention Time, Demurrage, RLTIFR and HM Sent to PCM/Sand Pit/Dry Pit
+read a `techno_data` "General"-unit key with no extractor behind it — filled in
 via that dedicated manual-entry page (or the general Techno Manual Entry
 form's PARAM_TEMPLATES.General, frontend/src/app/data-entry/techno-manual/
 page.js) so they render as "—" until someone fills them in there. Coke Ash
@@ -31,16 +31,21 @@ tfe_in_sinter per Sinter Plant unit (SP-1/SP-2/SP-3) and is shown slash-joined
 across the three machines (see _SP_UNIT_MAP/_sinter_fe_val); other plants
 still read the single BF-unit-sourced figure.
 
-Cost of Production: Hot Metal / Crude Steel / Saleable Steel Rs/T come from
-cost_trend_monthly (FIXED + VARIABLE till_month — see _fetch_cop); BF Coke
-and Sinter Rs/T, plus RLTIFR and Special Steel in Finished Steel, have no DB
-source and are transcribed from the comparative PDF into _PDF_VALUES ("pdf"
-kind) — refresh those when a real extractor or a newer sheet lands.
+Cost of Production: Hot Metal / Crude Steel / Saleable Steel / BF Coke /
+Sinter Rs/T all come from cost_trend_monthly (FIXED + VARIABLE till_month —
+see _fetch_cop). HM/CS/SS carry a real Variable/Fixed split; BF Coke and
+Sinter currently carry the lump comparative figure under VARIABLE (the
+comparative sheet gives no split), entered via the Cost Trend Entry page or
+its Excel extractor. Special Steel in Finished Steel still has no DB source
+and is transcribed from the comparative PDF into hardcoded_config.json
+("key_parameters" -> "pdf_values", the "pdf" row kind) — refresh it when a
+real extractor or a newer sheet lands.
 """
 import calendar as _calendar
 import json as _json
 
 import db
+import hardcoded_loader
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
@@ -351,16 +356,20 @@ def _demurrage_by_plant(ytd_months: list) -> dict:
     return out
 
 
-# Cost of Production (Rs/T) — Hot Metal / Crude Steel / Saleable Steel come
-# from cost_trend_monthly (FIXED + VARIABLE till_month, the same figure
-# page_cost_trend.py's "TOTAL" row shows). "cop" rows pass "HM"/"CS"/"SS" as
-# spec.
-_COP_PRODUCTS = {"HM", "CS", "SS"}
+# Cost of Production (Rs/T) — from cost_trend_monthly (FIXED + VARIABLE
+# till_month, the same figure page_cost_trend.py's "TOTAL" row shows). "cop"
+# rows pass the product code as spec. HM/CS/SS get their own report pages
+# (page_cost_trend.py) and a real Variable/Fixed split; COKE/SINTER don't —
+# they exist in cost_trend_monthly only to feed this page's "BF Coke" /
+# "Sinter" rows, and currently carry the lump comparative figure under
+# VARIABLE (no split available). FIXED is summed in too the moment one is
+# entered, so a later split just works.
+_COP_PRODUCTS = {"HM", "CS", "SS", "COKE", "SINTER"}
 
 
 def _fetch_cop(report_month: str) -> dict:
     """{(plant, product): total_rs_per_t} — FIXED + VARIABLE till_month cost
-    of production for HM/CS/SS at report_month."""
+    of production per product at report_month (see _COP_PRODUCTS)."""
     out = {}
     for product in _COP_PRODUCTS:
         data = db.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
@@ -372,20 +381,18 @@ def _fetch_cop(report_month: str) -> dict:
     return out
 
 
-# Values with no DB source yet — transcribed from
-# Report_format/Plant wise Comparative for Apr-Jul'26.pdf per direct
-# instruction (map from the DB where available, fill the rest from that
-# file). {spec: {plant: value}}. Refresh when a real extractor lands, or when
-# a newer comparative sheet supersedes this one.
-_PDF_VALUES = {
-    # RLTIFR (Reportable Lost Time Injury Frequency Rate)
-    "rltifr": {"BSP": 0.19, "DSP": 0.11, "RSP": 0.12, "BSL": 0.05, "ISP": 0.00},
-    # Special Steel in Finished Steel, %
-    "ss_in_finished": {"BSP": 81.5, "DSP": 98.8, "RSP": 39.9, "BSL": 10.3, "ISP": 99.6},
-    # Cost of Production, Rs/T — BF Coke & Sinter only (HM/CS/SS come from the DB)
-    "cop_bf_coke": {"BSP": 33232, "DSP": 33158, "RSP": 36081, "BSL": 31739, "ISP": 36110},
-    "cop_sinter": {"BSP": 5386, "DSP": 6149, "RSP": 5285, "BSL": 5709, "ISP": 6248},
-}
+# Values with no DB source yet ({spec: {plant: value}}) are hand-maintained
+# in hardcoded_config.json's "key_parameters" -> "pdf_values", transcribed
+# from Report_format/Plant wise Comparative for Apr-Jul'26.pdf per direct
+# instruction (map from the DB where available, fill the rest from that file).
+# Only "ss_in_finished" remains — rltifr moved to techno_data "General", and
+# cop_bf_coke/cop_sinter moved to cost_trend_monthly (products COKE/SINTER).
+# Refresh the file when a real extractor lands, or when a newer comparative
+# sheet supersedes this one. Read via _pdf_values() below.
+
+
+def _pdf_values() -> dict:
+    return hardcoded_loader.section("key_parameters")["pdf_values"]
 
 
 # (label, unit, kind, spec, decimal_places, flags)
@@ -450,7 +457,11 @@ _ROWS = [
     (None,                                     "%",  "vap_pct", None, 1, {"continuation": True}),
     (None, "", _SPACER, None, 0, {}),
     ("Labour Productivity",    "T/Man-yr", "general", "labour_productivity", 0, {}),
-    ("RLTIFR",                 "--",       "pdf",     "rltifr", 2, {}),
+    # RLTIFR — Reportable Lost Time Injury Frequency Rate. techno_data
+    # "General"-unit key, no extractor yet: entered via the Key Parameters
+    # Manual Entry page (or Techno Manual Entry's General area) as month +
+    # till-month, or wired to an extractor later. Reads the till_month value.
+    ("RLTIFR",                 "--",       "general", "rltifr", 2, {}),
     ("Avg Rake Detention Time","Hrs",      "general", "avg_rake_detention_time", 1, {}),
     # Label's period placeholder is filled in with the same Apr-<report
     # month> range as the page title (_DEMURRAGE_LABEL below). Split into two
@@ -462,8 +473,8 @@ _ROWS = [
     ("CAPEX",                  "Rs Cr",    "general", "capex", 0, {}),
 
     ("Cost of Production", "", _SECTION, None, 0, {}),
-    ("BF Coke",        "Rs/T", "pdf", "cop_bf_coke", 0, {}),
-    ("Sinter",         "Rs/T", "pdf", "cop_sinter", 0, {}),
+    ("BF Coke",        "Rs/T", "cop", "COKE", 0, {}),
+    ("Sinter",         "Rs/T", "cop", "SINTER", 0, {}),
     ("Hot Metal",      "Rs/T", "cop", "HM", 0, {}),
     ("Crude Steel",    "Rs/T", "cop", "CS", 0, {}),
     ("Saleable Steel", "Rs/T", "cop", "SS", 0, {}),
@@ -475,6 +486,7 @@ def generate_key_parameters(report_month: str) -> dict:
     techno = _fetch_techno(report_month)
     production = _fetch_production(ytd_months)
     cop = _fetch_cop(report_month)
+    pdf_values = _pdf_values()
 
     import datetime as _dt
     period_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")
@@ -621,7 +633,7 @@ def generate_key_parameters(report_month: str) -> dict:
             elif kind == "cop":
                 v = _round(cop.get((plant, spec)), dp)
             elif kind == "pdf":
-                v = _round(_PDF_VALUES.get(spec, {}).get(plant), dp)
+                v = _round(pdf_values.get(spec, {}).get(plant), dp)
             else:
                 v = None
             # _round()/the branches above return a plain float for most

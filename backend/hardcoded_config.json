@@ -1,0 +1,42 @@
+{
+  "_doc": "SINGLE SOURCE OF TRUTH for report figures that are NOT yet sourced from the database — hand-transcribed values and stopgaps pending a real extractor or data-entry wiring. Edit this file to update those numbers; changes apply on the next PDF/preview generation, no restart needed. Do NOT re-scatter these back into the page_*.py generators. Each top-level section names the page generator that consumes it. '_doc' keys (at any level) are ignored by the loader.",
+
+  "sail_mines": {
+    "_doc": "page_sail_mines.py — 'SAIL Mines Production & Despatch Performance'. Charts are in million tonnes; the iron-ore group table is in '000 T. Stopgap per direct instruction 2026-08-27, a placeholder until real series / mine-level actuals exist. Chart colours stay in the page module (presentation, not data).",
+
+    "trend_fys": ["FY 23-24", "FY 24-25", "FY 25-26"],
+    "iron_ore_prod_mt": [35.423, 34.8, 38.1],
+    "clean_coal_prod_mt": [0.484, 0.376, 0.345],
+    "flux_prod_mt": [2.018, 1.715, 1.279],
+    "sales_booking_mt": [1.16, 0.754, 3.01],
+
+    "despatch_mix_cats": ["Captive", "Conversion Agent", "Sales"],
+    "despatch_mix": {
+      "_doc": "Iron-ore despatch mix by end-use, million tonnes, in despatch_mix_cats order. One entry per donut.",
+      "FY 2025-26": [31.014, 4.024, 2.492],
+      "Apr-Jul'26": [10.560, 1.802, 1.598]
+    },
+
+    "iron_ore_group_kt": {
+      "_doc": "Iron Ore Production / Despatch and Sales of Iron Ore (Booked Qty / Despatch), delinked from the mine-level rollups per direct instruction 2026-08-27 (mine-level despatch/sales actuals were never entered). Each item -> [APP, YTD Actual Apr-Jul'26, YTD CPLY] in '000 T. The 'SAIL' rows stay derived (CGoM + OGoM + JGoM) and are NOT listed here. Restore the rollup calls in generate_sail_mines() once real figures land.",
+      "iron_ore_prod":           {"CGoM": [3675, 3126, 2841], "OGoM": [7507, 6532, 5279], "JGoM": [5138, 3914, 3645]},
+      "iron_ore_despatch":       {"CGoM": [3675, 2996, 2878], "OGoM": [7507, 6940, 5410], "JGoM": [5138, 4026, 3785]},
+      "iron_ore_sales":          {"CGoM": [20, 20, 0],        "OGoM": [2008, 1619, 524],  "JGoM": [0, 0, 0]},
+      "iron_ore_sales_despatch": {"CGoM": [0, 0, 0],          "OGoM": [2008, 1598, 465],  "JGoM": [443, 0, 0]}
+    }
+  },
+
+  "special_steel_physical": {
+    "_doc": "page_special_steel_physical.py — 'Special Steel Plants Physical Performance'. cur-FY YTD Actual overrides in Tonnes, plant -> series -> value. Wins over the derived / production_table figure; %FF stays blank (no APP), %Growth is recomputed against CPLY. Stopgap per direct instruction 2026-08-27 ('will map later'). Remove an entry once a real source is wired for it.",
+    "ytd_actual_override": {
+      "SSP": { "STAINLESS": 85900.0, "CARBON": 12000.0 }
+    }
+  },
+
+  "key_parameters": {
+    "_doc": "page_key_parameters.py — 'Inter Plant Performance Comparison' page. Values with no DB source yet, transcribed from Report_format/Plant wise Comparative for Apr-Jul'26.pdf. spec -> plant -> value. Cost of Production (HM/CS/SS and, since 2026-08-28, BF Coke + Sinter) comes from cost_trend_monthly (the DB), NOT here. RLTIFR moved to techno_data 'General' unit (key 'rltifr') on 2026-08-28. Only 'ss_in_finished' remains. Refresh when a real extractor lands or a newer comparative sheet supersedes this one.",
+    "pdf_values": {
+      "ss_in_finished": { "BSP": 81.5, "DSP": 98.8, "RSP": 39.9, "BSL": 10.3, "ISP": 99.6 }
+    }
+  }
+}

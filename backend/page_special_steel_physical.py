@@ -27,6 +27,7 @@ Data sources:
 Stored figures are '000 T; this page displays Tonnes (× 1000).
 """
 import db
+import hardcoded_loader
 
 HISTORY_START_FY_YEAR = 2014  # first history column (14-15), per the PDF
 
@@ -43,15 +44,12 @@ _SERIES_ITEM = {
     "CARBON": "Carbon Steel Production",
 }
 
-# cur-FY YTD Actual overrides (Tonnes) — hard-coded stopgap per direct
-# instruction (2026-08-27, "will map later"): SSP Stainless / Carbon for
-# Apr-Jul'26. Wins over the derived / production_table figure; %FF stays
-# blank (no APP) and %Gr is recomputed against CPLY. Remove once a real
-# source is wired.
-_YTD_ACTUAL_OVERRIDE = {
-    ("SSP", "STAINLESS"): 85900.0,
-    ("SSP", "CARBON"): 12000.0,
-}
+# cur-FY YTD Actual overrides (Tonnes) — hand-maintained in
+# hardcoded_config.json ("special_steel_physical" -> "ytd_actual_override",
+# plant -> series -> value). A stopgap per direct instruction (2026-08-27,
+# "will map later"): SSP Stainless / Carbon for Apr-Jul'26. Wins over the
+# derived / production_table figure; %FF stays blank (no APP) and %Gr is
+# recomputed against CPLY. Remove an entry there once a real source is wired.
 
 _MON = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -147,6 +145,7 @@ def generate_special_steel_physical(report_month: str) -> dict:
     ytd_label = f"{_MON[int(ytd_months[0][5:7])]}-{_MON[int(report_month[5:7])]}'{cur_start % 100:02d}"
 
     meta, perf = db.get_ss_phys_perf()
+    ytd_actual_override = hardcoded_loader.section("special_steel_physical")["ytd_actual_override"]
 
     conn = db.connect()
     cur = conn.cursor()
@@ -197,7 +196,7 @@ def generate_special_steel_physical(report_month: str) -> dict:
             if prev_actual is None:
                 prev_actual = seed_actual(_fy_label(prev_start))
 
-            ytd_actual = _YTD_ACTUAL_OVERRIDE.get((plant, series))
+            ytd_actual = ytd_actual_override.get(plant, {}).get(series)
             if ytd_actual is None:
                 ytd_actual = _db(db_ytd_act, plant, series)
             ytd_cply = _db(db_ytd_cply, plant, series)

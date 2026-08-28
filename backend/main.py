@@ -1676,10 +1676,12 @@ def save_special_steel_abp(request: SpecialSteelAbpSaveRequest):
 
 
 # Cost Trend (Report_format/COST TREND.xlsx, sheets HM/CS/SS) — see
-# page_cost_trend.py's module docstring for the full data model. product is
-# always one of these 3; cost_type/plant come from db.COST_TREND_COST_TYPES/
-# COST_TREND_PLANTS.
-COST_TREND_PRODUCTS = ["HM", "CS", "SS"]
+# page_cost_trend.py's module docstring for the full data model. cost_type/
+# plant come from db.COST_TREND_COST_TYPES/COST_TREND_PLANTS. HM/CS/SS get
+# their own report pages (3.61-3.63); COKE/SINTER exist only to feed the
+# Inter Plant Performance Comparison page's BF Coke / Sinter rows
+# (page_key_parameters.py) and have no page_cost_trend.py output.
+COST_TREND_PRODUCTS = ["HM", "CS", "SS", "COKE", "SINTER"]
 
 
 @app.get("/api/cost-trend/annual")

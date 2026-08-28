@@ -107,7 +107,7 @@ export const PARAM_TEMPLATES = {
     'specific_co2_emissions',
     // Key Parameters page (page 5) — no other source yet, filled here
     'hm_to_pcm_sandpit_drypit',
-    'capex','labour_productivity','avg_rake_detention_time',
+    'capex','labour_productivity','avg_rake_detention_time','rltifr',
     'cog_recovery','bfg_recovery','ldg_recovery',
   ],
 };
@@ -211,6 +211,7 @@ export const _LABEL_MAP = {
   capex:                                'CAPEX (Rs Cr)',
   labour_productivity:                  'Labour Productivity (T/Man-yr)',
   avg_rake_detention_time:              'Avg. Rake Detention Time (Hrs)',
+  rltifr:                               'RLTIFR',
   cog_recovery:                         'Recovery of COG (Nm³/T)',
   bfg_recovery:                         'Recovery of BFG (Nm³/THM)',
   ldg_recovery:                         'Recovery of LDG (Nm³/TCS)',
