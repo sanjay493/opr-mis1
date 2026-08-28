@@ -127,6 +127,7 @@ renderers. **The per-template `page.*` data contract is in §8.**
 | `reports/techno-custom`, `reports/techno-verification`, `reports/techno-monthly`, `reports/techno-dashboard` | `page_techno_custom_export.py`, `page_techno_verification_export.py`, `page_techno.py` | `techno_data`, `techno_plan_fy` |
 | `reports/bf-benchmark` | `api_bf_benchmark.py`, `page_bf_benchmark_export.py` | `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `techno_data` |
 | `reports/production-loss-analysis` | `production_loss_analysis.py`, `api_production_loss.py` | `production_table`, `production_plan_table`, `capital_repair_table`, `breakdown_table` |
+| `reports/breakdown-analysis` | frontend-only (recharts); client-side aggregation over `GET /api/breakdown` (`api_breakdown.py`) | `breakdown_table` |
 | `reports/ipt-fy` | `page_ipt.py` | `ipt_table` |
 | `reports/new-facilities` | (frontend-only / static) | — |
 
@@ -279,7 +280,7 @@ and `frontend/.../cost-trend/page.js:PRODUCTS` list all five.
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
 | `capital_repair_table` | annual CR plan rows per plant/FY (`shop`, `equipment`, `activity`, `schedule_days`, `period`, `actual` free-text) + structured cols (`unit_type`, `unit_name`, `actual_start/end`, `planned_days`) | `data-entry/capital-repair/page.js` → `/api/capital-repair-entry`; plan pre-seeded from `Report_format/CR.pdf`; `actual` display string built by `main.py:format_cr_actual` | `page_capital_repair.py` (CR pages 36–40); `production_loss_analysis.py` |
-| `breakdown_table` | ad-hoc unplanned-downtime events (`plant`, `unit_type`, `unit_name`, `start_ts`, `end_ts`, `is_ongoing`, `cause`, `hours_lost_override`) | `data-entry/breakdown/page.js` → `/api/breakdown` (`api_breakdown.py`, full CRUD) | `production_loss_analysis.py` (explains HM/CS/FS shortfall vs ABP) |
+| `breakdown_table` | ad-hoc unplanned-downtime events (`plant`, `unit_type`, `unit_name`, `start_ts`, `end_ts`, `is_ongoing`, `cause`, `hours_lost_override`) | `data-entry/breakdown/page.js` → `/api/breakdown` (`api_breakdown.py`, full CRUD) | `production_loss_analysis.py` (explains HM/CS/FS shortfall vs ABP); `reports/breakdown-analysis/page.js` (read-only cross-plant filter/sort/charts, client-side over `GET /api/breakdown`) |
 
 ### 4.10 Annual capacity
 

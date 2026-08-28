@@ -101,7 +101,8 @@ export default function GlobalNavbar() {
         { label: 'Techno Dashboard', link: '/reports/techno-dashboard', icon: '🔬' },
         { label: 'Techno Verification', link: '/reports/techno-verification', icon: '✅' },
         { label: 'Large BF Benchmarking', link: '/reports/bf-benchmark', icon: '📐' },
-        { label: 'Production Loss Analysis', link: '/reports/production-loss-analysis', icon: '📉' }
+        { label: 'Production Loss Analysis', link: '/reports/production-loss-analysis', icon: '📉' },
+        { label: 'Breakdown Analysis', link: '/reports/breakdown-analysis', icon: '⚠️' }
       ]
     },
     {
