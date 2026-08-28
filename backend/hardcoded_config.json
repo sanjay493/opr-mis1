@@ -27,10 +27,8 @@
   },
 
   "special_steel_physical": {
-    "_doc": "page_special_steel_physical.py — 'Special Steel Plants Physical Performance'. cur-FY YTD Actual overrides in Tonnes, plant -> series -> value. Wins over the derived / production_table figure; %FF stays blank (no APP), %Growth is recomputed against CPLY. Stopgap per direct instruction 2026-08-27 ('will map later'). Remove an entry once a real source is wired for it.",
-    "ytd_actual_override": {
-      "SSP": { "STAINLESS": 85900.0, "CARBON": 12000.0 }
-    }
+    "_doc": "page_special_steel_physical.py — 'Special Steel Plants Physical Performance'. cur-FY YTD Actual overrides in Tonnes, plant -> series -> value; wins over the derived / production_table figure. Empty since 2026-08-28: SSP Carbon/Stainless YTD Actual now come from production_table (Carbon Steel Production actuals + Saleable-minus-Carbon), and SSP Carbon monthly ABP from production_plan_table. Add an entry back only for a series with no usable production_table source.",
+    "ytd_actual_override": {}
   },
 
   "key_parameters": {

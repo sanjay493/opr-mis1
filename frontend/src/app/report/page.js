@@ -43,6 +43,7 @@ const PAGE_LABELS = {
   22: 'Special Steel – BSL',
   23: 'Special Steel – ISP',
   24: 'Special Steel – SAIL (Consolidated)',
+  1025: 'Special Steel Plants Physical Performance',
   25: 'Opening Stock at Plants & Stockyards',
   26: 'IPT Status',
   27: 'Major Techno-Economic Parameters',
@@ -69,7 +70,15 @@ const PAGE_LABELS = {
 // Page list/count is fixed regardless of report month, so the page selector
 // and PDF checklist can render from this immediately — they don't need to
 // wait on any report data to load.
-const ALL_PAGE_NUMBERS = Object.keys(PAGE_LABELS).map(Number).sort((a, b) => a - b);
+//
+// Sort key ≠ id for the big-int sentinels: SS Physical Performance keeps its
+// backend id 1025 (that's what /api/data?page_number= expects and what the
+// page object comes back tagged with), but physically sits right after
+// page 24, so it's sorted there — not after page 40. Same slot the Special
+// Steel trend sentinel (1024) would take if it were ever surfaced here.
+const _PAGE_SORT_POS = { 1024: 24.5, 1025: 24.6 };
+const _pageSortPos = (n) => _PAGE_SORT_POS[n] ?? n;
+const ALL_PAGE_NUMBERS = Object.keys(PAGE_LABELS).map(Number).sort((a, b) => _pageSortPos(a) - _pageSortPos(b));
 
 // Internal page ids include sentinel decimals (e.g. 2.5 for "MIS at a
 // Glance", 3.5 for "Key Parameters") so they can be inserted between real

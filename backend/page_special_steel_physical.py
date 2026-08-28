@@ -18,12 +18,15 @@ Data sources:
     tables special_steel_phys_perf / _meta / _note / special_steel_ipt_requirement
     (seeded by scripts/backfill_special_steel_physical.py, maintained via
     /data-entry/special-steel-physical and /data-entry/special-steel-ipt).
-  - prev-FY annual actual and the cur-FY YTD block (Actual / CPLY / APP):
-    production_table / production_plan_table, summed over the relevant months
-    (plant VISP <- VISL). SSP "Stainless Steel" has no item of its own — it is
-    Saleable Steel − Carbon Steel Production (per direct instruction), used
-    only when both components have data for the period (a full 12 months for
-    the prev-FY annual actual); otherwise the stored figure stands.
+  - cur-FY ABP (annual plan), prev-FY annual actual, and the cur-FY YTD block
+    (Actual / CPLY / APP): production_plan_table / production_table, summed
+    over the relevant months (plant VISP <- VISL). SSP "Stainless Steel" has
+    no item of its own — it is Saleable Steel − Carbon Steel Production (per
+    direct instruction), used only when both components have data for the
+    period. The cur-FY ABP and the prev-FY annual actual both require a full
+    12 months in the source table; otherwise the stored special_steel_phys_
+    perf figure stands. (Carbon Steel Production's monthly ABP is entered via
+    /data-entry/production, plant SSP.)
 Stored figures are '000 T; this page displays Tonnes (× 1000).
 """
 import db
@@ -151,6 +154,7 @@ def generate_special_steel_physical(report_month: str) -> dict:
     cur = conn.cursor()
     try:
         db_prev_fy = _prod_sum(cur, "production_table", _fy_months(prev_start))
+        db_cur_fy_app = _prod_sum(cur, "production_plan_table", _fy_months(cur_start))
         db_ytd_act = _prod_sum(cur, "production_table", ytd_months)
         db_ytd_cply = _prod_sum(cur, "production_table", cply_months)
         db_ytd_app = _prod_sum(cur, "production_plan_table", ytd_months)
@@ -201,7 +205,14 @@ def generate_special_steel_physical(report_month: str) -> dict:
                 ytd_actual = _db(db_ytd_act, plant, series)
             ytd_cply = _db(db_ytd_cply, plant, series)
             ytd_app = _db(db_ytd_app, plant, series)
-            cur_abp = _t(perf.get((cur_fy, plant, series, "plan")))
+
+            # cur-FY ABP: the summed monthly ABP breakdown in
+            # production_plan_table when a full 12 months are present (so the
+            # figure tracks /data-entry/production edits and Stainless =
+            # Saleable − Carbon holds), else the stored figure.
+            cur_abp = _db(db_cur_fy_app, plant, series, min_months=12)
+            if cur_abp is None:
+                cur_abp = _t(perf.get((cur_fy, plant, series, "plan")))
 
             rows.append({
                 "series_label": _SERIES_LABEL.get(series, series),

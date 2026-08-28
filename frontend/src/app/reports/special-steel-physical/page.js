@@ -25,6 +25,12 @@ const HEAD = {
   color: '#174ea6',
 };
 const sepLeft = { borderLeft: '2px solid #9aa7bd' };
+// cur-FY ABP — the single planning-target column: warm tint.
+// Apr-<report month> YTD block: cool tint.
+const abpBg = { backgroundColor: '#fef3d6' };
+const abpHead = { backgroundColor: '#fde3aa' };
+const ytdBg = { backgroundColor: '#e7f4ea' };
+const ytdHead = { backgroundColor: '#cbe8d2' };
 
 export default function SpecialSteelPhysicalPage() {
   const [data, setData] = useState(null);
@@ -75,18 +81,18 @@ export default function SpecialSteelPhysicalPage() {
                     <th rowSpan={2} style={HEAD}>Capacity</th>
                     <th colSpan={2} style={HEAD}>Best Achieved</th>
                     {historyFys.map((fy) => <th key={fy} rowSpan={2} style={HEAD}>{fy}</th>)}
-                    <th rowSpan={2} style={{ ...HEAD, ...sepLeft }}>{data.prev_fy} Actual</th>
-                    <th rowSpan={2} style={{ ...HEAD, ...sepLeft }}>{data.cur_fy} ABP</th>
-                    <th colSpan={5} style={{ ...HEAD, ...sepLeft }}>{data.ytd_label}</th>
+                    <th rowSpan={2} style={{ ...HEAD, ...sepLeft }}>{data.prev_fy}</th>
+                    <th rowSpan={2} style={{ ...HEAD, ...sepLeft, ...abpHead }}>{data.cur_fy} ABP</th>
+                    <th colSpan={5} style={{ ...HEAD, ...sepLeft, ...ytdHead }}>{data.ytd_label}</th>
                   </tr>
                   <tr>
                     <th style={{ ...HEAD, top: 31 }}>Actual</th>
                     <th style={{ ...HEAD, top: 31 }}>Year</th>
-                    <th style={{ ...HEAD, top: 31, ...sepLeft }}>APP</th>
-                    <th style={{ ...HEAD, top: 31 }}>Actual</th>
-                    <th style={{ ...HEAD, top: 31 }}>%FF</th>
-                    <th style={{ ...HEAD, top: 31 }}>CPLY</th>
-                    <th style={{ ...HEAD, top: 31 }}>%Gr</th>
+                    <th style={{ ...HEAD, top: 31, ...sepLeft, ...ytdHead }}>APP</th>
+                    <th style={{ ...HEAD, top: 31, ...ytdHead }}>Actual</th>
+                    <th style={{ ...HEAD, top: 31, ...ytdHead }}>%FF</th>
+                    <th style={{ ...HEAD, top: 31, ...ytdHead }}>CPLY</th>
+                    <th style={{ ...HEAD, top: 31, ...ytdHead }}>%Gr</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -103,12 +109,12 @@ export default function SpecialSteelPhysicalPage() {
                       <td style={{ ...cellBase, textAlign: 'center' }}>{r.best_year}</td>
                       {historyFys.map((fy) => <td key={fy} style={cellBase}>{r.history[fy]}</td>)}
                       <td style={{ ...cellBase, ...sepLeft }}>{r.prev_actual}</td>
-                      <td style={{ ...cellBase, ...sepLeft }}>{r.cur_abp}</td>
-                      <td style={{ ...cellBase, ...sepLeft }}>{r.ytd_app}</td>
-                      <td style={cellBase}>{r.ytd_actual}</td>
-                      <td style={cellBase}>{r.ytd_pct_ful}</td>
-                      <td style={cellBase}>{r.ytd_cply}</td>
-                      <td style={cellBase}>{r.ytd_growth}</td>
+                      <td style={{ ...cellBase, ...sepLeft, ...abpBg }}>{r.cur_abp}</td>
+                      <td style={{ ...cellBase, ...sepLeft, ...ytdBg }}>{r.ytd_app}</td>
+                      <td style={{ ...cellBase, ...ytdBg }}>{r.ytd_actual}</td>
+                      <td style={{ ...cellBase, ...ytdBg }}>{r.ytd_pct_ful}</td>
+                      <td style={{ ...cellBase, ...ytdBg }}>{r.ytd_cply}</td>
+                      <td style={{ ...cellBase, ...ytdBg }}>{r.ytd_growth}</td>
                     </tr>
                   )))}
                 </tbody>

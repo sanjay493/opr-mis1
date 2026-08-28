@@ -32,6 +32,8 @@ _DEPT_BADGE_GROUPS = [
 #     (3, 6, 1)) — not yet a section of its own.
 #   1024 — the Special Steel trend/performance-analysis page, inserted
 #     right after page 24, same group (5) it had while still numbered 24.
+#   1025 — "Special Steel Plants Physical Performance" (ASP/SSP/VISP grid),
+#     landscape sentinel inserted right after 1024, same group (5).
 #   29.5 — "Iron Making (contd.)", right after page 29, same group (7) as
 #     Techno-Economic Parameters.
 #   35.4, 35.5, 35.6, 35.7 — EPI, then "Coking Coal Receipts & Stock", then
@@ -47,7 +49,7 @@ _DEPT_BADGE_GROUPS = [
 _DEPT_BADGE_EXPLICIT_GROUP = {
     2.1: 1, 2.2: 1, 2.3: 1,
     2.5: 1, 3: 1, 3.2: 1, 3.3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1,
-    1024: 5,
+    1024: 5, 1025: 5,
     29.5: 7,
     35.4: 8, 35.5: 8, 35.6: 8, 35.7: 8,
 }

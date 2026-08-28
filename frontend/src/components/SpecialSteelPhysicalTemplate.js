@@ -25,6 +25,12 @@ const cell = {
 const th = { ...cell, background: C.headerBg, fontWeight: 700 };
 const num = { ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
 const sep = { borderLeft: `1.2pt solid ${C.borderDark}` };
+// cur-FY ABP — the single planning-target column: warm tint.
+// Apr-<report month> YTD block: cool tint.
+const abpBg = { background: '#fff3d4' };
+const abpHeadBg = { background: '#ffe3a3' };
+const ytdBg = { background: '#e7f3ea' };
+const ytdHeadBg = { background: '#c8e6cf' };
 
 export default function SpecialSteelPhysicalTemplate({ data }) {
   const {
@@ -51,18 +57,18 @@ export default function SpecialSteelPhysicalTemplate({ data }) {
               <th rowSpan={2} style={th}>Capacity</th>
               <th colSpan={2} style={th}>Best Achieved</th>
               {historyFys.map((fy) => <th key={fy} rowSpan={2} style={th}>{fy}</th>)}
-              <th rowSpan={2} style={{ ...th, ...sep }}>{prevFy} Actual</th>
-              <th rowSpan={2} style={{ ...th, ...sep }}>{curFy} ABP</th>
-              <th colSpan={5} style={{ ...th, ...sep }}>{ytdLabel}</th>
+              <th rowSpan={2} style={{ ...th, ...sep }}>{prevFy}</th>
+              <th rowSpan={2} style={{ ...th, ...sep, ...abpHeadBg }}>{curFy} ABP</th>
+              <th colSpan={5} style={{ ...th, ...sep, ...ytdHeadBg }}>{ytdLabel}</th>
             </tr>
             <tr>
               <th style={th}>Actual</th>
               <th style={th}>Year</th>
-              <th style={{ ...th, ...sep }}>APP</th>
-              <th style={th}>Actual</th>
-              <th style={th}>%FF</th>
-              <th style={th}>CPLY</th>
-              <th style={th}>%Gr</th>
+              <th style={{ ...th, ...sep, ...ytdHeadBg }}>APP</th>
+              <th style={{ ...th, ...ytdHeadBg }}>Actual</th>
+              <th style={{ ...th, ...ytdHeadBg }}>%FF</th>
+              <th style={{ ...th, ...ytdHeadBg }}>CPLY</th>
+              <th style={{ ...th, ...ytdHeadBg }}>%Gr</th>
             </tr>
           </thead>
           <tbody>
@@ -79,12 +85,12 @@ export default function SpecialSteelPhysicalTemplate({ data }) {
                 <td style={cell}>{r.best_year}</td>
                 {historyFys.map((fy) => <td key={fy} style={num}>{r.history[fy]}</td>)}
                 <td style={{ ...num, ...sep }}>{r.prev_actual}</td>
-                <td style={{ ...num, ...sep }}>{r.cur_abp}</td>
-                <td style={{ ...num, ...sep }}>{r.ytd_app}</td>
-                <td style={num}>{r.ytd_actual}</td>
-                <td style={num}>{r.ytd_pct_ful}</td>
-                <td style={num}>{r.ytd_cply}</td>
-                <td style={num}>{r.ytd_growth}</td>
+                <td style={{ ...num, ...sep, ...abpBg }}>{r.cur_abp}</td>
+                <td style={{ ...num, ...sep, ...ytdBg }}>{r.ytd_app}</td>
+                <td style={{ ...num, ...ytdBg }}>{r.ytd_actual}</td>
+                <td style={{ ...num, ...ytdBg }}>{r.ytd_pct_ful}</td>
+                <td style={{ ...num, ...ytdBg }}>{r.ytd_cply}</td>
+                <td style={{ ...num, ...ytdBg }}>{r.ytd_growth}</td>
               </tr>
             )))}
           </tbody>
