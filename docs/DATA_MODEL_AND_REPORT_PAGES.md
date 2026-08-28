@@ -153,7 +153,7 @@ are named `get_*` (read) and `save_* / upsert_* / merge_upsert_*` (write).
     `pdf_extractor_bsp_flash.py`.
   - `/upload` → *Preview & Insert* → `POST /api/extract-preview` → `POST /api/confirm-extraction`.
   - `frontend/src/app/data-entry/production/page.js` → `POST /api/production-entry`.
-  - `frontend/src/app/data-entry/legacy-sms-crude/page.js`, `.../conversion/page.js`.
+  - `frontend/src/app/data-entry/conversion/page.js`.
   - Backfill scripts: `scripts/backfill_asp_ingot.py`, `backfill_ssp_production.py`,
     `backfill_rspbsl_ingot.py`, `backfill_asp_legacy_fl_excel.py`,
     `backfill_asp_fy2425_from_fy2526_fl.py`, `backfill_special_steel_2022_23.py`.
@@ -581,7 +581,6 @@ export default function XPage() {
 | `opening-stock` | Opening stock per plant/item/type as-on 1st of month | `/api/opening-stock`, `/api/stock-entry`, `/api/stock-data` (via `useDataEntryAPI`) | `stock_table` |
 | `ipt` | Inter-plant transfer plan/actual per route; bulk paste; delete | `/api/ipt-entries`, `/api/ipt-entries/bulk`, `/api/ipt-delete`, `/api/ipt-items` | `ipt_table` |
 | `conversion` | Monthly conversion figures (SAIL consolidated) | `/api/conversion-data`, `/api/conversion-entry` | `production_table` (conversion items) |
-| `legacy-sms-crude` | Upload/preview/confirm a legacy SMS crude-steel workbook | `/api/legacy-sms-crude/{template,preview,confirm}` | `production_table` |
 | `targets` | Annual TE targets by plant (BF / SMS / major params); SAIL weighted recompute | `/api/techno-plant-targets`, `/api/techno-sail-targets`, `/api/techno-sms-targets`, `/api/techno-major-parameters`, `/api/techno-recalculate-sail-weighted` | `techno_plan_fy` |
 | `annual-target` | Per-page techno Norm/Target columns (pages 27–35) + coal-blend targets | `/api/techno-page-targets`, `/api/coal-blend-targets` | `techno_plan_fy` |
 | `annual-capacity` | Rated annual capacity per plant/item with mid-FY effective-dated changes | `/api/capacity`, `/api/capacity/{id}` (PATCH/DELETE) | `item_capacity_table` |

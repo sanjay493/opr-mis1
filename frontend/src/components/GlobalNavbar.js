@@ -35,7 +35,6 @@ export default function GlobalNavbar() {
             { label: 'Key Parameters Manual Entry', link: '/data-entry/key-parameters-manual', icon: '🔑' },
             { label: 'Key Highlights & Variances', link: '/data-entry/key-highlights', icon: '📝' },
             { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
-            { label: 'Legacy SMS / Crude Steel', link: '/data-entry/legacy-sms-crude', icon: '🗂️' },
             { label: 'Large BF Benchmarking Entry', link: '/data-entry/bf-benchmark', icon: '🏗️' },
             { label: 'SAIL Mines Entry (Page 4.5)', link: '/data-entry/sail-mines', icon: '⛏️' },
             { label: 'Iron Ore Mines Production & Despatch', link: '/data-entry/mines-production-despatch', icon: '🚂' },

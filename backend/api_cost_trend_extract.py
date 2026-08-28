@@ -4,7 +4,7 @@ for the workbook parsing itself. Consumed by frontend/src/app/data-entry/
 cost-trend-extract (upload -> preview -> confirm), the automated alternative
 to the manual Cost Trend Entry form for months a source workbook exists for.
 
-Flow (mirrors /api/legacy-sms-crude's preview/confirm pattern):
+Flow (preview/confirm pattern):
   1. POST /preview  — extract, diff every (product, plant, cost_type) cell
      against the current DB value for that field. Writes nothing.
   2. POST /confirm  — write the rows the client marked apply=true (re-

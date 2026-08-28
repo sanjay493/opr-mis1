@@ -53,7 +53,6 @@ PAGE_MODULES = {
             ("POST", "/api/confirm-extraction", False),
             ("POST", "/api/save-item-alias", False),
             ("POST", "/api/production-entry", False),
-            ("POST", "/api/legacy-sms-crude/confirm", False),
         ],
     },
     "special_steel": {
