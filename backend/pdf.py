@@ -395,7 +395,7 @@ def _main_header_footer_overlay_html(font_family: str, report_month: str, page_n
         f'box-sizing:border-box;font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
         f'display:flex;justify-content:space-between;'
         f'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
-        f'<span>figures are provision</span>'
+        f'<span>figures are provisional</span>'
         f'<span>MIS Operations</span>'
         f'<span>OMI - {report_month}</span>'
         f'<span>for internal circulation only</span>'
@@ -404,8 +404,29 @@ def _main_header_footer_overlay_html(font_family: str, report_month: str, page_n
     )
 
 
+def _index_declared_total_pages():
+    """Last page number printed in the report's Index (page 2). The Index
+    also lists external annexures appended to the printed report as-is —
+    "Details of Rakes Detention", the "Ready Reckoner" annexures — which have
+    no generated pages behind them here, so the Index's last page number is
+    larger than the count of pages this PDF actually renders. The footer's
+    "Page N of TOTAL" should match the Index, not the render count, so this
+    value (not len(main pages)) is what's stamped as the total.
+
+    Derived from main._INDEX_SECTIONS' page counts, so it moves on its own
+    whenever a section is added, split, or removed. Lazy import — main.py
+    imports this module, so a top-level import would be circular."""
+    try:
+        from main import _INDEX_SECTIONS
+        total = sum(int(count) for _title, count in _INDEX_SECTIONS)
+        return total or None
+    except Exception:
+        return None
+
+
 def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report_month: str,
-                              main_start: int, main_count: int) -> bytes:
+                              main_start: int, main_count: int,
+                              total_pages: int = None) -> bytes:
     """Post-render overlay pass (same merge_page technique as
     _apply_dept_badges): draws a correct, Python-computed header+footer
     (see _main_header_footer_overlay_html) onto every page in the
@@ -414,8 +435,15 @@ def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report
     _render_pdf's single main_html call, before a spliced-in landscape page
     (_render_landscape_page_pdf) made a single call's auto-numbering
     impossible to keep correct across the whole range. Cover/Index pages
-    outside this range are untouched (they carry no footer either way)."""
+    outside this range are untouched (they carry no footer either way).
+
+    `total_pages` is the "of N" shown in the footer — the Index's declared
+    last page (see _index_declared_total_pages), which counts the external
+    annexures too. Falls back to `main_count` (the pages actually rendered)
+    when not supplied. Per-page numbering still runs 1..main_count."""
     from pypdf import PdfReader, PdfWriter
+
+    footer_total = total_pages or main_count
 
     reader = PdfReader(io.BytesIO(pdf_bytes))
     writer = PdfWriter()
@@ -425,11 +453,11 @@ def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report
         if main_start <= k < main_start + main_count:
             page_num = k - main_start + 1
             w_pt, h_pt = float(page.mediabox.width), float(page.mediabox.height)
-            cache_key = (page_num, main_count, round(w_pt), round(h_pt))
+            cache_key = (page_num, footer_total, round(w_pt), round(h_pt))
             overlay_page = overlay_cache.get(cache_key)
             if overlay_page is None:
                 margin_side = "15mm" if round(w_pt) < round(h_pt) else "10mm"
-                html = _main_header_footer_overlay_html(font_family, report_month, page_num, main_count, margin_side)
+                html = _main_header_footer_overlay_html(font_family, report_month, page_num, footer_total, margin_side)
                 op = browser.new_page()
                 op.set_content(html, wait_until="domcontentloaded")
                 stamp_pdf = op.pdf(
@@ -450,7 +478,7 @@ def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report
 
 def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DEFAULT_FONT, report_month: str = "",
                  dept_badges: dict = None, cover_html: str = "", main_header_footer: bool = True,
-                 main_pre_pdf_hook=None) -> bytes:
+                 main_pre_pdf_hook=None, total_pages_override: int = None) -> bytes:
     """Render one PDF using an already-launched Chromium `browser`. Callers
     (the page3-overflow measurement pass and the final render, see
     _generate_pdf_sync) all share a single browser instance for the whole
@@ -528,6 +556,22 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
             if corrected_html:
                 page.set_content(corrected_html, wait_until="domcontentloaded")
                 page.evaluate("document.fonts.ready")
+        # "of N": the Index's declared last page when the caller supplies it
+        # (it counts the external annexures the report appends as-is — see
+        # _index_declared_total_pages), else Chromium's own page total.
+        _total_html = str(total_pages_override) if total_pages_override else '<span class="totalPages"></span>'
+        _footer_html = (
+            f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
+            f'font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
+            f'display:flex;justify-content:space-between;'
+            f'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
+            f'<span>figures are provisional</span>'
+            f'<span>MIS Operations</span>'
+            f'<span>OMI - {report_month}</span>'
+            f'<span>for internal circulation only</span>'
+            f'<span>Page <span class="pageNumber"></span> of {_total_html}</span>'
+            f'</div>'
+        )
         main_bytes = page.pdf(
             format="A4",
             print_background=True,
@@ -540,19 +584,7 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
                 f'OMI - {report_month}'
                 f'</div>'
             ) if main_header_footer else '<span></span>',
-            footer_template=(
-                f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
-                f'font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
-                f'display:flex;justify-content:space-between;'
-                f'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
-                f'<span>figures are provision</span>'
-                f'<span>MIS Operations</span>'
-                f'<span>OMI - {report_month}</span>'
-                f'<span>for internal circulation only</span>'
-                f'<span>Page <span class="pageNumber"></span>'
-                f' of <span class="totalPages"></span></span>'
-                f'</div>'
-            ) if main_header_footer else '<span></span>',
+            footer_template=_footer_html if main_header_footer else '<span></span>',
             margin=margin,
         )
         page.close()
@@ -1058,6 +1090,13 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     """
     from playwright.sync_api import sync_playwright
 
+    # Footer "Page N of TOTAL": TOTAL is the Index's declared last page (it
+    # counts the external annexures the printed report appends as-is), not
+    # the count of pages this PDF renders. Only for a full report (page 2 /
+    # Index present); a single-page fetch keeps Chromium's own page total.
+    _has_index = any(p.get("page") == 2 for p in front_pages)
+    footer_total_override = _index_declared_total_pages() if _has_index else None
+
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
 
@@ -1113,7 +1152,8 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
             _trend_hook = _make_trend_split_hook(main_pages, template, render_kwargs, _MAIN_MARGIN)
             pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month,
                                      dept_badges=dept_badges, cover_html=cover_html,
-                                     main_pre_pdf_hook=_trend_hook)
+                                     main_pre_pdf_hook=_trend_hook,
+                                     total_pages_override=footer_total_override)
         else:
             from pypdf import PdfReader, PdfWriter
 
@@ -1199,7 +1239,8 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
             _total_landscape = sum(len(rr.pages) for rr in run_readers)
             main_count = len(base_reader.pages) + _total_landscape - main_start
             spliced_bytes = _stamp_main_page_numbers(spliced_bytes, browser, font_family, report_month,
-                                                      main_start, main_count)
+                                                      main_start, main_count,
+                                                      total_pages=footer_total_override)
             if dept_badges:
                 spliced_bytes = _apply_dept_badges(spliced_bytes, dept_badges, browser, font_family)
             pdf_bytes = spliced_bytes
