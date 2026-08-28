@@ -72,7 +72,7 @@ right in the DB" often means a stale `page_configs` row — clear it for that
 
 `Page` is the display number; sentinel pages are inserted relative to a fixed
 page (see `main.py`). `type` is the `pageData.type` string that drives both
-renderers.
+renderers. **The per-template `page.*` data contract is in §8.**
 
 | Page(s) | Title | `type` | Backend generator | PDF template | Preview component | Primary tables |
 |---|---|---|---|---|---|---|
@@ -437,4 +437,86 @@ venv/Scripts/python -c "import page_key_parameters as k; import json; \
 | Report colours / fonts / margins | `backend/colors_config.json`, `backend/layout_config.json` |
 | Figures with no DB source | `backend/hardcoded_config.json` |
 | PDF rendering / pagination | `backend/pdf.py` |
-```
+
+---
+
+## 8. PDF template reference — `backend/page_templates/*.html`
+
+Every template is a **Jinja2 partial** `{% include %}`d by `main.html` (dispatch at
+`main.html` ~line 1622–1658), wrapped by `main.html` in the `.page` div with the
+`pg-<n>` class, header, footer and corner dept-badge. Each partial receives:
+
+- `page` — the `pageData` dict from the matching `generate_*()` (§3). Access with
+  `page.foo` or `page['foo']`.
+- `colors` — `colors_config.json` map (`{{ colors.text_primary }}` etc.). **Never
+  hard-code a hex in a template** — add a key to `colors_config.json`.
+- `page_layouts` / `_pl` — per-page font/margin overrides from `layout_config.json`.
+- date/label helpers injected globally by `pdf.py`: `short_m`, `short_y`,
+  `short_prev_y`, `prev_y`, `m_name`, `target_header`, `fy_str`,
+  `total_report_pages`.
+- custom Jinja filters (registered in `pdf.py`): `pgclass`, `split_label`,
+  `subscript_co2`.
+
+The **preview counterpart** for each is `frontend/src/components/<X>Template.js`,
+switched in `PageRenderer.js` on `page.type`. Keep the two visually in sync; they
+consume the identical `page` dict.
+
+### Shared / structural templates
+
+| Template | Role |
+|---|---|
+| `main.html` | The whole document shell: `<head>` CSS (the bulk of PDF styling), `@page` rules, `page_layouts` → CSS-var block, the `{% for page in pages %}` loop, per-`type` class assignment and `{% include %}` dispatch, `@@PGSTART_n@@` pagination markers. **Add a new page type here** (class block ~1624 + include block ~1657). |
+| `trend_section.html` | Not include-dispatched by type-name like the others — handled as its own branch (`{% if page.type == 'trend_section' %}`) because `pdf.py` measures/splits it row-by-row. Emits `@@TROW_i_j@@` markers. |
+| `cost_trend_macro.html` | `{% macro cost_trend_product(page, colors) %}` — the actual Cost Trend table; `cost_trend.html` is a 3-line wrapper that imports and calls it. |
+| `performance_summary_table.html` | Shared by pages 5 and 6 (`type = performance_summary_table`). |
+| `trend.html` / `trend_yearly.html` | Pages 7–12; `trend_yearly` = the 10-year Apr…Mar + Q/H/Total grid, `trend` = the simpler header/rows table. |
+
+### Per-page templates — data contract
+
+`page.*` = the keys the template reads. Cross-check against the generator's return
+dict when adding a field.
+
+| Template | `type` | Renders | Key `page.*` fields |
+|---|---|---|---|
+| `cover.html` | `cover` | Page 1 KPI cards + month banner | `bg_data_uri`, `month_display`, `month_short`, `kpis[]` (`label`, `mt`, `pct_ful`, `growth`, `growth_good`) |
+| `index.html` | `index` | Contents table | `title`, `rows[]` (`sno`, `title`, `page_range`) |
+| `summary.html` | `summary` | Page 3: narrative + 12-col production table + Highlights + TE-parameter table + bar charts | `title`, `production_narrative`, `production_table[]` (`item`, `values[12]`), `highlights[]` (strings; `:-` suffix = heading), `te_table[]` (`parameter`, `unit`, `values[5]`), `_chart_html` (raw) |
+| `page4_table.html` | `page4_table` | Page 4: item×plant grid, Ann.Cap / APP / month block / CPLY / CU% / YTD block | `rows[]` (`item`, `plant`, `capacity`, `values[]`, `is_first_in_group`, `group_size`, `is_conversion`, `is_sail_incl_conv`) |
+| `performance_summary_table.html` | `performance_summary_table` | Pages 5–6: plant→item rows, plan/act/%ful month + YTD | `rows[]` (`plant`, `label`, `bold`, `values[]`), `_page6_charts_html` (page 6 only) |
+| `trend_yearly.html` | `trend_yearly` / `trend_combined` | Pages 7–12: 10-yr month grid w/ best-ever & best-month cell flags | `item_display`, `unit`, `rows[]` (`values[19]`, `cell_flags[19]`, `plant`, `year_label`, `is_plan`, `rowspan_start`, `plant_row_count`, `is_first_in_plant`) |
+| `trend_section.html` | `trend_section` | Same grid, multi-item, row-split aware | `items[]` each with `item_display`, `unit`, `rows[]` (as above + `break_before`) |
+| `concast_performance.html` | `concast_performance` | Page 13: monthly + YTD concast tables (plant × plan/act/%ful/CPLY/growth) | `monthly[]`, `ytd[]` (`plant`, `ann_plan`, `m_plan`/`ytd_plan`, `m_act`/`ytd_act`, `m_pct`/`ytd_pct`, `cply_act`/`ytd_cply`, `m_growth`/`ytd_growth`, `bold`) |
+| `prod_by_process.html` | `prod_by_process` | Page 14: BOF/EAF/CC/CS split, monthly + YTD + HM→SS sankey | `monthly[]`, `monthly_prev[]`, `ytd[]`, `ytd_prev[]` (`plant`, `bof`, `eaf`, `cc`, `cs`, `bof_pct`, `cc_pct`, `bold`), `sankey_svg` (raw) |
+| `catwise_saleable.html` | `catwise_saleable` | Pages 15–17: per-plant category→item, month + cum blocks | `title`, `month_label`, `cply_label`, `sections[]` → `label`, `rows[]` (`type`: `separator`/`section-hdr`/data; `category`, `cat_first`, `cat_rowspan`, `label`, `ann_plan`, `m_*`, `cum_*`) |
+| `segment_wise.html` | `segment_wise` | Page 18: group→plant→item segment table | `title`, `month_label`, `cply_label`, `rows[]` (`type`: `separator`/`seg-total`/`seg-pct`/`grand-total`/data; `group`, `plant`, `show_group`, `group_span`, `show_plant`, `plant_span`, `label`, `ann_plan`, `m_*`, `cum_*`) |
+| `special_steel.html` | `special_steel` | Pages 19–24: 3 variants — `plant_detail` (Product+Grade, BSP/DSP/RSP/BSL), `isp_summary` (one row/mill), `sail_summary` (consolidated). Density auto-tiered. | `variant`, `density` (`pad`, `label_fs`, `table_fs`, `lh`, `split_at`, `tail_scale`), `title_prefix`/`plant_display`/`title`, `month_label`, `cply_label`, `cum_label`, `cum_cply_label`, `fy_label`, `rows[]` (`type`: `separator`/`grand-total`/`subtotal`/`product-total`/data; `label`, `product_name`, `prod_first`, `prod_rowspan`, `orders`, `actual`, `pct_ful`, `cply`, `pct_growth`, `cum_*`), `saleable_production`, `special_pct` |
+| `special_steel_trend.html` | `special_steel_trend` | After 24: SVG trend charts | `title`, `fy_range_label`, `month_svg`, `till_month_svg`, `annual_svgs[]` (all raw SVG) |
+| `special_steel_physical.html` | `special_steel_physical` | ASP/SSP/VISP physical perf, landscape | `title`, `unit`, `cur_fy`, `prev_fy`, `ytd_label`, `history_fys[]`, `sections[]` → `plant`, `rows[]` (`series_label`, `capacity`, `best_actual`, `best_year`, `history{}`, `prev_actual`, `cur_abp`, `ytd_app`, `ytd_actual`, `ytd_pct_ful`, `ytd_cply`, `ytd_growth`), `notes[]`, `ipt_title`, `ipt_rows[]` |
+| `opening_stock.html` | `opening_stock` | Page 25: section→plant→item stock grid (fixed 258mm table height for page-fill) | `title`, `unit`, `col_labels[]`, `var_label`, `sections[]` → `label`, `code`, `rows[]` (`sub`, `plant`, `plant_rowspan`, `values[]`, `var`, `sail`, `bold`) |
+| `ipt_status.html` | `ipt_status` | Page 26: IPT routes, month + cum | `title`, `month_label`, `cum_label`, `sections[]` |
+| `techno_params.html` | `techno_params` | Pages 27–35: Parameter / Unit / Norm(Target) / month cols / cum / CPLY, grouped by section | `title`, `subtitle`, `group`, `fy`, `month_labels[]`, `cum_label`, `cply_label`, `cum_cply_label`, `target_label`, `sections[]` (each with rows of param/unit/values) |
+| `key_parameters.html` | `key_parameters` | Inter Plant Performance Comparison — Parameter / UoM / BSP..ISP; section & spacer rows; min/max cell highlight | `title`, `plants[]`, `rows[]` (`type`: `section`/`spacer`/`data`; `parameter`, `unit`, `note`, `label_rowspan`, `continuation`, `highlight`, `plant_values{plant: str}`, `max_plants[]`, `min_plants[]`) |
+| `key_highlights.html` | `key_highlights` | (built, not wired) landscape: Achievements / Shortfalls / Focus Areas + KPI/techno/YTD blocks | `title`, `subtitle`, `month_label`, `achievements[]`, `shortfalls[]`, `focus_areas[]`, `kpi`, `techno`, `ytd`, `value_added` |
+| `at_a_glance.html` | `at_a_glance` | "MIS at a Glance" infographic (page 1) | `title`, `month_label`, `production`, `special_steel`, `techno`, `trend`, `ytd_trend` (mostly pre-rendered sub-structures / SVG) |
+| `best_ever_highlights.html` | `best_ever_highlights` | Records: per-group best-ever cards | `title`, `month_label`, `unit_note`, `groups[]` |
+| `best_calendar_month.html` | `best_calendar_month` | Best-for-this-calendar-month records | `title`, `month_label`, `unit`, `month_names[]`, `groups[]` |
+| `bf_large_annexure.html` | `bf_large_annexure` | SAIL large-BF snapshot, landscape | `title`, `periods[]`, `sail_cols[]`, `rows[]` |
+| `cost_trend.html` → `cost_trend_macro.html` | `cost_trend` | Cost Trend HM/CS/SS: annual FY cols + current-FY months + till-month, Total/Variable/Fixed blocks, landscape | `title`, `unit`, `periods[]`, `blocks[]` (Total/Variable/Fixed, each plant × period) |
+| `sail_mines.html` | `sail_mines` | SAIL Mines: 7 section tables (APP/Act/%FF/CPLY/%Grth) via `{% macro sail_mines_table %}` + `mines_charts_html` | `title`, `period_label`, `unit`, `tables[]` (`title`, `kind`, `columns[]` or `column_groups[]`, `rows[]`), `mines_charts_html` (raw) |
+| `coal_consumption.html` | `coal_consumption` | Coal consumption: qty & % column groups | `title`, `qty_cols[]`, `pct_cols[]`, `groups[]` |
+| `coal_receipt_stock.html` | `coal_receipt_stock` | Coking-coal receipts + consumption + stock history, landscape | `title`, `receipt_rows[]`, `consumption_rows[]`, `stock_history_tables[]`, `stock_history_month_names[]`, `stock_cols_*`, `stock_gap_after` |
+| `power_data.html` | `power_data` | Power OMI per plant | `title`, `plants[]` |
+| `epi.html` | `epi` | Environmental Performance Index (CO₂/Water/PM), landscape | `title`, `fy`, `month_labels[]`, `cum_label`, `cply_label`, `cum_cply_label`, `target_label`, `sections[]` |
+| `steel_sector_performance.html` | `steel_sector_performance` | PIB steel-sector release, pages 2.1–2.3, via `{% macro generic_table / value_cell / text_section %}` | `title`, `section`, `report_month`, `data_month`, `posted_on`, `footer_note`, `available`, `tables[]`, `text_sections[]` |
+| `capital_repair.html` | `capital_repair` | CR plan per plant, shop→equipment→activity→schedule→period→actual | `title`, `subtitle`, `sections[]` → `shop`, `rows[]` |
+
+### Adding a field to an existing page (template side)
+1. Produce it in `generate_<x>()` → the returned dict.
+2. `page_templates/<type>.html`: render `{{ page.<field> }}` (or loop it). If it's
+   HTML/SVG you built in Python, output with `| safe`.
+3. `frontend/src/components/<X>Template.js`: render the same field the same way.
+4. If it needs a colour, add a key to `colors_config.json` and use
+   `{{ colors.<key> }}` — the JS component keeps its own hex copy (see the
+   comment at the top of each `*Template.js`).
+5. Regenerate a test month (both `/report` preview and PDF) and diff.
+
