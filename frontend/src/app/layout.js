@@ -9,8 +9,12 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body>
+    // suppressHydrationWarning: browser extensions (Quillbot adds
+    // data-qb-installed, Grammarly, dark-mode toggles, …) mutate <html>/<body>
+    // before React hydrates, which otherwise logs a hydration-mismatch error.
+    // This only silences the warning on these two elements, not on app content.
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <QueryProvider>
           <AuthProvider>
             {children}
