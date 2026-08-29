@@ -124,6 +124,7 @@ export default function GlobalNavbar() {
         { label: '1-Page Report', link: '/reports/one-page-report', icon: '📃' },
         { label: 'Pmix Report (Year-wise)', link: '/reports/pmix-fy', icon: '📈' },
         { label: 'Techno Custom Report', link: '/reports/techno-custom', icon: '⚙️' },
+        { label: 'SEFI Report', link: '/reports/sefi', icon: '📮' },
       ]
     },
     {

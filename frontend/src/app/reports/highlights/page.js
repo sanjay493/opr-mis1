@@ -32,6 +32,7 @@ const PERIOD_TYPES = [
   { id: 'half',    label: 'Half-Yearly' },
   { id: 'fy',      label: 'Financial Year' },
   { id: 'cy',      label: 'Calendar Year' },
+  { id: 'custom',  label: 'Custom Range' },
 ];
 
 // Scopes for the Records section — keys of /api/production-records
@@ -92,6 +93,8 @@ export default function HighlightsPage() {
   const [quarter, setQuarter]     = useState(1);
   const [half, setHalf]           = useState(1);
   const [cyYear, setCyYear]       = useState(null);
+  const [customStart, setCustomStart] = useState(null);
+  const [customEnd, setCustomEnd]     = useState(null);
   const [fyCache, setFyCache]     = useState({});  // fy_start -> /api/production-fy response
   const [error, setError]         = useState(null);
   const [inTonnes, setInTonnes]   = useState(false);
@@ -116,6 +119,8 @@ export default function HighlightsPage() {
           const fy = list.some(f => f.fy_start === prevFy) ? prevFy : list[0].fy_start;
           setFyStart(fy);
           setCyYear(Number(prevKey.slice(0, 4)));
+          setCustomStart(prevKey);
+          setCustomEnd(prevKey);
           const idx = fyMonths(fy).indexOf(prevKey);
           if (idx >= 0) {
             setMonthIdx(idx);
@@ -149,8 +154,20 @@ export default function HighlightsPage() {
     return [...s].sort((a, b) => b - a);
   }, [fys]);
 
+  // All months available across every FY, for the custom-range pickers
+  const allMonths = useMemo(() => {
+    const s = new Set();
+    fys.forEach(f => fyMonths(f.fy_start).forEach(m => s.add(m)));
+    return [...s].sort();
+  }, [fys]);
+
   // ── Months of the selected period, and same period last year (CPLY) ────────
   const periodMonthList = useMemo(() => {
+    if (periodType === 'custom') {
+      if (!customStart || !customEnd) return [];
+      const [s, e] = customStart <= customEnd ? [customStart, customEnd] : [customEnd, customStart];
+      return allMonths.filter(m => m >= s && m <= e);
+    }
     if (periodType === 'cy') return cyYear != null ? cyMonths(cyYear) : [];
     if (fyStart == null) return [];
     const all = fyMonths(fyStart);
@@ -158,7 +175,7 @@ export default function HighlightsPage() {
     if (periodType === 'quarter') return all.slice((quarter - 1) * 3, quarter * 3);
     if (periodType === 'half')    return half === 1 ? all.slice(0, 6) : all.slice(6, 12);
     return all; // fy
-  }, [periodType, fyStart, monthIdx, quarter, half, cyYear]);
+  }, [periodType, fyStart, monthIdx, quarter, half, cyYear, customStart, customEnd, allMonths]);
 
   const cplyMonthList = useMemo(
     () => periodMonthList.map(m => shiftYear(m, -1)), [periodMonthList]);
@@ -253,6 +270,13 @@ export default function HighlightsPage() {
 
   // ── Labels & formatting ─────────────────────────────────────────────────────
   const periodLabel = useMemo(() => {
+    if (periodType === 'custom') {
+      if (!customStart || !customEnd) return '';
+      const [s, e] = customStart <= customEnd ? [customStart, customEnd] : [customEnd, customStart];
+      const sLabel = `${MONTH_LABEL[s.slice(5)]} ${s.slice(0, 4)}`;
+      const eLabel = `${MONTH_LABEL[e.slice(5)]} ${e.slice(0, 4)}`;
+      return s === e ? sLabel : `${sLabel} – ${eLabel}`;
+    }
     if (periodType === 'cy') return `Calendar Year ${cyYear ?? ''}`;
     if (fyStart == null) return '';
     if (periodType === 'month') {
@@ -262,7 +286,7 @@ export default function HighlightsPage() {
     if (periodType === 'quarter') return `${QUARTERS[quarter - 1].label} FY ${fyLabel(fyStart)}`;
     if (periodType === 'half')    return `${HALVES[half - 1].label} FY ${fyLabel(fyStart)}`;
     return `Financial Year ${fyLabel(fyStart)}`;
-  }, [periodType, fyStart, monthIdx, quarter, half, cyYear]);
+  }, [periodType, fyStart, monthIdx, quarter, half, cyYear, customStart, customEnd]);
 
   const fmt = (v) => {
     if (v == null) return '—';
@@ -433,7 +457,22 @@ export default function HighlightsPage() {
             {PERIOD_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
 
-          {periodType === 'cy' ? (
+          {periodType === 'custom' ? (
+            <>
+              <label style={labelStyle}>From</label>
+              <select value={customStart ?? ''} onChange={e => setCustomStart(e.target.value)} style={selectStyle}>
+                {allMonths.map(m => (
+                  <option key={m} value={m}>{MONTH_LABEL[m.slice(5)]} {m.slice(0, 4)}</option>
+                ))}
+              </select>
+              <label style={labelStyle}>To</label>
+              <select value={customEnd ?? ''} onChange={e => setCustomEnd(e.target.value)} style={selectStyle}>
+                {allMonths.map(m => (
+                  <option key={m} value={m}>{MONTH_LABEL[m.slice(5)]} {m.slice(0, 4)}</option>
+                ))}
+              </select>
+            </>
+          ) : periodType === 'cy' ? (
             <select value={cyYear ?? ''} onChange={e => setCyYear(Number(e.target.value))} style={selectStyle}>
               {cyOptions.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
