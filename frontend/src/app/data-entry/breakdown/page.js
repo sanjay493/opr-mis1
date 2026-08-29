@@ -25,6 +25,14 @@ const UNIT_TYPES = [
   { code: 'GENERAL', label: 'Plant-Level General' },
 ];
 const UNIT_TYPE_LABEL = Object.fromEntries(UNIT_TYPES.map(t => [t.code, t.label]));
+const SHOP_OPTION_LABEL = {
+  BF: 'Whole BF shop (all furnaces)',
+  SMS: 'Whole SMS shop (converters + casters)',
+  MILL: 'Whole mill shop (all mills)',
+  COKE: 'Whole coke oven battery',
+  SINTER: 'Whole sinter plant',
+  GENERAL: 'Plant-wide',
+};
 
 // ---- timestamp / duration helpers -----------------------------------------
 
@@ -71,11 +79,22 @@ function nowLocalInput() {
   return d.toISOString().slice(0, 16); // 'YYYY-MM-DDTHH:MM'
 }
 
+function todayDateInput() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+}
+
+// A stored timestamp with no time part ('YYYY-MM-DD', 10 chars) was entered
+// in date-only mode.
+const isDateOnlyTs = (ts) => !!ts && String(ts).trim().length <= 10;
+
 function fmtDateShort(ts) {
   const d = parseTs(ts);
   if (!d) return ts || '—';
   return d.toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    day: '2-digit', month: 'short', year: '2-digit',
+    ...(isDateOnlyTs(ts) ? {} : { hour: '2-digit', minute: '2-digit', hour12: false }),
   });
 }
 
@@ -132,10 +151,13 @@ function SegBtns({ options, value, onChange, allowClear }) {
 
 // ---- add / edit form panel ----------------------------------------------
 
+const isShopUnit = (name) => (name || '').trim().toLowerCase() === 'shop';
+const smsNeedsSubtag = (d) => d.unit_type === 'SMS' && !isShopUnit(d.unit_name);
+
 function emptyDraft(plant) {
   return {
     plant, unit_type: '', unit_name: '', sms_subtag: '',
-    start_ts: '', end_ts: '', is_ongoing: false,
+    start_ts: '', end_ts: '', is_ongoing: false, date_only: false,
     cause: '', hours_lost_override: '',
   };
 }
@@ -149,6 +171,7 @@ function draftFromRow(row) {
     start_ts: row.start_ts || '',
     end_ts: row.end_ts || '',
     is_ongoing: !!row.is_ongoing,
+    date_only: isDateOnlyTs(row.start_ts) || (!row.start_ts && isDateOnlyTs(row.end_ts)),
     cause: row.cause || '',
     hours_lost_override: row.hours_lost_override != null ? String(row.hours_lost_override) : '',
   };
@@ -157,9 +180,9 @@ function draftFromRow(row) {
 function validateDraft(d) {
   if (!d.unit_type) return 'Pick a unit type';
   if (!d.unit_name) return 'Pick a unit';
-  if (d.unit_type === 'SMS' && !d.sms_subtag) return 'Choose Converter or Caster for an SMS unit';
-  if (!d.start_ts) return 'Start date/time is required';
-  if (!d.is_ongoing && !d.end_ts) return 'End date/time is required unless the event is still ongoing';
+  if (smsNeedsSubtag(d) && !d.sms_subtag) return 'Choose Converter or Caster for a specific SMS unit';
+  if (!d.start_ts) return d.date_only ? 'Start date is required' : 'Start date/time is required';
+  if (!d.is_ongoing && !d.end_ts) return `End ${d.date_only ? 'date' : 'date/time'} is required unless the event is still ongoing`;
   if (!d.is_ongoing && d.end_ts && d.end_ts < d.start_ts) return 'End must not be before start';
   if (!d.cause.trim()) return 'Describe the cause';
   if (d.hours_lost_override !== '' && !(Number(d.hours_lost_override) >= 0)) return 'Hours override must be a positive number';
@@ -171,7 +194,7 @@ function draftPayload(d) {
     plant: d.plant,
     unit_type: d.unit_type,
     unit_name: d.unit_name,
-    sms_subtag: d.unit_type === 'SMS' ? d.sms_subtag : null,
+    sms_subtag: smsNeedsSubtag(d) ? d.sms_subtag : null,
     start_ts: d.start_ts,
     end_ts: d.is_ongoing ? null : d.end_ts,
     is_ongoing: d.is_ongoing,
@@ -198,12 +221,32 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
 
   const set = (patch) => setDraft(d => ({ ...d, ...(typeof patch === 'function' ? patch(d) : patch) }));
 
+  // Shops (BF Shop / SMS Shop — a whole-shop breakdown) are offered too, at
+  // the end of the list.
   const unitOptions = useMemo(
-    () => units.filter(u => u.unit_type === draft.unit_type && !u.is_shop),
+    () => units.filter(u => u.unit_type === draft.unit_type)
+               .sort((a, b) => (a.is_shop ? 1 : 0) - (b.is_shop ? 1 : 0) || a.sort_order - b.sort_order),
     [units, draft.unit_type],
   );
 
+  // Date-only mode: <input type="date"> for both ends, timestamps stored as
+  // 'YYYY-MM-DD'. Toggling truncates / pads the existing values.
+  const setDateOnly = (on) => set(d => ({
+    date_only: on,
+    start_ts: on
+      ? (d.start_ts || '').slice(0, 10)
+      : ((d.start_ts || '').length === 10 ? `${d.start_ts} 00:00` : d.start_ts),
+    end_ts: on
+      ? (d.end_ts || '').slice(0, 10)
+      : ((d.end_ts || '').length === 10 ? `${d.end_ts} 00:00` : d.end_ts),
+  }));
+
   const liveSpan = spanHours(draft.start_ts, draft.end_ts, draft.is_ongoing);
+  // for a resolved date-only event the loss report counts calendar days inclusive
+  const dayCount = (draft.date_only && !draft.is_ongoing && draft.start_ts && draft.end_ts
+    && draft.end_ts >= draft.start_ts)
+    ? Math.round((parseTs(draft.end_ts) - parseTs(draft.start_ts)) / 86400000) + 1
+    : null;
   const overrideNum = draft.hours_lost_override === '' ? null : Number(draft.hours_lost_override);
   const counted = overrideNum != null && overrideNum >= 0 ? overrideNum : liveSpan;
 
@@ -250,15 +293,24 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
                 onChange={(code) => set({ unit_type: code, unit_name: '', sms_subtag: '' })} />
             </Field>
             {draft.unit_type && (
-              <Field label="Unit" hint={unitOptions.length === 0 ? 'No units registered for this type' : null}>
-                <select style={{ ...S.select, minWidth: 180 }} value={draft.unit_name}
-                  onChange={e => set({ unit_name: e.target.value })}>
+              <Field label="Unit"
+                hint={unitOptions.length === 0 ? 'No units registered for this type'
+                  : (isShopUnit(draft.unit_name) ? 'Whole shop down — no single unit' : null)}>
+                <select style={{ ...S.select, minWidth: 200 }} value={draft.unit_name}
+                  onChange={e => set({
+                    unit_name: e.target.value,
+                    sms_subtag: isShopUnit(e.target.value) ? '' : draft.sms_subtag,
+                  })}>
                   <option value="">— select —</option>
-                  {unitOptions.map(u => <option key={u.unit_name} value={u.unit_name}>{u.unit_name}</option>)}
+                  {unitOptions.map(u => (
+                    <option key={u.unit_name} value={u.unit_name}>
+                      {u.is_shop ? (SHOP_OPTION_LABEL[u.unit_type] || 'Whole shop (all units)') : u.unit_name}
+                    </option>
+                  ))}
                 </select>
               </Field>
             )}
-            {draft.unit_type === 'SMS' && (
+            {smsNeedsSubtag(draft) && (
               <Field label="Converter / Caster">
                 <SegBtns
                   options={[{ code: 'CONVERTER', label: 'Converter' }, { code: 'CASTER', label: 'Caster' }]}
@@ -270,28 +322,51 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
 
         {/* Section: Time window */}
         <div style={{ marginBottom: 18 }}>
-          <div style={{ ...S.label, marginBottom: 8 }}>Time window</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+            <div style={S.label}>Time window</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: '#5f6368' }}>
+              <input type="checkbox" checked={draft.date_only} onChange={e => setDateOnly(e.target.checked)} />
+              Date only (no time)
+            </label>
+          </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
             <Field label="Start">
               <div style={{ display: 'flex', gap: 6 }}>
-                <input type="datetime-local" step="60" style={{ ...S.input, width: 232, flexShrink: 0 }}
-                  value={toInputTs(draft.start_ts)}
-                  onChange={e => set({ start_ts: toApiTs(e.target.value) })} />
+                {draft.date_only ? (
+                  <input type="date" style={{ ...S.input, width: 176, flexShrink: 0 }}
+                    value={(draft.start_ts || '').slice(0, 10)}
+                    onChange={e => set({ start_ts: e.target.value })} />
+                ) : (
+                  <input type="datetime-local" step="60" style={{ ...S.input, width: 232, flexShrink: 0 }}
+                    value={toInputTs(draft.start_ts)}
+                    onChange={e => set({ start_ts: toApiTs(e.target.value) })} />
+                )}
                 <button type="button" style={S.btnGhost}
-                  onClick={() => set({ start_ts: toApiTs(nowLocalInput()) })}>now</button>
+                  onClick={() => set({ start_ts: draft.date_only ? todayDateInput() : toApiTs(nowLocalInput()) })}>
+                  {draft.date_only ? 'today' : 'now'}
+                </button>
               </div>
             </Field>
             <Field label="End"
-              hint={draft.is_ongoing ? 'Picking an end time marks this resolved' : null}>
+              hint={draft.is_ongoing ? `Picking an end ${draft.date_only ? 'date' : 'time'} marks this resolved` : null}>
               <div style={{ display: 'flex', gap: 6 }}>
-                <input type="datetime-local" step="60" style={{ ...S.input, width: 232, flexShrink: 0 }}
-                  value={toInputTs(draft.end_ts)}
-                  onChange={e => {
-                    const v = e.target.value;
-                    set({ end_ts: toApiTs(v), is_ongoing: v ? false : draft.is_ongoing });
-                  }} />
+                {draft.date_only ? (
+                  <input type="date" style={{ ...S.input, width: 176, flexShrink: 0 }}
+                    value={(draft.end_ts || '').slice(0, 10)}
+                    onChange={e => set({ end_ts: e.target.value, is_ongoing: e.target.value ? false : draft.is_ongoing })} />
+                ) : (
+                  <input type="datetime-local" step="60" style={{ ...S.input, width: 232, flexShrink: 0 }}
+                    value={toInputTs(draft.end_ts)}
+                    onChange={e => {
+                      const v = e.target.value;
+                      set({ end_ts: toApiTs(v), is_ongoing: v ? false : draft.is_ongoing });
+                    }} />
+                )}
                 <button type="button" style={S.btnGhost}
-                  onClick={() => set({ end_ts: toApiTs(nowLocalInput()), is_ongoing: false })}>now</button>
+                  onClick={() => set({
+                    end_ts: draft.date_only ? todayDateInput() : toApiTs(nowLocalInput()),
+                    is_ongoing: false,
+                  })}>{draft.date_only ? 'today' : 'now'}</button>
               </div>
             </Field>
             <Field label="Status">
@@ -305,9 +380,16 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
           <div style={{ marginTop: 10, fontSize: 13, color: '#5f6368' }}>
             Duration:{' '}
             <strong style={{ color: liveSpan == null ? '#9aa0a6' : '#202124' }}>
-              {liveSpan == null ? 'set start & end' : fmtDuration(liveSpan)}
+              {liveSpan == null ? 'set start & end'
+                : dayCount != null ? `${dayCount} day${dayCount === 1 ? '' : 's'}`
+                : fmtDuration(liveSpan)}
             </strong>
-            {liveSpan != null && <span style={{ color: '#9aa0a6' }}> ({fmtHrs(liveSpan)} h){draft.is_ongoing ? ' and counting' : ''}</span>}
+            {liveSpan != null && (
+              <span style={{ color: '#9aa0a6' }}>
+                {' '}({fmtHrs(liveSpan)} h){draft.is_ongoing ? ' and counting' : ''}
+                {dayCount != null && ' — counted inclusive by the loss report'}
+              </span>
+            )}
           </div>
         </div>
 

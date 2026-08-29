@@ -21,12 +21,18 @@ from plant_registry import UNIT_TYPES, is_valid_unit
 router = APIRouter(prefix="/api/breakdown", tags=["breakdown"])
 
 
+def _is_shop(unit_name: Optional[str]) -> bool:
+    return (unit_name or "").strip().lower() == "shop"
+
+
 def _validate_unit(plant: str, unit_type: str, unit_name: str, sms_subtag: Optional[str]):
     if unit_type not in UNIT_TYPES:
         raise HTTPException(400, f"Unknown unit_type '{unit_type}'")
-    if unit_type == "SMS" and sms_subtag not in ("CONVERTER", "CASTER"):
-        raise HTTPException(400, "sms_subtag ('CONVERTER' or 'CASTER') is required when unit_type is SMS")
-    if not is_valid_unit(plant, unit_type, unit_name):
+    # A whole-shop breakdown (unit_name == "Shop") is allowed for any unit
+    # type and needs no Converter/Caster sub-tag — it's the entire shop down.
+    if unit_type == "SMS" and not _is_shop(unit_name) and sms_subtag not in ("CONVERTER", "CASTER"):
+        raise HTTPException(400, "sms_subtag ('CONVERTER' or 'CASTER') is required for a specific SMS unit")
+    if not is_valid_unit(plant, unit_type, unit_name, include_shop=True):
         raise HTTPException(400, f"'{unit_name}' is not a known {unit_type} unit for {plant}")
 
 
@@ -94,7 +100,7 @@ async def create_breakdown(body: BreakdownCreate, request: Request):
     cause = (body.cause or "").strip()
     if not cause:
         raise HTTPException(400, "cause is required")
-    sms_subtag = body.sms_subtag if body.unit_type == "SMS" else None
+    sms_subtag = body.sms_subtag if (body.unit_type == "SMS" and not _is_shop(body.unit_name)) else None
     _validate_unit(body.plant, body.unit_type, body.unit_name, sms_subtag)
     _validate_ts(body.start_ts, body.end_ts, body.is_ongoing)
 
@@ -121,7 +127,8 @@ async def update_breakdown(breakdown_id: int, body: BreakdownUpdate, request: Re
     plant = fields.get("plant", row["plant"])
     unit_type = fields.get("unit_type", row["unit_type"])
     unit_name = fields.get("unit_name", row["unit_name"])
-    sms_subtag = fields.get("sms_subtag", row["sms_subtag"]) if unit_type == "SMS" else None
+    sms_subtag = (fields.get("sms_subtag", row["sms_subtag"])
+                  if (unit_type == "SMS" and not _is_shop(unit_name)) else None)
     if "unit_type" in fields or "unit_name" in fields or "sms_subtag" in fields or "plant" in fields:
         _validate_unit(plant, unit_type, unit_name, sms_subtag)
         fields["sms_subtag"] = sms_subtag

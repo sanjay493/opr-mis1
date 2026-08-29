@@ -176,11 +176,16 @@ def parse_abp_period(text: Optional[str]) -> List[str]:
 # Cause classification
 # ---------------------------------------------------------------------------
 
-def classify_cause(unit_type: Optional[str], sms_subtag: Optional[str]) -> str:
-    """'BF'|'CONVERTER'|'CASTER'|'MILL'|'OTHER'. 'OTHER' covers SMS rows with
-    no Converter/Caster sub-tag, Coke/Sinter/General rows, and unclassified
-    (unit_type is None) rows — none of these attribute to HM/CS/FS under the
-    stated causal model, but they're still surfaced in the events list."""
+def classify_cause(unit_type: Optional[str], sms_subtag: Optional[str],
+                   unit_name: Optional[str] = None) -> str:
+    """'BF'|'CONVERTER'|'CASTER'|'MILL'|'OTHER'. 'OTHER' covers a specific SMS
+    unit with no Converter/Caster sub-tag, Coke/Sinter/General rows, and
+    unclassified (unit_type is None) rows — none of these attribute to
+    HM/CS/FS under the stated causal model, but they're still surfaced in the
+    events list. A whole-shop event (unit_name == 'Shop') for BF or SMS DOES
+    attribute: BF Shop -> BF; SMS Shop -> CONVERTER (the governing upstream
+    stage — the whole shop being down stops crude steel there)."""
+    is_shop = (unit_name or "").strip().lower() == "shop"
     if unit_type == "BF":
         return "BF"
     if unit_type == "SMS":
@@ -188,7 +193,7 @@ def classify_cause(unit_type: Optional[str], sms_subtag: Optional[str]) -> str:
             return "CONVERTER"
         if sms_subtag == "CASTER":
             return "CASTER"
-        return "OTHER"
+        return "CONVERTER" if is_shop else "OTHER"
     if unit_type == "MILL":
         return "MILL"
     return "OTHER"
@@ -241,7 +246,7 @@ def affected_days_for_item(item: str, plant: str, month: str,
                                   "shop": row.get("shop"), "equipment": row.get("equipment"),
                                   "activity": row.get("activity")})
             continue
-        cause = classify_cause(unit_type, row.get("sms_subtag"))
+        cause = classify_cause(unit_type, row.get("sms_subtag"), row.get("unit_name"))
         overrun = cr_overrun_interval(row.get("actual_start"), row.get("actual_end"),
                                        bool(row.get("actual_ongoing")), row.get("planned_days"), today)
         # "ongoing" alone doesn't say whether it's still within schedule or
@@ -285,7 +290,7 @@ def affected_days_for_item(item: str, plant: str, month: str,
         if not unit_type or not row.get("unit_name"):
             unclassified.append({"source": "bd", "id": row.get("id"), "cause_text": row.get("cause")})
             continue
-        cause = classify_cause(unit_type, row.get("sms_subtag"))
+        cause = classify_cause(unit_type, row.get("sms_subtag"), row.get("unit_name"))
         start_date = (row.get("start_ts") or "")[:10]
         is_ongoing = bool(row.get("is_ongoing"))
         end_date = (row.get("end_ts") or "")[:10] if row.get("end_ts") else (today if is_ongoing else None)
