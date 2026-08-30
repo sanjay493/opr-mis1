@@ -43,6 +43,18 @@ const RECORD_SCOPES = [
   ...UNITS3.map(p => ({ key: p, label: p, kind: 'Units' })),
 ];
 
+// ── Best-Period query (custom month window, top-5 FYs) ──────────────────────
+const BP_SCOPES = [
+  { id: 'sail5',  label: 'SAIL (5 Plants)' },
+  { id: 'all8',   label: 'SAIL (8 Plants)' },
+  { id: 'plants', label: 'Plant-wise (all 8)' },
+];
+// Months in financial-year order (Apr → Mar); value = calendar month number.
+const FY_MONTH_ORDER = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
+const fyPos = (m) => (m >= 4 ? m - 4 : m + 8);
+const monLbl = (m) => MONTH_LABEL[String(m).padStart(2, '0')];
+const isRateKey = (k) => /\/day|\/d\)/i.test(k) || k.toUpperCase().startsWith('COB#');
+
 const MONTH_LABEL = {
   '01': 'January', '02': 'February', '03': 'March', '04': 'April',
   '05': 'May', '06': 'June', '07': 'July', '08': 'August',
@@ -103,6 +115,16 @@ export default function HighlightsPage() {
   const [recordScope, setRecordScope]   = useState('sail5');
   const inflight = useRef(new Set());
 
+  // Best-Period query state
+  const [bpScope, setBpScope]     = useState('sail5');
+  const [bpItems, setBpItems]     = useState('major');
+  const [bpFrom, setBpFrom]       = useState(4);   // April
+  const [bpTo, setBpTo]           = useState(9);   // September
+  const [bpData, setBpData]       = useState(null);
+  const [bpError, setBpError]     = useState(null);
+  const [bpLoading, setBpLoading] = useState(false);
+  const bpValid = fyPos(bpTo) >= fyPos(bpFrom);
+
   // ── FY list; default selection = period containing last month ──────────────
   useEffect(() => {
     (async () => {
@@ -146,6 +168,19 @@ export default function HighlightsPage() {
       }
     })();
   }, []);
+
+  // ── Best-Period query — refetch whenever the window / scope / items change ──
+  useEffect(() => {
+    if (!bpValid) { setBpData(null); setBpError(null); return; }
+    let cancelled = false;
+    setBpLoading(true); setBpError(null);
+    fetch(`${API}/api/best-period-records?start_mon=${bpFrom}&end_mon=${bpTo}&scope=${bpScope}&items=${bpItems}`)
+      .then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); })
+      .then(d => { if (!cancelled) setBpData(d); })
+      .catch(e => { if (!cancelled) { setBpError(e.message); setBpData(null); } })
+      .finally(() => { if (!cancelled) setBpLoading(false); });
+    return () => { cancelled = true; };
+  }, [bpScope, bpItems, bpFrom, bpTo, bpValid]);
 
   // Calendar-year options derived from FY list (each FY touches two years)
   const cyOptions = useMemo(() => {
@@ -715,6 +750,135 @@ export default function HighlightsPage() {
             highest complete FY half, financial year and calendar year. Groups sum the member plants and show the
             summary items; selecting a single plant/unit lists every item that plant reports (BF, SMS, mills …).
             Conversion is not included.
+          </div>
+        </div>
+
+        {/* ══ Best Periods — custom month window, top-5 financial years ══ */}
+        <div style={{ marginTop: 34, borderTop: '2px solid #e8eaed', paddingTop: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#202124', margin: 0 }}>
+              🥇 Best Periods — custom window
+            </h2>
+            <span style={{ fontSize: 13, color: '#5f6368' }}>
+              {bpValid
+                ? `${monLbl(bpFrom)}–${monLbl(bpTo)} window · top 5 financial years by total production`
+                : 'pick a valid window'}
+            </span>
+          </div>
+
+          <div className="no-print" style={{
+            display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
+            marginBottom: 14, border: '1px solid #dadce0', borderRadius: 8, padding: '12px 18px',
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6368', textTransform: 'uppercase' }}>Scope</span>
+            <div style={{ display: 'flex', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
+              {BP_SCOPES.map(s => (
+                <button key={s.id} onClick={() => setBpScope(s.id)} style={{
+                  padding: '6px 12px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                  background: bpScope === s.id ? '#188038' : '#fff',
+                  color: bpScope === s.id ? '#fff' : '#374151',
+                }}>{s.label}</button>
+              ))}
+            </div>
+
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6368', textTransform: 'uppercase', marginLeft: 8 }}>Items</span>
+            <div style={{ display: 'flex', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
+              {[{ id: 'major', label: 'Major' }, { id: 'all', label: 'All' }].map(o => (
+                <button key={o.id} onClick={() => setBpItems(o.id)} style={{
+                  padding: '6px 12px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                  background: bpItems === o.id ? '#188038' : '#fff',
+                  color: bpItems === o.id ? '#fff' : '#374151',
+                }}>{o.label}</button>
+              ))}
+            </div>
+
+            <span style={{ ...labelStyle, marginLeft: 8 }}>From</span>
+            <select value={bpFrom} onChange={e => setBpFrom(Number(e.target.value))} style={selectStyle}>
+              {FY_MONTH_ORDER.map(m => <option key={m} value={m}>{monLbl(m)}</option>)}
+            </select>
+            <span style={labelStyle}>To</span>
+            <select value={bpTo} onChange={e => setBpTo(Number(e.target.value))} style={selectStyle}>
+              {FY_MONTH_ORDER.map(m => <option key={m} value={m}>{monLbl(m)}</option>)}
+            </select>
+
+            <span style={{ marginLeft: 'auto', fontSize: 13, color: '#5f6368' }}>{bpLoading && '⟳ loading…'}</span>
+          </div>
+
+          {!bpValid && (
+            <div style={{ padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14, background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
+              The <b>To</b> month must not come before the <b>From</b> month within the financial year (order is Apr → Mar).
+            </div>
+          )}
+          {bpError && (
+            <div style={{ padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14, background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}>{bpError}</div>
+          )}
+
+          {bpValid && bpData && (() => {
+            const cols = bpData.column_order || [];
+            const rowsFlat = cols.flatMap(col =>
+              Object.entries(bpData.results[col] || {}).map(([itemKey, ranks], i, arr) =>
+                ({ col, itemKey, ranks, first: i === 0, span: arr.length })));
+            if (rowsFlat.length === 0) {
+              return (
+                <div style={{ color: '#9ca3af', fontSize: 14, padding: '40px 0', textAlign: 'center', border: '2px dashed #dadce0', borderRadius: 8 }}>
+                  No financial year has a complete {monLbl(bpFrom)}–{monLbl(bpTo)} window for this selection.
+                </div>
+              );
+            }
+            const showCol = bpScope === 'plants';
+            return (
+              <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 8 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {showCol && <th style={{ ...TH, backgroundColor: '#14532d', textAlign: 'left' }}>Plant</th>}
+                      <th style={{ ...TH, backgroundColor: '#14532d', textAlign: 'left' }}>Item</th>
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <th key={n} style={{ ...TH, backgroundColor: '#14532d', textAlign: 'center' }}>#{n} best FY</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rowsFlat.map(({ col, itemKey, ranks, first, span }, i) => {
+                      const label = ITEMS.find(x => x.key === itemKey)?.label || itemKey;
+                      const val = (v) => (v == null ? '—'
+                        : isRateKey(itemKey) ? Math.round(v).toLocaleString('en-IN') : fmt(v));
+                      return (
+                        <tr key={`${col}-${itemKey}`} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                          {showCol && first && (
+                            <td rowSpan={span} style={{ ...TD, textAlign: 'left', fontWeight: 700, verticalAlign: 'top', background: '#ecfdf5', color: '#14532d' }}>{col}</td>
+                          )}
+                          <td style={{ ...TD, textAlign: 'left', fontWeight: 600, color: '#202124' }}>{label}</td>
+                          {[0, 1, 2, 3, 4].map(k => {
+                            const r = ranks[k];
+                            return (
+                              <td key={k} style={{ ...TD, textAlign: 'center', verticalAlign: 'top' }}>
+                                {r ? (
+                                  <>
+                                    <span style={{ fontWeight: 700, color: k === 0 ? '#14532d' : '#334155' }}>{val(r.total)}</span>
+                                    <br />
+                                    <span style={{ fontSize: 11, color: '#5f6368' }}>{r.fy}</span>
+                                  </>
+                                ) : '—'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
+          <div style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
+            Pick any month range in financial-year order (Apr → Mar — so e.g. Oct → Feb spans the year end).
+            For every financial year with the <b>complete</b> window, production is summed (rate items like
+            Oven Pushing are day-weighted averages) and the top 5 FYs are listed. Scope aggregates the member
+            plants; “Plant-wise” ranks each plant/unit on its own. “Major” = Sinter, Hot Metal, Pig Iron, Crude
+            Steel, Finished &amp; Saleable Steel, Oven Pushing; “All” = every item the scope reports. Values in
+            '000 tonnes (Tonnes view ×1000); Conversion not included.
           </div>
         </div>
       </div>

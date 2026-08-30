@@ -54,7 +54,7 @@ from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_major_techno_verification, generate_techno_target_columns,
                           calculate_sail_actuals_strict, techno_month_table_font_size,
                           _BF_PLANTS as _SAIL_DASHBOARD_PLANTS)
-from page_records import generate_records
+from page_records import generate_records, generate_best_period
 from page_jpc_report import build_jpc_report_bytes
 from page_finished_steel_report import (
     build_finished_steel_report_csv, list_finished_steel_fys, build_finished_steel_fy_data,
@@ -4574,6 +4574,24 @@ async def get_production_records():
     """Return best/2nd-best production stats by month, quarter, half, and top-5 years."""
     try:
         return generate_records()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/best-period-records")
+async def get_best_period_records(
+    start_mon: int = Query(..., ge=1, le=12),
+    end_mon: int = Query(..., ge=1, le=12),
+    scope: str = Query("sail5"),
+    items: str = Query("major"),
+):
+    """Best 5 financial years for a caller-defined month window (Apr→Mar FY
+    order), per item, for a SAIL group aggregate or per plant. See
+    page_records.generate_best_period."""
+    try:
+        return generate_best_period(start_mon, end_mon, scope, items)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

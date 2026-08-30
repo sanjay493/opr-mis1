@@ -33,6 +33,18 @@ def _fy_label(fy_start):
     return f"{fy_start}-{str(fy_start + 1)[2:]}"
 
 
+def _fy_pos_expr():
+    """report_month's position within its financial year: 0 = April … 11 = March."""
+    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER) >= 4 "
+            "THEN CAST(SUBSTR(report_month,6,2) AS INTEGER) - 4 "
+            "ELSE CAST(SUBSTR(report_month,6,2) AS INTEGER) + 8 END")
+
+
+def _pos_to_mon(pos: int) -> int:
+    """FY position (0 = Apr) -> calendar month number (1-12)."""
+    return pos + 4 if pos < 9 else pos - 8
+
+
 def _fy_expr():
     return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER)>=4 "
             "THEN CAST(SUBSTR(report_month,1,4) AS INTEGER) "
@@ -309,6 +321,122 @@ HIGHLIGHT_LABELS = {
     'Finished Steel':         'Finished Steel',
     'Saleable Steel':         'Saleable Steel',
 }
+
+
+# "Major" production items for the Best-Period query (process order).
+MAJOR_ITEMS = [
+    'Total Sinter', 'Hot Metal', 'Pig Iron', 'Total Crude Steel',
+    'Finished Steel', 'Saleable Steel', 'Oven Pushing (nos/day)',
+]
+
+_BEST_PERIOD_SCOPES = {
+    'sail5':  [('SAIL (5 Plants)', SAIL5)],
+    'all8':   [('SAIL (8 Plants)', ALL8)],
+    'plants': [(p, [p]) for p in ALL8],   # each plant / unit its own column
+}
+
+
+def _compute_best_period(cur, items: list, where: str, args: list,
+                         s_pos: int, e_pos: int, top_n: int) -> dict:
+    """Top-`top_n` financial years by production over the FY-relative month
+    window [s_pos, e_pos] (0 = Apr … 11 = Mar), per item. Only FYs with the
+    full window present are ranked. Rate items (Oven Pushing, COB#*) are
+    days-in-month-weighted averages; everything else is a plain sum. Output
+    is keyed in `items` order, skipping items with no complete window."""
+    window_len = e_pos - s_pos + 1
+    item_set = set(items)
+    cur.execute(f"""
+        SELECT item_name, {_fy_expr()} AS fy_start,
+               SUM(month_actual)                    AS total,
+               SUM(month_actual * {_days_expr()})   AS wsum,
+               SUM({_days_expr()})                  AS wdays,
+               COUNT(DISTINCT report_month)         AS n
+        FROM production_table
+        WHERE {where} AND ({_fy_pos_expr()}) BETWEEN ? AND ?
+        GROUP BY item_name, fy_start
+    """, list(args) + [s_pos, e_pos])
+
+    buckets: dict = {}
+    for item, fy_start, total, wsum, wdays, n in cur.fetchall():
+        if item not in item_set or total is None or n != window_len:
+            continue
+        value = _period_value(item, total, wsum, wdays)
+        buckets.setdefault(item, []).append(
+            {'fy': _fy_label(fy_start), 'fy_start': fy_start, 'total': round(value, 3)})
+
+    out = {}
+    for item in items:
+        rows = buckets.get(item)
+        if not rows:
+            continue
+        rows.sort(key=lambda r: r['total'], reverse=True)
+        out[item] = rows[:top_n]
+    return out
+
+
+def generate_best_period(start_mon: int, end_mon: int, scope: str = 'sail5',
+                         items_mode: str = 'major', top_n: int = 5) -> dict:
+    """Best `top_n` financial years for a caller-defined month window
+    (`start_mon`..`end_mon`, calendar month numbers, interpreted within the
+    financial year Apr→Mar so e.g. Oct→Feb spans the year boundary).
+
+      scope      : 'sail5' | 'all8' (group aggregates) | 'plants' (per plant)
+      items_mode : 'major' (MAJOR_ITEMS) | 'all' (every item the scope reports)
+
+    Response:
+      { window: {...}, scope, items_mode, column_order: [...],
+        results: { <column>: { <item_name>: [ {fy, fy_start, total}, ... ] } },
+        latest_month }
+    """
+    if not (1 <= start_mon <= 12 and 1 <= end_mon <= 12):
+        raise ValueError("start_mon and end_mon must be 1-12")
+    s_pos = start_mon - 4 if start_mon >= 4 else start_mon + 8
+    e_pos = end_mon - 4 if end_mon >= 4 else end_mon + 8
+    if e_pos < s_pos:
+        raise ValueError("end month must not precede start month within the "
+                         "financial year (Apr → Mar order)")
+    if scope not in _BEST_PERIOD_SCOPES:
+        raise ValueError(f"unknown scope {scope!r} (sail5 | all8 | plants)")
+    if items_mode not in ('major', 'all'):
+        raise ValueError(f"unknown items mode {items_mode!r} (major | all)")
+
+    columns = _BEST_PERIOD_SCOPES[scope]
+    conn = db.connect()
+    cur = conn.cursor()
+    sort_key = _item_sort_key()
+    try:
+        results = {}
+        for col_key, plants in columns:
+            ph = _ph(plants)
+            if items_mode == 'all':
+                cur.execute(
+                    f"SELECT DISTINCT item_name FROM production_table WHERE plant_name IN ({ph})",
+                    list(plants))
+                items = sorted((r[0] for r in cur.fetchall()), key=sort_key)
+            else:
+                items = MAJOR_ITEMS
+            where = f"item_name IN ({_ph(items)}) AND plant_name IN ({ph})"
+            args = list(items) + list(plants)
+            results[col_key] = _compute_best_period(
+                cur, items, where, args, s_pos, e_pos, top_n)
+
+        window_months = [_MON[_pos_to_mon(p)] for p in range(s_pos, e_pos + 1)]
+        return {
+            'window': {
+                'start_mon': start_mon, 'end_mon': end_mon,
+                'start_label': _MON[start_mon], 'end_label': _MON[end_mon],
+                'length': e_pos - s_pos + 1,
+                'months': window_months,
+                'spans_year_end': e_pos > 8 >= s_pos or (s_pos >= 9),
+            },
+            'scope': scope,
+            'items_mode': items_mode,
+            'column_order': [c[0] for c in columns],
+            'results': results,
+            'latest_month': _latest_production_month(cur),
+        }
+    finally:
+        conn.close()
 
 
 def generate_group_records(items: list = HIGHLIGHT_ITEMS) -> dict:
