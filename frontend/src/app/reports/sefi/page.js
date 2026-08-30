@@ -9,8 +9,8 @@ const API = process.env.NEXT_PUBLIC_API_URL || '';
 const ITEMS = [
   { label: 'Hot Metal',      key: 'Hot Metal' },
   { label: 'Crude Steel',    key: 'Total Crude Steel' },
-  { label: 'Saleable Steel', key: 'Saleable Steel' },
   { label: 'Finished Steel', key: 'Finished Steel' },
+  { label: 'Saleable Steel', key: 'Saleable Steel' },
 ];
 
 const PLANTS_MAIN5 = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
@@ -97,6 +97,12 @@ export default function SefiReportPage() {
     return allMonths.filter(m => m >= s && m <= e);
   }, [customStart, customEnd, allMonths]);
 
+  // Corresponding period last year — same calendar months, one FY back
+  const cplyMonthList = useMemo(
+    () => periodMonthList.map(m => `${Number(m.slice(0, 4)) - 1}-${m.slice(5)}`),
+    [periodMonthList],
+  );
+
   const currentFy = periodMonthList.length ? fyOfMonth(periodMonthList[periodMonthList.length - 1]) : null;
   const prevFy    = currentFy != null ? currentFy - 1 : null;
 
@@ -161,40 +167,50 @@ export default function SefiReportPage() {
       const abpAnnual = aggregate(scope.plants, key, 'plan', fyMonths(currentFy), scope.conv);
       const periodAbp = aggregate(scope.plants, key, 'plan', periodMonthList, scope.conv);
       const periodAct = aggregate(scope.plants, key, 'actual', periodMonthList, scope.conv);
+      const periodCply = aggregate(scope.plants, key, 'actual', cplyMonthList, scope.conv);
       const pctFul = periodAbp != null && periodAbp !== 0 && periodAct != null
         ? (periodAct / periodAbp) * 100 : null;
-      out[key] = { fyActual, abpAnnual, periodAbp, periodAct, pctFul };
+      const growthPct = periodCply != null && periodCply !== 0 && periodAct != null
+        ? ((periodAct - periodCply) / periodCply) * 100 : null;
+      out[key] = { fyActual, abpAnnual, periodAbp, periodAct, periodCply, pctFul, growthPct };
     });
     return out;
-  }, [scope, currentFy, prevFy, periodMonthList, aggregate]);
+  }, [scope, currentFy, prevFy, periodMonthList, cplyMonthList, aggregate]);
 
   const hasAnyData = Object.values(rows).some(c =>
-    c.fyActual != null || c.abpAnnual != null || c.periodAbp != null || c.periodAct != null);
+    c.fyActual != null || c.abpAnnual != null || c.periodAbp != null
+    || c.periodAct != null || c.periodCply != null);
 
-  const periodRangeLabel = useMemo(() => {
-    if (!periodMonthList.length) return '';
-    const s = periodMonthList[0], e = periodMonthList[periodMonthList.length - 1];
+  const rangeLabel = (list) => {
+    if (!list.length) return '';
+    const s = list[0], e = list[list.length - 1];
     const sYear = s.slice(0, 4), eYear = e.slice(0, 4);
     const sAbbr = MONTH_ABBR[s.slice(5)], eAbbr = MONTH_ABBR[e.slice(5)];
     if (s === e) return `${sAbbr}'${sYear.slice(2)}`;
     if (sYear === eYear) return `${sAbbr}-${eAbbr}'${eYear.slice(2)}`;
     return `${sAbbr}'${sYear.slice(2)}-${eAbbr}'${eYear.slice(2)}`;
-  }, [periodMonthList]);
+  };
+  const periodRangeLabel = useMemo(() => rangeLabel(periodMonthList), [periodMonthList]);
+  const cplyRangeLabel   = useMemo(() => rangeLabel(cplyMonthList),   [cplyMonthList]);
 
   const fmt = (v) => (v == null ? '—' : Math.round(v).toLocaleString('en-IN'));
   const fmtPct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`);
+  const fmtGrowth = (v) => (v == null ? '—' : `${v >= 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(1)}%`);
   const pctColor = (v) => (v == null ? '#6b7280' : v >= 100 ? '#188038' : v >= 95 ? '#b45309' : '#c5221f');
+  const growthColor = (v) => (v == null ? '#6b7280' : v >= 0 ? '#188038' : '#c5221f');
 
   const handlePrint = () => window.print();
 
   const handleDownloadExcel = () => {
     const escape = (s) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
     const header = ['Item', `FY ${fyLabel(prevFy)}`, `ABP ${fyLabel(currentFy)}`,
-      `${periodRangeLabel} ABP`, `${periodRangeLabel} Act`, `${periodRangeLabel} % ful. ABP`];
+      `${periodRangeLabel} ABP`, `${periodRangeLabel} Act`, `${periodRangeLabel} % ful. ABP`,
+      `CPLY ${cplyRangeLabel}`, `${periodRangeLabel} Growth %`];
     const body = ITEMS.map(({ label, key }) => {
       const c = rows[key] || {};
       return [label, fmt(c.fyActual), fmt(c.abpAnnual), fmt(c.periodAbp), fmt(c.periodAct),
-        c.pctFul == null ? '' : c.pctFul.toFixed(1)];
+        c.pctFul == null ? '' : c.pctFul.toFixed(1),
+        fmt(c.periodCply), c.growthPct == null ? '' : c.growthPct.toFixed(1)];
     });
     const csv = [header, ...body].map(r => r.map(v => escape(String(v))).join(',')).join('\r\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -224,7 +240,7 @@ export default function SefiReportPage() {
 
       <div className="no-print"><GlobalNavbar /></div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '22px 20px' }}>
+      <div style={{ maxWidth: 1240, margin: '0 auto', padding: '22px 20px' }}>
 
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
@@ -301,7 +317,7 @@ export default function SefiReportPage() {
                   <th rowSpan={2} style={{ ...TH, textAlign: 'center', verticalAlign: 'middle' }}>
                     ABP {currentFy != null ? fyLabel(currentFy) : ''}
                   </th>
-                  <th colSpan={3} style={{ ...TH, textAlign: 'center', borderLeft: '2px solid #64748b' }}>
+                  <th colSpan={5} style={{ ...TH, textAlign: 'center', borderLeft: '2px solid #64748b' }}>
                     {periodRangeLabel}
                   </th>
                 </tr>
@@ -309,6 +325,10 @@ export default function SefiReportPage() {
                   <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right', borderLeft: '2px solid #64748b' }}>ABP</th>
                   <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>Act</th>
                   <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>% ful. ABP</th>
+                  <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>
+                    CPLY{cplyRangeLabel ? ` (${cplyRangeLabel})` : ''}
+                  </th>
+                  <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>Growth %</th>
                 </tr>
               </thead>
               <tbody>
@@ -322,6 +342,8 @@ export default function SefiReportPage() {
                       <td style={{ ...TD, color: '#6b7280', borderLeft: '2px solid #94a3b8' }}>{fmt(c.periodAbp)}</td>
                       <td style={{ ...TD, fontWeight: 700 }}>{fmt(c.periodAct)}</td>
                       <td style={{ ...TD, fontWeight: 600, color: pctColor(c.pctFul) }}>{fmtPct(c.pctFul)}</td>
+                      <td style={{ ...TD, color: '#6b7280' }}>{fmt(c.periodCply)}</td>
+                      <td style={{ ...TD, fontWeight: 600, color: growthColor(c.growthPct) }}>{fmtGrowth(c.growthPct)}</td>
                     </tr>
                   );
                 })}
@@ -334,6 +356,7 @@ export default function SefiReportPage() {
           Values in &apos;000 tonnes. FY column = full-year actual of the preceding financial year; ABP column =
           annual plan (AAP) of the current financial year (production_plan_table, summed over all 12 months).
           Period ABP/Act = plan/actual summed over the selected From–To range; % ful. ABP = period Act ÷ period ABP.
+          CPLY = actual over the same calendar months one financial year earlier; Growth % = (period Act − CPLY) ÷ CPLY.
           Plant selector sums the member plants of the chosen group (&quot;SAIL (8 Plants)&quot; also adds Conversion to
           Finished Steel); months without data are skipped when summing.
         </div>
