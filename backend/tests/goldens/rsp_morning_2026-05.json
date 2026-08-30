@@ -1,185 +1,240 @@
 {
   "month": "2026-05",
+  "morning_days_in_month": 31,
+  "morning_is_month_end": true,
+  "morning_report_day": 31,
   "plant": "RSP",
   "production_rows": [
     {
-      "cell": "F10",
+      "basis": "month-end",
+      "cell": "E10",
       "item_name": "COB#1-5",
+      "sheet_mrate": 355.0,
       "status": "ok",
       "unit": "nos/d",
-      "value": 355.0
+      "value": 354.6
     },
     {
-      "cell": "F11",
+      "basis": "month-end",
+      "cell": "E11",
       "item_name": "COB#6",
+      "sheet_mrate": 89.0,
       "status": "ok",
       "unit": "nos/d",
-      "value": 89.0
+      "value": 89.1
     },
     {
-      "cell": "F12",
+      "basis": "month-end",
+      "cell": "E12",
       "item_name": "Oven Pushing (nos/day)",
+      "sheet_mrate": 526.0,
       "status": "ok",
       "unit": "nos/d",
-      "value": 526.0
+      "value": 526.1
     },
     {
-      "cell": "E41",
+      "basis": "month-end",
+      "cell": "D41",
       "item_name": "SP-1",
+      "sheet_mrate": 128.025,
       "status": "ok",
       "unit": "'000T",
       "value": 128.025
     },
     {
-      "cell": "E42",
+      "basis": "month-end",
+      "cell": "D42",
       "item_name": "SP-2",
+      "sheet_mrate": 167.9,
       "status": "ok",
       "unit": "'000T",
       "value": 167.9
     },
     {
-      "cell": "E43",
+      "basis": "month-end",
+      "cell": "D43",
       "item_name": "SP-3",
+      "sheet_mrate": 325.81,
       "status": "ok",
       "unit": "'000T",
       "value": 325.81
     },
     {
-      "cell": "E44",
+      "basis": "month-end",
+      "cell": "D44",
       "item_name": "Total Sinter",
+      "sheet_mrate": 621.735,
       "status": "ok",
       "unit": "'000T",
       "value": 621.735
     },
     {
+      "basis": "month-end",
       "cell": "K50",
-      "item_name": "BF-1",
+      "item_name": "BF#1",
+      "sheet_mrate": null,
       "status": "ok",
       "unit": "'000T",
       "value": 82.176
     },
     {
+      "basis": "month-end",
       "cell": "K52",
-      "item_name": "BF-5",
+      "item_name": "BF#5",
+      "sheet_mrate": null,
       "status": "ok",
       "unit": "'000T",
       "value": 277.86
     },
     {
-      "cell": "K53",
+      "basis": "month-end",
+      "cell": "D50",
       "item_name": "Hot Metal",
+      "sheet_mrate": 360.036,
       "status": "ok",
       "unit": "'000T",
       "value": 360.036
     },
     {
-      "cell": "E296",
+      "basis": "month-end",
+      "cell": "D296",
       "item_name": "Pig Iron",
+      "sheet_mrate": 15.078,
       "status": "ok",
       "unit": "'000T",
       "value": 15.078
     },
     {
+      "basis": "month-end",
       "cell": "E92",
       "item_name": "SMS-1 CCM-1",
+      "sheet_mrate": 36.978,
       "status": "ok",
       "unit": "'000T",
       "value": 36.978
     },
     {
+      "basis": "month-end",
       "cell": "X69+X74",
       "item_name": "SMS-2 CCM-1&2",
+      "sheet_mrate": null,
       "status": "ok",
       "unit": "'000T",
       "value": 78.444
     },
     {
+      "basis": "month-end",
       "cell": "L99",
       "item_name": "SMS-2 CCM-3",
+      "sheet_mrate": null,
       "status": "ok",
       "unit": "'000T",
       "value": 134.493
     },
     {
+      "basis": "month-end",
       "cell": "X79",
       "item_name": "SMS-2 CCM-4",
+      "sheet_mrate": null,
       "status": "ok",
       "unit": "'000T",
       "value": 76.794
     },
     {
-      "cell": "F94",
+      "basis": "month-end",
+      "cell": "E94",
       "item_name": "Total Crude Steel",
+      "sheet_mrate": 326.708,
       "status": "ok",
       "unit": "'000T",
       "value": 326.708
     },
     {
+      "basis": "month-end",
       "cell": "AB209",
       "item_name": "HSM-2 Total HR Coil",
+      "sheet_mrate": 177.446,
       "status": "ok",
       "unit": "'000T",
       "value": 177.446
     },
     {
-      "cell": "Z263",
+      "basis": "month-end",
+      "cell": "Y263",
       "item_name": "HSM-2 HR Coil (Sale)",
+      "sheet_mrate": 138.726,
       "status": "ok",
       "unit": "'000T",
       "value": 138.726
     },
     {
+      "basis": "month-end",
       "cell": "AB210",
       "item_name": "HSM-2 HR Plate",
+      "sheet_mrate": 28.202,
       "status": "ok",
       "unit": "'000T",
       "value": 28.202
     },
     {
-      "cell": "F204",
+      "basis": "month-end",
+      "cell": "E204",
       "item_name": "OPM Plate",
+      "sheet_mrate": 49.654,
       "status": "ok",
       "unit": "'000T",
       "value": 49.654
     },
     {
-      "cell": "F215",
+      "basis": "month-end",
+      "cell": "E215",
       "item_name": "NPM Plate",
+      "sheet_mrate": 88.832,
       "status": "ok",
       "unit": "'000T",
       "value": 88.832
     },
     {
-      "cell": "E267",
+      "basis": "month-end",
+      "cell": "D267",
       "item_name": "CRNO Coils",
+      "sheet_mrate": 6.866,
       "status": "ok",
       "unit": "'000T",
       "value": 6.866
     },
     {
-      "cell": "E265",
+      "basis": "month-end",
+      "cell": "D265",
       "item_name": "ERW Pipes",
+      "sheet_mrate": 2.77,
       "status": "ok",
       "unit": "'000T",
       "value": 2.77
     },
     {
-      "cell": "E266",
+      "basis": "month-end",
+      "cell": "D266",
       "item_name": "SW Pipes",
+      "sheet_mrate": 3.265,
       "status": "ok",
       "unit": "'000T",
       "value": 3.265
     },
     {
-      "cell": "E268",
+      "basis": "month-end",
+      "cell": "D268",
       "item_name": "Saleable Steel",
+      "sheet_mrate": 318.444,
       "status": "ok",
       "unit": "'000T",
       "value": 318.444
     },
     {
-      "cell": "E268",
+      "basis": "month-end",
+      "cell": "D268",
       "item_name": "Finished Steel",
+      "sheet_mrate": 318.444,
       "status": "ok",
       "unit": "'000T",
       "value": 318.444

@@ -342,7 +342,14 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
                   <td style={{ ...cellStyle, color: '#5f6368' }} title="Current value in production_table for this item/month">
                     {dbVal != null ? dbVal : '—'}
                   </td>
-                  <td style={{ ...cellStyle, color: changedFromDb ? '#b06000' : '#202124', fontWeight: changedFromDb ? 700 : 400 }}>{r.value ?? ''}</td>
+                  <td style={{ ...cellStyle, color: changedFromDb ? '#b06000' : '#202124', fontWeight: changedFromDb ? 700 : 400 }}
+                      title={r.sheet_mrate != null ? `Sheet "M Rate" for cross-check: ${r.sheet_mrate}` : undefined}>
+                    {r.value ?? ''}
+                    {r.sheet_mrate != null && r.value != null && Math.abs(r.sheet_mrate - r.value) > Math.max(0.01, Math.abs(r.value) * 0.005) && (
+                      <span style={{ color: '#b45309', fontSize: '7.5pt', marginLeft: 4 }}
+                            title={`Sheet M Rate = ${r.sheet_mrate}`}>≠ M Rate {r.sheet_mrate}</span>
+                    )}
+                  </td>
                   <td style={cellStyle}>{r.unit}</td>
                   <td style={{ ...cellStyle, color: '#5f6368' }}>{r.cell}</td>
                   <td style={{ ...cellStyle, color: '#5f6368', fontStyle: 'italic' }}>{r.pdf_label || ''}</td>
@@ -1998,6 +2005,16 @@ function UploadPageInner() {
                   </button>
                 </div>
               </div>
+
+              {technoPreview.morning_is_month_end === false && (
+                <div style={{ marginBottom: 10, padding: '8px 12px', background: '#fef7e0', border: '1px solid #fde68a',
+                              borderRadius: 6, fontSize: '8.5pt', color: '#92400e' }}>
+                  ⚠ Mid-month sheet (day {technoPreview.morning_report_day} of {technoPreview.morning_days_in_month}).
+                  Each production figure is the month-to-date total projected to the whole month
+                  (cumulative × {technoPreview.morning_days_in_month} ÷ {technoPreview.morning_report_day}) —
+                  the same basis as the sheet's own “M Rate”. Upload the last-day-of-month sheet for the final figures.
+                </div>
+              )}
 
               {/* 1. Production rows → production_table (selectable + item name editable) */}
               {prodRows.length > 0 && (

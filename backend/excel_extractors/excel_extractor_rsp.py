@@ -575,34 +575,106 @@ def _build_p18_cells(ws, col: str, cum_col: str) -> dict:
 # ---------------------------------------------------------------------------
 # Morning-report cells (fixed mapping — columns vary too much for label scan)
 # ---------------------------------------------------------------------------
+# Each item -> (mrate_cell, cum_spec):
+#   mrate_cell : the sheet's "M Rate" / "M.Rate" column cell for this row, or
+#                None when the section has no rated column (per-furnace and
+#                per-caster rows only carry a running "Cum" total).
+#   cum_spec   : the "ToDate" (month-to-date) cell — a str, or a tuple of
+#                cells whose values are summed.
+#
+# The month figure is the cum projected to the whole month for the report's
+# own date (from A2, "For the Date -: DD.MM.YYYY"):
+#     tonnage  -> cum * days_in_month / report_day
+#     nos/day  -> cum / report_day                (already a daily rate)
+# On the last-day-of-month report the factor is 1, so the projection is a
+# no-op and the true month total is used. The sheet's M Rate — which RSP
+# computes the same way — is carried alongside as a cross-check; where a cum
+# cell is missing it is the value.
+#
+# Previously several items read a raw cum cell (Hot Metal, SMS-1 CCM-1,
+# HSM-2 HR Coil/Plate) while others read M Rate, so a mid-month upload mixed
+# partial-month and full-month figures on the same sheet.
 MORNING_CELLS = {
-    "COB#1-5":             "F10",
-    "COB#6":               "F11",
-    "Oven Pushing (nos/day)": "F12",
-    "SP-1":                "E41",
-    "SP-2":                "E42",
-    "SP-3":                "E43",
-    "Total Sinter":        "E44",
-    "BF#1":                "K50",
-    "BF#5":                "K52",
-    "Hot Metal":           "K53",
-    "Pig Iron":            "E296",
-    "SMS-1 CCM-1":         "E92",
-    "SMS-2 CCM-1&2":       ("X69", "X74"),
-    "SMS-2 CCM-3":         "L99",
-    "SMS-2 CCM-4":         "X79",
-    "Total Crude Steel":   "F94",
-    "HSM-2 Total HR Coil": "AB209",
-    "HSM-2 HR Coil (Sale)":"Z263",
-    "HSM-2 HR Plate":      "AB210",
-    "OPM Plate":           "F204",
-    "NPM Plate":           "F215",
-    "CRNO Coils":          "E267",
-    "ERW Pipes":           "E265",
-    "SW Pipes":            "E266",
-    "Saleable Steel":      "E268",
-    "Finished Steel":      "E268",
+    "COB#1-5":              ("F10",  "E10"),
+    "COB#6":                ("F11",  "E11"),
+    "Oven Pushing (nos/day)": ("F12", "E12"),
+    "SP-1":                 ("E41",  "D41"),
+    "SP-2":                 ("E42",  "D42"),
+    "SP-3":                 ("E43",  "D43"),
+    "Total Sinter":         ("E44",  "D44"),
+    "BF#1":                 (None,   "K50"),
+    "BF#5":                 (None,   "K52"),
+    "Hot Metal":            ("E50",  "D50"),
+    "Pig Iron":             ("E296", "D296"),
+    "SMS-1 CCM-1":          ("F92",  "E92"),
+    "SMS-2 CCM-1&2":        (None,   ("X69", "X74")),
+    "SMS-2 CCM-3":          (None,   "L99"),
+    "SMS-2 CCM-4":          (None,   "X79"),
+    "Total Crude Steel":    ("F94",  "E94"),
+    "HSM-2 Total HR Coil":  ("AC209", "AB209"),
+    "HSM-2 HR Coil (Sale)": ("Z263", "Y263"),
+    "HSM-2 HR Plate":       ("AC210", "AB210"),
+    "OPM Plate":            ("F204", "E204"),
+    "NPM Plate":            ("F215", "E215"),
+    "CRNO Coils":           ("E267", "D267"),
+    "ERW Pipes":            ("E265", "D265"),
+    "SW Pipes":             ("E266", "D266"),
+    "Saleable Steel":       ("E268", "D268"),
+    "Finished Steel":       ("E268", "D268"),
 }
+
+
+def _morning_report_day(ws):
+    """(report_day:int, days_in_month:int, db_month:'YYYY-MM') from cell A2,
+    'For the Date -: DD.MM.YYYY'. Raises ValueError if it can't be parsed."""
+    a2 = str(ws["A2"].value or "")
+    m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", a2)
+    if not m:
+        raise ValueError(f"Cannot parse the report date from cell A2: {a2!r} (expected DD.MM.YYYY).")
+    day, mon, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return day, calendar.monthrange(year, mon)[1], f"{year}-{mon:02d}"
+
+
+def _project_month_value(cum, item, report_day, days_in_month):
+    """Month figure from a month-to-date cumulative and the report date.
+    nos/day items -> average daily rate; tonnage -> full-month total."""
+    if cum is None or not report_day:
+        return None
+    if item in NO_CONVERT:
+        return round(cum / report_day, 1)
+    return cum * days_in_month / report_day
+
+
+def _sum_cells(ws, spec):
+    if isinstance(spec, tuple):
+        parts = [clean_val(ws[c].value) for c in spec]
+        return None if all(p is None for p in parts) else sum(p for p in parts if p is not None)
+    return clean_val(ws[spec].value)
+
+
+def _morning_production_values(ws, report_day, days_in_month):
+    """{item_name: {'value', 'cell', 'sheet_mrate', 'cum', 'projected', 'basis'}}
+    for every MORNING_CELLS item. `value` is the projected-from-cum month
+    figure when a cum cell exists, else the sheet's M Rate."""
+    out = {}
+    for item, (mrate_cell, cum_spec) in MORNING_CELLS.items():
+        cum       = _sum_cells(ws, cum_spec) if cum_spec else None
+        mrate     = clean_val(ws[mrate_cell].value) if mrate_cell else None
+        cum_ref = cum_spec if isinstance(cum_spec, str) else "+".join(cum_spec or ())
+        projected = _project_month_value(cum, item, report_day, days_in_month)
+        month_end = report_day >= days_in_month
+        if projected is not None:
+            value = projected
+            basis = "month-end" if month_end else "projected"
+            cell = cum_ref if month_end else f"{cum_ref} ×{days_in_month}/{report_day}"
+        else:
+            value, basis = mrate, "m-rate"
+            cell = mrate_cell or ""
+        out[item] = {
+            "value": value, "cell": cell, "basis": basis,
+            "sheet_mrate": mrate, "cum": cum, "projected": projected,
+        }
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -950,6 +1022,30 @@ def _preview_production_from_cells(ws, cells):
     return rows
 
 
+def _preview_morning_production(ws, report_day, days_in_month):
+    """Daily Morning Report production preview — every item's month figure is
+    its month-to-date cumulative projected to the whole month for the report
+    date (see MORNING_CELLS). The sheet's own M Rate is shown for comparison."""
+    rows = []
+    for item, info in _morning_production_values(ws, report_day, days_in_month).items():
+        val = info["value"]
+        mrate = info["sheet_mrate"]
+        conv = item not in NO_CONVERT
+        disp = round(val / 1000.0, 3) if (val is not None and conv) else (
+            round(val, 1) if val is not None else None)
+        mr_disp = round(mrate / 1000.0, 3) if (mrate is not None and conv) else mrate
+        rows.append({
+            "item_name":   item,
+            "value":       disp,
+            "cell":        info["cell"],
+            "unit":        "nos/d" if item in NO_CONVERT else "'000T",
+            "basis":       info["basis"],       # 'projected' | 'm-rate'
+            "sheet_mrate": mr_disp,
+            "status":      "ok" if val is not None else "no value",
+        })
+    return rows
+
+
 def _preview_techno_from_cells(ws, cells, days_in_month=None, ytd_days=None):
     rows = []
     techno_values_with_cells = {}
@@ -1271,6 +1367,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
     production_rows, techno_rows, stock_rows = [], [], []
     source_type, sheets_used = "Techno Parameters File", ""
     db_report_month, month_num = _parse_report_month(report_month)
+    morning_meta = {}
 
     p9_sheet, p18_sheet = _find_report_sheets(wb, sheet_names)
     if p9_sheet or p18_sheet:
@@ -1314,13 +1411,14 @@ def extract_preview(file_path: str, report_month: str) -> dict:
             source_type = "Daily Morning Report"
             sheets_used = morning_sheet
             ws = wb[morning_sheet]
-            a2_raw = ws["A2"].value or ""
-            dm = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", str(a2_raw))
-            if dm:
-                _d, m_num2, year = dm.groups()
-                db_report_month = f"{year}-{m_num2}"
-            production_rows = _preview_production_from_cells(ws, MORNING_CELLS)
+            report_day, days_in_month, db_report_month = _morning_report_day(ws)
+            production_rows = _preview_morning_production(ws, report_day, days_in_month)
             stock_rows = _extract_morning_stock(ws, db_report_month)
+            morning_meta = {
+                "morning_report_day": report_day,
+                "morning_days_in_month": days_in_month,
+                "morning_is_month_end": report_day >= days_in_month,
+            }
 
     techno_param_rows, mill_meta = [], {}
     if source_type != "Daily Morning Report":
@@ -1354,6 +1452,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
         "techno_param_rows":  techno_param_rows,
         "stock_rows":         stock_rows,
         **mill_meta,
+        **morning_meta,
     }
 
 
@@ -1475,32 +1574,27 @@ def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
     import db as _db
 
     ws = wb[sheet_name]
-    a2_raw     = ws["A2"].value or ""
-    date_match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", str(a2_raw))
-    if not date_match:
-        raise ValueError(
-            f"Cannot parse date from cell A2: {repr(a2_raw)}. "
-            "Expected format DD.MM.YYYY.")
-    _day, m_num, year = date_match.groups()
-    db_report_month = f"{year}-{m_num}"
-    logger.info(f"RSP Morning Report: month auto-detected → {db_report_month}")
+    report_day, days_in_month, db_report_month = _morning_report_day(ws)
+    if report_day < days_in_month:
+        logger.info(
+            f"RSP Morning Report for {db_report_month} is a mid-month sheet "
+            f"(day {report_day}/{days_in_month}); month figures are the "
+            f"month-to-date cumulative projected to the full month.")
+    else:
+        logger.info(f"RSP Morning Report: month-end sheet for {db_report_month}.")
 
     conn   = db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
-    for item_name, cell_spec in MORNING_CELLS.items():
-        if isinstance(cell_spec, tuple):
-            parts = [clean_val(ws[c].value) for c in cell_spec]
-            val   = sum(p for p in parts if p is not None) or None
-            if all(p is None for p in parts):
-                val = None
-        else:
-            val = clean_val(ws[cell_spec].value)
+    for item_name, info in _morning_production_values(ws, report_day, days_in_month).items():
+        val = info["value"]
         if val is not None:
             vals_extracted += 1
             if item_name not in NO_CONVERT:
                 val = round(val / 1000.0, 3)
+            else:
+                val = round(val, 1)
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
             VALUES (?, ?, ?, ?)
