@@ -78,6 +78,15 @@
       "value": 82.176
     },
     {
+      "basis": "",
+      "cell": "K51",
+      "item_name": "BF#4",
+      "sheet_mrate": null,
+      "status": "no value",
+      "unit": "'000T",
+      "value": null
+    },
+    {
       "basis": "month-end",
       "cell": "K52",
       "item_name": "BF#5",

@@ -237,6 +237,10 @@ P9_ITEMS = [
     ("SP-3",                 ["sp 3", "sinter plant 3", "sinter iii"],    11),
     ("Total Sinter",         ["total sinter", "sinter total"],            12),
     ("BF#1",                 ["bf 1", "bf1"],                             13),
+    # BF-4 has no fixed row in RSP's page-9 template — it appears only in
+    # months it runs. Aliases only, no row_hint: absent (not mis-mapped)
+    # when the sheet has no BF-4 row.
+    ("BF#4",                 ["bf 4", "bf4", "bf 4 ", "bf iv"],           None),
     ("BF#5",                 ["bf 5", "bf5"],                             14),
     # "Tota Hot Metal" is a standing typo in RSP's own template (missing "l") —
     # present in every recent file, not a one-off mistake to work around.
@@ -603,6 +607,7 @@ MORNING_CELLS = {
     "SP-3":                 ("E43",  "D43"),
     "Total Sinter":         ("E44",  "D44"),
     "BF#1":                 (None,   "K50"),
+    "BF#4":                 (None,   "K51"),   # BF-IV — idle -> blank (K51 empty)
     "BF#5":                 (None,   "K52"),
     "Hot Metal":            ("E50",  "D50"),
     "Pig Iron":             ("E296", "D296"),
@@ -667,9 +672,10 @@ def _morning_production_values(ws, report_day, days_in_month):
             value = projected
             basis = "month-end" if month_end else "projected"
             cell = cum_ref if month_end else f"{cum_ref} ×{days_in_month}/{report_day}"
+        elif mrate is not None:
+            value, basis, cell = mrate, "m-rate", mrate_cell
         else:
-            value, basis = mrate, "m-rate"
-            cell = mrate_cell or ""
+            value, basis, cell = None, "", (cum_ref or mrate_cell or "")
         out[item] = {
             "value": value, "cell": cell, "basis": basis,
             "sheet_mrate": mrate, "cum": cum, "projected": projected,
