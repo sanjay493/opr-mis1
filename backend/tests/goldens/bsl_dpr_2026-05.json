@@ -7,7 +7,7 @@
   "production_rows": [
     {
       "basis": "m-rate",
-      "cell": "DPR!P6",
+      "cell": "DPR!P6 (vs CUM O6)",
       "item_name": "Oven Pushing(nos/d)",
       "pdf_label": "P6",
       "status": "ok",
@@ -16,7 +16,7 @@
     },
     {
       "basis": "m-rate",
-      "cell": "DPR!P7",
+      "cell": "DPR!P7 (vs CUM O7)",
       "item_name": "Total Sinter",
       "pdf_label": "P7",
       "status": "ok",
@@ -25,7 +25,7 @@
     },
     {
       "basis": "m-rate",
-      "cell": "DPR!P8",
+      "cell": "DPR!P8 (vs CUM O8)",
       "item_name": "Hot Metal",
       "pdf_label": "P8",
       "status": "ok",
@@ -33,17 +33,17 @@
       "value": 418.322
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z21",
+      "basis": "m-rate",
+      "cell": "DPR!AA21 (vs CUM Z21)",
       "item_name": "Pig Iron",
-      "pdf_label": "Z21",
+      "pdf_label": "AA21",
       "status": "ok",
       "unit": "'000T",
       "value": 11.667
     },
     {
       "basis": "m-rate",
-      "cell": "DPR!P10",
+      "cell": "DPR!P10 (vs CUM O10)",
       "item_name": "SMS-1 CCM-1",
       "pdf_label": "P10",
       "status": "ok",
@@ -52,7 +52,7 @@
     },
     {
       "basis": "m-rate",
-      "cell": "DPR!P11",
+      "cell": "DPR!P11 (vs CUM O11)",
       "item_name": "SMS-2 CCM-1&2",
       "pdf_label": "P11",
       "status": "ok",
@@ -61,7 +61,7 @@
     },
     {
       "basis": "m-rate",
-      "cell": "DPR!P12",
+      "cell": "DPR!P12 (vs CUM O12)",
       "item_name": "Total Crude Steel",
       "pdf_label": "P12",
       "status": "ok",
@@ -70,7 +70,7 @@
     },
     {
       "basis": "m-rate",
-      "cell": "DPR!P14",
+      "cell": "DPR!P14 (vs CUM O14)",
       "item_name": "HSM Total HR Coil",
       "pdf_label": "P14",
       "status": "ok",
@@ -78,136 +78,136 @@
       "value": 263.041
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z6",
+      "basis": "m-rate",
+      "cell": "DPR!AA6 (vs CUM Z6)",
       "item_name": "HSM HR Coil (Sale)",
-      "pdf_label": "Z6",
+      "pdf_label": "AA6",
       "status": "ok",
       "unit": "'000T",
-      "value": 157.625
+      "value": 157.626
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z7",
+      "basis": "m-rate",
+      "cell": "DPR!AA7 (vs CUM Z7)",
       "item_name": "HSM HR Plate",
-      "pdf_label": "Z7",
+      "pdf_label": "AA7",
       "status": "ok",
       "unit": "'000T",
       "value": 29.756
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z8",
+      "basis": "m-rate",
+      "cell": "DPR!AA8 (vs CUM Z8)",
       "item_name": "HR Sheet",
-      "pdf_label": "Z8",
+      "pdf_label": "AA8",
       "status": "ok",
       "unit": "'000T",
-      "value": 3.872
+      "value": 3.168
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z9",
+      "basis": "m-rate",
+      "cell": "DPR!AA9 (vs CUM Z9)",
       "item_name": "CR I/II CR(Coil) Sale",
-      "pdf_label": "Z9",
+      "pdf_label": "AA9",
       "status": "ok",
       "unit": "'000T",
       "value": 24.072
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z10",
+      "basis": "m-rate",
+      "cell": "DPR!AA10 (vs CUM Z10)",
       "item_name": "CR Sheets",
-      "pdf_label": "Z10",
+      "pdf_label": "AA10",
       "status": "ok",
       "unit": "'000T",
       "value": 0.024
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z15",
+      "basis": "m-rate",
+      "cell": "DPR!AA15 (vs CUM Z15)",
       "item_name": "CRC(3)",
-      "pdf_label": "Z15",
+      "pdf_label": "AA15",
       "status": "ok",
       "unit": "'000T",
       "value": 53.482
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z15",
+      "basis": "m-rate",
+      "cell": "DPR!AA15 (vs CUM Z15)",
       "item_name": "CR III CR(Coil) Sale",
-      "pdf_label": "Z15",
+      "pdf_label": "AA15",
       "status": "ok",
       "unit": "'000T",
       "value": 53.482
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z16",
+      "basis": "m-rate",
+      "cell": "DPR!AA16 (vs CUM Z16)",
       "item_name": "GPC3",
-      "pdf_label": "Z16",
+      "pdf_label": "AA16",
       "status": "ok",
       "unit": "'000T",
       "value": 13.106
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z18",
+      "basis": "m-rate",
+      "cell": "DPR!AA18 (vs CUM Z18)",
       "item_name": "CRSALE",
-      "pdf_label": "Z18",
+      "pdf_label": "AA18",
       "status": "ok",
       "unit": "'000T",
       "value": 91.016
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!O31",
+      "basis": "m-rate",
+      "cell": "DPR!P31 (vs CUM O31)",
       "item_name": "Saleable Steel",
-      "pdf_label": "O31",
+      "pdf_label": "P31",
       "status": "ok",
       "unit": "'000T",
       "value": 320.889
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z19",
+      "basis": "m-rate",
+      "cell": "DPR!AA19 (vs CUM Z19)",
       "item_name": "Saleable Semis",
-      "pdf_label": "Z19",
+      "pdf_label": "AA19",
       "status": "ok",
       "unit": "'000T",
       "value": 34.321
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z20",
+      "basis": "m-rate",
+      "cell": "DPR!AA20 (vs CUM Z20)",
       "item_name": "Thick Plate",
-      "pdf_label": "Z20",
+      "pdf_label": "AA20",
       "status": "ok",
       "unit": "'000T",
       "value": 4.3
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!O31-Z19 (computed)",
+      "basis": "m-rate",
+      "cell": "DPR!P31-AA19 (computed)",
       "item_name": "Finished Steel",
-      "pdf_label": "O31-Z19",
+      "pdf_label": "P31-AA19",
       "status": "ok",
       "unit": "'000T",
       "value": 286.568
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z9+Z10 (computed)",
+      "basis": "m-rate",
+      "cell": "DPR!AA9+AA10 (computed)",
       "item_name": "CRC&S(1&2)",
-      "pdf_label": "Z9+Z10",
+      "pdf_label": "AA9+AA10",
       "status": "ok",
       "unit": "'000T",
       "value": 24.096
     },
     {
-      "basis": "month-end",
-      "cell": "DPR!Z11+Z12+Z13 (computed)",
+      "basis": "m-rate",
+      "cell": "DPR!AA11+AA12+AA13 (computed)",
       "item_name": "GP/GC",
-      "pdf_label": "Z11+Z12+Z13",
+      "pdf_label": "AA11+AA12+AA13",
       "status": "ok",
       "unit": "'000T",
       "value": 0.148

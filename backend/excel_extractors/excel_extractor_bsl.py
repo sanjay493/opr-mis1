@@ -1,7 +1,8 @@
 import re
 import calendar
 import openpyxl
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter, column_index_from_string
+from openpyxl.utils.cell import coordinate_from_string
 import logging
 import os
 from datetime import datetime
@@ -27,15 +28,18 @@ def clean_val(val) -> Optional[float]:
 
 
 # ---------------------------------------------------------------------------
-# Mid-month → full-month projection (DPR Mail production)
+# DPR Mail production — M.RATE column, cross-checked against CUM
 # ---------------------------------------------------------------------------
-# The DPR sheet's "PRODUCTION (SALEABLE STEEL)" block (column Z) and the
-# Saleable Steel cell O31 hold a *month-to-date cumulative*, correct as the
-# monthly figure only on a last-day report. The "MAIN UNITS" block's column
-# P ("M.RATE") is the plant's own full-month projection (cum ÷ day-elapsed,
-# ×days_in_month for tonnage) and needs no scaling. When the O1 date is
-# before month-end we project the column-Z / O31 items ourselves the same
-# way; a strict no-op on a month-end or undated report.
+# Both production tables on the DPR sheet carry the plant's own full-month
+# figure one column to the RIGHT of the month-to-date cumulative:
+#   "MAIN UNITS"        block  — col O = CUM, col P  = M.RATE
+#   "SALEABLE STEEL"    block  — col Z = CUM, col AA = M.RATE
+# So every configured cell now points at an M.RATE cell and we take it
+# directly instead of reprojecting CUM. The sheet is pasted values (no live
+# formulas), so on a mid-month DPR the M.RATE cell can be stale — we
+# cross-check it against CUM x days_in_month / report_day and fall back to
+# that computed figure when M.RATE is missing or wildly off (see
+# _dpr_pick_month_value).
 
 def _dpr_report_day(o1_raw):
     """(report_day, days_in_month, 'YYYY-MM') from DPR cell O1 — an Excel
@@ -56,9 +60,64 @@ def _dpr_is_mid_month(report_day, days_in_month) -> bool:
     return bool(report_day and days_in_month and 0 < report_day < days_in_month)
 
 
-def _dpr_is_mrate_cell(addr: str) -> bool:
-    """True for the column-P 'M.RATE' cells (already a full-month figure)."""
-    return addr[:1].upper() == "P"
+def _dpr_cum_cell(mrate_addr: str) -> str:
+    """The CUM cell one column left of an M.RATE cell (P->O, AA->Z)."""
+    col, row = coordinate_from_string(mrate_addr)
+    return f"{get_column_letter(column_index_from_string(col) - 1)}{row}"
+
+
+def _dpr_expected(cum, report_day, days_in_month, per_day: bool):
+    """What the M.RATE cell *should* read, derived from CUM and the report
+    date: a per-day average for nos/day items, else the month-to-date total
+    scaled to a full month (a no-op at month-end). None if not computable."""
+    if cum is None or not report_day:
+        return None
+    if per_day:
+        return cum / report_day
+    if 0 < report_day < (days_in_month or 0):
+        return cum * days_in_month / report_day
+    return cum
+
+
+def _dpr_pick_month_value(mrate, cum, report_day, days_in_month, per_day=False,
+                          label=""):
+    """Choose an item's month figure: the sheet's M.RATE when it is present
+    and consistent with what CUM implies, otherwise the computed figure.
+
+    The consistency band is tight mid-month (0.6x-1.6x) — there M.RATE and
+    CUM x days/day must roughly agree, so a stale/un-projected M.RATE is
+    caught — and loose otherwise (0.2x-5x), where M.RATE is the plant's
+    authoritative monthly figure and may legitimately differ from raw CUM
+    (rework/downgrade adjustments) so only garbage is rejected.
+
+    Returns (value, basis) — basis is 'm-rate', 'm-rate (unchecked)',
+    'projected', 'cum', or '' (nothing available)."""
+    exp = _dpr_expected(cum, report_day, days_in_month, per_day)
+    mid = bool(report_day and 0 < report_day < (days_in_month or 0))
+    lo, hi = (0.6, 1.6) if mid else (0.2, 5.0)
+
+    if mrate is not None and mrate != 0:
+        if exp is None or exp == 0:
+            return mrate, "m-rate (unchecked)"
+        ratio = mrate / exp
+        if lo <= ratio <= hi:
+            return mrate, "m-rate"
+        logger.warning(
+            "BSL DPR: %sM.RATE %.3f is %.0f%% of the expected %.3f "
+            "(CUM %.3f, day %s/%s) — using the computed figure instead.",
+            f"{label} " if label else "", mrate, ratio * 100, exp,
+            cum if cum is not None else float("nan"), report_day, days_in_month,
+        )
+        return exp, ("projected" if mid else "cum")
+
+    # M.RATE blank or zero
+    if mrate == 0 and (cum is None or abs(cum) < 1e-9):
+        return 0.0, "m-rate"
+    if exp is not None:
+        return exp, ("projected" if mid else "cum")
+    if cum is not None:
+        return cum, "cum"
+    return None, ""
 
 
 def extract_and_save_excel(file_path: str, report_month: str = "", source_file_name: str = "") -> bool:
@@ -99,10 +158,14 @@ def _dpr_config():
     """
     Single source of truth for the BSL DPR Mail cell mapping — shared by the
     DB-writing extractor (_extract_dpr_report) and the preview-only extractor
-    (_extract_dpr_preview) so they can never drift apart. Pig Iron is Z21,
-    the CUM column under the "PRODUCTION (SALEABLE STEEL)" section (W3) —
-    E30 is a different figure under the "DESPATCH" section (B19) and must
-    not be used here.
+    (_extract_dpr_preview) so they can never drift apart.
+
+    Every cell points at the plant's own M.RATE figure — column P for the
+    "MAIN UNITS" block, column AA for the "PRODUCTION (SALEABLE STEEL)"
+    block. The month-to-date CUM figure sits one column to the left (O / Z)
+    and is read by the extractor for cross-checking only (see
+    _dpr_pick_month_value). Pig Iron is AA21, under the SALEABLE STEEL
+    section (W3) — E30 is a different figure under DESPATCH (B19).
 
     Reads excel_cells_config.json (section 'bsl_dpr'); falls back to these
     hardcoded defaults only if that config section is missing.
@@ -116,29 +179,29 @@ def _dpr_config():
         "Oven Pushing (nos/day)": "P6",
         "Total Sinter":        "P7",
         "Hot Metal":           "P8",
-        "Pig Iron":            "Z21",
+        "Pig Iron":            "AA21",
         "SMS-1 CCM-1":         "P10",
         "SMS-2 CCM-1&2":       "P11",
         "Total Crude Steel":   "P12",
         "HSM Total HR Coil":   "P14",
-        "HSM HR Coil (Sale)":  "Z6",
-        "HSM HR Plate":        "Z7",
-        "HR Sheet":            "Z8",
-        "CR I/II CR(Coil) Sale": "Z9",
-        "CR Sheets":           "Z10",
-        "CRC(3)":              "Z15",
-        "CR III CR(Coil) Sale": "Z15",
-        "GPC3":                "Z16",
-        "CRSALE":              "Z18",
-        "Saleable Steel":      "O31",
-        "Saleable Semis":      "Z19",
-        "Thick Plate":         "Z20",
+        "HSM HR Coil (Sale)":  "AA6",
+        "HSM HR Plate":        "AA7",
+        "HR Sheet":            "AA8",
+        "CR I/II CR(Coil) Sale": "AA9",
+        "CR Sheets":           "AA10",
+        "CRC(3)":              "AA15",
+        "CR III CR(Coil) Sale": "AA15",
+        "GPC3":                "AA16",
+        "CRSALE":              "AA18",
+        "Saleable Steel":      "P31",
+        "Saleable Semis":      "AA19",
+        "Thick Plate":         "AA20",
     })
     no_convert = set(cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
     derived = cfg.get("derived", [
-        {"item": "Finished Steel", "op": "subtract", "a": "O31", "b": "Z19"},
-        {"item": "CRC&S(1&2)", "op": "add", "cells": ["Z9", "Z10"]},
-        {"item": "GP/GC", "op": "add", "cells": ["Z11", "Z12", "Z13"]},
+        {"item": "Finished Steel", "op": "subtract", "a": "P31", "b": "AA19"},
+        {"item": "CRC&S(1&2)", "op": "add", "cells": ["AA9", "AA10"]},
+        {"item": "GP/GC", "op": "add", "cells": ["AA11", "AA12", "AA13"]},
     ])
     return cells, no_convert, derived
 
@@ -149,31 +212,37 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
 
     Date is auto-detected from cell O1 (stored as a Python datetime by Excel).
 
+    Every cell below is the plant's own M.RATE figure (column P for the MAIN
+    UNITS block, column AA for the SALEABLE STEEL block). The month-to-date
+    CUM figure one column to the left (O / Z) is read only to cross-check
+    M.RATE and to compute a fallback when it is stale — see
+    _dpr_pick_month_value.
+
     Cell map — sheet 'DPR':
       Oven Pushing (nos/day)  P6    — nos/day average, no unit conversion
       Total Sinter         P7    — tonnes → /1000
       Hot Metal            P8
-      Pig Iron             Z21
+      Pig Iron             AA21
       SMS-1 CCM-1          P10
       SMS-2 CCM-1&2        P11
       Total Crude Steel    P12
       HSM Total HR Coil    P14
-      HSM HR Coil (Sale)   Z6
-      HSM HR Plate         Z7
-      HR Sheet             Z8
-      CR I/II CR(Coil) Sale Z9  (CR Coil I&II alone, no CR Sheet — same row CRC&S(1&2) sums with Z10)
-      CR Sheets            Z10 (CR Sheet alone — same cell CRC&S(1&2) sums with Z9)
-      CRC(3)               Z15
-      CR III CR(Coil) Sale Z15  (same cell as CRC(3) — the DPR sheet's CRC(3) row is already CR Coil III alone)
-      GPC3                 Z16
-      CRSALE               Z18
-      Saleable Steel       O31  (CUM column, "PRODUCTION:-(MAIN UNITS)" table)
-      Saleable Semis       Z19  (CUM column, "PRODUCTION (SALEABLE STEEL)" table)
-      Thick Plate          Z20  ("COBB PLT" row — Thick/Cobble Plate)
-      Finished Steel       O31 − Z19  (derived: saleable steel minus semis, both production-side —
-                                        already includes Thick Plate; Z20 is only saved separately)
-      CRC&S(1&2)           Z9 + Z10  (derived: sum)
-      GP/GC                Z11 + Z12 + Z13  (derived: sum)
+      HSM HR Coil (Sale)   AA6
+      HSM HR Plate         AA7
+      HR Sheet             AA8
+      CR I/II CR(Coil) Sale AA9  (CR Coil I&II alone — CRC&S(1&2) sums with AA10)
+      CR Sheets            AA10 (CR Sheet alone — CRC&S(1&2) sums with AA9)
+      CRC(3)               AA15
+      CR III CR(Coil) Sale AA15  (same cell as CRC(3) — that row is already CR Coil III alone)
+      GPC3                 AA16
+      CRSALE               AA18
+      Saleable Steel       P31  (M.RATE column, "PRODUCTION:-(MAIN UNITS)" table)
+      Saleable Semis       AA19 (M.RATE column, "PRODUCTION (SALEABLE STEEL)" table)
+      Thick Plate          AA20 ("COBB PLT" row — Thick/Cobble Plate)
+      Finished Steel       P31 − AA19  (derived: saleable steel minus semis, both production-side —
+                                        already includes Thick Plate; AA20 is only saved separately)
+      CRC&S(1&2)           AA9 + AA10  (derived: sum)
+      GP/GC                AA11 + AA12 + AA13  (derived: sum)
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
@@ -203,21 +272,18 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     else:
         raise ValueError("Cell O1 is empty — cannot determine report month.")
 
-    # BSL DPR column-Z / O31 cells hold cumulative-to-date figures, correct as
-    # the monthly total only on the last day's report. A mid-month upload used
-    # to be rejected outright; now it is allowed with a warning — the column-Z
-    # items are projected to the full month (the column-P "M.RATE" items are
-    # already a full-month figure and pass through unchanged).
+    # The M.RATE column is correct as the monthly figure on a last-day report.
+    # A mid-month upload used to be rejected outright; now it is allowed with a
+    # warning — each M.RATE cell is cross-checked against its CUM sibling and
+    # the computed CUM x days/day figure is used instead where M.RATE is stale.
     last_day = calendar.monthrange(int(year), int(m_num))[1]
     days_in_month = last_day
     report_day = day
-    mid_month = _dpr_is_mid_month(report_day, days_in_month)
-    if mid_month:
+    if _dpr_is_mid_month(report_day, days_in_month):
         logger.warning(
             "BSL DPR: cell O1 date (%02d.%s.%s) is not the last day of %s %s "
-            "(last day is %02d) — mid-month DPR upload. Column-Z / O31 cumulative "
-            "items will be projected to the full month (x%d/%d); column-P "
-            "\"M.RATE\" items are used as-is.",
+            "(last day is %02d) — mid-month DPR upload. M.RATE cells are used "
+            "when they agree with CUM x %d/%d, else the computed figure.",
             report_day, m_num, year, MONTH_NAMES[m_num], year, last_day,
             days_in_month, report_day,
         )
@@ -226,12 +292,9 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
 
     production_cells, NO_CONVERT, derived_rules = _dpr_config()
 
-    def _project(cum):
-        """Scale a month-to-date cumulative to a full-month estimate (no-op
-        unless the O1 date is before month-end)."""
-        if cum is None:
-            return None
-        return cum * days_in_month / report_day if mid_month else cum
+    def _mrate_and_cum(addr):
+        return (clean_val(ws[addr].value),
+                clean_val(ws[_dpr_cum_cell(addr)].value))
 
     conn = db.connect()
     cursor = conn.cursor()
@@ -251,28 +314,43 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
         """, (db_report_month, "BSL", item_name, val))
 
     for item_name, cell in production_cells.items():
-        raw = clean_val(ws[cell].value)
-        if not _dpr_is_mrate_cell(cell):
-            raw = _project(raw)
-        _save(item_name, raw)
+        mrate, cum = _mrate_and_cum(cell)
+        val, _basis = _dpr_pick_month_value(
+            mrate, cum, report_day, days_in_month,
+            per_day=item_name in NO_CONVERT, label=item_name,
+        )
+        _save(item_name, val)
 
-    # Derived values driven by config. Every derived rule references column-Z /
-    # O31 cumulative cells (never a column-P M.RATE cell), so the combined
-    # result is projected as a whole.
+    # Derived values driven by config: the configured cells are M.RATE cells,
+    # cross-checked as a group against the same combination of their CUM
+    # siblings (one column left).
     for d in derived_rules:
         item = d["item"]
         if d["op"] == "subtract":
-            a_val = clean_val(ws[d["a"]].value)
-            b_val = clean_val(ws[d["b"]].value)
-            if a_val is not None and b_val is not None:
-                _save(item, _project(a_val - b_val))
-            elif a_val is not None:
-                _save(item, _project(a_val))
+            a_m, a_c = _mrate_and_cum(d["a"])
+            b_m, b_c = _mrate_and_cum(d["b"])
+            if a_m is not None and b_m is not None:
+                mrate_val = a_m - b_m
+                cum_val = (a_c - b_c) if (a_c is not None and b_c is not None) else None
+            elif a_m is not None:
+                mrate_val, cum_val = a_m, a_c
+            else:
+                continue
+            val, _basis = _dpr_pick_month_value(mrate_val, cum_val, report_day,
+                                                days_in_month, label=item)
+            _save(item, val)
         elif d["op"] == "add":
-            parts = [clean_val(ws[c].value) for c in d.get("cells", [])]
-            parts = [v for v in parts if v is not None]
-            if parts:
-                _save(item, _project(sum(parts)))
+            addrs = d.get("cells", [])
+            m_parts = [clean_val(ws[c].value) for c in addrs]
+            c_parts = [clean_val(ws[_dpr_cum_cell(c)].value) for c in addrs]
+            m_parts = [v for v in m_parts if v is not None]
+            c_parts = [v for v in c_parts if v is not None]
+            if m_parts:
+                val, _basis = _dpr_pick_month_value(
+                    sum(m_parts), sum(c_parts) if c_parts else None,
+                    report_day, days_in_month, label=item,
+                )
+                _save(item, val)
 
     if vals_extracted == 0:
         raise ValueError(
@@ -2218,77 +2296,79 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
     mid_month = _dpr_is_mid_month(report_day, days_in_month)
     if mid_month:
         logger.warning(
-            "BSL DPR preview: mid-month file (day %d of %d) — column-Z / O31 "
-            "cumulative items projected to the full month (x%d/%d); column-P "
-            "\"M.RATE\" items used as-is.",
+            "BSL DPR preview: mid-month file (day %d of %d) — M.RATE cells are "
+            "used when they agree with CUM x %d/%d, else the computed figure.",
             report_day, days_in_month, days_in_month, report_day,
         )
 
-    def _project(cum):
-        if cum is None:
-            return None
-        return cum * days_in_month / report_day if mid_month else cum
-
-    def _basis(is_mrate):
-        if is_mrate:
-            return "m-rate"
-        if mid_month:
-            return "projected"
-        return "month-end" if report_day else ""
+    def _mrate_and_cum(addr):
+        return (clean_val(ws[addr].value),
+                clean_val(ws[_dpr_cum_cell(addr)].value))
 
     CELL_MAP, NO_CONVERT, derived_rules = _dpr_config()
 
     rows = []
     for item_name, addr in CELL_MAP.items():
-        is_mrate = _dpr_is_mrate_cell(addr)
-        raw = clean_val(ws[addr].value)
-        if not is_mrate:
-            raw = _project(raw)
-        cell = f"DPR!{addr}" + (f" x{days_in_month}/{report_day}" if (mid_month and not is_mrate) else "")
+        per_day = item_name in NO_CONVERT
+        mrate, cum = _mrate_and_cum(addr)
+        raw, basis = _dpr_pick_month_value(mrate, cum, report_day, days_in_month,
+                                           per_day=per_day, label=item_name)
+        cum_addr = _dpr_cum_cell(addr)
+        cell = f"DPR!{addr}"
+        if basis.startswith("m-rate"):
+            cell += f" (vs CUM {cum_addr})"
+        elif basis in ("projected", "cum"):
+            cell = (f"DPR!{cum_addr}"
+                    + (f" x{days_in_month}/{report_day}" if basis == "projected" else "")
+                    + " (M.RATE rejected)")
         if raw is not None:
-            if item_name in NO_CONVERT:
+            if per_day:
                 stored, unit = raw, "nos/d"
             else:
                 stored, unit = round(raw / 1000.0, 3), "'000T"
             rows.append({"item_name": item_name, "value": stored, "unit": unit,
                          "cell": cell, "pdf_label": addr,
-                         "basis": _basis(is_mrate), "status": "ok"})
+                         "basis": basis, "status": "ok"})
         else:
-            unit = "nos/d" if item_name in NO_CONVERT else "'000T"
+            unit = "nos/d" if per_day else "'000T"
             rows.append({"item_name": item_name, "value": None, "unit": unit,
                          "cell": cell, "pdf_label": addr,
-                         "basis": _basis(is_mrate), "status": "skip"})
+                         "basis": basis, "status": "skip"})
 
-    # Derived values driven by the same config used by the DB-writing extractor.
-    # Every derived rule references column-Z / O31 cumulative cells only, so the
-    # combined result is projected as a whole on a mid-month file.
+    # Derived values: the configured cells are M.RATE cells, cross-checked as a
+    # group against the same combination of their CUM siblings (one col left).
     for d in derived_rules:
         item = d["item"]
         if d["op"] == "subtract":
-            a_val = clean_val(ws[d["a"]].value)
-            b_val = clean_val(ws[d["b"]].value)
-            if a_val is not None and b_val is not None:
-                rows.append({"item_name": item,
-                             "value": round(_project(a_val - b_val) / 1000.0, 3), "unit": "'000T",
-                             "cell": f"DPR!{d['a']}-{d['b']} (computed)",
-                             "pdf_label": f"{d['a']}-{d['b']}",
-                             "basis": _basis(False), "status": "ok"})
-            elif a_val is not None:
-                rows.append({"item_name": item,
-                             "value": round(_project(a_val) / 1000.0, 3), "unit": "'000T",
-                             "cell": f"DPR!{d['a']} ({d['b']} missing)",
-                             "pdf_label": d["a"],
-                             "basis": _basis(False), "status": "ok"})
+            a_m, a_c = _mrate_and_cum(d["a"])
+            b_m, b_c = _mrate_and_cum(d["b"])
+            if a_m is not None and b_m is not None:
+                mrate_val = a_m - b_m
+                cum_val = (a_c - b_c) if (a_c is not None and b_c is not None) else None
+                lbl = f"{d['a']}-{d['b']}"
+            elif a_m is not None:
+                mrate_val, cum_val, lbl = a_m, a_c, d["a"]
+            else:
+                continue
+            val, basis = _dpr_pick_month_value(mrate_val, cum_val, report_day,
+                                               days_in_month, label=item)
+            if val is not None:
+                rows.append({"item_name": item, "value": round(val / 1000.0, 3),
+                             "unit": "'000T", "cell": f"DPR!{lbl} (computed)",
+                             "pdf_label": lbl, "basis": basis, "status": "ok"})
         elif d["op"] == "add":
             addrs = d.get("cells", [])
-            parts = [clean_val(ws[c].value) for c in addrs]
-            parts = [v for v in parts if v is not None]
-            if parts:
-                rows.append({"item_name": item,
-                             "value": round(_project(sum(parts)) / 1000.0, 3), "unit": "'000T",
-                             "cell": f"DPR!{'+'.join(addrs)} (computed)",
-                             "pdf_label": "+".join(addrs),
-                             "basis": _basis(False), "status": "ok"})
+            m_parts = [v for v in (clean_val(ws[c].value) for c in addrs) if v is not None]
+            c_parts = [v for v in (clean_val(ws[_dpr_cum_cell(c)].value) for c in addrs) if v is not None]
+            if m_parts:
+                val, basis = _dpr_pick_month_value(
+                    sum(m_parts), sum(c_parts) if c_parts else None,
+                    report_day, days_in_month, label=item,
+                )
+                if val is not None:
+                    rows.append({"item_name": item, "value": round(val / 1000.0, 3),
+                                 "unit": "'000T", "cell": f"DPR!{'+'.join(addrs)} (computed)",
+                                 "pdf_label": "+".join(addrs), "basis": basis, "status": "ok"})
 
     ok = sum(1 for r in rows if r["status"] == "ok")
     logger.info("BSL DPR preview: %d/%d ok for %s", ok, len(rows), db_month)

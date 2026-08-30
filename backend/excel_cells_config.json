@@ -1,7 +1,7 @@
 {
   "_doc": "Cell-address config for Excel/PDF extractors. Edit here when a file format changes — no Python code changes needed. All changes take effect on the next upload (no restart). Keys: 'cells' for A1-style addresses, 'cells_rc' for [row_0based, col_0based, divide_by_1000] tuples.",
   "bsl_dpr": {
-    "_doc": "BSL DPR Mail month-end report. Sheet: DPR. Date auto-detected from date_cell (Excel datetime).",
+    "_doc": "BSL DPR Mail. Sheet: DPR. Date auto-detected from date_cell (Excel datetime). Every 'cells' address is the plant's M.RATE figure (col P for MAIN UNITS, col AA for SALEABLE STEEL); the CUM figure one column left (O / Z) is read only to cross-check M.RATE and compute a fallback for a stale mid-month value.",
     "sheet": "DPR",
     "date_cell": "O1",
     "plant": "BSL",
@@ -12,40 +12,40 @@
       "Oven Pushing(nos/d)": "P6",
       "Total Sinter": "P7",
       "Hot Metal": "P8",
-      "Pig Iron": "Z21",
+      "Pig Iron": "AA21",
       "SMS-1 CCM-1": "P10",
       "SMS-2 CCM-1&2": "P11",
       "Total Crude Steel": "P12",
       "HSM Total HR Coil": "P14",
-      "HSM HR Coil (Sale)": "Z6",
-      "HSM HR Plate": "Z7",
-      "HR Sheet": "Z8",
-      "CR I/II CR(Coil) Sale": "Z9",
-      "CR Sheets": "Z10",
-      "CRC(3)": "Z15",
-      "CR III CR(Coil) Sale": "Z15",
-      "GPC3": "Z16",
-      "CRSALE": "Z18",
-      "Saleable Steel": "O31",
-      "Saleable Semis": "Z19",
-      "Thick Plate": "Z20"
+      "HSM HR Coil (Sale)": "AA6",
+      "HSM HR Plate": "AA7",
+      "HR Sheet": "AA8",
+      "CR I/II CR(Coil) Sale": "AA9",
+      "CR Sheets": "AA10",
+      "CRC(3)": "AA15",
+      "CR III CR(Coil) Sale": "AA15",
+      "GPC3": "AA16",
+      "CRSALE": "AA18",
+      "Saleable Steel": "P31",
+      "Saleable Semis": "AA19",
+      "Thick Plate": "AA20"
     },
     "derived": [
       {
         "item": "Finished Steel",
         "op": "subtract",
-        "a": "O31",
-        "b": "Z19"
+        "a": "P31",
+        "b": "AA19"
       },
       {
         "item": "CRC&S(1&2)",
         "op": "add",
-        "cells": ["Z9", "Z10"]
+        "cells": ["AA9", "AA10"]
       },
       {
         "item": "GP/GC",
         "op": "add",
-        "cells": ["Z11", "Z12", "Z13"]
+        "cells": ["AA11", "AA12", "AA13"]
       }
     ]
   },
