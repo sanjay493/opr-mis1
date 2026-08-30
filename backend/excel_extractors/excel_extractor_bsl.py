@@ -26,6 +26,41 @@ def clean_val(val) -> Optional[float]:
         return None
 
 
+# ---------------------------------------------------------------------------
+# Mid-month → full-month projection (DPR Mail production)
+# ---------------------------------------------------------------------------
+# The DPR sheet's "PRODUCTION (SALEABLE STEEL)" block (column Z) and the
+# Saleable Steel cell O31 hold a *month-to-date cumulative*, correct as the
+# monthly figure only on a last-day report. The "MAIN UNITS" block's column
+# P ("M.RATE") is the plant's own full-month projection (cum ÷ day-elapsed,
+# ×days_in_month for tonnage) and needs no scaling. When the O1 date is
+# before month-end we project the column-Z / O31 items ourselves the same
+# way; a strict no-op on a month-end or undated report.
+
+def _dpr_report_day(o1_raw):
+    """(report_day, days_in_month, 'YYYY-MM') from DPR cell O1 — an Excel
+    datetime or a DD.MM.YYYY string. (None, None, None) if unreadable."""
+    y = mth = day = None
+    if isinstance(o1_raw, datetime):
+        y, mth, day = o1_raw.year, o1_raw.month, o1_raw.day
+    elif o1_raw:
+        m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", str(o1_raw))
+        if m:
+            day, mth, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if not (y and mth and day):
+        return None, None, None
+    return day, calendar.monthrange(y, mth)[1], f"{y}-{str(mth).zfill(2)}"
+
+
+def _dpr_is_mid_month(report_day, days_in_month) -> bool:
+    return bool(report_day and days_in_month and 0 < report_day < days_in_month)
+
+
+def _dpr_is_mrate_cell(addr: str) -> bool:
+    """True for the column-P 'M.RATE' cells (already a full-month figure)."""
+    return addr[:1].upper() == "P"
+
+
 def extract_and_save_excel(file_path: str, report_month: str = "", source_file_name: str = "") -> bool:
     """
     Dispatcher: auto-detects BSL file type by sheet name and calls the correct extractor.
@@ -168,21 +203,35 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     else:
         raise ValueError("Cell O1 is empty — cannot determine report month.")
 
-    # BSL DPR cells hold cumulative-to-date figures, which are only correct as
-    # the monthly total when this is genuinely the last day's report. Reject
-    # mid-month uploads rather than silently storing a partial month as final.
+    # BSL DPR column-Z / O31 cells hold cumulative-to-date figures, correct as
+    # the monthly total only on the last day's report. A mid-month upload used
+    # to be rejected outright; now it is allowed with a warning — the column-Z
+    # items are projected to the full month (the column-P "M.RATE" items are
+    # already a full-month figure and pass through unchanged).
     last_day = calendar.monthrange(int(year), int(m_num))[1]
-    if day != last_day:
-        raise ValueError(
-            f"Cell O1 date ({day:02d}.{m_num}.{year}) is not the last day of "
-            f"{MONTH_NAMES[m_num]} {year} (last day is {last_day:02d}.{m_num}.{year}). "
-            "The BSL DPR Mail report must be the month-end file — this looks like "
-            "a mid-month DPR upload."
+    days_in_month = last_day
+    report_day = day
+    mid_month = _dpr_is_mid_month(report_day, days_in_month)
+    if mid_month:
+        logger.warning(
+            "BSL DPR: cell O1 date (%02d.%s.%s) is not the last day of %s %s "
+            "(last day is %02d) — mid-month DPR upload. Column-Z / O31 cumulative "
+            "items will be projected to the full month (x%d/%d); column-P "
+            "\"M.RATE\" items are used as-is.",
+            report_day, m_num, year, MONTH_NAMES[m_num], year, last_day,
+            days_in_month, report_day,
         )
 
     logger.info(f"BSL DPR: month auto-detected from O1 → {db_report_month}")
 
     production_cells, NO_CONVERT, derived_rules = _dpr_config()
+
+    def _project(cum):
+        """Scale a month-to-date cumulative to a full-month estimate (no-op
+        unless the O1 date is before month-end)."""
+        if cum is None:
+            return None
+        return cum * days_in_month / report_day if mid_month else cum
 
     conn = db.connect()
     cursor = conn.cursor()
@@ -202,23 +251,28 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
         """, (db_report_month, "BSL", item_name, val))
 
     for item_name, cell in production_cells.items():
-        _save(item_name, clean_val(ws[cell].value))
+        raw = clean_val(ws[cell].value)
+        if not _dpr_is_mrate_cell(cell):
+            raw = _project(raw)
+        _save(item_name, raw)
 
-    # Derived values driven by config
+    # Derived values driven by config. Every derived rule references column-Z /
+    # O31 cumulative cells (never a column-P M.RATE cell), so the combined
+    # result is projected as a whole.
     for d in derived_rules:
         item = d["item"]
         if d["op"] == "subtract":
             a_val = clean_val(ws[d["a"]].value)
             b_val = clean_val(ws[d["b"]].value)
             if a_val is not None and b_val is not None:
-                _save(item, a_val - b_val)
+                _save(item, _project(a_val - b_val))
             elif a_val is not None:
-                _save(item, a_val)
+                _save(item, _project(a_val))
         elif d["op"] == "add":
             parts = [clean_val(ws[c].value) for c in d.get("cells", [])]
             parts = [v for v in parts if v is not None]
             if parts:
-                _save(item, sum(parts))
+                _save(item, _project(sum(parts)))
 
     if vals_extracted == 0:
         raise ValueError(
@@ -2144,15 +2198,9 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
     """Preview BSL DPR Mail report (sheet 'DPR') — no DB writes."""
     ws = wb["DPR"]
 
-    # Auto-detect month from O1 (Excel datetime or DD.MM.YYYY string)
+    # Auto-detect month + report day from O1 (Excel datetime or DD.MM.YYYY string)
     o1_raw = ws["O1"].value
-    db_month = None
-    if isinstance(o1_raw, datetime):
-        db_month = f"{o1_raw.year}-{str(o1_raw.month).zfill(2)}"
-    elif o1_raw:
-        m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", str(o1_raw))
-        if m:
-            db_month = f"{m.group(3)}-{m.group(2)}"
+    report_day, days_in_month, db_month = _dpr_report_day(o1_raw)
     db_month = db_month or report_month
     if not db_month:
         raise ValueError("Cannot determine report month: cell O1 is empty and no month supplied.")
@@ -2167,24 +2215,53 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
 
     logger.info("BSL DPR preview: month from O1 → %s", db_month)
 
+    mid_month = _dpr_is_mid_month(report_day, days_in_month)
+    if mid_month:
+        logger.warning(
+            "BSL DPR preview: mid-month file (day %d of %d) — column-Z / O31 "
+            "cumulative items projected to the full month (x%d/%d); column-P "
+            "\"M.RATE\" items used as-is.",
+            report_day, days_in_month, days_in_month, report_day,
+        )
+
+    def _project(cum):
+        if cum is None:
+            return None
+        return cum * days_in_month / report_day if mid_month else cum
+
+    def _basis(is_mrate):
+        if is_mrate:
+            return "m-rate"
+        if mid_month:
+            return "projected"
+        return "month-end" if report_day else ""
+
     CELL_MAP, NO_CONVERT, derived_rules = _dpr_config()
 
     rows = []
     for item_name, addr in CELL_MAP.items():
+        is_mrate = _dpr_is_mrate_cell(addr)
         raw = clean_val(ws[addr].value)
+        if not is_mrate:
+            raw = _project(raw)
+        cell = f"DPR!{addr}" + (f" x{days_in_month}/{report_day}" if (mid_month and not is_mrate) else "")
         if raw is not None:
             if item_name in NO_CONVERT:
                 stored, unit = raw, "nos/d"
             else:
                 stored, unit = round(raw / 1000.0, 3), "'000T"
             rows.append({"item_name": item_name, "value": stored, "unit": unit,
-                         "cell": f"DPR!{addr}", "pdf_label": addr, "status": "ok"})
+                         "cell": cell, "pdf_label": addr,
+                         "basis": _basis(is_mrate), "status": "ok"})
         else:
             unit = "nos/d" if item_name in NO_CONVERT else "'000T"
             rows.append({"item_name": item_name, "value": None, "unit": unit,
-                         "cell": f"DPR!{addr}", "pdf_label": addr, "status": "skip"})
+                         "cell": cell, "pdf_label": addr,
+                         "basis": _basis(is_mrate), "status": "skip"})
 
     # Derived values driven by the same config used by the DB-writing extractor.
+    # Every derived rule references column-Z / O31 cumulative cells only, so the
+    # combined result is projected as a whole on a mid-month file.
     for d in derived_rules:
         item = d["item"]
         if d["op"] == "subtract":
@@ -2192,23 +2269,26 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
             b_val = clean_val(ws[d["b"]].value)
             if a_val is not None and b_val is not None:
                 rows.append({"item_name": item,
-                             "value": round((a_val - b_val) / 1000.0, 3), "unit": "'000T",
+                             "value": round(_project(a_val - b_val) / 1000.0, 3), "unit": "'000T",
                              "cell": f"DPR!{d['a']}-{d['b']} (computed)",
-                             "pdf_label": f"{d['a']}-{d['b']}", "status": "ok"})
+                             "pdf_label": f"{d['a']}-{d['b']}",
+                             "basis": _basis(False), "status": "ok"})
             elif a_val is not None:
                 rows.append({"item_name": item,
-                             "value": round(a_val / 1000.0, 3), "unit": "'000T",
+                             "value": round(_project(a_val) / 1000.0, 3), "unit": "'000T",
                              "cell": f"DPR!{d['a']} ({d['b']} missing)",
-                             "pdf_label": d["a"], "status": "ok"})
+                             "pdf_label": d["a"],
+                             "basis": _basis(False), "status": "ok"})
         elif d["op"] == "add":
             addrs = d.get("cells", [])
             parts = [clean_val(ws[c].value) for c in addrs]
             parts = [v for v in parts if v is not None]
             if parts:
                 rows.append({"item_name": item,
-                             "value": round(sum(parts) / 1000.0, 3), "unit": "'000T",
+                             "value": round(_project(sum(parts)) / 1000.0, 3), "unit": "'000T",
                              "cell": f"DPR!{'+'.join(addrs)} (computed)",
-                             "pdf_label": "+".join(addrs), "status": "ok"})
+                             "pdf_label": "+".join(addrs),
+                             "basis": _basis(False), "status": "ok"})
 
     ok = sum(1 for r in rows if r["status"] == "ok")
     logger.info("BSL DPR preview: %d/%d ok for %s", ok, len(rows), db_month)
@@ -2234,6 +2314,9 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
         "techno_param_rows":  [],
         "special_steel_rows": [],
         "stock_rows":         stock_rows,
+        "morning_report_day":    report_day,
+        "morning_days_in_month": days_in_month,
+        "morning_is_month_end":  (not report_day) or report_day >= (days_in_month or 0),
     }
 
 

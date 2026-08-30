@@ -1,8 +1,12 @@
 {
   "month": "2026-05",
+  "morning_days_in_month": 31,
+  "morning_is_month_end": true,
+  "morning_report_day": 31,
   "plant": "BSL",
   "production_rows": [
     {
+      "basis": "m-rate",
       "cell": "DPR!P6",
       "item_name": "Oven Pushing(nos/d)",
       "pdf_label": "P6",
@@ -11,6 +15,7 @@
       "value": 524.193548
     },
     {
+      "basis": "m-rate",
       "cell": "DPR!P7",
       "item_name": "Total Sinter",
       "pdf_label": "P7",
@@ -19,6 +24,7 @@
       "value": 575.813
     },
     {
+      "basis": "m-rate",
       "cell": "DPR!P8",
       "item_name": "Hot Metal",
       "pdf_label": "P8",
@@ -27,6 +33,7 @@
       "value": 418.322
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z21",
       "item_name": "Pig Iron",
       "pdf_label": "Z21",
@@ -35,6 +42,7 @@
       "value": 11.667
     },
     {
+      "basis": "m-rate",
       "cell": "DPR!P10",
       "item_name": "SMS-1 CCM-1",
       "pdf_label": "P10",
@@ -43,6 +51,7 @@
       "value": 71.065
     },
     {
+      "basis": "m-rate",
       "cell": "DPR!P11",
       "item_name": "SMS-2 CCM-1&2",
       "pdf_label": "P11",
@@ -51,6 +60,7 @@
       "value": 302.497
     },
     {
+      "basis": "m-rate",
       "cell": "DPR!P12",
       "item_name": "Total Crude Steel",
       "pdf_label": "P12",
@@ -59,6 +69,7 @@
       "value": 373.562
     },
     {
+      "basis": "m-rate",
       "cell": "DPR!P14",
       "item_name": "HSM Total HR Coil",
       "pdf_label": "P14",
@@ -67,6 +78,7 @@
       "value": 263.041
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z6",
       "item_name": "HSM HR Coil (Sale)",
       "pdf_label": "Z6",
@@ -75,6 +87,7 @@
       "value": 157.625
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z7",
       "item_name": "HSM HR Plate",
       "pdf_label": "Z7",
@@ -83,6 +96,7 @@
       "value": 29.756
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z8",
       "item_name": "HR Sheet",
       "pdf_label": "Z8",
@@ -91,6 +105,7 @@
       "value": 3.872
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z9",
       "item_name": "CR I/II CR(Coil) Sale",
       "pdf_label": "Z9",
@@ -99,6 +114,7 @@
       "value": 24.072
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z10",
       "item_name": "CR Sheets",
       "pdf_label": "Z10",
@@ -107,6 +123,7 @@
       "value": 0.024
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z15",
       "item_name": "CRC(3)",
       "pdf_label": "Z15",
@@ -115,6 +132,7 @@
       "value": 53.482
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z15",
       "item_name": "CR III CR(Coil) Sale",
       "pdf_label": "Z15",
@@ -123,6 +141,7 @@
       "value": 53.482
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z16",
       "item_name": "GPC3",
       "pdf_label": "Z16",
@@ -131,6 +150,7 @@
       "value": 13.106
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z18",
       "item_name": "CRSALE",
       "pdf_label": "Z18",
@@ -139,6 +159,7 @@
       "value": 91.016
     },
     {
+      "basis": "month-end",
       "cell": "DPR!O31",
       "item_name": "Saleable Steel",
       "pdf_label": "O31",
@@ -147,6 +168,7 @@
       "value": 320.889
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z19",
       "item_name": "Saleable Semis",
       "pdf_label": "Z19",
@@ -155,6 +177,7 @@
       "value": 34.321
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z20",
       "item_name": "Thick Plate",
       "pdf_label": "Z20",
@@ -163,6 +186,7 @@
       "value": 4.3
     },
     {
+      "basis": "month-end",
       "cell": "DPR!O31-Z19 (computed)",
       "item_name": "Finished Steel",
       "pdf_label": "O31-Z19",
@@ -171,6 +195,7 @@
       "value": 286.568
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z9+Z10 (computed)",
       "item_name": "CRC&S(1&2)",
       "pdf_label": "Z9+Z10",
@@ -179,6 +204,7 @@
       "value": 24.096
     },
     {
+      "basis": "month-end",
       "cell": "DPR!Z11+Z12+Z13 (computed)",
       "item_name": "GP/GC",
       "pdf_label": "Z11+Z12+Z13",
