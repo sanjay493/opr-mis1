@@ -5,8 +5,9 @@ Handles five distinct BSP file types, auto-detected:
   1. BSP PPC MIS daily report (.xls, sheet "S1")
        → extract_and_save_excel() — direct DB write, no preview
   2. BSP MIS-2 month-end report (.xls/.xlsx, row 2 = "BSP MIS-2") — furnace-
-     wise Hot Metal production (tentative), column D "CUM" on a month-end-
-     dated report is the for-the-month figure
+     wise Hot Metal production (tentative), column D "CUM" is a month-to-date
+     running total; on a report dated before the last day of the month it is
+     projected to the full month from the header date (see _project_to_month)
        → _extract_mis2_furnace_preview()
   3. BSP 3-page Techno parameters (.xlsx, sheet "Sheet1", month in R3C1)
        → _extract_techno_3page_preview()
@@ -140,6 +141,39 @@ def _clean(v) -> Optional[float]:
         return float(s.replace(",", ""))
     except (ValueError, TypeError):
         return None
+
+
+# ---------------------------------------------------------------------------
+# Month-to-date → full-month projection
+# ---------------------------------------------------------------------------
+# Both BSP month-end reports carry a *month-to-date running total*, not a
+# for-the-month figure: PPC MIS sheet S1 column F ("Cum. Till Date") and
+# MIS-2 column D ("CUM"). That total only equals the whole month on a
+# last-day-of-month report; uploaded any earlier it understates every
+# tonnage. Neither report has a "monthly rate" / projected column of its
+# own (unlike RSP), so we project it ourselves from the report date —
+# cum × days_in_month ÷ report_day — exactly as excel_extractor_rsp does.
+# A strict no-op on a month-end or undated report.
+
+def _report_day_of(y, m, d):
+    """(report_day, days_in_month) from a Y/M/D, or (None, None) if unusable."""
+    if not (y and m and d):
+        return None, None
+    return int(d), calendar.monthrange(int(y), int(m))[1]
+
+
+def _is_mid_month(report_day, days_in_month) -> bool:
+    return bool(report_day and days_in_month and 0 < report_day < days_in_month)
+
+
+def _project_to_month(cum, report_day, days_in_month):
+    """Scale a month-to-date cumulative up to a full-month estimate.
+    No-op unless the report is dated before the last day of its month."""
+    if cum is None:
+        return None
+    if _is_mid_month(report_day, days_in_month):
+        return cum * days_in_month / report_day
+    return cum
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +387,8 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
     Month auto-detected from the date cell (see _detect_ppc_date — its column
     has drifted between report vintages). report_month used only as fallback.
     Units: raw Tonnes → stored as '000 T (divide by 1000). Coke items as-is (nos/day).
+    Column F is a month-to-date cumulative for tonnage items; on a report dated
+    before month-end it is projected to the full month (×days_in_month/report_day).
     """
     try:
         wb = xlrd.open_workbook(file_path)
@@ -364,10 +400,12 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
 
         ws = wb.sheet_by_name("S1")
 
+        report_day = days_in_month = None
         date_serial = _detect_ppc_date(ws)
         if date_serial is not None:
-            y, m, *_ = xlrd.xldate_as_tuple(date_serial, wb.datemode)
+            y, m, d, *_ = xlrd.xldate_as_tuple(date_serial, wb.datemode)
             db_report_month = f"{y}-{m:02d}"
+            report_day, days_in_month = _report_day_of(y, m, d)
             logger.info(f"BSP PPC MIS: month auto-detected → {db_report_month}")
         elif report_month:
             db_report_month = report_month
@@ -375,6 +413,14 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
             raise ValueError(
                 "Cannot determine report month: no plausible date found and "
                 "no report_month was provided."
+            )
+
+        mid_month = _is_mid_month(report_day, days_in_month)
+        if mid_month:
+            logger.warning(
+                "BSP PPC MIS: report dated day %s of %s — column-F month-to-date "
+                "tonnages will be projected to the full month (×%s/%s)",
+                report_day, days_in_month, days_in_month, report_day,
             )
 
         production_cells = _resolve_ppc_mis_cells(ws)
@@ -388,6 +434,8 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
             val = _clean(raw)
             if val is not None:
                 if do_convert:
+                    if mid_month:
+                        val = val * days_in_month / report_day
                     val = round(val / 1000.0, 3)
                 vals_extracted += 1
 
@@ -1014,6 +1062,7 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
     import datetime as _dt
 
     is_xls = file_path.lower().endswith(".xls")
+    report_day = days_in_month = None
 
     if is_xls:
         wb_raw = xlrd.open_workbook(file_path)
@@ -1022,8 +1071,9 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
 
         n1_raw = ws_s1.cell_value(0, 13)
         if n1_raw and isinstance(n1_raw, float) and n1_raw > 0:
-            y, m, *_ = xlrd.xldate_as_tuple(n1_raw, wb_raw.datemode)
+            y, m, d, *_ = xlrd.xldate_as_tuple(n1_raw, wb_raw.datemode)
             db_month = f"{y}-{m:02d}"
+            report_day, days_in_month = _report_day_of(y, m, d)
         elif report_month:
             db_month = report_month
         else:
@@ -1042,6 +1092,7 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
         n1_raw = ws_s1.cell(row=1, column=14).value
         if isinstance(n1_raw, (_dt.datetime, _dt.date)):
             db_month = f"{n1_raw.year}-{n1_raw.month:02d}"
+            report_day, days_in_month = _report_day_of(n1_raw.year, n1_raw.month, n1_raw.day)
         elif report_month:
             db_month = report_month
         else:
@@ -1064,6 +1115,14 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
     else:
         logger.info("BSP PPC MIS preview: month → %s", db_month)
 
+    mid_month = _is_mid_month(report_day, days_in_month)
+    if mid_month:
+        logger.warning(
+            "BSP PPC MIS preview: report dated day %s of %s — column-F month-to-date "
+            "tonnages projected to the full month (×%s/%s)",
+            report_day, days_in_month, days_in_month, report_day,
+        )
+
     production_rows = []
     # Same guard/stable-label resolution extract_and_save_excel applies —
     # previously this loop read _ppc_mis_config()'s raw default row/col
@@ -1074,16 +1133,33 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
     for item_name, (row_0, col_0, do_convert) in _resolve_ppc_mis_cells(ws_for_resolve).items():
         raw = _cv(row_0, col_0)
         val = _clean(raw)
+        # Column F is a month-to-date cumulative for tonnage items (do_convert)
+        # — project it to a whole-month figure when the report is mid-month.
+        # The nos/day rows (do_convert False) already hold a per-day average,
+        # so they need no scaling; flag them as partial-month only.
         if val is not None and do_convert:
+            if mid_month:
+                val = val * days_in_month / report_day
             val = round(val / 1000.0, 3)
         unit = "nos/d" if not do_convert else "'000T"
         cell_ref = f"{get_column_letter(col_0 + 1)}{row_0 + 1}"
+        cell = f"S1!{cell_ref}"
+        if mid_month and do_convert and val is not None:
+            basis = "projected"
+            cell += f" ×{days_in_month}/{report_day}"
+        elif mid_month and not do_convert:
+            basis = "mtd-average"
+        elif report_day:
+            basis = "month-end"
+        else:
+            basis = ""
         production_rows.append({
             "item_name": item_name,
             "value": val,
             "unit": unit,
-            "cell": f"S1!{cell_ref}",
+            "cell": cell,
             "pdf_label": cell_ref,
+            "basis": basis,
             "status": "ok" if val is not None else "skip",
         })
 
@@ -1135,13 +1211,18 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
         "techno_param_rows":  [],
         "special_steel_rows": [],
         "stock_rows":         stock_rows,
+        "morning_report_day":    report_day,
+        "morning_days_in_month": days_in_month,
+        "morning_is_month_end":  (not report_day) or report_day >= (days_in_month or 0),
     }
 
 
 # ---------------------------------------------------------------------------
 # Section 5 — BSP MIS-2 month-end report: furnace-wise Hot Metal production
-# (tentative). On a month-end-dated report the column-D "CUM" figure is the
-# for-the-month production. Feeds production_table item_names "BF-1".."BF-8"
+# (tentative). Column D "CUM" is a month-to-date running total — the whole
+# month only on a last-day report, otherwise projected to the full month from
+# the header date (_project_to_month). Feeds production_table item_names
+# "BF-1".."BF-8"
 # (via the shared /api/confirm-extraction normalize_item_name step, which
 # rewrites "BF-" → "BF#") so techno_cumulative's per-furnace weighting can
 # read real furnace-wise weights instead of falling back to the techno page's
@@ -1224,12 +1305,32 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
         )
     y, m, d = parsed
     db_month = f"{y}-{m:02d}"
+    report_day, days_in_month = _report_day_of(y, m, d)
+    mid_month = _is_mid_month(report_day, days_in_month)
     month_mismatch = bool(report_month and db_month != report_month)
     if month_mismatch:
         logger.warning(
             "BSP MIS-2: file month %s != selected month %s — file month will be used",
             db_month, report_month,
         )
+    if mid_month:
+        logger.warning(
+            "BSP MIS-2: report dated day %s of %s — column-D CUM tonnages projected "
+            "to the full month (×%s/%s)",
+            report_day, days_in_month, days_in_month, report_day,
+        )
+
+    # Column D "CUM" is a month-to-date running total, whole-month only on a
+    # last-day report — project it otherwise (see _project_to_month).
+    def _t000(raw):
+        v = _project_to_month(_clean(raw), report_day, days_in_month)
+        return round(v / 1000.0, 3) if v is not None else None
+
+    def _dcell(r):
+        base = f"{ws.title}!D{r}"
+        return base + (f" ×{days_in_month}/{report_day}" if mid_month else "")
+
+    _basis = "projected" if mid_month else ("month-end" if report_day else "")
 
     # item_name uses the "BF#N" spelling (not "BF-N") to match the existing
     # BSP production_table convention directly — main.py's normalize_item_name
@@ -1244,14 +1345,14 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
         label = str(ws.cell(r, 2).value or "").strip().upper()   # column B
         if label in _MIS2_FURNACE_LABELS and label not in found:
             found.add(label)
-            val = _clean(ws.cell(r, _MIS2_PRODUCTION_COL).value)
-            val_000t = round(val / 1000.0, 3) if val is not None else None
+            val_000t = _t000(ws.cell(r, _MIS2_PRODUCTION_COL).value)
             production_rows.append({
                 "item_name": label.replace("BF-", "BF#"),
                 "value":     val_000t,
                 "unit":      "'000T",
-                "cell":      f"{ws.title}!D{r}",
+                "cell":      _dcell(r),
                 "pdf_label": label,
+                "basis":     _basis,
                 "status":    "ok" if val_000t is not None else "skip",
             })
         elif label in _MIS2_MM_LABELS and _MIS2_MM_LABELS[label] not in mm_values:
@@ -1260,55 +1361,64 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
             # so a file using the older wording doesn't also get a spurious
             # "skip" row for the newer label further down.
             item_name = _MIS2_MM_LABELS[label]
-            val = _clean(ws.cell(r, _MIS2_PRODUCTION_COL).value)
-            val_000t = round(val / 1000.0, 3) if val is not None else None
+            val_000t = _t000(ws.cell(r, _MIS2_PRODUCTION_COL).value)
             mm_values[item_name] = val_000t
             production_rows.append({
                 "item_name": item_name,
                 "value":     val_000t,
                 "unit":      "'000T",
-                "cell":      f"{ws.title}!D{r}",
+                "cell":      _dcell(r),
                 "pdf_label": label,
+                "basis":     _basis,
                 "status":    "ok" if val_000t is not None else "skip",
             })
         elif label in _MIS2_EXTRA_LABELS and label not in found:
             found.add(label)
             item_name = _MIS2_EXTRA_LABELS[label]
-            val = _clean(ws.cell(r, _MIS2_PRODUCTION_COL).value)
+            raw = _clean(ws.cell(r, _MIS2_PRODUCTION_COL).value)
             if item_name in _MIS2_PER_DAY_COUNT_ITEMS:
-                days_in_month = calendar.monthrange(y, m)[1]
-                item_val = round(val / days_in_month, 2) if val is not None else None
+                # CUM here is a running *count* of pushings — average over the
+                # days elapsed (report_day), which on a month-end file is the
+                # whole month.
+                den = report_day if report_day else calendar.monthrange(y, m)[1]
+                item_val = round(raw / den, 2) if raw is not None else None
                 item_unit = "nos/day"
+                item_cell = f"{ws.title}!D{r}" + (f" ÷{den}" if raw is not None else "")
+                item_basis = "mtd-average" if mid_month else _basis
             else:
-                item_val = round(val / 1000.0, 3) if val is not None else None
+                v = _project_to_month(raw, report_day, days_in_month)
+                item_val = round(v / 1000.0, 3) if v is not None else None
                 item_unit = "'000T"
+                item_cell = _dcell(r)
+                item_basis = _basis
             extra_values[item_name] = item_val
             production_rows.append({
                 "item_name": item_name,
                 "value":     item_val,
                 "unit":      item_unit,
-                "cell":      f"{ws.title}!D{r}",
+                "cell":      item_cell,
                 "pdf_label": label,
+                "basis":     item_basis,
                 "status":    "ok" if item_val is not None else "skip",
             })
     for label in _MIS2_FURNACE_LABELS:
         if label not in found:
             production_rows.append({
                 "item_name": label.replace("BF-", "BF#"), "value": None, "unit": "'000T",
-                "cell": "", "pdf_label": label, "status": "skip",
+                "cell": "", "pdf_label": label, "basis": "", "status": "skip",
             })
     for item_name in dict.fromkeys(_MIS2_MM_LABELS.values()):
         if item_name not in mm_values:
             production_rows.append({
                 "item_name": item_name, "value": None, "unit": "'000T",
-                "cell": "", "pdf_label": item_name, "status": "skip",
+                "cell": "", "pdf_label": item_name, "basis": "", "status": "skip",
             })
     for label, item_name in _MIS2_EXTRA_LABELS.items():
         if label not in found:
             unit = "nos/day" if item_name in _MIS2_PER_DAY_COUNT_ITEMS else "'000T"
             production_rows.append({
                 "item_name": item_name, "value": None, "unit": unit,
-                "cell": "", "pdf_label": label, "status": "skip",
+                "cell": "", "pdf_label": label, "basis": "", "status": "skip",
             })
 
     # "MM" (mill total) re-derived as the sum of the two product groups above
@@ -1325,6 +1435,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
             "unit":      "'000T",
             "cell":      "derived: TMT BARS(MM) + LT STRS(MM)",
             "pdf_label": "MM (derived)",
+            "basis":     _basis,
             "status":    "ok",
         })
 
@@ -1334,9 +1445,11 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
     # production_table from the PPC MIS upload — see "SP-3" in
     # _ppc_mis_config) minus the M/C-2 figure just read here. Skipped (not
     # guessed) if that month's SP-3 total isn't in the DB yet, e.g. this
-    # MIS-2 file was uploaded before that month's PPC MIS file.
+    # MIS-2 file was uploaded before that month's PPC MIS file — and also
+    # skipped on a mid-month file, where the just-projected M/C-2 and the
+    # stored SP-3 total are on different bases and the subtraction is unsafe.
     mc2_val = extra_values.get("SP-3 M/C-2")
-    if mc2_val is not None:
+    if mc2_val is not None and not mid_month:
         sp3_total = None
         try:
             _conn = db.connect()
@@ -1359,12 +1472,13 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
                 "unit":      "'000T",
                 "cell":      "derived: SP-3 (production_table) - SP-3 M/C-2",
                 "pdf_label": "SP-3 M/C-1 (derived)",
+                "basis":     _basis,
                 "status":    "ok",
             })
         else:
             production_rows.append({
                 "item_name": "SP-3 M/C-1", "value": None, "unit": "'000T",
-                "cell": "", "pdf_label": "SP-3 M/C-1 (derived)", "status": "skip",
+                "cell": "", "pdf_label": "SP-3 M/C-1 (derived)", "basis": "", "status": "skip",
             })
 
     ok = sum(1 for r in production_rows if r["status"] == "ok")
@@ -1383,6 +1497,9 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
         "techno_param_rows":  [],
         "special_steel_rows": [],
         "stock_rows":         [],
+        "morning_report_day":    report_day,
+        "morning_days_in_month": days_in_month,
+        "morning_is_month_end":  (not report_day) or report_day >= (days_in_month or 0),
     }
 
 

@@ -1,9 +1,13 @@
 {
   "month": "2026-05",
   "month_mismatch": false,
+  "morning_days_in_month": 31,
+  "morning_is_month_end": true,
+  "morning_report_day": 31,
   "plant": "BSP",
   "production_rows": [
     {
+      "basis": "month-end",
       "cell": "S1!F4",
       "item_name": "COB#1-8",
       "pdf_label": "F4",
@@ -12,6 +16,25 @@
       "value": 372.322581
     },
     {
+      "basis": "month-end",
+      "cell": "S1!F5",
+      "item_name": "COB#9-10",
+      "pdf_label": "F5",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 229.645161
+    },
+    {
+      "basis": "month-end",
+      "cell": "S1!F5",
+      "item_name": "COB#9-11",
+      "pdf_label": "F5",
+      "status": "ok",
+      "unit": "nos/d",
+      "value": 229.645161
+    },
+    {
+      "basis": "month-end",
       "cell": "S1!F6",
       "item_name": "Oven Pushing(nos/d)",
       "pdf_label": "F6",
@@ -20,6 +43,7 @@
       "value": 787.0
     },
     {
+      "basis": "month-end",
       "cell": "S1!F8",
       "item_name": "SP-2",
       "pdf_label": "F8",
@@ -28,6 +52,7 @@
       "value": 255.303
     },
     {
+      "basis": "month-end",
       "cell": "S1!F9",
       "item_name": "SP-3",
       "pdf_label": "F9",
@@ -36,6 +61,7 @@
       "value": 532.338
     },
     {
+      "basis": "month-end",
       "cell": "S1!F10",
       "item_name": "Total Sinter",
       "pdf_label": "F10",
@@ -44,6 +70,7 @@
       "value": 787.641
     },
     {
+      "basis": "month-end",
       "cell": "S1!F11",
       "item_name": "BF#1-7",
       "pdf_label": "F11",
@@ -52,6 +79,7 @@
       "value": 278.203
     },
     {
+      "basis": "month-end",
       "cell": "S1!F12",
       "item_name": "BF#8",
       "pdf_label": "F12",
@@ -60,6 +88,7 @@
       "value": 259.056
     },
     {
+      "basis": "month-end",
       "cell": "S1!F13",
       "item_name": "Hot Metal",
       "pdf_label": "F13",
@@ -68,6 +97,7 @@
       "value": 537.259
     },
     {
+      "basis": "month-end",
       "cell": "S1!F14",
       "item_name": "SMS-2",
       "pdf_label": "F14",
@@ -76,6 +106,7 @@
       "value": 194.58
     },
     {
+      "basis": "month-end",
       "cell": "S1!F16",
       "item_name": "SMS-3",
       "pdf_label": "F16",
@@ -84,6 +115,7 @@
       "value": 319.355
     },
     {
+      "basis": "month-end",
       "cell": "S1!F17",
       "item_name": "Total Crude Steel",
       "pdf_label": "F17",
@@ -92,6 +124,7 @@
       "value": 513.935
     },
     {
+      "basis": "month-end",
       "cell": "S1!F18",
       "item_name": "RSM_RAIL",
       "pdf_label": "F18",
@@ -100,6 +133,7 @@
       "value": 41.359
     },
     {
+      "basis": "month-end",
       "cell": "S1!F22",
       "item_name": "URM_RAIL",
       "pdf_label": "F22",
@@ -108,6 +142,7 @@
       "value": 93.397
     },
     {
+      "basis": "month-end",
       "cell": "S1!F24",
       "item_name": "MM",
       "pdf_label": "F24",
@@ -116,6 +151,7 @@
       "value": 56.531
     },
     {
+      "basis": "month-end",
       "cell": "S1!F25",
       "item_name": "WIRERODS",
       "pdf_label": "F25",
@@ -124,6 +160,7 @@
       "value": 37.523
     },
     {
+      "basis": "month-end",
       "cell": "S1!F26",
       "item_name": "BARS&RODMILL",
       "pdf_label": "F26",
@@ -132,6 +169,7 @@
       "value": 92.61
     },
     {
+      "basis": "month-end",
       "cell": "S1!F27",
       "item_name": "PLATEMILL",
       "pdf_label": "F27",
@@ -140,6 +178,7 @@
       "value": 125.102
     },
     {
+      "basis": "month-end",
       "cell": "S1!F28",
       "item_name": "Finished Steel",
       "pdf_label": "F28",
@@ -148,6 +187,7 @@
       "value": 446.522
     },
     {
+      "basis": "month-end",
       "cell": "S1!F35",
       "item_name": "Saleable Semis",
       "pdf_label": "F35",
@@ -156,6 +196,7 @@
       "value": 39.049
     },
     {
+      "basis": "month-end",
       "cell": "S1!F36",
       "item_name": "Saleable Steel",
       "pdf_label": "F36",
@@ -164,6 +205,7 @@
       "value": 485.571
     },
     {
+      "basis": "month-end",
       "cell": "S1!F39",
       "item_name": "RSMPRIME",
       "pdf_label": "F39",
@@ -172,6 +214,7 @@
       "value": 32.445
     },
     {
+      "basis": "month-end",
       "cell": "S1!J39",
       "item_name": "URMPRIME",
       "pdf_label": "J39",
@@ -180,6 +223,7 @@
       "value": 90.594
     },
     {
+      "basis": "month-end",
       "cell": "S1!N63",
       "item_name": "Pig Iron",
       "pdf_label": "N63",

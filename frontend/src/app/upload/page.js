@@ -2010,9 +2010,9 @@ function UploadPageInner() {
                 <div style={{ marginBottom: 10, padding: '8px 12px', background: '#fef7e0', border: '1px solid #fde68a',
                               borderRadius: 6, fontSize: '8.5pt', color: '#92400e' }}>
                   ⚠ Mid-month sheet (day {technoPreview.morning_report_day} of {technoPreview.morning_days_in_month}).
-                  Each production figure is the month-to-date total projected to the whole month
-                  (cumulative × {technoPreview.morning_days_in_month} ÷ {technoPreview.morning_report_day}) —
-                  the same basis as the sheet's own “M Rate”. Upload the last-day-of-month sheet for the final figures.
+                  Each tonnage figure is the month-to-date total scaled up to a whole-month estimate
+                  (cumulative × {technoPreview.morning_days_in_month} ÷ {technoPreview.morning_report_day}).
+                  Upload the last-day-of-month sheet for the final figures.
                 </div>
               )}
 
