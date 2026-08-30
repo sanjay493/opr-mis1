@@ -74,13 +74,56 @@ def _days_expr():
             "THEN 29 ELSE 28 END END")
 
 
-def _period_value(item, total, wsum, wdays):
-    """Plain sum for tonnage items; days-in-month-weighted average for rate
-    items (nos/day, COB#*) — a quarter's Oven Pushing figure must stay a
-    nos/day rate, not the sum of 3 monthly averages."""
-    if is_rate_item(item) and wdays:
-        return float(wsum) / float(wdays)
-    return total
+def _cells_period_value(item, plant_cells):
+    """plant_cells: {plant: [wsum, wdays, total]} accumulated over a period's
+    (plant, month) cells. Tonnage item -> Σ of every plant's total; rate item
+    (Oven Pushing nos/day, COB#*) -> Σ of each plant's own day-in-month
+    weighted mean = the SAIL nos/day, NOT a per-plant average (grouping the
+    days together across plants would divide by plant_count)."""
+    if is_rate_item(item):
+        return sum(w[0] / w[1] for w in plant_cells.values() if w[1])
+    return sum(w[2] for w in plant_cells.values())
+
+
+def _bucketed_period_values(cur, items: list, where: str, args: list,
+                            bucket_exprs: list, required_months: int) -> dict:
+    """{(item_name, *bucket): value} for every (item, period bucket) whose
+    window has exactly `required_months` distinct report_months.
+
+    bucket_exprs: [(sql_expr, alias), ...] — the columns that define a period
+    (e.g. quarter number + fy_start, or just a calendar year). Values are
+    combined per `_cells_period_value` (rate-item aware)."""
+    item_set = set(items)
+    sel = ", ".join(f"{e} AS {a}" for e, a in bucket_exprs)
+    grp = ", ".join(a for _e, a in bucket_exprs)
+    n = len(bucket_exprs)
+    cur.execute(f"""
+        SELECT item_name, {sel}, plant_name, report_month,
+               SUM(month_actual)   AS v,
+               MAX({_days_expr()}) AS days
+        FROM production_table
+        WHERE {where}
+        GROUP BY item_name, {grp}, plant_name, report_month
+    """, list(args))
+
+    acc = {}  # (item, bucket_tuple) -> {'months': set, 'plants': {plant: [wsum, wdays, total]}}
+    for row in cur.fetchall():
+        item, bucket = row[0], tuple(row[1:1 + n])
+        plant, rm, v, days = row[1 + n], row[2 + n], row[3 + n], row[4 + n]
+        if item not in item_set or v is None:
+            continue
+        d = acc.setdefault((item, bucket), {'months': set(), 'plants': {}})
+        d['months'].add(rm)
+        p = d['plants'].setdefault(plant, [0.0, 0.0, 0.0])
+        p[0] += v * days
+        p[1] += days
+        p[2] += v
+
+    return {
+        (item, *bucket): round(_cells_period_value(item, d['plants']), 3)
+        for (item, bucket), d in acc.items()
+        if len(d['months']) == required_months
+    }
 
 
 def _item_sort_key():
@@ -134,97 +177,48 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
             rows.append({'period': _mon_label(rm), 'month': rm,
                          'total': round(total, 3)})
 
-    # ── FY quarter: top 2 per (item, quarter) — rate items (Oven
-    # Pushing, COB#*) are days-in-month-weighted averages, everything
-    # else is a plain sum. Sorted in Python (not SQL) since the
-    # correct value per row depends on the item. ────────────────────
-    cur.execute(f"""
-        SELECT item_name,
-               {_q_expr()} AS qnum,
-               {_fy_expr()} AS fy_start,
-               SUM(month_actual) AS total,
-               SUM(month_actual * {_days_expr()}) AS wsum,
-               SUM({_days_expr()}) AS wdays
-        FROM production_table
-        WHERE {where}
-        GROUP BY item_name, qnum, fy_start
-        HAVING COUNT(DISTINCT report_month) = 3
-    """, args)
+    # ── FY quarter / half / top-5 FY / top-5 CY. Tonnage items are a
+    # plain sum; rate items (Oven Pushing, COB#*) are the sum of each
+    # plant's own days-in-month-weighted mean over the period — the SAIL
+    # nos/day, not a per-plant average. Only complete periods (3 / 6 / 12
+    # months present) count. ───────────────────────────────────────────
+    _H_EXPR = ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER) BETWEEN 4 AND 9 "
+               "THEN 1 ELSE 2 END")
+
     q_buckets = {}
-    for item, qnum, fy_start, total, wsum, wdays in cur.fetchall():
-        if item not in grp['fy_quarters'] or total is None:
-            continue
-        value = _period_value(item, total, wsum, wdays)
+    for (item, qnum, fy_start), value in _bucketed_period_values(
+            cur, items, where, args,
+            [(_q_expr(), 'qnum'), (_fy_expr(), 'fy_start')], 3).items():
         q_buckets.setdefault((item, qnum), []).append(
-            {'period': _fy_label(fy_start), 'fy_start': fy_start, 'total': round(value, 3)})
+            {'period': _fy_label(fy_start), 'fy_start': fy_start, 'total': value})
     for (item, qnum), rows in q_buckets.items():
         rows.sort(key=lambda r: r['total'], reverse=True)
         grp['fy_quarters'][item][_Q_LABELS[qnum]] = rows[:2]
 
-    # ── FY half: top 2 per (item, half) ──────────────────────────────
-    cur.execute(f"""
-        SELECT item_name,
-               CASE WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER) BETWEEN 4 AND 9
-                    THEN 1 ELSE 2 END AS hnum,
-               {_fy_expr()} AS fy_start,
-               SUM(month_actual) AS total,
-               SUM(month_actual * {_days_expr()}) AS wsum,
-               SUM({_days_expr()}) AS wdays
-        FROM production_table
-        WHERE {where}
-        GROUP BY item_name, hnum, fy_start
-        HAVING COUNT(DISTINCT report_month) = 6
-    """, args)
     h_buckets = {}
-    for item, hnum, fy_start, total, wsum, wdays in cur.fetchall():
-        if item not in grp['fy_halves'] or total is None:
-            continue
-        value = _period_value(item, total, wsum, wdays)
+    for (item, hnum, fy_start), value in _bucketed_period_values(
+            cur, items, where, args,
+            [(_H_EXPR, 'hnum'), (_fy_expr(), 'fy_start')], 6).items():
         h_buckets.setdefault((item, hnum), []).append(
-            {'period': _fy_label(fy_start), 'fy_start': fy_start, 'total': round(value, 3)})
+            {'period': _fy_label(fy_start), 'fy_start': fy_start, 'total': value})
     for (item, hnum), rows in h_buckets.items():
         rows.sort(key=lambda r: r['total'], reverse=True)
         grp['fy_halves'][item][_H_LABELS[hnum]] = rows[:2]
 
-    # ── Top 5 FY per item ────────────────────────────────────────────
-    cur.execute(f"""
-        SELECT item_name, {_fy_expr()} AS fy_start,
-               SUM(month_actual) AS total,
-               SUM(month_actual * {_days_expr()}) AS wsum,
-               SUM({_days_expr()}) AS wdays
-        FROM production_table
-        WHERE {where}
-        GROUP BY item_name, fy_start
-        HAVING COUNT(DISTINCT report_month) = 12
-    """, args)
     fy_buckets = {}
-    for item, fy_start, total, wsum, wdays in cur.fetchall():
-        if item not in grp['top5_fy'] or total is None:
-            continue
-        value = _period_value(item, total, wsum, wdays)
+    for (item, fy_start), value in _bucketed_period_values(
+            cur, items, where, args, [(_fy_expr(), 'fy_start')], 12).items():
         fy_buckets.setdefault(item, []).append(
-            {'period': _fy_label(fy_start), 'total': round(value, 3)})
+            {'period': _fy_label(fy_start), 'total': value})
     for item, rows in fy_buckets.items():
         rows.sort(key=lambda r: r['total'], reverse=True)
         grp['top5_fy'][item] = rows[:5]
 
-    # ── Top 5 CY per item ────────────────────────────────────────────
-    cur.execute(f"""
-        SELECT item_name, SUBSTR(report_month,1,4) AS yr,
-               SUM(month_actual) AS total,
-               SUM(month_actual * {_days_expr()}) AS wsum,
-               SUM({_days_expr()}) AS wdays
-        FROM production_table
-        WHERE {where}
-        GROUP BY item_name, yr
-        HAVING COUNT(DISTINCT report_month) = 12
-    """, args)
     cy_buckets = {}
-    for item, yr, total, wsum, wdays in cur.fetchall():
-        if item not in grp['top5_cy'] or total is None:
-            continue
-        value = _period_value(item, total, wsum, wdays)
-        cy_buckets.setdefault(item, []).append({'period': yr, 'total': round(value, 3)})
+    for (item, yr), value in _bucketed_period_values(
+            cur, items, where, args,
+            [('SUBSTR(report_month,1,4)', 'yr')], 12).items():
+        cy_buckets.setdefault(item, []).append({'period': yr, 'total': value})
     for item, rows in cy_buckets.items():
         rows.sort(key=lambda r: r['total'], reverse=True)
         grp['top5_cy'][item] = rows[:5]
@@ -374,12 +368,9 @@ def _compute_best_period(cur, items: list, where: str, args: list,
     for (item, fy_start), d in acc.items():
         if len(d['months']) != window_len:
             continue
-        if is_rate_item(item):
-            value = sum(w[0] / w[1] for w in d['plants'].values() if w[1])
-        else:
-            value = sum(w[2] for w in d['plants'].values())
         buckets.setdefault(item, []).append(
-            {'fy': _fy_label(fy_start), 'fy_start': fy_start, 'total': round(value, 3)})
+            {'fy': _fy_label(fy_start), 'fy_start': fy_start,
+             'total': round(_cells_period_value(item, d['plants']), 3)})
 
     out = {}
     for item in items:
