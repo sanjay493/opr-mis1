@@ -8,10 +8,15 @@ const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
 const KEY_PARAMETERS = ['Coke Rate', 'BF Productivity', 'CDI Rate', 'Fuel Rate', 'O2 Enrichment'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+const monthLabel = (key) => {
+  const [y, m] = key.split('-');
+  return `${MONTHS[Number(m) - 1]} '${y.slice(2)}`;
+};
+
 function TechnoDashboard() {
   const [selectedPlant, setSelectedPlant] = useState('all');
   const [selectedParams, setSelectedParams] = useState(KEY_PARAMETERS);
-  const [monthRange, setMonthRange] = useState({ from: 0, to: 11 });
+  const [range, setRange] = useState({ from: null, to: null });   // 'YYYY-MM' keys
   const [allParameters, setAllParameters] = useState([]);
   const [data, setData] = useState({});
   const [sailMissing, setSailMissing] = useState({});
@@ -82,20 +87,48 @@ function TechnoDashboard() {
     );
   };
 
-  const getLastMonths = (count) => {
-    const now = new Date();
-    const months = [];
-    for (let i = count - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push({
-        label: `${MONTHS[d.getMonth()]} '${d.getFullYear().toString().slice(-2)}`,
-        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      });
+  // Every 'YYYY-MM' that the loaded data actually carries a value for.
+  const availableMonths = useMemo(() => {
+    const s = new Set();
+    Object.values(data).forEach(params =>
+      Object.values(params || {}).forEach(months =>
+        Object.keys(months || {}).forEach(m => s.add(m))));
+    return [...s].sort();
+  }, [data]);
+
+  // Keep the range valid as the available months change (param/plant switch);
+  // default to the most recent 12 months of data.
+  useEffect(() => {
+    if (availableMonths.length === 0) return;
+    setRange(r => {
+      const last = availableMonths[availableMonths.length - 1];
+      const from = r.from && availableMonths.includes(r.from)
+        ? r.from : availableMonths[Math.max(0, availableMonths.length - 12)];
+      const to = r.to && availableMonths.includes(r.to) ? r.to : last;
+      return (from === r.from && to === r.to) ? r : { from, to };
+    });
+  }, [availableMonths]);
+
+  const applyPreset = (kind) => {
+    if (!availableMonths.length) return;
+    const first = availableMonths[0];
+    const last = availableMonths[availableMonths.length - 1];
+    const nthFromEnd = (n) => availableMonths[Math.max(0, availableMonths.length - n)];
+    if (kind === 'all') setRange({ from: first, to: last });
+    else if (kind === 'last6') setRange({ from: nthFromEnd(6), to: last });
+    else if (kind === 'last12') setRange({ from: nthFromEnd(12), to: last });
+    else if (kind === 'fy') {
+      const [y, m] = last.split('-').map(Number);
+      const fyFrom = `${m >= 4 ? y : y - 1}-04`;
+      setRange({ from: availableMonths.find(x => x >= fyFrom) || first, to: last });
     }
-    return months;
   };
 
-  const displayMonths = getLastMonths(12).slice(monthRange.from, monthRange.to + 1);
+  const displayMonths = useMemo(() => {
+    if (!range.from || !range.to) return [];
+    const [lo, hi] = range.from <= range.to ? [range.from, range.to] : [range.to, range.from];
+    return availableMonths.filter(m => m >= lo && m <= hi).map(k => ({ key: k, label: monthLabel(k) }));
+  }, [availableMonths, range]);
 
   // Most recent month (within the selected range) that has a value for this
   // plant/parameter — used by the Compare view so each card shows a real,
@@ -224,21 +257,52 @@ function TechnoDashboard() {
           {/* Month Range Selection */}
           <div style={{ marginBottom: '0' }}>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#5f6368', marginBottom: '8px', textTransform: 'uppercase' }}>
-              📅 Month Range (Drag Slider)
+              📅 Month Range
             </label>
-            <div style={{ display: 'block' }}>
-              <input
-                type="range"
-                min="0"
-                max="11"
-                value={monthRange.from}
-                onChange={(e) => setMonthRange(prev => ({ ...prev, from: Math.min(parseInt(e.target.value), prev.to) }))}
-                style={{ width: '100%', height: '6px' }}
-              />
-              <div style={{ fontSize: '9px', color: '#5f6368', marginTop: '6px', textAlign: 'center' }}>
-                {displayMonths[0]?.label || 'Loading...'} to {displayMonths[displayMonths.length - 1]?.label || 'Loading...'}
+            {availableMonths.length === 0 ? (
+              <div style={{ fontSize: '11px', color: '#9aa0a6' }}>
+                {loading ? 'Loading months…' : 'No data for the current plant / parameter selection.'}
               </div>
-            </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={range.from ?? ''}
+                  onChange={(e) => setRange(r => ({ ...r, from: e.target.value }))}
+                  style={{ fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '4px', color: '#202124' }}
+                >
+                  {availableMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                </select>
+                <span style={{ fontSize: '11px', color: '#5f6368' }}>to</span>
+                <select
+                  value={range.to ?? ''}
+                  onChange={(e) => setRange(r => ({ ...r, to: e.target.value }))}
+                  style={{ fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '4px', color: '#202124' }}
+                >
+                  {availableMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                </select>
+
+                <div style={{ display: 'flex', gap: '4px', marginLeft: '6px' }}>
+                  {[
+                    { k: 'last6', l: 'Last 6' },
+                    { k: 'last12', l: 'Last 12' },
+                    { k: 'fy', l: 'This FY' },
+                    { k: 'all', l: 'All' },
+                  ].map(({ k, l }) => (
+                    <button
+                      key={k}
+                      onClick={() => applyPreset(k)}
+                      style={{ fontSize: '10px', fontWeight: '600', padding: '4px 8px', borderRadius: '4px', border: '1px solid #dadce0', background: '#f8f9fa', color: '#5f6368', cursor: 'pointer' }}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+
+                <span style={{ fontSize: '10px', color: '#9aa0a6', marginLeft: '4px' }}>
+                  {displayMonths.length} month{displayMonths.length === 1 ? '' : 's'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
