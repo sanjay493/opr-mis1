@@ -874,11 +874,12 @@ export default function HighlightsPage() {
 
           <div style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
             Pick any month range in financial-year order (Apr → Mar — so e.g. Oct → Feb spans the year end).
-            For every financial year with the <b>complete</b> window, production is summed (rate items like
-            Oven Pushing are day-weighted averages) and the top 5 FYs are listed. Scope aggregates the member
-            plants; “Plant-wise” ranks each plant/unit on its own. “Major” = Sinter, Hot Metal, Pig Iron, Crude
-            Steel, Finished &amp; Saleable Steel, Oven Pushing; “All” = every item the scope reports. Values in
-            '000 tonnes (Tonnes view ×1000); Conversion not included.
+            For every financial year with the <b>complete</b> window the top 5 FYs are listed. Tonnage items
+            are the sum of every member plant's window total; rate items (Oven Pushing, COB#*) are the sum of
+            each plant's own day-weighted average over the window — i.e. the SAIL nos/day, not a per-plant
+            mean. Scope aggregates the member plants; “Plant-wise” ranks each plant/unit on its own. “Major” =
+            Sinter, Hot Metal, Pig Iron, Crude Steel, Finished &amp; Saleable Steel, Oven Pushing; “All” =
+            every item the scope reports. Values in '000 tonnes (Tonnes view ×1000); Conversion not included.
           </div>
         </div>
       </div>

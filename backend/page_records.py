@@ -339,28 +339,45 @@ _BEST_PERIOD_SCOPES = {
 def _compute_best_period(cur, items: list, where: str, args: list,
                          s_pos: int, e_pos: int, top_n: int) -> dict:
     """Top-`top_n` financial years by production over the FY-relative month
-    window [s_pos, e_pos] (0 = Apr … 11 = Mar), per item. Only FYs with the
-    full window present are ranked. Rate items (Oven Pushing, COB#*) are
-    days-in-month-weighted averages; everything else is a plain sum. Output
-    is keyed in `items` order, skipping items with no complete window."""
+    window [s_pos, e_pos] (0 = Apr … 11 = Mar), per item. Only FYs whose
+    window is complete (all window_len months present) are ranked.
+
+    Tonnage items: sum of every member plant's window total.
+    Rate items (Oven Pushing, COB#*): sum of each member plant's own
+    days-in-month-weighted mean over the window — i.e. the SAIL total
+    nos/day, not a per-plant average. Output keyed in `items` order,
+    items with no complete window omitted."""
     window_len = e_pos - s_pos + 1
     item_set = set(items)
     cur.execute(f"""
-        SELECT item_name, {_fy_expr()} AS fy_start,
-               SUM(month_actual)                    AS total,
-               SUM(month_actual * {_days_expr()})   AS wsum,
-               SUM({_days_expr()})                  AS wdays,
-               COUNT(DISTINCT report_month)         AS n
+        SELECT item_name, {_fy_expr()} AS fy_start, plant_name, report_month,
+               SUM(month_actual)     AS v,
+               MAX({_days_expr()})   AS days
         FROM production_table
         WHERE {where} AND ({_fy_pos_expr()}) BETWEEN ? AND ?
-        GROUP BY item_name, fy_start
+        GROUP BY item_name, fy_start, plant_name, report_month
     """, list(args) + [s_pos, e_pos])
 
-    buckets: dict = {}
-    for item, fy_start, total, wsum, wdays, n in cur.fetchall():
-        if item not in item_set or total is None or n != window_len:
+    # (item, fy_start) -> {'months': set, 'plants': {plant: [wsum, wdays, total]}}
+    acc: dict = {}
+    for item, fy_start, plant, rm, v, days in cur.fetchall():
+        if item not in item_set or v is None:
             continue
-        value = _period_value(item, total, wsum, wdays)
+        d = acc.setdefault((item, fy_start), {'months': set(), 'plants': {}})
+        d['months'].add(rm)
+        p = d['plants'].setdefault(plant, [0.0, 0.0, 0.0])
+        p[0] += v * days
+        p[1] += days
+        p[2] += v
+
+    buckets: dict = {}
+    for (item, fy_start), d in acc.items():
+        if len(d['months']) != window_len:
+            continue
+        if is_rate_item(item):
+            value = sum(w[0] / w[1] for w in d['plants'].values() if w[1])
+        else:
+            value = sum(w[2] for w in d['plants'].values())
         buckets.setdefault(item, []).append(
             {'fy': _fy_label(fy_start), 'fy_start': fy_start, 'total': round(value, 3)})
 
