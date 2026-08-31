@@ -1790,6 +1790,23 @@ def save_mines_production_despatch_monthly_api(request: MinesProductionDespatchS
     return {"status": "success", "saved": saved}
 
 
+@app.get("/api/iron-ore-mines/series")
+def get_iron_ore_mines_series_api(fy_start: int = Query(...)):
+    """Month-wise mine-level Iron Ore production & despatch for one financial
+    year (Apr..Mar) — feeds /reports/iron-ore-mines. Flat rows; the frontend
+    aggregates by scope (SAIL / group / mine), material and mode."""
+    months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
+             [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
+    data = db.get_iron_ore_mines_series(months)
+    return {
+        "fy_start": fy_start,
+        "fy_label": f"{fy_start}-{str(fy_start + 1)[2:]}",
+        "months": months,
+        "masters": db.get_mines_masters(),
+        **data,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Excel ingestion
 # ---------------------------------------------------------------------------

@@ -3314,6 +3314,73 @@ def get_iron_ore_sales_group_rollup_monthly(report_months: List[str]) -> Dict[st
     return out
 
 
+def get_iron_ore_mines_series(report_months: List[str]) -> Dict[str, Any]:
+    """Flat month-wise mine-level Iron Ore rows for the reports page
+    (/reports/iron-ore-mines) — no roll-up, the frontend groups by
+    scope/material/mode itself. All quantities are '000 T.
+
+      production:     [{report_month, mine_code, group_code, material_code,
+                        actual, plan}]  — LUMP / FINES only
+      despatch:       [{report_month, mine_code, group_code, material_code,
+                        transport_mode, end_use_code, actual}]
+                        — LUMP / FINES / DUMP_FINES / TAILINGS / PELLETS,
+                          mode RAIL / ROAD
+      despatch_plan:  [{report_month, mine_code, group_code, material_code,
+                        end_use_code, plan}]  — Plan has no Rail/Road split
+    """
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {"production": [], "despatch": [], "despatch_plan": []}
+    if not report_months:
+        conn.close()
+        return out
+    ph = ",".join("?" * len(report_months))
+
+    cur.execute(f"""
+        SELECT p.report_month, p.mine_code, mm.group_code, p.material_code,
+               p.qty_actual, p.qty_plan
+        FROM mines_production_monthly p
+        JOIN mines_master mm ON mm.mine_code = p.mine_code
+        WHERE p.report_month IN ({ph})
+    """, report_months)
+    for rm, mine, grp, mat, act, plan in cur.fetchall():
+        out["production"].append({
+            "report_month": rm, "mine_code": mine, "group_code": grp,
+            "material_code": mat, "actual": act, "plan": plan,
+        })
+
+    cur.execute(f"""
+        SELECT d.report_month, d.mine_code, mm.group_code, d.material_code,
+               d.transport_mode, d.end_use_code, d.qty_actual
+        FROM mines_despatch_actual_monthly d
+        JOIN mines_master mm ON mm.mine_code = d.mine_code
+        WHERE d.report_month IN ({ph})
+    """, report_months)
+    for rm, mine, grp, mat, mode, eu, act in cur.fetchall():
+        out["despatch"].append({
+            "report_month": rm, "mine_code": mine, "group_code": grp,
+            "material_code": mat, "transport_mode": mode, "end_use_code": eu,
+            "actual": act,
+        })
+
+    cur.execute(f"""
+        SELECT pl.report_month, pl.mine_code, mm.group_code, pl.material_code,
+               pl.end_use_code, pl.qty_plan
+        FROM mines_despatch_plan_monthly pl
+        JOIN mines_master mm ON mm.mine_code = pl.mine_code
+        WHERE pl.report_month IN ({ph})
+    """, report_months)
+    for rm, mine, grp, mat, eu, plan in cur.fetchall():
+        out["despatch_plan"].append({
+            "report_month": rm, "mine_code": mine, "group_code": grp,
+            "material_code": mat, "end_use_code": eu, "plan": plan,
+        })
+
+    conn.close()
+    return out
+
+
 # ── "Special Steel Plants Physical Performance" report ────────────────────────
 # Backing store for page_special_steel_physical.py + its two data-entry pages.
 # All physical figures are '000 T. See migrate_add_special_steel_physical.sql.
