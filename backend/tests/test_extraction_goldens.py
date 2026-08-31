@@ -92,6 +92,24 @@ CASES = [
     Case("rsp_technopara_apr2024_2024-04",
          "excel_extractors.excel_extractor_rsp",
          "Monthly/RSP/TECHNOPARA APRIL-2024.xlsx", "2024-04"),
+    # SSP DPR PDF — a true month-end file (header 31/05, all bases "cum") and
+    # a mid-month one (header 30/08 of a 31-day month) that locks in the
+    # Rate-column / projected-Cum handling.
+    Case("ssp_dpr_2026-05",
+         "excel_extractors.pdf_extractor_ssp",
+         "MONTHEND/SSP/DPR-01.06.2026.pdf", "2026-05"),
+    Case("ssp_dpr_2026-08",
+         "excel_extractors.pdf_extractor_ssp",
+         "MONTHEND/SSP/DPR-31.08.2026.pdf", "2026-08"),
+    # VISL PDF — a true month-end Format-A file (header 31-May, basis "cum")
+    # and a mid-month one (header 30-Aug of a 31-day month) that locks in the
+    # x days_in_month / report_day projection.
+    Case("visl_2026-05",
+         "excel_extractors.pdf_extractor_visl",
+         "MONTHEND/visl/VISLreportsMAY26.pdf", "2026-05"),
+    Case("visl_2026-08",
+         "excel_extractors.pdf_extractor_visl",
+         "MONTHEND/visl/reports-Aug'26.pdf", "2026-08"),
 ]
 
 

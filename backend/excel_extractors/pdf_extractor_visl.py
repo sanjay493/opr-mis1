@@ -20,7 +20,20 @@ Format B  "Daily Production and Performance" (e.g. VISLreportsAPR25.pdf)
     Sales (AS+MS)        154 119.860  4610  2696.400  0  0
 
 Values are in Tonnes in both formats → stored as '000T (÷ 1000).
+
+Mid-month reports
+----------------
+The 'Date: DD-Mon-YY' header is meant to be the month's last day, but VISL
+routinely mails the report a day or two early (e.g. 'Date: 30-Aug-26' for a
+31-day August). The target column ('To Date' / 'Month ACT') is then a
+month-to-date running total that understates the month, and neither format
+carries a usable monthly-rate column (Format B's 'Monthly Rate' is always 0).
+
+So on a mid-month report every production/despatch item is scaled to a full
+month — value x days_in_month / report_day (basis "projected"). A strict
+no-op on a last-day or undated report (basis "cum").
 """
+import calendar
 import os
 import re
 import sys
@@ -80,20 +93,47 @@ def _strip_letters(s: str) -> str:
 _DATE_RE = re.compile(r"Date:\s*(\d{1,2})-([A-Za-z]{3})-(\d{2})")
 
 
-def _detect_month_from_pdf_text(full_text: str):
-    """Detect 'YYYY-MM' from the report's own header 'Date: DD-Mon-YY' line
-    (e.g. 'Date: 30-Jun-24') — always the last day of the report's own
-    month across every sample checked. Returns None if not found, since a
-    missing signal shouldn't block extraction, only a genuine mismatch."""
+def _detect_date_from_pdf_text(full_text: str):
+    """(report_day, days_in_month, 'YYYY-MM') from the report's own header
+    'Date: DD-Mon-YY' line (e.g. 'Date: 30-Jun-24'), or (None, None, None).
+
+    That date is the day the 'To Date' / 'Month ACT' cumulative runs
+    through — normally the month's last day, a day or two earlier when the
+    report is mailed before month-end."""
     m = _DATE_RE.search(full_text[:300])
     if not m:
-        return None
-    _, mon_abbr, yy = m.groups()
+        return None, None, None
+    dd, mon_abbr, yy = m.groups()
     try:
         mon_num = _MONTHS.index(mon_abbr.upper()) + 1
     except ValueError:
-        return None
-    return f"20{yy}-{mon_num:02d}"
+        return None, None, None
+    year = 2000 + int(yy)
+    return int(dd), calendar.monthrange(year, mon_num)[1], f"{year}-{mon_num:02d}"
+
+
+def _detect_month_from_pdf_text(full_text: str):
+    """'YYYY-MM' from the header date (see _detect_date_from_pdf_text), or None."""
+    return _detect_date_from_pdf_text(full_text)[2]
+
+
+def _is_mid_month(report_day, days_in_month) -> bool:
+    return bool(report_day and days_in_month and 0 < report_day < days_in_month)
+
+
+def _pick_month_value(cum, report_day, days_in_month, label=""):
+    """The item's full-month figure and its basis.
+
+    Last-day / undated report → (cum, "cum")             — unchanged behaviour.
+    Mid-month                 → (cum x dim/day, "projected").
+
+    Returns (value, basis). `value` stays in Tonnes."""
+    if cum is None or not _is_mid_month(report_day, days_in_month):
+        return cum, "cum"
+    projected = cum * days_in_month / report_day
+    print(f"[VISL PDF] {label}: To Date {cum} projected x{days_in_month}/{report_day} "
+          f"→ {projected:.1f}", flush=True, file=sys.stderr)
+    return projected, "projected"
 
 
 def _fmt_month(ym: str) -> str:
@@ -130,7 +170,7 @@ def _detect_format(full_text: str) -> str:
     return "A"
 
 
-def _row(item_name, val_t, cell_desc, pdf_label):
+def _row(item_name, val_t, cell_desc, pdf_label, basis="cum"):
     """Build a standard production_row dict. val_t is in Tonnes."""
     if val_t is None:
         return {
@@ -139,6 +179,7 @@ def _row(item_name, val_t, cell_desc, pdf_label):
             "unit":      "T",
             "cell":      cell_desc,
             "pdf_label": pdf_label,
+            "basis":     basis,
             "status":    "unmapped",
         }
     return {
@@ -147,6 +188,7 @@ def _row(item_name, val_t, cell_desc, pdf_label):
         "unit":      "'000T",
         "cell":      cell_desc,
         "pdf_label": pdf_label,
+        "basis":     basis,
         "status":    "ok",
     }
 
@@ -187,8 +229,14 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
 
     full_text, n_pages = _load_pdf_text(file_path)
 
-    detected_month = _detect_month_from_pdf_text(full_text)
+    report_day, days_in_month, detected_month = _detect_date_from_pdf_text(full_text)
     _assert_month_match(detected_month, report_month)
+
+    mid_month = _is_mid_month(report_day, days_in_month)
+    is_month_end = (not report_day) or report_day >= (days_in_month or 0)
+    if mid_month:
+        print(f"[VISL PDF] mid-month report (day {report_day} of {days_in_month}) — "
+              f"figures projected x{days_in_month}/{report_day}", flush=True, file=sys.stderr)
 
     fmt = _detect_format(full_text)
     col_desc = "To Date (col 2)" if fmt == "A" else "Month ACT (col 4)"
@@ -199,6 +247,14 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     lines = full_text.splitlines()
     prod_rows = []
     cell_tag  = f"PDF ({n_pages}p) · {want_mon}'{yy} · Fmt-{fmt}"
+
+    def _add_row(item_name, raw_val, cell_core, label):
+        """Project the raw cumulative to a full month (no-op at month-end)
+        and append a production row with a basis-annotated cell ref."""
+        val, basis = _pick_month_value(raw_val, report_day, days_in_month, label=item_name)
+        suffix = f" x{days_in_month}/{report_day}" if basis == "projected" else ""
+        prod_rows.append(_row(item_name, val, f"{cell_core}{suffix}", label, basis))
+        return val
 
     # ── Saleable Steel & Finished Steel: "Total Saleable Steel" row ────────────
     sal_val   = None
@@ -211,8 +267,7 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
             break
 
     for item in ("Saleable Steel", "Finished Steel"):
-        prod_rows.append(_row(item, sal_val,
-                              f"{cell_tag} · Total Saleable Steel · {col_desc}", sal_label))
+        _add_row(item, sal_val, f"{cell_tag} · Total Saleable Steel · {col_desc}", sal_label)
 
     # ── Per-mill Saleable Steel breakdown: Primary Mill / Bar Mill /
     # Forging Press / Long Forging Machine ─────────────────────────────────
@@ -241,8 +296,7 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
                 val = _extract_value(nums, fmt, item_name)
                 label = ln.strip()[:80]
                 break
-        prod_rows.append(_row(item_name, val,
-                              f"{cell_tag} · Saleable Steel · {item_name} · {col_desc}", label))
+        _add_row(item_name, val, f"{cell_tag} · Saleable Steel · {item_name} · {col_desc}", label)
 
     # ── Saleable Steel Despatch: "Sales (AS+MS)" row ───────────────────────────
     desp_val   = None
@@ -255,8 +309,8 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
             desp_label = ln.strip()[:80]
             break
 
-    prod_rows.append(_row("Saleable Steel Despatch", desp_val,
-                          f"{cell_tag} · Sales (AS+MS) · {col_desc}", desp_label))
+    _add_row("Saleable Steel Despatch", desp_val,
+             f"{cell_tag} · Sales (AS+MS) · {col_desc}", desp_label)
 
     ok = sum(1 for r in prod_rows if r["status"] == "ok")
     print(f"[VISL PDF] {ok}/{len(prod_rows)} rows ok", flush=True, file=sys.stderr)
@@ -282,4 +336,7 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
         "special_steel_note": "",
         "techno_rows":        [],
         "techno_param_rows":  [],
+        "morning_report_day":    report_day,
+        "morning_days_in_month": days_in_month,
+        "morning_is_month_end":  is_month_end,
     }

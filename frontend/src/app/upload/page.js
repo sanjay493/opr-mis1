@@ -1545,9 +1545,9 @@ function UploadPageInner() {
                     : technoPlant === 'ASP'
                     ? "asp.xlsx → reads cells F10/F11/F13/F21/L26 (Crude Steel, Concast, Ingot, Saleable, Stock). Month auto-detected from E3. REP*.pdf → Total Crude Steel, Total Caster, Ingot Steel, Saleable Steel, Saleable Steel Despatch (\"PLANT DESPATCH\" row), Closing Stock (month auto-detected from its own \"...REPORT FOR DD/MM/YYYY\" line). FL*.pdf → Ingot Semis, Billets, BARS, PLATES, Saleable Steel, Saleable Steel Despatch (\"DESPATCH\" section's own TOTAL) for both the report month and the previous month (report month auto-detected from the table's own header)."
                     : technoPlant === 'SSP'
-                    ? "SSP DPR PDF → SMS(SLAB) row: 1st number = Crude Steel (Cum Actual). Saleable Production TOTAL row: 2nd number = Finished & Saleable Steel (Cum Actual). Values in Tonnes → stored as '000T."
+                    ? "SSP DPR PDF → SMS(SLAB) row = Crude Steel, Saleable Production TOTAL row = Finished & Saleable Steel, plus HRM, NO1/CRSS/HRSS/Carbon production, despatches & stocks. Month from the \"...REPORT FOR DD/MM/YYYY\" line. If that date is before month-end, each cumulative item is projected to a full month — from the DPR's own Rate column where it agrees, else Cum × days-in-month ÷ report-day (stock columns are never projected). Values in Tonnes → stored as '000T."
                     : technoPlant === 'VISL'
-                    ? "VISL Monthly PDF → 'Total Saleable Steel' row: 2nd number (To Date) = Finished Steel & Saleable Steel. 'Sales (AS+MS)' row: 2nd number (To Date) = Saleable Steel Despatch. Values in Tonnes → stored as '000T."
+                    ? "VISL Monthly PDF → 'Total Saleable Steel' row (To Date) = Finished & Saleable Steel, per-mill breakdown (Primary/Bar Mill, Forging Press, LFM), 'Sales (AS+MS)' (To Date) = Saleable Steel Despatch. Month from the 'Date: DD-Mon-YY' header. If that date is before month-end, every figure is projected to a full month (To Date × days-in-month ÷ report-day). Values in Tonnes → stored as '000T."
                     : 'Final Monthly, Morning Report or Techno file — auto-detected. Production + techno both extracted.'}
                   {' '}Shown for review before insertion.
                 </div>
@@ -2009,11 +2009,11 @@ function UploadPageInner() {
               {technoPreview.morning_is_month_end === false && (
                 <div style={{ marginBottom: 10, padding: '8px 12px', background: '#fef7e0', border: '1px solid #fde68a',
                               borderRadius: 6, fontSize: '8.5pt', color: '#92400e' }}>
-                  ⚠ Mid-month sheet (day {technoPreview.morning_report_day} of {technoPreview.morning_days_in_month}).
-                  Each figure is the sheet's own monthly-rate cell; where that looks stale it is replaced
-                  with the month-to-date total scaled to a whole month
+                  ⚠ Mid-month report (day {technoPreview.morning_report_day} of {technoPreview.morning_days_in_month}).
+                  Each figure is projected to a whole month — from the report's own monthly-rate column
+                  where it has one and it looks sound, else the month-to-date total scaled up
                   (× {technoPreview.morning_days_in_month} ÷ {technoPreview.morning_report_day}) — see the Cell column.
-                  Upload the last-day-of-month sheet for the final figures.
+                  Upload the last-day-of-month report for the final figures.
                 </div>
               )}
 

@@ -1,0 +1,83 @@
+{
+  "detected_month": "2026-05",
+  "month": "2026-05",
+  "morning_days_in_month": 31,
+  "morning_is_month_end": true,
+  "morning_report_day": 31,
+  "plant": "VISL",
+  "production_rows": [
+    {
+      "basis": "cum",
+      "cell": "PDF (1p) · MAY'26 · Fmt-A · Total Saleable Steel · To Date (col 2)",
+      "item_name": "Saleable Steel",
+      "pdf_label": "Total Saleable Steel 254.25 3654.85 6360 57.47",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.655
+    },
+    {
+      "basis": "cum",
+      "cell": "PDF (1p) · MAY'26 · Fmt-A · Total Saleable Steel · To Date (col 2)",
+      "item_name": "Finished Steel",
+      "pdf_label": "Total Saleable Steel 254.25 3654.85 6360 57.47",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.655
+    },
+    {
+      "basis": "cum",
+      "cell": "PDF (1p) · MAY'26 · Fmt-A · Saleable Steel · Primary Mill · To Date (col 2)",
+      "item_name": "Primary Mill",
+      "pdf_label": "Primary Mill 195.05 3260.66 4250 76.72",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.261
+    },
+    {
+      "basis": "cum",
+      "cell": "PDF (1p) · MAY'26 · Fmt-A · Saleable Steel · Bar Mill · To Date (col 2)",
+      "item_name": "Bar Mill",
+      "pdf_label": "Bar Mill 59.20 116.13 1400 8.30",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.116
+    },
+    {
+      "basis": "cum",
+      "cell": "PDF (1p) · MAY'26 · Fmt-A · Saleable Steel · Forging Press · To Date (col 2)",
+      "item_name": "Forging Press",
+      "pdf_label": "Forging Press 0.00 3.04 110 2.76",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.003
+    },
+    {
+      "basis": "cum",
+      "cell": "PDF (1p) · MAY'26 · Fmt-A · Saleable Steel · Long Forging Machine · To Date (col 2)",
+      "item_name": "Long Forging Machine",
+      "pdf_label": "Long Forging Machine 0.00 275.03 600.00 0.00",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.275
+    },
+    {
+      "basis": "cum",
+      "cell": "PDF (1p) · MAY'26 · Fmt-A · Sales (AS+MS) · To Date (col 2)",
+      "item_name": "Saleable Steel Despatch",
+      "pdf_label": "Sales (AS+MS) 0.00 2591.76 4089 63.38",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 2.592
+    }
+  ],
+  "report_type": "MONTHLY",
+  "sheets": "PDF (1 page) — VISL Month-End",
+  "source_type": "VISL Monthly Report (Month-End)",
+  "special_steel_note": "",
+  "special_steel_rows": [],
+  "techno_param_rows": [],
+  "techno_rows": [],
+  "workbook_sheets": [
+    "PDF (1 pages)"
+  ]
+}

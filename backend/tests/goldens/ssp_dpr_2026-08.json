@@ -1,0 +1,155 @@
+{
+  "detected_month": "2026-08",
+  "month": "2026-08",
+  "morning_days_in_month": 31,
+  "morning_is_month_end": false,
+  "morning_report_day": 30,
+  "plant": "SSP",
+  "production_rows": [
+    {
+      "basis": "m-rate",
+      "cell": "PDF (1p) · AUG'26 · SMS(SLAB) Cum Actual (Rate col)",
+      "item_name": "Total Crude Steel",
+      "pdf_label": "SMS (SLAB) 692 6752 8000 6977",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 6.977
+    },
+    {
+      "basis": "m-rate",
+      "cell": "PDF (1p) · AUG'26 · HRM Cum Actual (Rate col)",
+      "item_name": "HRM",
+      "pdf_label": "HRM 802 22878 30000 23640 18007 29228",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 23.64
+    },
+    {
+      "basis": "stock",
+      "cell": "PDF (1p) · AUG'26 · - STAINLESS Stock As on Date",
+      "item_name": "Input SS Slab Stock",
+      "pdf_label": "- STAINLESS 802 13137 15000 13574 14669 21358",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 14.669
+    },
+    {
+      "basis": "stock",
+      "cell": "PDF (1p) · AUG'26 · - CARBON Stock As on Date",
+      "item_name": "Input Carbon Slab Stock",
+      "pdf_label": "- CARBON 9740 15000 10064 3338 7870",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.338
+    },
+    {
+      "basis": "projected",
+      "cell": "PDF (1p) · AUG'26 · SALEABLE PRODUCTION TOTAL Cum Actual (Cum x31/30)",
+      "item_name": "Saleable Steel",
+      "pdf_label": "TOTAL 251 17450 28000 18004",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 18.032
+    },
+    {
+      "basis": "projected",
+      "cell": "PDF (1p) · AUG'26 · SALEABLE PRODUCTION TOTAL Cum Actual (Cum x31/30)",
+      "item_name": "Finished Steel",
+      "pdf_label": "TOTAL 251 17450 28000 18004",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 18.032
+    },
+    {
+      "basis": "m-rate",
+      "cell": "PDF (1p) · AUG'26 · SALEABLE PRODUCTION HRCS Cum Actual (Rate col)",
+      "item_name": "Carbon Steel Production",
+      "pdf_label": "HRCS 9539 15000 9856",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 9.856
+    },
+    {
+      "basis": "m-rate",
+      "cell": "PDF (1p) · AUG'26 · SALEABLE PRODUCTION NO1 Cum Actual (Rate col)",
+      "item_name": "NO1 Production",
+      "pdf_label": "NO1 139 4975 9000 5140",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 5.14
+    },
+    {
+      "basis": "m-rate",
+      "cell": "PDF (1p) · AUG'26 · SALEABLE PRODUCTION CRSS Cum Actual (Rate col)",
+      "item_name": "CRSS Production",
+      "pdf_label": "CRSS 112 2710 4000 2800",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 2.8
+    },
+    {
+      "basis": "projected",
+      "cell": "PDF (1p) · AUG'26 · SALEABLE PRODUCTION HRSS Cum Actual (Cum x31/30)",
+      "item_name": "HRSS Production",
+      "pdf_label": "HRSS 0 226 0",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.234
+    },
+    {
+      "basis": "m-rate",
+      "cell": "PDF (1p) · AUG'26 · DESPATCHES HRCS Cum Actual (Rate col)",
+      "item_name": "Finished Carbon Steel Despatch",
+      "pdf_label": "HRCS 480 11632 15000 12079 1286 2951",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 12.079
+    },
+    {
+      "basis": "projected",
+      "cell": "PDF (1p) · AUG'26 · DESPATCHES TOTAL Cum Actual (Cum x31/30)",
+      "item_name": "Total Saleable Steel Despatch",
+      "pdf_label": "TOTAL 962 19328 30000 20069 21169 22487",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 19.972
+    },
+    {
+      "basis": "stock",
+      "cell": "PDF (1p) · AUG'26 · DESPATCHES HRCS Stock As on Date",
+      "item_name": "Finished Carbon Steel Stock",
+      "pdf_label": "HRCS 480 11632 15000 12079 1286 2951",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 1.286
+    },
+    {
+      "basis": "stock",
+      "cell": "PDF (1p) · AUG'26 · DESPATCHES TOTAL Stock As on Date",
+      "item_name": "Finished Total Steel Stock",
+      "pdf_label": "TOTAL 962 19328 30000 20069 21169 22487",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 21.169
+    },
+    {
+      "basis": "stock",
+      "cell": "PDF (1p) · AUG'26 · Finished Total Steel Stock - Finished Carbon Steel Stock",
+      "item_name": "Finished Stainless Steel Stock",
+      "pdf_label": "(computed)",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 19.883
+    }
+  ],
+  "report_type": "DPR",
+  "sheets": "PDF (1 page) — SSP DPR",
+  "source_type": "SSP Daily Production Report (DPR)",
+  "special_steel_note": "",
+  "special_steel_rows": [],
+  "techno_param_rows": [],
+  "techno_rows": [],
+  "workbook_sheets": [
+    "PDF (1 pages)"
+  ]
+}
