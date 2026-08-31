@@ -126,6 +126,7 @@ export default function GlobalNavbar() {
         { label: 'Pmix Report (Year-wise)', link: '/reports/pmix-fy', icon: '📈' },
         { label: 'Techno Custom Report', link: '/reports/techno-custom', icon: '⚙️' },
         { label: 'SEFI Report', link: '/reports/sefi', icon: '📮' },
+        { label: 'Inputs for Steel Bulletin', link: '/reports/steel-bulletin', icon: '📰' },
       ]
     },
     {
