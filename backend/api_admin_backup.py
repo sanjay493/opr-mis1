@@ -232,6 +232,39 @@ def _tables_at_risk(src: Path) -> list:
     return at_risk
 
 
+_LOCK_NAME = "mis_admin_backup_restore"
+
+
+def _acquire_admin_lock():
+    """A MySQL named lock (GET_LOCK), not a Python threading.Lock — this
+    machine's dev server ends up with two independent uvicorn processes
+    bound to the same port (the reloader + its worker; see
+    docs/SETUP.md / duplicate-processes note), so an in-process lock
+    wouldn't stop a request landing on the *other* process from racing a
+    restore's table-by-table DROP/CREATE. GET_LOCK is server-side and
+    connection-scoped, so it serializes across processes too; held for the
+    life of `conn`, released by closing it (or explicitly via
+    RELEASE_LOCK before that)."""
+    conn = db.connect()
+    cur = conn.cursor()
+    cur.execute("SELECT GET_LOCK(?, 0)", (_LOCK_NAME,))
+    if cur.fetchone()[0] != 1:
+        conn.close()
+        raise HTTPException(
+            status_code=409,
+            detail="Another backup/restore operation is already in progress. Wait for it to finish and try again.",
+        )
+    return conn
+
+
+def _release_admin_lock(conn) -> None:
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT RELEASE_LOCK(?)", (_LOCK_NAME,))
+    finally:
+        conn.close()
+
+
 @router.get("")
 def list_backups():
     _require_mysql()
@@ -252,9 +285,13 @@ def list_backups():
 def create_backup(admin: dict = Depends(auth.require_admin)):
     _require_mysql()
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
-    filename = f"mis_reports_admin_{stamp}.sql"
-    _run_dump(BACKUP_DIR / filename)
+    lock = _acquire_admin_lock()
+    try:
+        stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
+        filename = f"mis_reports_admin_{stamp}.sql"
+        _run_dump(BACKUP_DIR / filename)
+    finally:
+        _release_admin_lock(lock)
     auth.log_activity(admin, "backup", "mis_reports", f"created {filename}")
     return {"status": "ok", "filename": filename}
 
@@ -266,60 +303,65 @@ def restore_backup(filename: str, confirm_data_loss: bool = False, admin: dict =
     if not src.exists():
         raise HTTPException(status_code=404, detail="Backup file not found.")
 
-    # Refuse (unless explicitly confirmed) to restore a file that would wipe
-    # out any table that currently has data — this is what actually happened
-    # on 2026-08-21: the chosen backup was missing capital_repair_table
-    # entirely while every other table matched that day's data almost
-    # exactly, so nothing about the file list or its size gave any hint.
-    if not confirm_data_loss:
-        at_risk = _tables_at_risk(src)
-        if at_risk:
-            summary = ", ".join(f"{t} ({n} rows)" for t, n in at_risk[:10])
-            more = f" and {len(at_risk) - 10} more" if len(at_risk) > 10 else ""
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Restoring \"{filename}\" would empty {len(at_risk)} table(s) that currently "
-                    f"have data: {summary}{more}. If this is intentional, confirm to proceed anyway."
-                ),
-            )
-
-    # Safety net: snapshot current state before overwriting anything.
-    prerestore_stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
-    prerestore_name = f"mis_reports_prerestore_{prerestore_stamp}.sql"
-    _run_dump(BACKUP_DIR / prerestore_name)
-
-    bin_dir = _mysql_bin_dir()
-    ini_path = _client_ini()
-    sanitized = _sanitize_for_restore(src)
+    lock = _acquire_admin_lock()
     try:
-        with open(sanitized, "rb") as stdin_file:
-            try:
-                result = subprocess.run(
-                    [str(bin_dir / "mysql.exe"), f"--defaults-extra-file={ini_path}", _MYSQL_CFG["database"]],
-                    stdin=stdin_file, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
-                )
-            except subprocess.TimeoutExpired:
+        # Refuse (unless explicitly confirmed) to restore a file that would
+        # wipe out any table that currently has data — this is what actually
+        # happened on 2026-08-21: the chosen backup was missing
+        # capital_repair_table entirely while every other table matched that
+        # day's data almost exactly, so nothing about the file list or its
+        # size gave any hint.
+        if not confirm_data_loss:
+            at_risk = _tables_at_risk(src)
+            if at_risk:
+                summary = ", ".join(f"{t} ({n} rows)" for t, n in at_risk[:10])
+                more = f" and {len(at_risk) - 10} more" if len(at_risk) > 10 else ""
                 raise HTTPException(
-                    status_code=504,
+                    status_code=409,
                     detail=(
-                        "Restore timed out after 180s — likely blocked by a long-running query or "
-                        "open transaction on mis_reports. Check SHOW FULL PROCESSLIST / "
-                        "information_schema.innodb_trx, clear the blocker, and retry. "
-                        f"Data was not changed — pre-restore snapshot saved as {prerestore_name}."
+                        f"Restoring \"{filename}\" would empty {len(at_risk)} table(s) that currently "
+                        f"have data: {summary}{more}. If this is intentional, confirm to proceed anyway."
                     ),
                 )
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    f"Restore failed: {result.stderr.decode(errors='replace')[:500]} "
-                    f"— pre-restore snapshot saved as {prerestore_name}, data was not changed until this point."
-                ),
-            )
+
+        # Safety net: snapshot current state before overwriting anything.
+        prerestore_stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
+        prerestore_name = f"mis_reports_prerestore_{prerestore_stamp}.sql"
+        _run_dump(BACKUP_DIR / prerestore_name)
+
+        bin_dir = _mysql_bin_dir()
+        ini_path = _client_ini()
+        sanitized = _sanitize_for_restore(src)
+        try:
+            with open(sanitized, "rb") as stdin_file:
+                try:
+                    result = subprocess.run(
+                        [str(bin_dir / "mysql.exe"), f"--defaults-extra-file={ini_path}", _MYSQL_CFG["database"]],
+                        stdin=stdin_file, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
+                    )
+                except subprocess.TimeoutExpired:
+                    raise HTTPException(
+                        status_code=504,
+                        detail=(
+                            "Restore timed out after 180s — likely blocked by a long-running query or "
+                            "open transaction on mis_reports. Check SHOW FULL PROCESSLIST / "
+                            "information_schema.innodb_trx, clear the blocker, and retry. "
+                            f"Data was not changed — pre-restore snapshot saved as {prerestore_name}."
+                        ),
+                    )
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Restore failed: {result.stderr.decode(errors='replace')[:500]} "
+                        f"— pre-restore snapshot saved as {prerestore_name}, data was not changed until this point."
+                    ),
+                )
+        finally:
+            os.remove(ini_path)
+            sanitized.unlink(missing_ok=True)
     finally:
-        os.remove(ini_path)
-        sanitized.unlink(missing_ok=True)
+        _release_admin_lock(lock)
 
     note = f"restored from {filename}; pre-restore snapshot saved as {prerestore_name}"
     if confirm_data_loss:
