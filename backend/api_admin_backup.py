@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -96,6 +97,34 @@ def _mysql_bin_dir() -> Path:
     return Path(matches[-1])
 
 
+def _open_backup(path: Path, mode: str, **kwargs):
+    """open() with a short retry on PermissionError.
+
+    Report_format/ is a Google Drive for Desktop synced folder (see the
+    .tmp.driveupload staging dir it creates), and Drive grabs a brief
+    no-sharing handle on each freshly written .sql while it uploads it —
+    so a restore kicked off seconds after a backup, or during one of
+    Drive's upload retries, hits `PermissionError: [Errno 13]` opening the
+    file. The lock window is short; a few retries clears it. If it's still
+    held after that, surface a 503 that names the actual cause instead of
+    a raw 500 traceback."""
+    last_exc = None
+    for attempt in range(6):
+        try:
+            return open(path, mode, **kwargs)
+        except PermissionError as e:
+            last_exc = e
+            time.sleep(1)
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            f"Could not read backup file \"{path.name}\" — it's locked by another "
+            "process (Google Drive for Desktop is most likely still uploading it). "
+            "Wait for Drive to finish syncing and retry."
+        ),
+    ) from last_exc
+
+
 def _safe_path(filename: str) -> Path:
     if not _FILENAME_RE.match(filename):
         raise HTTPException(status_code=400, detail="Invalid backup filename.")
@@ -165,7 +194,7 @@ def _sanitize_for_restore(src: Path) -> Path:
     short leading SET statements, so this can't accidentally match the
     substring inside a large data row later in the line."""
     fd, path = tempfile.mkstemp(suffix=".sql", prefix="mis_restore_")
-    with os.fdopen(fd, "w", encoding="utf-8") as out, open(src, "r", encoding="utf-8") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as out, _open_backup(src, "r", encoding="utf-8") as f:
         for line in f:
             if not _STRIP_RE.search(line[:80]):
                 out.write(line)
@@ -189,7 +218,7 @@ def _source_table_counts(path: Path) -> dict:
     sums across every matching line regardless, in case a table's data was
     ever split across more than one statement."""
     counts: dict = {}
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
+    with _open_backup(path, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
             m = _INSERT_LINE_RE.match(line.rstrip("\n"))
             if not m:

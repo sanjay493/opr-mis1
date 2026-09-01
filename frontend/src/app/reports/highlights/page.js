@@ -757,11 +757,11 @@ export default function HighlightsPage() {
         <div style={{ marginTop: 34, borderTop: '2px solid #e8eaed', paddingTop: 22 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-              🥇 Best Periods — custom window
+              🥇 Best Periods — {bpValid ? `${monLbl(bpFrom)}–${monLbl(bpTo)} window` : 'custom window'}
             </h2>
             <span style={{ fontSize: 13, color: '#5f6368' }}>
               {bpValid
-                ? `${monLbl(bpFrom)}–${monLbl(bpTo)} window · top 5 financial years by total production`
+                ? 'top 5 financial years by total production'
                 : 'pick a valid window'}
             </span>
           </div>
