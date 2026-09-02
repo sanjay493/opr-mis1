@@ -1,7 +1,7 @@
 {
   "_doc": "Cell-address config for Excel/PDF extractors. Edit here when a file format changes — no Python code changes needed. All changes take effect on the next upload (no restart). Keys: 'cells' for A1-style addresses, 'cells_rc' for [row_0based, col_0based, divide_by_1000] tuples.",
   "bsl_dpr": {
-    "_doc": "BSL DPR Mail. Sheet: DPR. Date auto-detected from date_cell (Excel datetime). Every 'cells' address is the plant's M.RATE figure (col P for MAIN UNITS, col AA for SALEABLE STEEL); the CUM figure one column left (O / Z) is read only to cross-check M.RATE and compute a fallback for a stale mid-month value.",
+    "_doc": "BSL DPR Mail. Sheet: DPR. Date auto-detected from date_cell (Excel datetime). 'cells' addresses are only a last-resort fallback now — the actual row for each item is re-located every upload by its own label text (see excel_extractor_bsl._DPR_LABELS), since rows shift between report vintages (e.g. a '- CHQ PLATE' sub-line comes and goes). Values are always taken from CUM (col O / Z), projected to the full month mid-month; M.RATE (col P / AA) is cross-checked against that and surfaced as an alert when it disagrees by more than 10%, never used to pick the value.",
     "sheet": "DPR",
     "date_cell": "O1",
     "plant": "BSL",
@@ -34,18 +34,18 @@
       {
         "item": "Finished Steel",
         "op": "subtract",
-        "a": "P31",
-        "b": "AA19"
+        "a_item": "Saleable Steel",
+        "b_item": "Saleable Semis"
       },
       {
         "item": "CRC&S(1&2)",
-        "op": "add",
-        "cells": ["AA9", "AA10"]
+        "op": "add_items",
+        "items": ["CR I/II CR(Coil) Sale", "CR Sheets"]
       },
       {
         "item": "GP/GC",
-        "op": "add",
-        "cells": ["AA11", "AA12", "AA13"]
+        "op": "add_labels",
+        "labels": ["_GP_SHEET", "_GC_SHEET", "_GP_COIL"]
       }
     ]
   },

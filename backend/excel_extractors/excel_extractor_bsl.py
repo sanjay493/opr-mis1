@@ -28,18 +28,23 @@ def clean_val(val) -> Optional[float]:
 
 
 # ---------------------------------------------------------------------------
-# DPR Mail production — M.RATE column, cross-checked against CUM
+# DPR Mail production — CUM column is authoritative; M.RATE is a cross-check
 # ---------------------------------------------------------------------------
 # Both production tables on the DPR sheet carry the plant's own full-month
 # figure one column to the RIGHT of the month-to-date cumulative:
 #   "MAIN UNITS"        block  — col O = CUM, col P  = M.RATE
 #   "SALEABLE STEEL"    block  — col Z = CUM, col AA = M.RATE
-# So every configured cell now points at an M.RATE cell and we take it
-# directly instead of reprojecting CUM. The sheet is pasted values (no live
-# formulas), so on a mid-month DPR the M.RATE cell can be stale — we
-# cross-check it against CUM x days_in_month / report_day and fall back to
-# that computed figure when M.RATE is missing or wildly off (see
-# _dpr_pick_month_value).
+# M.RATE is *supposed* to already be the whole-month figure (a no-op copy of
+# CUM on the last day, or BSL's own projection mid-month) but BSL's own
+# report is known to sometimes get it wrong even at month-end — confirmed
+# against real files: e.g. a 31/05/2026 month-end report's "H R SHEET" row
+# reads CUM 3872 vs M.RATE 3168, an 18% gap, with no such gap anywhere else
+# on that sheet. That is a flaw in BSL's own report, not a legitimate
+# rework/downgrade adjustment, so CUM (or, mid-month, CUM projected to the
+# full month — cum x days_in_month / report_day) is always what gets saved.
+# M.RATE is only read to cross-check that projection and surface an alert
+# when the two disagree by more than 10% (see _dpr_value_and_alert) — it is
+# never used to pick the saved value.
 
 def _dpr_report_day(o1_raw):
     """(report_day, days_in_month, 'YYYY-MM') from DPR cell O1 — an Excel
@@ -67,9 +72,9 @@ def _dpr_cum_cell(mrate_addr: str) -> str:
 
 
 def _dpr_expected(cum, report_day, days_in_month, per_day: bool):
-    """What the M.RATE cell *should* read, derived from CUM and the report
-    date: a per-day average for nos/day items, else the month-to-date total
-    scaled to a full month (a no-op at month-end). None if not computable."""
+    """The full-month figure derived purely from CUM and the report date: a
+    per-day average for nos/day items, else the month-to-date total scaled
+    to a full month (a no-op at month-end). None if not computable."""
     if cum is None or not report_day:
         return None
     if per_day:
@@ -79,45 +84,39 @@ def _dpr_expected(cum, report_day, days_in_month, per_day: bool):
     return cum
 
 
-def _dpr_pick_month_value(mrate, cum, report_day, days_in_month, per_day=False,
+_DPR_ERRATIC_LO, _DPR_ERRATIC_HI = 0.9, 1.1  # ±10% — see module note above
+
+
+def _dpr_value_and_alert(mrate, cum, report_day, days_in_month, per_day=False,
                           label=""):
-    """Choose an item's month figure: the sheet's M.RATE when it is present
-    and consistent with what CUM implies, otherwise the computed figure.
+    """The item's month figure — always derived from CUM, never from
+    M.RATE (see module note above) — plus an alert string when M.RATE
+    disagrees with that figure by more than 10%, else None.
 
-    The consistency band is tight mid-month (0.6x-1.6x) — there M.RATE and
-    CUM x days/day must roughly agree, so a stale/un-projected M.RATE is
-    caught — and loose otherwise (0.2x-5x), where M.RATE is the plant's
-    authoritative monthly figure and may legitimately differ from raw CUM
-    (rework/downgrade adjustments) so only garbage is rejected.
-
-    Returns (value, basis) — basis is 'm-rate', 'm-rate (unchecked)',
-    'projected', 'cum', or '' (nothing available)."""
-    exp = _dpr_expected(cum, report_day, days_in_month, per_day)
+    Returns (value, basis, alert). basis is 'projected' (mid-month),
+    'cum' (month-end/undated), or '' (CUM itself is missing)."""
     mid = bool(report_day and 0 < report_day < (days_in_month or 0))
-    lo, hi = (0.6, 1.6) if mid else (0.2, 5.0)
-
-    if mrate is not None and mrate != 0:
-        if exp is None or exp == 0:
-            return mrate, "m-rate (unchecked)"
-        ratio = mrate / exp
-        if lo <= ratio <= hi:
-            return mrate, "m-rate"
-        logger.warning(
-            "BSL DPR: %sM.RATE %.3f is %.0f%% of the expected %.3f "
-            "(CUM %.3f, day %s/%s) — using the computed figure instead.",
-            f"{label} " if label else "", mrate, ratio * 100, exp,
-            cum if cum is not None else float("nan"), report_day, days_in_month,
-        )
-        return exp, ("projected" if mid else "cum")
-
-    # M.RATE blank or zero
-    if mrate == 0 and (cum is None or abs(cum) < 1e-9):
-        return 0.0, "m-rate"
+    exp = _dpr_expected(cum, report_day, days_in_month, per_day)
     if exp is not None:
-        return exp, ("projected" if mid else "cum")
-    if cum is not None:
-        return cum, "cum"
-    return None, ""
+        value, basis = exp, ("projected" if mid else "cum")
+    elif cum is not None:
+        value, basis = cum, "cum"
+    else:
+        value, basis = None, ""
+
+    alert = None
+    if mrate not in (None, 0) and exp not in (None, 0):
+        ratio = mrate / exp
+        if not (_DPR_ERRATIC_LO <= ratio <= _DPR_ERRATIC_HI):
+            alert = (
+                f"{label}: sheet's M.RATE ({mrate:,.1f}) differs from the "
+                f"cumulative-derived figure ({exp:,.1f}, from CUM "
+                f"{cum:,.1f}) by {abs(ratio - 1) * 100:.0f}% — the "
+                f"cumulative figure was used; M.RATE looks erratic on "
+                f"this report."
+            )
+            logger.warning("BSL DPR: %s", alert)
+    return value, basis, alert
 
 
 def extract_and_save_excel(file_path: str, report_month: str = "", source_file_name: str = "") -> bool:
@@ -162,10 +161,11 @@ def _dpr_config():
 
     Every cell points at the plant's own M.RATE figure — column P for the
     "MAIN UNITS" block, column AA for the "PRODUCTION (SALEABLE STEEL)"
-    block. The month-to-date CUM figure sits one column to the left (O / Z)
-    and is read by the extractor for cross-checking only (see
-    _dpr_pick_month_value). Pig Iron is AA21, under the SALEABLE STEEL
-    section (W3) — E30 is a different figure under DESPATCH (B19).
+    block. The month-to-date CUM figure sits one column to the left (O / Z).
+    These addresses are only a starting point / last-resort fallback now —
+    see _resolve_dpr_cells, which re-locates every row by its own label text
+    on each upload (rows here drift between report vintages; see its
+    docstring for a confirmed real example).
 
     Reads excel_cells_config.json (section 'bsl_dpr'); falls back to these
     hardcoded defaults only if that config section is missing.
@@ -176,7 +176,7 @@ def _dpr_config():
     cfg = get_extractor_config("bsl_dpr")
 
     cells = cfg.get("cells", {
-        "Oven Pushing (nos/day)": "P6",
+        "Oven Pushing(nos/d)": "P6",
         "Total Sinter":        "P7",
         "Hot Metal":           "P8",
         "Pig Iron":            "AA21",
@@ -197,13 +197,111 @@ def _dpr_config():
         "Saleable Semis":      "AA19",
         "Thick Plate":         "AA20",
     })
-    no_convert = set(cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
+    no_convert = set(cfg.get("no_convert", ["Oven Pushing(nos/d)"]))
     derived = cfg.get("derived", [
-        {"item": "Finished Steel", "op": "subtract", "a": "P31", "b": "AA19"},
-        {"item": "CRC&S(1&2)", "op": "add", "cells": ["AA9", "AA10"]},
-        {"item": "GP/GC", "op": "add", "cells": ["AA11", "AA12", "AA13"]},
+        {"item": "Finished Steel", "op": "subtract", "a_item": "Saleable Steel", "b_item": "Saleable Semis"},
+        {"item": "CRC&S(1&2)", "op": "add_items", "items": ["CR I/II CR(Coil) Sale", "CR Sheets"]},
+        {"item": "GP/GC", "op": "add_labels", "labels": ["_GP_SHEET", "_GC_SHEET", "_GP_COIL"]},
     ])
     return cells, no_convert, derived
+
+
+# Label anchors for every DPR production row — resistant to rows being
+# inserted or removed between report vintages, unlike a fixed cell address.
+# Confirmed against real files spanning 2016-2026: a "- CHQ PLATE" sub-line
+# (under H R PLATE, "SALEABLE STEEL" table) and a "G P COIL }" line have
+# each independently come and gone across eras — e.g. 31/08/2026's report
+# has "- CHQ PLATE" but not "G P COIL }", while 31/05/2026's has the
+# opposite — shifting every row below the one that appeared/disappeared.
+# A fixed cell address silently read the wrong neighbouring row whenever
+# this happened (HR Sheet, CR I/II CR(Coil) Sale, CR Sheets and the GP/GC
+# sum were all wrong on any file with "- CHQ PLATE" present, extracting
+# the row above their real one).
+#
+# value: (label_col, [substrings]). label_col is 'L' for the "MAIN UNITS"
+# table (cum=O, m.rate=P) or 'W' for "SALEABLE STEEL" (cum=Z, m.rate=AA).
+# First row in range 6-40 whose label cell contains any substring wins.
+_DPR_LABELS = {
+    "Oven Pushing(nos/d)":   ("L", ["OVENS PUSHED"]),
+    "Total Sinter":          ("L", ["G.SINTER"]),
+    "Hot Metal":             ("L", ["HOT METAL"]),
+    "SMS-1 CCM-1":           ("L", ["SMS NEW-SLAB"]),
+    "SMS-2 CCM-1&2":         ("L", ["SMS-2/CCS"]),
+    "Total Crude Steel":     ("L", ["CRUDE STEEL"]),
+    "HSM Total HR Coil":     ("L", ["HSM H.R.COIL"]),
+    "Saleable Steel":        ("L", ["SAL.STEEL(P)"]),
+    "HSM HR Coil (Sale)":    ("W", ["H R COIL"]),
+    "HSM HR Plate":          ("W", ["H R PLATE"]),
+    # "- CHQ PLATE" is a sub-line of H R PLATE, present only on some report
+    # vintages (see above) — HSM HR Plate already includes it, so this is
+    # purely an additional breakdown, not summed into anything else.
+    "CHQ Plate":             ("W", ["CHQ PLATE"]),
+    "HR Sheet":              ("W", ["H R SHEET"]),
+    "CR I/II CR(Coil) Sale": ("W", ["C R CL/SL"]),
+    "CR Sheets":             ("W", ["C R SHEET"]),
+    "CRC(3)":                ("W", ["CR COIL-3"]),
+    "CR III CR(Coil) Sale":  ("W", ["CR COIL-3"]),
+    "GPC3":                  ("W", ["GP COIL-3"]),
+    "CRSALE":                ("W", ["TOT CR SAL"]),
+    "Saleable Semis":        ("W", ["SLAB"]),
+    "Thick Plate":           ("W", ["COBB PLT"]),
+    "Pig Iron":              ("W", ["PIG IRON"]),
+}
+
+# The GP/GC derived sum's three possible component rows — not themselves
+# saved as DB items, and (unlike everything in _DPR_LABELS) not always all
+# present: "G P COIL }" only exists on some vintages (see _DPR_LABELS'
+# docstring), so each is searched independently and summed with whichever
+# are found (none found → GP/GC is skipped, same as every other item).
+_DPR_GPGC_HELPERS = {
+    "_GP_SHEET": ("W", ["G P SHEET"]),
+    "_GC_SHEET": ("W", ["G C SHEET"]),
+    "_GP_COIL":  ("W", ["G P COIL"]),
+}
+
+_DPR_TABLE_COLS = {"L": ("O", "P"), "W": ("Z", "AA")}  # label_col -> (cum_col, mrate_col)
+
+
+def _find_dpr_label_row(ws, col_letter, substrings, row_range=(6, 40)):
+    """First row (1-based) in row_range whose col_letter cell's text
+    contains any of substrings (case-insensitive, stripped), else None."""
+    col = column_index_from_string(col_letter)
+    for r in range(row_range[0], row_range[1] + 1):
+        label = str(ws.cell(row=r, column=col).value or "").strip().upper()
+        if not label:
+            continue
+        if any(s in label for s in substrings):
+            return r
+    return None
+
+
+def _resolve_dpr_cells(ws, defaults):
+    """{item_name: mrate_cell_address} — every row re-located by its own
+    label text (see _DPR_LABELS) rather than trusted at a fixed address,
+    so an inserted/removed row elsewhere on the sheet can't shift a
+    neighbouring item's data into the wrong one. Falls back to `defaults`
+    (the configured/hardcoded cell) only for an item _DPR_LABELS doesn't
+    cover; an item whose label can't be found at all is dropped rather
+    than risk reading the wrong row silently."""
+    resolved = dict(defaults)
+    for item, (label_col, substrings) in _DPR_LABELS.items():
+        row = _find_dpr_label_row(ws, label_col, substrings)
+        cum_col, mrate_col = _DPR_TABLE_COLS[label_col]
+        if row is not None:
+            resolved[item] = f"{mrate_col}{row}"
+        else:
+            resolved.pop(item, None)
+    return resolved
+
+
+def _resolve_dpr_gpgc_helpers(ws):
+    """{helper_name: mrate_cell_address or None} for _DPR_GPGC_HELPERS."""
+    out = {}
+    for name, (label_col, substrings) in _DPR_GPGC_HELPERS.items():
+        row = _find_dpr_label_row(ws, label_col, substrings)
+        _, mrate_col = _DPR_TABLE_COLS[label_col]
+        out[name] = f"{mrate_col}{row}" if row is not None else None
+    return out
 
 
 def _extract_dpr_report(wb, source_file_name: str) -> bool:
@@ -212,37 +310,30 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
 
     Date is auto-detected from cell O1 (stored as a Python datetime by Excel).
 
-    Every cell below is the plant's own M.RATE figure (column P for the MAIN
-    UNITS block, column AA for the SALEABLE STEEL block). The month-to-date
-    CUM figure one column to the left (O / Z) is read only to cross-check
-    M.RATE and to compute a fallback when it is stale — see
-    _dpr_pick_month_value.
+    Every item's row is re-located by its own label text (see _DPR_LABELS)
+    rather than a fixed cell address — column P/AA (M.RATE) and O/Z (CUM)
+    stay fixed per table, but which row they land on shifts between report
+    vintages. Value saved is always CUM-derived (see _dpr_value_and_alert);
+    M.RATE is cross-checked and logged as a warning when it disagrees by
+    more than 10%, never used to pick the value.
 
-    Cell map — sheet 'DPR':
-      Oven Pushing (nos/day)  P6    — nos/day average, no unit conversion
-      Total Sinter         P7    — tonnes → /1000
-      Hot Metal            P8
-      Pig Iron             AA21
-      SMS-1 CCM-1          P10
-      SMS-2 CCM-1&2        P11
-      Total Crude Steel    P12
-      HSM Total HR Coil    P14
-      HSM HR Coil (Sale)   AA6
-      HSM HR Plate         AA7
-      HR Sheet             AA8
-      CR I/II CR(Coil) Sale AA9  (CR Coil I&II alone — CRC&S(1&2) sums with AA10)
-      CR Sheets            AA10 (CR Sheet alone — CRC&S(1&2) sums with AA9)
-      CRC(3)               AA15
-      CR III CR(Coil) Sale AA15  (same cell as CRC(3) — that row is already CR Coil III alone)
-      GPC3                 AA16
-      CRSALE               AA18
-      Saleable Steel       P31  (M.RATE column, "PRODUCTION:-(MAIN UNITS)" table)
-      Saleable Semis       AA19 (M.RATE column, "PRODUCTION (SALEABLE STEEL)" table)
-      Thick Plate          AA20 ("COBB PLT" row — Thick/Cobble Plate)
-      Finished Steel       P31 − AA19  (derived: saleable steel minus semis, both production-side —
-                                        already includes Thick Plate; AA20 is only saved separately)
-      CRC&S(1&2)           AA9 + AA10  (derived: sum)
-      GP/GC                AA11 + AA12 + AA13  (derived: sum)
+    Items — see _DPR_LABELS for the label each is found by:
+      Oven Pushing(nos/d), Total Sinter, Hot Metal, SMS-1 CCM-1,
+      SMS-2 CCM-1&2, Total Crude Steel, HSM Total HR Coil, Saleable Steel
+        — "MAIN UNITS" table (col O = CUM, col P = M.RATE)
+      HSM HR Coil (Sale), HSM HR Plate, CHQ Plate (a sub-line of HSM HR
+      Plate, present only on some report vintages — already included in
+      HSM HR Plate, saved separately too when its row exists), HR Sheet,
+      CR I/II CR(Coil) Sale, CR Sheets, CRC(3), CR III CR(Coil) Sale (same
+      row as CRC(3)), GPC3, CRSALE, Saleable Semis, Thick Plate, Pig Iron
+        — "SALEABLE STEEL" table (col Z = CUM, col AA = M.RATE)
+      Finished Steel        derived: Saleable Steel − Saleable Semis
+                             (already includes Thick Plate; Thick Plate is
+                             also saved separately)
+      CRC&S(1&2)             derived: CR I/II CR(Coil) Sale + CR Sheets
+      GP/GC                  derived: G P SHEET + G C SHEET + G P COIL
+                             (whichever of those three rows exist on this
+                             report — see _DPR_GPGC_HELPERS)
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
@@ -272,25 +363,26 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     else:
         raise ValueError("Cell O1 is empty — cannot determine report month.")
 
-    # The M.RATE column is correct as the monthly figure on a last-day report.
-    # A mid-month upload used to be rejected outright; now it is allowed with a
-    # warning — each M.RATE cell is cross-checked against its CUM sibling and
-    # the computed CUM x days/day figure is used instead where M.RATE is stale.
+    # CUM (projected to the full month mid-month) is always what gets saved;
+    # a mid-month upload is allowed, with each item's M.RATE cross-checked
+    # against that projection and logged as a warning when it's erratic.
     last_day = calendar.monthrange(int(year), int(m_num))[1]
     days_in_month = last_day
     report_day = day
     if _dpr_is_mid_month(report_day, days_in_month):
         logger.warning(
             "BSL DPR: cell O1 date (%02d.%s.%s) is not the last day of %s %s "
-            "(last day is %02d) — mid-month DPR upload. M.RATE cells are used "
-            "when they agree with CUM x %d/%d, else the computed figure.",
+            "(last day is %02d) — mid-month DPR upload. Every item is CUM x "
+            "%d/%d; M.RATE is cross-checked and logged if erratic.",
             report_day, m_num, year, MONTH_NAMES[m_num], year, last_day,
             days_in_month, report_day,
         )
 
     logger.info(f"BSL DPR: month auto-detected from O1 → {db_report_month}")
 
-    production_cells, NO_CONVERT, derived_rules = _dpr_config()
+    default_cells, NO_CONVERT, derived_rules = _dpr_config()
+    production_cells = _resolve_dpr_cells(ws, default_cells)
+    gpgc_helpers = _resolve_dpr_gpgc_helpers(ws)
 
     def _mrate_and_cum(addr):
         return (clean_val(ws[addr].value),
@@ -315,20 +407,21 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
 
     for item_name, cell in production_cells.items():
         mrate, cum = _mrate_and_cum(cell)
-        val, _basis = _dpr_pick_month_value(
+        val, _basis, _alert = _dpr_value_and_alert(
             mrate, cum, report_day, days_in_month,
             per_day=item_name in NO_CONVERT, label=item_name,
         )
         _save(item_name, val)
 
-    # Derived values driven by config: the configured cells are M.RATE cells,
-    # cross-checked as a group against the same combination of their CUM
-    # siblings (one column left).
+    # Derived values, driven by config, referencing already-resolved items
+    # (or, for GP/GC, the independently-resolved helper rows) so they share
+    # the same label-based row lookup as everything else.
     for d in derived_rules:
         item = d["item"]
         if d["op"] == "subtract":
-            a_m, a_c = _mrate_and_cum(d["a"])
-            b_m, b_c = _mrate_and_cum(d["b"])
+            a_cell, b_cell = production_cells.get(d["a_item"]), production_cells.get(d["b_item"])
+            a_m, a_c = _mrate_and_cum(a_cell) if a_cell else (None, None)
+            b_m, b_c = _mrate_and_cum(b_cell) if b_cell else (None, None)
             if a_m is not None and b_m is not None:
                 mrate_val = a_m - b_m
                 cum_val = (a_c - b_c) if (a_c is not None and b_c is not None) else None
@@ -336,17 +429,17 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
                 mrate_val, cum_val = a_m, a_c
             else:
                 continue
-            val, _basis = _dpr_pick_month_value(mrate_val, cum_val, report_day,
-                                                days_in_month, label=item)
+            val, _basis, _alert = _dpr_value_and_alert(mrate_val, cum_val, report_day,
+                                                        days_in_month, label=item)
             _save(item, val)
-        elif d["op"] == "add":
-            addrs = d.get("cells", [])
-            m_parts = [clean_val(ws[c].value) for c in addrs]
-            c_parts = [clean_val(ws[_dpr_cum_cell(c)].value) for c in addrs]
-            m_parts = [v for v in m_parts if v is not None]
-            c_parts = [v for v in c_parts if v is not None]
+        elif d["op"] in ("add_items", "add_labels"):
+            addrs = [production_cells.get(i) for i in d["items"]] if d["op"] == "add_items" \
+                else [gpgc_helpers.get(l) for l in d["labels"]]
+            addrs = [a for a in addrs if a]
+            m_parts = [v for v in (clean_val(ws[c].value) for c in addrs) if v is not None]
+            c_parts = [v for v in (clean_val(ws[_dpr_cum_cell(c)].value) for c in addrs) if v is not None]
             if m_parts:
-                val, _basis = _dpr_pick_month_value(
+                val, _basis, _alert = _dpr_value_and_alert(
                     sum(m_parts), sum(c_parts) if c_parts else None,
                     report_day, days_in_month, label=item,
                 )
@@ -2296,8 +2389,8 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
     mid_month = _dpr_is_mid_month(report_day, days_in_month)
     if mid_month:
         logger.warning(
-            "BSL DPR preview: mid-month file (day %d of %d) — M.RATE cells are "
-            "used when they agree with CUM x %d/%d, else the computed figure.",
+            "BSL DPR preview: mid-month file (day %d of %d) — every item is "
+            "CUM x %d/%d; M.RATE is cross-checked and flagged if erratic.",
             report_day, days_in_month, days_in_month, report_day,
         )
 
@@ -2305,22 +2398,23 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
         return (clean_val(ws[addr].value),
                 clean_val(ws[_dpr_cum_cell(addr)].value))
 
-    CELL_MAP, NO_CONVERT, derived_rules = _dpr_config()
+    default_cells, NO_CONVERT, derived_rules = _dpr_config()
+    CELL_MAP = _resolve_dpr_cells(ws, default_cells)
+    gpgc_helpers = _resolve_dpr_gpgc_helpers(ws)
 
     rows = []
+    alerts = []
     for item_name, addr in CELL_MAP.items():
         per_day = item_name in NO_CONVERT
         mrate, cum = _mrate_and_cum(addr)
-        raw, basis = _dpr_pick_month_value(mrate, cum, report_day, days_in_month,
-                                           per_day=per_day, label=item_name)
+        raw, basis, alert = _dpr_value_and_alert(mrate, cum, report_day, days_in_month,
+                                                  per_day=per_day, label=item_name)
+        if alert:
+            alerts.append(alert)
         cum_addr = _dpr_cum_cell(addr)
-        cell = f"DPR!{addr}"
-        if basis.startswith("m-rate"):
-            cell += f" (vs CUM {cum_addr})"
-        elif basis in ("projected", "cum"):
-            cell = (f"DPR!{cum_addr}"
-                    + (f" x{days_in_month}/{report_day}" if basis == "projected" else "")
-                    + " (M.RATE rejected)")
+        cell = f"DPR!{cum_addr}" + (f" x{days_in_month}/{report_day}" if basis == "projected" else "")
+        if alert:
+            cell += f" (M.RATE {addr} erratic)"
         if raw is not None:
             if per_day:
                 stored, unit = raw, "nos/d"
@@ -2335,36 +2429,44 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
                          "cell": cell, "pdf_label": addr,
                          "basis": basis, "status": "skip"})
 
-    # Derived values: the configured cells are M.RATE cells, cross-checked as a
-    # group against the same combination of their CUM siblings (one col left).
+    # Derived values, referencing already-resolved items (or, for GP/GC, the
+    # independently-resolved helper rows — see _DPR_GPGC_HELPERS) so they
+    # share the same label-based row lookup as everything else.
     for d in derived_rules:
         item = d["item"]
         if d["op"] == "subtract":
-            a_m, a_c = _mrate_and_cum(d["a"])
-            b_m, b_c = _mrate_and_cum(d["b"])
+            a_cell, b_cell = CELL_MAP.get(d["a_item"]), CELL_MAP.get(d["b_item"])
+            a_m, a_c = _mrate_and_cum(a_cell) if a_cell else (None, None)
+            b_m, b_c = _mrate_and_cum(b_cell) if b_cell else (None, None)
             if a_m is not None and b_m is not None:
                 mrate_val = a_m - b_m
                 cum_val = (a_c - b_c) if (a_c is not None and b_c is not None) else None
-                lbl = f"{d['a']}-{d['b']}"
+                lbl = f"{a_cell}-{b_cell}"
             elif a_m is not None:
-                mrate_val, cum_val, lbl = a_m, a_c, d["a"]
+                mrate_val, cum_val, lbl = a_m, a_c, a_cell
             else:
                 continue
-            val, basis = _dpr_pick_month_value(mrate_val, cum_val, report_day,
-                                               days_in_month, label=item)
+            val, basis, alert = _dpr_value_and_alert(mrate_val, cum_val, report_day,
+                                                      days_in_month, label=item)
+            if alert:
+                alerts.append(alert)
             if val is not None:
                 rows.append({"item_name": item, "value": round(val / 1000.0, 3),
                              "unit": "'000T", "cell": f"DPR!{lbl} (computed)",
                              "pdf_label": lbl, "basis": basis, "status": "ok"})
-        elif d["op"] == "add":
-            addrs = d.get("cells", [])
+        elif d["op"] in ("add_items", "add_labels"):
+            addrs = [CELL_MAP.get(i) for i in d["items"]] if d["op"] == "add_items" \
+                else [gpgc_helpers.get(l) for l in d["labels"]]
+            addrs = [a for a in addrs if a]
             m_parts = [v for v in (clean_val(ws[c].value) for c in addrs) if v is not None]
             c_parts = [v for v in (clean_val(ws[_dpr_cum_cell(c)].value) for c in addrs) if v is not None]
             if m_parts:
-                val, basis = _dpr_pick_month_value(
+                val, basis, alert = _dpr_value_and_alert(
                     sum(m_parts), sum(c_parts) if c_parts else None,
                     report_day, days_in_month, label=item,
                 )
+                if alert:
+                    alerts.append(alert)
                 if val is not None:
                     rows.append({"item_name": item, "value": round(val / 1000.0, 3),
                                  "unit": "'000T", "cell": f"DPR!{'+'.join(addrs)} (computed)",
@@ -2397,6 +2499,7 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
         "morning_report_day":    report_day,
         "morning_days_in_month": days_in_month,
         "morning_is_month_end":  (not report_day) or report_day >= (days_in_month or 0),
+        "mrate_alerts":       alerts,
     }
 
 

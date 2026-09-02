@@ -1,11 +1,9 @@
 {
-  "month": "2026-05",
+  "month": "2026-08",
   "morning_days_in_month": 31,
   "morning_is_month_end": true,
   "morning_report_day": 31,
-  "mrate_alerts": [
-    "HR Sheet: sheet's M.RATE (3,168.0) differs from the cumulative-derived figure (3,872.0, from CUM 3,872.0) by 18% — the cumulative figure was used; M.RATE looks erratic on this report."
-  ],
+  "mrate_alerts": [],
   "plant": "BSL",
   "production_rows": [
     {
@@ -15,7 +13,7 @@
       "pdf_label": "P6",
       "status": "ok",
       "unit": "nos/d",
-      "value": 524.193548
+      "value": 499.258065
     },
     {
       "basis": "cum",
@@ -24,7 +22,7 @@
       "pdf_label": "P7",
       "status": "ok",
       "unit": "'000T",
-      "value": 575.813
+      "value": 525.185
     },
     {
       "basis": "cum",
@@ -33,7 +31,7 @@
       "pdf_label": "P8",
       "status": "ok",
       "unit": "'000T",
-      "value": 418.322
+      "value": 431.666
     },
     {
       "basis": "cum",
@@ -42,7 +40,7 @@
       "pdf_label": "AA21",
       "status": "ok",
       "unit": "'000T",
-      "value": 11.667
+      "value": 6.686
     },
     {
       "basis": "cum",
@@ -51,7 +49,7 @@
       "pdf_label": "P10",
       "status": "ok",
       "unit": "'000T",
-      "value": 71.065
+      "value": 66.486
     },
     {
       "basis": "cum",
@@ -60,7 +58,7 @@
       "pdf_label": "P11",
       "status": "ok",
       "unit": "'000T",
-      "value": 302.497
+      "value": 334.174
     },
     {
       "basis": "cum",
@@ -69,7 +67,7 @@
       "pdf_label": "P12",
       "status": "ok",
       "unit": "'000T",
-      "value": 373.562
+      "value": 400.775
     },
     {
       "basis": "cum",
@@ -78,7 +76,7 @@
       "pdf_label": "P14",
       "status": "ok",
       "unit": "'000T",
-      "value": 263.039
+      "value": 361.488
     },
     {
       "basis": "cum",
@@ -87,7 +85,7 @@
       "pdf_label": "AA6",
       "status": "ok",
       "unit": "'000T",
-      "value": 157.625
+      "value": 196.453
     },
     {
       "basis": "cum",
@@ -96,34 +94,34 @@
       "pdf_label": "AA7",
       "status": "ok",
       "unit": "'000T",
-      "value": 29.756
-    },
-    {
-      "basis": "cum",
-      "cell": "DPR!Z8 (M.RATE AA8 erratic)",
-      "item_name": "HR Sheet",
-      "pdf_label": "AA8",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 3.872
+      "value": 33.999
     },
     {
       "basis": "cum",
       "cell": "DPR!Z9",
-      "item_name": "CR I/II CR(Coil) Sale",
+      "item_name": "HR Sheet",
       "pdf_label": "AA9",
       "status": "ok",
       "unit": "'000T",
-      "value": 24.072
+      "value": 8.79
     },
     {
       "basis": "cum",
       "cell": "DPR!Z10",
-      "item_name": "CR Sheets",
+      "item_name": "CR I/II CR(Coil) Sale",
       "pdf_label": "AA10",
       "status": "ok",
       "unit": "'000T",
-      "value": 0.024
+      "value": 55.044
+    },
+    {
+      "basis": "cum",
+      "cell": "DPR!Z11",
+      "item_name": "CR Sheets",
+      "pdf_label": "AA11",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 0.08
     },
     {
       "basis": "cum",
@@ -132,7 +130,7 @@
       "pdf_label": "AA15",
       "status": "ok",
       "unit": "'000T",
-      "value": 53.482
+      "value": 50.306
     },
     {
       "basis": "cum",
@@ -141,7 +139,7 @@
       "pdf_label": "AA15",
       "status": "ok",
       "unit": "'000T",
-      "value": 53.482
+      "value": 50.306
     },
     {
       "basis": "cum",
@@ -150,7 +148,7 @@
       "pdf_label": "AA16",
       "status": "ok",
       "unit": "'000T",
-      "value": 13.106
+      "value": 21.686
     },
     {
       "basis": "cum",
@@ -159,7 +157,7 @@
       "pdf_label": "AA18",
       "status": "ok",
       "unit": "'000T",
-      "value": 91.016
+      "value": 127.558
     },
     {
       "basis": "cum",
@@ -168,7 +166,7 @@
       "pdf_label": "P31",
       "status": "ok",
       "unit": "'000T",
-      "value": 320.889
+      "value": 407.587
     },
     {
       "basis": "cum",
@@ -177,7 +175,7 @@
       "pdf_label": "AA19",
       "status": "ok",
       "unit": "'000T",
-      "value": 34.321
+      "value": 37.693
     },
     {
       "basis": "cum",
@@ -186,7 +184,16 @@
       "pdf_label": "AA20",
       "status": "ok",
       "unit": "'000T",
-      "value": 4.3
+      "value": 3.094
+    },
+    {
+      "basis": "cum",
+      "cell": "DPR!Z8",
+      "item_name": "CHQ Plate",
+      "pdf_label": "AA8",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 3.966
     },
     {
       "basis": "cum",
@@ -195,25 +202,25 @@
       "pdf_label": "P31-AA19",
       "status": "ok",
       "unit": "'000T",
-      "value": 286.568
+      "value": 369.894
     },
     {
       "basis": "cum",
-      "cell": "DPR!AA9+AA10 (computed)",
+      "cell": "DPR!AA10+AA11 (computed)",
       "item_name": "CRC&S(1&2)",
-      "pdf_label": "AA9+AA10",
+      "pdf_label": "AA10+AA11",
       "status": "ok",
       "unit": "'000T",
-      "value": 24.096
+      "value": 55.124
     },
     {
       "basis": "cum",
-      "cell": "DPR!AA11+AA12+AA13 (computed)",
+      "cell": "DPR!AA12+AA13 (computed)",
       "item_name": "GP/GC",
-      "pdf_label": "AA11+AA12+AA13",
+      "pdf_label": "AA12+AA13",
       "status": "ok",
       "unit": "'000T",
-      "value": 0.148
+      "value": 0.442
     }
   ],
   "source_type": "BSL DPR Mail (Month-End)",
@@ -224,27 +231,27 @@
       "item_type": "SLABS",
       "plant": "BSL",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "INPROCESS",
-      "value": 173.209
+      "value": 61.283
     },
     {
       "formula": "Delhi Report!M66",
       "item_type": "FINISHED STEEL",
       "plant": "BSL",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "",
-      "value": 82.057
+      "value": 84.402
     },
     {
       "formula": "Delhi Report!M69",
       "item_type": "PIG IRON",
       "plant": "BSL",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "",
-      "value": 37.142
+      "value": 20.868
     }
   ],
   "techno_param_rows": [],

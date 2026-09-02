@@ -51,6 +51,14 @@ CASES = [
     Case("bsl_dpr_2026-05",
          "excel_extractors.excel_extractor_bsl",
          "MONTHEND/BSL/BSL-DPR31052026.xlsx", "2026-05"),
+    # Same report, a vintage that carries a "- CHQ PLATE" sub-line (absent
+    # from the 2026-05 sample above) that shifts every row below it in the
+    # "SALEABLE STEEL" table — locks in the label-based row lookup added
+    # for HR Sheet / CR I/II CR(Coil) Sale / CR Sheets / GP/GC (see
+    # excel_extractor_bsl._DPR_LABELS).
+    Case("bsl_dpr_2026-08",
+         "excel_extractors.excel_extractor_bsl",
+         "MONTHEND/BSL/DPR Mail_31082026.xlsx", "2026-08"),
     Case("isp_morning_2026-05",
          "excel_extractors.excel_extractor_isp",
          "MONTHEND/MORNING REPORT.xlsx", "2026-05"),

@@ -652,6 +652,7 @@ function UploadPageInner() {
         }
       }
       addLog('info', `Workbook sheets: ${(result.workbook_sheets || []).join(' | ')}`);
+      (result.mrate_alerts || []).forEach((msg) => addLog('warning', `⚠ ${msg}`));
       if (!result.production_rows?.length) {
         addLog('info', 'No production data: this file was not recognized as a Final Monthly Report (sheets "page-9" + "page 1-8") or Morning Report. If it should contain production, check the sheet names above.');
       }
