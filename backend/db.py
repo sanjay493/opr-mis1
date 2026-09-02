@@ -3,6 +3,7 @@ import json
 import os
 import copy
 import functools
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from constants import ALL_PLANTS as PLANTS
 from techno_registry import canonical_unit as _canon_unit
@@ -561,6 +562,23 @@ def init_db():
             entity     TEXT,            -- e.g. 'production_table', 'upload-excel'
             details    TEXT DEFAULT '',
             timestamp  TEXT NOT NULL
+        )
+    """)
+
+    # 16b. Page-visit log — one row per frontend page navigation (see
+    # frontend/src/components/VisitLogger.js), feeding /admin/site-visits.
+    # Unlike activity_log this also covers anonymous (never-logged-in)
+    # traffic — user_email/user_name are NULL for those rows, and
+    # ip_address is the visitor's real IP (see frontend/server.js — the
+    # Next rewrite proxy doesn't forward it on its own).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS page_visits (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp  TEXT NOT NULL,
+            ip_address TEXT,
+            user_email TEXT,
+            user_name  TEXT,
+            path       TEXT NOT NULL
         )
     """)
 
@@ -1916,6 +1934,26 @@ def save_techno_target(fy: str, param_id: int, target: Optional[float]):
         VALUES (?, ?, ?)
         ON CONFLICT(fy, param_id) DO UPDATE SET target = excluded.target
     """, (fy, param_id, target))
+    conn.commit()
+    conn.close()
+
+
+def log_page_visit(ip_address: str, user: Optional[dict], path: str) -> None:
+    """Appends one row to page_visits — a frontend navigation to `path`,
+    from `ip_address`, by `user` (the get_current_user_optional dict) or
+    anonymously if `user` is None. See api_visits.py's POST /api/log-visit."""
+    init_db()
+    conn = connect()
+    conn.execute("""
+        INSERT INTO page_visits (timestamp, ip_address, user_email, user_name, path)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        datetime.now(timezone.utc).isoformat(),
+        ip_address or None,
+        user.get("email") if user else None,
+        user.get("name") if user else None,
+        path,
+    ))
     conn.commit()
     conn.close()
 

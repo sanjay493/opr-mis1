@@ -344,6 +344,21 @@ CREATE TABLE IF NOT EXISTS activity_log (
     KEY idx_activity_ts (timestamp)
 ) ENGINE=InnoDB;
 
+-- One row per frontend page navigation (see frontend/src/components/
+-- VisitLogger.js and db.py's page_visits table doc) — covers anonymous
+-- traffic too, unlike activity_log.
+CREATE TABLE IF NOT EXISTS page_visits (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    timestamp  VARCHAR(40) NOT NULL,
+    ip_address VARCHAR(64),
+    user_email VARCHAR(190),
+    user_name  VARCHAR(190),
+    path       VARCHAR(255) NOT NULL,
+    KEY idx_visits_ts (timestamp),
+    KEY idx_visits_email (user_email),
+    KEY idx_visits_ip (ip_address)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS todo_jobs (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     subject      VARCHAR(255) NOT NULL,

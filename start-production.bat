@@ -1,7 +1,11 @@
 @echo off
 rem Starts the SAIL MIS application in production mode, reachable across the LAN.
 rem Backend : FastAPI (uvicorn) on http://0.0.0.0:8082 (proxied via the frontend)
-rem Frontend: Next.js production server on http://0.0.0.0:80
+rem Frontend: Next.js production server on http://0.0.0.0:80, launched through
+rem           frontend/server.js (a custom server — forwards each visitor's
+rem           real IP to the backend as x-forwarded-for, since Next's own
+rem           rewrite proxy doesn't). Port comes from the PORT env var below,
+rem           not a CLI flag - server.js doesn't parse argv.
 rem
 rem Browsers only talk to port 80; the Next.js server proxies /api/* to the
 rem backend locally, so no firewall rule for port 8082 is needed.
@@ -27,7 +31,7 @@ echo Starting FastAPI backend on port 8082...
 start "MIS Backend (8082)" cmd /k "cd /d %~dp0backend && venv\Scripts\python.exe main.py"
 
 echo Starting Next.js production server on port 80...
-start "MIS Frontend (80)" cmd /k "cd /d %~dp0frontend && npm start -- -p 80"
+start "MIS Frontend (80)" cmd /k "cd /d %~dp0frontend && set PORT=80 && npm start"
 
 echo.
 echo Both servers launching in separate windows.

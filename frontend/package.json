@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next dev",
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=4096 node server.js",
     "dev:webpack": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next dev --webpack",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next build",
-    "start": "next start",
+    "start": "cross-env NODE_ENV=production node server.js",
     "lint": "eslint"
   },
   "dependencies": {

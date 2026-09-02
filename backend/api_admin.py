@@ -1,11 +1,11 @@
 """
 Administrator-only endpoints: manage the registration allow-list (add /
 remove / bar emails), manage registered users (assign editor/admin role or
-delete an account), and view the activity log.
+delete an account), view the activity log, and view the site-visit log.
 """
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -227,3 +227,56 @@ def get_activity_log(limit: int = 200, offset: int = 0, user_email: Optional[str
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
     return {"entries": rows}
+
+
+# ── site visits ──────────────────────────────────────────────────────────────
+
+@router.get("/site-visits")
+def get_site_visits(days: int = 30):
+    """One row per distinct visitor (logged-in users grouped by email,
+    anonymous ones by IP) in the last `days` days (days<=0 = all time),
+    each with the list of pages they visited and how often. Grouped in
+    Python — portable across sqlite/MySQL, and the row count in any
+    reasonable window is small for an internal LAN tool."""
+    conn = db.connect()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    if days > 0:
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        cur.execute("SELECT * FROM page_visits WHERE timestamp >= ? ORDER BY timestamp ASC", (since,))
+    else:
+        cur.execute("SELECT * FROM page_visits ORDER BY timestamp ASC")
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+
+    visitors: dict = {}
+    for r in rows:
+        key = r["user_email"] or f"anon:{r['ip_address'] or 'unknown'}"
+        v = visitors.get(key)
+        if v is None:
+            v = visitors[key] = {
+                "key": key,
+                "user_email": r["user_email"],
+                "user_name": r["user_name"],
+                "ip_address": r["ip_address"],
+                "is_logged_in": bool(r["user_email"]),
+                "first_seen": r["timestamp"],
+                "last_seen": r["timestamp"],
+                "visit_count": 0,
+                "_pages": {},
+            }
+        v["visit_count"] += 1
+        v["last_seen"] = r["timestamp"]
+        v["ip_address"] = r["ip_address"] or v["ip_address"]
+        page = v["_pages"].get(r["path"])
+        if page is None:
+            page = v["_pages"][r["path"]] = {"path": r["path"], "count": 0, "last_seen": r["timestamp"]}
+        page["count"] += 1
+        page["last_seen"] = r["timestamp"]
+
+    result = []
+    for v in visitors.values():
+        v["pages"] = sorted(v.pop("_pages").values(), key=lambda p: p["count"], reverse=True)
+        result.append(v)
+    result.sort(key=lambda v: v["last_seen"], reverse=True)
+    return {"visitors": result}

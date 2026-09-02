@@ -507,6 +507,11 @@ export default function GlobalNavbar() {
                             💾 Backup & Restore
                           </div>
                         </Link>
+                        <Link href="/admin/site-visits" style={{ textDecoration: 'none' }}>
+                          <div style={{ padding: '12px 18px', color: '#202124', fontSize: '12pt', borderBottom: '1px solid #e8eaed' }}>
+                            🌐 Site Visits
+                          </div>
+                        </Link>
                       </>
                     )}
                     <div

@@ -1,8 +1,11 @@
 @echo off
 rem Starts the SAIL MIS application in development mode (local only, auto-reload).
 rem Backend : FastAPI (uvicorn --reload) on http://127.0.0.1:8082
-rem Frontend: Next.js dev server on http://localhost:3000 (proxies /api/* to
-rem           the backend via next.config.mjs rewrites)
+rem Frontend: Next.js dev server on http://localhost:3000, launched through
+rem           frontend/server.js (a custom server — forwards each visitor's
+rem           real IP to the backend as x-forwarded-for, since Next's own
+rem           rewrite proxy doesn't; see next.config.mjs for the /api/*
+rem           rewrite itself)
 rem
 rem Both servers auto-reload on file changes - no rebuild/restart needed
 rem while developing. For a LAN-reachable production build, use

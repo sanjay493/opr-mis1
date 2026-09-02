@@ -1,6 +1,7 @@
 import "./globals.css";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
+import VisitLogger from "@/components/VisitLogger";
 
 export const metadata = {
   title: "SAIL Operations Monthly Informatics (OMI) Report Portal",
@@ -17,6 +18,7 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <QueryProvider>
           <AuthProvider>
+            <VisitLogger />
             {children}
           </AuthProvider>
         </QueryProvider>
