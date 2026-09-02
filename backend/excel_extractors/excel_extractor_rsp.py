@@ -618,7 +618,7 @@ MORNING_CELLS = {
     "Total Crude Steel":    ("F94",  "E94"),
     "HSM-2 Total HR Coil":  ("AC209", "AB209"),
     "HSM-2 HR Coil (Sale)": ("Z263", "Y263"),
-    "HSM-2 HR Plate":       ("AC210", "AB210"),
+    "HSM-2 HR Plate":       ("Z262",  "Y262"),
     "OPM Plate":            ("F204", "E204"),
     "NPM Plate":            ("F215", "E215"),
     "CRNO Coils":           ("E267", "D267"),

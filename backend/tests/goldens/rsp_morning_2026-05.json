@@ -178,12 +178,12 @@
     },
     {
       "basis": "month-end",
-      "cell": "AB210",
+      "cell": "Y262",
       "item_name": "HSM-2 HR Plate",
-      "sheet_mrate": 28.202,
+      "sheet_mrate": 28.331,
       "status": "ok",
       "unit": "'000T",
-      "value": 28.202
+      "value": 28.331
     },
     {
       "basis": "month-end",
