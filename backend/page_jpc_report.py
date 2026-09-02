@@ -180,8 +180,8 @@ _BSP_ITEMS = [
     ("Rail (URM)",            "BSP", "URM_RAIL"),
     ("Hy.Struls.",            "BSP", None),
     ("Plates",                "BSP", "PLATEMILL"),
-    ("BBM blooms",            "BSP", None),   # permanent blank placeholder — see note above
-    ("BBM/billets",           "BSP", None),   # permanent blank placeholder — see note above
+    ("BBM Blooms",            "BSP", None),   # permanent blank placeholder — see note above
+    ("BBM Billets",           "BSP", None),   # permanent blank placeholder — see note above
     ("CC Billets",            "BSP", "CC BILLET"),
     ("CC bloom",              "BSP", "CC BLOOM"),
     ("CC slab",               "BSP", "CC SLAB"),
@@ -238,7 +238,7 @@ _ISP_ITEMS = [
     # Both have real, non-zero figures in Pmix.xlsx's own sample but aren't
     # sourced from anywhere in this app's DB yet — a genuine data gap, not
     # touched here (flagged, not fixed — see the chat response this came from).
-    ("CC Blooms (150x150)",   "ISP", None),
+    ("CC Blooms (150X150)",   "ISP", None),
     ("CC Blooms (200x280)",   "ISP", None),
     ("Semis",                 "ISP", "Saleable Semis"),
     ("Saleable Steel",        "ISP", "Saleable Steel"),
