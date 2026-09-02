@@ -177,6 +177,9 @@ _BSP_ITEMS = [
     ("Rail (URM)",            "BSP", "URM_RAIL"),
     ("Hy.Struls.",            "BSP", None),
     ("Plates",                "BSP", "PLATEMILL"),
+    ("CC Slab",               "BSP", "CC SLAB"),
+    ("CC Billet",             "BSP", "CC BILLET"),
+    ("CC Bloom",              "BSP", "CC BLOOM"),
     ("Semis Total",           "BSP", "Saleable Semis"),
     ("Saleable Steel",        "BSP", "Saleable Steel"),
 ]

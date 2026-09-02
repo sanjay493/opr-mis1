@@ -41,6 +41,13 @@ CASES = [
     Case("bsp_mis_2026-05",
          "excel_extractors.excel_extractor_bsp",
          "MONTHEND/BSPMIS30052026.xls", "2026-05"),
+    # Mid-month report (day 29 of 31), the only vintage seen so far that
+    # carries the PPC MIS "Monthly Rate" column (col G) — locks in the
+    # "m-rate" basis / CC SLAB-BILLET-BLOOM extraction added for BSP's Semis
+    # break-up (see excel_extractor_bsp._pick_ppc_month_value).
+    Case("bsp_mis_2026-08",
+         "excel_extractors.excel_extractor_bsp",
+         "MONTHEND/BSP/BSP PPC MIS_300826.xls", "2026-08"),
     Case("bsl_dpr_2026-05",
          "excel_extractors.excel_extractor_bsl",
          "MONTHEND/BSL/BSL-DPR31052026.xlsx", "2026-05"),

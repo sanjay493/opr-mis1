@@ -212,6 +212,16 @@
         5,
         true
       ],
+      "CC SLAB": [
+        31,
+        5,
+        true
+      ],
+      "CC BILLET": [
+        33,
+        5,
+        true
+      ],
       "Saleable Semis": [
         34,
         5,

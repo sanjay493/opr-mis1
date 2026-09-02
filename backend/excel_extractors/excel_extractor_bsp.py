@@ -150,10 +150,20 @@ def _clean(v) -> Optional[float]:
 # for-the-month figure: PPC MIS sheet S1 column F ("Cum. Till Date") and
 # MIS-2 column D ("CUM"). That total only equals the whole month on a
 # last-day-of-month report; uploaded any earlier it understates every
-# tonnage. Neither report has a "monthly rate" / projected column of its
-# own (unlike RSP), so we project it ourselves from the report date —
-# cum × days_in_month ÷ report_day — exactly as excel_extractor_rsp does.
-# A strict no-op on a month-end or undated report.
+# tonnage.
+#
+# PPC MIS's main production table (rows ~3-35: COB through Saleable Steel,
+# including the Semis break-up) sometimes carries its own column G, headed
+# "Monthly Rate" — but only on some reports dated before month-end; a true
+# month-end (or undated) report drops that column entirely (header and all),
+# so column G reads blank there and Cum (already the whole month) is used
+# as-is. When Rate *is* present, it's BSP's own PPC projection for the
+# month rather than a naive day-count scale, so it's preferred over our own
+# computed projection — same "prefer the sheet's rate, sanity-checked
+# against the computed projection, else fall back to the projection" pattern
+# as pdf_extractor_ssp._pick_month_value. The other sub-tables sharing this
+# sheet (Prime Rails RSM/URM, Pig Iron) have no such column at all, so they
+# always fall back to the plain day-count projection — exactly as before.
 
 def _report_day_of(y, m, d):
     """(report_day, days_in_month) from a Y/M/D, or (None, None) if unusable."""
@@ -174,6 +184,56 @@ def _project_to_month(cum, report_day, days_in_month):
     if _is_mid_month(report_day, days_in_month):
         return cum * days_in_month / report_day
     return cum
+
+
+def _pick_ppc_month_value(cum, rate, report_day, days_in_month):
+    """Choose a PPC MIS production item's full-month figure and its basis.
+
+    Last-day / undated report, or no Cum at all → (cum, "cum") — unchanged
+    behaviour; Cum already IS the whole month.
+    Mid-month:
+        Rate present, nonzero, & Rate / (Cum × dim/day) in 0.6-1.6
+                                                    → (rate, "m-rate")
+        else                                       → (projected, "projected")
+    Values are in raw Tonnes (not yet divided by 1000)."""
+    if not _is_mid_month(report_day, days_in_month) or cum is None:
+        return cum, "cum"
+    projected = cum * days_in_month / report_day
+    if rate not in (None, 0):
+        ratio = rate / projected if projected else None
+        if ratio is not None and 0.6 <= ratio <= 1.6:
+            return rate, "m-rate"
+    return projected, "projected"
+
+
+def _read_ppc_item(cellfn, row_idx, col_idx):
+    """(cum, rate) cleaned floats for one production_cells entry, read via
+    cellfn(row, col) -> raw value (an xlrd .cell_value or the preview's own
+    _cv, both 0-based).
+
+    row_idx is an int for a single-cell item, or a tuple of ints for a
+    multi-row sum (currently just "CC BLOOM" = SMS-2 Blooms + SMS-3 Blooms —
+    see _resolve_ppc_mis_cells). `rate` (column G, one right of F) only
+    exists for the main production table (col_idx == 5); the Prime
+    Rails/Pig Iron sub-tables use different column layouts and have no
+    such column, so `rate` is always None there."""
+    rows = row_idx if isinstance(row_idx, tuple) else (row_idx,)
+    cum_parts = [_clean(cellfn(r, col_idx)) for r in rows]
+    cum = None if all(p is None for p in cum_parts) else sum(p for p in cum_parts if p is not None)
+    rate = None
+    if col_idx == 5:
+        rate_parts = [_clean(cellfn(r, col_idx + 1)) for r in rows]
+        if not all(p is None for p in rate_parts):
+            rate = sum(p for p in rate_parts if p is not None)
+    return cum, rate
+
+
+def _ppc_cell_ref(row_idx, col_idx):
+    """Human-readable cell reference for a production_cells entry (row_idx
+    may be a tuple for a multi-row sum item)."""
+    rows = row_idx if isinstance(row_idx, tuple) else (row_idx,)
+    letter = get_column_letter(col_idx + 1)
+    return "+".join(f"{letter}{r + 1}" for r in rows)
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +285,8 @@ def _ppc_mis_config() -> Dict[str, tuple]:
         "BARS&RODMILL":        (25, 5,  True),
         "PLATEMILL":           (26, 5,  True),
         "Finished Steel":      (27, 5,  True),
+        "CC SLAB":             (31, 5,  True),
+        "CC BILLET":           (33, 5,  True),
         "Saleable Semis":      (34, 5,  True),
         "Saleable Steel":      (35, 5,  True),
         "RSMPRIME":            (38, 5,  True),
@@ -315,7 +377,20 @@ _PPC_GUARDED_ITEMS = {
     "RSMPRIME":          (37, 2, "RSM"),
     "URMPRIME":          (37, 7, "URM"),
     "Pig Iron":          (60, 12, "PIG IRON"),
+    # Semis break-up, immediately above "Total Semis" (row 34): SMS-2 Blooms
+    # (30) / Slabs (31) / SMS-3 Blooms (32) / Billets (33). Slabs and Billets
+    # are each their own tracked item; the two Blooms rows are only ever
+    # used summed together (see _CC_BLOOM_ROWS below) since neither shop's
+    # Blooms figure is independently useful.
+    "CC SLAB":           (31, 0, "SLAB"),
+    "CC BILLET":         (33, 0, "BILLET"),
 }
+
+# The two rows summed for "CC BLOOM" (not itself in _ppc_mis_config — a
+# derived item, not a single cell). Only added to production_cells when
+# both rows' own labels still say "BLOOM" (see _resolve_ppc_mis_cells),
+# same guard discipline as every other fixed-row item on this sheet.
+_CC_BLOOM_ROWS = [(30, 0, "BLOOM"), (32, 0, "BLOOM")]
 
 
 def _find_ppc_label_row(ws, substrings, max_row=45):
@@ -377,6 +452,11 @@ def _resolve_ppc_mis_cells(ws) -> Dict[str, tuple]:
         if needle not in guard_label:
             production_cells.pop(item_name, None)
 
+    if all(str(ws.cell_value(r, c) or "").strip().upper().find(needle) >= 0
+           for r, c, needle in _CC_BLOOM_ROWS):
+        col = production_cells.get("CC SLAB", (None, 5, None))[1]
+        production_cells["CC BLOOM"] = (tuple(r for r, _, _ in _CC_BLOOM_ROWS), col, True)
+
     return production_cells
 
 
@@ -388,7 +468,9 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
     has drifted between report vintages). report_month used only as fallback.
     Units: raw Tonnes → stored as '000 T (divide by 1000). Coke items as-is (nos/day).
     Column F is a month-to-date cumulative for tonnage items; on a report dated
-    before month-end it is projected to the full month (×days_in_month/report_day).
+    before month-end it's projected to the full month (×days_in_month/report_day)
+    unless column G ("Monthly Rate") is present and agrees with that projection,
+    in which case G is used as-is (see _pick_ppc_month_value).
     """
     try:
         wb = xlrd.open_workbook(file_path)
@@ -419,7 +501,8 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
         if mid_month:
             logger.warning(
                 "BSP PPC MIS: report dated day %s of %s — column-F month-to-date "
-                "tonnages will be projected to the full month (×%s/%s)",
+                "tonnages projected to the full month (×%s/%s), or column G's "
+                "own Monthly Rate used where present and in line with that",
                 report_day, days_in_month, days_in_month, report_day,
             )
 
@@ -430,12 +513,11 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
         vals_extracted = 0
 
         for item_name, (row_idx, col_idx, do_convert) in production_cells.items():
-            raw = ws.cell_value(row_idx, col_idx)
-            val = _clean(raw)
+            cum, rate = _read_ppc_item(ws.cell_value, row_idx, col_idx)
+            val = cum
             if val is not None:
                 if do_convert:
-                    if mid_month:
-                        val = val * days_in_month / report_day
+                    val, _basis = _pick_ppc_month_value(val, rate, report_day, days_in_month)
                     val = round(val / 1000.0, 3)
                 vals_extracted += 1
 
@@ -1119,7 +1201,8 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
     if mid_month:
         logger.warning(
             "BSP PPC MIS preview: report dated day %s of %s — column-F month-to-date "
-            "tonnages projected to the full month (×%s/%s)",
+            "tonnages projected to the full month (×%s/%s), or column G's own "
+            "Monthly Rate used where present and in line with that",
             report_day, days_in_month, days_in_month, report_day,
         )
 
@@ -1131,22 +1214,24 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
     # moved between report eras, out of step with what the direct-write
     # path would have caught. See _resolve_ppc_mis_cells's own doc.
     for item_name, (row_0, col_0, do_convert) in _resolve_ppc_mis_cells(ws_for_resolve).items():
-        raw = _cv(row_0, col_0)
-        val = _clean(raw)
-        # Column F is a month-to-date cumulative for tonnage items (do_convert)
-        # — project it to a whole-month figure when the report is mid-month.
-        # The nos/day rows (do_convert False) already hold a per-day average,
-        # so they need no scaling; flag them as partial-month only.
-        if val is not None and do_convert:
-            if mid_month:
-                val = val * days_in_month / report_day
-            val = round(val / 1000.0, 3)
+        cum, rate = _read_ppc_item(_cv, row_0, col_0)
+        val = cum
         unit = "nos/d" if not do_convert else "'000T"
-        cell_ref = f"{get_column_letter(col_0 + 1)}{row_0 + 1}"
-        cell = f"S1!{cell_ref}"
-        if mid_month and do_convert and val is not None:
-            basis = "projected"
-            cell += f" ×{days_in_month}/{report_day}"
+        f_ref = _ppc_cell_ref(row_0, col_0)
+        cell = f"S1!{f_ref}"
+        # Column F is a month-to-date cumulative for tonnage items (do_convert)
+        # — project it to a whole-month figure when the report is mid-month,
+        # preferring column G's own Monthly Rate when it's present and agrees
+        # with the projection (see _pick_ppc_month_value). The nos/day rows
+        # (do_convert False) already hold a per-day average, so they need no
+        # scaling; flag them as partial-month only.
+        if val is not None and do_convert:
+            val, basis = _pick_ppc_month_value(val, rate, report_day, days_in_month)
+            val = round(val / 1000.0, 3)
+            if basis == "m-rate":
+                cell = f"S1!{_ppc_cell_ref(row_0, col_0 + 1)}"
+            elif basis == "projected":
+                cell += f" ×{days_in_month}/{report_day}"
         elif mid_month and not do_convert:
             basis = "mtd-average"
         elif report_day:
@@ -1158,7 +1243,7 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
             "value": val,
             "unit": unit,
             "cell": cell,
-            "pdf_label": cell_ref,
+            "pdf_label": f_ref,
             "basis": basis,
             "status": "ok" if val is not None else "skip",
         })

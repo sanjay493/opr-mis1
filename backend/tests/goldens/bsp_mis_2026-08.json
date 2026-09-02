@@ -1,265 +1,265 @@
 {
-  "month": "2026-05",
+  "month": "2026-08",
   "month_mismatch": false,
   "morning_days_in_month": 31,
-  "morning_is_month_end": true,
-  "morning_report_day": 31,
+  "morning_is_month_end": false,
+  "morning_report_day": 29,
   "plant": "BSP",
   "production_rows": [
     {
-      "basis": "month-end",
+      "basis": "mtd-average",
       "cell": "S1!F4",
       "item_name": "COB#1-8",
       "pdf_label": "F4",
       "status": "ok",
       "unit": "nos/d",
-      "value": 372.322581
+      "value": 378.103448
     },
     {
-      "basis": "month-end",
+      "basis": "mtd-average",
       "cell": "S1!F5",
       "item_name": "COB#9-10",
       "pdf_label": "F5",
       "status": "ok",
       "unit": "nos/d",
-      "value": 229.645161
+      "value": 236.0
     },
     {
-      "basis": "month-end",
+      "basis": "mtd-average",
       "cell": "S1!F5",
       "item_name": "COB#9-11",
       "pdf_label": "F5",
       "status": "ok",
       "unit": "nos/d",
-      "value": 229.645161
+      "value": 236.0
     },
     {
-      "basis": "month-end",
+      "basis": "mtd-average",
       "cell": "S1!F6",
       "item_name": "Oven Pushing(nos/d)",
       "pdf_label": "F6",
       "status": "ok",
       "unit": "nos/d",
-      "value": 787.0
+      "value": 804.0
     },
     {
-      "basis": "cum",
-      "cell": "S1!F8",
+      "basis": "m-rate",
+      "cell": "S1!G8",
       "item_name": "SP-2",
       "pdf_label": "F8",
       "status": "ok",
       "unit": "'000T",
-      "value": 255.303
+      "value": 243.2
     },
     {
-      "basis": "cum",
-      "cell": "S1!F9",
+      "basis": "m-rate",
+      "cell": "S1!G9",
       "item_name": "SP-3",
       "pdf_label": "F9",
       "status": "ok",
       "unit": "'000T",
-      "value": 532.338
+      "value": 518.5
     },
     {
-      "basis": "cum",
-      "cell": "S1!F10",
+      "basis": "m-rate",
+      "cell": "S1!G10",
       "item_name": "Total Sinter",
       "pdf_label": "F10",
       "status": "ok",
       "unit": "'000T",
-      "value": 787.641
+      "value": 761.7
     },
     {
-      "basis": "cum",
-      "cell": "S1!F11",
+      "basis": "m-rate",
+      "cell": "S1!G11",
       "item_name": "BF#1-7",
       "pdf_label": "F11",
       "status": "ok",
       "unit": "'000T",
-      "value": 278.203
+      "value": 254.9
     },
     {
-      "basis": "cum",
-      "cell": "S1!F12",
+      "basis": "m-rate",
+      "cell": "S1!G12",
       "item_name": "BF#8",
       "pdf_label": "F12",
       "status": "ok",
       "unit": "'000T",
-      "value": 259.056
+      "value": 248.6
     },
     {
-      "basis": "cum",
-      "cell": "S1!F13",
+      "basis": "m-rate",
+      "cell": "S1!G13",
       "item_name": "Hot Metal",
       "pdf_label": "F13",
       "status": "ok",
       "unit": "'000T",
-      "value": 537.259
+      "value": 503.5
     },
     {
-      "basis": "cum",
-      "cell": "S1!F14",
+      "basis": "m-rate",
+      "cell": "S1!G14",
       "item_name": "SMS-2",
       "pdf_label": "F14",
       "status": "ok",
       "unit": "'000T",
-      "value": 194.58
+      "value": 203.0
     },
     {
-      "basis": "cum",
-      "cell": "S1!F16",
+      "basis": "m-rate",
+      "cell": "S1!G16",
       "item_name": "SMS-3",
       "pdf_label": "F16",
       "status": "ok",
       "unit": "'000T",
-      "value": 319.355
+      "value": 278.6
     },
     {
-      "basis": "cum",
-      "cell": "S1!F17",
+      "basis": "m-rate",
+      "cell": "S1!G17",
       "item_name": "Total Crude Steel",
       "pdf_label": "F17",
       "status": "ok",
       "unit": "'000T",
-      "value": 513.935
+      "value": 481.6
     },
     {
-      "basis": "cum",
-      "cell": "S1!F18",
+      "basis": "m-rate",
+      "cell": "S1!G18",
       "item_name": "RSM_RAIL",
       "pdf_label": "F18",
       "status": "ok",
       "unit": "'000T",
-      "value": 41.359
+      "value": 44.2
     },
     {
-      "basis": "cum",
-      "cell": "S1!F22",
+      "basis": "m-rate",
+      "cell": "S1!G22",
       "item_name": "URM_RAIL",
       "pdf_label": "F22",
       "status": "ok",
       "unit": "'000T",
-      "value": 93.397
+      "value": 93.0
     },
     {
-      "basis": "cum",
-      "cell": "S1!F24",
+      "basis": "m-rate",
+      "cell": "S1!G24",
       "item_name": "MM",
       "pdf_label": "F24",
       "status": "ok",
       "unit": "'000T",
-      "value": 56.531
+      "value": 51.4
     },
     {
-      "basis": "cum",
-      "cell": "S1!F25",
+      "basis": "m-rate",
+      "cell": "S1!G25",
       "item_name": "WIRERODS",
       "pdf_label": "F25",
       "status": "ok",
       "unit": "'000T",
-      "value": 37.523
+      "value": 29.9
     },
     {
-      "basis": "cum",
-      "cell": "S1!F26",
+      "basis": "m-rate",
+      "cell": "S1!G26",
       "item_name": "BARS&RODMILL",
       "pdf_label": "F26",
       "status": "ok",
       "unit": "'000T",
-      "value": 92.61
+      "value": 62.9
     },
     {
-      "basis": "cum",
-      "cell": "S1!F27",
+      "basis": "m-rate",
+      "cell": "S1!G27",
       "item_name": "PLATEMILL",
       "pdf_label": "F27",
       "status": "ok",
       "unit": "'000T",
-      "value": 125.102
+      "value": 125.4
     },
     {
-      "basis": "cum",
-      "cell": "S1!F28",
+      "basis": "m-rate",
+      "cell": "S1!G28",
       "item_name": "Finished Steel",
       "pdf_label": "F28",
       "status": "ok",
       "unit": "'000T",
-      "value": 446.522
+      "value": 406.8
     },
     {
-      "basis": "cum",
-      "cell": "S1!F32",
+      "basis": "m-rate",
+      "cell": "S1!G32",
       "item_name": "CC SLAB",
       "pdf_label": "F32",
       "status": "ok",
       "unit": "'000T",
-      "value": 9.017
+      "value": 11.1
     },
     {
-      "basis": "cum",
-      "cell": "S1!F34",
+      "basis": "m-rate",
+      "cell": "S1!G34",
       "item_name": "CC BILLET",
       "pdf_label": "F34",
       "status": "ok",
       "unit": "'000T",
-      "value": 11.725
+      "value": 22.3
     },
     {
-      "basis": "cum",
-      "cell": "S1!F35",
+      "basis": "m-rate",
+      "cell": "S1!G35",
       "item_name": "Saleable Semis",
       "pdf_label": "F35",
       "status": "ok",
       "unit": "'000T",
-      "value": 39.049
+      "value": 50.6
     },
     {
-      "basis": "cum",
-      "cell": "S1!F36",
+      "basis": "m-rate",
+      "cell": "S1!G36",
       "item_name": "Saleable Steel",
       "pdf_label": "F36",
       "status": "ok",
       "unit": "'000T",
-      "value": 485.571
+      "value": 457.4
     },
     {
-      "basis": "cum",
-      "cell": "S1!F39",
+      "basis": "projected",
+      "cell": "S1!F39 ×31/29",
       "item_name": "RSMPRIME",
       "pdf_label": "F39",
       "status": "ok",
       "unit": "'000T",
-      "value": 32.445
+      "value": 37.137
     },
     {
-      "basis": "cum",
-      "cell": "S1!J39",
+      "basis": "projected",
+      "cell": "S1!J39 ×31/29",
       "item_name": "URMPRIME",
       "pdf_label": "J39",
       "status": "ok",
       "unit": "'000T",
-      "value": 90.594
+      "value": 89.883
     },
     {
-      "basis": "cum",
-      "cell": "S1!N63",
+      "basis": "projected",
+      "cell": "S1!N63 ×31/29",
       "item_name": "Pig Iron",
       "pdf_label": "N63",
       "status": "ok",
       "unit": "'000T",
-      "value": 0.374
+      "value": 0.695
     },
     {
-      "basis": "cum",
-      "cell": "S1!F31+F33",
+      "basis": "m-rate",
+      "cell": "S1!G31+G33",
       "item_name": "CC BLOOM",
       "pdf_label": "F31+F33",
       "status": "ok",
       "unit": "'000T",
-      "value": 18.307
+      "value": 17.2
     }
   ],
-  "selected_month": "2026-05",
+  "selected_month": "2026-08",
   "source_type": "BSP PPC MIS Monthly Report",
   "special_steel_rows": [],
   "stock_rows": [
@@ -268,54 +268,54 @@
       "item_type": "SLABS",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "FOR SALE",
-      "value": 4.209
+      "value": 5.362
     },
     {
       "formula": "K47-N47",
       "item_type": "SLABS",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "INPROCESS",
-      "value": 17.629
+      "value": 21.373
     },
     {
       "formula": "N50-N47",
       "item_type": "BLOOM/BILLETS",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "FOR SALE",
-      "value": 19.882
+      "value": 18.481
     },
     {
       "formula": "K50-N50-K47+N47",
       "item_type": "BLOOM/BILLETS",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "INPROCESS",
-      "value": 100.67
+      "value": 110.491
     },
     {
       "formula": "N58",
       "item_type": "FINISHED STEEL",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "",
-      "value": 134.598
+      "value": 112.709
     },
     {
       "formula": "O63",
       "item_type": "PIG IRON",
       "plant": "BSP",
       "status": "ok",
-      "stock_month": "2026-06",
+      "stock_month": "2026-09",
       "stock_type": "",
-      "value": 1.629
+      "value": 3.556
     }
   ],
   "techno_param_rows": [],
