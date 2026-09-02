@@ -60,7 +60,7 @@ async function downloadCsv(url, fallbackName) {
   window.URL.revokeObjectURL(objUrl);
 }
 
-export default function FinishedSteelReportPage() {
+export default function ProductionItemsReportPage() {
   const [item, setItem] = useState('Finished Steel');
   const [fys, setFys] = useState([]);
   const [fyStart, setFyStart] = useState(null);

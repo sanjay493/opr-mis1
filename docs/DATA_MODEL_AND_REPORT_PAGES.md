@@ -119,7 +119,7 @@ renderers. **The per-template `page.*` data contract is in §8.**
 | `reports/one-page-report` | `page_one_page_report.py` | `sail_sales_table`, `sail_sales_note_table`, `sail_stock_snapshot_table`, `production_table` |
 | `reports/do-letter` | `page_do_letter.py` (`/api/do-letter…`) | `production_table`, `production_plan_table`, `do_letter_remark_table` |
 | `reports/jpc-report` | `page_jpc_report.py` (`/api/jpc-report` → xlsx) | `production_table` |
-| `reports/finished-steel` | `page_finished_steel_report.py` | `production_table` |
+| `reports/production-items` | `page_finished_steel_report.py` (`/api/finished-steel-report…`; Oven Pushing / Sinter / Hot Metal / Crude Steel / Pig Iron / Finished Steel / Saleable Steel) | `production_table` |
 | `reports/records-matrix` | `page_records.py` (`/api/records`) | `production_table` |
 | `reports/pmix-fy` | `page_pmix_fy_report.py` | `production_table` |
 | `reports/production-fy`, `reports/production-query`, `reports/major-production` | `page_production_fy_export.py`, `page_production_query_export.py` | `production_table`, `production_plan_table` |

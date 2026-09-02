@@ -92,7 +92,7 @@ export default function GlobalNavbar() {
         { label: 'OMI Generate', link: '/report', icon: '📈' },
         { label: 'Month-wise Production', link: '/reports/production-fy', icon: '📅' },
         { label: 'Unit-wise Production Query', link: '/reports/production-query', icon: '🔍' },
-        { label: 'Finished Steel (Month & Unit-wise)', link: '/reports/finished-steel', icon: '📦' },
+        { label: 'Production Items (Month & Unit-wise)', link: '/reports/production-items', icon: '📦' },
         { label: 'Iron Ore Mines (Month-wise)', link: '/reports/iron-ore-mines', icon: '⛏️' },
         { label: 'Special Steel (Order vs Actual, FY)', link: '/reports/special-steel-fy', icon: '🔩' },
         { label: 'Special Steel Plants Physical Performance', link: '/reports/special-steel-physical', icon: '🏭' },
