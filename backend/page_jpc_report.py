@@ -163,11 +163,14 @@ def _autosize(ws, widths):
 # ── Sheet 1: Pmix report ────────────────────────────────────────────────────
 
 # Per-plant mill breakdown. Each entry: (label, plant, item_name_or_None).
-# item_name=None → left blank: confirmed not tracked anywhere in this app's
-# DB (checked against page_catwise_saleable.py's item catalog + a live query,
-# not just a label grep) — will be filled in once a source is extracted.
+# item_name=None → left blank: either confirmed not tracked anywhere in this
+# app's DB (checked against page_catwise_saleable.py's item catalog + a live
+# query, not just a label grep), or a row Report_format/work/Pmix.xlsx's own
+# template keeps as a permanent blank placeholder (e.g. BSP's "BBM blooms"/
+# "BBM/billets", DSP's CC Blooms/SPU rows) — will be filled in once a source
+# is extracted, for the ones that aren't placeholders.
 _BSP_ITEMS = [
-    ("WRM (Total)",           "BSP", "WIRERODS"),
+    ("WRM",                   "BSP", "WIRERODS"),
     ("TMT coils(WRM)",        "BSP", "TMT COILS(WRM)"),
     ("Others (WRM)",          "BSP", "OTHERS(WRM)"),
     ("TMT Bars (MM)",         "BSP", "TMT BARS(MM)"),
@@ -177,9 +180,11 @@ _BSP_ITEMS = [
     ("Rail (URM)",            "BSP", "URM_RAIL"),
     ("Hy.Struls.",            "BSP", None),
     ("Plates",                "BSP", "PLATEMILL"),
-    ("CC Slab",               "BSP", "CC SLAB"),
-    ("CC Billet",             "BSP", "CC BILLET"),
-    ("CC Bloom",              "BSP", "CC BLOOM"),
+    ("BBM blooms",            "BSP", None),   # permanent blank placeholder — see note above
+    ("BBM/billets",           "BSP", None),   # permanent blank placeholder — see note above
+    ("CC Billets",            "BSP", "CC BILLET"),
+    ("CC bloom",              "BSP", "CC BLOOM"),
+    ("CC slab",               "BSP", "CC SLAB"),
     ("Semis Total",           "BSP", "Saleable Semis"),
     ("Saleable Steel",        "BSP", "Saleable Steel"),
 ]
@@ -188,6 +193,11 @@ _DSP_ITEMS = [
     ("Med Structurals (MSM)", "DSP", "MSM"),
     ("Round & bars (MM)",     "DSP", "MM"),
     ("Wheel & Axle",          "DSP", "WAP"),
+    ("CC Blooms",             "DSP", None),   # permanent blank placeholder — see note above
+    ("CC Blooms from New BRC","DSP", None),   # permanent blank placeholder — see note above
+    ("CC Billets",            "DSP", None),   # permanent blank placeholder — see note above
+    ("SPU Kandrori",          "DSP", None),   # permanent blank placeholder — see note above
+    ("SPU Jagdishpur",        "DSP", None),   # permanent blank placeholder — see note above
     ("Semis Total",           "DSP", "Saleable Semis"),
     ("Saleable steel",        "DSP", "Saleable Steel"),
 ]
@@ -220,11 +230,16 @@ _BSL_ITEMS = [
     ("Saleable Steel",        "BSL", "Saleable Steel"),
 ]
 _ISP_ITEMS = [
-    ("Round & Bars",          "ISP", "BARMILL"),
-    ("Hy Structurals",        "ISP", "USMILL"),
-    ("TMT Coils(WRM)",        "ISP", None),   # DB has only one combined WRM figure
-    ("Wire Rod Coils(WRM)",   "ISP", "WRMILL"),
+    ("Round & Bars(Bar Mill)","ISP", "BARMILL"),
+    ("Hy Structurals(USM)",   "ISP", "USMILL"),
+    ("Wire Rod TMT Coiles",   "ISP", None),   # DB has only one combined WRM figure
+    ("Wire Rod Coils",        "ISP", "WRMILL"),
     ("WRM",                   "ISP", "WRMILL"),
+    # Both have real, non-zero figures in Pmix.xlsx's own sample but aren't
+    # sourced from anywhere in this app's DB yet — a genuine data gap, not
+    # touched here (flagged, not fixed — see the chat response this came from).
+    ("CC Blooms (150x150)",   "ISP", None),
+    ("CC Blooms (200x280)",   "ISP", None),
     ("Semis",                 "ISP", "Saleable Semis"),
     ("Saleable Steel",        "ISP", "Saleable Steel"),
 ]

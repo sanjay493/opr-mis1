@@ -20,6 +20,7 @@ here are computed properly as sums of that row's own months instead of
 copying the same mistake.)
 """
 import io
+from datetime import date
 
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -85,11 +86,11 @@ def _label_cell(ws, row, col, text, bold=False):
         c.font = _BOLD
 
 
-def _plant_hdr(ws, row, label, n_cols):
-    for col in range(1, n_cols + 1):
+def _plant_hdr(ws, row, label, start_col, end_col):
+    for col in range(start_col, end_col + 1):
         ws.cell(row=row, column=col).fill = _PLANT_FILL
         ws.cell(row=row, column=col).border = _BORDER
-    ws.cell(row=row, column=1, value=label).font = _PLANT_FONT
+    ws.cell(row=row, column=start_col, value=label).font = _PLANT_FONT
 
 
 # ── Sheet 1: "ACT <FY>" — plant-wise monthwise production summary,
@@ -223,7 +224,6 @@ def build_act_fy_sheet(ws, cur, fy_start: int, months: list):
 def build_pmix_fy_workbook(fy_start: int):
     fy_label = f"{fy_start}-{str(fy_start + 1)[2:]}"
     months = _fy_months(fy_start)
-    n_cols = 1 + 12 + 4 + 1   # label + 12 months + 4 quarters + cum
 
     conn = db.connect()
     cur = conn.cursor()
@@ -248,46 +248,52 @@ def build_pmix_fy_workbook(fy_start: int):
 
     ws = wb.create_sheet(f"Pmix'{fy_label[2:]} ACT")
 
-    ws.cell(row=1, column=1, value="Operations Directorate").font = Font(size=10)
-    ws.cell(row=2, column=1, value=f"Product mix Performance: {fy_label}").font = _TITLE_FONT
-    ws.cell(row=2, column=n_cols, value="Unit: '000 T").font = _UNIT_FONT
+    # Column layout matches Report_format/work/Pmix.xlsx exactly: that
+    # template leaves columns A/B unused, starts labels at C, months at D,
+    # quarters at P, Cum at T — so this does too, rather than starting at A.
+    LABEL_COL, MONTH_START, QTR_START, CUM_COL = 3, 4, 16, 20
+
+    ws.cell(row=1, column=LABEL_COL, value="Operations Directorate").font = Font(size=10)
+    ws.cell(row=2, column=LABEL_COL, value=f"Product mix Performance: {fy_label}").font = _TITLE_FONT
+    ws.cell(row=2, column=CUM_COL, value="Unit: '000 T").font = _UNIT_FONT
 
     header_row = 3
-    ws.cell(row=header_row, column=1, value="Item").font = _HDR_FONT
-    ws.cell(row=header_row, column=1).fill = _HDR_FILL
-    for i, m in enumerate(months, start=2):
-        c = ws.cell(row=header_row, column=i, value=_mlabel(m))
+    ws.cell(row=header_row, column=LABEL_COL).fill = _HDR_FILL
+    for i, m in enumerate(months, start=MONTH_START):
+        y, mo = int(m[:4]), int(m[5:7])
+        c = ws.cell(row=header_row, column=i, value=date(y, mo, 1))
+        c.number_format = "mmm\\'yy"   # matches the sample's own month header format exactly
         c.font = _HDR_FONT
         c.fill = _HDR_FILL
         c.alignment = Alignment(horizontal="center")
-    for i, label in enumerate(_QTR_LABELS, start=14):
+    for i, label in enumerate(_QTR_LABELS, start=QTR_START):
         c = ws.cell(row=header_row, column=i, value=label)
         c.font = _HDR_FONT
         c.fill = _HDR_FILL
         c.alignment = Alignment(horizontal="center")
-    c = ws.cell(row=header_row, column=18, value="Cum")
+    c = ws.cell(row=header_row, column=CUM_COL, value="Cum")
     c.font = _HDR_FONT
     c.fill = _HDR_FILL
     c.alignment = Alignment(horizontal="center")
 
     def write_data_row(label, values_by_month, bold=False):
         nonlocal row
-        _label_cell(ws, row, 1, label, bold=bold)
+        _label_cell(ws, row, LABEL_COL, label, bold=bold)
         vals = [values_by_month.get(m) for m in months]
-        for i, v in enumerate(vals, start=2):
+        for i, v in enumerate(vals, start=MONTH_START):
             _num_cell(ws, row, i, v, bold=bold)
         quarters = [vals[0:3], vals[3:6], vals[6:9], vals[9:12]]
         q_sums = [_sum_opt(q) for q in quarters]
-        for i, qs in enumerate(q_sums, start=14):
+        for i, qs in enumerate(q_sums, start=QTR_START):
             _num_cell(ws, row, i, qs, bold=bold)
-        _num_cell(ws, row, 18, _sum_opt(q_sums), bold=bold)
+        _num_cell(ws, row, CUM_COL, _sum_opt(q_sums), bold=bold)
         row += 1
 
     row = header_row + 1
     for row_idx in range(n_rows):
         spec = rows_by_month[months[0]][row_idx]
         if spec["kind"] == "header":
-            _plant_hdr(ws, row, spec["label"], n_cols)
+            _plant_hdr(ws, row, spec["label"], LABEL_COL, CUM_COL)
             row += 1
         else:
             values_by_month = {m: rows_by_month[m][row_idx]["value"] for m in months}
@@ -301,10 +307,10 @@ def build_pmix_fy_workbook(fy_start: int):
     write_data_row("RSP HSM-2", rsp_hsm2)
     write_data_row("BSL HSM", bsl_hsm)
 
-    ws.column_dimensions["A"].width = 30
-    for i in range(2, n_cols + 1):
+    ws.column_dimensions[get_column_letter(LABEL_COL)].width = 30
+    for i in range(MONTH_START, CUM_COL + 1):
         ws.column_dimensions[get_column_letter(i)].width = 10
-    ws.freeze_panes = "B4"
+    ws.freeze_panes = f"{get_column_letter(MONTH_START)}{header_row + 1}"
 
     return wb
 
