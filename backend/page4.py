@@ -89,6 +89,13 @@ def _fy_months(month: str) -> list:
     return result
 
 
+def _p4_days_in_fy(month: str) -> int:
+    """Calendar days in the financial year containing `month` (365, or 366
+    when the FY spans a leap February) — the denominator for day-prorated
+    capacity utilisation."""
+    return sum(_days_in_month(m) for m in _fy_months(month)) or 365
+
+
 _FS_ALIAS = frozenset({"SSP", "VISL"})
 
 
@@ -206,14 +213,16 @@ def _p4_capacity_at(plant, db_item, month, five_plants, sail_set):
 
 
 def _p4_ytd_capacity(months, plant, db_item, five_plants, sail_set):
-    """Sum of each YTD month's own prorated (annual/12) capacity — correctly
-    reflects a mid-FY change by using that change's own rate only from its
-    effective month onward, not retroactively for the whole FY."""
+    """Sum of each YTD month's own day-prorated capacity
+    (annual_cap * days_in_month / days_in_FY) — reflects a mid-FY capacity
+    change by using that change's own rate only from its effective month
+    onward, and matches how many days each month actually contributes
+    rather than treating every month as 1/12."""
     total, found = 0.0, False
     for m in months:
         v = _p4_capacity_at(plant, db_item, m, five_plants, sail_set)
         if v is not None:
-            total += v / 12
+            total += v * _days_in_month(m) / _p4_days_in_fy(m)
             found = True
     return total if found else None
 
@@ -259,7 +268,10 @@ def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set
     cu_month = cu_ytd = ""
     if has_capacity:
         capacity_val = _p4_capacity_at(plant, db_item, month, five_plants, sail_set)
-        monthly_capacity = capacity_val / 12 if capacity_val is not None else None
+        # Day-prorated: annual_cap * days_in_month / days_in_FY (not annual/12),
+        # so a short/long month is scored against its own share of the year.
+        monthly_capacity = (capacity_val * _days_in_month(month) / _p4_days_in_fy(month)
+                            if capacity_val is not None else None)
         ytd_capacity = _p4_ytd_capacity(ytd_m, plant, db_item, five_plants, sail_set)
         cu_month = pct(act_m, monthly_capacity)
         cu_ytd = pct(act_ytd, ytd_capacity)
@@ -458,7 +470,9 @@ def generate_page4_rows(month: str) -> list:
         # Steel's own capacity (conversion itself has no separate rated capacity).
         capacity_f = float(sail_fs_capacity) if sail_fs_capacity else None
         ytd_capacity = _p4_ytd_capacity(ytd_ms, "SAIL", "Finished Steel", _5P, fs_sail_set)
-        iv[7]  = _safe_cu(iv[2], capacity_f / 12 if capacity_f is not None else None)
+        month_capacity = (capacity_f * _days_in_month(month) / _p4_days_in_fy(month)
+                          if capacity_f is not None else None)
+        iv[7]  = _safe_cu(iv[2], month_capacity)
         iv[14] = _safe_cu(iv[9], ytd_capacity)
         # Round all numeric values to zero decimal places
         iv = [str(round(float(v))) if v not in ("", None) else v for v in iv]
