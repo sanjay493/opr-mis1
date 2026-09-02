@@ -7,6 +7,10 @@ const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// Selectable production items (must match page_finished_steel_report.ITEMS keys).
+const ITEMS = ['Oven Pushing', 'Sinter', 'Hot Metal', 'Crude Steel', 'Pig Iron', 'Finished Steel', 'Saleable Steel'];
+const RATE_ITEMS = new Set(['Oven Pushing']);
+
 function monthLabel(ym) {
   // "2026-04" -> "Apr'26"
   const [y, m] = ym.split('-');
@@ -57,6 +61,7 @@ async function downloadCsv(url, fallbackName) {
 }
 
 export default function FinishedSteelReportPage() {
+  const [item, setItem] = useState('Finished Steel');
   const [fys, setFys] = useState([]);
   const [fyStart, setFyStart] = useState(null);
   const [data, setData] = useState(null);
@@ -66,37 +71,42 @@ export default function FinishedSteelReportPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/api/finished-steel-fys`)
+    fetch(`${API}/api/finished-steel-fys?item=${encodeURIComponent(item)}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then((d) => {
-        setFys(d.fys || []);
-        if (d.fys && d.fys.length > 0) setFyStart(d.fys[0].fy_start);
+        const list = d.fys || [];
+        setFys(list);
+        setFyStart((prev) => {
+          if (prev != null && list.some((fy) => fy.fy_start === prev)) return prev;
+          return list.length > 0 ? list[0].fy_start : null;
+        });
       })
       .catch((e) => setError(`Failed to load financial years: ${e.message}`));
-  }, []);
+  }, [item]);
 
   useEffect(() => {
     if (fyStart == null) return;
     setLoading(true);
     setError(null);
-    fetch(`${API}/api/finished-steel-report/fy?fy_start=${fyStart}`)
+    fetch(`${API}/api/finished-steel-report/fy?fy_start=${fyStart}&item=${encodeURIComponent(item)}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then((d) => setData(d))
-      .catch((e) => setError(`Failed to load Finished Steel data: ${e.message}`))
+      .catch((e) => setError(`Failed to load ${item} data: ${e.message}`))
       .finally(() => setLoading(false));
-  }, [fyStart]);
+  }, [fyStart, item]);
 
   const handleDownloadAll = async () => {
     setDownloadingAll(true);
     setError(null);
     try {
-      await downloadCsv(`${API}/api/finished-steel-report`, 'finished_steel_month_plant_wise.csv');
+      const slug = item.toLowerCase().replace(/ /g, '_');
+      await downloadCsv(`${API}/api/finished-steel-report?item=${encodeURIComponent(item)}`, `${slug}_month_plant_wise.csv`);
     } catch (e) {
       setError(`Download failed: ${e.message}`);
     } finally {
@@ -109,7 +119,8 @@ export default function FinishedSteelReportPage() {
     setDownloadingFy(true);
     setError(null);
     try {
-      await downloadCsv(`${API}/api/finished-steel-report?fy_start=${fyStart}`, `finished_steel_FY${fyStart}.csv`);
+      const slug = item.toLowerCase().replace(/ /g, '_');
+      await downloadCsv(`${API}/api/finished-steel-report?fy_start=${fyStart}&item=${encodeURIComponent(item)}`, `${slug}_FY${fyStart}.csv`);
     } catch (e) {
       setError(`Download failed: ${e.message}`);
     } finally {
@@ -142,12 +153,12 @@ export default function FinishedSteelReportPage() {
       }}>
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-            Finished Steel — Month-wise, Plant-wise
+            {item} — Month-wise, Plant-wise
           </h1>
           <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            One row per month, one column per plant (plus the SAIL total), from production_table&#39;s
-            &lsquo;Finished Steel&rsquo; item. Unit: &lsquo;000 T. Blank cells mean no figure recorded for
-            that plant that month.
+            One row per month, one column per plant (plus the SAIL total), from production_table.
+            Unit: {RATE_ITEMS.has(item) ? 'nos./day' : "‘000 T"}. Blank cells mean no figure
+            recorded for that plant that month.
           </p>
         </div>
 
@@ -157,6 +168,23 @@ export default function FinishedSteelReportPage() {
           padding: '16px 20px', border: '1px solid #dadce0', borderRadius: '8px',
           backgroundColor: '#f8f9fa', marginBottom: '24px',
         }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>Item</label>
+            <select
+              value={item}
+              onChange={(e) => setItem(e.target.value)}
+              style={{
+                padding: '8px 12px', fontSize: '11pt', border: '1px solid #dadce0',
+                borderRadius: '6px', backgroundColor: '#ffffff', color: '#202124',
+                cursor: 'pointer', minWidth: '150px', fontWeight: 600,
+              }}
+            >
+              {ITEMS.map((it) => (
+                <option key={it} value={it}>{it}</option>
+              ))}
+            </select>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>Financial Year</label>
             <select
@@ -195,7 +223,7 @@ export default function FinishedSteelReportPage() {
 
         {!loading && !error && data && months.length === 0 && (
           <div style={{ padding: '40px', textAlign: 'center', color: '#5f6368', fontSize: '12pt' }}>
-            No Finished Steel data available for FY {data.fy_label}.
+            No {item} data available for FY {data.fy_label}.
           </div>
         )}
 
