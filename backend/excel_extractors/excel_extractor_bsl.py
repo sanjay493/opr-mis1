@@ -189,8 +189,9 @@ def _dpr_config():
         "HR Sheet":            "AA8",
         "CR I/II CR(Coil) Sale": "AA9",
         "CR Sheets":           "AA10",
-        "CRC(3)":              "AA15",
+        "CRC&S(1&2)":          "AA14",
         "CR III CR(Coil) Sale": "AA15",
+        "CRC(3)":              "AA17",
         "GPC3":                "AA16",
         "CRSALE":              "AA18",
         "Saleable Steel":      "P31",
@@ -200,7 +201,6 @@ def _dpr_config():
     no_convert = set(cfg.get("no_convert", ["Oven Pushing(nos/d)"]))
     derived = cfg.get("derived", [
         {"item": "Finished Steel", "op": "subtract", "a_item": "Saleable Steel", "b_item": "Saleable Semis"},
-        {"item": "CRC&S(1&2)", "op": "add_items", "items": ["CR I/II CR(Coil) Sale", "CR Sheets"]},
         {"item": "GP/GC", "op": "add_labels", "labels": ["_GP_SHEET", "_GC_SHEET", "_GP_COIL"]},
     ])
     return cells, no_convert, derived
@@ -239,7 +239,12 @@ _DPR_LABELS = {
     "HR Sheet":              ("W", ["H R SHEET"]),
     "CR I/II CR(Coil) Sale": ("W", ["C R CL/SL"]),
     "CR Sheets":             ("W", ["C R SHEET"]),
-    "CRC(3)":                ("W", ["CR COIL-3"]),
+    # CRC(3) / CRC&S(1&2) are the mother-mill (CRM) production figures, not
+    # the sales-side "CR Coil" rows above — CRM-3 = mother mill 3, CRM(1+2)
+    # = mother mills 1&2 combined. Distinct rows from CR I/II CR(Coil) Sale
+    # / CR Sheets (sales) and from CR III CR(Coil) Sale (sales, still below).
+    "CRC&S(1&2)":            ("W", ["CRM(1+2)"]),
+    "CRC(3)":                ("W", ["CRM-3"]),
     "CR III CR(Coil) Sale":  ("W", ["CR COIL-3"]),
     "GPC3":                  ("W", ["GP COIL-3"]),
     "CRSALE":                ("W", ["TOT CR SAL"]),
@@ -324,13 +329,15 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       HSM HR Coil (Sale), HSM HR Plate, CHQ Plate (a sub-line of HSM HR
       Plate, present only on some report vintages — already included in
       HSM HR Plate, saved separately too when its row exists), HR Sheet,
-      CR I/II CR(Coil) Sale, CR Sheets, CRC(3), CR III CR(Coil) Sale (same
-      row as CRC(3)), GPC3, CRSALE, Saleable Semis, Thick Plate, Pig Iron
+      CR I/II CR(Coil) Sale, CR Sheets (sales-side, mills 1&2), CRC&S(1&2)
+      (mother-mill production, mills 1&2 — CRM(1+2) row, distinct from the
+      two sales-side rows above), CR III CR(Coil) Sale (sales-side, mill 3),
+      CRC(3) (mother-mill production, mill 3 — CRM-3 row), GPC3, CRSALE,
+      Saleable Semis, Thick Plate, Pig Iron
         — "SALEABLE STEEL" table (col Z = CUM, col AA = M.RATE)
       Finished Steel        derived: Saleable Steel − Saleable Semis
                              (already includes Thick Plate; Thick Plate is
                              also saved separately)
-      CRC&S(1&2)             derived: CR I/II CR(Coil) Sale + CR Sheets
       GP/GC                  derived: G P SHEET + G C SHEET + G P COIL
                              (whichever of those three rows exist on this
                              report — see _DPR_GPGC_HELPERS)

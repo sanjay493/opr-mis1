@@ -22,8 +22,9 @@
       "HR Sheet": "AA8",
       "CR I/II CR(Coil) Sale": "AA9",
       "CR Sheets": "AA10",
-      "CRC(3)": "AA15",
+      "CRC&S(1&2)": "AA14",
       "CR III CR(Coil) Sale": "AA15",
+      "CRC(3)": "AA17",
       "GPC3": "AA16",
       "CRSALE": "AA18",
       "Saleable Steel": "P31",
@@ -36,11 +37,6 @@
         "op": "subtract",
         "a_item": "Saleable Steel",
         "b_item": "Saleable Semis"
-      },
-      {
-        "item": "CRC&S(1&2)",
-        "op": "add_items",
-        "items": ["CR I/II CR(Coil) Sale", "CR Sheets"]
       },
       {
         "item": "GP/GC",

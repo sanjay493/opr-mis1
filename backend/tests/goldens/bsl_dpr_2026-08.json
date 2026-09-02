@@ -125,12 +125,12 @@
     },
     {
       "basis": "cum",
-      "cell": "DPR!Z15",
-      "item_name": "CRC(3)",
-      "pdf_label": "AA15",
+      "cell": "DPR!Z14",
+      "item_name": "CRC&S(1&2)",
+      "pdf_label": "AA14",
       "status": "ok",
       "unit": "'000T",
-      "value": 50.306
+      "value": 55.566
     },
     {
       "basis": "cum",
@@ -140,6 +140,15 @@
       "status": "ok",
       "unit": "'000T",
       "value": 50.306
+    },
+    {
+      "basis": "cum",
+      "cell": "DPR!Z17",
+      "item_name": "CRC(3)",
+      "pdf_label": "AA17",
+      "status": "ok",
+      "unit": "'000T",
+      "value": 71.992
     },
     {
       "basis": "cum",
@@ -203,15 +212,6 @@
       "status": "ok",
       "unit": "'000T",
       "value": 369.894
-    },
-    {
-      "basis": "cum",
-      "cell": "DPR!AA10+AA11 (computed)",
-      "item_name": "CRC&S(1&2)",
-      "pdf_label": "AA10+AA11",
-      "status": "ok",
-      "unit": "'000T",
-      "value": 55.124
     },
     {
       "basis": "cum",
