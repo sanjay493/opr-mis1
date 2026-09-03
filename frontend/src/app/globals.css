@@ -769,7 +769,7 @@ select.form-control {
 
 /* ─── Page 3 – SAIL Performance Summary: compact to fit on one page ─── */
 .a4-page.pg-3 {
-  --page-margin-top: 3mm;
+  --page-margin-top: 2mm;
   --page-margin-bottom: 2mm;
 }
 

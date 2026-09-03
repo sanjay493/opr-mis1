@@ -954,7 +954,7 @@ def _fmt_bar_val(v: float) -> str:
     return s.rstrip("0").rstrip(".")
 
 
-def _param_svg(p: dict, vw: int = 290, vh: int = 230) -> str:
+def _param_svg(p: dict, vw: int = 290, vh: int = 168) -> str:
     # label_fs is this chart's own SVG-viewBox font-size, NOT points — a
     # literal font-size="7"/"6.5" here rendered at only ~5.2pt/~4.5pt on a
     # real page-3 (confirmed empirically: this chart's viewBox-to-rendered-
@@ -963,9 +963,14 @@ def _param_svg(p: dict, vw: int = 290, vh: int = 230) -> str:
     # measure the target true point size once Chromium shrinks the
     # 290-wide viewBox down to this chart's real on-page width (~half of
     # page 3's content column).
-    label_fs = 12.78  # true ~9.5pt on the page (was 14.8 / ~11pt, -1.5pt per direct instruction)
-    mt   = 30
-    mb   = 85
+    label_fs = 11.30  # true ~8.4pt on the page (was 12.78 / ~9.5pt, -1.1pt per direct instruction)
+    mt   = 24
+    # vh (168, was 230) and mb (32, was 85) trimmed together: the old bottom
+    # band was ~53 viewBox-units of dead space below the deepest x-axis label,
+    # which on a real page-3 print is ~7mm of blank per chart row (two rows =
+    # a big chunk of why the page spilled). ch stays ~the same, so bars/value
+    # labels are unchanged; only the empty margin under the axis shrinks.
+    mb   = 32
     ml   = 16
     mr   = 5
     cw, ch = vw - ml - mr, vh - mt - mb
@@ -1046,22 +1051,22 @@ def _param_svg(p: dict, vw: int = 290, vh: int = 230) -> str:
         label_parts = lbl.split("\n")
         if len(label_parts) == 1:
             if many:
-                ly = mt + ch + 10
+                ly = mt + ch + 9
                 lines.append(
                     f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="end" '
                     f'font-size="{label_fs}" font-family="Arial,sans-serif" fill="#374151" '
                     f'transform="rotate(-60,{lx:.1f},{ly:.1f})">{lbl}</text>'
                 )
             else:
-                ly = mt + ch + 16
+                ly = mt + ch + 13
                 lines.append(
                     f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="middle" '
                     f'font-size="{label_fs}" font-family="Arial,sans-serif" fill="#374151">'
                     f'{lbl}</text>'
                 )
         else:
-            ly1 = mt + ch + 16
-            ly2 = mt + ch + 32
+            ly1 = mt + ch + 12
+            ly2 = mt + ch + 25
             lines.append(
                 f'<text x="{lx:.1f}" y="{ly1:.1f}" text-anchor="middle" '
                 f'font-size="{label_fs}" font-family="Arial,sans-serif" fill="#374151">'
@@ -1086,14 +1091,14 @@ def generate_summary_chart_html(chart_data: dict) -> str:
     for row_start in (0, 2):
         p0, p1 = params[row_start], params[row_start + 1]
         rows_html += (
-            '<div style="display:flex;gap:4px;margin-bottom:2px;">'
-            f'<div style="flex:1;border:0.5px solid #e2e8f0;border-radius:3px;padding:2px;">'
+            '<div style="display:flex;gap:4px;margin-bottom:1px;">'
+            f'<div style="flex:1;border:0.5px solid #e2e8f0;border-radius:3px;padding:1px;">'
             f'{_param_svg(p0)}</div>'
-            f'<div style="flex:1;border:0.5px solid #e2e8f0;border-radius:3px;padding:2px;">'
+            f'<div style="flex:1;border:0.5px solid #e2e8f0;border-radius:3px;padding:1px;">'
             f'{_param_svg(p1)}</div>'
             "</div>"
         )
-    return '<div style="margin-top:6px;">' + rows_html + "</div>"
+    return '<div style="margin-top:3px;">' + rows_html + "</div>"
 
 
 # ---------------------------------------------------------------------------
