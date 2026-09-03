@@ -675,6 +675,15 @@ _TREND_MIN_BOTTOM_MARGIN_MM = 2
 # margins, and _enforce_trend_min_segments then hard-guarantees it by
 # injecting a forced page break (row['break_before']) wherever the probe
 # print still shows a shorter segment.
+#
+# A per-group override (7 for "5 Plants", 5 for "SAIL", so the stacked
+# rowspan label always has room) was tried and reverted: those groups are
+# only ~12 rows, so a 7-row minimum means "5 Plants" can essentially never
+# split and gets forced wholesale onto the next page, which pushed the
+# Saleable Steel item — and the whole trend section — onto a 13th physical
+# page (breaking the static Index count in main.py). A short "5 Plants" /
+# "SAIL" segment instead just shrinks its stacked label to 6pt
+# (.plant-cell.tight, see main.html).
 _TREND_MIN_SPLIT_SEGMENT_ROWS = 3
 
 

@@ -1497,6 +1497,14 @@
             page: content-layout;
             page-break-before: always;
             break-before: page;
+            /* Also force a break AFTER the section so the page that follows
+               it ("Crude Steel Production Details - Concast") always starts
+               on its own fresh physical page instead of rendering in the
+               leftover space below the last trend item — the static Index
+               (main.py _INDEX_SECTIONS) already counts Concast as a separate
+               page, so this makes the physical layout match it. */
+            page-break-after: always;
+            break-after: page;
             padding: 0;
             /* This one div holds the whole pages-7-13 flow and spills
                across many physical pages via ordinary table-row page
