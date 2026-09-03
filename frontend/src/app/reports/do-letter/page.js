@@ -5,13 +5,14 @@ import GlobalNavbar from '@/components/GlobalNavbar';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
-// Matches page_do_letter.py's own remark-eligible rows exactly — ASP/SSP
-// get their own row (and remark) in the Crude Steel table, but are folded
-// into a single "Special Steel Plants" row (no individual remark) in the
-// Finished Steel table.
+// Matches page_do_letter.py's own remark-eligible rows — ASP/SSP get their
+// own row (and remark) in the Crude Steel table. In the Finished Steel
+// table, ASP/SSP/VISL are folded into a single "Special Steel Plants" row,
+// but each still gets its own remark box here — the three get clubbed
+// together (one line each) into that row's remark cell in the docx.
 const REMARK_PLANTS = {
   'Crude Steel': ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP'],
-  'Finished Steel': ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'],
+  'Finished Steel': ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'VISL'],
 };
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

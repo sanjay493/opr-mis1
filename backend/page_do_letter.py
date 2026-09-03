@@ -144,13 +144,21 @@ def _build_plant_table(cur, report_month, cply_month, prev_month, item, plant_ro
             "gr_cply": _gr(c, y), "gr_prev": _gr(c, p),
             "remark": remarks.get(plant, ""),
         })
-    for label, plants, add_conv in aggregate_rows:
-        c, y, p = block(plants, add_conv)
+    for label, plants, add_conv, *rest in aggregate_rows:
         # A single-plant "aggregate" (ASP/SSP get their own row in the Crude
-        # Steel table, via this same loop) still carries a real remark —
-        # only true multi-plant subtotals (5ISPs, SAIL, Special Steel
-        # Plants, SAIL*) never do, matching the reference letter.
-        remark = remarks.get(plants[0], "") if len(plants) == 1 else ""
+        # Steel table, via this same loop) still carries a real remark; true
+        # multi-plant subtotals (5ISPs, SAIL, SAIL*) never do. The one
+        # exception is the Finished Steel table's "Special Steel Plants" row
+        # (club=True, 4th tuple element): ASP/SSP/VISL each get their own
+        # remark box on the D.O. Letter page (still keyed per-plant, same as
+        # Crude Steel's), and since they share a single folded row here
+        # those per-plant remarks are clubbed together, one line each.
+        club = rest[0] if rest else False
+        c, y, p = block(plants, add_conv)
+        if club:
+            remark = "\n".join(f"{pl}: {remarks[pl]}" for pl in plants if remarks.get(pl))
+        else:
+            remark = remarks.get(plants[0], "") if len(plants) == 1 else ""
         rows.append({
             "plant": label, "cur": c, "cply": y, "prev": p,
             "gr_cply": _gr(c, y), "gr_prev": _gr(c, p),
@@ -177,14 +185,16 @@ def crude_steel_annexure_rows(cur, report_month, cply_month, prev_month):
 def finished_steel_annexure_rows(cur, report_month, cply_month, prev_month):
     """BSP/DSP/RSP/BSL/ISP/5 ISP's/Special Steel Plants/SAIL* — matches
     Annexure-B exactly (ASP+SSP+VISL combined into one row here, unlike
-    Crude Steel's table where ASP/SSP get their own rows)."""
+    Crude Steel's table where ASP/SSP get their own rows). Their remarks
+    stay per-plant on the D.O. Letter page and are clubbed together into
+    that one row's remark cell (club=True) — see _build_plant_table."""
     remarks = _fetch_remarks(cur, report_month, "Finished Steel")
     return _build_plant_table(
         cur, report_month, cply_month, prev_month, "Finished Steel",
         plant_row_order=list(_5P),
         aggregate_rows=[
             ("5 ISP's", _5P, False),
-            ("Special Steel Plants", _SPECIAL_STEEL_PLANTS, False),
+            ("Special Steel Plants", _SPECIAL_STEEL_PLANTS, False, True),
             ("SAIL*", _FINISHED_STEEL_PLANTS, True),
         ],
         remarks=remarks,
