@@ -388,6 +388,20 @@ def _set_cell_text(cell, text: str) -> None:
         _remove_paragraph(p)
 
 
+def _fill_annexure_header(table, header_row: int, report_label, cply_label, prev_label):
+    """The bundled template keeps the reference month's column labels in the
+    header row ("Jul'26 / Jul'25 / Jun'26 / Growth over Jul'25 / Growth over
+    Jun'26") — retarget them to the month actually being generated, so an
+    Aug'26 letter's tables don't still read "Jul'26". Column order matches
+    _fill_annexure_table's cur/cply/prev/gr_cply/gr_prev fill exactly."""
+    cells = table.rows[header_row].cells
+    _set_cell_text(cells[1], report_label)
+    _set_cell_text(cells[2], cply_label)
+    _set_cell_text(cells[3], prev_label)
+    _set_cell_text(cells[4], f"Growth over {cply_label}")
+    _set_cell_text(cells[5], f"Growth over {prev_label}")
+
+
 def _fill_annexure_table(table, rows, data_start_row: int):
     """rows: list from crude_steel_annexure_rows()/finished_steel_annexure_rows().
     data_start_row: 1 for Table A (row 0 is the column-header row), 2 for
@@ -455,6 +469,8 @@ def build_do_letter_docx_bytes(report_month: str) -> bytes:
             for extra in bullets[_N_TEMPLATE_BULLETS:]:
                 ref = _clone_paragraph_after(ref, extra)
 
+    _fill_annexure_header(doc.tables[0], 0, report_label, cply_label, prev_label)
+    _fill_annexure_header(doc.tables[1], 1, report_label, cply_label, prev_label)
     _fill_annexure_table(doc.tables[0], data["crude_steel_rows"], data_start_row=1)
     _fill_annexure_table(doc.tables[1], data["finished_steel_rows"], data_start_row=2)
 
