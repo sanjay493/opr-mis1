@@ -1571,6 +1571,12 @@
         .catwise-table tr.cw-total td { background-color: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
         .catwise-table tr.cw-separator { height: 3px; }
         .catwise-table tr.cw-separator td { border: none; background: transparent; padding: 0; }
+        /* Fine colored line between BSL's HR products and CR+GP products
+           groups — a single divider (not a box), on the last row of the
+           HR group only (see row.box_last in page_catwise_saleable.py).
+           2px beats the table's own 1px cell borders under border-collapse
+           regardless of source order. */
+        .catwise-table tr.cw-box-hr.cw-box-last > td { border-bottom: 2px solid {{ colors.border_darkred }}; }
 
         /* ── page 18: Segment Wise Production ───────────────────────────── */
         {# 9.5pt/0.5px-1.5px padding, not the original 10pt/1px-2px — this
@@ -1591,6 +1597,20 @@
         .segwise-table tr.sw-seg-total td { background-color: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
         .segwise-table tr.sw-seg-pct td { background-color: {{ colors.highlight_pct_row_bg }}; font-weight: 700; font-style: italic; }
         .segwise-table tr.sw-grand-total td { background-color: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
+        /* No horizontal line between item rows of the same plant — only
+           vertical (column) borders survive on data rows; the fine
+           colored line at each plant boundary (below) is the only
+           horizontal rule inside a group. Left/right stay via the base
+           ".segwise-table td { border: 1px solid ... }" rule above (this
+           only zeroes top/bottom, so column separators are unaffected). */
+        .segwise-table tr.sw-data > td { border-top: none; border-bottom: none; }
+        /* Fine colored line between plants — row.show_plant (already
+           computed by _add_rowspans for the first row of each plant's
+           block) doubles as "a new plant starts here", so no extra field
+           is needed. Doesn't cross the rowspan'd Group column: a plant
+           change without a group change means that row has no Group <td>
+           of its own to apply the border to. */
+        .segwise-table tr.sw-plant-start > td { border-top: 2px solid {{ colors.border_darkred }}; }
 
         /* ── Page-specific font overrides ───────────────────────────────── */
         .pg-7, .pg-7 th, .pg-7 td {

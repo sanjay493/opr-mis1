@@ -66,6 +66,7 @@
   "border_group_top": "#374151",
   "border_heavy":     "#64748b",
   "border_green":     "#2d5016",
+  "border_darkred":   "#8B0000",
   "border_slate_sep": "#5a7fa0",
   "border_header":    "#93c5fd",
   "border_cumulative_col": "#96ae83",

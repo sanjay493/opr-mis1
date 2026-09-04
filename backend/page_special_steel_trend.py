@@ -26,7 +26,7 @@ import calendar
 import datetime as _dt
 import math
 import db
-from page_special_steel import _ssps_special_steel
+from page_special_steel import _ssps_special_steel, _SSPS_PLANTS
 
 _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 _SSPS = "SSPs"
@@ -128,8 +128,17 @@ def _saleable_steel(cur, month, plant):
 
 
 def _period_saleable(cur, months: list, entity: str):
-    """SAIL/plant Saleable Steel ('000T) summed across these months."""
-    plants = _PLANTS if entity == "SAIL" else [entity]
+    """SAIL/plant Saleable Steel ('000T) summed across these months.
+
+    SSPs has no 'Saleable Steel' row of its own in production_table (the
+    label is a display-only bundle, not a real plant_name there) — its
+    denominator is instead ASP+SSP+VISL's own Saleable Steel, the same
+    three plants _ssps_special_steel's docstring says the 'SSPs' bundle
+    actually covers everywhere else in this app (see _SSPS_PLANTS)."""
+    if entity == _SSPS:
+        plants = list(_SSPS_PLANTS)
+    else:
+        plants = _PLANTS if entity == "SAIL" else [entity]
     total, has = 0.0, False
     for m in months:
         for p in plants:
@@ -426,10 +435,11 @@ def generate_special_steel_trend(report_month: str) -> dict:
         # gets its own slice alongside the 5 plants — SAIL's center total
         # already includes it (_entity_plants("SAIL") = _PLANTS + [SSPs]),
         # so omitting it here previously left the slices summing to less
-        # than the center total with no visual account of the gap. SSPs has
-        # no "% of Saleable Steel" denominator of its own (no plant_name=
-        # 'SSPs' row in production_table) — _period_value_pct degrades to
-        # pct=None for it, which the donut legend already renders as "—".
+        # than the center total with no visual account of the gap. SSPs'
+        # own "% of Saleable Steel" is its special steel divided by
+        # ASP+SSP+VISL's combined Saleable Steel (see _period_saleable) —
+        # there's no plant_name='SSPs' row in production_table to read a
+        # denominator from directly.
         month_slices, ytd_slices = [], []
         for ent in _PLANTS + [_SSPS]:
             qty, pct = _period_value_pct(cur, [report_month], ent)

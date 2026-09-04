@@ -17,6 +17,7 @@
     "4":    { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 5,  "marginBottom": 3, "marginLR": 7 },
     "5-6":  { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 7,  "marginBottom": 5, "marginLR": 7 },
     "7-13": { "marginTop": 7, "marginBottom": 5, "marginLR": 2 },
+    "17":   { "table": { "th": 10, "td": 10 }, "marginTop": 0, "marginBottom": 0, "marginLR": 3, "fitToPage": true, "tdPaddingV": 5.0, "lineHeight": 1.0 },
     "27":   { "fontFamily": "Aptos", "table": { "th": 8, "td":  8}, "fontWeight": 300, "marginTop": 3, "marginBottom": 1.5, "marginLR": 4, "fitToPage": true },
     "28-30": { "table": { "th": 9, "td": 9 },    "marginTop": 4,  "marginBottom": 3, "marginLR": 4, "fitToPage": true },
     "31-35": { "table": { "th": 8, "td": 8 },    "marginTop": 4,  "marginBottom": 3, "marginLR": 6, "fitToPage": true }

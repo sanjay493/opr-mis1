@@ -40,7 +40,7 @@
                         <td colspan="13" class="lbl-td">{{ row.label }}</td>
                     </tr>
                     {% elif row.category %}
-                    <tr class="cw-{{ row.type }}">
+                    <tr class="cw-{{ row.type }}{% if row.box %} cw-box-{{ row.box }}{% if row.box_last %} cw-box-last{% endif %}{% endif %}">
                         {% if row.cat_first %}
                         <td rowspan="{{ row.cat_rowspan }}" class="cat-td">{{ row.category }}</td>
                         {% endif %}
@@ -58,7 +58,7 @@
                         <td class="num-td">{{ row.cum_growth }}</td>
                     </tr>
                     {% else %}
-                    <tr class="cw-{{ row.type }}">
+                    <tr class="cw-{{ row.type }}{% if row.box %} cw-box-{{ row.box }}{% if row.box_last %} cw-box-last{% endif %}{% endif %}">
                         <td colspan="2" class="lbl-td">{{ row.label }}</td>
                         <td class="num-td">{{ row.ann_plan }}</td>
                         <td class="num-td">{{ row.m_plan }}</td>

@@ -53,7 +53,7 @@
                     <td class="num-td">{{ row.cum_growth }}</td>
                 </tr>
                 {% else %}
-                <tr class="sw-{{ row.type }}">
+                <tr class="sw-{{ row.type }}{% if row.show_plant %} sw-plant-start{% endif %}">
                     {% if row.show_group %}<td rowspan="{{ row.group_span }}" class="sw-group-cell">{{ row.group }}</td>{% endif %}
                     {% if row.show_plant %}<td rowspan="{{ row.plant_span }}" class="sw-plant-cell">{{ row.plant }}</td>{% endif %}
                     <td class="lbl-td">{{ row.label }}</td>

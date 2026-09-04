@@ -402,15 +402,29 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
                       "CR I/II CR(Coil) Sale", "CR III CR(Coil) Sale", "CR Sheets", "New CR Sheet",
                       "Thick Plate", "GP/GC", "GPC3"]
 
+    def _mark_box(group_rows, box_name):
+        """Flags the LAST row of a group with its box name (see
+        .cw-box-hr.cw-box-last in main.html) — a fine colored line is
+        drawn under that one row only, marking the boundary with whatever
+        group comes next. Only the HR group actually needs this (the line
+        between HR and CR products); CR's own rows are never marked."""
+        if group_rows:
+            group_rows[-1]["box"] = box_name
+            group_rows[-1]["box_last"] = True
+        return group_rows
+
+    # HR products — grouped contiguously (a fine colored line marks the
+    # boundary with CR/GP products below, via _mark_box), regardless of
+    # where each item would otherwise fall in the CRM-I/II vs CRM-III
+    # split below.
+    hr_rows = []
     for label, item in [
         ("HR Coils",               "HSM HR Coil (Sale)"),
         ("HR Plates",              "HSM HR Plate"),
         ("Chequered Plate",        "Checkered plate"),
         ("HR Sheets",              "HR Sheet"),
-        ("CR Coils",               "CR I/II CR(Coil) Sale"),
-        ("New CR Coils",           "CR III CR(Coil) Sale"),
     ]:
-        rows.append(_row(label, "data",
+        hr_rows.append(_row(label, "data",
                          _ann(cur, "BSL", item, fy),
                          _one(cur, "plan", "BSL", item, rm),
                          _one(cur, "act",  "BSL", item, rm),
@@ -419,31 +433,7 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
                          _ytd_one(cur, "act",  "BSL", item, ytd),
                          _ytd_one(cur, "act",  "BSL", item, cply_ytd),
                          category="FLAT"))
-
-    rows.append(_row("CR Sheets", "data",
-                     _ann(cur, "BSL", "CR Sheets", fy),
-                     _one(cur, "plan", "BSL", "CR Sheets", rm),
-                     _one(cur, "act",  "BSL", "CR Sheets", rm),
-                     _one(cur, "act",  "BSL", "CR Sheets", pm),
-                     _ytd_one(cur, "plan", "BSL", "CR Sheets", ytd),
-                     _ytd_one(cur, "act",  "BSL", "CR Sheets", ytd),
-                     _ytd_one(cur, "act",  "BSL", "CR Sheets", cply_ytd),
-                     category="FLAT", decimals=3))
-    # "New CR Sheet" (CRM-III) is backfilled historically (always 0 — mill 3
-    # makes coil only) but has no live extractor cell, since no report ever
-    # carries a nonzero figure for it. Future months read as blank rather
-    # than a guessed 0 until a real source proves otherwise.
-    rows.append(_row("New CR Sheet", "data",
-                     _ann(cur, "BSL", "New CR Sheet", fy),
-                     _one(cur, "plan", "BSL", "New CR Sheet", rm),
-                     _one(cur, "act",  "BSL", "New CR Sheet", rm),
-                     _one(cur, "act",  "BSL", "New CR Sheet", pm),
-                     _ytd_one(cur, "plan", "BSL", "New CR Sheet", ytd),
-                     _ytd_one(cur, "act",  "BSL", "New CR Sheet", ytd),
-                     _ytd_one(cur, "act",  "BSL", "New CR Sheet", cply_ytd),
-                     category="FLAT"))
-
-    rows.append(_row("Thick Plates", "data",
+    hr_rows.append(_row("Thick Plates", "data",
                      _ann(cur, "BSL", "Thick Plate", fy),
                      _one(cur, "plan", "BSL", "Thick Plate", rm),
                      _one(cur, "act",  "BSL", "Thick Plate", rm),
@@ -452,12 +442,45 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
                      _ytd_one(cur, "act",  "BSL", "Thick Plate", ytd),
                      _ytd_one(cur, "act",  "BSL", "Thick Plate", cply_ytd),
                      category="FLAT"))
+    rows.extend(_mark_box(hr_rows, "hr"))
 
-    for label, item in [
-        ("GP/GC Sheets",           "GP/GC"),
-        ("GP/GC Sheets (New CRM)", "GPC3"),
+    # CR / GP products — each labelled by mill complex (CRM-I/II vs
+    # CRM-III) rather than the old bare "CR Coils"/"New CR Coils"/etc
+    # names. No box marking needed here — the divider line above already
+    # marks this group's start, on the HR group's own last row.
+    cr_rows = []
+    for label, item, decimals in [
+        ("CRM-I/II CR Coils",      "CR I/II CR(Coil) Sale", 0),
+        ("CRM-III CR Coils",       "CR III CR(Coil) Sale",  0),
+        ("CRM-I/II CR Sheets",     "CR Sheets",              3),
     ]:
-        rows.append(_row(label, "data",
+        cr_rows.append(_row(label, "data",
+                         _ann(cur, "BSL", item, fy),
+                         _one(cur, "plan", "BSL", item, rm),
+                         _one(cur, "act",  "BSL", item, rm),
+                         _one(cur, "act",  "BSL", item, pm),
+                         _ytd_one(cur, "plan", "BSL", item, ytd),
+                         _ytd_one(cur, "act",  "BSL", item, ytd),
+                         _ytd_one(cur, "act",  "BSL", item, cply_ytd),
+                         category="FLAT", decimals=decimals))
+    # "New CR Sheet" (CRM-III) is backfilled historically (always 0 — mill 3
+    # makes coil only) but has no live extractor cell, since no report ever
+    # carries a nonzero figure for it. Future months read as blank rather
+    # than a guessed 0 until a real source proves otherwise.
+    cr_rows.append(_row("New CR Sheet", "data",
+                     _ann(cur, "BSL", "New CR Sheet", fy),
+                     _one(cur, "plan", "BSL", "New CR Sheet", rm),
+                     _one(cur, "act",  "BSL", "New CR Sheet", rm),
+                     _one(cur, "act",  "BSL", "New CR Sheet", pm),
+                     _ytd_one(cur, "plan", "BSL", "New CR Sheet", ytd),
+                     _ytd_one(cur, "act",  "BSL", "New CR Sheet", ytd),
+                     _ytd_one(cur, "act",  "BSL", "New CR Sheet", cply_ytd),
+                     category="FLAT"))
+    for label, item in [
+        ("CRM-I/II GP/GC Sheets",  "GP/GC"),
+        ("CRM-III GP/GC Sheets",   "GPC3"),
+    ]:
+        cr_rows.append(_row(label, "data",
                          _ann(cur, "BSL", item, fy),
                          _one(cur, "plan", "BSL", item, rm),
                          _one(cur, "act",  "BSL", item, rm),
@@ -466,6 +489,7 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
                          _ytd_one(cur, "act",  "BSL", item, ytd),
                          _ytd_one(cur, "act",  "BSL", item, cply_ytd),
                          category="FLAT"))
+    rows.extend(cr_rows)
 
     rows.append(_zero_row("TMBP", rtype="data", category="FLAT"))
 

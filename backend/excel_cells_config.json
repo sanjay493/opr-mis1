@@ -13,6 +13,7 @@
       "Total Sinter": "P7",
       "Hot Metal": "P8",
       "Pig Iron": "AA21",
+      "SMS-1 Ingot": "P9",
       "SMS-1 CCM-1": "P10",
       "SMS-2 CCM-1&2": "P11",
       "Total Crude Steel": "P12",
@@ -50,6 +51,12 @@
         "item": "CR III Total Saleable",
         "op": "sum_items",
         "items": ["CR III CR(Coil) Sale", "GPC3"]
+      },
+      {
+        "item": "HSM HR Plate",
+        "op": "subtract",
+        "a_item": "HSM HR Plate",
+        "b_item": "Checkered plate"
       }
     ]
   },

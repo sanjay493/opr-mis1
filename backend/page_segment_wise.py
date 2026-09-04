@@ -187,15 +187,18 @@ def generate_segment_wise(report_month: str) -> dict:
                        _ytd_one(cur,"plan","BSL","Saleable Semis",ytd),
                        _ytd_one(cur,"act","BSL","Saleable Semis",ytd),
                        _ytd_one(cur,"act","BSL","Saleable Semis",cply_ytd)))
+        # HR products, grouped contiguously (same order as
+        # page_catwise_saleable.py's BSL section) — Thick Plates moved up
+        # to sit with the other hot-rolled items instead of after the CR
+        # rows below.
+        hr_rows = []
         for label, item in [
             ("HR Coils",        "HSM HR Coil (Sale)"),
             ("HR Plates",       "HSM HR Plate"),
             ("Chequered Plate", "Checkered plate"),
             ("HR Sheets",       "HR Sheet"),
-            ("CR Coils",     "CR I/II CR(Coil) Sale"),
-            ("New CR Coils", "CR III CR(Coil) Sale"),
         ]:
-            rows.append(_r(label, "data", "FLAT", "BSL",
+            hr_rows.append(_r(label, "data", "FLAT", "BSL",
                            _ann(cur,"BSL",item,fy),
                            _one(cur,"plan","BSL",item,report_month),
                            _one(cur,"act","BSL",item,report_month),
@@ -203,15 +206,7 @@ def generate_segment_wise(report_month: str) -> dict:
                            _ytd_one(cur,"plan","BSL",item,ytd),
                            _ytd_one(cur,"act","BSL",item,ytd),
                            _ytd_one(cur,"act","BSL",item,cply_ytd)))
-        rows.append(_r("CR Sheets", "data", "FLAT", "BSL",
-                       _ann(cur,"BSL","CR Sheets",fy),
-                       _one(cur,"plan","BSL","CR Sheets",report_month),
-                       _one(cur,"act","BSL","CR Sheets",report_month),
-                       _one(cur,"act","BSL","CR Sheets",prev_month),
-                       _ytd_one(cur,"plan","BSL","CR Sheets",ytd),
-                       _ytd_one(cur,"act","BSL","CR Sheets",ytd),
-                       _ytd_one(cur,"act","BSL","CR Sheets",cply_ytd)))
-        rows.append(_r("Thick Plates", "data", "FLAT", "BSL",
+        hr_rows.append(_r("Thick Plates", "data", "FLAT", "BSL",
                        _ann(cur,"BSL","Thick Plate",fy),
                        _one(cur,"plan","BSL","Thick Plate",report_month),
                        _one(cur,"act","BSL","Thick Plate",report_month),
@@ -219,6 +214,34 @@ def generate_segment_wise(report_month: str) -> dict:
                        _ytd_one(cur,"plan","BSL","Thick Plate",ytd),
                        _ytd_one(cur,"act","BSL","Thick Plate",ytd),
                        _ytd_one(cur,"act","BSL","Thick Plate",cply_ytd)))
+        rows.extend(hr_rows)
+
+        # CR / GP products, grouped contiguously — each mill-complex-
+        # labelled item renamed to match page_catwise_saleable.py's BSL
+        # section. GP/GC Sheets stays one combined CRM-I/II + CRM-III
+        # total here (this page never split it the way catwise_saleable's
+        # does), so it isn't renamed.
+        cr_rows = []
+        for label, item in [
+            ("CRM-I/II CR Coils", "CR I/II CR(Coil) Sale"),
+            ("CRM-III CR Coils",  "CR III CR(Coil) Sale"),
+        ]:
+            cr_rows.append(_r(label, "data", "FLAT", "BSL",
+                           _ann(cur,"BSL",item,fy),
+                           _one(cur,"plan","BSL",item,report_month),
+                           _one(cur,"act","BSL",item,report_month),
+                           _one(cur,"act","BSL",item,prev_month),
+                           _ytd_one(cur,"plan","BSL",item,ytd),
+                           _ytd_one(cur,"act","BSL",item,ytd),
+                           _ytd_one(cur,"act","BSL",item,cply_ytd)))
+        cr_rows.append(_r("CRM-I/II CR Sheets", "data", "FLAT", "BSL",
+                       _ann(cur,"BSL","CR Sheets",fy),
+                       _one(cur,"plan","BSL","CR Sheets",report_month),
+                       _one(cur,"act","BSL","CR Sheets",report_month),
+                       _one(cur,"act","BSL","CR Sheets",prev_month),
+                       _ytd_one(cur,"plan","BSL","CR Sheets",ytd),
+                       _ytd_one(cur,"act","BSL","CR Sheets",ytd),
+                       _ytd_one(cur,"act","BSL","CR Sheets",cply_ytd)))
 
         # GP/GC total for BSL = GP/GC + GPC3
         gp_ann   = (_ann(cur,"BSL","GP/GC",fy) or 0) + (_ann(cur,"BSL","GPC3",fy) or 0)
@@ -234,9 +257,10 @@ def generate_segment_wise(report_month: str) -> dict:
                     (_ytd_one(cur,"act","BSL","GPC3",ytd) or 0))
         gp_ccply = ((_ytd_one(cur,"act","BSL","GP/GC",cply_ytd) or 0) +
                     (_ytd_one(cur,"act","BSL","GPC3",cply_ytd) or 0))
-        rows.append(_r("GP/GC Sheets", "data", "FLAT", "BSL",
+        cr_rows.append(_r("GP/GC Sheets", "data", "FLAT", "BSL",
                        gp_ann or None, gp_plan or None, gp_act or None, gp_cply or None,
                        gp_cplan or None, gp_cact or None, gp_ccply or None))
+        rows.extend(cr_rows)
         rows.append(_zero("TMBP", "FLAT", "BSL"))
 
         # FLAT totals

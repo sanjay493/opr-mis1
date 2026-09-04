@@ -180,6 +180,7 @@ def _dpr_config():
         "Total Sinter":        "P7",
         "Hot Metal":           "P8",
         "Pig Iron":            "AA21",
+        "SMS-1 Ingot":         "P9",
         "SMS-1 CCM-1":         "P10",
         "SMS-2 CCM-1&2":       "P11",
         "Total Crude Steel":   "P12",
@@ -218,6 +219,18 @@ def _dpr_config():
         # unambiguously defined instead, mirroring CR(1&2) Total Saleable.
         {"item": "CR III Total Saleable", "op": "sum_items",
          "items": ["CR III CR(Coil) Sale", "GPC3"]},
+        # H R PLATE (the row _DPR_LABELS resolves for "HSM HR Plate") is the
+        # mill's total plate output, INCLUDING the "- CHQ PLATE" sub-line —
+        # confirmed against production_table (2026-05..08: HSM HR Plate
+        # ~26-34, Checkered plate ~2-4, both clearly counting the same
+        # tonnes twice as separate items). Overwrites the raw H R PLATE
+        # value the main per-item loop above already saved for "HSM HR
+        # Plate" with H R PLATE minus Checkered plate instead, so ordinary
+        # (non-chequered) HR plate isn't double-counted against Checkered
+        # plate elsewhere. Falls back to the raw H R PLATE figure on a
+        # report vintage with no "- CHQ PLATE" row at all (nothing to
+        # subtract — see the "subtract" op's single-operand branch).
+        {"item": "HSM HR Plate", "op": "subtract", "a_item": "HSM HR Plate", "b_item": "Checkered plate"},
     ])
     return cells, no_convert, derived
 
@@ -241,6 +254,13 @@ _DPR_LABELS = {
     "Oven Pushing (nos/day)": ("L", ["OVENS PUSHED"]),
     "Total Sinter":          ("L", ["G.SINTER"]),
     "Hot Metal":             ("L", ["HOT METAL"]),
+    # SMS-1's ingot route (as opposed to "SMS NEW-SLAB", its continuously-
+    # cast route, just below) — same item this app already knows as
+    # "SMS-1 Ingot" from the Annual Book PDF's "Steel to Foundry" column
+    # and the legacy RSPBSL_INGOT.xlsx backfill (see
+    # scripts/backfill_rspbsl_ingot.py), confirmed the same physical
+    # figure, just not previously read from the DPR route at all.
+    "SMS-1 Ingot":           ("L", ["SMS NEW-IS/FS"]),
     "SMS-1 CCM-1":           ("L", ["SMS NEW-SLAB"]),
     "SMS-2 CCM-1&2":         ("L", ["SMS-2/CCS"]),
     "Total Crude Steel":     ("L", ["CRUDE STEEL"]),
@@ -249,13 +269,16 @@ _DPR_LABELS = {
     "HSM HR Coil (Sale)":    ("W", ["H R COIL"]),
     "HSM HR Plate":          ("W", ["H R PLATE"]),
     # "- CHQ PLATE" is a sub-line of H R PLATE, present only on some report
-    # vintages (see above) — HSM HR Plate already includes it, so this is
-    # purely an additional breakdown, not summed into anything else. Saved
-    # as "Checkered plate" (not "CHQ Plate") to match the item_name
-    # page_catwise_saleable.py/page_segment_wise.py already display this
-    # under and that manual entries already use — confirmed no overlapping
-    # month between the two spellings (Checkered plate: May-Jul'26 manual;
-    # CHQ Plate: Aug'26, this extractor's first month writing it at all).
+    # vintages (see above) — H R PLATE's own total counts it in (confirmed
+    # against production_table: HSM HR Plate ~26-34 vs Checkered plate
+    # ~2-4 for the same months, clearly double-counted as two separate
+    # items), so _dpr_config's derived rules subtract it back out of "HSM
+    # HR Plate" after both are resolved here. Saved as "Checkered plate"
+    # (not "CHQ Plate") to match the item_name page_catwise_saleable.py/
+    # page_segment_wise.py already display this under and that manual
+    # entries already use — confirmed no overlapping month between the two
+    # spellings (Checkered plate: May-Jul'26 manual; CHQ Plate: Aug'26,
+    # this extractor's first month writing it at all).
     "Checkered plate":       ("W", ["CHQ PLATE"]),
     "HR Sheet":              ("W", ["H R SHEET"]),
     "CR I/II CR(Coil) Sale": ("W", ["C R CL/SL"]),
@@ -343,12 +366,13 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     more than 10%, never used to pick the value.
 
     Items — see _DPR_LABELS for the label each is found by:
-      Oven Pushing (nos/day), Total Sinter, Hot Metal, SMS-1 CCM-1,
-      SMS-2 CCM-1&2, Total Crude Steel, HSM Total HR Coil, Saleable Steel
+      Oven Pushing (nos/day), Total Sinter, Hot Metal, SMS-1 Ingot,
+      SMS-1 CCM-1, SMS-2 CCM-1&2, Total Crude Steel, HSM Total HR Coil,
+      Saleable Steel
         — "MAIN UNITS" table (col O = CUM, col P = M.RATE)
-      HSM HR Coil (Sale), HSM HR Plate, Checkered plate (a sub-line of HSM
-      HR Plate, present only on some report vintages — already included in
-      HSM HR Plate, saved separately too when its row exists), HR Sheet,
+      HSM HR Coil (Sale), HSM HR Plate (raw H R PLATE reading, before the
+      Checkered plate subtraction below), Checkered plate (a sub-line of
+      HSM HR Plate, present only on some report vintages), HR Sheet,
       CR I/II CR(Coil) Sale, CR Sheets (sales-side, mills 1&2), CR III
       CR(Coil) Sale (sales-side, mill 3), GPC3, CRSALE, Saleable Semis,
       Thick Plate, Pig Iron
@@ -369,6 +393,13 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
                              3's saleable output only. Replaces the old
                              "CRC(3)" mother-mill (CRM-3) row, same
                              rationale as CR(1&2) Total Saleable above.
+      HSM HR Plate (final)   derived: H R PLATE − Checkered plate — the
+                             raw H R PLATE reading above counts Checkered
+                             plate in, so it's subtracted back out here
+                             (overwriting the raw value saved above) to
+                             avoid double-counting between the two items.
+                             Falls back to the raw H R PLATE figure on a
+                             report vintage with no "- CHQ PLATE" row.
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
@@ -462,10 +493,17 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
             a_cell, b_cell = production_cells.get(d["a_item"]), production_cells.get(d["b_item"])
             a_m, a_c = _mrate_and_cum(a_cell) if a_cell else (None, None)
             b_m, b_c = _mrate_and_cum(b_cell) if b_cell else (None, None)
-            if a_m is not None and b_m is not None:
-                mrate_val = a_m - b_m
-                cum_val = (a_c - b_c) if (a_c is not None and b_c is not None) else None
-            elif a_m is not None:
+            # CUM-gated (not M.RATE-gated) — matches _dpr_value_and_alert's
+            # own rule that CUM is always what actually gets saved, M.RATE
+            # only a cross-check. A minor breakdown row like "- CHQ PLATE"
+            # often carries a real CUM with a blank/'-' M.RATE (that row's
+            # own M.RATE cell isn't even filled in on the source report),
+            # which an M.RATE-gated check would silently skip subtracting
+            # at all despite CUM having a perfectly good value to use.
+            if a_c is not None and b_c is not None:
+                cum_val = a_c - b_c
+                mrate_val = (a_m - b_m) if (a_m is not None and b_m is not None) else None
+            elif a_c is not None:
                 mrate_val, cum_val = a_m, a_c
             else:
                 continue
@@ -2543,11 +2581,13 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
             a_cell, b_cell = CELL_MAP.get(d["a_item"]), CELL_MAP.get(d["b_item"])
             a_m, a_c = _mrate_and_cum(a_cell) if a_cell else (None, None)
             b_m, b_c = _mrate_and_cum(b_cell) if b_cell else (None, None)
-            if a_m is not None and b_m is not None:
-                mrate_val = a_m - b_m
-                cum_val = (a_c - b_c) if (a_c is not None and b_c is not None) else None
+            # CUM-gated, not M.RATE-gated — see the matching comment in
+            # _extract_dpr_report's own "subtract" branch.
+            if a_c is not None and b_c is not None:
+                cum_val = a_c - b_c
+                mrate_val = (a_m - b_m) if (a_m is not None and b_m is not None) else None
                 lbl = f"{a_cell}-{b_cell}"
-            elif a_m is not None:
+            elif a_c is not None:
                 mrate_val, cum_val, lbl = a_m, a_c, a_cell
             else:
                 continue
