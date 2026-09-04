@@ -1046,7 +1046,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
         }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#174ea6', marginBottom: 10 }}>
-            RSP Techno Upload — Technopara Excel (final) and/or Month-End Morning Report (tentative, merged into the same table)
+            RSP Techno Upload — Technopara Excel (final), BF Department GLANCE workbook (final) and/or Month-End Morning Report (tentative) — all merged into the same table
           </div>
           <ExtractRow
             label="RSP Technopara Excel (page1-8 sheet)"
@@ -1057,6 +1057,16 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             apiBase={apiBase}
             onSuccess={loadData}
             accent="#1a73e8"
+          />
+          <ExtractRow
+            label="RSP BF Department GLANCE workbook (DETAIL + per-month sheet)"
+            previewEndpoint="/api/rsp-bf-glance/preview"
+            insertEndpoint="/api/rsp-bf-glance/insert"
+            plant="RSP"
+            reportMonth={reportMonth}
+            apiBase={apiBase}
+            onSuccess={loadData}
+            accent="#0f766e"
           />
           <ExtractRow
             label="RSP Morning Report — month-end (tentative)"
