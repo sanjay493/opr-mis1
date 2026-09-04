@@ -28,11 +28,6 @@
                         <td class="coal-num">{{ '%.0f'|format(sub.vals.cdi_coal) if sub.vals.get('cdi_coal') is not none else '—' }}</td>
                     </tr>
                     {% endfor %}
-                    {% if not loop.last %}
-                    <tr class="coal-plant-spacer-row">
-                        <td colspan="{{ 2 + page.qty_cols|length + 2 }}"></td>
-                    </tr>
-                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -61,13 +56,15 @@
                         {% endfor %}
                     </tr>
                     {% endfor %}
-                    {% if not loop.last %}
-                    <tr class="coal-plant-spacer-row">
-                        <td colspan="{{ 2 + page.pct_cols|length }}"></td>
-                    </tr>
-                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
+
+            <div class="coal-c-heading">(C) % Imported Coking Coal in Blend — Plant Wise (last 3 FY / FY Target / Month / Apr-Month)</div>
+            <div class="coal-import-chart-grid">
+                {% for chart in page.import_pct_charts %}
+                <div class="coal-import-chart-cell">{{ chart.svg | safe }}</div>
+                {% endfor %}
+            </div>
 
             <div class="coal-note">Note: The above information is based on the reports from plants/CCSO</div>

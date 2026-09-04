@@ -289,6 +289,21 @@
             margin-top: 6px;
             color: {{ colors.text_secondary }};
         }
+        /* % Imported Coking Coal in Blend — 6 mini bar charts (one per
+           plant + SAIL), filling the space the removed coal-plant-spacer-
+           rows freed up. 3 cols x 2 rows fits a portrait page comfortably
+           with room for each chart's 6 bars + labels. */
+        .coal-import-chart-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin: 1px 0 4px;
+        }
+        .coal-import-chart-cell {
+            border: 1px solid {{ colors.border_dark }};
+            border-radius: 3px;
+            padding: 0px 2px 1px;
+        }
 
         /* SAIL Mines (page 4.5) — 6 stacked tables + a 6-chart cluster +
            the Flux table on one portrait page: compact every element.
@@ -361,7 +376,15 @@
            rule so "Receipt, Consumption & Stocks of Coking Coal" (the
            other .coal-table page) is unaffected. */
         .coal-consumption-table th, .coal-consumption-table td {
-            padding: 6px 5px;
+            padding: 2.5px 5px;
+        }
+        /* Page-level top/bottom margin — default .page padding (3mm) plus
+           the 6px table padding above used to comfortably fill this
+           portrait page on its own; now that the %import chart grid below
+           also needs room, both are trimmed back per direct instruction so
+           the grid's 2nd row still fits on the same page. */
+        .coal-consumption-page {
+            padding: 1mm 0;
         }
         /* Fixed (not 100%-stretched) column widths — however many months
            happen to have data yet, each column stays the same width as
@@ -1677,7 +1700,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
