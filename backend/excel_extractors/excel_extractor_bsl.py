@@ -250,8 +250,13 @@ _DPR_LABELS = {
     "HSM HR Plate":          ("W", ["H R PLATE"]),
     # "- CHQ PLATE" is a sub-line of H R PLATE, present only on some report
     # vintages (see above) — HSM HR Plate already includes it, so this is
-    # purely an additional breakdown, not summed into anything else.
-    "CHQ Plate":             ("W", ["CHQ PLATE"]),
+    # purely an additional breakdown, not summed into anything else. Saved
+    # as "Checkered plate" (not "CHQ Plate") to match the item_name
+    # page_catwise_saleable.py/page_segment_wise.py already display this
+    # under and that manual entries already use — confirmed no overlapping
+    # month between the two spellings (Checkered plate: May-Jul'26 manual;
+    # CHQ Plate: Aug'26, this extractor's first month writing it at all).
+    "Checkered plate":       ("W", ["CHQ PLATE"]),
     "HR Sheet":              ("W", ["H R SHEET"]),
     "CR I/II CR(Coil) Sale": ("W", ["C R CL/SL"]),
     "CR Sheets":             ("W", ["C R SHEET"]),
@@ -341,8 +346,8 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       Oven Pushing (nos/day), Total Sinter, Hot Metal, SMS-1 CCM-1,
       SMS-2 CCM-1&2, Total Crude Steel, HSM Total HR Coil, Saleable Steel
         — "MAIN UNITS" table (col O = CUM, col P = M.RATE)
-      HSM HR Coil (Sale), HSM HR Plate, CHQ Plate (a sub-line of HSM HR
-      Plate, present only on some report vintages — already included in
+      HSM HR Coil (Sale), HSM HR Plate, Checkered plate (a sub-line of HSM
+      HR Plate, present only on some report vintages — already included in
       HSM HR Plate, saved separately too when its row exists), HR Sheet,
       CR I/II CR(Coil) Sale, CR Sheets (sales-side, mills 1&2), CR III
       CR(Coil) Sale (sales-side, mill 3), GPC3, CRSALE, Saleable Semis,
