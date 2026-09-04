@@ -38,8 +38,8 @@ _MONTH_NAMES = {
 
 # Default label maps — overridden at runtime from excel_cells_config.json ["dsp_pdf"]
 _ITEM_MAP_DEFAULT = [
-    # ("i) Nos.(Total)",      "Oven Pushing(nos/d)",  False),
-    ("ii) nos. per day",        "Oven Pushing(nos/d)",  False),
+    # ("i) Nos.(Total)",      "Oven Pushing (nos/day)",  False),
+    ("ii) nos. per day",        "Oven Pushing (nos/day)",  False),
     ("sinter",             "Total Sinter",         True),
     ("sp 1",               "SP-1",                 True),
     ("sp 2",               "SP-2",                 True),

@@ -176,7 +176,7 @@ def _dpr_config():
     cfg = get_extractor_config("bsl_dpr")
 
     cells = cfg.get("cells", {
-        "Oven Pushing(nos/d)": "P6",
+        "Oven Pushing (nos/day)": "P6",
         "Total Sinter":        "P7",
         "Hot Metal":           "P8",
         "Pig Iron":            "AA21",
@@ -189,19 +189,35 @@ def _dpr_config():
         "HR Sheet":            "AA8",
         "CR I/II CR(Coil) Sale": "AA9",
         "CR Sheets":           "AA10",
-        "CRC&S(1&2)":          "AA14",
         "CR III CR(Coil) Sale": "AA15",
-        "CRC(3)":              "AA17",
         "GPC3":                "AA16",
         "CRSALE":              "AA18",
         "Saleable Steel":      "P31",
         "Saleable Semis":      "AA19",
         "Thick Plate":         "AA20",
     })
-    no_convert = set(cfg.get("no_convert", ["Oven Pushing(nos/d)"]))
+    no_convert = set(cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
     derived = cfg.get("derived", [
         {"item": "Finished Steel", "op": "subtract", "a_item": "Saleable Steel", "b_item": "Saleable Semis"},
         {"item": "GP/GC", "op": "add_labels", "labels": ["_GP_SHEET", "_GC_SHEET", "_GP_COIL"]},
+        # Replaces the old "CRC&S(1&2)" item, which read the CRM(1+2)
+        # mother-mill row (AA14/"CRM(1+2)" label) directly — confirmed to
+        # diverge from the sales-side figures below in some months (see
+        # page_catwise_saleable.py's note, e.g. Sep'25: 35.7 vs the true
+        # 47.4). "CR(1&2) Total Saleable" is unambiguously defined instead,
+        # as the sum of its own already-resolved sibling items — see the
+        # "sum_items" op below, which runs after GP/GC so it's available.
+        {"item": "CR(1&2) Total Saleable", "op": "sum_items",
+         "items": ["CR I/II CR(Coil) Sale", "CR Sheets", "GP/GC"]},
+        # Replaces the old "CRC(3)" item, which read the CRM-3 mother-mill
+        # row (AA17/"CRM-3" label) directly — like CRC&S(1&2) above, this
+        # diverged from the sales-side total in most months once the DPR
+        # route started supplying it regularly (confirmed: 10 of 17
+        # overlapping months disagreed even with CR III CR(Coil) Sale
+        # alone, let alone once GPC3 is added). "CR III Total Saleable" is
+        # unambiguously defined instead, mirroring CR(1&2) Total Saleable.
+        {"item": "CR III Total Saleable", "op": "sum_items",
+         "items": ["CR III CR(Coil) Sale", "GPC3"]},
     ])
     return cells, no_convert, derived
 
@@ -222,7 +238,7 @@ def _dpr_config():
 # table (cum=O, m.rate=P) or 'W' for "SALEABLE STEEL" (cum=Z, m.rate=AA).
 # First row in range 6-40 whose label cell contains any substring wins.
 _DPR_LABELS = {
-    "Oven Pushing(nos/d)":   ("L", ["OVENS PUSHED"]),
+    "Oven Pushing (nos/day)": ("L", ["OVENS PUSHED"]),
     "Total Sinter":          ("L", ["G.SINTER"]),
     "Hot Metal":             ("L", ["HOT METAL"]),
     "SMS-1 CCM-1":           ("L", ["SMS NEW-SLAB"]),
@@ -239,12 +255,11 @@ _DPR_LABELS = {
     "HR Sheet":              ("W", ["H R SHEET"]),
     "CR I/II CR(Coil) Sale": ("W", ["C R CL/SL"]),
     "CR Sheets":             ("W", ["C R SHEET"]),
-    # CRC(3) / CRC&S(1&2) are the mother-mill (CRM) production figures, not
-    # the sales-side "CR Coil" rows above — CRM-3 = mother mill 3, CRM(1+2)
-    # = mother mills 1&2 combined. Distinct rows from CR I/II CR(Coil) Sale
-    # / CR Sheets (sales) and from CR III CR(Coil) Sale (sales, still below).
-    "CRC&S(1&2)":            ("W", ["CRM(1+2)"]),
-    "CRC(3)":                ("W", ["CRM-3"]),
+    # Neither CRM-3 (mill 3's own mother-mill row) nor CRM(1+2) (mills
+    # 1&2's equivalent) are read here any more — both retired in favour of
+    # "CR III Total Saleable" / "CR(1&2) Total Saleable" (see _dpr_config's
+    # derived rules), which are unambiguously defined from the sales-side
+    # rows below instead.
     "CR III CR(Coil) Sale":  ("W", ["CR COIL-3"]),
     "GPC3":                  ("W", ["GP COIL-3"]),
     "CRSALE":                ("W", ["TOT CR SAL"]),
@@ -323,17 +338,15 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     more than 10%, never used to pick the value.
 
     Items — see _DPR_LABELS for the label each is found by:
-      Oven Pushing(nos/d), Total Sinter, Hot Metal, SMS-1 CCM-1,
+      Oven Pushing (nos/day), Total Sinter, Hot Metal, SMS-1 CCM-1,
       SMS-2 CCM-1&2, Total Crude Steel, HSM Total HR Coil, Saleable Steel
         — "MAIN UNITS" table (col O = CUM, col P = M.RATE)
       HSM HR Coil (Sale), HSM HR Plate, CHQ Plate (a sub-line of HSM HR
       Plate, present only on some report vintages — already included in
       HSM HR Plate, saved separately too when its row exists), HR Sheet,
-      CR I/II CR(Coil) Sale, CR Sheets (sales-side, mills 1&2), CRC&S(1&2)
-      (mother-mill production, mills 1&2 — CRM(1+2) row, distinct from the
-      two sales-side rows above), CR III CR(Coil) Sale (sales-side, mill 3),
-      CRC(3) (mother-mill production, mill 3 — CRM-3 row), GPC3, CRSALE,
-      Saleable Semis, Thick Plate, Pig Iron
+      CR I/II CR(Coil) Sale, CR Sheets (sales-side, mills 1&2), CR III
+      CR(Coil) Sale (sales-side, mill 3), GPC3, CRSALE, Saleable Semis,
+      Thick Plate, Pig Iron
         — "SALEABLE STEEL" table (col Z = CUM, col AA = M.RATE)
       Finished Steel        derived: Saleable Steel − Saleable Semis
                              (already includes Thick Plate; Thick Plate is
@@ -341,6 +354,16 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       GP/GC                  derived: G P SHEET + G C SHEET + G P COIL
                              (whichever of those three rows exist on this
                              report — see _DPR_GPGC_HELPERS)
+      CR(1&2) Total Saleable  derived: CR I/II CR(Coil) Sale + CR Sheets
+                             + GP/GC — mills 1&2's saleable output only.
+                             Replaces the old "CRC&S(1&2)" mother-mill
+                             (CRM(1+2)) row, which sometimes diverged from
+                             this sum — see the derived-rules comment in
+                             _dpr_config.
+      CR III Total Saleable   derived: CR III CR(Coil) Sale + GPC3 — mill
+                             3's saleable output only. Replaces the old
+                             "CRC(3)" mother-mill (CRM-3) row, same
+                             rationale as CR(1&2) Total Saleable above.
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
@@ -398,13 +421,18 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     conn = db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
+    # Final (post-conversion) value already saved for each item this run —
+    # lets a later derived rule (e.g. "sum_items") add up already-resolved
+    # sibling items directly, instead of re-deriving from raw cells.
+    resolved_vals = {}
 
-    def _save(item_name, val):
+    def _save(item_name, val, pre_converted=False):
         nonlocal vals_extracted
         if val is not None:
             vals_extracted += 1
-            if item_name not in NO_CONVERT:
+            if not pre_converted and item_name not in NO_CONVERT:
                 val = round(val / 1000.0, 3)
+        resolved_vals[item_name] = val
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
             VALUES (?, ?, ?, ?)
@@ -451,6 +479,15 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
                     report_day, days_in_month, label=item,
                 )
                 _save(item, val)
+        elif d["op"] == "sum_items":
+            # Adds already-resolved (post-conversion) sibling values rather
+            # than raw cells — works for any mix of plain production_cells
+            # items and earlier derived items (e.g. GP/GC) in one sum,
+            # without needing its own cell address.
+            parts = [resolved_vals.get(i) for i in d["items"]]
+            parts = [p for p in parts if p is not None]
+            if parts:
+                _save(item, round(sum(parts), 3), pre_converted=True)
 
     if vals_extracted == 0:
         raise ValueError(
@@ -1490,7 +1527,7 @@ def _extract_corp_ss_preview(wb, report_month: str) -> dict:
 def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     """
     Extract furnace-wise HM production from BSL BF Performance & Analysis
-    Report PDF, for production_table (item_name = BF-1/BF-2/BF-3/BF-4/BF-5,
+    Report PDF, for production_table (item_name = BF#1/BF#2/BF#3/BF#4/BF#5,
     whichever are actually producing that month — '000 t).
 
     Parsing is delegated to bsl_mer_parser (shared with the /data-entry/techno
@@ -1531,7 +1568,11 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
         prod = rec['techno_json'].get('month', {}).get('production')
         ok = isinstance(prod, (int, float)) and prod > 0
         rows_out.append({
-            'item_name': unit,
+            # production_table uses "BF#N" (see main.py's normalize_item_name
+            # and PRODUCTION_ITEM_ORDER); `unit` stays "BF-N" for the
+            # techno-convention labels below (file_label/cell/found_via),
+            # matching techno_data's own unit naming.
+            'item_name': unit.replace('BF-', 'BF#'),
             'value': round(prod / 1000.0, 3) if ok else None,
             'unit': "'000T",
             'cell': f'BF Performance PDF — {unit} monthly production',
@@ -1762,19 +1803,27 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
         HR COIL                      → HSM HR Coil (Sale)
         HR PLATE                     → HSM HR Plate             (matches page 3 HR PLATE)
         HR SHEET                     → HR Sheet                 (matches page 3 HR SHEET)
-        CR COIL III                  → CRC(3), CR III CR(Coil) Sale (same value, both names)
-        CR COIL I & II + CR SHEET    → CRC&S(1&2)               (mill 3 makes coil only,
+        CR COIL III                  → CR III CR(Coil) Sale
+        CR COIL III + GP Coil III    → CR III Total Saleable    (mill 3 makes coil only,
                                                                    no separate CR Sheet row)
+        CR COIL I & II + CR SHEET
+          + GP/GC I & II             → CR(1&2) Total Saleable   (mills 1&2's own equivalent)
         CR COIL I & II               → CR I/II CR(Coil) Sale    (Coil-only, no CR Sheet —
                                                                    pages 17/18 product mix)
         CR SHEET                     → CR Sheets                (Sheet-only, same source
-                                                                   row used in CRC&S(1&2) above)
+                                                                   row used in CR(1&2) Total
+                                                                   Saleable above)
         GP Coil III                  → GPC3
         GP/GC I & II                 → GP/GC
-      SAL.CR PRODUCTS                → CRSALE                   (= CRC(3)+CRC&S(1&2)+GPC3+GP/GC,
-                                                                   verified: 50893+40548+21319+380
-                                                                   = 113140 on the report this was
-                                                                   built against)
+      SAL.CR PRODUCTS                → CRSALE                   (= CR III Total Saleable+
+                                                                   CR(1&2) Total Saleable, i.e.
+                                                                   all mills combined — verified
+                                                                   (50893+21319)+(40548+380)
+                                                                   = 113140 on the report this
+                                                                   was built against, using the
+                                                                   old CRC(3)/CRC&S(1&2)+GP/GC
+                                                                   split that CR III/CR(1&2) Total Saleable
+                                                                   now bundles into one figure)
       SALEABLE STEEL                 → Saleable Steel
     Page 3 breakup table (month-total = 3rd number of the first PRIME/SEC/
     TOTAL group):
@@ -1862,7 +1911,6 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
         ("HR COIL", "HSM HR Coil (Sale)"),
         ("HR PLATE", "HSM HR Plate"),
         ("HR SHEET", "HR Sheet"),
-        ("CR COIL III", "CRC(3)"),
         ("GP Coil III", "GPC3"),
         ("GP/GC I & II", "GP/GC"),
         ("SAL.CR PRODUCTS", "CRSALE"),
@@ -1871,25 +1919,46 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
         v, c = month_actual(p2, pdf_label)
         add(item_name, v, c)
 
-    # CRC&S(1&2) = CR Coil I&II (Saleable) + CR Sheet (report carries CR Sheet
-    # as one combined figure, not split by mill — attributed entirely to
-    # mills 1&2 since mill 3's row is coil-only in this report).
+    # CR(1&2) Total Saleable = CR Coil I&II (Saleable) + CR Sheet (report
+    # carries CR Sheet as one combined figure, not split by mill —
+    # attributed entirely to mills 1&2 since mill 3's row is coil-only in
+    # this report) + GP/GC (mills 1&2's own GP/GC product, already saved
+    # above under its own item_name too). Replaces the old "CRC&S(1&2)"
+    # item, which only summed CR Coil I&II + CR Sheet (missing GP/GC) and
+    # was confirmed to disagree with the true sales-side total in some
+    # months (see page_catwise_saleable.py's note, e.g. Sep'25: 35.7 vs the
+    # true 47.4).
     coil12, c1 = month_actual(p2, "CR COIL I & II")
     sheet, c2 = month_actual(p2, "CR SHEET")
-    if coil12 is not None or sheet is not None:
-        add("CRC&S(1&2)", (coil12 or 0) + (sheet or 0), f"{c1} + {c2}")
+    gpgc, c3 = month_actual(p2, "GP/GC I & II")
+    cr12_parts = [v for v in (coil12, sheet, gpgc) if v is not None]
+    if cr12_parts:
+        add("CR(1&2) Total Saleable", sum(cr12_parts), f"{c1} + {c2} + {c3}")
     else:
-        add("CRC&S(1&2)", None, None)
+        add("CR(1&2) Total Saleable", None, None)
 
     # CR I/II CR(Coil) Sale / CR III CR(Coil) Sale — the Coil-Sale-only
-    # figures (pages 17/18 product mix), as distinct from CRC&S(1&2) above
-    # which bundles CR Sheet into the mills 1&2 figure. "CR COIL III" is
-    # already Coil-only in this report (mill 3 makes coil only), so it's the
-    # same value already saved as CRC(3) above, just under this name too.
+    # figures (pages 17/18 product mix), as distinct from CR(1&2)/CR III
+    # Total Saleable which bundle CR Sheet/GP-GC into each mill's figure.
+    # "CR COIL III" is already Coil-only in this report (mill 3 makes coil
+    # only).
     add("CR I/II CR(Coil) Sale", coil12, c1)
     add("CR Sheets", sheet, c2)
     crc3_val, crc3_cell = month_actual(p2, "CR COIL III")
     add("CR III CR(Coil) Sale", crc3_val, crc3_cell)
+
+    # CR III Total Saleable = CR Coil III (Saleable) + GP Coil III — mill
+    # 3's saleable output only (no separate CR Sheet row, mill 3 makes coil
+    # only). Replaces the old "CRC(3)" item, which read this same "CR COIL
+    # III" figure alone (missing GPC3) and, on the DPR route, sometimes read
+    # a different mother-mill row entirely — see excel_extractor_bsl's
+    # _dpr_config comment for the confirmed divergence.
+    gpc3_val, gpc3_cell = month_actual(p2, "GP Coil III")
+    cr3_parts = [v for v in (crc3_val, gpc3_val) if v is not None]
+    if cr3_parts:
+        add("CR III Total Saleable", sum(cr3_parts), f"{crc3_cell} + {gpc3_cell}")
+    else:
+        add("CR III Total Saleable", None, None)
 
     # Finished Steel / Saleable Semis aren't on page 2 — page 3's breakup
     # table carries them. Thick Plate stays folded into Finished Steel (as
@@ -1944,13 +2013,18 @@ _FY_TABLE_COLS = [
 ]
 _FY_MONTH_NAMES = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
 
-# Items this extractor writes, and — per the confirmed mapping below — the
-# two legacy item names it deliberately does NOT write (CRC&S(1&2), CRC(3):
-# duplicate figures from the old Main Products PDF route, being retired).
+# Items this extractor writes. Neither legacy bundled item ("CRC&S(1&2)",
+# "CRC(3)") is written — this extractor never wrote them in the first
+# place; both are retired everywhere now (see the DPR/Main Products PDF
+# extractors' own comments). "CR(1&2) Total Saleable" (CR I/II CR(Coil)
+# Sale + CR Sheets + GP/GC) and "CR III Total Saleable" (CR III CR(Coil)
+# Sale + GPC3) replace them, computed from components already resolved
+# below.
 _FY_ITEM_ORDER = [
     "Thick Plate", "HSM HR Coil (Sale)", "HSM HR Plate", "HR Sheet",
     "CR I/II CR(Coil) Sale", "CR Sheets", "CR III CR(Coil) Sale",
-    "GP/GC", "GPC3", "CRSALE", "Saleable Semis", "Saleable Steel", "Finished Steel",
+    "GP/GC", "GPC3", "CR(1&2) Total Saleable", "CR III Total Saleable",
+    "CRSALE", "Saleable Semis", "Saleable Steel", "Finished Steel",
 ]
 
 
@@ -2023,6 +2097,14 @@ def _derive_saleable_steel_fy_items(cols: dict, month_label: str = "") -> dict:
     slab = round(cols["Slab"] / 1000.0, 3)
     total_saleable = round(cols["TotalSaleableSteel"] / 1000.0, 3)
     gp_gc = round((cols["GPSheet"] + cols["GCSheet"]) / 1000.0, 3)
+    # CR(1&2) Total Saleable — mills 1&2's own saleable output only (coil +
+    # sheet + GP/GC), summed once from raw tonnes rather than adding the
+    # three already-rounded '000T figures, to avoid compounding rounding.
+    cr12_total_saleable = round(
+        (cols["CRM_I_II"] + cols["CRSheet"] + cols["GPSheet"] + cols["GCSheet"]) / 1000.0, 3)
+    # CR III Total Saleable — mill 3's own saleable output only (coil +
+    # GPC3, no separate CR Sheet row for mill 3).
+    cr3_total_saleable = round((cols["CRM_III"] + cols["GPCRM_III"]) / 1000.0, 3)
 
     expected_crsale = (cols["CRM_I_II"] + cols["CRM_III"] + cols["CRSheet"]
                        + cols["GPCRM_I_II"] + cols["GPCRM_III"] + cols["GPSheet"] + cols["GCSheet"])
@@ -2043,6 +2125,8 @@ def _derive_saleable_steel_fy_items(cols: dict, month_label: str = "") -> dict:
         "CR III CR(Coil) Sale": round(cols["CRM_III"] / 1000.0, 3),
         "GP/GC": gp_gc,
         "GPC3": round(cols["GPCRM_III"] / 1000.0, 3),
+        "CR(1&2) Total Saleable": cr12_total_saleable,
+        "CR III Total Saleable": cr3_total_saleable,
         "CRSALE": round(cols["CRSaleable"] / 1000.0, 3),
         "Saleable Semis": slab,
         "Saleable Steel": total_saleable,
@@ -2177,7 +2261,14 @@ _ANNUAL_BOOK_SUMMARY_ITEMS = {
     "Sinter":            ("Total Sinter", True),
     "HotMetal":          ("Hot Metal", True),
     "PigIron":           ("Pig Iron", True),
-    "SteelToFoundry":    ("Steel to Foundry", True),
+    # "Steel to Foundry" on this PDF is the same figure page5_6.py /
+    # page17_concast.py / page_prod_by_process.py already know as
+    # "SMS-1 Ingot" (the legacy RSP/BSL ingot-route item, backfilled from
+    # Report_format/RSPBSL_INGOT.xlsx — see scripts/backfill_rspbsl_ingot.py)
+    # — confirmed identical on every one of the 12 months where both this
+    # PDF and that backfill cover the same month. Written under the older,
+    # more widely-used name so both sources land on one row instead of two.
+    "SteelToFoundry":    ("SMS-1 Ingot", True),
     "CastSlabSMSNew":    ("SMS-1 CCM-1", True),
     "CastSlabSMSII":     ("SMS-2 CCM-1&2", True),
     "CrudeSteel":        ("Total Crude Steel", True),
@@ -2185,12 +2276,14 @@ _ANNUAL_BOOK_SUMMARY_ITEMS = {
 
 # FURNACEWISE PRODUCTION: each furnace contributes 4 columns (Basic Gr., Fdy.
 # Gr., Off Gr., Total) — only the Total column (furnace-wise Hot Metal) is
-# wanted, at item_name "BF-<n>", matching extract_preview_bf_pdf's existing
-# convention (plant_name stays 'BSL'; furnace number becomes the item_name).
+# wanted, at item_name "BF#<n>" (production_table's convention — see
+# main.py's normalize_item_name/PRODUCTION_ITEM_ORDER and
+# extract_preview_bf_pdf above, which now matches it too; plant_name stays
+# 'BSL', furnace number becomes the item_name).
 # Page 2 has furnaces 1-3, page 3 has furnaces 4-5 + a trailing Granulated
 # Slag column (not extracted — no item_name convention for it yet).
-_ANNUAL_BOOK_FURNACE_PAGE2 = ["BF-1", "BF-2", "BF-3"]
-_ANNUAL_BOOK_FURNACE_PAGE3 = ["BF-4", "BF-5"]
+_ANNUAL_BOOK_FURNACE_PAGE2 = ["BF#1", "BF#2", "BF#3"]
+_ANNUAL_BOOK_FURNACE_PAGE3 = ["BF#4", "BF#5"]
 
 
 def _parse_annual_book_month_rows(text: str, n_cols: int):
@@ -2537,9 +2630,9 @@ def extract_preview(file_path: str, report_month: str, all_months: bool = False)
 
     • Annual Book 3-page extract (.pdf) — PRODUCTION SUMMARY (Table No. 2.1,
       MAIN PRODUCTS: Oven Pushing, Gross/BF Coke, Sinter, Hot Metal, Pig
-      Iron, Steel to Foundry, Cast Slab SMS New/II, Crude Steel) +
+      Iron, SMS-1 Ingot, Cast Slab SMS New/II, Crude Steel) +
       FURNACEWISE PRODUCTION (Table No. 7.3, pages 2-3: Hot Metal per
-      furnace's own Total column, item_name BF-1/2/3/4/5). Same year-wide,
+      furnace's own Total column, item_name BF#1/2/3/4/5). Same year-wide,
       `all_months`-capable shape as Saleable Steel above — see
       extract_preview_annual_book_pdf().
 

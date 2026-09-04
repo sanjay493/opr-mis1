@@ -13,6 +13,20 @@ ITEMS = ['Total Sinter', 'Hot Metal', 'Total Crude Steel',
 SAIL5 = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
 ALL8  = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'VISL']
 
+# Legacy item_name spellings superseded by a canonical one (main.py's
+# normalize_item_name / the BF-N -> BF#N, "Oven Pushing(nos/d)" -> "Oven
+# Pushing (nos/day)" cleanup) but not yet fully migrated out of
+# production_table — BSL's BF-1..BF-5 still have one un-merged month
+# (2026-07, where the old and new spellings genuinely disagree, flagged for
+# manual review rather than silently discarded during that cleanup).
+# generate_records()'s single-plant sweep below reads DISTINCT item_name
+# straight from the table, so these would otherwise show up as their own
+# near-empty rows (1 month of history each) right next to the real,
+# fully-populated BF#1..BF#5 rows. Excluded here at read time — remove an
+# entry once its production_table rows are fully migrated to the canonical
+# name.
+LEGACY_ITEM_NAMES = {'BF-1', 'BF-2', 'BF-3', 'BF-4', 'BF-5'}
+
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -280,7 +294,9 @@ def generate_records() -> dict:
                 cur.execute(
                     "SELECT DISTINCT item_name FROM production_table WHERE plant_name=?",
                     plants)
-                items = sorted((r[0] for r in cur.fetchall()), key=sort_key)
+                items = sorted(
+                    (r[0] for r in cur.fetchall() if r[0] not in LEGACY_ITEM_NAMES),
+                    key=sort_key)
                 where = f"plant_name IN ({ph})"
                 args  = list(plants)
             else:

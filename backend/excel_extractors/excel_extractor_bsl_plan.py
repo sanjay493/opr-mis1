@@ -34,9 +34,9 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
       Row 22 = JAN, 23 = FEB, 24 = MAR,  (25 = Q4 skip, 26 = Total skip)
 
     Columns (values already in '000 T per sheet header; B is nos/day):
-      B = Oven Pushing (nos/d)   C = Total Sinter        D = Hot Metal
+      B = Oven Pushing (nos/day)   C = Total Sinter        D = Hot Metal
       E = Total Crude Steel      F = SMS-1 CCM-1         G = SMS-2 CCM-1&2
-      H = HSM Total HR Coil      J = CRC&S(1&2)          K = CRC(3)
+      H = HSM Total HR Coil
       L = CR Saleable            M = Saleable Steel       N = Pig Iron
       O = Saleable Semis         P = HSM HR Coil (Sale)  Q = HSM HR Plate
       R = HR Sheet               S = CR I/II CR(Coil) Sale (CRM-I/II CR Coil(Sale))
@@ -45,10 +45,17 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
 
     S, T, U, V and W are product-mix columns appended to the sheet for pages
     17/18 (Category-Wise Saleable Steel / Segment-Wise Production), which
-    read GP/GC, GPC3, and the CR(Coil) Sale-only / CR Sheet-only figures (as
-    opposed to J/K — CRC&S(1&2)/CRC(3) — which bundle CR Sheet into the
-    CRM-I/II figure) as plan items. There's no equivalent "New CR Sheet"
-    column for CRM-III — mill 3 makes coil only, no separate CR Sheet row.
+    read GP/GC, GPC3, and the CR(Coil) Sale-only / CR Sheet-only figures as
+    plan items. There's no equivalent "New CR Sheet" column for CRM-III —
+    mill 3 makes coil only, no separate CR Sheet row.
+
+    Columns J and K (the sheet's own "CRC&S(1&2)" / "CRC(3)" plan figures)
+    are deliberately not read at all any more — same retirement as the
+    actuals extractors (see excel_extractor_bsl.py's _dpr_config/
+    extract_preview_main_products_pdf comments): "CR(1&2) Total Saleable"
+    (S + T + U = CR I/II CR(Coil) Sale + CR Sheets + GP/GC) and "CR III
+    Total Saleable" (V + W = CR III CR(Coil) Sale + GPC3) are derived
+    instead, so plan and actual use the exact same definitions.
 
     Finished Steel is derived: Saleable Steel (M) − Saleable Semis (O).
     """
@@ -104,8 +111,6 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
             "F": ("SMS-1 CCM-1",          False),
             "G": ("SMS-2 CCM-1&2",        False),
             "H": ("HSM Total HR Coil",    False),
-            "J": ("CRC&S(1&2)",           False),
-            "K": ("CRC(3)",               False),
             "L": ("CR Saleable",          False),
             "M": ("Saleable Steel",       False),
             "N": ("Pig Iron",             False),
@@ -166,6 +171,51 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                 DO UPDATE SET month_actual = excluded.month_actual
                 """,
                 (db_report_month, "BSL", "Finished Steel", finished),
+            )
+
+            # Derived: CR(1&2) Total Saleable = CR I/II CR(Coil) Sale +
+            # CR Sheets + GP/GC (mills 1&2's own saleable components — see
+            # the module docstring for why column J's own "CRC&S(1&2)"
+            # figure is no longer read directly).
+            cr12_parts = [
+                v for v in (
+                    raw_row.get("CR I/II CR(Coil) Sale"),
+                    raw_row.get("CR Sheets"),
+                    raw_row.get("GP/GC"),
+                )
+                if v is not None
+            ]
+            cr12_total = round(sum(cr12_parts), 3) if cr12_parts else None
+            cursor.execute(
+                """
+                INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(report_month, plant_name, item_name)
+                DO UPDATE SET month_actual = excluded.month_actual
+                """,
+                (db_report_month, "BSL", "CR(1&2) Total Saleable", cr12_total),
+            )
+
+            # Derived: CR III Total Saleable = CR III CR(Coil) Sale + GPC3
+            # (mill 3's own saleable components — see the module docstring
+            # for why column K's own "CRC(3)" figure is no longer read
+            # directly).
+            cr3_parts = [
+                v for v in (
+                    raw_row.get("CR III CR(Coil) Sale"),
+                    raw_row.get("GPC3"),
+                )
+                if v is not None
+            ]
+            cr3_total = round(sum(cr3_parts), 3) if cr3_parts else None
+            cursor.execute(
+                """
+                INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(report_month, plant_name, item_name)
+                DO UPDATE SET month_actual = excluded.month_actual
+                """,
+                (db_report_month, "BSL", "CR III Total Saleable", cr3_total),
             )
 
         if vals_extracted == 0:

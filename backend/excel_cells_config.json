@@ -6,10 +6,10 @@
     "date_cell": "O1",
     "plant": "BSL",
     "no_convert": [
-      "Oven Pushing(nos/d)"
+      "Oven Pushing (nos/day)"
     ],
     "cells": {
-      "Oven Pushing(nos/d)": "P6",
+      "Oven Pushing (nos/day)": "P6",
       "Total Sinter": "P7",
       "Hot Metal": "P8",
       "Pig Iron": "AA21",
@@ -22,9 +22,7 @@
       "HR Sheet": "AA8",
       "CR I/II CR(Coil) Sale": "AA9",
       "CR Sheets": "AA10",
-      "CRC&S(1&2)": "AA14",
       "CR III CR(Coil) Sale": "AA15",
-      "CRC(3)": "AA17",
       "GPC3": "AA16",
       "CRSALE": "AA18",
       "Saleable Steel": "P31",
@@ -42,6 +40,16 @@
         "item": "GP/GC",
         "op": "add_labels",
         "labels": ["_GP_SHEET", "_GC_SHEET", "_GP_COIL"]
+      },
+      {
+        "item": "CR(1&2) Total Saleable",
+        "op": "sum_items",
+        "items": ["CR I/II CR(Coil) Sale", "CR Sheets", "GP/GC"]
+      },
+      {
+        "item": "CR III Total Saleable",
+        "op": "sum_items",
+        "items": ["CR III CR(Coil) Sale", "GPC3"]
       }
     ]
   },
@@ -53,12 +61,12 @@
     "no_convert": [
       "COB#10",
       "COB#11",
-      "Oven Pushing(nos/d)"
+      "Oven Pushing (nos/day)"
     ],
     "cells": {
       "COB#10": "E9",
       "COB#11": "E10",
-      "Oven Pushing(nos/d)": "E11",
+      "Oven Pushing (nos/day)": "E11",
       "SP M/c-1": "E12",
       "SP M/c-2": "E13",
       "Total Sinter": "E14",
@@ -105,7 +113,7 @@
       "COB#1-8",
       "COB#9-10",
       "COB#9-11",
-      "Oven Pushing(nos/d)"
+      "Oven Pushing (nos/day)"
     ],
     "cells_rc": {
       "COB#1-8": [
@@ -123,7 +131,7 @@
         5,
         false
       ],
-      "Oven Pushing(nos/d)": [
+      "Oven Pushing (nos/day)": [
         5,
         5,
         false
@@ -250,12 +258,12 @@
     "item_map": [
       [
         "nos per day",
-        "Oven Pushing(nos/d)",
+        "Oven Pushing (nos/day)",
         false
       ],
       [
         "2 nos per day",
-        "Oven Pushing(nos/d)",
+        "Oven Pushing (nos/day)",
         false
       ],
       [

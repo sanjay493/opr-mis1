@@ -322,7 +322,7 @@ def _detect_ppc_date(ws):
 # rows being inserted/removed/renamed between eras. Matched by substring
 # (case-insensitive) against the *whole sheet*, first match wins.
 _PPC_STABLE_LABELS = {
-    "Oven Pushing(nos/d)": (False, ["EQV. PUSHING"]),
+    "Oven Pushing (nos/day)": (False, ["EQV. PUSHING"]),
     "SP-2":                (True,  ["SP-2"]),
     "SP-3":                (True,  ["SP-3"]),
     "Total Sinter":        (True,  ["TOTAL SINTER"]),
@@ -359,7 +359,7 @@ _PPC_GUARDED_ITEMS = {
     # inserted just below COB#1-8 only once those batteries were
     # commissioned — older reports have no such row (guard correctly skips
     # them, since the batteries didn't exist yet), which is also why
-    # "Oven Pushing(nos/d)" below it needs a stable-label search rather than
+    # "Oven Pushing (nos/day)" below it needs a stable-label search rather than
     # a fixed row: this insertion is exactly what pushed it down by one row.
     "COB#9-10":          (4,  0, "BATT"),
     # Same row as COB#9-10 above, but with a narrower guard: this row's own

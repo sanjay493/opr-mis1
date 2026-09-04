@@ -394,7 +394,10 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
     # CR-I/II-Coil-Sale + CR-Sheets — true for Apr-Jul'26 but confirmed to
     # diverge (sometimes badly, e.g. Sep'25: 35.7 vs the rows' true 47.4)
     # across most of FY2025-26, silently understating the FY/YTD "Total
-    # Flat" figures by that gap.
+    # Flat" figures by that gap. "CRC&S(1&2)" has since been retired
+    # entirely (see excel_extractor_bsl.py) in favour of "CR(1&2) Total
+    # Saleable" — CR-I/II-Coil-Sale + CR-Sheets + GP/GC, the same three
+    # rows this sum already used, so no further change needed here.
     flat_items_bsl = ["HSM HR Coil (Sale)", "HSM HR Plate", "Checkered plate", "HR Sheet",
                       "CR I/II CR(Coil) Sale", "CR III CR(Coil) Sale", "CR Sheets", "New CR Sheet",
                       "Thick Plate", "GP/GC", "GPC3"]

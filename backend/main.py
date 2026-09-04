@@ -3253,10 +3253,10 @@ PRODUCTION_ITEM_ORDER = [
     'RSM_RAIL',
     'RSMPRIME',
     # 7. Secondary mills
-    'CRC&S(1&2)',
+    'CR(1&2) Total Saleable',
     'CR I/II CR(Coil) Sale',
     'CR Sheets',
-    'CRC(3)',
+    'CR III Total Saleable',
     'CR III CR(Coil) Sale',
     'New CR Sheet',
     'CRSALE',

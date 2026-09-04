@@ -71,10 +71,19 @@ const SECTIONS = [
       { label: 'DSP MSM',   indent: 0, sources: [{ plant: 'DSP', item: 'MSM' }] },
       { label: 'RSP HSM-2', indent: 0, sources: [{ plant: 'RSP', item: 'HSM-2 Total HR Coil' }] },
       { label: 'RSP NPM',   indent: 0, sources: [{ plant: 'RSP', item: 'NPM Plate' }] },
-      // CRM-III alone — CRC&S(1&2) belongs to the old CR mills. (Earlier
-      // Annexure-III exports summed both complexes here: APP showed 1660
-      // instead of CRM-III's 1000, actuals were likewise combined.)
-      { label: 'BSL CRM-III',  indent: 0, sources: [{ plant: 'BSL', item: 'CRC(3)' }] },
+      // CRM-III alone — CR(1&2) Total Saleable belongs to the old CR mills.
+      // (Earlier Annexure-III exports summed both complexes here: APP
+      // showed 1660 instead of CRM-III's 1000, actuals were likewise
+      // combined.) Was "CRC(3)" (mill 3's mother-mill row alone) through
+      // Aug'26 — retired app-wide (its DPR-route reads diverged from the
+      // true sales-side figure in most months since Apr'25) in favour of
+      // "CR III Total Saleable" (CR III CR(Coil) Sale + GPC3). This DOES
+      // change the reported BSL CRM-III figure from what was previously
+      // cross-verified against the Apr/May/Jun'25 Annexure-III PDF (those
+      // months happened to have CRC(3) == CR III CR(Coil) Sale alone, i.e.
+      // without GPC3) — a deliberate choice to use the same definition as
+      // production_table everywhere else, confirmed 2026-09.
+      { label: 'BSL CRM-III',  indent: 0, sources: [{ plant: 'BSL', item: 'CR III Total Saleable' }] },
       { label: 'ISP WRM',      indent: 0, sources: [{ plant: 'ISP', item: 'WRMILL' }] },
       { label: 'ISP BAR MILL', indent: 0, sources: [{ plant: 'ISP', item: 'BARMILL' }] },
       { label: 'ISP USM',      indent: 0, sources: [{ plant: 'ISP', item: 'USMILL' }] },
@@ -83,7 +92,7 @@ const SECTIONS = [
       { plant: 'BSP', item: 'URM_RAIL' }, { plant: 'BSP', item: 'BARS&RODMILL' },
       { plant: 'DSP', item: 'MSM' },
       { plant: 'RSP', item: 'HSM-2 Total HR Coil' }, { plant: 'RSP', item: 'NPM Plate' },
-      { plant: 'BSL', item: 'CRC(3)' },
+      { plant: 'BSL', item: 'CR III Total Saleable' },
       { plant: 'ISP', item: 'WRMILL' }, { plant: 'ISP', item: 'BARMILL' }, { plant: 'ISP', item: 'USMILL' },
     ],
   },
