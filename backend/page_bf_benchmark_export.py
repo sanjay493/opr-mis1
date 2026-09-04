@@ -39,10 +39,11 @@ _ZEBRA_FILL = PatternFill("solid", fgColor="F8F9FA")
 _THIN = Side(style="thin", color="DADCE0")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
-# BF Productivity and O2 Enrichment read to 2 decimal places; every other
-# param (Working Volume, rates, HBT, etc.) is a whole-number figure — same
-# rule the frontend's fmt() applies (see reports/bf-benchmark/page.js).
-_TWO_DECIMAL_KEYS = {"bf_productivity", "o2_enrichment"}
+# BF Productivity, O2 Enrichment and Production (Million T) read to 2
+# decimal places; every other param (Working Volume, rates, HBT, etc.) is a
+# whole-number figure — same rule the frontend's fmt() applies (see
+# reports/bf-benchmark/page.js).
+_TWO_DECIMAL_KEYS = {"bf_productivity", "o2_enrichment", "production"}
 
 
 def _fmt(v, key=None):

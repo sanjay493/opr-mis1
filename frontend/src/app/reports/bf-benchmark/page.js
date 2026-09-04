@@ -15,9 +15,10 @@ const FY_START_YEARS = Array.from(
 
 function fyLabelOf(y) { return `${y}-${String((y + 1) % 100).padStart(2, '0')}`; }
 
-// BF Productivity and O2 Enrichment read to 2 decimal places; every other
-// param (Working Volume, rates, HBT, etc.) is a whole-number figure.
-const TWO_DECIMAL_KEYS = new Set(['bf_productivity', 'o2_enrichment']);
+// BF Productivity, O2 Enrichment and Production (Million T — too small a
+// scale for a whole number to mean anything) read to 2 decimal places;
+// every other param (Working Volume, rates, HBT, etc.) is a whole number.
+const TWO_DECIMAL_KEYS = new Set(['bf_productivity', 'o2_enrichment', 'production']);
 
 function fmt(v, key) {
   if (v === null || v === undefined || v === '') return '—';
@@ -79,11 +80,18 @@ function bestValueFor(paramKey, better, periods) {
   return best;
 }
 
+// Three size classes by Working Volume, not four arbitrary bands — chosen
+// against SAIL's own fleet (16 furnaces, 1204-3551 m³): the 1650 cut sits in
+// the clear gap between DSP BF-4/RSP's smaller furnaces (<=1539) and BSL's
+// (>=1758); the 2800 cut sits in the much wider gap between BSP BF-7/BSL
+// (<=2250) and the 3 flagship furnaces (>=3445) — which is exactly
+// bf_benchmark_registry.SAIL_BFS, so "Large" here reproduces this feature's
+// original 3-furnace comparison as one selectable class rather than a
+// separate concept.
 const WV_SLABS = [
-  { key: 'lt1500', label: '< 1500 m³', min: -Infinity, max: 1500 },
-  { key: '1500-2500', label: '1500–2500 m³', min: 1500, max: 2500 },
-  { key: '2500-3500', label: '2500–3500 m³', min: 2500, max: 3500 },
-  { key: 'gt3500', label: '> 3500 m³', min: 3500, max: Infinity },
+  { key: 'small', label: 'Small (< 1650 m³)', color: '#188038', min: -Infinity, max: 1650 },
+  { key: 'medium', label: 'Medium (1650–2800 m³)', color: '#1a73e8', min: 1650, max: 2800 },
+  { key: 'large', label: 'Large (≥ 2800 m³)', color: '#7b1fa2', min: 2800, max: Infinity },
 ];
 
 const th = {
@@ -98,11 +106,16 @@ const tdBestExt = { ...tdBest, backgroundColor: '#d9f0df' };
 const tdLabel = { ...td, textAlign: 'left', fontWeight: 600 };
 const tdUnit = { ...td, textAlign: 'left', color: '#5f6368' };
 
+// Which WV_SLABS bucket a Working Volume falls into, or null if unknown.
+function slabFor(wv) {
+  if (wv == null) return null;
+  return WV_SLABS.find((s) => wv >= s.min && wv < s.max) || null;
+}
+
 export default function BFBenchmarkReportPage() {
   const [params, setParams] = useState([]);
-  const [sailBfsAll, setSailBfsAll] = useState([]);
+  const [sailBfsAll, setSailBfsAll] = useState([]); // every SAIL furnace, each with working_volume_m3
   const [externalBfsAll, setExternalBfsAll] = useState([]);
-  const [sailWorkingVolumes, setSailWorkingVolumes] = useState({}); // "PLANT:UNIT" -> m3
 
   const [selectedSailKeys, setSelectedSailKeys] = useState([]);
   const [selectedExtIds, setSelectedExtIds] = useState([]);
@@ -126,33 +139,12 @@ export default function BFBenchmarkReportPage() {
       const pData = await pRes.json();
       const bData = await bRes.json();
       setParams(pData.params || []);
-      setSailBfsAll(pData.sail_bfs || []);
+      setSailBfsAll(pData.sail_bfs_all || []);
       setExternalBfsAll(bData.external_bfs || []);
+      // Default selection: the 3 flagship furnaces this feature originally
+      // shipped with (SAIL's "Large" class) — the size buttons below swap
+      // this out for Medium/Small, or any furnace can be toggled by hand.
       setSelectedSailKeys((pData.sail_bfs || []).map((b) => `${b.plant}:${b.unit}`));
-
-      // Seed SAIL Working Volumes (a static spec, not period-dependent) via
-      // a lightweight one-month compare, purely to power the slab filter
-      // below before the user has run a real comparison yet.
-      if ((pData.sail_bfs || []).length > 0) {
-        const thisMonth = new Date().toISOString().slice(0, 7);
-        const wvRes = await fetch(`${API}/api/bf-benchmark/compare`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            sail_bf_keys: pData.sail_bfs.map((b) => `${b.plant}:${b.unit}`),
-            months: [thisMonth],
-          }),
-        });
-        if (wvRes.ok) {
-          const wvData = await wvRes.json();
-          const map = {};
-          for (const period of wvData.periods || []) {
-            for (const r of period.rows) map[r.bf_key] = r.values.working_volume_m3;
-          }
-          setSailWorkingVolumes(map);
-        }
-      }
     } catch (err) {
       setError(err.message);
     }
@@ -167,7 +159,7 @@ export default function BFBenchmarkReportPage() {
   const applySlab = (slab) => {
     if (activeSlab === slab.key) { setActiveSlab(null); return; }
     const inSlab = (wv) => wv != null && wv >= slab.min && wv < slab.max;
-    setSelectedSailKeys(sailBfsAll.filter((b) => inSlab(sailWorkingVolumes[`${b.plant}:${b.unit}`])).map((b) => `${b.plant}:${b.unit}`));
+    setSelectedSailKeys(sailBfsAll.filter((b) => inSlab(b.working_volume_m3)).map((b) => `${b.plant}:${b.unit}`));
     setSelectedExtIds(externalBfsAll.filter((b) => inSlab(b.working_volume_m3)).map((b) => b.id));
     setActiveSlab(slab.key);
   };
@@ -250,18 +242,22 @@ export default function BFBenchmarkReportPage() {
         maxWidth: '1400px', margin: '0 auto', padding: '32px 20px',
         height: 'calc(100vh - 72px)', overflowY: 'auto',
       }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Large BF Benchmarking</h1>
+        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>BF Benchmarking</h1>
         <p style={{ color: '#5f6368', marginBottom: '20px' }}>
-          Compare BSP BF-8, RSP BF-5, ISP BF-5 against non-SAIL large BFs, grouped Company → Location → Furnace.
+          Compare any of SAIL&apos;s 16 blast furnaces against non-SAIL BFs, grouped Company → Location → Furnace.
+          Use the Working Volume buttons to jump straight to all Large, Medium or Small furnaces on both sides —
+          SAIL&apos;s 3 flagship furnaces (BSP BF-8, RSP BF-5, ISP BF-5) are the Large class.
           Non-SAIL BFs show data for the same Financial Year(s) selected below (blank if that BF hasn&apos;t entered that year).
-          Add or edit non-SAIL BF data at <a href="/data-entry/bf-benchmark">BF Benchmarking Entry</a>.
+          Add or edit furnace Working Volume / non-SAIL BF data at <a href="/data-entry/bf-benchmark">BF Benchmarking Entry</a>.
         </p>
 
         {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
 
         <div style={{ border: '1px solid #dadce0', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '9pt', color: '#5f6368', marginBottom: '6px' }}>Select by Working Volume</div>
+            <div style={{ fontSize: '9pt', color: '#5f6368', marginBottom: '6px' }}>
+              Select by Working Volume — replaces the furnace selection below with every SAIL and non-SAIL furnace in that size class
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {WV_SLABS.map((slab) => {
                 const on = activeSlab === slab.key;
@@ -269,8 +265,8 @@ export default function BFBenchmarkReportPage() {
                   <button key={slab.key} onClick={() => applySlab(slab)}
                     style={{
                       padding: '5px 12px', fontSize: '9.5pt', fontWeight: 600, borderRadius: '14px', cursor: 'pointer',
-                      border: on ? '1px solid #7b1fa2' : '1px solid #dadce0',
-                      backgroundColor: on ? '#7b1fa2' : '#fff', color: on ? '#fff' : '#202124',
+                      border: `1px solid ${slab.color}`,
+                      backgroundColor: on ? slab.color : '#fff', color: on ? '#fff' : slab.color,
                     }}>
                     {slab.label}
                   </button>
@@ -280,12 +276,15 @@ export default function BFBenchmarkReportPage() {
           </div>
 
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '9pt', color: '#5f6368', marginBottom: '6px' }}>SAIL Blast Furnaces</div>
+            <div style={{ fontSize: '9pt', color: '#5f6368', marginBottom: '6px' }}>
+              SAIL Blast Furnaces — all {sailBfsAll.length}, badge shows size class
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {sailBfsAll.map((b) => {
                 const key = `${b.plant}:${b.unit}`;
                 const on = selectedSailKeys.includes(key);
-                const wv = sailWorkingVolumes[key];
+                const wv = b.working_volume_m3;
+                const slab = slabFor(wv);
                 return (
                   <button key={key} onClick={() => toggleSail(key)}
                     style={{
@@ -293,7 +292,16 @@ export default function BFBenchmarkReportPage() {
                       border: on ? '1px solid #f9ab00' : '1px solid #dadce0',
                       backgroundColor: on ? '#f9ab00' : '#fff', color: on ? '#3c2f00' : '#202124',
                     }}>
-                    {b.label}{wv != null ? ` (${fmt(wv)} m³)` : ''}
+                    {b.label}{wv != null ? ` (${fmt(wv)} m³` : ''}
+                    {slab && (
+                      <span style={{
+                        marginLeft: 4, padding: '1px 5px', borderRadius: '8px', fontSize: '8pt',
+                        backgroundColor: on ? 'rgba(0,0,0,0.12)' : slab.color, color: on ? '#3c2f00' : '#fff',
+                      }}>
+                        {slab.key[0].toUpperCase()}
+                      </span>
+                    )}
+                    {wv != null ? ')' : ''}
                   </button>
                 );
               })}

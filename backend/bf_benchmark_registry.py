@@ -24,6 +24,28 @@ SAIL_BFS = [
     {"plant": "ISP", "unit": "BF-5", "label": "ISP BF-5"},
 ]
 
+# Every individual furnace SAIL currently operates (shop/aggregate units
+# like BF_Shop excluded — Working Volume is a per-furnace spec, not a shop
+# total). Wider than SAIL_BFS above, which is only the 3 flagship furnaces
+# this feature's comparison page shows against non-SAIL BFs — this roster
+# instead drives the SAIL BF Meta entry form's Furnace dropdown
+# (api_bf_benchmark.py's /sail-meta endpoints), so Working Volume can be
+# recorded for any SAIL furnace, not just the 3 used in the comparison.
+#
+# A curated list, not derived from techno_data's unit names — plants blow
+# in/blow out furnaces over time (e.g. BSP's BF-4 and BF-6 came back into
+# service after this was first written), so it WILL drift. The entry form's
+# Furnace field also accepts free text for exactly this reason — a furnace
+# missing here doesn't block recording its Working Volume, but update this
+# list too when you notice one, so the dropdown stays useful.
+SAIL_BF_UNITS_BY_PLANT = {
+    "BSP": ["BF-4", "BF-6", "BF-7", "BF-8"],
+    "RSP": ["BF-1", "BF-4", "BF-5"],
+    "DSP": ["BF-2", "BF-3", "BF-4"],
+    "BSL": ["BF-1", "BF-2", "BF-3", "BF-4", "BF-5"],
+    "ISP": ["BF-5"],
+}
+
 # Comparison parameters shown as columns, in display order. `static=True`
 # means the value is a per-BF constant (edited via the BF's registry row /
 # sail-meta, not entered monthly). `key` for non-static params must be a
@@ -49,7 +71,12 @@ SAIL_BFS = [
 # bf_benchmark_registry.compute_fuel_rate).
 BF_BENCHMARK_PARAMS = [
     {"key": "working_volume_m3", "label": "Working Volume", "unit": "m³", "static": True, "better": None},
-    {"key": "production", "label": "Production", "unit": UNIT.T, "static": False, "better": "high"},
+    # Displayed/entered in Million T, not T — non-SAIL BFs only ever
+    # publish (and are entered here as) Million T figures; SAIL's own
+    # techno_data-sourced tonnes are converted at read time to match
+    # (api_bf_benchmark.py's _sail_period_values / _PRODUCTION_SCALE), so
+    # both sides land on the same scale in this comparison table.
+    {"key": "production", "label": "Production", "unit": "Million T", "static": False, "better": "high"},
     # Added backfilling Report_format/Non SAIL BF Performance in 2023-24.pdf
     # — that source reports Avg. Daily Prod directly per non-SAIL BF (an
     # annual total ÷ operating days figure they publish themselves, unlike

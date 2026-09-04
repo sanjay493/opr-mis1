@@ -29,6 +29,12 @@ const cardStyle = {
   backgroundColor: '#ffffff',
 };
 
+// Sentinel Furnace dropdown value that reveals a free-text input — plants
+// blow furnaces in/out of service over time, so SAIL_BF_UNITS_BY_PLANT will
+// drift; this is the escape hatch so a furnace missing from that curated
+// list never blocks recording its Working Volume.
+const CUSTOM_UNIT_OPTION = '__custom__';
+
 function BFInner() {
   const [params, setParams] = useState([]);
   const [sailBfs, setSailBfs] = useState([]);
@@ -37,9 +43,16 @@ function BFInner() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const [sailMeta, setSailMeta] = useState({}); // "PLANT:UNIT" -> working_volume_m3
+  const [sailMetaRows, setSailMetaRows] = useState([]); // [{plant, unit, working_volume_m3, updated_at}]
+  const [sailUnitsByPlant, setSailUnitsByPlant] = useState({});
   const [editingSailKey, setEditingSailKey] = useState(null);
   const [sailWvDraft, setSailWvDraft] = useState('');
+
+  const [showAddSailForm, setShowAddSailForm] = useState(false);
+  const [newSailPlant, setNewSailPlant] = useState('');
+  const [newSailUnit, setNewSailUnit] = useState('');       // dropdown selection, or CUSTOM_UNIT_OPTION
+  const [newSailUnitCustom, setNewSailUnitCustom] = useState(''); // typed name when newSailUnit === CUSTOM_UNIT_OPTION
+  const [newSailWv, setNewSailWv] = useState('');
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -58,17 +71,22 @@ function BFInner() {
     setLoading(true);
     setError('');
     try {
-      const [pRes, bRes] = await Promise.all([
+      const [pRes, bRes, sRes] = await Promise.all([
         fetch(`${API}/api/bf-benchmark/params`, { credentials: 'include' }),
         fetch(`${API}/api/bf-benchmark/external-bfs`, { credentials: 'include' }),
+        fetch(`${API}/api/bf-benchmark/sail-meta`, { credentials: 'include' }),
       ]);
       const pData = await pRes.json();
       const bData = await bRes.json();
+      const sData = await sRes.json();
       if (!pRes.ok) throw new Error(pData.detail || 'Could not load parameters.');
       if (!bRes.ok) throw new Error(bData.detail || 'Could not load non-SAIL BFs.');
+      if (!sRes.ok) throw new Error(sData.detail || 'Could not load SAIL BF meta.');
       setParams(pData.params || []);
       setSailBfs(pData.sail_bfs || []);
       setExternalBfs(bData.external_bfs || []);
+      setSailMetaRows(sData.sail_meta || []);
+      setSailUnitsByPlant(sData.units_by_plant || {});
     } catch (err) {
       setError(err.message);
     } finally {
@@ -78,55 +96,38 @@ function BFInner() {
 
   useEffect(() => { loadRegistry(); }, [loadRegistry]);
 
-  // SAIL Working Volume comes back per-BF via /compare in the report page;
-  // this entry page only writes it, so seed the display from a lightweight
-  // compare call over the current month for the 3 fixed SAIL BFs.
-  useEffect(() => {
-    if (sailBfs.length === 0) return;
-    const thisMonth = new Date().toISOString().slice(0, 7);
-    fetch(`${API}/api/bf-benchmark/compare`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        sail_bf_keys: sailBfs.map((b) => `${b.plant}:${b.unit}`),
-        months: [thisMonth],
-      }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!d || !d.periods || d.periods.length === 0) return;
-        const map = {};
-        for (const row of d.periods[0].rows) {
-          const [plant, unit] = row.bf_key.split(':');
-          map[`${plant}:${unit}`] = row.values.working_volume_m3;
-        }
-        setSailMeta(map);
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sailBfs]);
-
-  const saveSailWv = async (plant, unit) => {
+  const saveSailWv = async (plant, unit, wvOverride) => {
     setError(''); setNotice('');
+    const raw = wvOverride !== undefined ? wvOverride : sailWvDraft;
+    const wv = raw === '' ? null : parseFloat(raw);
     try {
       const res = await fetch(`${API}/api/bf-benchmark/sail-meta`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          plant, unit,
-          working_volume_m3: sailWvDraft === '' ? null : parseFloat(sailWvDraft),
-        }),
+        body: JSON.stringify({ plant, unit, working_volume_m3: wv }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Could not save Working Volume.');
-      setSailMeta((m) => ({ ...m, [`${plant}:${unit}`]: sailWvDraft === '' ? null : parseFloat(sailWvDraft) }));
+      await loadRegistry();
       setEditingSailKey(null);
-      setNotice('Working Volume saved.');
+      setNotice(`Working Volume saved for ${plant} ${unit}.`);
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const addSailMeta = async () => {
+    if (!newSailPlant) { setError('Select a plant.'); return; }
+    const unit = newSailUnit === CUSTOM_UNIT_OPTION ? newSailUnitCustom.trim() : newSailUnit;
+    if (!unit) { setError(newSailUnit === CUSTOM_UNIT_OPTION ? 'Type the furnace name.' : 'Select a furnace.'); return; }
+    if (sailMetaRows.some((r) => r.plant === newSailPlant && r.unit === unit)) {
+      setError(`${newSailPlant} ${unit} is already listed below — edit it there instead.`);
+      return;
+    }
+    await saveSailWv(newSailPlant, unit, newSailWv);
+    setShowAddSailForm(false);
+    setNewSailPlant(''); setNewSailUnit(''); setNewSailUnitCustom(''); setNewSailWv('');
   };
 
   const addBf = async () => {
@@ -243,7 +244,7 @@ function BFInner() {
         <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Large BF Benchmarking — Data Entry</h1>
         <p style={{ color: '#5f6368', marginBottom: '20px' }}>
           Manage non-SAIL large BFs and their per-FY figures (non-SAIL BFs only publish Financial Year totals,
-          not monthly ones), plus Working Volume for SAIL&apos;s 3 large BFs.
+          not monthly ones), plus Working Volume for any SAIL blast furnace.
           See the comparison at <a href="/reports/bf-benchmark">Large BF Benchmarking</a>.
         </p>
 
@@ -251,17 +252,89 @@ function BFInner() {
         {notice && <p style={{ color: '#188038', marginBottom: '12px' }}>{notice}</p>}
         {loading ? <p>Loading…</p> : (
           <>
-            {/* SAIL BF Working Volumes */}
+            {/* SAIL BF Meta (Working Volume) — every SAIL furnace, not just
+                the 3 flagship ones used in the comparison below. */}
             <div style={cardStyle}>
-              <h3 style={{ marginTop: 0, fontSize: '12pt' }}>SAIL BF Working Volumes</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ marginTop: 0, fontSize: '12pt' }}>SAIL BF Meta — Working Volume</h3>
+                {!showAddSailForm && (
+                  <button className="btn btn-primary" onClick={() => setShowAddSailForm(true)}>+ Add Furnace</button>
+                )}
+              </div>
+              <p style={{ color: '#5f6368', fontSize: '9pt', marginTop: '-6px', marginBottom: '12px' }}>
+                Every furnace here can be selected on the comparison report — Working Volume also groups them into
+                Large / Medium / Small there ({sailBfs.map((b) => b.label).join(', ')} are the Large class).
+              </p>
+              {showAddSailForm && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'flex-end' }}>
+                  <div>
+                    <label style={labelStyle}>Plant</label>
+                    <select
+                      style={selStyle} value={newSailPlant}
+                      onChange={(e) => { setNewSailPlant(e.target.value); setNewSailUnit(''); setNewSailUnitCustom(''); }}
+                    >
+                      <option value="">Select…</option>
+                      {Object.keys(sailUnitsByPlant).map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Furnace</label>
+                    <select
+                      style={selStyle} value={newSailUnit} disabled={!newSailPlant}
+                      onChange={(e) => setNewSailUnit(e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      {(sailUnitsByPlant[newSailPlant] || [])
+                        .filter((u) => !sailMetaRows.some((r) => r.plant === newSailPlant && r.unit === u))
+                        .map((u) => <option key={u} value={u}>{u}</option>)}
+                      <option value={CUSTOM_UNIT_OPTION}>Other — type furnace name…</option>
+                    </select>
+                  </div>
+                  {newSailUnit === CUSTOM_UNIT_OPTION && (
+                    <div>
+                      <label style={labelStyle}>Furnace Name</label>
+                      <input
+                        style={{ ...inputStyle, width: '140px' }}
+                        value={newSailUnitCustom} onChange={(e) => setNewSailUnitCustom(e.target.value)}
+                        placeholder="e.g. BF-6" autoFocus
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label style={labelStyle}>Working Volume (m³)</label>
+                    <input
+                      type="number" style={{ ...inputStyle, width: '140px' }}
+                      value={newSailWv} onChange={(e) => setNewSailWv(e.target.value)} placeholder="m³"
+                    />
+                  </div>
+                  <button className="btn btn-primary" onClick={addSailMeta}>Save</button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowAddSailForm(false);
+                      setNewSailPlant(''); setNewSailUnit(''); setNewSailUnitCustom(''); setNewSailWv('');
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
+                    <th style={{ padding: '6px 8px' }}>Plant</th>
+                    <th style={{ padding: '6px 8px' }}>Furnace</th>
+                    <th style={{ padding: '6px 8px' }}>Working Volume</th>
+                    <th style={{ padding: '6px 8px' }}></th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {sailBfs.map((b) => {
-                    const key = `${b.plant}:${b.unit}`;
-                    const val = sailMeta[key];
+                  {sailMetaRows.map((r) => {
+                    const key = `${r.plant}:${r.unit}`;
                     return (
                       <tr key={key} style={{ borderBottom: '1px solid #e8eaed' }}>
-                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{b.label}</td>
+                        <td style={{ padding: '6px 8px' }}>{r.plant}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{r.unit}</td>
                         <td style={{ padding: '6px 8px' }}>
                           {editingSailKey === key ? (
                             <input
@@ -270,22 +343,25 @@ function BFInner() {
                               placeholder="m³"
                             />
                           ) : (
-                            <span>{val ?? '—'} {val != null ? 'm³' : ''}</span>
+                            <span>{r.working_volume_m3 ?? '—'} {r.working_volume_m3 != null ? 'm³' : ''}</span>
                           )}
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           {editingSailKey === key ? (
                             <>
-                              <button className="btn btn-primary" style={{ marginRight: '6px' }} onClick={() => saveSailWv(b.plant, b.unit)}>Save</button>
+                              <button className="btn btn-primary" style={{ marginRight: '6px' }} onClick={() => saveSailWv(r.plant, r.unit)}>Save</button>
                               <button className="btn btn-secondary" onClick={() => setEditingSailKey(null)}>Cancel</button>
                             </>
                           ) : (
-                            <button className="btn btn-secondary" onClick={() => { setEditingSailKey(key); setSailWvDraft(val ?? ''); }}>Edit</button>
+                            <button className="btn btn-secondary" onClick={() => { setEditingSailKey(key); setSailWvDraft(r.working_volume_m3 ?? ''); }}>Edit</button>
                           )}
                         </td>
                       </tr>
                     );
                   })}
+                  {sailMetaRows.length === 0 && (
+                    <tr><td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>No SAIL BF meta recorded yet.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>

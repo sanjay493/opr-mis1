@@ -615,8 +615,9 @@ def init_db():
         )
     """)
 
-    # 18. Large BF Benchmarking — static Working Volume for SAIL's 3 fixed
-    # large BFs (BSP BF-8, RSP BF-5, ISP BF-5); their monthly operating data
+    # 18. Static Working Volume per SAIL blast furnace (bf_benchmark_registry.
+    # SAIL_BF_UNITS_BY_PLANT — the whole fleet, not just the 3 flagship BFs
+    # the Large BF Benchmark comparison itself uses); monthly operating data
     # already lives in techno_data, only Working Volume (an engineering spec
     # that rarely changes) is tracked here.
     cursor.execute("""

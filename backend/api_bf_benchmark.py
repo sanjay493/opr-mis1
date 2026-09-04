@@ -1,7 +1,10 @@
 """
-Large BF Benchmarking API — compares SAIL's 3 large blast furnaces (BSP
-BF-8, RSP BF-5, ISP BF-5) against admin-added non-SAIL large BFs, on the
-parameters in bf_benchmark_registry.BF_BENCHMARK_PARAMS.
+BF Benchmarking API — compares any SAIL blast furnace (all of them, in
+bf_benchmark_registry.SAIL_BF_UNITS_BY_PLANT — the report page groups them
+Large/Medium/Small by Working Volume) against admin-added non-SAIL BFs, on
+the parameters in bf_benchmark_registry.BF_BENCHMARK_PARAMS. SAIL_BFS (BSP
+BF-8, RSP BF-5, ISP BF-5) is kept only as this feature's original default
+selection, not a restriction — see _ALL_SAIL_BF_BY_KEY below.
 
 Endpoints:
   GET    /api/bf-benchmark/params                       – param + SAIL BF registry
@@ -10,7 +13,8 @@ Endpoints:
   PATCH  /api/bf-benchmark/external-bfs/{id}              – edit name/company/Working Volume/active
   GET    /api/bf-benchmark/external-bfs/{id}/entry        – fetch one FY's entered data
   POST   /api/bf-benchmark/external-bfs/{id}/entry        – save one FY's entered data (merge)
-  PATCH  /api/bf-benchmark/sail-meta                      – set Working Volume for a SAIL BF
+  GET    /api/bf-benchmark/sail-meta                       – list Working Volume for every recorded SAIL BF
+  PATCH  /api/bf-benchmark/sail-meta                       – set/insert Working Volume for a SAIL BF (any furnace in SAIL_BF_UNITS_BY_PLANT)
   POST   /api/bf-benchmark/compare                        – SAIL FY/month periods + non-SAIL's own latest FY
   POST   /api/bf-benchmark/excel                          – comparison table as .xlsx
   POST   /api/bf-benchmark/pdf                             – comparison table as .pdf
@@ -36,11 +40,30 @@ import db as _db
 import page_bf_benchmark_export as _export
 from page_key_parameters import _COKE_UNITS
 import bf_benchmark_registry as _registry
-from bf_benchmark_registry import BF_BENCHMARK_PARAMS, DYNAMIC_PARAM_KEYS, PARAM_BY_KEY, SAIL_BFS
+from bf_benchmark_registry import (
+    BF_BENCHMARK_PARAMS, DYNAMIC_PARAM_KEYS, PARAM_BY_KEY, SAIL_BFS, SAIL_BF_UNITS_BY_PLANT,
+)
 
 router = APIRouter(prefix="/api/bf-benchmark", tags=["bf-benchmark"])
 
+# Production is compared/displayed in Million T (BF_BENCHMARK_PARAMS' own
+# "production" unit label) — non-SAIL BFs are entered directly in Million T
+# (see EntrySaveRequest usage below / the data-entry page), SAIL's comes
+# from techno_data in actual tonnes and needs converting; see
+# _sail_period_values.
+_PRODUCTION_SCALE = 1_000_000
+
 _SAIL_BF_BY_KEY = {f"{b['plant']}:{b['unit']}": b for b in SAIL_BFS}
+
+# Every SAIL furnace the comparison will accept (not just the 3 SAIL_BFS
+# flagships) — build_compare() validates sail_bf_keys against this, so any
+# furnace in SAIL_BF_UNITS_BY_PLANT can be compared, matching the report
+# page's Large/Medium/Small selector covering the whole fleet.
+_ALL_SAIL_BF_BY_KEY = {
+    f"{plant}:{unit}": {"plant": plant, "unit": unit, "label": f"{plant} {unit}"}
+    for plant, units in SAIL_BF_UNITS_BY_PLANT.items()
+    for unit in units
+}
 
 
 def _now() -> str:
@@ -114,7 +137,28 @@ def _month_label(report_month: str) -> str:
 # ── Registry ──────────────────────────────────────────────────────────────────
 @router.get("/params")
 async def get_params():
-    return {"params": BF_BENCHMARK_PARAMS, "sail_bfs": SAIL_BFS}
+    """`sail_bfs` stays the 3 flagship furnaces (BSP BF-8, RSP BF-5, ISP
+    BF-5) this feature originally shipped with, kept for callers that still
+    want just those. `sail_bfs_all` is every SAIL furnace in
+    SAIL_BF_UNITS_BY_PLANT with its Working Volume attached (one query, no
+    separate /compare round-trip needed just to seed it) — the report
+    page's size-based (Large/Medium/Small) selector is built from this."""
+    conn = _db.connect()
+    cur = conn.cursor()
+    cur.execute("SELECT plant, unit, working_volume_m3 FROM bf_benchmark_sail_meta")
+    wv_by_key = {f"{p}:{u}": wv for p, u, wv in cur.fetchall()}
+    conn.close()
+
+    sail_bfs_all = [
+        {
+            "plant": plant, "unit": unit, "label": f"{plant} {unit}",
+            "working_volume_m3": wv_by_key.get(f"{plant}:{unit}"),
+        }
+        for plant, units in SAIL_BF_UNITS_BY_PLANT.items()
+        for unit in units
+    ]
+    sail_bfs_all.sort(key=lambda b: (b["plant"], b["unit"]))
+    return {"params": BF_BENCHMARK_PARAMS, "sail_bfs": SAIL_BFS, "sail_bfs_all": sail_bfs_all}
 
 
 # ── Non-SAIL BF registry ──────────────────────────────────────────────────────
@@ -246,19 +290,42 @@ async def save_external_entry(bf_id: int, body: EntrySaveRequest):
     return {"status": "ok", "param_data": merged}
 
 
-# ── SAIL BF static Working Volume ────────────────────────────────────────────
+# ── SAIL BF static meta (Working Volume) ─────────────────────────────────────
+# Not limited to the 3 SAIL_BFS the comparison page shows (BSP BF-8, RSP
+# BF-5, ISP BF-5) — this covers every SAIL furnace in SAIL_BF_UNITS_BY_PLANT,
+# so Working Volume can be recorded/kept up to date for the whole fleet even
+# though only the 3 flagship furnaces are used in the Large BF Benchmark
+# comparison itself. Rows for furnaces outside SAIL_BFS simply aren't read
+# by build_compare() above — they're pure reference data until/unless that
+# list is ever widened.
+@router.get("/sail-meta")
+async def list_sail_meta():
+    conn = _db.connect()
+    cur = conn.cursor()
+    cur.execute("SELECT plant, unit, working_volume_m3, updated_at FROM bf_benchmark_sail_meta ORDER BY plant, unit")
+    rows = [
+        {"plant": p, "unit": u, "working_volume_m3": wv, "updated_at": ts}
+        for p, u, wv, ts in cur.fetchall()
+    ]
+    conn.close()
+    return {"sail_meta": rows, "units_by_plant": SAIL_BF_UNITS_BY_PLANT}
+
+
 @router.patch("/sail-meta")
 async def set_sail_meta(body: SailMetaRequest):
-    key = f"{body.plant.upper()}:{body.unit}"
-    if key not in _SAIL_BF_BY_KEY:
-        raise HTTPException(400, f"Unknown SAIL BF: {body.plant}/{body.unit}")
+    plant = body.plant.upper().strip()
+    unit = body.unit.strip()
+    if plant not in SAIL_BF_UNITS_BY_PLANT:
+        raise HTTPException(400, f"Unknown plant: {body.plant}. Expected one of {sorted(SAIL_BF_UNITS_BY_PLANT)}")
+    if not unit:
+        raise HTTPException(400, "unit is required")
     conn = _db.connect()
     cur = conn.cursor()
     now = _now()
     cur.execute(
         "INSERT INTO bf_benchmark_sail_meta (plant, unit, working_volume_m3, updated_at) VALUES (?, ?, ?, ?) "
         "ON CONFLICT(plant, unit) DO UPDATE SET working_volume_m3=excluded.working_volume_m3, updated_at=excluded.updated_at",
-        (body.plant.upper(), body.unit, body.working_volume_m3, now),
+        (plant, unit, body.working_volume_m3, now),
     )
     conn.commit()
     conn.close()
@@ -322,6 +389,13 @@ def _sail_period_values(plant: str, unit: str, report_month: str, period: str) -
                 except (TypeError, ValueError):
                     pass
     out["fuel_rate"] = _registry.compute_fuel_rate(out)
+    # techno_data stores Production in actual tonnes; the comparison table
+    # (and non-SAIL BFs' own entries, see _external_bf_values below) display
+    # it in Million T. Scaled only here, at the SAIL-data read boundary, so
+    # every other reader of techno_data's raw "production" key (production
+    # reports, page_techno.py, etc.) is unaffected.
+    if out.get("production") is not None:
+        out["production"] = out["production"] / _PRODUCTION_SCALE
     return out
 
 
@@ -330,7 +404,12 @@ def _external_bf_values(bf_id: int, fy_label: str) -> "tuple[bool, Dict[str, Opt
     non-SAIL BF entered for this exact FY, no averaging (nothing to average
     across). has_data is False when this BF simply never entered anything
     for this particular FY (distinct from having entered it with some
-    params left blank)."""
+    params left blank).
+
+    No Million T conversion here (unlike _sail_period_values' "production"
+    scaling) — non-SAIL BFs are entered directly in Million T (see
+    dynamicParams in the data-entry page), matching how these companies
+    themselves publish figures, so the stored value already needs none."""
     conn = _db.connect()
     cur = conn.cursor()
     cur.execute(
@@ -370,9 +449,9 @@ def build_compare(body: CompareRequest) -> Dict:
 
     sail_bfs = []
     for key in body.sail_bf_keys:
-        if key not in _SAIL_BF_BY_KEY:
+        if key not in _ALL_SAIL_BF_BY_KEY:
             raise HTTPException(400, f"Unknown SAIL BF: {key}")
-        sail_bfs.append(_SAIL_BF_BY_KEY[key])
+        sail_bfs.append(_ALL_SAIL_BF_BY_KEY[key])
     sail_wv = _sail_working_volumes() if sail_bfs else {}
 
     ext_meta = {}
