@@ -14,7 +14,7 @@
 
   "pages": {
     "3":    { "table": { "th": 7.5, "td": 10 },  "marginTop": 7, "marginBottom": 5, "marginLR": 12 },
-    "4":    { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 5,  "marginBottom": 3, "marginLR": 7 },
+    "4":    { "table": { "th": 8.2, "td": 8.5 }, "marginTop": 5,  "marginBottom": 3, "marginLR": 7 },
     "5-6":  { "table": { "th": 8.5, "td": 8.5 }, "marginTop": 7,  "marginBottom": 5, "marginLR": 7 },
     "7-13": { "marginTop": 7, "marginBottom": 5, "marginLR": 2 },
     "17":   { "table": { "th": 10, "td": 10 }, "marginTop": 0, "marginBottom": 0, "marginLR": 3, "fitToPage": true, "tdPaddingV": 5.0, "lineHeight": 1.0 },

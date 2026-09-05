@@ -30,10 +30,16 @@ _UNIT = "Coal_Consumption"
 # convention: closed FYs shade light-to-full gold, current-FY figure is a
 # different color since it's not a closed actual). Target (a plan, not an
 # actual) gets its own neutral gray so it doesn't read as a 4th closed FY.
+# Month/YTD are light tints (not the medium blue/green they used to be) —
+# see _import_pct_bar_svg's docstring: a medium fill's auto-contrast WHITE
+# label is invisible wherever it overflows above a short bar into this
+# chart's white background, so these two also pass a fixed dark
+# _PCT_BAR_DARK_TEXT instead of relying on contrast-from-fill.
 _PCT_BAR_FY_COLORS = ["#FFE699", "#FFD966", "#FFC000"]
 _PCT_BAR_TARGET_COLOR = "#94A3B8"
-_PCT_BAR_MONTH_COLOR = "#4472C4"
-_PCT_BAR_YTD_COLOR = "#70AD47"
+_PCT_BAR_MONTH_COLOR = "#BDD7EE"
+_PCT_BAR_YTD_COLOR = "#C6E0B4"
+_PCT_BAR_DARK_TEXT = "#0f172a"
 
 # (label, key) — column order matches the sheet/PDF left-to-right.
 QTY_COLS = [
@@ -143,10 +149,18 @@ def _import_pct_bar_svg(bars: list, title: str, vw: int = 220, vh: int = 150) ->
     """One mini bar chart: 6 bars (3 closed FYs, FY target, report month,
     Apr-report month YTD), half-circle-top bars matching
     page_special_steel_trend's visual language, value labeled inside each
-    bar as "NN.N%", x-axis label below. bars: [(label, pct_or_None, color), ...]"""
+    bar as "NN.N%", x-axis label below. bars: [(label, pct_or_None, color), ...]
+    — a 4th element per bar (text_color) overrides the value label's color
+    for just that bar; omitted/absent falls back to _contrast_text(color)
+    (same override pattern as page_special_steel_trend._bar_group_svg's
+    pct_label_color). Needed for the month/YTD bars: their fill is a
+    medium blue/green whose auto-contrast text is WHITE, which is
+    invisible wherever the label overflows above a short bar into this
+    chart's white background — those two callers pass a fixed dark
+    text_color instead of relying on contrast-from-fill."""
     ml, mr, mt, mb = 8, 6, 16, 20
     cw, ch = vw - ml - mr, vh - mt - mb
-    vals = [v for _, v, _ in bars if v is not None]
+    vals = [b[1] for b in bars if b[1] is not None]
     yhi = max((max(vals) * 1.3 if vals else 10.0), 10.0)
 
     n = len(bars)
@@ -161,7 +175,9 @@ def _import_pct_bar_svg(bars: list, title: str, vw: int = 220, vh: int = 150) ->
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
 
-    for i, (label, val, color) in enumerate(bars):
+    for i, bar in enumerate(bars):
+        label, val, color = bar[0], bar[1], bar[2]
+        text_color = bar[3] if len(bar) > 3 else None
         cx = ml + i * slot_w + slot_w / 2
         if val is None:
             by, bh = mt + ch - 3, 3
@@ -174,7 +190,7 @@ def _import_pct_bar_svg(bars: list, title: str, vw: int = 220, vh: int = 150) ->
             by = mt + ch - bh
             path = _rounded_bar_path(cx - bar_w / 2, by, bar_w, bh, bar_w / 2)
             lines.append(f'<path d="{path}" fill="{color}"/>')
-            fill = _contrast_text(color)
+            fill = text_color or _contrast_text(color)
             ty = by + bh / 2 + 3.4
             lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" font-size="9.5" '
                          f'font-weight="bold" font-family="Arial,sans-serif" fill="{fill}">{val:.1f}%</text>')
@@ -221,18 +237,32 @@ def generate_coal_consumption(report_month: str) -> dict:
             bars = [(fy[2:], _fy_end_actual_pct(fy_rows, fy), _PCT_BAR_FY_COLORS[i])
                     for i, fy in enumerate(closed_fys)]
             bars.append((f"{cur_fy[2:]} Tgt", target_pcts.get(plant), _PCT_BAR_TARGET_COLOR))
-            bars.append((_month_label(report_month), month_row.get("imported_total_pct"), _PCT_BAR_MONTH_COLOR))
+            bars.append((_month_label(report_month), month_row.get("imported_total_pct"),
+                         _PCT_BAR_MONTH_COLOR, _PCT_BAR_DARK_TEXT))
             ytd_pct = month_row.get("imported_total_pct") if is_april else till_row.get("imported_total_pct")
-            bars.append((_till_month_label(report_month), ytd_pct, _PCT_BAR_YTD_COLOR))
+            bars.append((_till_month_label(report_month), ytd_pct,
+                         _PCT_BAR_YTD_COLOR, _PCT_BAR_DARK_TEXT))
             import_pct_charts.append({"plant": plant, "svg": _import_pct_bar_svg(bars, plant)})
     finally:
         conn.close()
 
+    month_lbl = _month_label(report_month)
+    till_lbl = month_lbl if is_april else _till_month_label(report_month)
     return {
         "type": "coal_consumption",
-        "title": f"Details of Coking Coal Consumption, Blend and Stocks - Consumption ({_month_label(report_month)})",
+        "title": f"Details of Coking Coal Consumption, Blend and Stocks - Consumption ({month_lbl})",
         "qty_cols": QTY_COLS,
         "pct_cols": PCT_COLS,
         "groups": groups,
         "import_pct_charts": import_pct_charts,
+        # Section (C) heading — "last 3 FY / FY Target / Month / Apr-Month"
+        # spelled out with the actual selected report_month rather than the
+        # literal words "Month"/"Apr-Month", so it reads correctly for
+        # whichever month the user picked (matches the bars' own x-axis
+        # labels, which already use these same _month_label/_till_month_label
+        # helpers).
+        "import_chart_heading": (
+            f"(C) % Imported Coking Coal in Blend — Plant Wise "
+            f"(last 3 FY / FY Target / {month_lbl} / {till_lbl})"
+        ),
     }

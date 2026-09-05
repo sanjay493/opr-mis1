@@ -1,0 +1,43 @@
+        <div class="ssd-wrap">
+          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;color:rgb(0,0,255);">{{ page.title }}</div>
+          <div class="ssd-legend">
+            <span><i style="background:#B4C7E7;"></i>Finished (Regular)</span>
+            <span><i style="background:#4472C4;"></i>Finished (Special)</span>
+            <span><i style="background:#F8CBAD;"></i>Semis (Regular)</span>
+            <span><i style="background:#ED7D31;"></i>Semis (Special)</span>
+          </div>
+          <table class="ssd-table">
+            <colgroup>
+              <col class="ssd-col-lbl"/><col/><col/><col/>
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Plant</th>
+                <th>Annual ABP Plan {{ page.fy_label }}</th>
+                <th>{{ page.month_label }} (Actual)</th>
+                <th>{{ page.cum_label }} (Actual)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in page.rows %}
+              <tr class="{{ 'ssd-sail-row' if row.label == 'SAIL' else '' }}">
+                <td class="ssd-lbl">{{ row.label }}</td>
+                {% for cell in [row.plan, row.month, row.ytd] %}
+                <td class="ssd-cell">
+                  <div class="ssd-cell-inner">
+                    <div class="ssd-donut">{{ cell.svg | safe }}</div>
+                    <div class="ssd-cell-txt">
+                      <div>{{ cell.fin_txt }}</div>
+                      <div>{{ cell.semis_txt }}</div>
+                      <div class="ssd-special-txt">{{ cell.spl_fin_txt }}</div>
+                      {% if cell.spl_semis_txt %}<div class="ssd-special-txt">{{ cell.spl_semis_txt }}</div>{% endif %}
+                    </div>
+                  </div>
+                </td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <div class="ssd-note">Note: Quantities in Tonnes. Ring shading = Special Steel's share within Finished/Semis (same color, more intense for the Special-Steel portion). For the Month and {{ page.cum_label }} (Actual) columns, Saleable Steel figures are Production data while Special Steel figures are Despatch data — different physical flows for the same plant; the Annual ABP Plan column uses target/plan figures for both, with no Finished/Semis split available for its Special Steel target, so its ring shows plain Finished/Semis only.</div>
+        </div>

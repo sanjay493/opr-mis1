@@ -51,13 +51,13 @@
                     {% for row in page.rows %}
                     <tr class="{% if row.is_first_in_group %}group-first {% endif %}{% if row.plant == 'SAIL' %}sail-row{% elif row.plant == '5 Plants' %}fp-row{% endif %}">
                         {% if row.is_conversion %}
-                        <td colspan="3" class="label-cell"
+                        <td colspan="3" class="label-cell page4-col1-label"
                             style="font-weight: 700; font-size: 7.5pt; vertical-align: middle;
                                    padding: 1.8px 2px 1.8px 4px; font-family: inherit;">
                             Conversion
                         </td>
                         {% elif row.is_sail_incl_conv %}
-                        <td colspan="2" class="label-cell"
+                        <td colspan="2" class="label-cell page4-col1-label"
                             style="font-weight: 700; font-size: 7.5pt; vertical-align: middle;
                                    padding: 1.8px 2px 1.8px 4px; font-family: inherit;">
                             SAIL incl. conversion

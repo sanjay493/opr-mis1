@@ -376,7 +376,7 @@
            rule so "Receipt, Consumption & Stocks of Coking Coal" (the
            other .coal-table page) is unaffected. */
         .coal-consumption-table th, .coal-consumption-table td {
-            padding: 2.5px 5px;
+            padding: 3.6px 5px;
         }
         /* Page-level top/bottom margin — default .page padding (3mm) plus
            the 6px table padding above used to comfortably fill this
@@ -1103,7 +1103,7 @@
            supposed to show it — box-shadow draws outside the collapsed
            border model entirely, so it can't lose that fight. */
         .page4-table { table-layout: fixed; width: 100%; box-shadow: 0 0 0 1px {{ colors.border_black }}; }
-        .page4-table th { font-size: 8.1pt; padding: 1.8px 2px; line-height: 1.05; }
+        .page4-table th { font-size: 8.1pt; padding: 1.8px 2px; line-height: 1.05; font-family: 'Roboto', sans-serif !important; }
         .page4-table td { font-size: 8.2pt; padding: 1.8px 2px; line-height: 1.05; }
         .page4-table th, .page4-table td { color: {{ colors.text_black }} !important; }
         .page4-table col.c-items    { width:  8%; }
@@ -1158,6 +1158,26 @@
         .page4-table td.item-group-cell {
             border-right:  1px solid {{ colors.border_black }} !important;
             border-bottom: 1px solid {{ colors.border_black }} !important;
+        }
+        /* 1st column ("Items", plus the "Conversion"/"SAIL incl.
+           conversion" rows that replace it) — Roboto, 0.3pt smaller than
+           the header row's own 8.2pt (see layout_config.json's page "4"
+           entry) so both read as a matched pair. Needs to beat both the
+           template's own inline font-size (7.5pt on the two labeled rows)
+           and layout_config's .pg-4 td rule (8.5pt !important) — a class
+           selector this specific outranks .pg-4 td regardless of source
+           order, since both are !important and specificity (not order)
+           breaks the tie between two !important rules. page4-col1-label
+           is added in page4_table.html to the "Conversion"/"SAIL incl.
+           conversion" cells specifically so this doesn't have to fall back
+           to a fragile :first-child selector — those rows have no
+           item-group-cell before them (it's an earlier row's rowspan), so
+           :first-child would land on the Plant column instead on any
+           row where it's not itself group-first. */
+        .page4-table td.item-group-cell,
+        .page4-table td.page4-col1-label {
+            font-size: 8.2pt !important;
+            font-family: 'Roboto', sans-serif !important;
         }
 
         /* Annual Capacity column — slightly more intense than the shared
@@ -1608,9 +1628,9 @@
            little off every row's height reclaims well over a row's worth
            across the whole table. #}
         .segwise-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; font-size: 9.5pt; }
-        .segwise-table th { background-color: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 1.5px 3px; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 9.5pt; line-height: 1.15; font-weight: 600; }
+        .segwise-table th { background-color: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 2.1px 3px; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 9.5pt; line-height: 1.15; font-weight: 600; }
         .segwise-table th.lbl-th { text-align: left; }
-        .segwise-table td { padding: 0.5px 3px; border: 1px solid {{ colors.border_light }}; line-height: 1.15; }
+        .segwise-table td { padding: 1.2px 3px; border: 1px solid {{ colors.border_light }}; line-height: 1.15; }
         .segwise-table td.lbl-td { text-align: left; }
         .segwise-table td.num-td { text-align: right; }
         .segwise-table td.sw-group-cell { background-color: {{ colors.misc_white }}; color: {{ colors.text_black }}; font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; writing-mode: vertical-rl; transform: rotate(180deg); }
@@ -1634,6 +1654,25 @@
            change without a group change means that row has no Group <td>
            of its own to apply the border to. */
         .segwise-table tr.sw-plant-start > td { border-top: 2px solid {{ colors.border_darkred }}; }
+
+        /* Special Steel — Saleable Steel Composition & Value-Added Share
+           (page 24, page_special_steel_donut.py) — 7 entities x 3 periods
+           of nested-donut cells. Kept compact (small donut + 3 text lines)
+           since 21 cells share one portrait page. */
+        .ssd-wrap { padding: 2px 6px; font-family: 'Arial Narrow', Arial, sans-serif; }
+        .ssd-legend { display: flex; justify-content: center; gap: 14px; font-size: 7pt; margin-bottom: 4px; }
+        .ssd-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 1.5px; margin-right: 3px; vertical-align: middle; }
+        .ssd-table { width: 100%; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; table-layout: fixed; }
+        .ssd-table th { background: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 3px 2px; border: 1px solid {{ colors.border_dark }}; font-size: 7.6pt; text-align: center; }
+        .ssd-col-lbl { width: 10%; }
+        .ssd-table td.ssd-lbl { font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 8pt; }
+        .ssd-table tr.ssd-sail-row td.ssd-lbl { background: {{ colors.highlight_achieved_band_bg }}; }
+        .ssd-table td.ssd-cell { border: 1px solid {{ colors.border_medium }}; padding: 2px 3px; vertical-align: middle; }
+        .ssd-cell-inner { display: flex; align-items: center; gap: 4px; }
+        .ssd-donut { width: 34%; min-width: 44px; flex-shrink: 0; }
+        .ssd-cell-txt { font-size: 6.3pt; line-height: 1.22; flex: 1; }
+        .ssd-special-txt { color: #166534; font-weight: 700; }
+        .ssd-note { font-size: 6.6pt; margin-top: 4px; color: {{ colors.text_secondary }}; }
 
         /* ── Page-specific font overrides ───────────────────────────────── */
         .pg-7, .pg-7 th, .pg-7 td {
@@ -1700,7 +1739,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type == 'special_steel' %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('special_steel', 'special_steel_donut') %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
@@ -1719,6 +1758,7 @@
         {% elif page.type == 'catwise_saleable' %}{% include 'catwise_saleable.html' %}
         {% elif page.type == 'segment_wise' %}{% include 'segment_wise.html' %}
         {% elif page.type == 'special_steel' %}{% include 'special_steel.html' %}
+        {% elif page.type == 'special_steel_donut' %}{% include 'special_steel_donut.html' %}
         {% elif page.type == 'special_steel_trend' %}{% include 'special_steel_trend.html' %}
         {% elif page.type == 'special_steel_physical' %}{% include 'special_steel_physical.html' %}
         {% elif page.type == 'opening_stock' %}{% include 'opening_stock.html' %}

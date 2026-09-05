@@ -28,6 +28,7 @@ from page_prod_by_process import generate_prod_by_process
 from page_catwise_saleable import generate_catwise_saleable
 from page_segment_wise import generate_segment_wise
 from page_special_steel import generate_special_steel_plant, generate_special_steel_sail, _ssps_special_steel
+from page_special_steel_donut import generate_special_steel_donut
 from page_special_steel_trend import generate_special_steel_trend
 import page_special_steel_physical
 from page_special_steel_physical import generate_special_steel_physical
@@ -898,11 +899,22 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 ss = generate_special_steel_plant(month, _SPECIAL_PLANTS[pg])
                 page.update(ss)
                 page["type"] = "special_steel"
+                if pg == 23:
+                    # SAIL consolidated table, appended below ISP's own table
+                    # on this same physical page — see special_steel.html's
+                    # page.sail_section block. Frees up page 24 (below) for
+                    # the Special Steel donut-grid instead. month_label/
+                    # cply_label aren't part of generate_special_steel_sail's
+                    # own return dict (the old page==24 branch always set
+                    # them at the page level instead, same _ml/_cl as above)
+                    # — set directly on the nested dict so the template's
+                    # `ss.month_label`/`ss.cply_label` resolve.
+                    page["sail_section"] = generate_special_steel_sail(month)
+                    page["sail_section"]["month_label"] = _ml
+                    page["sail_section"]["cply_label"] = _cl
             if pg == 24:
-                page["month_label"] = _ml
-                page["cply_label"]  = _cl
-                page.update(generate_special_steel_sail(month))
-                page["type"] = "special_steel"
+                page.update(generate_special_steel_donut(month))
+                page["type"] = "special_steel_donut"
             if pg == TREND_PAGE_ID:
                 page.update(generate_special_steel_trend(month))
             if pg == SS_PHYSICAL_PAGE_ID:
@@ -1186,9 +1198,13 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg in _SP:
             ss = generate_special_steel_plant(request.month, _SP[pg])
             p.update(ss); p["type"] = "special_steel"
+            if pg == 23:
+                p["sail_section"] = generate_special_steel_sail(request.month)
+                p["sail_section"]["month_label"] = p["month_label"]
+                p["sail_section"]["cply_label"] = p["cply_label"]
         if pg == 24:
-            p.update(generate_special_steel_sail(request.month))
-            p["type"] = "special_steel"
+            p.update(generate_special_steel_donut(request.month))
+            p["type"] = "special_steel_donut"
         if pg == TREND_PAGE_ID:
             p.update(generate_special_steel_trend(request.month))
             p["type"] = "special_steel_trend"

@@ -60,7 +60,7 @@
                 </tbody>
             </table>
 
-            <div class="coal-c-heading">(C) % Imported Coking Coal in Blend — Plant Wise (last 3 FY / FY Target / Month / Apr-Month)</div>
+            <div class="coal-c-heading">{{ page.import_chart_heading }}</div>
             <div class="coal-import-chart-grid">
                 {% for chart in page.import_pct_charts %}
                 <div class="coal-import-chart-cell">{{ chart.svg | safe }}</div>
