@@ -118,7 +118,16 @@ def _prod_item_sum(cur, months: list, entity: str, item: str, is_plan: bool = Fa
     module docstring for why this doesn't just call
     db.get_sail_production_actual/_plan/_ytd_actual directly for every
     entity: those each open their own connection per call, and the ABP
-    period needs one call per fy month)."""
+    period needs one call per fy month).
+
+    'Saleable Semis' additionally folds in a residual for any of ASP/VISL/
+    SSP present in `plants` (that plant's own Saleable Steel minus Finished
+    Steel) — confirmed against production_table/production_plan_table that
+    none of the three ever carries a 'Saleable Semis' row of its own, so a
+    plain item_name='Saleable Semis' sum silently shows them (and SAIL/SSPs,
+    which both include them) as 100% Finished / 0% Semis. See
+    _ssps_semis_residual's docstring for why the residual is computed this
+    way rather than by summing a 'Saleable Semis' row that doesn't exist."""
     table = "production_plan_table" if is_plan else "production_table"
     if entity == "SAIL":
         plants = ALL_PLANTS
@@ -137,15 +146,57 @@ def _prod_item_sum(cur, months: list, entity: str, item: str, is_plan: bool = Fa
                 found = True
         return (total * 1000) if found else None
 
+    direct_plants = [p for p in plants if item != "Saleable Semis" or p not in _SSPS_PLANTS]
+    total, found = 0.0, False
+    if direct_plants:
+        ph_m = ",".join("?" * len(months))
+        ph_p = ",".join("?" * len(direct_plants))
+        cur.execute(f"""
+            SELECT COALESCE(SUM(month_actual),0), COUNT(*)
+            FROM {table}
+            WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=?
+        """, (*months, *direct_plants, item))
+        t, c = cur.fetchone()
+        if c > 0:
+            total += t
+            found = True
+
+    if item == "Saleable Semis":
+        ssps_plants = [p for p in plants if p in _SSPS_PLANTS]
+        if ssps_plants:
+            total += _ssps_semis_residual(cur, table, months, ssps_plants)
+            found = True
+
+    return (total * 1000) if found else None
+
+
+def _ssps_semis_residual(cur, table: str, months: list, plants: list) -> float:
+    """Saleable Steel minus Finished Steel, summed over `plants` (a subset
+    of ASP/VISL/SSP) and `months`, in '000T (the caller applies the x1000
+    Tonnes conversion). None of the three ever record a 'Saleable Semis'
+    row (verified against both production_table and
+    production_plan_table), so their Semis has to be derived from the two
+    totals they DO record instead — "plant wise saleable-finished steel to
+    get their semis" per direct instruction. Finished Steel goes through
+    _fs_alias_sum (SSP/VISL fall back to that same month's Saleable Steel
+    there when no dedicated Finished Steel row exists — the residual is
+    then correctly ~0 for that plant/month, not negative). Clamped at 0
+    overall so a data gap in one table/month doesn't flip the sign."""
     ph_m = ",".join("?" * len(months))
     ph_p = ",".join("?" * len(plants))
     cur.execute(f"""
-        SELECT COALESCE(SUM(month_actual),0), COUNT(*)
+        SELECT COALESCE(SUM(month_actual),0)
         FROM {table}
-        WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=?
-    """, (*months, *plants, item))
-    t, c = cur.fetchone()
-    return (t * 1000) if c > 0 else None
+        WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name='Saleable Steel'
+    """, (*months, *plants))
+    saleable = cur.fetchone()[0] or 0.0
+
+    finished = 0.0
+    for m in months:
+        v = _fs_alias_sum(cur, table, m, plants)
+        finished += v or 0.0
+
+    return max(saleable - finished, 0.0)
 
 
 def _abp_special_sum(cur, fy_months: list, entity: str):
@@ -231,20 +282,63 @@ def _cell(cur, months: list, entity: str, is_plan: bool) -> dict:
         else:
             special_fin, special_semis = _special_fin_semis_split(cur, months, entity)
 
+    # Each qty gets its own "(NN% of SS)" line underneath it — per direct
+    # instruction, matching the reference mock-up's line layout rather than
+    # the old single-line "label: qty (pct)" format ("SS"/"FS" abbreviate
+    # Saleable Steel/Finished Steel, again per direct instruction, to keep
+    # these lines short enough not to wrap). Spl. FS additionally gets a
+    # SECOND pct line, against Finished Steel itself (not Saleable Steel) —
+    # "additional % of special Finished steel in total finished steel" per
+    # direct instruction — since that's the ratio that shows how
+    # value-added-heavy a plant's own Finished Steel mix is. Only computed
+    # when the Fin/Semis split is available (see _special_fin_semis_split's
+    # docstring for why the Annual ABP Plan column never has one): mixing
+    # an aggregate Plan Special figure (Finished+Semis together) into a
+    # Finished-Steel-only denominator would misstate the ratio.
     if special_fin is not None:
-        spl_fin_txt = f"Spl-Fin: {_fmt_int(special_fin)} ({_pct(special_fin, total)})"
-        spl_semis_txt = f"Spl-Semis: {_fmt_int(special_semis)} ({_pct(special_semis, total)})"
+        spl_fin_txt = f"Spl. FS: {_fmt_int(special_fin)} T"
+        spl_fin_pct_txt = f"({_pct(special_fin, total)} of SS)"
+        spl_fin_pct_of_fin_txt = f"({_pct(special_fin, fin)} of FS)"
+        # None (not "Spl. Semis: 0 T (0% of SS)") whenever Special Semis is
+        # structurally always zero for this entity — RSP (semis is None:
+        # _SEMIS_PRODUCTS["RSP"] is empty, so every despatched product
+        # counts as Finished) and SSPs (_special_fin_semis_split's SSPs
+        # branch always returns 0 for special_semis: SSPs has no
+        # special_steel_orders rows of its own, so its whole Special Steel
+        # figure is attributed to Finished) — showing a permanently-zero
+        # Spl. Semis line for an entity that can never have one is just
+        # noise, per direct instruction.
+        if semis is not None and entity != "SSPs":
+            spl_semis_txt = f"Spl. Semis: {_fmt_int(special_semis)} T"
+            spl_semis_pct_txt = f"({_pct(special_semis, total)} of SS)"
+        else:
+            spl_semis_txt = None
+            spl_semis_pct_txt = None
     else:
-        spl_fin_txt = f"Spl: {_fmt_int(special)} ({_pct(special, total)})"
+        spl_fin_txt = f"Spl: {_fmt_int(special)} T"
+        spl_fin_pct_txt = f"({_pct(special, total)} of SS)"
+        spl_fin_pct_of_fin_txt = None
         spl_semis_txt = None
+        spl_semis_pct_txt = None
 
     return {
         "svg": _nested_donut_svg(fin, semis, special_fin, special_semis),
         "total_txt": _fmt_int(total) if total else "N/A",
-        "fin_txt": f"Fin: {_fmt_int(fin)} ({_pct(fin, total)})",
-        "semis_txt": f"Semis: {_fmt_int(semis)} ({_pct(semis, total)})",
+        "fin_txt": f"FS: {_fmt_int(fin)} T",
+        "fin_pct_txt": f"({_pct(fin, total)} of SS)",
+        # None (not "Semis: N/A (—)") when this entity structurally has no
+        # Semis at all — RSP, in both production_table and
+        # production_plan_table, has never once carried a 'Saleable Semis'
+        # row (unlike SSPs, now covered by _prod_item_sum's own residual —
+        # see that function's docstring) — per direct instruction, the line
+        # is omitted by special_steel_donut.html rather than shown as N/A.
+        "semis_txt": f"Semis: {_fmt_int(semis)} T" if semis is not None else None,
+        "semis_pct_txt": f"({_pct(semis, total)} of SS)" if semis is not None else None,
         "spl_fin_txt": spl_fin_txt,
+        "spl_fin_pct_txt": spl_fin_pct_txt,
+        "spl_fin_pct_of_fin_txt": spl_fin_pct_of_fin_txt,
         "spl_semis_txt": spl_semis_txt,
+        "spl_semis_pct_txt": spl_semis_pct_txt,
     }
 
 
@@ -316,8 +410,6 @@ def _nested_donut_svg(fin_qty, semis_qty, special_fin_qty, special_semis_qty,
 
     if total <= 0:
         lines.append(na_ring(46.0))
-        lines.append(f'<text x="{cx}" y="{cy + 2.5:.1f}" text-anchor="middle" font-size="7" '
-                     f'font-family="Arial,sans-serif" fill="#94a3b8">N/A</text>')
         lines.append("</svg>")
         return "\n".join(lines)
 
@@ -328,10 +420,6 @@ def _nested_donut_svg(fin_qty, semis_qty, special_fin_qty, special_semis_qty,
         # Plan column: no Special Steel Finished/Semis split available —
         # single plain ring, same as before this page grew a second ring.
         lines.extend(ring(46.0, 26.0, [(fin_sh, _FINISHED_COLOR), (semis_sh, _SEMIS_COLOR)]))
-        lines.append(f'<text x="{cx}" y="{cy - 1.5:.1f}" text-anchor="middle" font-size="8" '
-                     f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_fmt_int(total)}</text>')
-        lines.append(f'<text x="{cx}" y="{cy + 7:.1f}" text-anchor="middle" font-size="5.2" '
-                     f'font-family="Arial,sans-serif" fill="#64748b">Sal.Stl,T</text>')
         lines.append("</svg>")
         return "\n".join(lines)
 
@@ -348,11 +436,6 @@ def _nested_donut_svg(fin_qty, semis_qty, special_fin_qty, special_semis_qty,
         lines.extend(ring(29.0, 16.0, [(sfin_sh, _FINISHED_COLOR), (ssemis_sh, _SEMIS_COLOR)]))
     else:
         lines.append(na_ring(29.0))
-
-    lines.append(f'<text x="{cx}" y="{cy - 1.3:.1f}" text-anchor="middle" font-size="7" '
-                 f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_fmt_int(total)}</text>')
-    lines.append(f'<text x="{cx}" y="{cy + 5:.1f}" text-anchor="middle" font-size="4" '
-                 f'font-family="Arial,sans-serif" fill="#64748b">Sal.Stl,T</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)

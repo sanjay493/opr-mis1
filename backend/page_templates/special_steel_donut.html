@@ -25,12 +25,23 @@
                 {% for cell in [row.plan, row.month, row.ytd] %}
                 <td class="ssd-cell">
                   <div class="ssd-cell-inner">
+                    <div class="ssd-side ssd-side-left">
+                      <div class="ssd-stat">{{ cell.fin_txt }}</div>
+                      <div class="ssd-pct-inline">{{ cell.fin_pct_txt }}</div>
+                      {% if cell.semis_txt %}
+                      <div class="ssd-stat">{{ cell.semis_txt }}</div>
+                      <div class="ssd-pct-inline">{{ cell.semis_pct_txt }}</div>
+                      {% endif %}
+                    </div>
                     <div class="ssd-donut">{{ cell.svg | safe }}</div>
-                    <div class="ssd-cell-txt">
-                      <div>{{ cell.fin_txt }}</div>
-                      <div>{{ cell.semis_txt }}</div>
-                      <div class="ssd-special-txt">{{ cell.spl_fin_txt }}</div>
-                      {% if cell.spl_semis_txt %}<div class="ssd-special-txt">{{ cell.spl_semis_txt }}</div>{% endif %}
+                    <div class="ssd-side ssd-side-right ssd-special-txt">
+                      <div class="ssd-stat">{{ cell.spl_fin_txt }}</div>
+                      <div class="ssd-pct-inline">{{ cell.spl_fin_pct_txt }}</div>
+                      {% if cell.spl_fin_pct_of_fin_txt %}<div class="ssd-pct-inline">{{ cell.spl_fin_pct_of_fin_txt }}</div>{% endif %}
+                      {% if cell.spl_semis_txt %}
+                      <div class="ssd-stat">{{ cell.spl_semis_txt }}</div>
+                      <div class="ssd-pct-inline">{{ cell.spl_semis_pct_txt }}</div>
+                      {% endif %}
                     </div>
                   </div>
                 </td>
@@ -39,5 +50,5 @@
               {% endfor %}
             </tbody>
           </table>
-          <div class="ssd-note">Note: Quantities in Tonnes. Each Month/{{ page.cum_label }} (Actual) cell draws two rings, each its own 100% Finished/Semis split, both starting Finished at the same top edge for easy comparison: outer ring = Saleable Steel, inner ring = Special Steel. Saleable Steel figures are Production data while Special Steel figures are Despatch data — different physical flows for the same plant, so the inner ring's proportions aren't a slice carved out of the outer ring's total. The Annual ABP Plan column uses target/plan figures for both, with no Finished/Semis split available for its Special Steel target, so its cell shows a single plain Finished/Semis ring only.</div>
+          <div class="ssd-note">Note: Quantities in Tonnes. Each Actual cell draws two rings (outer = Saleable Steel, inner = Special Steel), both its own 100% Finished/Semis split starting Finished at the same top edge. Saleable Steel is Production data, Special Steel is Despatch data — different physical flows for the same plant, so the inner ring isn't a slice of the outer ring's total. Spl. FS's 2nd % line is its share of Finished Steel alone (value-added intensity), not of Saleable Steel. The Annual ABP Plan column has no Finished/Semis split for its Special Steel target, so it shows one plain ring and a single aggregate Spl figure (no Finished-Steel-share line).</div>
         </div>
