@@ -8,14 +8,12 @@ generate_special_steel_sail(month); special_steel.html renders it as a
 second table on the same physical page). Page 24 itself now shows a 7
 (entity) x 3 (period) grid of donut charts:
 
-  One ring: that period's Saleable Steel split Finished/Semis, each of
-  those two slices further split into a Special-Steel sub-portion (full
-  Finished/Semis color) and a regular/non-special sub-portion (a lighter
-  tint of that same color) — "same color, more intense for the
-  special-steel share" per direct instruction, replacing an earlier
-  design that used a separate inner ring + 3rd color for Special Steel.
+  Two concentric rings per cell (see the module-docstring paragraph below
+  for the current design; superseded an even earlier one-ring design that
+  shaded each Finished/Semis slice by special-steel intensity instead of
+  drawing Special Steel as its own ring).
 
-  The Special/regular sub-split needs special_steel_orders' own `product`
+  The Finished/Semis split of Special Steel needs special_steel_orders' own `product`
   grouping (see _SEMIS_PRODUCTS) to know how much of a plant's despatched
   Special Steel was itself Finished vs Semis — special_steel_abp_table (the
   Annual ABP Plan column's source) carries no such breakdown, only one
@@ -28,6 +26,24 @@ Apr-report month (YTD) — mirrors the exact three periods
 page_special_steel_trend.py's annual/month/till-month charts already use.
 Entities (rows): BSP/DSP/RSP/BSL/ISP, SSPs (the ASP+VISL+SSP bundle — see
 page_special_steel._SSPS_PLANTS), and SAIL (all 8 plants). 7 rows total.
+
+Each cell (Actual columns) draws TWO separate concentric rings rather than
+one shaded ring: an outer ring for Saleable Steel's own Finished/Semis
+split (light "regular" colors) and an inner ring for Special Steel's own
+Finished/Semis split (full-saturation "special" colors) — per direct
+instruction, replacing the single-ring intensity-shaded design below.
+Saleable Steel (production) and Special Steel (despatch) are different
+physical flows for the same plant (see the footnote further down) and
+aren't guaranteed exact subsets of one another, so giving Special Steel
+its own full ring avoids implying an exact subset relationship the data
+doesn't back up. Both rings start at angle 0 (12 o'clock) and go
+Finished-then-Semis clockwise, so the Finished slice's start edge lines up
+between the two rings — "drawn matching" per direct instruction — even
+though the Finished/Semis boundary itself generally falls at a different
+angle in each ring (the two totals have different proportions). The
+Annual ABP Plan column still has no Finished/Semis split for its Special
+Steel target (see below), so it keeps the single plain ring it always
+had — see _nested_donut_svg's has_split branch.
 
 Data sources:
   Saleable Steel (Finished + Saleable Semis) — production_table (actual)
@@ -85,9 +101,9 @@ _SEMIS_PRODUCTS = {
     "ISP": {"150 BLT", "200 BLM"},
 }
 
-# "Same color, more intense for the special-steel share" — full-intensity
-# swatch is the special-steel sub-portion of that Finished/Semis slice, the
-# lighter tint is the regular (non-special) remainder.
+# Full-saturation swatch draws the inner (Special Steel) ring, the lighter
+# tint of the same color draws the outer (Saleable Steel) ring — "same
+# color, more intense for the special-steel ring" per direct instruction.
 _FINISHED_COLOR = "#4472C4"
 _FINISHED_LIGHT = "#B4C7E7"
 _SEMIS_COLOR = "#ED7D31"
@@ -232,39 +248,49 @@ def _cell(cur, months: list, entity: str, is_plan: bool) -> dict:
     }
 
 
-# ── SVG: single ring, Finished/Semis with a special-steel intensity split ──
+# ── SVG: two concentric rings — outer Saleable, inner Special ──────────────
 
 def _nested_donut_svg(fin_qty, semis_qty, special_fin_qty, special_semis_qty,
                        vw: float = 100, vh: float = 100) -> str:
-    """One ring: Finished then Semis, each split into its Special-Steel
-    sub-portion (full Finished/Semis color) and regular remainder (a
-    lighter tint of that same color) — "same color, more intense for the
-    special-steel share" per direct instruction. special_fin_qty/
-    special_semis_qty are None together when no per-product-group split is
-    available (the Annual ABP Plan column — see module docstring); the
-    ring then falls back to plain Finished/Semis, no shading."""
+    """Outer ring = Saleable Steel's own Finished/Semis split (light
+    "regular" colors); inner ring = Special Steel's own Finished/Semis
+    split (full-saturation "special" colors) — two independent 100%
+    breakdowns, not one ring shaded by a sub-portion, per direct
+    instruction (see module docstring for why). Both rings start at angle
+    0 and go Finished-then-Semis clockwise, so the Finished slice's start
+    edge lines up between the two rings ("drawn matching") even though
+    each ring's own Finished/Semis boundary angle differs (the two totals
+    have different proportions).
+
+    special_fin_qty/special_semis_qty are None together when no
+    per-product-group split is available (the Annual ABP Plan column —
+    see module docstring); only the single outer-sized ring is drawn then,
+    in full-saturation colors since there's nothing to contrast it
+    against — the page's pre-existing plain-ring fallback."""
     total = (fin_qty or 0) + (semis_qty or 0)
+    has_split = special_fin_qty is not None or special_semis_qty is not None
     cx, cy = vw / 2, vh / 2
-    r_o, r_i = 46.0, 26.0
 
     def polar(r, deg):
         a = math.radians(deg)
         return cx + r * math.sin(a), cy - r * math.cos(a)
 
-    def ring_slice(a0, a1, color):
+    def ring_slice(r_o, r_i, a0, a1, color):
         large = 1 if (a1 - a0) > 180 else 0
         x1o, y1o = polar(r_o, a0); x2o, y2o = polar(r_o, a1)
         x1i, y1i = polar(r_i, a1); x2i, y2i = polar(r_i, a0)
         path = (f'M {x1o:.2f} {y1o:.2f} A {r_o} {r_o} 0 {large} 1 {x2o:.2f} {y2o:.2f} '
                 f'L {x1i:.2f} {y1i:.2f} A {r_i} {r_i} 0 {large} 0 {x2i:.2f} {y2i:.2f} Z')
-        return f'<path d="{path}" fill="{color}" stroke="#ffffff" stroke-width="0.8"/>'
+        return f'<path d="{path}" fill="{color}" stroke="#ffffff" stroke-width="0.6"/>'
 
-    def ring(slices):
+    def ring(r_o, r_i, slices):
         # A share of exactly 1.0 (e.g. RSP has no Semis, or a period with no
         # Special Steel at all) can't be drawn as a single A-arc — start and
         # end points coincide, which is degenerate for the sweep-flag math
         # above. Drawn as a plain stroked circle instead whenever only one
-        # slice is actually non-zero.
+        # slice is actually non-zero. Both rings always start at angle 0
+        # (the loop's initial a=0.0) so the Finished slice's start edge
+        # matches between the outer and inner ring.
         out = []
         active = [(s, c) for s, c in slices if s and s > 0]
         if not active:
@@ -277,40 +303,56 @@ def _nested_donut_svg(fin_qty, semis_qty, special_fin_qty, special_semis_qty,
         a = 0.0
         for share, color in active:
             sweep = share * 360.0
-            out.append(ring_slice(a, a + sweep, color))
+            out.append(ring_slice(r_o, r_i, a, a + sweep, color))
             a += sweep
         return out
+
+    def na_ring(r_o):
+        return (f'<circle cx="{cx}" cy="{cy}" r="{r_o}" fill="none" '
+                f'stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,2"/>')
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
 
     if total <= 0:
-        lines.append(f'<circle cx="{cx}" cy="{cy}" r="{r_o}" fill="none" '
-                     f'stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,2"/>')
+        lines.append(na_ring(46.0))
         lines.append(f'<text x="{cx}" y="{cy + 2.5:.1f}" text-anchor="middle" font-size="7" '
                      f'font-family="Arial,sans-serif" fill="#94a3b8">N/A</text>')
-    else:
-        fin_sh = (fin_qty or 0) / total
-        semis_sh = (semis_qty or 0) / total
-        has_split = special_fin_qty is not None or special_semis_qty is not None
+        lines.append("</svg>")
+        return "\n".join(lines)
 
-        if has_split:
-            fin_spl_sh = min((special_fin_qty or 0) / total, fin_sh)
-            fin_reg_sh = max(fin_sh - fin_spl_sh, 0.0)
-            semis_spl_sh = min((special_semis_qty or 0) / total, semis_sh)
-            semis_reg_sh = max(semis_sh - semis_spl_sh, 0.0)
-            slices = [
-                (fin_reg_sh, _FINISHED_LIGHT), (fin_spl_sh, _FINISHED_COLOR),
-                (semis_reg_sh, _SEMIS_LIGHT), (semis_spl_sh, _SEMIS_COLOR),
-            ]
-        else:
-            slices = [(fin_sh, _FINISHED_COLOR), (semis_sh, _SEMIS_COLOR)]
-        lines.extend(ring(slices))
+    fin_sh = (fin_qty or 0) / total
+    semis_sh = (semis_qty or 0) / total
 
+    if not has_split:
+        # Plan column: no Special Steel Finished/Semis split available —
+        # single plain ring, same as before this page grew a second ring.
+        lines.extend(ring(46.0, 26.0, [(fin_sh, _FINISHED_COLOR), (semis_sh, _SEMIS_COLOR)]))
         lines.append(f'<text x="{cx}" y="{cy - 1.5:.1f}" text-anchor="middle" font-size="8" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_fmt_int(total)}</text>')
         lines.append(f'<text x="{cx}" y="{cy + 7:.1f}" text-anchor="middle" font-size="5.2" '
                      f'font-family="Arial,sans-serif" fill="#64748b">Sal.Stl,T</text>')
+        lines.append("</svg>")
+        return "\n".join(lines)
+
+    # Outer ring: Saleable Steel, Finished/Semis, light "regular" colors.
+    lines.extend(ring(46.0, 33.0, [(fin_sh, _FINISHED_LIGHT), (semis_sh, _SEMIS_LIGHT)]))
+
+    # Inner ring: Special Steel, Finished/Semis, full-saturation "special"
+    # colors — its OWN 100% (special_fin+special_semis), not a share of the
+    # Saleable total, since despatch and production don't share a base.
+    special_total = (special_fin_qty or 0) + (special_semis_qty or 0)
+    if special_total > 0:
+        sfin_sh = (special_fin_qty or 0) / special_total
+        ssemis_sh = (special_semis_qty or 0) / special_total
+        lines.extend(ring(29.0, 16.0, [(sfin_sh, _FINISHED_COLOR), (ssemis_sh, _SEMIS_COLOR)]))
+    else:
+        lines.append(na_ring(29.0))
+
+    lines.append(f'<text x="{cx}" y="{cy - 1.3:.1f}" text-anchor="middle" font-size="7" '
+                 f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_fmt_int(total)}</text>')
+    lines.append(f'<text x="{cx}" y="{cy + 5:.1f}" text-anchor="middle" font-size="4" '
+                 f'font-family="Arial,sans-serif" fill="#64748b">Sal.Stl,T</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)

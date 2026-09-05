@@ -1,10 +1,10 @@
         <div class="ssd-wrap">
           <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;color:rgb(0,0,255);">{{ page.title }}</div>
           <div class="ssd-legend">
-            <span><i style="background:#B4C7E7;"></i>Finished (Regular)</span>
-            <span><i style="background:#4472C4;"></i>Finished (Special)</span>
-            <span><i style="background:#F8CBAD;"></i>Semis (Regular)</span>
-            <span><i style="background:#ED7D31;"></i>Semis (Special)</span>
+            <span><i style="background:#B4C7E7;"></i>Outer ring: Finished (Saleable)</span>
+            <span><i style="background:#F8CBAD;"></i>Outer ring: Semis (Saleable)</span>
+            <span><i style="background:#4472C4;"></i>Inner ring: Finished (Special)</span>
+            <span><i style="background:#ED7D31;"></i>Inner ring: Semis (Special)</span>
           </div>
           <table class="ssd-table">
             <colgroup>
@@ -39,5 +39,5 @@
               {% endfor %}
             </tbody>
           </table>
-          <div class="ssd-note">Note: Quantities in Tonnes. Ring shading = Special Steel's share within Finished/Semis (same color, more intense for the Special-Steel portion). For the Month and {{ page.cum_label }} (Actual) columns, Saleable Steel figures are Production data while Special Steel figures are Despatch data — different physical flows for the same plant; the Annual ABP Plan column uses target/plan figures for both, with no Finished/Semis split available for its Special Steel target, so its ring shows plain Finished/Semis only.</div>
+          <div class="ssd-note">Note: Quantities in Tonnes. Each Month/{{ page.cum_label }} (Actual) cell draws two rings, each its own 100% Finished/Semis split, both starting Finished at the same top edge for easy comparison: outer ring = Saleable Steel, inner ring = Special Steel. Saleable Steel figures are Production data while Special Steel figures are Despatch data — different physical flows for the same plant, so the inner ring's proportions aren't a slice carved out of the outer ring's total. The Annual ABP Plan column uses target/plan figures for both, with no Finished/Semis split available for its Special Steel target, so its cell shows a single plain Finished/Semis ring only.</div>
         </div>
