@@ -1275,6 +1275,311 @@ def _block_production_all_months(file_path: str, prod_page_idx: int,
 
 
 # ---------------------------------------------------------------------------
+# Despatch (Saleable Steel Despatch / Direct Despatch / Semis Despatch /
+# Semis Export / Finished Export) — per direct instruction.
+# ---------------------------------------------------------------------------
+
+# The despatch section spans 2 candidate source pages, in different report
+# eras:
+#   'desp_pivot'  — "DESPATCH PERFORMANCE : <MONTH> <YEAR>" — a simple
+#       per-product pivot table (PLAN/DIRECT/SYD/CONV/TOTAL HS/EXPORT/IPT/
+#       PLANT SALES/INT. CON/Total columns) with its own "Total Sal.
+#       Steel"/"Total Semis"/"Total Finished" summary rows — each category
+#       already has its own column, no reconstruction needed. Only present
+#       on newer report vintages (confirmed present 2026; confirmed ABSENT
+#       2016 — the report format gained this page at some point in between).
+#   'desp_nested' — "SALEABLE STEEL DESPATCH PERFORMANCE" — an older, more
+#       complex table present on EVERY vintage checked (2016 through 2026):
+#       one column per (IPT/EXPORT/CMO SALES DIRECT/CMO SALES STOCKYARD/CMO
+#       SALES TOTAL/PLANT SALES/TOTAL SALEABLE STEEL) group, each itself
+#       split into RAIL/ROAD/TOTAL sub-columns, plus a single-column
+#       "INTERNAL" (road only) and 2 stock-date columns at the end — 24
+#       numbers total per data row. Used as the fallback when the pivot
+#       page isn't found.
+# Both pages carry TWO tables/sections: the report month's own single-month
+# figures first, then a second "APRIL - <MONTH>" FY-cumulative table (same
+# row/column shape) — only the first (single-month) one is used here.
+#
+# A "DESPATCH PERFORMANCE" substring match alone can't tell the two pivot
+# vs nested pages apart (the nested page's own title, "SALEABLE STEEL
+# DESPATCH PERFORMANCE", contains "DESPATCH PERFORMANCE" as a substring) —
+# anchoring to the START of a line is what actually distinguishes them.
+_DESPATCH_NESTED_RE = re.compile(r'SALEABLE STEEL DESPATCH PERFORMANCE', re.I)
+_DESPATCH_PIVOT_RE = re.compile(r'^DESPATCH PERFORMANCE\s*:', re.I | re.M)
+_DESPATCH_PIVOT_TITLE_RE = re.compile(r'^DESPATCH PERFORMANCE\s*:\s*(.+)$', re.I | re.M)
+
+
+def _looks_like_toc(txt_upper: str) -> bool:
+    """Whether a page is the TOC/INDEX page rather than real content — the
+    TOC lists "Saleable Steel Despatch Performance" as a menu entry (with
+    a page-number reference, e.g. "9 ... 8-9"), which would otherwise
+    satisfy _DESPATCH_NESTED_RE just like the real table page does. Same
+    markers _scan_page_index already uses for the 'prod' key."""
+    return 'INDEX' in txt_upper or 'CONTENTS' in txt_upper or 'TABLE OF' in txt_upper
+
+
+def _find_despatch_pages(file_path: str, page_texts_cache: dict, max_pages: int = 20):
+    """(nested_page_idx_or_None, pivot_page_idx_or_None) — see module note
+    above. Reuses Pass 0's page_texts_cache where possible (the despatch
+    pages are usually already in range by the time every other section is
+    found); only opens the PDF again if genuinely not yet cached."""
+    import sys
+    nested_idx = pivot_idx = None
+    texts = dict(page_texts_cache or {})
+
+    for i in sorted(texts):
+        txt = texts[i]
+        up = txt.upper()
+        if _looks_like_toc(up):
+            continue
+        if nested_idx is None and _DESPATCH_NESTED_RE.search(txt):
+            nested_idx = i
+        if pivot_idx is None and _DESPATCH_PIVOT_RE.search(txt):
+            pivot_idx = i
+
+    if nested_idx is not None and pivot_idx is not None:
+        return nested_idx, pivot_idx
+
+    highest_cached = max(texts) if texts else -1
+    if highest_cached + 1 >= max_pages:
+        return nested_idx, pivot_idx
+
+    import pdfplumber
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for i in range(highest_cached + 1, min(max_pages, len(pdf.pages))):
+                if nested_idx is not None and pivot_idx is not None:
+                    break
+                try:
+                    txt = pdf.pages[i].extract_text() or ""
+                except Exception as exc:
+                    print(f"[DSP PDF] despatch scan: page {i+1} extract_text failed ({exc}), skipping",
+                          flush=True, file=sys.stderr)
+                    continue
+                up = txt.upper()
+                if _looks_like_toc(up):
+                    continue
+                if nested_idx is None and _DESPATCH_NESTED_RE.search(txt):
+                    nested_idx = i
+                if pivot_idx is None and _DESPATCH_PIVOT_RE.search(txt):
+                    pivot_idx = i
+    except Exception as exc:
+        print(f"[DSP PDF] despatch scan: cannot open PDF: {exc}", flush=True, file=sys.stderr)
+
+    return nested_idx, pivot_idx
+
+
+def _norm_ws(s):
+    return ' '.join(str(s or '').split()).upper()
+
+
+def _select_pivot_table(page, page_text):
+    """The pivot page's FIRST table whose own title has no month range
+    (e.g. "MAY 2026", not "APRIL - MAY 2026") — the single actual month,
+    not the FY-cumulative table that follows it. Falls back to the page's
+    first table if no title text is found at all (title regex miss)."""
+    tables = page.extract_tables()
+    if not tables:
+        return None
+    titles = [m.group(1).strip() for m in _DESPATCH_PIVOT_TITLE_RE.finditer(page_text)]
+    for i, title in enumerate(titles):
+        if '-' not in title and i < len(tables):
+            return tables[i]
+    return tables[0]
+
+
+def _extract_despatch_pivot(table):
+    """{item_name: value_tonnes} from the "DESPATCH PERFORMANCE : <month>"
+    pivot table (see module note above). Column positions are located by
+    header text (not fixed index) since PLAN/SYD/CONV/IPT/PLANT SALES/INT.
+    CON columns aren't needed and might drift; DIRECT/EXPORT/Total are.
+    """
+    if not table or len(table) < 2:
+        return {}
+
+    header = table[0]
+    direct_ci = export_ci = total_ci = None
+    for i, cell in enumerate(header):
+        norm = _norm_ws(cell)
+        if norm == "DIRECT":
+            direct_ci = i
+        elif norm == "EXPORT":
+            export_ci = i
+        elif norm == "TOTAL":
+            total_ci = i  # rightmost "TOTAL" wins over "TOTAL HS"
+    if direct_ci is None or export_ci is None or total_ci is None:
+        return {}
+
+    def _find_row(label):
+        for row in table[1:]:
+            if row and row[0] and _norm_ws(row[0]).replace('.', '') == label:
+                return row
+        return None
+
+    def _cell(row, ci):
+        if row is None or ci >= len(row) or row[ci] is None:
+            return None
+        return _num(str(row[ci]).replace(',', '').strip())
+
+    r_ss = _find_row("TOTAL SAL STEEL")
+    r_semis = _find_row("TOTAL SEMIS")
+    r_fin = _find_row("TOTAL FINISHED")
+
+    ss_total = _cell(r_ss, total_ci)
+    semis_total = _cell(r_semis, total_ci)
+    fin_total = _cell(r_fin, total_ci)
+
+    values = {}
+    if ss_total is not None:
+        values["Saleable Steel Despatch"] = ss_total
+    if semis_total is not None:
+        values["Semis Despatch"] = semis_total
+    direct_val = _cell(r_ss, direct_ci)
+    if direct_val is not None:
+        values["Direct Despatch"] = direct_val
+    fin_export = _cell(r_fin, export_ci)
+    if fin_export is not None:
+        values["Finished Export"] = fin_export
+    semis_export = _cell(r_semis, export_ci)
+    if semis_export is not None:
+        values["Semis Export"] = semis_export
+
+    if None not in (ss_total, semis_total, fin_total) and abs((semis_total + fin_total) - ss_total) > 1:
+        import sys
+        print(f"[DSP PDF] despatch pivot: consistency check failed (Semis {semis_total} "
+              f"+ Finished {fin_total} != Total {ss_total}) - values kept but flagged",
+              flush=True, file=sys.stderr)
+    return values
+
+
+def _extract_despatch_nested(text: str) -> dict:
+    """{item_name: value_tonnes} from the older "SALEABLE STEEL DESPATCH
+    PERFORMANCE" nested table (see module note above). Each of its 3
+    summary rows ("TOTAL SEMIS", "TOTAL FINISHED", "TOTAL SALEABLE STEEL")
+    carries exactly 24 numbers in a FIXED order — confirmed identical on
+    both a 2016 and a 2026 report via the grand-total identity below:
+        [0]  INTERNAL (single "Road" column, no Rail/Total split)
+        [1:4]   IPT            Rail, Road, Total
+        [4:7]   EXPORT         Rail, Road, Total
+        [7:10]  CMO SALES DIRECT     Rail, Road, Total
+        [10:13] CMO SALES STOCKYARD  Rail, Road, Total
+        [13:16] CMO SALES TOTAL      Rail, Road, Total
+        [16:19] PLANT SALES    Rail, Road, Total
+        [19:22] TOTAL SALEABLE STEEL (grand total)  Rail, Road, Total
+        [22:24] Stock (opening, closing)
+    i.e. INTERNAL + IPT_Total + EXPORT_Total + CMO_SALES_TOTAL_Total +
+    PLANT_SALES_Total == TOTAL_SALEABLE_STEEL_Total (index 21) — verified
+    exactly on both vintages' own "TOTAL SALEABLE STEEL" row before trusting
+    this layout. Only the FIRST occurrence of each row on the page is used
+    (stops right after "TOTAL SALEABLE STEEL", i.e. before the page's
+    second, FY-cumulative "APRIL - <month>" table further down).
+    """
+    values = {}
+    finished_total = semis_total = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        upper = line.upper()
+        is_semis_row = upper.startswith("TOTAL SEMIS")
+        is_fin_row = upper.startswith("TOTAL FINISHED")
+        is_ss_row = upper.startswith("TOTAL SALEABLE STEEL")
+        if not (is_semis_row or is_fin_row or is_ss_row):
+            continue
+
+        nums = [float(t.replace(',', '')) for t in re.findall(r'-?\d[\d,]*(?:\.\d+)?', line)]
+        # PLANT SALES's own width isn't always exactly 3 (Rail/Road/Total)
+        # — confirmed on a real report (Dec 2019) where it printed as 4
+        # tokens ("0 3724 0 3724") instead of the usual 3, apparently a 4th
+        # sub-column that's normally blank (and so invisible to text
+        # extraction) rather than genuinely absent. A fixed "must be
+        # exactly 24 numbers" check silently fell through to the SAME
+        # label's occurrence in the page's 2nd, FY-cumulative table
+        # instead (which happened to total exactly 24 after an unrelated
+        # "#REF!" text token got filtered out) — a wrong-but-plausible
+        # value 8x too large, not caught until an annual-sum-style outlier
+        # check. Indexing from the END for this row's own grand total
+        # (always the 3rd-from-last number, followed by the 2 stock
+        # figures) sidesteps the variable PLANT SALES width entirely,
+        # since it's self-relative to each line; only the items that are
+        # provably BEFORE the variable region (INTERNAL/IPT/EXPORT/DIRECT,
+        # i.e. index <= 9) are still indexed from the start.
+        if len(nums) < 10:
+            import sys
+            print(f"[DSP PDF] despatch nested: too few numbers ({len(nums)}) on line "
+                  f"{line!r} - skipped", flush=True, file=sys.stderr)
+            continue
+        row_total = nums[-3]
+
+        if is_semis_row:
+            semis_total = row_total
+            values["Semis Despatch"] = row_total
+            values["Semis Export"] = nums[6]
+        elif is_fin_row:
+            finished_total = row_total
+            values["Finished Export"] = nums[6]
+        elif is_ss_row:
+            values["Saleable Steel Despatch"] = row_total
+            values["Direct Despatch"] = nums[9]
+            if None not in (semis_total, finished_total) and abs((semis_total + finished_total) - row_total) > 1:
+                import sys
+                print(f"[DSP PDF] despatch nested: consistency check failed (Semis {semis_total} "
+                      f"+ Finished {finished_total} != Total {row_total}) - values kept but flagged",
+                      flush=True, file=sys.stderr)
+
+        if is_ss_row:
+            break  # don't fall through into the page's 2nd (cumulative) table
+
+    return values
+
+
+def _block_despatch(file_path: str, page_texts_cache: dict) -> list:
+    """Extract DSP's 5 despatch items (see module note above) — tries the
+    simpler pivot page first, falls back to the nested table. Values come
+    back already in tonnes; converted to '000T here to match every other
+    DSP production_table item."""
+    import sys
+    nested_idx, pivot_idx = _find_despatch_pages(file_path, page_texts_cache)
+
+    values, source = {}, None
+    if pivot_idx is not None:
+        try:
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                page = pdf.pages[pivot_idx]
+                page_text = page.extract_text() or ""
+                table = _select_pivot_table(page, page_text)
+            if table:
+                values = _extract_despatch_pivot(table)
+                if values:
+                    source = f"PDF p{pivot_idx + 1} (DESPATCH PERFORMANCE pivot table)"
+        except Exception as exc:
+            print(f"[DSP PDF] despatch: pivot extraction failed ({exc}), trying nested table",
+                  flush=True, file=sys.stderr)
+
+    if not values and nested_idx is not None:
+        text = (page_texts_cache or {}).get(nested_idx)
+        if text is None:
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                text = pdf.pages[nested_idx].extract_text() or ""
+        values = _extract_despatch_nested(text)
+        if values:
+            source = f"PDF p{nested_idx + 1} (SALEABLE STEEL DESPATCH PERFORMANCE)"
+
+    rows = []
+    for item_name, val in values.items():
+        rows.append({
+            "item_name": item_name,
+            "value": round(val / 1000.0, 3),
+            "unit": "'000T",
+            "cell": source or "",
+            "status": "ok",
+        })
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # BF page 1 parser (Silicon, Sulphur, Slag Rate, BF Productivity)
 # ---------------------------------------------------------------------------
 
@@ -2289,6 +2594,25 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
               flush=True, file=sys.stderr)
         if not any(r["status"] == "ok" for r in prod_rows):
             raise ValueError("Production page found but no known items matched.")
+
+        # ── Block 1b: Despatch (Saleable Steel/Direct/Semis Despatch,
+        # Semis/Finished Export) — always the report's own single month,
+        # regardless of all_months mode (DSP has no growing-FY despatch
+        # table the way RSP/ISP's production sheets do). Failures here
+        # must not fail the whole preview — despatch data may simply be
+        # absent on some vintages/pages.
+        try:
+            print("[DSP PDF] Block 1b: despatch ...", flush=True, file=sys.stderr)
+            desp_rows = _block_despatch(file_path, page_texts_cache)
+            for r in desp_rows:
+                r.setdefault("pdf_label", r["item_name"])
+            prod_rows.extend(desp_rows)
+            print(f"[DSP PDF] Block 1b done: {len(desp_rows)} despatch rows",
+                  flush=True, file=sys.stderr)
+        except Exception as exc:
+            print(f"[DSP PDF] Block 1b FAILED: {type(exc).__name__}: {exc}",
+                  flush=True, file=sys.stderr)
+        gc.collect()
 
     # ── Block 2: Techno parameters ────────────────────────────────────────
     techno_rows = []

@@ -32,9 +32,7 @@
   },
 
   "key_parameters": {
-    "_doc": "page_key_parameters.py — 'Inter Plant Performance Comparison' page. Values with no DB source yet, transcribed from Report_format/Plant wise Comparative for Apr-Jul'26.pdf. spec -> plant -> value. Cost of Production (HM/CS/SS and, since 2026-08-28, BF Coke + Sinter) comes from cost_trend_monthly (the DB), NOT here. RLTIFR moved to techno_data 'General' unit (key 'rltifr') on 2026-08-28. Only 'ss_in_finished' remains. Refresh when a real extractor lands or a newer comparative sheet supersedes this one.",
-    "pdf_values": {
-      "ss_in_finished": { "BSP": 81.5, "DSP": 98.8, "RSP": 39.9, "BSL": 10.3, "ISP": 99.6 }
-    }
+    "_doc": "page_key_parameters.py — 'Inter Plant Performance Comparison' page. Empty since 2026-09-06: the last remaining hand-transcribed figure, 'ss_in_finished' (Special Steel in Finished Steel %), is now live-computed as Special Finished Steel Despatch / Finished Steel Despatch (_ss_in_fs_pct) instead of transcribed from the comparative PDF. Cost of Production (HM/CS/SS and, since 2026-08-28, BF Coke + Sinter) comes from cost_trend_monthly (the DB); RLTIFR is techno_data 'General' unit (key 'rltifr'). Add an entry back only for a figure with no usable DB source.",
+    "pdf_values": {}
   }
 }

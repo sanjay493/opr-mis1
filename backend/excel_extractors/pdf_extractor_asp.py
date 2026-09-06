@@ -129,6 +129,35 @@ _FL_ITEMS = [
 # Finished Steel = sum of these three (see module docstring)
 _FL_FINISHED_STEEL_PARTS = ["BARS", "FS PRD", "PLATES"]
 
+# Finished Despatch = BAR + FORG. + PLT, from the DESPATCH section (NOT
+# _FL_ITEMS/section_for — these 3 rows are only ever used to compute this
+# one derived figure, never stored as their own production_table items, so
+# they're kept out of the generic item loop entirely rather than needing a
+# throwaway item_name that must then be filtered back out of the preview).
+# Mirrors _FL_FINISHED_STEEL_PARTS' BARS+FS PRD+PL MILL exactly, one
+# section over — per direct instruction. Semis Despatch is then derived as
+# Saleable Steel Despatch (the DESPATCH section's own TOTAL row) minus
+# this, the same "whatever isn't finished must be semis" logic BSL/ISP/BSP
+# already use for their own despatch breakdowns.
+_FL_DESPATCH_FINISHED_PARTS = [("BAR",), ("FORG.",), ("PLT",)]
+
+
+def _fl_finished_despatch(despatch_block, target_x: float):
+    """Sum of BAR + FORG. + PLT (DESPATCH section) at column x0 `target_x`,
+    in '000T — or None if any of the 3 rows is missing/has no value at
+    that column (never a partial sum, which would silently understate
+    Finished Despatch and so overstate the derived Semis Despatch)."""
+    total = 0.0
+    for label_words in _FL_DESPATCH_FINISHED_PARTS:
+        row = _fl_find_item_row(despatch_block, label_words, False)
+        if row is None:
+            return None
+        val = _fl_nearest(_fl_row_numbers(row, len(label_words)), target_x)
+        if val is None:
+            return None
+        total += val
+    return round(total / 1000.0, 3)
+
 _FL_MONTH_TO_NUM = {
     "JAN": 1, "FEB": 2, "MAR": 3, "MARCH": 3, "APR": 4, "APRIL": 4,
     "MAY": 5, "JUN": 6, "JUNE": 6, "JUL": 7, "JULY": 7, "AUG": 8,
@@ -455,6 +484,7 @@ def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
 
     out_rows = []
     parts_by_month = {report_month: {}, prev_month: {}}  # item_name -> value, for Finished Steel
+    despatch_total_by_month = {}  # month -> Saleable Steel Despatch value, for Semis Despatch
     for label_words, item_name, exact_total in _FL_ITEMS:
         block = section_for[item_name]
         row = _fl_find_item_row(block, label_words, exact_total)
@@ -485,6 +515,8 @@ def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
                 })
                 if item_name in _FL_FINISHED_STEEL_PARTS:
                     parts_by_month[ym][item_name] = out_val
+                if item_name == "Saleable Steel Despatch":
+                    despatch_total_by_month[ym] = out_val
             else:
                 out_rows.append({
                     "item_name": f"(no value) {item_name}", "value": None, "unit": "T",
@@ -501,6 +533,22 @@ def _parse_fl_two_month(rows, report_month: str, prev_month: str, n_pages: int):
                 "cell": f"PDF ({n_pages}p) · {_fmt_month(ym)} [computed: BARS+FS PRD+PL MILL]",
                 "pdf_label": "BARS + FS PRD. + PL MILL", "status": "ok", "report_month": ym,
             })
+
+        target_x = act_x if ym == report_month else prev_x
+        fd_val = _fl_finished_despatch(despatch_block, target_x)
+        if fd_val is not None:
+            out_rows.append({
+                "item_name": "Finished Despatch", "value": fd_val, "unit": "'000T",
+                "cell": f"PDF ({n_pages}p) · {_fmt_month(ym)} [computed: BAR+FORG.+PLT]",
+                "pdf_label": "BAR + FORG. + PLT", "status": "ok", "report_month": ym,
+            })
+            if ym in despatch_total_by_month:
+                semis_val = round(despatch_total_by_month[ym] - fd_val, 3)
+                out_rows.append({
+                    "item_name": "Semis Despatch", "value": semis_val, "unit": "'000T",
+                    "cell": f"PDF ({n_pages}p) · {_fmt_month(ym)} [computed: Saleable Steel Despatch - Finished Despatch]",
+                    "pdf_label": "TOTAL (DESPATCH) - (BAR + FORG. + PLT)", "status": "ok", "report_month": ym,
+                })
     return out_rows
 
 
@@ -562,6 +610,7 @@ def parse_fl_last_year_column(rows, report_month: str, n_pages: int) -> list:
 
     out_rows = []
     parts = {}
+    despatch_total = None
     for label_words, item_name, exact_total in _FL_ITEMS:
         block = section_for[item_name]
         row = _fl_find_item_row(block, label_words, exact_total)
@@ -586,6 +635,8 @@ def parse_fl_last_year_column(rows, report_month: str, n_pages: int) -> list:
             })
             if item_name in _FL_FINISHED_STEEL_PARTS:
                 parts[item_name] = out_val
+            if item_name == "Saleable Steel Despatch":
+                despatch_total = out_val
         else:
             out_rows.append({
                 "item_name": f"(no value) {item_name}", "value": None, "unit": "T",
@@ -600,6 +651,21 @@ def parse_fl_last_year_column(rows, report_month: str, n_pages: int) -> list:
             "cell": f"PDF ({n_pages}p) · {_fmt_month(ly_month)} [computed: BARS+FS PRD+PL MILL]",
             "pdf_label": "BARS + FS PRD. + PL MILL", "status": "ok", "report_month": ly_month,
         })
+
+    fd_val = _fl_finished_despatch(despatch_block, ly_x)
+    if fd_val is not None:
+        out_rows.append({
+            "item_name": "Finished Despatch", "value": fd_val, "unit": "'000T",
+            "cell": f"PDF ({n_pages}p) · {_fmt_month(ly_month)} [computed: BAR+FORG.+PLT]",
+            "pdf_label": "BAR + FORG. + PLT", "status": "ok", "report_month": ly_month,
+        })
+        if despatch_total is not None:
+            semis_val = round(despatch_total - fd_val, 3)
+            out_rows.append({
+                "item_name": "Semis Despatch", "value": semis_val, "unit": "'000T",
+                "cell": f"PDF ({n_pages}p) · {_fmt_month(ly_month)} [computed: Saleable Steel Despatch - Finished Despatch]",
+                "pdf_label": "TOTAL (DESPATCH) - (BAR + FORG. + PLT)", "status": "ok", "report_month": ly_month,
+            })
     return out_rows
 
 

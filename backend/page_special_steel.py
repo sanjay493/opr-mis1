@@ -286,7 +286,7 @@ def _get_prod_ytd(cur, ytd_months, plant, item):
 _SSPS_PLANTS = ("ASP", "VISL", "SSP")
 
 
-def _ssps_special_steel(cur, months, item="Total Saleable Steel Despatch"):
+def _ssps_special_steel(cur, months, item="Saleable Steel Despatch"):
     """SSPs carries no order-book rows in special_steel_orders, so its
     'actual' special-steel figure on page 24 is derived instead from
     production_table: Salem Steel Plant's (SSP) own <item> despatch,
@@ -802,12 +802,16 @@ def generate_special_steel_plant(report_month: str, plant: str) -> dict:
             rows = []
             tot_o = tot_a = tot_c = tot_co = tot_ca = tot_cc = 0
 
-        # production_table stores values in '000T; page unit is T → ×1000
+        # production_table stores values in '000T; page unit is T → ×1000.
+        # Denominator changed from Saleable Steel PRODUCTION to Saleable
+        # Steel DESPATCH per direct instruction — the "saleable_production"
+        # dict/field names below are kept as-is (template compatibility),
+        # but the figures they now hold are despatch, not production.
         _t = lambda v: v * 1000 if v is not None else None
-        ss_cur  = _t(_get_prod(cur, report_month, plant, "Saleable Steel"))
-        ss_cply = _t(_get_prod(cur, cply_month,   plant, "Saleable Steel"))
-        ss_cum  = _t(_get_prod_ytd(cur, ytd_months,      plant, "Saleable Steel"))
-        ss_ccum = _t(_get_prod_ytd(cur, cply_ytd_months, plant, "Saleable Steel"))
+        ss_cur  = _t(_get_prod(cur, report_month, plant, "Saleable Steel Despatch"))
+        ss_cply = _t(_get_prod(cur, cply_month,   plant, "Saleable Steel Despatch"))
+        ss_cum  = _t(_get_prod_ytd(cur, ytd_months,      plant, "Saleable Steel Despatch"))
+        ss_ccum = _t(_get_prod_ytd(cur, cply_ytd_months, plant, "Saleable Steel Despatch"))
 
         return {
             "title":         _PLANT_TITLES.get(plant, f"Special Steel — {plant}"),
@@ -948,20 +952,28 @@ def generate_special_steel_sail(report_month: str) -> dict:
         # the 5 integrated plants here PLUS ASP/SSP/VISL, same PLANTS list
         # get_sail_production_plan below already uses for the ABP figure)
         # rather than looping the local 5-plant `plants` list above: this row
-        # is overall SAIL saleable steel production, not special-steel-only,
-        # so it must include the SSPs group like the ABP column already does
-        # — looping `plants` here previously left the actual/cply/cum/cply-cum
-        # columns 3 plants short of the ABP column they sit next to.
+        # is overall SAIL saleable steel, not special-steel-only, so it must
+        # include the SSPs group like the ABP column already does — looping
+        # `plants` here previously left the actual/cply/cum/cply-cum columns
+        # 3 plants short of the ABP column they sit next to.
+        #
+        # Denominator changed from Saleable Steel PRODUCTION to Saleable
+        # Steel DESPATCH per direct instruction, for the actual/cply/cum
+        # figures — NOT for the ABP row just below, which stays on
+        # production_plan_table's own plan since there's no reliable
+        # Saleable Steel Despatch PLAN figure to substitute (despatch items
+        # generally aren't ABP-planned the way production is).
         _t = lambda v: v * 1000 if v is not None else None
-        ss_cur  = _t(db.get_sail_production_actual(report_month, "Saleable Steel"))
-        ss_cply = _t(db.get_sail_production_actual(cply_month,   "Saleable Steel"))
-        ss_cum  = _t(db.get_sail_production_ytd_actual(ytd_months,      "Saleable Steel"))
-        ss_ccum = _t(db.get_sail_production_ytd_actual(cply_ytd_months, "Saleable Steel"))
+        ss_cur  = _t(db.get_sail_production_actual(report_month, "Saleable Steel Despatch"))
+        ss_cply = _t(db.get_sail_production_actual(cply_month,   "Saleable Steel Despatch"))
+        ss_cum  = _t(db.get_sail_production_ytd_actual(ytd_months,      "Saleable Steel Despatch"))
+        ss_ccum = _t(db.get_sail_production_ytd_actual(cply_ytd_months, "Saleable Steel Despatch"))
 
         # Saleable Steel production ABP (FY only — see _get_abp_sum): existing
         # production_plan_table ABP-plan data (same source as page 3's
         # Production Performance Summary), not special_steel_abp_table — this
         # row is overall saleable steel, not special steel specifically.
+        # Deliberately still PRODUCTION plan, not despatch — see note above.
         ss_abp_fy = sum(v * 1000 for m in fy_months for v in [db.get_sail_production_plan(m, "Saleable Steel")] if v)
 
         return {

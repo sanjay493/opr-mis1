@@ -1,77 +1,117 @@
 """
-Special Steel — Saleable Steel Composition & Value-Added Share (page 24).
+Special Steel — Saleable Steel Composition & Value-Added Share in Despatch
+(page 24).
 
 Replaces the old page-24 "Special Steel Performance of SAIL" table — that
 content now lives appended below page 23's own ISP table instead (see
 main.py's pg==23 handling, which now also sets page["sail_section"] =
 generate_special_steel_sail(month); special_steel.html renders it as a
-second table on the same physical page). Page 24 itself now shows a 7
-(entity) x 3 (period) grid of donut charts:
+second table on the same physical page). Page 24 itself is a plain figures
+table, no charts (an earlier two-ring donut design was dropped per direct
+instruction — see git history): Plant | Metric | Total | Annual ABP Plan |
+Month (Actual) | YTD (Actual), with "Plant" a merged cell spanning every
+row for that entity and, within each of the two Metric/Total column pairs
+below, a "Total" cell ALSO merged (rowspanned) down its own 2-row block —
+per direct instruction matching a reference layout, to cut the row count
+(and so the table's overall height, making room for the bubble chart on
+the same page) by moving SS/Spl. SS beside their own detail rows instead
+of under them in a dedicated full-width row.
 
-  Two concentric rings per cell (see the module-docstring paragraph below
-  for the current design; superseded an even earlier one-ring design that
-  shaded each Finished/Semis slice by special-steel intensity instead of
-  drawing Special Steel as its own ring).
-
-  The Finished/Semis split of Special Steel needs special_steel_orders' own `product`
-  grouping (see _SEMIS_PRODUCTS) to know how much of a plant's despatched
-  Special Steel was itself Finished vs Semis — special_steel_abp_table (the
-  Annual ABP Plan column's source) carries no such breakdown, only one
-  aggregate figure per plant/month, so the Plan column's ring shows plain
-  Finished/Semis with no special-steel shading (see _cell's is_plan branch
-  and the page's own footnote about this).
+Two blocks per entity (see _block_rows), each a detail column (1-2 rows)
+plus one Total column rowspanned across them. The Annual ABP Plan column
+stays on PRODUCTION data throughout (no despatch plan exists, and the
+plan's own Finished/Semis distribution is the same either way); the Month
+and YTD (Actual) columns are DESPATCH-based throughout, per direct
+instruction — see _raw_cell/_desp_item_sum:
+  Saleable Steel block — detail rows FS then Semis (Semis omitted entirely
+                  for an entity that structurally never carries a Semis
+                  despatch/production row, e.g. RSP — see _prod_item_sum's
+                  and _desp_item_sum's docstrings — rather than shown as a
+                  permanent blank row), each "% of SS"; Total column is SS
+                  itself (Plan: FS+Semis production; Actual: the plant's
+                  own Saleable Steel DESPATCH figure, with FS derived as
+                  SS-minus-Semis), no "% of" line (it IS the 100% base
+                  every other row's percentage is against).
+  Despatch block  — detail rows Spl. FS then Spl. Semis (Spl. Semis
+                  omitted, like the Semis row, for an entity structurally
+                  incapable of having one: RSP — no Semis products at all,
+                  _SEMIS_PRODUCTS["RSP"] is empty — and SSPs — no
+                  special_steel_orders rows of its own, its whole Special
+                  Steel figure is attributed to Finished, see
+                  _special_fin_semis_split's docstring). Spl. FS carries
+                  "% of SS" AND "% of FS" (value-added intensity of the
+                  plant's own Finished Steel mix) on the SAME line,
+                  separated by "||" (_amt_dual_pct). Blank cell (not
+                  "N/A") wherever the Fin/Semis split isn't available for
+                  that period — always true for the Annual ABP Plan
+                  column, since special_steel_abp_table carries only one
+                  aggregate figure per plant/month with no Finished/Semis
+                  breakdown. Total column is Spl. SS (Spl. FS + Spl.
+                  Semis, or the Plan column's own single aggregate figure,
+                  which is what this column alone carries there); no
+                  "% of" line, per direct instruction (unlike the SS
+                  column, this total draws no percentage of its own since
+                  despatch isn't a slice of the production base).
 
 Periods (columns): the current FY's Annual ABP Plan, the report month, and
 Apr-report month (YTD) — mirrors the exact three periods
 page_special_steel_trend.py's annual/month/till-month charts already use.
 Entities (rows): BSP/DSP/RSP/BSL/ISP, SSPs (the ASP+VISL+SSP bundle — see
-page_special_steel._SSPS_PLANTS), and SAIL (all 8 plants). 7 rows total.
+page_special_steel._SSPS_PLANTS), and SAIL (all 8 plants). 7 entities.
 
-Each cell (Actual columns) draws TWO separate concentric rings rather than
-one shaded ring: an outer ring for Saleable Steel's own Finished/Semis
-split (light "regular" colors) and an inner ring for Special Steel's own
-Finished/Semis split (full-saturation "special" colors) — per direct
-instruction, replacing the single-ring intensity-shaded design below.
 Saleable Steel (production) and Special Steel (despatch) are different
-physical flows for the same plant (see the footnote further down) and
-aren't guaranteed exact subsets of one another, so giving Special Steel
-its own full ring avoids implying an exact subset relationship the data
-doesn't back up. Both rings start at angle 0 (12 o'clock) and go
-Finished-then-Semis clockwise, so the Finished slice's start edge lines up
-between the two rings — "drawn matching" per direct instruction — even
-though the Finished/Semis boundary itself generally falls at a different
-angle in each ring (the two totals have different proportions). The
-Annual ABP Plan column still has no Finished/Semis split for its Special
-Steel target (see below), so it keeps the single plain ring it always
-had — see _nested_donut_svg's has_split branch.
+physical flows for the same plant and aren't guaranteed exact subsets of
+one another — every Spl.-row "% of SS" line is against the production
+total only for a value-added-share reading, not because despatch is a
+subset of production.
+
+Below the table, a bubble chart plots each plant's till-month (YTD)
+value-addition positioning (_bubble_data/_bubble_chart_svg) — per direct
+instruction, replacing the table's old footnote paragraph:
+  X = Finished Steel Share = Finished Steel / Saleable Steel x 100.
+  Y = Special Finished Steel Share = Special Finished Steel /
+      Saleable Steel x 100 (i.e. the Spl. FS row's own "% of SS" figure).
+  size = Saleable Steel production (Tonnes), sqrt-scaled between a fixed
+      min/max radius so the largest plant doesn't swamp the smallest.
+Dashed quadrant dividers sit at the mean X/mean Y of the plotted plants
+(not a fixed 50%, since neither share clusters near the middle) with
+"High/Low Value Addition" labels in the upper/lower right, matching a
+reference mock-up. SAIL is excluded (it's the sum of the other rows, not
+a peer plant to compare); SSPs is included as the ASP+VISL+SSP bundle,
+same as the table above. A plant with no YTD despatch data at all is
+silently dropped from the plot (nothing meaningful to place at either
+axis) rather than plotted at a misleading 0.
 
 Data sources:
-  Saleable Steel (Finished + Saleable Semis) — production_table (actual)
-    and production_plan_table (ABP plan), both '000T, scaled to Tonnes
-    here to match Special Steel's own native Tonnes unit. SAIL sums all 8
-    plants and "Finished Steel" gets the same alias-fallback (SSP/VISL ->
-    Saleable Steel when no dedicated Finished Steel row) and, for actuals
-    only, the conversion adjustment — db.get_sail_production_actual/_plan/
-    _ytd_actual's own established convention, replicated here on a SHARED
-    cursor (see _prod_item_sum's docstring for why: those db.py helpers
-    each open their own fresh MySQL connection per call, and the ABP
-    period needs 12 monthly figures per entity — looping the db.py
-    helpers directly would reopen the exact per-call-connection slowdown
-    fixed earlier for the coal-blend %import chart).
+  Saleable Steel — Annual ABP Plan: production_plan_table (Finished Steel +
+    Saleable Semis), '000T, scaled to Tonnes here to match Special Steel's
+    own native Tonnes unit. SAIL sums all 8 plants and "Finished Steel"
+    gets the same alias-fallback (SSP/VISL -> Saleable Steel when no
+    dedicated Finished Steel row) db.get_sail_production_plan itself uses,
+    replicated here on a SHARED cursor (see _prod_item_sum's docstring for
+    why: those db.py helpers each open their own fresh MySQL connection
+    per call, and the ABP period needs 12 monthly figures per entity —
+    looping the db.py helpers directly would reopen the exact per-call-
+    connection slowdown fixed earlier for the coal-blend %import chart).
+    Month/YTD (Actual): production_table's own 'Saleable Steel Despatch'/
+    'Semis Despatch' items (_desp_item_sum) — no alias/conversion handling
+    needed there (see that function's docstring; the inter-plant
+    conversion adjustment is production-actual-specific and no longer
+    reachable from this page now that Actual periods are despatch-based).
   Special Steel actual — page_special_steel_trend._sum_actual (Tonnes) for
     the total, plus special_steel_orders.product grouped into Finished/
-    Semis (_special_fin_semis_split) for the two actual columns' ring
-    shading.
+    Semis (_special_fin_semis_split) for the Spl. FS/Spl. Semis rows.
   Special Steel ABP — page_special_steel._get_abp_sum (special_steel_abp_table,
     Tonnes) — one aggregate figure, no Finished/Semis split available.
 
-Saleable Steel here is production (production_table/production_plan_table),
-while Special Steel is despatch (special_steel_orders / Salem's own
-despatch figure) for the Month/YTD columns — two different physical flows
-for the same plant, not necessarily equal tonnage even before the
-Finished/Semis split. Called out in the page's own footnote rather than
-buried only in this docstring, since it materially affects how the ring's
-proportions should be read.
+Saleable Steel and Special Steel are now both DESPATCH for the Month/YTD
+(Actual) columns (Saleable Steel Despatch / Semis Despatch vs.
+special_steel_orders.actual_despatch) — the same physical flow, so every
+"% of SS"/"% of FS" figure and the bubble chart's X/Y/size all sit on one
+consistent despatch base. The Annual ABP Plan column alone stays on
+PRODUCTION (production_plan_table) throughout, per direct instruction: no
+despatch plan data exists, and Saleable Steel's planned Finished/Semis
+distribution is taken to be the same whichever side it's read from.
 """
 import math
 import datetime as _dt
@@ -100,15 +140,6 @@ _SEMIS_PRODUCTS = {
     "BSL": {"SLAB"},
     "ISP": {"150 BLT", "200 BLM"},
 }
-
-# Full-saturation swatch draws the inner (Special Steel) ring, the lighter
-# tint of the same color draws the outer (Saleable Steel) ring — "same
-# color, more intense for the special-steel ring" per direct instruction.
-_FINISHED_COLOR = "#4472C4"
-_FINISHED_LIGHT = "#B4C7E7"
-_SEMIS_COLOR = "#ED7D31"
-_SEMIS_LIGHT = "#F8CBAD"
-
 
 # ── data ──────────────────────────────────────────────────────────────────
 
@@ -199,6 +230,42 @@ def _ssps_semis_residual(cur, table: str, months: list, plants: list) -> float:
     return max(saleable - finished, 0.0)
 
 
+def _desp_item_sum(cur, months: list, entity: str, item: str):
+    """Sum of `item` ('Saleable Steel Despatch'/'Semis Despatch') over
+    `months`, in Tonnes ('000T stored -> x1000) — the despatch-side
+    counterpart to _prod_item_sum's PRODUCTION-side sum, used for every
+    Actual (Month/YTD) period's FS/Semis/SS figures per direct instruction
+    (the Annual ABP Plan column keeps using _prod_item_sum/production
+    tables unchanged, since no despatch plan data exists and the plan's
+    Saleable Steel distribution is the same whichever side it's read from).
+
+    Same plants-per-entity resolution as _prod_item_sum (SAIL -> all 8
+    plants, SSPs -> ASP+VISL+SSP, else -> the one plant) but no
+    Finished-Steel alias/conversion handling — those are production-table-
+    specific mechanisms (SSP/VISL's Finished Steel alias, SAIL's inter-
+    plant conversion adjustment) that don't apply to despatch, and aren't
+    needed here anyway: 'Semis Despatch' simply doesn't exist for SSP/VISL/
+    RSP (see module's _SEMIS_PRODUCTS), so _raw_cell's total-minus-semis
+    derivation of Finished Despatch already comes out as 100% Finished for
+    them with no alias needed."""
+    if entity == "SAIL":
+        plants = ALL_PLANTS
+    elif entity == "SSPs":
+        plants = list(_SSPS_PLANTS)
+    else:
+        plants = [entity]
+
+    ph_m = ",".join("?" * len(months))
+    ph_p = ",".join("?" * len(plants))
+    cur.execute(f"""
+        SELECT COALESCE(SUM(month_actual),0), COUNT(*)
+        FROM production_table
+        WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=?
+    """, (*months, *plants, item))
+    t, c = cur.fetchone()
+    return (t * 1000) if c > 0 else None
+
+
 def _abp_special_sum(cur, fy_months: list, entity: str):
     """Special Steel FY ABP target, Tonnes — special_steel_abp_table has no
     'SAIL' row of its own (see generate_special_steel_sail's sail_abp_fy),
@@ -267,175 +334,281 @@ def _pct(v, total):
     return f"{v / total * 100:.0f}%" if (v is not None and total) else "—"
 
 
-def _cell(cur, months: list, entity: str, is_plan: bool) -> dict:
-    fin = _prod_item_sum(cur, months, entity, "Finished Steel", is_plan)
-    semis = _prod_item_sum(cur, months, entity, "Saleable Semis", is_plan)
-    total = (fin or 0) + (semis or 0)
+def _amt_pct(v, total, unit="SS"):
+    return f"{_fmt_int(v)} ({_pct(v, total)} of {unit})"
 
-    special_fin = special_semis = None
+
+def _amt_dual_pct(v, total_a, unit_a, total_b, unit_b):
+    return f"{_fmt_int(v)} ({_pct(v, total_a)} of {unit_a} || {_pct(v, total_b)} of {unit_b})"
+
+
+def _raw_cell(cur, months: list, entity: str, is_plan: bool) -> dict:
+    """Numeric-only figures for one entity/period — the per-period building
+    block for generate_special_steel_donut's metric rows (see module
+    docstring). `spl_fin`/`spl_semis` are None together whenever no
+    Fin/Semis split is available for Special Steel this period (always
+    true for the Annual ABP Plan column; also true for an Actual period
+    with no despatch at all); `spl_total` is spl_fin+spl_semis when the
+    split is known, else the Plan column's own single aggregate figure.
+
+    Plan period: `total`/`fin`/`semis` are Saleable Steel PRODUCTION plan
+    (fin+semis summed from production_plan_table) — unchanged, per direct
+    instruction, since no despatch plan data exists and the plan's own
+    Finished/Semis distribution is the same whichever side it's read from.
+    Actual period (Month/YTD): `total` is the plant's Saleable Steel
+    DESPATCH itself (not a sum of fin+semis — the more reliably-reported
+    figure), and `fin` is derived as total-minus-semis so Spl. FS's "% of
+    SS"/"% of FS" (and the bubble chart's X/Y/size) all land on the same
+    despatch-side base as Special Steel's own despatch figure."""
     if is_plan:
-        special = _abp_special_sum(cur, months, entity)
+        fin = _prod_item_sum(cur, months, entity, "Finished Steel", is_plan=True)
+        semis = _prod_item_sum(cur, months, entity, "Saleable Semis", is_plan=True)
+        total = (fin or 0) + (semis or 0)
     else:
-        special, has = _sum_actual(cur, months, entity)
+        total = _desp_item_sum(cur, months, entity, "Saleable Steel Despatch")
+        semis = _desp_item_sum(cur, months, entity, "Semis Despatch")
+        fin = (total - (semis or 0)) if total is not None else None
+
+    spl_fin = spl_semis = None
+    if is_plan:
+        spl_total = _abp_special_sum(cur, months, entity)
+    else:
+        spl_total, has = _sum_actual(cur, months, entity)
         if not has:
-            special = None
+            spl_total = None
         else:
-            special_fin, special_semis = _special_fin_semis_split(cur, months, entity)
+            spl_fin, spl_semis = _special_fin_semis_split(cur, months, entity)
+            spl_total = spl_fin + spl_semis
 
-    # Each qty gets its own "(NN% of SS)" line underneath it — per direct
-    # instruction, matching the reference mock-up's line layout rather than
-    # the old single-line "label: qty (pct)" format ("SS"/"FS" abbreviate
-    # Saleable Steel/Finished Steel, again per direct instruction, to keep
-    # these lines short enough not to wrap). Spl. FS additionally gets a
-    # SECOND pct line, against Finished Steel itself (not Saleable Steel) —
-    # "additional % of special Finished steel in total finished steel" per
-    # direct instruction — since that's the ratio that shows how
-    # value-added-heavy a plant's own Finished Steel mix is. Only computed
-    # when the Fin/Semis split is available (see _special_fin_semis_split's
-    # docstring for why the Annual ABP Plan column never has one): mixing
-    # an aggregate Plan Special figure (Finished+Semis together) into a
-    # Finished-Steel-only denominator would misstate the ratio.
-    if special_fin is not None:
-        spl_fin_txt = f"Spl. FS: {_fmt_int(special_fin)} T"
-        spl_fin_pct_txt = f"({_pct(special_fin, total)} of SS)"
-        spl_fin_pct_of_fin_txt = f"({_pct(special_fin, fin)} of FS)"
-        # None (not "Spl. Semis: 0 T (0% of SS)") whenever Special Semis is
-        # structurally always zero for this entity — RSP (semis is None:
-        # _SEMIS_PRODUCTS["RSP"] is empty, so every despatched product
-        # counts as Finished) and SSPs (_special_fin_semis_split's SSPs
-        # branch always returns 0 for special_semis: SSPs has no
-        # special_steel_orders rows of its own, so its whole Special Steel
-        # figure is attributed to Finished) — showing a permanently-zero
-        # Spl. Semis line for an entity that can never have one is just
-        # noise, per direct instruction.
-        if semis is not None and entity != "SSPs":
-            spl_semis_txt = f"Spl. Semis: {_fmt_int(special_semis)} T"
-            spl_semis_pct_txt = f"({_pct(special_semis, total)} of SS)"
-        else:
-            spl_semis_txt = None
-            spl_semis_pct_txt = None
-    else:
-        spl_fin_txt = f"Spl: {_fmt_int(special)} T"
-        spl_fin_pct_txt = f"({_pct(special, total)} of SS)"
-        spl_fin_pct_of_fin_txt = None
-        spl_semis_txt = None
-        spl_semis_pct_txt = None
-
-    return {
-        "svg": _nested_donut_svg(fin, semis, special_fin, special_semis),
-        "total_txt": _fmt_int(total) if total else "N/A",
-        "fin_txt": f"FS: {_fmt_int(fin)} T",
-        "fin_pct_txt": f"({_pct(fin, total)} of SS)",
-        # None (not "Semis: N/A (—)") when this entity structurally has no
-        # Semis at all — RSP, in both production_table and
-        # production_plan_table, has never once carried a 'Saleable Semis'
-        # row (unlike SSPs, now covered by _prod_item_sum's own residual —
-        # see that function's docstring) — per direct instruction, the line
-        # is omitted by special_steel_donut.html rather than shown as N/A.
-        "semis_txt": f"Semis: {_fmt_int(semis)} T" if semis is not None else None,
-        "semis_pct_txt": f"({_pct(semis, total)} of SS)" if semis is not None else None,
-        "spl_fin_txt": spl_fin_txt,
-        "spl_fin_pct_txt": spl_fin_pct_txt,
-        "spl_fin_pct_of_fin_txt": spl_fin_pct_of_fin_txt,
-        "spl_semis_txt": spl_semis_txt,
-        "spl_semis_pct_txt": spl_semis_pct_txt,
-    }
+    return {"fin": fin, "semis": semis, "total": total,
+            "spl_fin": spl_fin, "spl_semis": spl_semis, "spl_total": spl_total}
 
 
-# ── SVG: two concentric rings — outer Saleable, inner Special ──────────────
+def _block_rows(periods: tuple, detail_defs: list, total_label: str, total_fn, special: bool,
+                 emphasize: frozenset = frozenset()) -> list:
+    """One physical table row per (label, cells_fn) in `detail_defs`, all
+    sharing a single "total" column (total_label/total_fn) that's rowspanned
+    down the whole block — see generate_special_steel_donut's module
+    docstring: this is what lets e.g. FS+Semis+SS collapse from 3 full-width
+    rows into 2, with SS moved beside them rather than under them. Only the
+    first row of the block carries "total_cells" (non-None) — the template
+    renders the Total <td>s (with rowspan=len(detail_defs)) on that row only
+    and skips them on the rest, exactly like the Plant column's own
+    rowspan.
 
-def _nested_donut_svg(fin_qty, semis_qty, special_fin_qty, special_semis_qty,
-                       vw: float = 100, vh: float = 100) -> str:
-    """Outer ring = Saleable Steel's own Finished/Semis split (light
-    "regular" colors); inner ring = Special Steel's own Finished/Semis
-    split (full-saturation "special" colors) — two independent 100%
-    breakdowns, not one ring shaded by a sub-portion, per direct
-    instruction (see module docstring for why). Both rings start at angle
-    0 and go Finished-then-Semis clockwise, so the Finished slice's start
-    edge lines up between the two rings ("drawn matching") even though
-    each ring's own Finished/Semis boundary angle differs (the two totals
-    have different proportions).
+    `emphasize` names detail rows (by label) whose own value cells should
+    render bold — currently just Spl. FS, per direct instruction, since
+    it's the page's core value-added figure ("596,744 (78% of SS || 102%
+    of FS)"-style lines) and the rest are supporting context."""
+    n = len(detail_defs)
+    total_cells = [total_fn(d) for d in periods]
+    rows = []
+    for i, (label, cells_fn) in enumerate(detail_defs):
+        rows.append({
+            "metric_label": label,
+            "cells": [cells_fn(d) for d in periods],
+            "special": special,
+            "emphasis": label in emphasize,
+            "is_block_first": i == 0,
+            "block_span": n,
+            "total_label": total_label if i == 0 else None,
+            "total_cells": total_cells if i == 0 else None,
+        })
+    return rows
 
-    special_fin_qty/special_semis_qty are None together when no
-    per-product-group split is available (the Annual ABP Plan column —
-    see module docstring); only the single outer-sized ring is drawn then,
-    in full-saturation colors since there's nothing to contrast it
-    against — the page's pre-existing plain-ring fallback."""
-    total = (fin_qty or 0) + (semis_qty or 0)
-    has_split = special_fin_qty is not None or special_semis_qty is not None
-    cx, cy = vw / 2, vh / 2
 
-    def polar(r, deg):
-        a = math.radians(deg)
-        return cx + r * math.sin(a), cy - r * math.cos(a)
+def _entity_metrics(cur, entity: str, fy_months: list, month: str, ytd_months: list) -> dict:
+    plan_d = _raw_cell(cur, fy_months, entity, is_plan=True)
+    month_d = _raw_cell(cur, [month], entity, is_plan=False)
+    ytd_d = _raw_cell(cur, ytd_months, entity, is_plan=False)
+    periods = (plan_d, month_d, ytd_d)
 
-    def ring_slice(r_o, r_i, a0, a1, color):
-        large = 1 if (a1 - a0) > 180 else 0
-        x1o, y1o = polar(r_o, a0); x2o, y2o = polar(r_o, a1)
-        x1i, y1i = polar(r_i, a1); x2i, y2i = polar(r_i, a0)
-        path = (f'M {x1o:.2f} {y1o:.2f} A {r_o} {r_o} 0 {large} 1 {x2o:.2f} {y2o:.2f} '
-                f'L {x1i:.2f} {y1i:.2f} A {r_i} {r_i} 0 {large} 0 {x2i:.2f} {y2i:.2f} Z')
-        return f'<path d="{path}" fill="{color}" stroke="#ffffff" stroke-width="0.6"/>'
+    # Row shown at all only when at least one period actually carries the
+    # figure — Semis is entity-structural (RSP never has a Saleable Semis
+    # production row, in either production_table or
+    # production_plan_table — see _prod_item_sum's docstring), so this is
+    # equivalent to an entity-level flag despite being computed from the
+    # three periods. Spl. Semis piggybacks on the same flag (an entity that
+    # never despatches Semis-grouped product also never produces Semis
+    # Saleable Steel) and additionally excludes SSPs (see
+    # _special_fin_semis_split's docstring: its whole Special Steel figure
+    # is attributed to Finished by construction, never Semis).
+    show_semis = any(d["semis"] is not None for d in periods)
+    show_spl_semis = show_semis and entity != "SSPs"
 
-    def ring(r_o, r_i, slices):
-        # A share of exactly 1.0 (e.g. RSP has no Semis, or a period with no
-        # Special Steel at all) can't be drawn as a single A-arc — start and
-        # end points coincide, which is degenerate for the sweep-flag math
-        # above. Drawn as a plain stroked circle instead whenever only one
-        # slice is actually non-zero. Both rings always start at angle 0
-        # (the loop's initial a=0.0) so the Finished slice's start edge
-        # matches between the outer and inner ring.
-        out = []
-        active = [(s, c) for s, c in slices if s and s > 0]
-        if not active:
-            return out
-        if len(active) == 1 and active[0][0] >= 0.999:
-            _, color = active[0]
-            out.append(f'<circle cx="{cx}" cy="{cy}" r="{(r_o + r_i) / 2:.2f}" '
-                       f'fill="none" stroke="{color}" stroke-width="{r_o - r_i}"/>')
-            return out
-        a = 0.0
-        for share, color in active:
-            sweep = share * 360.0
-            out.append(ring_slice(r_o, r_i, a, a + sweep, color))
-            a += sweep
-        return out
+    prod_defs = [("FS", lambda d: [_amt_pct(d["fin"], d["total"])])]
+    if show_semis:
+        prod_defs.append(("Semis", lambda d: [_amt_pct(d["semis"], d["total"])] if d["semis"] is not None else []))
+    prod_rows = _block_rows(
+        periods, prod_defs, "SS",
+        lambda d: [f"{_fmt_int(d['total']) if d['total'] else 'N/A'}"],
+        special=False,
+    )
 
-    def na_ring(r_o):
-        return (f'<circle cx="{cx}" cy="{cy}" r="{r_o}" fill="none" '
-                f'stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,2"/>')
+    despatch_defs = [("Spl. FS", lambda d: [_amt_dual_pct(d["spl_fin"], d["total"], "SS", d["fin"], "FS")]
+                      if d["spl_fin"] is not None else [])]
+    if show_spl_semis:
+        despatch_defs.append(("Spl. Semis", lambda d: [_amt_pct(d["spl_semis"], d["total"])]
+                               if d["spl_semis"] is not None else []))
+    despatch_rows = _block_rows(
+        periods, despatch_defs, "Spl. SS",
+        lambda d: [f"{_fmt_int(d['spl_total'])}"],
+        special=True,
+        emphasize=frozenset({"Spl. FS"}),
+    )
+
+    rows = prod_rows + despatch_rows
+    for i, row in enumerate(rows):
+        row["is_entity_first"] = (i == 0)
+
+    return {"label": entity, "rowspan": len(rows), "rows": rows}
+
+
+# ── bubble chart: till-month (YTD) value-addition positioning ──────────────
+
+_BUBBLE_COLORS = {
+    "BSP": "#4472C4",
+    "DSP": "#70AD47",
+    "RSP": "#7030A0",
+    "BSL": "#ED7D31",
+    "ISP": "#FFC000",
+    "SSPs": "#00B0B9",
+}
+
+
+def _bubble_data(cur, ytd_months: list) -> list:
+    """One point per plant (SAIL excluded — it's the sum of these rows, not
+    a peer to compare) for the till-month bubble chart: X = Finished Steel
+    Share of Saleable Steel DESPATCH, Y = Special Finished Steel Share of
+    Saleable Steel Despatch (the Spl. FS row's own "% of SS" figure), size
+    = Saleable Steel Despatch. A plant with no YTD Special Steel despatch
+    at all (spl_fin is None) or no Saleable Steel despatch is dropped
+    rather than plotted at a misleading 0."""
+    points = []
+    for ent in _PLANTS + ["SSPs"]:
+        d = _raw_cell(cur, ytd_months, ent, is_plan=False)
+        if not d["total"] or d["spl_fin"] is None:
+            continue
+        points.append({
+            "label": ent,
+            "x": (d["fin"] or 0) / d["total"] * 100,
+            "y": d["spl_fin"] / d["total"] * 100,
+            "size": d["total"],
+            "color": _BUBBLE_COLORS.get(ent, "#6b7280"),
+        })
+    return points
+
+
+def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 500) -> str:
+    """Quadrant bubble chart matching a reference mock-up: plain L-shaped
+    axes (no box, no tick numbers), dashed quadrant dividers at the mean
+    X/mean Y of the plotted plants (not a fixed 50% — neither share
+    clusters near the middle in practice), "High/Low Value Addition"
+    labels in the upper/lower right, and a plant-colored, sqrt-scaled
+    bubble per plant with its label centered inside. Returns "" when fewer
+    than 2 plants have data (a quadrant split is meaningless with 0-1
+    points).
+
+    The default vw:vh (1000:640) is tuned, not arbitrary — since the <svg>
+    is only ever set to width:100% (height:auto) in CSS, this ratio IS the
+    chart's rendered aspect ratio on the page. An earlier 1000:700 pass
+    was tuned against a standalone browser preview (not the real PDF
+    pipeline) and turned out ~13pt too tall once actually rendered through
+    Playwright — Chromium's print layout can't split this block (no
+    internal break point), so being even slightly too tall pushed the
+    WHOLE chart onto page 25 (leaving page 24 with the title/subtitle and
+    a large blank gap), rather than just clipping the overflow. 1000:640
+    was instead measured from an ACTUAL generated PDF (pdf.generate_pdf_bytes
+    with pages_override=[this page's dict], inspected via PyMuPDF —
+    fitz.open(...).get_drawings()/search_for() to get real point
+    coordinates) — the table's own row count is fixed regardless of
+    report month (which entities get a Semis/Spl. Semis row is
+    structural, not data-dependent, and every value cell is single-line
+    via white-space:nowrap — see main.html's .ssd-table rules — so digit
+    count doesn't change row height either), so the measured leftover
+    space, and this ratio, stay good without needing to be recomputed per
+    month. If the table's column/row structure changes again, re-measure
+    the SAME way (a synthetic HTML preview is not reliable enough here —
+    it under-counted the real table height by several mm) rather than
+    guessing a new ratio."""
+    if len(points) < 2:
+        return ""
+
+    # pad_r must clear r_max (the largest possible bubble radius, below) —
+    # RSP structurally has no Semis (_SEMIS_PRODUCTS["RSP"] is empty), so
+    # its Finished Steel Share is always exactly 100%, i.e. x=x_max, every
+    # single period: its bubble sits with its CENTER on the plot's right
+    # edge every time, not just near it. The old pad_r=50 was smaller than
+    # r_max=72, so whenever RSP was a large-enough plant its bubble spilled
+    # off the right edge of the viewBox and got clipped — per direct
+    # instruction, fixed by widening pad_r past r_max with a small margin
+    # rather than by touching x_max/the 100% axis meaning itself.
+    pad_l, pad_r, pad_t, pad_b = 130, 90, 60, 110
+    plot_w = vw - pad_l - pad_r
+    plot_h = vh - pad_t - pad_b
+
+    x_max = 100.0
+    y_max = max(100.0, math.ceil(max(p["y"] for p in points) * 1.1 / 10) * 10)
+
+    mean_x = sum(p["x"] for p in points) / len(points)
+    mean_y = sum(p["y"] for p in points) / len(points)
+
+    sizes = [p["size"] for p in points]
+    s_min, s_max = min(sizes), max(sizes)
+    r_min, r_max = 34.0, 72.0
+
+    def radius(size):
+        if s_max <= s_min:
+            return (r_min + r_max) / 2
+        t = (math.sqrt(size) - math.sqrt(s_min)) / (math.sqrt(s_max) - math.sqrt(s_min))
+        return r_min + t * (r_max - r_min)
+
+    def xp(x):
+        return pad_l + (x / x_max) * plot_w
+
+    def yp(y):
+        return pad_t + (1 - y / y_max) * plot_h
 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
 
-    if total <= 0:
-        lines.append(na_ring(46.0))
-        lines.append("</svg>")
-        return "\n".join(lines)
+    # L-shaped axes (Y then X), solid black — no surrounding box.
+    lines.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t + plot_h}" stroke="#000000" stroke-width="2.5"/>')
+    lines.append(f'<line x1="{pad_l}" y1="{pad_t + plot_h}" x2="{pad_l + plot_w}" y2="{pad_t + plot_h}" stroke="#000000" stroke-width="2.5"/>')
 
-    fin_sh = (fin_qty or 0) / total
-    semis_sh = (semis_qty or 0) / total
+    # Dashed quadrant dividers at the plotted set's own mean, not a fixed 50%.
+    mx, my = xp(mean_x), yp(mean_y)
+    lines.append(f'<line x1="{mx:.1f}" y1="{pad_t}" x2="{mx:.1f}" y2="{pad_t + plot_h}" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="7,5"/>')
+    lines.append(f'<line x1="{pad_l}" y1="{my:.1f}" x2="{pad_l + plot_w}" y2="{my:.1f}" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="7,5"/>')
 
-    if not has_split:
-        # Plan column: no Special Steel Finished/Semis split available —
-        # single plain ring, same as before this page grew a second ring.
-        lines.extend(ring(46.0, 26.0, [(fin_sh, _FINISHED_COLOR), (semis_sh, _SEMIS_COLOR)]))
-        lines.append("</svg>")
-        return "\n".join(lines)
+    # Quadrant labels, upper/lower right — matching the reference mock-up.
+    label_x = pad_l + plot_w * 0.56
+    lines.append(f'<text x="{label_x:.1f}" y="{pad_t + 22:.1f}" font-size="20" '
+                 f'font-family="Arial, sans-serif" fill="#16a34a" font-weight="600">High Value Addition</text>')
+    lines.append(f'<text x="{label_x:.1f}" y="{pad_t + plot_h - 14:.1f}" font-size="20" '
+                 f'font-family="Arial, sans-serif" fill="#c2410c" font-weight="600">Low Value Addition</text>')
 
-    # Outer ring: Saleable Steel, Finished/Semis, light "regular" colors.
-    lines.extend(ring(46.0, 33.0, [(fin_sh, _FINISHED_LIGHT), (semis_sh, _SEMIS_LIGHT)]))
+    # Axis titles.
+    xt = pad_l + plot_w / 2
+    lines.append(f'<text x="{xt:.1f}" y="{vh - 38:.1f}" font-size="20" font-family="Arial, sans-serif" '
+                 f'fill="#111827" text-anchor="middle">Finished Steel Share of Saleable Steel Despatch (%)</text>')
+    yt = pad_t + plot_h / 2
+    # Shorter, abbreviated wording (matching the table's own "FS"/"SS")
+    # rather than the fully spelled-out label the X-axis uses — this text
+    # runs vertically along plot_h, which is far shorter than plot_w, and
+    # appending "Despatch" to the old, already-long spelled-out label
+    # pushed it past the chart's own top/bottom bounds.
+    lines.append(f'<text x="32" y="{yt:.1f}" font-size="17" font-family="Arial, sans-serif" fill="#111827" '
+                 f'text-anchor="middle" transform="rotate(-90 32 {yt:.1f})">Special FS Share of Saleable Steel Despatch (%)</text>')
 
-    # Inner ring: Special Steel, Finished/Semis, full-saturation "special"
-    # colors — its OWN 100% (special_fin+special_semis), not a share of the
-    # Saleable total, since despatch and production don't share a base.
-    special_total = (special_fin_qty or 0) + (special_semis_qty or 0)
-    if special_total > 0:
-        sfin_sh = (special_fin_qty or 0) / special_total
-        ssemis_sh = (special_semis_qty or 0) / special_total
-        lines.extend(ring(29.0, 16.0, [(sfin_sh, _FINISHED_COLOR), (ssemis_sh, _SEMIS_COLOR)]))
-    else:
-        lines.append(na_ring(29.0))
+    # Bubbles, sqrt-scaled by Saleable Steel production, label centered.
+    for p in points:
+        cx, cy = xp(p["x"]), yp(p["y"])
+        r = radius(p["size"])
+        lines.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r:.1f}" fill="{p["color"]}" '
+                     f'fill-opacity="0.88" stroke="#ffffff" stroke-width="2"/>')
+        lines.append(f'<text x="{cx:.1f}" y="{cy + 7:.1f}" font-size="22" font-family="Arial, sans-serif" '
+                     f'fill="#ffffff" font-weight="700" text-anchor="middle">{p["label"]}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -450,14 +623,8 @@ def generate_special_steel_donut(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        rows = []
-        for ent in _ROWS:
-            rows.append({
-                "label": ent,
-                "plan":  _cell(cur, fy_months, ent, is_plan=True),
-                "month": _cell(cur, [report_month], ent, is_plan=False),
-                "ytd":   _cell(cur, ytd_months, ent, is_plan=False),
-            })
+        entities = [_entity_metrics(cur, ent, fy_months, report_month, ytd_months) for ent in _ROWS]
+        bubble_svg = _bubble_chart_svg(_bubble_data(cur, ytd_months))
     finally:
         conn.close()
 
@@ -468,9 +635,10 @@ def generate_special_steel_donut(report_month: str) -> dict:
 
     return {
         "type": "special_steel_donut",
-        "title": "Special Steel — Saleable Steel Composition & Value-Added Share",
+        "title": "Special Steel — Saleable Steel Composition & Value-Added Share in Despatch",
         "fy_label": db.get_fy_for_month(report_month)[2:],
         "month_label": month_label,
         "cum_label": cum_label,
-        "rows": rows,
+        "entities": entities,
+        "bubble_svg": bubble_svg,
     }

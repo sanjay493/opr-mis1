@@ -953,6 +953,7 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
                 if page_of:
                     _apply_trend_page_splits(tp, page_of)
                     _enforce_trend_min_segments(tp, page_of)
+                    _fix_orphaned_small_groups(tp, page_of)
 
             new_snapshot = _trend_split_snapshot(trend_pages)
             if new_snapshot == prev_snapshot:
@@ -1075,6 +1076,69 @@ def _enforce_trend_min_segments(trend_page: dict, page_of: dict) -> None:
                         # too few rows in the continuation — pull the break
                         # earlier so exactly MIN rows carry over
                         _force(j - MIN)
+            i = j
+
+
+def _fix_orphaned_small_groups(trend_page: dict, page_of: dict) -> None:
+    """Mutate trend_page's rows in place: catch a shape _enforce_trend_min_
+    segments misses entirely — a small (<=MIN-row) plant group left utterly
+    alone on its own physical page, with nothing else sharing that page.
+
+    This is a SIDE EFFECT of an earlier pass's forced break, not something
+    visible when that break was first added: confirmed against a real
+    report (Crude Steel, July 2026) via a probe trace — pass 0 found VISL's
+    lone "16-17" row sharing a page with SSP's tail (not orphaned at all,
+    so _enforce_trend_min_segments correctly left it alone) while forcing
+    SAIL wholly onto the next page (too few SAIL rows — 2 — fit before that
+    page's natural end). Once that forced break was applied and re-probed
+    in pass 1, VISL itself drifted onto its OWN fresh page — SAIL no longer
+    shares it, and nothing backfills the space SAIL vacated. Because SAIL's
+    group is no longer split by pass 1 (its forced break already put all
+    12 rows on one page), _enforce_trend_min_segments has nothing left to
+    "fix" there, so this orphaning would otherwise never get corrected —
+    hence a dedicated pass, re-run fresh every probe (the orphaning is only
+    ever visible AFTER the break that causes it has already been applied
+    and re-rendered).
+
+    Fixed by MOVING the break rather than adding a second one: cleared
+    from the big group's first row, set on the small group's first row
+    instead, so the small group opens the same fresh page the big group
+    would have opened alone right after it — merging them onto one page
+    instead of leaving the small group's page mostly blank. This is the
+    one place allowed to clear a break_before _enforce_trend_min_segments
+    added — always paired with adding one earlier in the row order, so the
+    net page count this pass produces can only ever go down or stay equal,
+    still converging within _MAX_TREND_SPLIT_PASSES.
+
+    Skips an item with any unmapped row (marker not found — see
+    _apply_trend_page_splits' docstring on the same caution) rather than
+    risk a wrong move from incomplete data."""
+    MIN = _TREND_MIN_SPLIT_SEGMENT_ROWS
+    for ii, it in enumerate(trend_page.get("items", [])):
+        rows = it.get("rows", [])
+        n = len(rows)
+        page_for_row = [page_of.get((ii, k)) for k in range(n)]
+        if any(p is None for p in page_for_row):
+            continue
+
+        i = 0
+        while i < n:
+            plant = rows[i]["plant"]
+            j = i
+            while j < n and rows[j]["plant"] == plant:
+                j += 1
+            group_page = page_for_row[i]
+            if (
+                j - i <= MIN
+                and j < n
+                and not rows[i].get("break_before")
+                and rows[j].get("break_before")
+                and all(page_for_row[k] == group_page for k in range(i, j))
+                and not any(page_for_row[k] == group_page for k in range(0, i))
+                and not any(page_for_row[k] == group_page for k in range(j, n))
+            ):
+                rows[j]["break_before"] = False
+                rows[i]["break_before"] = True
             i = j
 
 

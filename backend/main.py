@@ -1606,7 +1606,7 @@ def get_special_steel_ssps_basis(month: str = Query(...)):
     try:
         cur.execute("""
             SELECT month_actual FROM production_table
-            WHERE report_month=? AND plant_name='SSP' AND item_name='Total Saleable Steel Despatch'
+            WHERE report_month=? AND plant_name='SSP' AND item_name='Saleable Steel Despatch'
         """, (month,))
         row = cur.fetchone()
         saleable_000t = row[0] if row else None
@@ -3157,6 +3157,37 @@ def normalize_item_name(name, plant=None):
             name = 'Billets'
         elif name == 'Finished':
             name = 'Finished Steel'
+    # BSP: the month-end/daily PPC MIS extractor (excel_extractor_bsp.py's
+    # _ppc_mis_config/_PPC_STABLE_LABELS) emits the Semis breakdown as "CC
+    # SLAB"/"CC BILLET"/"CC BLOOM", but excel_extractor_bsp_plan.py's ABP
+    # plan sheet (and PRODUCTION_ITEM_ORDER) call the same 3 physical
+    # quantities "SEMIS SLABS"/"SEMIS BILLETS"/"SEMIS BLOOM" — with no fold,
+    # plan and actual land on 2 different item rows instead of 1 on both
+    # the Production Data Entry page and /api/production-fy (confirmed:
+    # actual under "CC SLAB" etc., plan under "SEMIS SLABS" etc., for the
+    # same months, never merging). Folded onto the plan's naming (not the
+    # other way around) since that's PRODUCTION_ITEM_ORDER's own spelling.
+    # NOTE: page_jpc_report.py's Pmix report queries "CC BILLET"/"CC
+    # BLOOM"/"CC SLAB" directly via raw SQL, bypassing this function
+    # entirely — unaffected by this fold either way.
+    elif plant == 'BSP':
+        if name == 'CC SLAB':
+            name = 'SEMIS SLABS'
+        elif name == 'CC Billet':   # already 'BILLET'->'Billet' by this point
+            name = 'SEMIS BilletS'
+        elif name == 'CC BLOOM':
+            name = 'SEMIS BLOOM'
+    # DSP: a stray "Total Caster" appears in production_table for ~27
+    # scattered months (2017-2026) — not written by any current DSP
+    # extractor (pdf_extractor_dsp.py / excel_extractor_dsp.py's MCR-I
+    # route / excel_extractor_dsp_plan.py all use "SMS Total Caster", which
+    # has complete, continuously-extracted data for the same quantity —
+    # looks like a leftover from an older extractor version or a manual
+    # entry typed against a stale row label. Folded so it doesn't show as
+    # its own separate, mostly-empty row alongside the real data.
+    elif plant == 'DSP':
+        if name == 'Total Caster':
+            name = 'SMS Total Caster'
     return name.strip()
 
 # BSP's two rolling mills each split into product groups where only one
@@ -3171,6 +3202,81 @@ BSP_SPLIT_PAIRS = {
     "TMT BARS(MM)":   ("LT STRS(MM)",   "MM"),
     "LT STRS(MM)":    ("TMT BARS(MM)",  "MM"),
 }
+
+# BSL despatch items (excel_extractor_bsl.py's DPR/Main Products PDF
+# extractors, plus the FY25-26 one-time backfill — see
+# scripts/backfill_bsl_despatch_fy2526.py) — no ABP plan is ever uploaded
+# for these, so without this they'd never appear as a row on the
+# Production Data Entry page at all (get_production_items below only
+# offers items already in production_plan_table/production_table for that
+# month) until an extractor happens to have written one already. Always
+# offered instead, same pattern as BSP_SPLIT_PAIRS above.
+BSL_DESPATCH_ITEMS = [
+    "Saleable Steel Despatch", "Road Despatch", "Direct Despatch",
+    "Semis Export", "Finished Export", "Semis Despatch",
+]
+
+# RSP despatch items (excel_extractors/excel_extractor_rsp.py's
+# DESPATCH_ITEMS/_build_despatch_cells) — same rationale as
+# BSL_DESPATCH_ITEMS above. "Finished Export" (not "Total Export") since
+# RSP's own despatch sheet carries only one combined EXPORT row, but per
+# direct instruction it's named to match BSL's/ISP's "Finished Export" —
+# RSP's saleable steel has no semis component at all (its own "Semis
+# Despatch" row, "Slabs & Billet", has never carried a value on any file
+# checked — see below), so RSP's one EXPORT figure genuinely is all-
+# finished, and naming it this way lets a SAIL-wide rollup sum "Finished
+# Export"/"Semis Export"/Total Export across plants uniformly. "Semis
+# Despatch" is kept in the list so a real figure gets picked up the day
+# RSP starts reporting it, not because there's backfillable history for it.
+RSP_DESPATCH_ITEMS = [
+    "Saleable Steel Despatch", "Direct Despatch", "Road Despatch", "Finished Export",
+    "Semis Despatch",
+]
+
+# ISP despatch items (excel_extractors/excel_extractor_isp.py's
+# _extract_despatch) — same rationale as BSL_DESPATCH_ITEMS above. Same 6
+# item names as BSL (Semis/Finished Export split, unlike RSP's single
+# Finished Export) — Direct Despatch is unavailable on ISP report vintages
+# from ~Mar'26 onward though (the "MKTG DIR" row this figure depends on
+# was replaced by a different breakdown — see _extract_despatch's
+# docstring), so expect that one to be blank for recent months.
+ISP_DESPATCH_ITEMS = [
+    "Saleable Steel Despatch", "Road Despatch", "Direct Despatch",
+    "Semis Export", "Finished Export", "Semis Despatch",
+]
+
+# DSP despatch items (excel_extractors/pdf_extractor_dsp.py's
+# _block_despatch) — same rationale as BSL_DESPATCH_ITEMS above. No "Road
+# Despatch" — DSP's own despatch pages (both the newer per-product pivot
+# table and the older nested table) have no road-vs-rail total of their
+# own the way BSL's page does; despatch is broken down by IPT/Export/CMO
+# Sales(Direct+Stockyard)/Plant Sales instead, of which only Direct and
+# Export are requested items here.
+DSP_DESPATCH_ITEMS = [
+    "Saleable Steel Despatch", "Direct Despatch",
+    "Semis Export", "Finished Export", "Semis Despatch",
+]
+
+# BSP despatch items (excel_extractors/excel_extractor_bsp.py's
+# _resolve_bsp_despatch_cells, PPC MIS monthly report S1 sheet) — same
+# rationale as BSL_DESPATCH_ITEMS above. No "Direct Despatch"/"Semis
+# Export"/"Finished Export" — this sheet's own despatch table only breaks
+# loading down by Total vs Road (not Direct/CMO/Export), so those 3 items
+# aren't available here the way they are for BSL/ISP.
+BSP_DESPATCH_ITEMS = [
+    "Saleable Steel Despatch", "Semis Despatch", "Road Despatch",
+]
+
+# ASP despatch items (excel_extractors/pdf_extractor_asp.py's FL*.pdf
+# DESPATCH section — _fl_finished_despatch) — same rationale as
+# BSL_DESPATCH_ITEMS above. "Finished Despatch" (BAR+FORG.+PLT, mirroring
+# the Saleable Production section's BARS+FS PRD+PL MILL = Finished Steel
+# one section over) and "Semis Despatch" (Saleable Steel Despatch minus
+# Finished Despatch) — no Direct/Road/Export split, this report's DESPATCH
+# section doesn't break dispatch down that way.
+ASP_DESPATCH_ITEMS = [
+    "Finished Despatch", "Semis Despatch",
+]
 
 # Custom sort order for production items — process sequence:
 # coke oven pushing → sinter → hot metal → crude steel → pig iron → mills
@@ -3304,6 +3410,14 @@ PRODUCTION_ITEM_ORDER = [
     'Forging Press',
     'Long Forging Machine',
     'Saleable Steel Despatch',
+    # 11. BSL/RSP/ISP despatch (see BSL_DESPATCH_ITEMS/RSP_DESPATCH_ITEMS/
+    # ISP_DESPATCH_ITEMS above)
+    'Direct Despatch',
+    'Road Despatch',
+    'Semis Export',
+    'Finished Export',
+    'Finished Despatch',
+    'Semis Despatch',
 ]
 
 def production_item_sort_key(item):
@@ -3345,6 +3459,17 @@ async def get_production_items(plant: str, month: str):
     # be typed into before anything else about that month exists.
     if plant == "BSP":
         all_items |= set(BSP_SPLIT_PAIRS.keys())
+        all_items |= set(BSP_DESPATCH_ITEMS)
+    if plant == "BSL":
+        all_items |= set(BSL_DESPATCH_ITEMS)
+    if plant == "RSP":
+        all_items |= set(RSP_DESPATCH_ITEMS)
+    if plant == "ISP":
+        all_items |= set(ISP_DESPATCH_ITEMS)
+    if plant == "DSP":
+        all_items |= set(DSP_DESPATCH_ITEMS)
+    if plant == "ASP":
+        all_items |= set(ASP_DESPATCH_ITEMS)
 
     # Sort items in process order, with remaining items at the end
     sorted_items = sorted(all_items, key=production_item_sort_key)

@@ -36,16 +36,17 @@ Sinter Rs/T all come from cost_trend_monthly (FIXED + VARIABLE till_month —
 see _fetch_cop). HM/CS/SS carry a real Variable/Fixed split; BF Coke and
 Sinter currently carry the lump comparative figure under VARIABLE (the
 comparative sheet gives no split), entered via the Cost Trend Entry page or
-its Excel extractor. Special Steel in Finished Steel still has no DB source
-and is transcribed from the comparative PDF into hardcoded_config.json
-("key_parameters" -> "pdf_values", the "pdf" row kind) — refresh it when a
-real extractor or a newer sheet lands.
+its Excel extractor. Special Steel in Finished Steel is live-computed (see
+_ss_in_fs_qty_and_pct) as a qty+% row pair — Special Finished Steel
+Despatch (T), then that qty as a % of Finished Steel Despatch — both
+despatch-side, mirroring page_special_steel_donut's own Spl. FS "% of FS"
+figure — replacing an earlier hand-transcribed hardcoded_config.json
+figure (a % only, no qty row) that had no DB source at all.
 """
 import calendar as _calendar
 import json as _json
 
 import db
-import hardcoded_loader
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
@@ -279,16 +280,18 @@ def _coal_blend_pct(plant, kind, report_month, dp):
 
 
 def _value_added_qty_and_pct(plant, ytd_months, production):
-    """(qty_tonnes, pct_of_saleable_steel) — plant's Value Added Steel
-    despatch (Total Value Added Steel despatch, unadjusted) as a % of the
-    plant's own Saleable Steel production — both over the Apr-report_month
-    YTD period this table's every other row covers. Mirrors page 24's
-    Special Steel report / At-a-Glance VA chart exactly
+    """(qty_tonnes, pct_of_saleable_steel_despatch) — plant's Value Added
+    Steel despatch (Total Value Added Steel despatch, unadjusted) as a %
+    of the plant's own Saleable Steel DESPATCH — both over the
+    Apr-report_month YTD period this table's every other row covers.
+    Mirrors page 24's Special Steel report / At-a-Glance VA chart exactly
     (page_special_steel_trend._sum_actual for the qty,
-    page_special_steel_trend._saleable_steel-equivalent Saleable Steel
-    production as denominator), so this row and those stay consistent.
-    Computed together (not as two separate lookups) since both rows share
-    the same qty/saleable-steel inputs."""
+    page_special_steel_trend._period_saleable's "Saleable Steel Despatch"
+    denominator), so this row and those stay consistent. Changed from
+    Saleable Steel PRODUCTION to DESPATCH per direct instruction (was:
+    plant's own Saleable Steel production as denominator). Computed
+    together (not as two separate lookups) since both rows share the same
+    qty/saleable-steel inputs."""
     from page_special_steel_trend import _sum_actual
     conn = db.connect()
     cur = conn.cursor()
@@ -298,11 +301,53 @@ def _value_added_qty_and_pct(plant, ytd_months, production):
         conn.close()
     if not has:
         return None, None
-    saleable_000T = _prod_val(plant, ["Saleable Steel"], production, 6, ytd_months)
+    saleable_000T = _prod_val(plant, ["Saleable Steel Despatch"], production, 6, ytd_months)
     if not saleable_000T:
         return None, None
     pct = qty / (saleable_000T * 1000) * 100
     return qty, pct
+
+
+def _ss_in_fs_qty_and_pct(plant, ytd_months, production):
+    """(qty_tonnes, pct_of_finished_steel_despatch) — plant's Special
+    (Value Added) Finished Steel Despatch, and that same qty as a % of the
+    plant's own Finished Steel DESPATCH — both over the Apr-report_month
+    YTD period this table's every other row covers. Replaces the old
+    hand-transcribed "ss_in_finished" hardcoded_config.json figure (a %
+    only, no qty row) with a live-computed qty+% pair, matching
+    _value_added_qty_and_pct's own qty+% row shape above, per direct
+    instruction. Computed together (not as two separate lookups), same
+    reasoning as that function.
+
+    Finished Steel Despatch is derived as Saleable Steel Despatch minus
+    Semis Despatch, read from the already-fetched `production` dict (same
+    _prod_val technique _value_added_qty_and_pct uses) — mirrors
+    page_special_steel_donut._raw_cell/_desp_item_sum's own derivation for
+    this exact plant set (BSP/DSP/RSP/BSL/ISP; RSP has no Semis Despatch,
+    so its Finished Despatch is its full Saleable Steel Despatch). Special
+    Finished Steel Despatch is that same module's own Spl. FS figure
+    (_special_fin_semis_split, special_steel_orders.actual_despatch grouped
+    by product) — reused here via a fresh cursor since it reads a table
+    the shared `production` dict doesn't cover."""
+    from page_special_steel_donut import _special_fin_semis_split
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        spl_fin, _spl_semis = _special_fin_semis_split(cur, ytd_months, plant)
+    finally:
+        conn.close()
+    if not spl_fin:
+        return None, None
+
+    total_desp = _prod_val(plant, ["Saleable Steel Despatch"], production, 6, ytd_months)
+    if not total_desp:
+        return spl_fin, None
+    semis_desp = _prod_val(plant, ["Semis Despatch"], production, 6, ytd_months)
+    fin_desp = total_desp - (semis_desp or 0)
+    if not fin_desp:
+        return spl_fin, None
+    pct = spl_fin / (fin_desp * 1000) * 100
+    return spl_fin, pct
 
 
 # Placeholder swapped for "Demurrage (Apr-<latest month with data>)" in
@@ -381,20 +426,6 @@ def _fetch_cop(report_month: str) -> dict:
     return out
 
 
-# Values with no DB source yet ({spec: {plant: value}}) are hand-maintained
-# in hardcoded_config.json's "key_parameters" -> "pdf_values", transcribed
-# from Report_format/Plant wise Comparative for Apr-Jul'26.pdf per direct
-# instruction (map from the DB where available, fill the rest from that file).
-# Only "ss_in_finished" remains — rltifr moved to techno_data "General", and
-# cop_bf_coke/cop_sinter moved to cost_trend_monthly (products COKE/SINTER).
-# Refresh the file when a real extractor lands, or when a newer comparative
-# sheet supersedes this one. Read via _pdf_values() below.
-
-
-def _pdf_values() -> dict:
-    return hardcoded_loader.section("key_parameters")["pdf_values"]
-
-
 # (label, unit, kind, spec, decimal_places, flags)
 #   flags:
 #     highlight       - light background on this data row
@@ -448,12 +479,22 @@ _ROWS = [
     ("Sp. Water Consumption",     "m³/TCS",   "general", "sp_water_consumption", 2, {}),
     ("Sp CO2 Emission",           "T-CO2/TCS","general", "sp_co2_emission", 2, {}),
     ("Finished in Total SS",      "%",        "ratio_prod", ("Finished Steel", "Saleable Steel"), 1, {"highlight": True}),
-    ("Special Steel in Finished Steel", "%",  "pdf", "ss_in_finished", 1, {}),
+    # Split into qty + % rows (per direct instruction), same qty+% shape as
+    # "Spl. Saleable Steel" right below — Special (Value Added) Finished
+    # Steel Despatch, then that qty as a % of the plant's own Finished
+    # Steel DESPATCH. See _ss_in_fs_qty_and_pct's docstring.
+    ("Special Steel in Finished Steel", "T", "ss_fs_qty", None, 0,
+     {"label_rowspan": 2, "note": "despatch of Spl. Finished Steel / Total Despatch of Finished Steel"}),
+    (None,                                     "%",  "ss_fs_pct", None, 1, {"continuation": True}),
     # Retained from the previous layout (not on the source comparative
-    # sheet): Value Added Steel despatch qty within Finished Steel, then the
-    # same qty as a % of the plant's own Saleable Steel production.
-    ("Value Added Saleable Steel", "T", "vap_qty", None, 0,
-     {"label_rowspan": 2, "note": "despatch of value added SS / Total Production of SS"}),
+    # sheet): Special (Value Added) Steel despatch qty within Saleable
+    # Steel, then the same qty as a % of the plant's own Saleable Steel
+    # DESPATCH (changed from Saleable Steel production per direct
+    # instruction). Renamed from "Value Added Saleable Steel" to "Spl.
+    # Saleable Steel" per direct instruction — same underlying figures
+    # (_value_added_qty_and_pct), label/note text only.
+    ("Spl. Saleable Steel", "T", "vap_qty", None, 0,
+     {"label_rowspan": 2, "note": "despatch of Spl. SS / Total Despatch of SS"}),
     (None,                                     "%",  "vap_pct", None, 1, {"continuation": True}),
     (None, "", _SPACER, None, 0, {}),
     ("Labour Productivity",    "T/Man-yr", "general", "labour_productivity", 0, {}),
@@ -486,7 +527,6 @@ def generate_key_parameters(report_month: str) -> dict:
     techno = _fetch_techno(report_month)
     production = _fetch_production(ytd_months)
     cop = _fetch_cop(report_month)
-    pdf_values = _pdf_values()
 
     import datetime as _dt
     period_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")
@@ -512,6 +552,7 @@ def generate_key_parameters(report_month: str) -> dict:
     # below both derive from the same underlying figures — see
     # _value_added_qty_and_pct's docstring.
     vap_by_plant = {p: _value_added_qty_and_pct(p, ytd_months, production) for p in PLANTS}
+    ss_fs_by_plant = {p: _ss_in_fs_qty_and_pct(p, ytd_months, production) for p in PLANTS}
 
     # Rows between the "Major Efficiency Parameters"
     # section header and whatever ends it (the next section header, or the
@@ -632,8 +673,12 @@ def generate_key_parameters(report_month: str) -> dict:
                 v = _round(pct, dp) if pct is not None else None
             elif kind == "cop":
                 v = _round(cop.get((plant, spec)), dp)
-            elif kind == "pdf":
-                v = _round(pdf_values.get(spec, {}).get(plant), dp)
+            elif kind == "ss_fs_qty":
+                qty, _pct = ss_fs_by_plant.get(plant, (None, None))
+                v = f"{qty:,.0f}" if qty is not None else None
+            elif kind == "ss_fs_pct":
+                _qty, pct = ss_fs_by_plant.get(plant, (None, None))
+                v = _round(pct, dp) if pct is not None else None
             else:
                 v = None
             # _round()/the branches above return a plain float for most

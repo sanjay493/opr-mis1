@@ -19,7 +19,7 @@ from report_utils import compute_item_row
 from page_techno import generate_at_a_glance_te_table
 from page_special_steel import generate_special_steel_sail
 from page_special_steel_trend import (
-    _last_n_fys, _fy_months, _current_fy_rate, _saleable_steel, _sum_actual,
+    _last_n_fys, _fy_months, _current_fy_rate, _saleable_steel, _saleable_item, _sum_actual,
 )
 
 _PROD_ITEMS = ["Hot Metal", "Crude Steel", "Finished Steel", "Saleable Steel"]
@@ -622,13 +622,15 @@ _VA_STEM_COLOR = "#cbd5e1"
 
 
 def _va_period_saleable_total(cur, months) -> float:
-    """SAIL Saleable Steel ('000T) summed across these months — the
-    denominator for a Value Added Steel % of Saleable Steel figure over any
-    period (FY or quarter), not just a single report month."""
+    """SAIL Saleable Steel DESPATCH ('000T) summed across these months —
+    the denominator for a Value Added Steel % of Saleable Steel figure
+    over any period (FY or quarter), not just a single report month.
+    Changed from Saleable Steel PRODUCTION to DESPATCH per direct
+    instruction (mirrors page_special_steel_trend.py's own change)."""
     total, has = 0.0, False
     for m in months:
         for p in _VA_PLANTS:
-            v = _saleable_steel(cur, m, p)
+            v = _saleable_item(cur, m, p, "Saleable Steel Despatch")
             if v is not None:
                 total += v
                 has = True
@@ -748,7 +750,7 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     # — only to decide whether both legend items fit on one row, not to
     # size anything that needs to be pixel-exact.
     sw = round(label_fs * 0.42)  # legend swatch size, scaled with label_fs
-    legend1_text, legend2_text = "% of Saleable Steel", "Qty (Million T)"
+    legend1_text, legend2_text = "% of Saleable Steel Despatch", "Qty (Million T)"
     legend_gap = round(label_fs * 1.4)  # visible breathing room between the two legend items
     legend1_w = sw + 6 + len(legend1_text) * label_fs * 0.52
     legend2_w = sw + 10 + len(legend2_text) * label_fs * 0.52

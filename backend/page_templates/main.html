@@ -1656,46 +1656,49 @@
         .segwise-table tr.sw-plant-start > td { border-top: 2px solid {{ colors.border_darkred }}; }
 
         /* Special Steel — Saleable Steel Composition & Value-Added Share
-           (page 24, page_special_steel_donut.py) — 7 entities x 3 periods
-           of two-ring donut cells. Sized to spread across the full portrait
-           page rather than stay pinned to a compact block at the top with
-           the rest left blank — 21 cells easily fit one page even at this
-           size (verified via a standalone single-page render), so there's
-           no overflow risk from going bigger, per direct instruction.
-
-           Cell layout is a row: Saleable Steel stats on the LEFT, the donut
-           in the middle, Special Steel stats on the RIGHT — flanking the
-           donut rather than stacking text above/below it (the previous
-           layout: see git history). Stacking above/below meant every row's
-           height was text-height + donut-height + text-height, which left
-           little headroom to grow the donut without spilling onto a 2nd
-           page. Flanking removes that stacking: each row's height is now
-           just max(donut height, side-text height), so the donut can be
-           much bigger — per direct instruction, "use max area of page" —
-           while the two side columns only ever hold 2-4 short lines each.
-           The donut itself no longer draws a center total/label (also per
-           direct instruction) — that total is already shown via fin_txt/
-           semis_txt beside it, so the center was redundant and the space
-           is better spent on the rings themselves. */
+           (page 24, page_special_steel_donut.py) — no charts (an earlier
+           two-ring donut design was dropped per direct instruction — see
+           git history). Plant | Metric | Total | Annual ABP Plan | Month |
+           YTD, "Plant" row-spanned across every row for that entity, and
+           within the Metric/Total pair AND each period's own
+           detail/total pair, the Total cell is ALSO row-spanned across
+           its 1-2 detail rows (see page_special_steel_donut.py's
+           _block_rows) — SS/Spl. SS sit beside FS/Semis and Spl. FS/Spl.
+           Semis rather than under them in their own full-width row, per
+           direct instruction, to cut the table's row count (4-6 rows
+           became 2-4) and free vertical room for the bubble chart below
+           on the same physical page. table-layout is auto (content-fit)
+           rather than fixed percentages, with white-space:nowrap on every
+           value line, so the table sizes itself to the longest line (e.g.
+           "93,629 (51% of SS || 99% of FS)") instead of that line wrapping
+           and inflating row height — the "T" unit itself was moved out of
+           every cell into one ssd-unit-tag at the table's top-right corner
+           specifically to shorten that longest line enough to fit,
+           per direct instruction. */
         .ssd-wrap { padding: 2px 8px; font-family: 'Arial Narrow', Arial, sans-serif; }
-        .ssd-legend { display: flex; justify-content: center; gap: 20px; font-size: 8pt; margin-bottom: 4px; }
-        .ssd-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
-        .ssd-table { width: 100%; height: 100%; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; table-layout: fixed; }
-        .ssd-table th { background: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 3px 3px; border: 1px solid {{ colors.border_dark }}; font-size: 10pt; text-align: center; }
-        .ssd-col-lbl { width: 10%; }
-        .ssd-table td.ssd-lbl { font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 12pt; }
+        .ssd-title-row { position: relative; padding: 3px 46px 5px 0; margin-bottom: 2px; }
+        .ssd-title { text-align: center; font-weight: 700; font-size: 12.5pt; color: rgb(0,0,255); }
+        .ssd-unit-tag { position: absolute; top: 50%; right: 0; transform: translateY(-50%); font-size: 7.5pt; font-weight: 700; color: {{ colors.text_secondary }}; }
+        .ssd-table { width: auto; margin: 0 auto; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; table-layout: auto; }
+        .ssd-table th { background: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 3px 6px; border: 1px solid {{ colors.border_dark }}; font-size: 11pt; text-align: center; white-space: nowrap; }
+        .ssd-table td.ssd-lbl { font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 13pt; white-space: nowrap; }
         .ssd-table tr.ssd-sail-row td.ssd-lbl { background: {{ colors.highlight_achieved_band_bg }}; }
-        .ssd-table td.ssd-cell { border: 1px solid {{ colors.border_medium }}; padding: 2px 4px; vertical-align: middle; }
-        .ssd-cell-inner { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 3px; }
-        .ssd-side { flex: 0 0 22%; min-width: 0; }
-        .ssd-side-left { text-align: right; }
-        .ssd-side-right { text-align: left; }
-        .ssd-donut { flex: 0 0 53%; min-width: 98px; margin: 0; }
-        .ssd-stat { font-size: 8.4pt; line-height: 1.1; }
-        .ssd-special-txt { color: #166534; font-weight: 700; }
-        .ssd-pct-inline { display: block; font-size: 7pt; font-style: italic; font-weight: 700; line-height: 1.1; margin-bottom: 2px; color: #1e3a8a; }
-        .ssd-special-txt .ssd-pct-inline { color: #9a3412; }
-        .ssd-note { font-size: 6.4pt; line-height: 1.15; margin-top: 2px; color: {{ colors.text_secondary }}; }
+        /* No horizontal line between an entity's own rows — only left/right
+           borders — with a dark divider reintroduced solely at each
+           entity's first row (tr.ssd-plant-start, same pattern as
+           .segwise-table above) so the grid reads as "one block per
+           plant" per direct instruction. */
+        .ssd-table td.ssd-metric-lbl { font-weight: 600; text-align: center; vertical-align: middle; border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; font-size: 9.8pt; white-space: nowrap; }
+        .ssd-table td.ssd-cell { border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; padding: 3px 8px; text-align: center; vertical-align: middle; }
+        .ssd-table tr.ssd-plant-start > td { border-top: 2px solid {{ colors.border_darkest }}; }
+        .ssd-stat { font-size: 9pt; line-height: 1.2; white-space: nowrap; }
+        .ssd-total-col { font-weight: 700; background: #f1f5f9; }
+        .ssd-special-txt { color: #166534; }
+        .ssd-emphasis .ssd-stat { font-weight: 700; }
+        .ssd-bubble-wrap { margin-top: 10px; }
+        .ssd-bubble-title { text-align: center; font-weight: 700; font-size: 10.5pt; color: {{ colors.text_black }}; }
+        .ssd-bubble-sub { text-align: center; font-size: 7pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 2px; }
+        .ssd-bubble-chart { width: 100%; }
 
         /* ── Page-specific font overrides ───────────────────────────────── */
         .pg-7, .pg-7 th, .pg-7 td {

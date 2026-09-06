@@ -28,7 +28,9 @@
       "CRSALE": "AA18",
       "Saleable Steel": "P31",
       "Saleable Semis": "AA19",
-      "Thick Plate": "AA20"
+      "Thick Plate": "AA20",
+      "Saleable Steel Despatch": "E20",
+      "Semis Despatch": "E35"
     },
     "derived": [
       {
@@ -220,16 +222,6 @@
       ],
       "Finished Steel": [
         27,
-        5,
-        true
-      ],
-      "CC SLAB": [
-        31,
-        5,
-        true
-      ],
-      "CC BILLET": [
-        33,
         5,
         true
       ],

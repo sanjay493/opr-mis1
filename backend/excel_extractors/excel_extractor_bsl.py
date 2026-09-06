@@ -196,6 +196,8 @@ def _dpr_config():
         "Saleable Steel":      "P31",
         "Saleable Semis":      "AA19",
         "Thick Plate":         "AA20",
+        "Saleable Steel Despatch": "E20",
+        "Semis Despatch":      "E35",
     })
     no_convert = set(cfg.get("no_convert", ["Oven Pushing (nos/day)"]))
     derived = cfg.get("derived", [
@@ -294,6 +296,22 @@ _DPR_LABELS = {
     "Saleable Semis":        ("W", ["SLAB"]),
     "Thick Plate":           ("W", ["COBB PLT"]),
     "Pig Iron":              ("W", ["PIG IRON"]),
+    # A third table further down the same sheet ("DESPATCH", header row
+    # carries "ON DT"/"CUM"/"M.RATE" in columns C/D/E) — column B is its own
+    # label column, distinct from "MAIN UNITS"'s L and "SALEABLE STEEL"'s W.
+    # Confirmed against a real file (31/05/2026): row 20 there, but per
+    # direct instruction (cited as row 22 on a different report vintage) —
+    # row-located like everything else here, not trusted at a fixed row.
+    "Saleable Steel Despatch": ("B", ["SAL.STEEL"]),
+    # Same DESPATCH table, per direct instruction — user-cited row 35 (yet
+    # another vintage's own row number, same drift as Saleable Steel
+    # Despatch above). "SLAB" as a substring also matches the EARLIER
+    # "ORDER VS DESPATCH" table's own "SLAB(SALE/IPT)" row (a completely
+    # different table, whose C/D/E columns mean ORDER/ON DT/ACTUAL-CUM,
+    # not this table's ON DT/CUM/M.RATE) — see _resolve_dpr_cells' label_col
+    # "B" branch, which bounds this search to start AFTER the "DESPATCH"
+    # header specifically so that earlier row can never be matched first.
+    "Semis Despatch":        ("B", ["SLAB"]),
 }
 
 # The GP/GC derived sum's three possible component rows — not themselves
@@ -307,7 +325,7 @@ _DPR_GPGC_HELPERS = {
     "_GP_COIL":  ("W", ["G P COIL"]),
 }
 
-_DPR_TABLE_COLS = {"L": ("O", "P"), "W": ("Z", "AA")}  # label_col -> (cum_col, mrate_col)
+_DPR_TABLE_COLS = {"L": ("O", "P"), "W": ("Z", "AA"), "B": ("D", "E")}  # label_col -> (cum_col, mrate_col)
 
 
 def _find_dpr_label_row(ws, col_letter, substrings, row_range=(6, 40)):
@@ -330,10 +348,23 @@ def _resolve_dpr_cells(ws, defaults):
     neighbouring item's data into the wrong one. Falls back to `defaults`
     (the configured/hardcoded cell) only for an item _DPR_LABELS doesn't
     cover; an item whose label can't be found at all is dropped rather
-    than risk reading the wrong row silently."""
+    than risk reading the wrong row silently.
+
+    label_col "B" (the DESPATCH table) is searched starting AFTER that
+    table's own "DESPATCH" header row, not sheet-wide — the earlier "ORDER
+    VS DESPATCH" table on the same sheet has its own row whose label also
+    contains "SLAB" ("SLAB(SALE/IPT)"), which a sheet-wide search would
+    match first and silently read using the wrong table's column meaning
+    (that table's C/D/E are ORDER/ON DT/ACTUAL-CUM, not DESPATCH's own ON
+    DT/CUM/M.RATE)."""
     resolved = dict(defaults)
+    despatch_header_row = _find_dpr_label_row(ws, "B", ["DESPATCH"])
     for item, (label_col, substrings) in _DPR_LABELS.items():
-        row = _find_dpr_label_row(ws, label_col, substrings)
+        if label_col == "B" and despatch_header_row is not None:
+            row = _find_dpr_label_row(ws, label_col, substrings,
+                                       row_range=(despatch_header_row + 1, 60))
+        else:
+            row = _find_dpr_label_row(ws, label_col, substrings)
         cum_col, mrate_col = _DPR_TABLE_COLS[label_col]
         if row is not None:
             resolved[item] = f"{mrate_col}{row}"
@@ -377,6 +408,22 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
       CR(Coil) Sale (sales-side, mill 3), GPC3, CRSALE, Saleable Semis,
       Thick Plate, Pig Iron
         — "SALEABLE STEEL" table (col Z = CUM, col AA = M.RATE)
+      Saleable Steel Despatch, Semis Despatch
+        — "DESPATCH" table (col D = CUM, col E = M.RATE), the SAL.STEEL
+          and SLAB rows respectively — Total Saleable Steel despatch
+          (Direct + Secondary Sales + IPT + Export) and total Slab
+          despatch across every sale type (not just the export portion —
+          see "Semis Export" below for that), NOT the same physical flow
+          as "Saleable Steel"/"Saleable Semis" above (those are
+          production). Both label-searched starting AFTER this table's
+          own "DESPATCH" header specifically (see _resolve_dpr_cells) —
+          "SLAB" as a bare substring also matches the earlier "ORDER VS
+          DESPATCH" table's own "SLAB(SALE/IPT)" row, a different table
+          entirely with different column meanings. Road Despatch/Direct
+          Despatch/Semis Export/Finished Export are NOT on this sheet at
+          all — they only come from the monthly "Production of Main
+          Products" PDF's "DESPATCH PERFORMANCE AT A GLANCE" page (see
+          extract_preview_main_products_pdf below), per direct instruction.
       Finished Steel        derived: Saleable Steel − Saleable Semis
                              (already includes Thick Plate; Thick Plate is
                              also saved separately)
@@ -1827,10 +1874,181 @@ def _index_products_lines(text: str) -> dict:
     return out
 
 
+_DESPATCH_GLANCE_TITLE_RE = re.compile(r'DESPATCH PERFORMANCE AT A GLANCE', re.I)
+_LEADING_LABEL_RE = re.compile(r'^([^\d]*)')
+
+
+def _collapse_doubled_letters(s: str) -> str:
+    """'TTOOTTAALL' -> 'TOTAL'. The DESPATCH PERFORMANCE AT A GLANCE page's
+    "-- TOTAL" sub-total rows extract with every letter of the label
+    doubled on at least one report vintage (confirmed on "Rev June26
+    (2).pdf": "-- TOTAL" comes out as "-- TTOOTTAALL", presumably two
+    overlapping text runs in the source PDF) — collapsing adjacent
+    duplicate letters
+    undoes that. Idempotent on ordinary text (no adjacent repeats to
+    collapse), so it's safe to apply unconditionally. Callers apply this
+    to the row's LABEL portion only (see _row_label) — applying it to a
+    whole line would also mangle any number with a repeated digit, e.g.
+    "257766" -> "2576"."""
+    return re.sub(r'(.)\1', r'\1', s)
+
+
+def _row_label(line: str) -> str:
+    """The leading non-digit portion of a data row — e.g. "-- TTOOTTAALL "
+    from "-- TTOOTTAALL 257766 260372 738442 759770 -". None of this
+    page's row labels contain digits, so this cleanly separates label from
+    data without needing to know the label's exact text up front."""
+    m = _LEADING_LABEL_RE.match(line)
+    return m.group(1) if m else line
+
+
+def _first_number(line: str):
+    """First number anywhere in `line`, or None. Safe to call on a whole
+    row (not just its data portion) since none of this page's labels
+    contain digits."""
+    m = re.search(r'-?\d[\d,]*(?:\.\d+)?', line)
+    return float(m.group(0).replace(',', '')) if m else None
+
+
+def _nth_number(line: str, index: int):
+    """The number at position `index` (0-based) among all numbers found
+    anywhere in `line`, or None if there aren't that many."""
+    nums = re.findall(r'-?\d[\d,]*(?:\.\d+)?', line)
+    if index >= len(nums):
+        return None
+    return float(nums[index].replace(',', ''))
+
+
+def _parse_despatch_glance_page(text: str) -> dict:
+    """{item_name: month_actual_tonnes} for the 5 BSL despatch items on the
+    "DESPATCH PERFORMANCE AT A GLANCE" page of BSL's monthly PDF bundle
+    (the same file extract_preview_main_products_pdf already opens for the
+    Production of Main Products / Breakup pages) — per direct instruction.
+
+    This page mixes TWO different row layouts, and picking the wrong
+    column silently returns a real-looking but wrong number (caught via
+    annual-sum cross-checks against the Annual Statistics PDF's own FY
+    totals — do not "fix" these indices without re-running that check):
+      - Main SALEABLE STEEL block rows ("Total Saleable steel", "Slab",
+        and their un-tracked siblings like "HR Coil"): 8-9 numbers —
+        MonthAPP, MonthACTUAL, MonthPCT, MonthPrevYr, CumAPP, CumACTUAL,
+        CumPCT, CumPrevYr, (Growth%). The true month actual is the
+        **2nd** number (index 1); the 1st is the APP/target, not a
+        figure we want.
+      - Breakdown/memo rows with no APP column ("-- TOTAL" under DIRECT
+        DESPATCH/EXPORT, "-Semi Finished", "-Finished", "ROAD DESPATCH"):
+        4-5 numbers — MonthACTUAL, MonthPrevYr, CumACTUAL, CumPrevYr,
+        (Growth%). Here the month actual genuinely is the **1st** number
+        (index 0).
+      Total Saleable steel        -> Saleable Steel Despatch, index 1
+                                      (also extractable from the DPR Mail
+                                      Excel's DESPATCH table — see
+                                      _DPR_LABELS — confirmed to track
+                                      closely: May 2025's DPR figure
+                                      (BSL_DPR_31052025.xlsx) is 393,707 T
+                                      vs 392,342 T for the same month in
+                                      the BSL Annual Statistics 2025-26
+                                      PDF's own "SALEABLE STEEL" table,
+                                      Grand Total column)
+      DIRECT DESPATCH -- TOTAL    -> Direct Despatch, index 0
+      EXPORT -Semi Finished       -> Semis Export, index 0
+      EXPORT -Finished            -> Finished Export, index 0
+      ROAD DESPATCH                -> Road Despatch, index 0 (not always
+                                      present — some report vintages omit
+                                      this row entirely, e.g. "Rev March
+                                      2025.pdf" has no ROAD line anywhere
+                                      in the file)
+      Slab                         -> Semis Despatch, index 1 (total Slab
+                                      despatch across every sale type,
+                                      sitting just above "Thick Plate" in
+                                      the SALEABLE STEEL block — NOT the
+                                      same figure as Semis Export above,
+                                      which is only the export portion of
+                                      it)
+    "DIRECT DESPATCH" and "EXPORT" each introduce a short sub-block ending
+    in their own "-- TOTAL" row before the next section starts — tracked
+    with a simple `section` state machine rather than one big regex, since
+    the two sections share the exact same "-Semi Finished"/"-Finished"/
+    "-- TOTAL" sub-labels and only their order in the file disambiguates
+    which is which. Only Direct Despatch's TOTAL is kept (not FS/Semi
+    Finished, unlike Export's own breakdown) since that's the one figure
+    this page names as its own row.
+    """
+    values = {}
+    section = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        upper = line.upper()
+
+        if upper.startswith("TOTAL SALEABLE STEEL"):
+            # 8-9 numbers: MonthAPP, MonthACTUAL, MonthPCT, MonthPrevYr,
+            # CumAPP, CumACTUAL, CumPCT, CumPrevYr, (Growth%) — the true
+            # month actual is the 2nd number, not the 1st (which is the
+            # APP/target). Confirmed via annual-sum cross-check against
+            # the Annual Statistics PDF's own FY total (3,813,552 vs
+            # known 3,813,487).
+            v = _nth_number(line, 1)
+            if v is not None:
+                values["Saleable Steel Despatch"] = v
+            continue
+
+        if upper == "DIRECT DESPATCH":
+            section = "direct"
+            continue
+        if upper == "EXPORT":
+            section = "export"
+            continue
+
+        label = _collapse_doubled_letters(_row_label(line).upper()).strip(" -")
+
+        if section == "direct":
+            if label.startswith("TOTAL"):
+                v = _first_number(line)
+                if v is not None:
+                    values["Direct Despatch"] = v
+                section = None
+            continue
+
+        if section == "export":
+            if label.startswith("TOTAL"):
+                section = None
+            elif upper.startswith("-SEMI FINISHED"):
+                v = _first_number(line)
+                if v is not None:
+                    values["Semis Export"] = v
+            elif upper.startswith("-FINISHED"):
+                v = _first_number(line)
+                if v is not None:
+                    values["Finished Export"] = v
+            continue
+
+        if upper.startswith("ROAD DESPATCH"):
+            v = _first_number(line)
+            if v is not None:
+                values["Road Despatch"] = v
+            continue
+
+        if upper.startswith("SLAB"):
+            # Same 8-9 number main-table structure as "Total Saleable
+            # steel" above — 2nd number is the true month actual, not
+            # the 1st (APP/target). Confirmed via annual-sum cross-check
+            # (300,860 exact match to the Annual Statistics PDF's own
+            # FY24-25 Slab total).
+            v = _nth_number(line, 1)
+            if v is not None:
+                values["Semis Despatch"] = v
+
+    return values
+
+
 def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict:
     """Extract BSL's "Production of Main Products" PDF (PPC/Statistical,
     typically pages 2-3 of the month-end PDF bundle) into the same 19
-    production_table items the DPR Mail Excel path uses.
+    production_table items the DPR Mail Excel path uses, plus 5 despatch
+    items (see _parse_despatch_glance_page) from the same bundle's
+    "DESPATCH PERFORMANCE AT A GLANCE" page.
 
     Mapping (PDF label → item_name), each cross-checked against another PDF
     total so the source row for every item is unambiguous:
@@ -1879,6 +2097,8 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
                                                             item the DPR Mail
                                                             route saves)
       SLAB                           → Saleable Semis
+    "DESPATCH PERFORMANCE AT A GLANCE" page — see _parse_despatch_glance_page
+    for the label → item_name mapping.
     """
     import pdfplumber
 
@@ -1887,7 +2107,11 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
 
     try:
         with pdfplumber.open(file_path) as pdf:
-            pages_text = [pg.extract_text() or "" for pg in pdf.pages[:4]]
+            # First 6 pages, not 4 — "DESPATCH PERFORMANCE AT A GLANCE" has
+            # been at index 3 on every file checked, but this leaves a
+            # couple of pages' margin against a future bundle reordering
+            # without the cost of parsing the whole (20+ page) document.
+            pages_text = [pg.extract_text() or "" for pg in pdf.pages[:6]]
             ss_rows, ss_page_num = _extract_special_steel_despatch_rows(pdf)
     except Exception as exc:
         raise ValueError(f"Cannot open PDF '{fname}': {exc}") from exc
@@ -2016,6 +2240,21 @@ def extract_preview_main_products_pdf(file_path: str, report_month: str) -> dict
 
     slab, cs1 = p3_month_total("SLAB")
     add("Saleable Semis", slab, cs1)
+
+    # DESPATCH PERFORMANCE AT A GLANCE — 5 despatch items, per direct
+    # instruction. Located by title within pages_text (pdf.pages[:6]
+    # above), not a fixed index, so a future bundle reordering just yields
+    # "not found" (all 5 blank) rather than silently reading the wrong page.
+    despatch_text = next((t for t in pages_text if _DESPATCH_GLANCE_TITLE_RE.search(t)), None)
+    despatch_vals = _parse_despatch_glance_page(despatch_text) if despatch_text else {}
+    if despatch_text is None:
+        logger.info("BSL Main Products PDF: no 'DESPATCH PERFORMANCE AT A GLANCE' "
+                    "page found in %s — despatch items skipped", fname)
+    for item_name in ("Saleable Steel Despatch", "Direct Despatch",
+                      "Semis Export", "Finished Export", "Road Despatch",
+                      "Semis Despatch"):
+        add(item_name, despatch_vals.get(item_name),
+            "Despatch Glance" if item_name in despatch_vals else None)
 
     ok = sum(1 for r in rows if r["status"] == "ok")
     logger.info("BSL Main Products PDF: %d/%d items ok for %s", ok, len(rows), db_month)

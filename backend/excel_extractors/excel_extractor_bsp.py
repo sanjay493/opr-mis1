@@ -285,8 +285,6 @@ def _ppc_mis_config() -> Dict[str, tuple]:
         "BARS&RODMILL":        (25, 5,  True),
         "PLATEMILL":           (26, 5,  True),
         "Finished Steel":      (27, 5,  True),
-        "CC SLAB":             (31, 5,  True),
-        "CC BILLET":           (33, 5,  True),
         "Saleable Semis":      (34, 5,  True),
         "Saleable Steel":      (35, 5,  True),
         "RSMPRIME":            (38, 5,  True),
@@ -377,20 +375,58 @@ _PPC_GUARDED_ITEMS = {
     "RSMPRIME":          (37, 2, "RSM"),
     "URMPRIME":          (37, 7, "URM"),
     "Pig Iron":          (60, 12, "PIG IRON"),
-    # Semis break-up, immediately above "Total Semis" (row 34): SMS-2 Blooms
-    # (30) / Slabs (31) / SMS-3 Blooms (32) / Billets (33). Slabs and Billets
-    # are each their own tracked item; the two Blooms rows are only ever
-    # used summed together (see _CC_BLOOM_ROWS below) since neither shop's
-    # Blooms figure is independently useful.
-    "CC SLAB":           (31, 0, "SLAB"),
-    "CC BILLET":         (33, 0, "BILLET"),
 }
 
-# The two rows summed for "CC BLOOM" (not itself in _ppc_mis_config — a
-# derived item, not a single cell). Only added to production_cells when
-# both rows' own labels still say "BLOOM" (see _resolve_ppc_mis_cells),
-# same guard discipline as every other fixed-row item on this sheet.
-_CC_BLOOM_ROWS = [(30, 0, "BLOOM"), (32, 0, "BLOOM")]
+# Semis break-up (CC SLAB / CC BILLET / CC BLOOM) — resolved relative to
+# "Saleable Semis"'s own row (itself found via _PPC_STABLE_LABELS's "TOTAL
+# SEMIS" search, reliable across every vintage) rather than a fixed row —
+# see _resolve_bsp_semis_breakdown. A fixed-row+guard approach (this
+# section's original design) turned out to only cover the ~2022-onward
+# layout: the whole section shifts up by exactly 1 row for ~2019-2021
+# files (confirmed: "SMS-2 Blooms"/"Slabs"/"SMS-3 Blooms"/"Billets" one row
+# higher relative to "Total Semis"), and 2018-and-earlier files use a
+# completely different layout again ("CC Blooms"/"CC Slabs" as their own
+# direct rows, no SMS-2/SMS-3 split, and a single-cell "CC Blooms" instead
+# of a 2-row sum) — the guard correctly refused to guess for either older
+# era, silently producing NO data for ~2018-2021 despite the source rows
+# genuinely being present just a row or two off. An anchor-relative search
+# recovers both eras without needing a separate fixed-row entry per era.
+_BSP_SEMIS_BREAKDOWN_WINDOW = 4  # rows scanned upward from the anchor
+
+
+def _resolve_bsp_semis_breakdown(ws, anchor_row, col) -> Dict[str, tuple]:
+    """{item_name: (row_0based_or_tuple, col, True)} for CC SLAB / CC
+    BILLET / CC BLOOM, found by scanning the `_BSP_SEMIS_BREAKDOWN_WINDOW`
+    rows immediately above `anchor_row` ("Saleable Semis"/"Total Semis"'s
+    own row). Only items actually found are included.
+
+    Excludes any candidate row whose label is the 2-line "Semis:  Blooms" /
+    "      :Billets" compound header (~2018 vintage only) — a DIFFERENT
+    quantity (SMS production-stage Bloom/Billet output, not CC-cast semis
+    specifically) that happens to sit in this same window on that one
+    vintage and would otherwise collide with (or get double-summed
+    alongside) the genuine "CC Blooms"/"CC Slabs" rows next to it.
+    """
+    if anchor_row is None:
+        return {}
+
+    bloom_rows = []
+    cells: Dict[str, tuple] = {}
+    for r in range(anchor_row - 1, max(anchor_row - _BSP_SEMIS_BREAKDOWN_WINDOW - 1, -1), -1):
+        raw_label = str(ws.cell_value(r, 0) or "").strip()
+        if not raw_label or raw_label.startswith(':') or raw_label.upper().startswith('SEMIS'):
+            continue
+        label = raw_label.upper()
+        if "SLAB" in label and "CC SLAB" not in cells:
+            cells["CC SLAB"] = (r, col, True)
+        if "BILLET" in label and "CC BILLET" not in cells:
+            cells["CC BILLET"] = (r, col, True)
+        if "BLOOM" in label:
+            bloom_rows.append(r)
+
+    if bloom_rows:
+        cells["CC BLOOM"] = (tuple(bloom_rows), col, True)
+    return cells
 
 
 def _find_ppc_label_row(ws, substrings, max_row=45):
@@ -452,12 +488,103 @@ def _resolve_ppc_mis_cells(ws) -> Dict[str, tuple]:
         if needle not in guard_label:
             production_cells.pop(item_name, None)
 
-    if all(str(ws.cell_value(r, c) or "").strip().upper().find(needle) >= 0
-           for r, c, needle in _CC_BLOOM_ROWS):
-        col = production_cells.get("CC SLAB", (None, 5, None))[1]
-        production_cells["CC BLOOM"] = (tuple(r for r, _, _ in _CC_BLOOM_ROWS), col, True)
+    # CC SLAB / CC BILLET / CC BLOOM — anchored off "Saleable Semis"'s own
+    # row rather than a fixed row (see _resolve_bsp_semis_breakdown).
+    semis_row, semis_col = production_cells.get("Saleable Semis", (None, 5))[:2]
+    production_cells.update(_resolve_bsp_semis_breakdown(ws, semis_row, semis_col))
 
     return production_cells
+
+
+# ---------------------------------------------------------------------------
+# BSP PPC MIS despatch items — Saleable Steel Despatch / Semis Despatch /
+# Road Despatch, per direct instruction.
+#
+# This sheet's despatch table ("Total Semis" / "Saleable Steel" rows, under
+# a "DESPATCH" section header with PLAN/ACTUAL(On Dt)/ACTUAL(Cuml) columns
+# for Total loading and again for Road-only loading) is confirmed present
+# and in this exact shape on report vintages from ~2020 onward (e.g. "BSP
+# PPC MIS_Jan'20.xls" has it at a different row than "BSP PPC MIS_Apr'25/
+# Aug'26/Mar'26.xls" — row drift, same as _resolve_ppc_mis_cells's own
+# section, hence the label search below rather than a fixed row) but is a
+# DIFFERENT, incompatible layout on older files (confirmed on "BSP PPC
+# MIS_Apr'16.xls": a "DESPATCHES" section exists but the row order/column
+# meaning don't match "Total Semis"/"Saleable Steel" with 2 Cuml columns at
+# all) — deliberately not guessed for those, returns {} instead.
+#
+# Row 35's own "Total Semis" (production of semis, a totally different
+# quantity than despatch) sits ABOVE this table on every vintage — the
+# search here is bounded to start only after the despatch section's own
+# header row is found, exactly the collision this guards against (same
+# collision class as BSL's DPR "SLAB" fix earlier this project).
+#
+# "Semis Despatch"'s own row label abbreviates differently across vintages
+# — "Tot. Semis" (~2018) vs "Total Semis" (~2020 onward) — both aliased
+# here; "Saleable Steel Despatch"'s own row label hasn't been seen to vary.
+_BSP_DESPATCH_ROW_LABELS = {
+    "Semis Despatch":          ["TOTAL SEMIS", "TOT. SEMIS", "TOT SEMIS"],
+    "Saleable Steel Despatch": ["SALEABLE STEEL"],
+}
+
+
+def _bsp_safe_cell(ws, r, c):
+    """ws.cell_value(r, c), tolerating a row/col past this sheet's own
+    extent — a raw xlrd sheet raises IndexError there (an openpyxl-backed
+    _CellValueAdapter just returns None), and older/shorter report
+    vintages genuinely don't reach the row range this search probes."""
+    try:
+        return ws.cell_value(r, c)
+    except IndexError:
+        return None
+
+
+def _find_bsp_despatch_header_row(ws, max_row=90):
+    """(sub_header_row_0based, total_col, road_col), or (None, None, None)
+    if this report vintage doesn't have the expected despatch table shape.
+
+    A bare "at least 2 cells read 'CUML'" scan is NOT specific enough — the
+    earlier "Prime Rails" RSM/URM sub-table (row ~38) also has exactly 2
+    'Cuml' cells (its own RSM and URM columns), and sits BEFORE the real
+    despatch table, so a naive top-down scan finds that row first and reads
+    completely wrong columns. Anchoring on a standalone "DESPATCH" cell in
+    column A first (the despatch table's own section title, immediately
+    above its "PLAN/ACTUAL .. On Dt/Cuml" sub-header) avoids that collision.
+    """
+    despatch_row = None
+    for r in range(0, max_row):
+        if str(_bsp_safe_cell(ws, r, 0) or "").strip().upper() == "DESPATCH":
+            despatch_row = r
+            break
+    if despatch_row is None:
+        return None, None, None
+
+    for r in range(despatch_row, min(despatch_row + 4, max_row)):
+        cuml_cols = [c for c in range(1, 10)
+                     if str(_bsp_safe_cell(ws, r, c) or "").strip().upper() == "CUML"]
+        if len(cuml_cols) >= 2:
+            return r, cuml_cols[0], cuml_cols[1]
+    return None, None, None
+
+
+def _resolve_bsp_despatch_cells(ws) -> Dict[str, tuple]:
+    """{item_name: (row_0based, col_0based)} for Saleable Steel Despatch,
+    Semis Despatch (both from the Total-loading Cuml column) and Road
+    Despatch (Saleable Steel row's own Road-loading Cuml column). Empty
+    dict if this report vintage doesn't have the expected table shape."""
+    header_row, total_col, road_col = _find_bsp_despatch_header_row(ws)
+    if header_row is None:
+        return {}
+
+    cells: Dict[str, tuple] = {}
+    for item_name, needles in _BSP_DESPATCH_ROW_LABELS.items():
+        for r in range(header_row + 1, header_row + 40):
+            label = str(_bsp_safe_cell(ws, r, 0) or "").strip().upper()
+            if any(label.startswith(n) for n in needles):
+                cells[item_name] = (r, total_col)
+                if item_name == "Saleable Steel Despatch":
+                    cells["Road Despatch"] = (r, road_col)
+                break
+    return cells
 
 
 def extract_and_save_excel(file_path: str, report_month: str = None,
@@ -1245,6 +1372,27 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
             "cell": cell,
             "pdf_label": f_ref,
             "basis": basis,
+            "status": "ok" if val is not None else "skip",
+        })
+
+    # Saleable Steel Despatch / Semis Despatch / Road Despatch — see
+    # _resolve_bsp_despatch_cells's own docstring. Cuml values are raw
+    # Tonnes, month-to-date on a mid-month upload — projected to the full
+    # month exactly like every other tonnage item on this sheet.
+    for item_name, (row_0, col_0) in _resolve_bsp_despatch_cells(ws_for_resolve).items():
+        raw = _clean(_cv(row_0, col_0))
+        val = _project_to_month(raw, report_day, days_in_month)
+        f_ref = _ppc_cell_ref(row_0, col_0)
+        cell = f"S1!{f_ref}"
+        if val is not None and _is_mid_month(report_day, days_in_month):
+            cell += f" ×{days_in_month}/{report_day}"
+        production_rows.append({
+            "item_name": item_name,
+            "value": round(val / 1000.0, 3) if val is not None else None,
+            "unit": "'000T",
+            "cell": cell,
+            "pdf_label": f_ref,
+            "basis": "projected" if _is_mid_month(report_day, days_in_month) else "cum",
             "status": "ok" if val is not None else "skip",
         })
 

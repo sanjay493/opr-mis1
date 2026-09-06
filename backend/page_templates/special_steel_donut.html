@@ -1,54 +1,47 @@
         <div class="ssd-wrap">
-          <div style="text-align:center;font-weight:700;font-size:10pt;margin-bottom:2px;color:rgb(0,0,255);">{{ page.title }}</div>
-          <div class="ssd-legend">
-            <span><i style="background:#B4C7E7;"></i>Outer ring: Finished (Saleable)</span>
-            <span><i style="background:#F8CBAD;"></i>Outer ring: Semis (Saleable)</span>
-            <span><i style="background:#4472C4;"></i>Inner ring: Finished (Special)</span>
-            <span><i style="background:#ED7D31;"></i>Inner ring: Semis (Special)</span>
+          <div class="ssd-title-row">
+            <div class="ssd-title">{{ page.title }}</div>
+            <div class="ssd-unit-tag">Unit: T</div>
           </div>
           <table class="ssd-table">
-            <colgroup>
-              <col class="ssd-col-lbl"/><col/><col/><col/>
-            </colgroup>
             <thead>
               <tr>
                 <th>Plant</th>
-                <th>Annual ABP Plan {{ page.fy_label }}</th>
-                <th>{{ page.month_label }} (Actual)</th>
-                <th>{{ page.cum_label }} (Actual)</th>
+                <th colspan="2">Metric</th>
+                <th colspan="2">Annual ABP Plan {{ page.fy_label }}</th>
+                <th colspan="2">{{ page.month_label }} (Actual)</th>
+                <th colspan="2">{{ page.cum_label }} (Actual)</th>
               </tr>
             </thead>
             <tbody>
-              {% for row in page.rows %}
-              <tr class="{{ 'ssd-sail-row' if row.label == 'SAIL' else '' }}">
-                <td class="ssd-lbl">{{ row.label }}</td>
-                {% for cell in [row.plan, row.month, row.ytd] %}
-                <td class="ssd-cell">
-                  <div class="ssd-cell-inner">
-                    <div class="ssd-side ssd-side-left">
-                      <div class="ssd-stat">{{ cell.fin_txt }}</div>
-                      <div class="ssd-pct-inline">{{ cell.fin_pct_txt }}</div>
-                      {% if cell.semis_txt %}
-                      <div class="ssd-stat">{{ cell.semis_txt }}</div>
-                      <div class="ssd-pct-inline">{{ cell.semis_pct_txt }}</div>
-                      {% endif %}
-                    </div>
-                    <div class="ssd-donut">{{ cell.svg | safe }}</div>
-                    <div class="ssd-side ssd-side-right ssd-special-txt">
-                      <div class="ssd-stat">{{ cell.spl_fin_txt }}</div>
-                      <div class="ssd-pct-inline">{{ cell.spl_fin_pct_txt }}</div>
-                      {% if cell.spl_fin_pct_of_fin_txt %}<div class="ssd-pct-inline">{{ cell.spl_fin_pct_of_fin_txt }}</div>{% endif %}
-                      {% if cell.spl_semis_txt %}
-                      <div class="ssd-stat">{{ cell.spl_semis_txt }}</div>
-                      <div class="ssd-pct-inline">{{ cell.spl_semis_pct_txt }}</div>
-                      {% endif %}
-                    </div>
-                  </div>
+              {% for ent in page.entities %}
+              {% for row in ent.rows %}
+              <tr class="{{ 'ssd-sail-row' if ent.label == 'SAIL' else '' }} {{ 'ssd-plant-start' if row.is_entity_first else '' }}">
+                {% if row.is_entity_first %}<td class="ssd-lbl" rowspan="{{ ent.rowspan }}">{{ ent.label }}</td>{% endif %}
+                <td class="ssd-metric-lbl {{ 'ssd-special-txt' if row.special else '' }}">{{ row.metric_label }}</td>
+                {% if row.is_block_first %}
+                <td class="ssd-metric-lbl ssd-total-col {{ 'ssd-special-txt' if row.special else '' }}" rowspan="{{ row.block_span }}">{{ row.total_label }}</td>
+                {% endif %}
+                {% for cell in row.cells %}
+                <td class="ssd-cell {{ 'ssd-special-txt' if row.special else '' }} {{ 'ssd-emphasis' if row.emphasis else '' }}">
+                  {% for line in cell %}<div class="ssd-stat">{{ line }}</div>{% endfor %}
                 </td>
+                {% if row.is_block_first %}
+                <td class="ssd-cell ssd-total-col {{ 'ssd-special-txt' if row.special else '' }}" rowspan="{{ row.block_span }}">
+                  {% for line in row.total_cells[loop.index0] %}<div class="ssd-stat">{{ line }}</div>{% endfor %}
+                </td>
+                {% endif %}
                 {% endfor %}
               </tr>
               {% endfor %}
+              {% endfor %}
             </tbody>
           </table>
-          <div class="ssd-note">Note: Quantities in Tonnes. Each Actual cell draws two rings (outer = Saleable Steel, inner = Special Steel), both its own 100% Finished/Semis split starting Finished at the same top edge. Saleable Steel is Production data, Special Steel is Despatch data — different physical flows for the same plant, so the inner ring isn't a slice of the outer ring's total. Spl. FS's 2nd % line is its share of Finished Steel alone (value-added intensity), not of Saleable Steel. The Annual ABP Plan column has no Finished/Semis split for its Special Steel target, so it shows one plain ring and a single aggregate Spl figure (no Finished-Steel-share line).</div>
+          {% if page.bubble_svg %}
+          <div class="ssd-bubble-wrap">
+            <div class="ssd-bubble-title">Value-Addition Positioning — {{ page.cum_label }} (Actual)</div>
+            <div class="ssd-bubble-sub">Bubble size &#8733; Saleable Steel Despatch (Tonnes)</div>
+            <div class="ssd-bubble-chart">{{ page.bubble_svg | safe }}</div>
+          </div>
+          {% endif %}
         </div>

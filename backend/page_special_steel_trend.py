@@ -100,7 +100,7 @@ def _sum_actual(cur, months: list, entity: str):
             cur.execute(f"""
                 SELECT COUNT(*) FROM production_table
                 WHERE report_month IN ({ph}) AND plant_name='SSP'
-                  AND item_name='Total Saleable Steel Despatch'
+                  AND item_name='Saleable Steel Despatch'
             """, (*months,))
             (c,) = cur.fetchone()
             if c > 0:
@@ -118,23 +118,37 @@ def _sum_actual(cur, months: list, entity: str):
     return total, has_any
 
 
-def _saleable_steel(cur, month, plant):
+def _saleable_item(cur, month, plant, item_name):
     cur.execute("""
         SELECT month_actual FROM production_table
-        WHERE report_month=? AND plant_name=? AND item_name='Saleable Steel'
-    """, (month, plant))
+        WHERE report_month=? AND plant_name=? AND item_name=?
+    """, (month, plant, item_name))
     r = cur.fetchone()
     return r[0] if r and r[0] is not None else None  # '000T
 
 
-def _period_saleable(cur, months: list, entity: str):
-    """SAIL/plant Saleable Steel ('000T) summed across these months.
+def _saleable_steel(cur, month, plant):
+    """Back-compat wrapper — page_at_a_glance.py imports this name
+    directly for its own Saleable Steel production lookups. Kept as a
+    thin alias over _saleable_item rather than updating that caller, so
+    this module's public surface doesn't shift under an unrelated page."""
+    return _saleable_item(cur, month, plant, "Saleable Steel")
 
-    SSPs has no 'Saleable Steel' row of its own in production_table (the
-    label is a display-only bundle, not a real plant_name there) — its
-    denominator is instead ASP+SSP+VISL's own Saleable Steel, the same
-    three plants _ssps_special_steel's docstring says the 'SSPs' bundle
-    actually covers everywhere else in this app (see _SSPS_PLANTS)."""
+
+def _period_saleable(cur, months: list, entity: str, item_name: str = "Saleable Steel"):
+    """SAIL/plant Saleable Steel PRODUCTION ('000T) summed across these
+    months — the original (and still default) denominator for this page's
+    "% of Saleable Steel" figure. `item_name="Saleable Steel Despatch"`
+    computes the same sum against the DESPATCH quantity instead (per direct
+    instruction, a 2nd metric alongside — not replacing — this one; see
+    generate_special_steel_trend's own despatch-side block).
+
+    SSPs has no 'Saleable Steel'/'Saleable Steel Despatch' row of its own
+    in production_table (the label is a display-only bundle, not a real
+    plant_name there) — its denominator is instead ASP+SSP+VISL's own
+    figure, the same three plants _ssps_special_steel's docstring says the
+    'SSPs' bundle actually covers everywhere else in this app (see
+    _SSPS_PLANTS)."""
     if entity == _SSPS:
         plants = list(_SSPS_PLANTS)
     else:
@@ -142,20 +156,21 @@ def _period_saleable(cur, months: list, entity: str):
     total, has = 0.0, False
     for m in months:
         for p in plants:
-            v = _saleable_steel(cur, m, p)
+            v = _saleable_item(cur, m, p, item_name)
             if v is not None:
                 total += v
                 has = True
     return total if has else None
 
 
-def _period_value_pct(cur, months: list, entity: str):
+def _period_value_pct(cur, months: list, entity: str, item_name: str = "Saleable Steel"):
     """(qty_tonnes, pct_of_saleable) for this entity's Special Steel despatch
-    over these months, or (None, None) if nothing's been reported yet."""
+    over these months, or (None, None) if nothing's been reported yet.
+    `item_name` selects the denominator — see _period_saleable."""
     qty, has = _sum_actual(cur, months, entity)
     if not has:
         return None, None
-    saleable_000T = _period_saleable(cur, months, entity)
+    saleable_000T = _period_saleable(cur, months, entity, item_name)
     pct = qty / (saleable_000T * 1000) * 100 if saleable_000T else None
     return qty, pct
 
@@ -411,66 +426,93 @@ def _donut_svg(entities: list, title: str, sail_qty=None, sail_pct=None,
 
 # ── public API ──────────────────────────────────────────────────────────────
 
+def _build_trend_bundle(cur, report_month: str, fys: list, ytd_months: list,
+                        month_label: str, cum_label: str, denom_item: str, denom_short: str) -> dict:
+    """One full {annual_svgs, month_svg, till_month_svg} bundle — the 6
+    annual blocks + 2 donuts — against whichever denominator `denom_item`
+    names ("Saleable Steel" = production, the original metric; "Saleable
+    Steel Despatch" = the 2nd metric added alongside it per direct
+    instruction). Everything here is otherwise identical between the two
+    metrics (same numerator, same entities, same chart code) — only the
+    denominator passed into _period_value_pct/_period_saleable changes."""
+    annual_svgs = {}
+    for ent in _BLOCK_ORDER:
+        bars = []
+        for fy in fys[:-1]:
+            qty, pct = _period_value_pct(cur, _fy_months(fy), ent, denom_item)
+            bars.append((_fy_axis_label(fy), qty, pct, _FY_BAR_COLORS[len(bars)], _PREV_FY_PCT_LABEL_COLOR))
+        cur_fy = fys[-1]
+        _, cur_pct = _period_value_pct(cur, ytd_months, ent, denom_item)
+        cur_rate = _current_fy_rate(cur, report_month, ent)
+        cur_qty = cur_rate * 1000 if cur_rate is not None else None
+        bars.append((f"{_fy_axis_label(cur_fy)} (Likely)", cur_qty, cur_pct, _FY_BAR_COLORS[3]))
+        annual_svgs[ent] = _bar_group_svg(bars, ent, vw=240, vh=200, pct_font_size=12)
+
+    # SSPs (Salem's own special-steel despatch, per _ssps_special_steel)
+    # gets its own slice alongside the 5 plants — SAIL's center total
+    # already includes it (_entity_plants("SAIL") = _PLANTS + [SSPs]),
+    # so omitting it here previously left the slices summing to less
+    # than the center total with no visual account of the gap. SSPs'
+    # own "% of Saleable Steel" is its special steel divided by
+    # ASP+SSP+VISL's combined Saleable Steel (see _period_saleable) —
+    # there's no plant_name='SSPs' row in production_table to read a
+    # denominator from directly.
+    month_slices, ytd_slices = [], []
+    for ent in _PLANTS + [_SSPS]:
+        qty, pct = _period_value_pct(cur, [report_month], ent, denom_item)
+        month_slices.append((ent, qty, pct, _COLORS[ent]))
+        qty, pct = _period_value_pct(cur, ytd_months, ent, denom_item)
+        ytd_slices.append((ent, qty, pct, _COLORS[ent]))
+
+    # SAIL's own despatch/denominator ratio — a real aggregate over SAIL's
+    # own totals, not derivable from averaging the plant slices above (and
+    # not equal to summing the plant slices' qty either, since entity=
+    # "SAIL" also includes SSPs — see _entity_plants).
+    sail_month_qty, sail_month_pct = _period_value_pct(cur, [report_month], "SAIL", denom_item)
+    sail_ytd_qty, sail_ytd_pct = _period_value_pct(cur, ytd_months, "SAIL", denom_item)
+
+    return {
+        "annual_svgs": [annual_svgs[e] for e in _BLOCK_ORDER],
+        "month_svg": _donut_svg(
+            month_slices, f"Special Steel Despatch — {month_label} (Plant Share of SAIL, % of {denom_short})",
+            sail_qty=sail_month_qty, sail_pct=sail_month_pct, mirror=False,
+            vw=700, vh=220),
+        "till_month_svg": _donut_svg(
+            ytd_slices, f"Special Steel Despatch — {cum_label} YTD (Plant Share of SAIL, % of {denom_short})",
+            sail_qty=sail_ytd_qty, sail_pct=sail_ytd_pct, mirror=True,
+            vw=700, vh=220),
+    }
+
+
 def generate_special_steel_trend(report_month: str) -> dict:
     fys = _last_n_fys(report_month, 4)
     ytd_months = db.get_ytd_months(report_month)
-
-    conn = db.connect()
-    cur = conn.cursor()
-    try:
-        annual_svgs = {}
-        for ent in _BLOCK_ORDER:
-            bars = []
-            for fy in fys[:-1]:
-                qty, pct = _period_value_pct(cur, _fy_months(fy), ent)
-                bars.append((_fy_axis_label(fy), qty, pct, _FY_BAR_COLORS[len(bars)], _PREV_FY_PCT_LABEL_COLOR))
-            cur_fy = fys[-1]
-            _, cur_pct = _period_value_pct(cur, ytd_months, ent)
-            cur_rate = _current_fy_rate(cur, report_month, ent)
-            cur_qty = cur_rate * 1000 if cur_rate is not None else None
-            bars.append((f"{_fy_axis_label(cur_fy)} (Likely)", cur_qty, cur_pct, _FY_BAR_COLORS[3]))
-            annual_svgs[ent] = _bar_group_svg(bars, ent, vw=240, vh=200, pct_font_size=12)
-
-        # SSPs (Salem's own special-steel despatch, per _ssps_special_steel)
-        # gets its own slice alongside the 5 plants — SAIL's center total
-        # already includes it (_entity_plants("SAIL") = _PLANTS + [SSPs]),
-        # so omitting it here previously left the slices summing to less
-        # than the center total with no visual account of the gap. SSPs'
-        # own "% of Saleable Steel" is its special steel divided by
-        # ASP+SSP+VISL's combined Saleable Steel (see _period_saleable) —
-        # there's no plant_name='SSPs' row in production_table to read a
-        # denominator from directly.
-        month_slices, ytd_slices = [], []
-        for ent in _PLANTS + [_SSPS]:
-            qty, pct = _period_value_pct(cur, [report_month], ent)
-            month_slices.append((ent, qty, pct, _COLORS[ent]))
-            qty, pct = _period_value_pct(cur, ytd_months, ent)
-            ytd_slices.append((ent, qty, pct, _COLORS[ent]))
-
-        # SAIL's own despatch/Saleable-Steel ratio — a real aggregate over
-        # SAIL's own totals, not derivable from averaging the plant slices
-        # above (and not equal to summing the plant slices' qty either,
-        # since entity="SAIL" also includes SSPs — see _entity_plants).
-        sail_month_qty, sail_month_pct = _period_value_pct(cur, [report_month], "SAIL")
-        sail_ytd_qty, sail_ytd_pct = _period_value_pct(cur, ytd_months, "SAIL")
-    finally:
-        conn.close()
 
     dt = _dt.datetime.strptime(report_month, "%Y-%m")
     month_label = dt.strftime("%b'%y")
     cum_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b'%y") + "-" + month_label
 
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        production = _build_trend_bundle(cur, report_month, fys, ytd_months, month_label, cum_label,
+                                         "Saleable Steel", "Saleable Steel Production")
+        despatch = _build_trend_bundle(cur, report_month, fys, ytd_months, month_label, cum_label,
+                                       "Saleable Steel Despatch", "Saleable Steel Despatch")
+    finally:
+        conn.close()
+
     return {
         "type": "special_steel_trend",
         "title": "Plant Wise Special Steel Production & SAIL Trend",
-        "annual_svgs": [annual_svgs[e] for e in _BLOCK_ORDER],
-        "month_svg": _donut_svg(
-            month_slices, f"Special Steel Despatch — {month_label} (Plant Share of SAIL)",
-            sail_qty=sail_month_qty, sail_pct=sail_month_pct, mirror=False,
-            vw=700, vh=220),
-        "till_month_svg": _donut_svg(
-            ytd_slices, f"Special Steel Despatch — {cum_label} YTD (Plant Share of SAIL)",
-            sail_qty=sail_ytd_qty, sail_pct=sail_ytd_pct, mirror=True,
-            vw=700, vh=220),
+        "annual_svgs": production["annual_svgs"],
+        "month_svg": production["month_svg"],
+        "till_month_svg": production["till_month_svg"],
+        # 2nd metric, per direct instruction: same Special Steel despatch
+        # numerator, divided by Saleable Steel DESPATCH instead of
+        # Saleable Steel PRODUCTION — see _build_trend_bundle.
+        "annual_svgs_despatch": despatch["annual_svgs"],
+        "month_svg_despatch": despatch["month_svg"],
+        "till_month_svg_despatch": despatch["till_month_svg"],
         "fy_range_label": f"{_fy_short(fys[0])} to {_fy_short(fys[-1])}",
     }

@@ -11,9 +11,17 @@ first two — see _find_report_sheets):
     by extract_and_save_excel. techno_data (read by /data-entry/techno) is
     populated by the separate TechnoExtractor upload flow.
   • Daily Morning Report      — sheet starting with 'RSP Morning Report Data for-'
+  • Despatch table            — located by SHEET TITLE ("DESP.PERFORMANCE"/
+    "DESPATCH PERFORMANCE", see _find_despatch_sheet), not sheet name — RSP's
+    sheet naming has been unreliable enough that trusting a name here would
+    misfire (confirmed: TECHNOPARA JUNE-2026.xlsx's PRODUCTION sheet is named
+    "Pg-10", with despatch on "PAGE-11" instead). Saved into production_table
+    alongside page-9's own items — see DESPATCH_ITEMS/_build_despatch_cells.
 
 Both page-9 and page-1-8 column detection are position-tolerant:
-  • page-9's month columns are stable across years (COL_MAP_P9, fixed letters).
+  • page-9's month columns are stable across years (COL_MAP_P9, fixed letters)
+    — the despatch table reuses this exact same map (confirmed identical
+    layout across 2024-25/2025-26/2026-27 files).
   • page-1-8 prepends one more legacy fiscal-year column every year, shifting
     the current month's column annually — its month/Cum columns are located
     dynamically per file via rsp_row_scan.find_month_cum_columns instead.
@@ -276,6 +284,81 @@ P9_ITEMS = [
     # of Saleable Steel in _build_p9_cells instead of guessing a row here.
     ("Finished Steel",       [],                                          None),
 ]
+
+# ---------------------------------------------------------------------------
+# Despatch config  (the "DESP.PERFORMANCE"/"DESPATCH PERFORMANCE" sheet) —
+# per direct instruction. Located by TITLE (see _find_despatch_sheet), not
+# sheet name: RSP's sheet-naming is unreliable across recent files — e.g.
+# TECHNOPARA JUNE-2026.xlsx has the *production* sheet ("PRODUCTION
+# PERFORMANCE") named "Pg-10" and despatch on "PAGE-11" instead, while
+# TECHNOPARA MAY-2026's despatch sheet is itself named "page-10" — the same
+# "page-9 renamed to page-10" drift _P9_NAME_RE's own docstring/comment
+# already warns about, just landing on the other sheet this time. Column
+# layout (Apr/May/Jun/1st Qr/Jul/...) is identical to page-9's own
+# COL_MAP_P9 — confirmed across 2024-25, 2025-26 and 2026-27 files — so
+# despatch reuses that map directly rather than needing its own.
+#
+# Two label wordings confirmed for the same Saleable Steel Despatch row
+# across file vintages ("TOT. SAL.STEEL" vs "TOTAL  SALEABLE STEEL" — row
+# number itself also shifts, 14 vs 13, hence the label-scan approach
+# rather than a fixed row). RSP's sheet carries only one combined EXPORT
+# row (no Semis/Finished split the way BSL's page does) — but per direct
+# instruction this is named "Finished Export", not "Total Export": RSP's
+# own "Semis Despatch" ("Slabs & Billet") row has always read 0/blank on
+# every vintage checked (see its own entry below), confirming RSP's
+# saleable steel carries no semis component at all, so its one EXPORT
+# figure genuinely IS all-finished — naming it "Finished Export" matches
+# BSL's/ISP's own naming for the same physical quantity and lets a SAIL-
+# wide rollup sum "Finished Export"/"Semis Export"/Total Export across
+# plants without a per-plant special case.
+_DESPATCH_SHEET_TITLE_RE = re.compile(r'DESP(?:\.|ATCH)?\s*PERFORMANCE', re.I)
+
+DESPATCH_ITEMS = [
+    ("Saleable Steel Despatch", ["tot sal steel", "total saleable steel", "total sal steel"], None),
+    # Absent entirely on file vintages up to at least Apr'25 (confirmed:
+    # TECHNOPARA APRIL-2025/APRIL-2024's despatch sheets jump straight from
+    # TOT. SAL.STEEL to Sal.Steel-Road, no direct-despatch row at all) —
+    # correctly skipped rather than mis-mapped, same as page-9's BF-4.
+    ("Direct Despatch",         ["cmo direct despatch"],                                       None),
+    ("Road Despatch",           ["sal steel road"],                                             None),
+    # "Export" (bare) on older files (confirmed 2024-25), "TOTAL EXPORT" on
+    # newer ones (confirmed 2026-27) — both listed so exact-match resolves
+    # either; safe against a false match on " Slabs-Export" (a different,
+    # unrelated row on some files) since exact/prefix matching requires the
+    # WHOLE label to be "export", not just contain it. Stored as "Finished
+    # Export" (not "Total Export") — see comment above DESPATCH_ITEMS.
+    ("Finished Export",         ["total export", "export"],                                    None),
+    # Per direct instruction ("there is Semis in RSP") — the row exists
+    # ("Slabs & Billet", right under the "SALEABLE STEEL" section header)
+    # on every vintage checked (2024-25 through 2026-27), but has always
+    # read 0 or blank in every one of them (confirmed) — RSP evidently
+    # doesn't populate this row the way BSL/ISP populate their own Semis
+    # despatch figure. Mapped anyway so a real value gets picked up the
+    # day RSP starts reporting it, rather than silently missing it because
+    # nobody thought to wire it up.
+    ("Semis Despatch",          ["slabs billet"],                                               None),
+]
+
+
+def _find_despatch_sheet(wb, sheet_names) -> Optional[str]:
+    """First sheet whose title (row 1-3, first few columns — same search
+    window as _looks_like_p9_sheet) matches "DESP.PERFORMANCE"/"DESPATCH
+    PERFORMANCE", regardless of the sheet's own name."""
+    for s in sheet_names:
+        ws = wb[s]
+        for r in range(1, 4):
+            for c in range(1, 5):
+                v = ws.cell(row=r, column=c).value
+                if v and _DESPATCH_SHEET_TITLE_RE.search(str(v)):
+                    return s
+    return None
+
+
+def _build_despatch_cells(ws, col: str) -> dict:
+    """Resolve the despatch sheet's 4 tracked rows; return {item_name: cell_ref}."""
+    row_map = _scan_rows_for_items(ws, DESPATCH_ITEMS, max_scan=40)
+    return {name: f"{col}{row}" for name, row in row_map.items()}
+
 
 # ---------------------------------------------------------------------------
 # Techno-table config  (page-1-8 sheet)
@@ -1555,6 +1638,30 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
             DO UPDATE SET month_actual = excluded.month_actual
         """, (db_report_month, "RSP", item_name, val))
 
+    # Despatch (Saleable Steel Despatch / Direct Despatch / Road Despatch /
+    # Finished Export) — located by sheet TITLE, not name (see
+    # _find_despatch_sheet's docstring for why), so this still works even
+    # on a file where "page-10" turned out to be the production sheet
+    # instead. Same column map as page-9 (COL_MAP_P9), no conversion
+    # exemption (all 4 are Tonnes -> '000T like the rest of production_table).
+    despatch_name = _find_despatch_sheet(wb, wb.sheetnames)
+    if despatch_name:
+        sheet_despatch = wb[despatch_name]
+        for item_name, cell in _build_despatch_cells(sheet_despatch, col_p9).items():
+            val = clean_val(sheet_despatch[cell].value)
+            if val is not None:
+                vals_extracted += 1
+                val = round(val / 1000.0, 3)
+            cursor.execute("""
+                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(report_month, plant_name, item_name)
+                DO UPDATE SET month_actual = excluded.month_actual
+            """, (db_report_month, "RSP", item_name, val))
+    else:
+        logger.info("RSP Monthly Report: no DESP.PERFORMANCE sheet found — "
+                    "despatch items skipped for %s", db_report_month)
+
     if vals_extracted == 0:
         conn.close()
         raise ValueError("No numeric data found in the RSP monthly report sheets.")
@@ -1565,7 +1672,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
     _db.log_extraction(
         plant="RSP", report_month=db_report_month,
         file_name=source_file_name,
-        sheet_name=", ".join(s for s in (p9_name, p18_name) if s),
+        sheet_name=", ".join(s for s in (p9_name, p18_name, despatch_name) if s),
         source_type="Final Monthly Report",
         items_extracted=vals_extracted)
     logger.info(f"RSP Monthly Report: {vals_extracted} values for {db_report_month}.")

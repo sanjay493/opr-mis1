@@ -21,7 +21,11 @@ Extraction mapping (all "Cum Actual" / "Stock As on Date" columns):
     (Finished Steel — same "TOTAL" Cum Actual, existing alias of Saleable Steel)
   3.0 DESPATCHES
     Finished Carbon Steel Despatch — "HRCS" row, Cum Actual
-    Total Saleable Steel Despatch  — "TOTAL" row, Cum Actual
+    Saleable Steel Despatch        — "TOTAL" row, Cum Actual (named to match
+                                      every other plant's own despatch item
+                                      — SSP has no semis component at all,
+                                      so unlike BSL/RSP/ISP this is never
+                                      split further; per direct instruction)
     Finished Carbon Steel Stock    — "HRCS" row, Stock As on Date
     Finished Total Steel Stock     — "TOTAL" row, Stock As on Date
     Finished Stainless Steel Stock — computed: Finished Total Steel Stock - Finished Carbon Steel Stock
@@ -346,7 +350,7 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
     # 6-col layout: [OnDate?, Cum, Target, Rate, StockDate, Stock1st]
     add_cum("Finished Carbon Steel Despatch", "despatches", lambda t: t.startswith("HRCS"),
             -5, -3, "DESPATCHES HRCS Cum Actual")
-    add_cum("Total Saleable Steel Despatch", "despatches", lambda t: t.startswith("TOTAL"),
+    add_cum("Saleable Steel Despatch", "despatches", lambda t: t.startswith("TOTAL"),
             -5, -3, "DESPATCHES TOTAL Cum Actual", use_rate=False)
     finished_carbon_val = add_stock("Finished Carbon Steel Stock", "despatches",
                                     lambda t: t.startswith("HRCS"), -2,
