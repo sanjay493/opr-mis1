@@ -154,6 +154,15 @@ function SegBtns({ options, value, onChange, allowClear }) {
 const isShopUnit = (name) => (name || '').trim().toLowerCase() === 'shop';
 const smsNeedsSubtag = (d) => d.unit_type === 'SMS' && !isShopUnit(d.unit_name);
 
+// These three unit types have no individually-named units at any plant —
+// plant_registry.PLANT_UNITS registers only a single "Shop" row for each
+// (whole sinter plant / whole coke oven battery / plant-wide), so there's
+// nothing for a user to actually choose. The Unit control auto-fills that
+// one value and goes inactive (disabled) instead of offering a dropdown
+// with one option, rather than requiring a pointless click.
+const NO_UNIT_CHOICE_TYPES = ['SINTER', 'COKE', 'GENERAL'];
+const hasNoUnitChoice = (unitType) => NO_UNIT_CHOICE_TYPES.includes(unitType);
+
 function emptyDraft(plant) {
   return {
     plant, unit_type: '', unit_name: '', sms_subtag: '',
@@ -290,13 +299,20 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
             <Field label="Unit type">
               <SegBtns options={UNIT_TYPES} value={draft.unit_type}
-                onChange={(code) => set({ unit_type: code, unit_name: '', sms_subtag: '' })} />
+                onChange={(code) => set({
+                  unit_type: code,
+                  unit_name: hasNoUnitChoice(code) ? 'Shop' : '',
+                  sms_subtag: '',
+                })} />
             </Field>
             {draft.unit_type && (
               <Field label="Unit"
-                hint={unitOptions.length === 0 ? 'No units registered for this type'
+                hint={hasNoUnitChoice(draft.unit_type)
+                  ? `Logged as: ${SHOP_OPTION_LABEL[draft.unit_type] || 'Whole shop'} — no unit to pick`
+                  : unitOptions.length === 0 ? 'No units registered for this type'
                   : (isShopUnit(draft.unit_name) ? 'Whole shop down — no single unit' : null)}>
                 <select style={{ ...S.select, minWidth: 200 }} value={draft.unit_name}
+                  disabled={hasNoUnitChoice(draft.unit_type)}
                   onChange={e => set({
                     unit_name: e.target.value,
                     sms_subtag: isShopUnit(e.target.value) ? '' : draft.sms_subtag,

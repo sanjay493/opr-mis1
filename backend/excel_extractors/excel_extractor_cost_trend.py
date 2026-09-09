@@ -144,3 +144,198 @@ def extract_cost_trend_workbook(file_path) -> dict:
         raise ValueError("No HM/CS/SS sheet found in this workbook")
 
     return {"report_month": report_month, "is_till_month": is_till_month, "products": products}
+
+
+# ---------------------------------------------------------------------------
+# BF Coke extractor — reads one "BF Coke-5ISPs-For and Upto <Mon><YY>.xlsx"
+# workbook (a completely different source than the elementwise HM/CS/SS one
+# above — one sheet per plant, named BSP/DSP/RSP/BSL/ISP rather than one
+# sheet per product) and pulls VARIABLE + FIXED cost (Rs/T) for BOTH the
+# month and the till-month (cumulative) columns in a single pass, since —
+# unlike the HM/CS/SS workbook, which is either a month file or a separate
+# "APRIL-<month>" till-month file — this workbook prints both blocks
+# side by side on every sheet (columns ~1-6 for the month, ~7-13 for
+# "Upto <Mon>"). Feeds cost_trend_monthly with product="COKE" (same table
+# HM/CS/SS use; see data-entry/cost-trend's PRODUCTS list for "BF Coke").
+#
+# Each plant's sheet is that plant's OWN report template (not a shared one
+# like HM/CS/SS's 3 identical sheets) — confirmed against a real Aug'26
+# file: label column, header wording (Fixed/Variable vs VAR/FIXED vs "V
+# Cost"/"F Cost"), and column order all differ plant to plant, so column
+# positions are hardcoded per plant below rather than located generically.
+# What's NOT hardcoded is the ROW: a plant's "TOTAL COST" line drifts as
+# line items are added/removed month to month, so it's always located by
+# searching for that label, never by a fixed row number.
+#
+# RSP and ISP additionally print SEVERAL cost blocks per sheet (RSP: WET
+# 1-5/DRY 1-5/Battery 6/"DRY AVERAGE (1-5 & 6)"; ISP: OLD/NEW/Skip Coke/
+# "COMBINED") — verified against the real file that the plant-level figure
+# is the one block titled AVERAGE (RSP) or COMBINED (ISP): ISP's COMBINED
+# production (102042.1935 t) is exactly OLD (36304.298) + NEW (65737.8955),
+# confirming it's the whole-plant total, not another sub-unit. block_re
+# below locates that one block by its title; if a future month's workbook
+# doesn't have exactly one block matching it, extraction fails loudly
+# rather than silently reading the wrong sub-unit's figures.
+_BF_COKE_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]  # no SAIL row in this workbook
+
+# plant -> (variable col, fixed col) x (month block, till-month block),
+# the label column its own "TOTAL COST" row is found in, and — for a sheet
+# with multiple cost blocks — the regex that names its plant-level block.
+_BF_COKE_COLUMNS = {
+    "BSP": dict(var_m=5, fixed_m=4, var_u=10, fixed_u=9,  label_col=1, block_re=None),
+    "DSP": dict(var_m=6, fixed_m=7, var_u=11, fixed_u=12, label_col=3, block_re=None),
+    "RSP": dict(var_m=7, fixed_m=8, var_u=12, fixed_u=13, label_col=2, block_re=re.compile(r"AVERAGE", re.I)),
+    "BSL": dict(var_m=4, fixed_m=5, var_u=11, fixed_u=12, label_col=1, block_re=None),
+    "ISP": dict(var_m=4, fixed_m=5, var_u=11, fixed_u=12, label_col=1, block_re=re.compile(r"COMBINED", re.I)),
+}
+
+_MONTHLIKE_RE = re.compile(r"([A-Za-z]{3,9})\s*'?\s*(\d{2,4})")
+_HEADER_TOKEN_RE = re.compile(r"\bFIX(ED)?\b|\bVAR(IABLE)?\b", re.I)
+
+
+def _find_bf_coke_month(ws):
+    """Scans the sheet's top rows for the first recognizable "<Mon> <YY>"
+    (or "<Mon>'<YYYY>", "UPTO <Mon>'<YY>", ...) label — row/column position
+    and punctuation both vary by plant, unlike the HM/CS/SS workbook's
+    fixed row 3."""
+    for row in ws.iter_rows(min_row=1, max_row=10):
+        for cell in row:
+            v = cell.value
+            if not isinstance(v, str):
+                continue
+            m = _MONTHLIKE_RE.search(v)
+            if not m:
+                continue
+            mon = _MONTH_ABBR.get(m.group(1)[:3].upper())
+            if not mon:
+                continue
+            yr = int(m.group(2))
+            if yr < 100:
+                yr += 2000
+            return f"{yr}-{mon:02d}"
+    return None
+
+
+def _row_has_header_tokens(ws, row, max_col=20):
+    """True if `row` itself looks like a column-header row (has a
+    Fixed/Variable-ish label in it) rather than a data row — used to reject
+    a false-positive "TOTAL COST" hit that's actually a column header
+    reading "Total Cost" (seen on BSP's own header row) rather than a
+    TOTAL COST data row."""
+    for c in range(1, max_col + 1):
+        v = ws.cell(row=row, column=c).value
+        if isinstance(v, str) and _HEADER_TOKEN_RE.search(v):
+            return True
+    return False
+
+
+def _dedupe_adjacent_rows(rows, gap=3):
+    """Collapses total-row hits that are within `gap` rows of each other
+    into one (keeping the first) — e.g. BSL prints both 'TOTAL COST' and
+    'TOTAL COST AS PER COST SHEET' one row apart for the same block
+    (numerically identical to rounding noise); real distinct blocks (RSP/
+    ISP's sub-units) sit dozens of rows apart and are never merged by this."""
+    groups = []
+    for r in rows:
+        if groups and r - groups[-1][-1] <= gap:
+            groups[-1].append(r)
+        else:
+            groups.append([r])
+    return [g[0] for g in groups]
+
+
+def _nearest_block_title_above(ws, row, max_back=150):
+    for r in range(row, max(1, row - max_back) - 1, -1):
+        for c in range(1, 5):
+            v = ws.cell(row=r, column=c).value
+            if isinstance(v, str) and "ELEMENTWISE" in v.upper():
+                return v
+    return None
+
+
+def _find_bf_coke_total_row(ws, cfg, sheet_name):
+    """Locates the ONE 'TOTAL COST' row this plant's Fixed/Variable figures
+    should be read from. Raises ValueError (rather than guessing) if the
+    sheet doesn't resolve to exactly one candidate — either because it has
+    no multi-block marker (cfg['block_re'] is None) but printed more than
+    one TOTAL COST block, or because a multi-block sheet doesn't have
+    exactly one block matching its expected AVERAGE/COMBINED title."""
+    hits = []
+    for r in range(1, ws.max_row + 1):
+        v = ws.cell(row=r, column=cfg["label_col"]).value
+        if isinstance(v, str) and "TOTAL COST" in v.upper() and not _row_has_header_tokens(ws, r):
+            hits.append(r)
+    groups = _dedupe_adjacent_rows(hits)
+
+    if not groups:
+        raise ValueError(f"Sheet '{sheet_name}': no 'TOTAL COST' row found in column {cfg['label_col']}")
+
+    if cfg["block_re"] is None:
+        if len(groups) != 1:
+            raise ValueError(
+                f"Sheet '{sheet_name}': expected exactly one TOTAL COST block, found {len(groups)} "
+                f"at rows {groups} — this plant's sheet may have gained a second cost block"
+            )
+        return groups[0]
+
+    matches = [r for r in groups if (t := _nearest_block_title_above(ws, r)) and cfg["block_re"].search(t)]
+    if len(matches) != 1:
+        titles = [_nearest_block_title_above(ws, r) for r in groups]
+        raise ValueError(
+            f"Sheet '{sheet_name}': expected exactly one cost block titled like "
+            f"{cfg['block_re'].pattern!r} (the plant-level total), found {len(matches)} "
+            f"among blocks {list(zip(groups, titles))}"
+        )
+    return matches[0]
+
+
+def extract_bf_coke_workbook(file_path) -> dict:
+    """-> {"report_month": "YYYY-MM", "product": "COKE",
+           "plants": {"BSP": {"month": {"variable":.., "fixed":..},
+                               "till_month": {"variable":.., "fixed":..}},
+                      ..., "ISP": {...}}}  (no SAIL — not in this workbook)
+    Raises ValueError on anything that doesn't match the expected layout —
+    same "fail loudly" philosophy as extract_cost_trend_workbook above."""
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+
+    report_month = None
+    plants = {}
+
+    for plant in _BF_COKE_PLANTS:
+        if plant not in wb.sheetnames:
+            continue
+        cfg = _BF_COKE_COLUMNS[plant]
+        ws = wb[plant]
+
+        rm = _find_bf_coke_month(ws)
+        if rm is None:
+            raise ValueError(f"Sheet '{plant}': could not find a month label (e.g. \"Aug 26\", \"AUG'2026\")")
+        if report_month is None:
+            report_month = rm
+        elif rm != report_month:
+            raise ValueError(
+                f"Sheet '{plant}' month ({rm}) disagrees with an earlier sheet in this workbook ({report_month})"
+            )
+
+        total_row = _find_bf_coke_total_row(ws, cfg, plant)
+
+        cell_map = {
+            ("month", "variable"): cfg["var_m"], ("month", "fixed"): cfg["fixed_m"],
+            ("till_month", "variable"): cfg["var_u"], ("till_month", "fixed"): cfg["fixed_u"],
+        }
+        values = {"month": {}, "till_month": {}}
+        for (block_key, cost_key), col in cell_map.items():
+            raw = ws.cell(row=total_row, column=col).value
+            num = _num(raw)
+            if num is None:
+                raise ValueError(
+                    f"Sheet '{plant}', row {total_row}, column {col} ({block_key}/{cost_key}): "
+                    f"expected a number, found {raw!r}"
+                )
+            values[block_key][cost_key] = num
+        plants[plant] = values
+
+    if not plants:
+        raise ValueError("No BF Coke plant sheet (BSP/DSP/RSP/BSL/ISP) found in this workbook")
+
+    return {"report_month": report_month, "product": "COKE", "plants": plants}

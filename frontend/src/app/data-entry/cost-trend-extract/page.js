@@ -14,8 +14,9 @@ const STATUS_META = {
   blank:     { label: 'Blank',     text: '#9aa0a6', bg: '#fafafa', border: '#dadce0' },
 };
 
-const PRODUCT_LABEL = { HM: 'Hot Metal', CS: 'Crude Steel', SS: 'Saleable Steel' };
+const PRODUCT_LABEL = { HM: 'Hot Metal', CS: 'Crude Steel', SS: 'Saleable Steel', COKE: 'BF Coke' };
 const PLANT_LABEL = { SAIL: 'SAIL 5 ISPs' };
+const FIELD_LABEL = { month_value: 'Month', till_month_value: 'Till Month' };
 
 function fmtNum(v) {
   if (v == null) return '—';
@@ -55,6 +56,7 @@ function CostTrendExtractPageInner() {
       setMeta({
         report_month: json.report_month, is_till_month: json.is_till_month,
         field: json.field, filename: json.filename,
+        dual_field: json.dual_field, product: json.product,
       });
     } catch (err) {
       setError(err.message || 'Preview failed');
@@ -71,9 +73,14 @@ function CostTrendExtractPageInner() {
 
   const handleConfirm = async () => {
     if (!rows || applyCount === 0 || !meta) return;
-    const fieldLabel = meta.is_till_month ? 'Till Month' : 'Month';
+    // Each row carries its own field now (a BF Coke upload's applied rows
+    // can be a mix of Month and Till Month), so the confirmation summary
+    // lists whichever field(s) are actually about to be written rather
+    // than assuming one field for the whole batch.
+    const appliedFields = [...new Set(rows.filter((r) => r.apply).map((r) => r.field))];
+    const fieldLabel = appliedFields.map((f) => FIELD_LABEL[f] || f).join(' + ');
     if (!window.confirm(
-      `Write ${applyCount} value(s) into Cost Trend for ${meta.report_month} (${fieldLabel} column)? `
+      `Write ${applyCount} value(s) into Cost Trend for ${meta.report_month} (${fieldLabel} column${appliedFields.length > 1 ? 's' : ''})? `
       + `This overwrites any existing value for those cells.`
     )) return;
     setConfirming(true);
@@ -82,7 +89,7 @@ function CostTrendExtractPageInner() {
       const res = await fetch(`${API_BASE}/api/cost-trend-extract/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report_month: meta.report_month, field: meta.field, rows }),
+        body: JSON.stringify({ report_month: meta.report_month, rows }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Save failed');
@@ -117,10 +124,12 @@ function CostTrendExtractPageInner() {
         <p style={{ fontSize: '11pt', color: '#5f6368', marginBottom: '20px', maxWidth: '820px' }}>
           Upload one "ELHM CS SS ..." elementwise cost workbook (Report_format/Cost/ — one file per
           month for the Month column, one "APRIL-&lt;month&gt;" cumulative file per month for the
-          Till Month column). Pulls Variable and Fixed cost (Rs/T) for BSP/DSP/RSP/BSL/ISP/SAIL across
-          Hot Metal, Crude Steel and Saleable Steel from each sheet&apos;s TOTAL COST row, then previews a
-          diff against the database before writing anything. Total Cost stays computed on the report,
-          same as manual entry.
+          Till Month column) to pull Variable and Fixed cost (Rs/T) for BSP/DSP/RSP/BSL/ISP/SAIL across
+          Hot Metal, Crude Steel and Saleable Steel; or one "BF Coke-5ISPs-For and Upto &lt;Mon&gt;&lt;YY&gt;"
+          workbook (sheets BSP/DSP/RSP/BSL/ISP) to pull BF Coke&apos;s Variable and Fixed cost for both the
+          Month and Till Month columns at once. Each workbook&apos;s TOTAL COST row is previewed as a diff
+          against the database before writing anything. Total Cost stays computed on the report, same as
+          manual entry.
         </p>
 
         <div style={{
@@ -164,13 +173,22 @@ function CostTrendExtractPageInner() {
             }}>
               Report Month: {meta.report_month}
             </span>
-            <span style={{
-              padding: '6px 14px', borderRadius: '8px', border: `1px solid ${meta.is_till_month ? '#8430ce' : '#0284c7'}`,
-              backgroundColor: meta.is_till_month ? '#f3e8fd' : '#e0f2fe',
-              color: meta.is_till_month ? '#8430ce' : '#0284c7', fontSize: '10pt', fontWeight: 700,
-            }}>
-              {meta.is_till_month ? 'Till Month (cumulative)' : 'Month'} column
-            </span>
+            {meta.dual_field ? (
+              <span style={{
+                padding: '6px 14px', borderRadius: '8px', border: '1px solid #8430ce',
+                backgroundColor: '#f3e8fd', color: '#8430ce', fontSize: '10pt', fontWeight: 700,
+              }}>
+                Month + Till Month (both columns)
+              </span>
+            ) : (
+              <span style={{
+                padding: '6px 14px', borderRadius: '8px', border: `1px solid ${meta.is_till_month ? '#8430ce' : '#0284c7'}`,
+                backgroundColor: meta.is_till_month ? '#f3e8fd' : '#e0f2fe',
+                color: meta.is_till_month ? '#8430ce' : '#0284c7', fontSize: '10pt', fontWeight: 700,
+              }}>
+                {meta.is_till_month ? 'Till Month (cumulative)' : 'Month'} column
+              </span>
+            )}
             <span style={{ fontSize: '9.5pt', color: '#5f6368' }}>from {meta.filename}</span>
           </div>
         )}
@@ -223,6 +241,7 @@ function CostTrendExtractPageInner() {
                     <th style={thStyle}>Product</th>
                     <th style={thStyle}>Plant</th>
                     <th style={thStyle}>Cost Type</th>
+                    <th style={thStyle}>Field</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>Extracted Value</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>DB Value</th>
                     <th style={thStyle}>Status</th>
@@ -230,7 +249,7 @@ function CostTrendExtractPageInner() {
                 </thead>
                 <tbody>
                   {visibleRows.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#5f6368', fontSize: '10.5pt' }}>No rows in this view.</td></tr>
+                    <tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: '#5f6368', fontSize: '10.5pt' }}>No rows in this view.</td></tr>
                   )}
                   {visibleRows.map((r) => {
                     const stMeta = STATUS_META[r.status];
@@ -246,6 +265,7 @@ function CostTrendExtractPageInner() {
                         <td style={tdStyle}>{PRODUCT_LABEL[r.product] || r.product}</td>
                         <td style={tdStyle}>{PLANT_LABEL[r.plant] || r.plant}</td>
                         <td style={tdStyle}>{r.cost_type === 'VARIABLE' ? 'Variable' : 'Fixed'}</td>
+                        <td style={tdStyle}>{FIELD_LABEL[r.field] || r.field}</td>
                         <td style={{ ...tdStyle, textAlign: 'right' }}>{fmtNum(r.extracted_value)}</td>
                         <td style={{ ...tdStyle, textAlign: 'right' }}>{fmtNum(r.db_value)}</td>
                         <td style={tdStyle}>

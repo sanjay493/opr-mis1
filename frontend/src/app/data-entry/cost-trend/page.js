@@ -175,7 +175,7 @@ function CostTrendPageInner() {
             Cost Trend Entry — Pages 3.61-3.63
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Trend in Cost of Production (Hot Metal / Crude Steel / Saleable Steel) — Variable / Fixed Cost per plant, including SAIL 5 ISPs (entered directly, not summed from the plants), annual history and current-FY month + till-month. Total Cost is computed automatically on the report. BF Coke / Sinter feed only the Inter Plant Performance Comparison page — enter their lump Rs/T under Variable Cost (no split on the comparative sheet). Have an "ELHM CS SS ..." workbook instead? Use the <a href="/data-entry/cost-trend-extract" style={{ color: '#1a73e8' }}>Excel Extractor</a> to pull these values automatically.
+            Trend in Cost of Production (Hot Metal / Crude Steel / Saleable Steel) — Variable / Fixed Cost per plant, including SAIL 5 ISPs (entered directly, not summed from the plants), annual history and current-FY month + till-month. Total Cost is computed automatically on the report. BF Coke / Sinter feed only the Inter Plant Performance Comparison page; Sinter has no source workbook yet — enter its lump Rs/T under Variable Cost (no split on the comparative sheet) — but BF Coke can be pulled automatically instead, with a real Fixed/Variable split (no SAIL row). Have an "ELHM CS SS ..." or "BF Coke-5ISPs-For and Upto ..." workbook? Use the <a href="/data-entry/cost-trend-extract" style={{ color: '#1a73e8' }}>Excel Extractor</a> to pull these values automatically.
           </span>
         </div>
 

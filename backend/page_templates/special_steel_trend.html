@@ -1,10 +1,10 @@
-{# Page 24: Special Steel — Trend & Performance Analysis #}
+{# Page 24: Special Steel — Trend & Performance Analysis (% of Saleable Steel Despatch) #}
 <div style="padding:4px 8px;font-family:'Arial Narrow',Arial,sans-serif;">
   <div style="text-align:center;font-weight:700;font-size:12pt;margin-bottom:2px;color:rgb(0,0,255);">{{ page.title }}</div>
   <div style="text-align:center;font-size:8pt;color:{{ colors.text_muted }};margin-bottom:8px;">{{ page.fy_range_label }}</div>
 
   <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};margin-bottom:3px;">
-    Annual Special Steel Despatch — Last 3 Years + Current FY (Likely) (T & % Special Steel in Total Saleable Steel Production)
+    Annual Special Steel Despatch — Last 3 Years + Current FY (Likely) (T & % Special Steel in Total Saleable Steel Despatch)
   </div>
   <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;margin-bottom:10px;">
     {% for svg in page.annual_svgs %}
@@ -20,29 +20,5 @@
 
   <div style="border:0.5px solid {{ colors.border_divider }};border-radius:3px;padding:4px;">
     {{ page.till_month_svg }}
-  </div>
-
-  <div style="page-break-before:always;"></div>
-
-  <div style="text-align:center;font-weight:700;font-size:12pt;margin:8px 0 2px;color:rgb(0,0,255);">{{ page.title }} — % of Saleable Steel Despatch</div>
-  <div style="text-align:center;font-size:8pt;color:{{ colors.text_muted }};margin-bottom:8px;">{{ page.fy_range_label }}</div>
-
-  <div style="font-size:9pt;font-weight:700;color:{{ colors.text_heading_dark }};margin-bottom:3px;">
-    Annual Special Steel Despatch — Last 3 Years + Current FY (Likely) (T & % Special Steel in Total Saleable Steel Despatch)
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;margin-bottom:10px;">
-    {% for svg in page.annual_svgs_despatch %}
-    <div style="border:0.5px solid {{ colors.border_divider }};border-radius:3px;padding:4px;">
-      {{ svg }}
-    </div>
-    {% endfor %}
-  </div>
-
-  <div style="border:0.5px solid {{ colors.border_divider }};border-radius:3px;padding:4px;margin-bottom:8px;">
-    {{ page.month_svg_despatch }}
-  </div>
-
-  <div style="border:0.5px solid {{ colors.border_divider }};border-radius:3px;padding:4px;">
-    {{ page.till_month_svg_despatch }}
   </div>
 </div>

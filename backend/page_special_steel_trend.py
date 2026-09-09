@@ -430,11 +430,11 @@ def _build_trend_bundle(cur, report_month: str, fys: list, ytd_months: list,
                         month_label: str, cum_label: str, denom_item: str, denom_short: str) -> dict:
     """One full {annual_svgs, month_svg, till_month_svg} bundle — the 6
     annual blocks + 2 donuts — against whichever denominator `denom_item`
-    names ("Saleable Steel" = production, the original metric; "Saleable
-    Steel Despatch" = the 2nd metric added alongside it per direct
-    instruction). Everything here is otherwise identical between the two
-    metrics (same numerator, same entities, same chart code) — only the
-    denominator passed into _period_value_pct/_period_saleable changes."""
+    names. `denom_item`/`denom_short` stay parameterized (rather than
+    hardcoded to "Saleable Steel Despatch") because this page used to also
+    render a Saleable-Steel-PRODUCTION-denominated bundle alongside this
+    one; that page was dropped per direct instruction, leaving despatch as
+    the sole metric, but the split kept the denominator swappable for free."""
     annual_svgs = {}
     for ent in _BLOCK_ORDER:
         bars = []
@@ -495,8 +495,6 @@ def generate_special_steel_trend(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        production = _build_trend_bundle(cur, report_month, fys, ytd_months, month_label, cum_label,
-                                         "Saleable Steel", "Saleable Steel Production")
         despatch = _build_trend_bundle(cur, report_month, fys, ytd_months, month_label, cum_label,
                                        "Saleable Steel Despatch", "Saleable Steel Despatch")
     finally:
@@ -504,15 +502,14 @@ def generate_special_steel_trend(report_month: str) -> dict:
 
     return {
         "type": "special_steel_trend",
-        "title": "Plant Wise Special Steel Production & SAIL Trend",
-        "annual_svgs": production["annual_svgs"],
-        "month_svg": production["month_svg"],
-        "till_month_svg": production["till_month_svg"],
-        # 2nd metric, per direct instruction: same Special Steel despatch
-        # numerator, divided by Saleable Steel DESPATCH instead of
-        # Saleable Steel PRODUCTION — see _build_trend_bundle.
-        "annual_svgs_despatch": despatch["annual_svgs"],
-        "month_svg_despatch": despatch["month_svg"],
-        "till_month_svg_despatch": despatch["till_month_svg"],
+        # Per direct instruction: the Saleable-Steel-PRODUCTION-denominated
+        # page this section used to lead with is dropped — despatch is now
+        # the only metric on this page, so the title says so directly
+        # instead of the two-page split's "— % of Saleable Steel Despatch"
+        # suffix on just the 2nd page.
+        "title": "Plant Wise Special Steel Production & SAIL Trend — % of Saleable Steel Despatch",
+        "annual_svgs": despatch["annual_svgs"],
+        "month_svg": despatch["month_svg"],
+        "till_month_svg": despatch["till_month_svg"],
         "fy_range_label": f"{_fy_short(fys[0])} to {_fy_short(fys[-1])}",
     }

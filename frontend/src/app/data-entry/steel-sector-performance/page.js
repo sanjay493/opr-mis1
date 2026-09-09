@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
@@ -213,6 +213,7 @@ function EditableTable({ table, onChange }) {
 }
 
 function EditableTextSection({ section, heading, onChange }) {
+  const missing = !section;
   const s = section || { heading, paragraphs: [''] };
 
   const setHeading = (val) => onChange({ ...s, heading: val });
@@ -226,6 +227,11 @@ function EditableTextSection({ section, heading, onChange }) {
 
   return (
     <div style={{ marginBottom: '16px' }}>
+      {missing && (
+        <p style={{ fontSize: '9pt', color: '#c5221f', marginBottom: '6px' }}>
+          Not found in the source — enter it by hand below.
+        </p>
+      )}
       <input
         value={s.heading ?? ''}
         onChange={(e) => setHeading(e.target.value)}
@@ -247,9 +253,40 @@ function EditableTextSection({ section, heading, onChange }) {
   );
 }
 
+// Which of the 10 sections (7 tables + 3 text sections) a preview is
+// missing — drives the non-blocking summary banner shown right after
+// extraction. An interrupting popup was considered and rejected: the
+// extractor already flags each missing table/section inline (red text
+// right where the user needs to fill it in), so a modal would just repeat
+// that same information as a dialog the user has to dismiss before they
+// can see the very sections it's warning about. A summary banner gives
+// the same "here's what's missing" visibility up front without blocking.
+function missingSections(preview) {
+  if (!preview) return [];
+  const missing = [];
+  for (const [key, label] of TABLE_ORDER) {
+    if (!preview.tables?.[key]) missing.push(label);
+  }
+  for (const [key, label] of TEXT_ORDER) {
+    if (!preview.text_sections?.[key]) missing.push(label);
+  }
+  return missing;
+}
+
 export default function SteelSectorPerformancePage() {
-  const [srcMonth, setSrcMonth] = useState(previousMonth());
+  // Computed client-side only (not from useState(previousMonth())) — that
+  // call runs during SSR too, and if the server's clock/timezone doesn't
+  // land on the exact same month as the browser's (most visible right
+  // around a month boundary), the server-rendered <input type="month">
+  // value disagrees with what the client computes, and React flags a
+  // hydration mismatch. Starting blank and filling in on mount keeps the
+  // SSR and first client render identical.
+  const [srcMonth, setSrcMonth] = useState('');
+  useEffect(() => {
+    setSrcMonth(previousMonth());
+  }, []);
   const [file, setFile] = useState(null);
+  const [sourceUrl, setSourceUrl] = useState('');
   const [preview, setPreview] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -267,6 +304,28 @@ export default function SteelSectorPerformancePage() {
       fd.append('file', file);
       fd.append('month', srcMonth);
       const res = await fetch(`${API}/api/steel-sector-performance/preview`, { method: 'POST', body: fd });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+      setPreview(body);
+    } catch (e) {
+      setError(`Extraction failed: ${e.message}`);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const handleExtractUrl = async () => {
+    if (!sourceUrl.trim()) return;
+    setExtracting(true);
+    setError(null);
+    setPreview(null);
+    setSaveResult(null);
+    try {
+      const res = await fetch(`${API}/api/steel-sector-performance/preview-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: sourceUrl.trim(), month: srcMonth }),
+      });
       const body = await res.json();
       if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
       setPreview(body);
@@ -339,20 +398,24 @@ export default function SteelSectorPerformancePage() {
             Indian Steel Sector Performance
           </h1>
           <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            Upload the monthly PIB (Ministry of Steel) &quot;Indian Steel Sector Performance&quot; PDF
+            Paste the URL of the monthly PIB (Ministry of Steel) &quot;Indian Steel Sector Performance&quot;
+            press release (pib.gov.in/PressReleasePage.aspx), or upload the release PDF
             (Report_format/&quot;Indian Steel Sector Performance in &lt;Mon&gt;&apos;&lt;YY&gt;.pdf&quot;).
-            Every table and narrative section is extracted for review below — every cell, heading and
-            paragraph is editable before saving, so a table the extractor gets wrong (or misses
-            entirely) can be corrected or typed in by hand. Table 1a&apos;s SAIL rows and % share of
-            India are computed automatically when the report is generated, not here.
+            Every table (Production Overview, Producer wise Production, Steel Prices, Demand,
+            Finished Steel Import &amp; Export, Domestic Raw Material Prices, Key Indices) and narrative
+            section is extracted for review below — every cell, heading and paragraph is editable before
+            saving, so anything the extractor gets wrong (or misses entirely) can be corrected or typed in
+            by hand; missing sections are flagged in red rather than blocking the upload. Table 1a&apos;s
+            SAIL rows and % share of India are computed automatically when the report is generated, not
+            here.
           </p>
         </div>
 
         <div style={cardStyle}>
           <div style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', marginBottom: '12px' }}>
-            Extract from source PDF
+            Extract from source
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '14px' }}>
             <label style={{ fontSize: '11pt', fontWeight: 600 }}>Report month</label>
             <input
               type="month"
@@ -360,6 +423,28 @@ export default function SteelSectorPerformancePage() {
               onChange={(e) => setSrcMonth(e.target.value)}
               style={selectStyle}
             />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <span style={{ fontSize: '9.5pt', fontWeight: 600, color: '#5f6368', minWidth: '90px' }}>PIB URL</span>
+            <input
+              type="url"
+              placeholder="https://www.pib.gov.in/PressReleasePage.aspx?PRID=..."
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              style={{ ...selectStyle, flex: 1, minWidth: '320px' }}
+            />
+            <button
+              onClick={handleExtractUrl}
+              disabled={!sourceUrl.trim() || extracting}
+              style={btnStyle(!sourceUrl.trim() || extracting)}
+            >
+              {extracting ? 'Extracting…' : 'Extract from URL'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' }}>
+            <span style={{ fontSize: '9.5pt', fontWeight: 600, color: '#5f6368', minWidth: '90px' }}>PDF file</span>
             <input
               type="file"
               accept=".pdf"
@@ -371,7 +456,7 @@ export default function SteelSectorPerformancePage() {
             </button>
             <span style={{ fontSize: '9.5pt', color: '#5f6368' }}>or</span>
             <button onClick={handleStartManual} style={{ ...btnStyle(false), backgroundColor: '#ffffff', color: '#1a73e8', border: '1px solid #1a73e8' }}>
-              Start blank (no PDF)
+              Start blank
             </button>
           </div>
         </div>
@@ -396,6 +481,13 @@ export default function SteelSectorPerformancePage() {
             {saveResult && (
               <div style={{ padding: '10px 14px', backgroundColor: '#e6f4ea', color: '#137333', borderRadius: '6px', fontSize: '10.5pt', marginBottom: '14px' }}>
                 Saved for {saveResult.report_month}.
+              </div>
+            )}
+
+            {missingSections(preview).length > 0 && (
+              <div style={{ padding: '10px 14px', backgroundColor: '#fef7e0', color: '#976a00', borderRadius: '6px', fontSize: '10pt', marginBottom: '14px' }}>
+                <strong>{missingSections(preview).length} section(s) not found</strong> in the source — shown
+                below in red for hand entry before saving: {missingSections(preview).join(', ')}.
               </div>
             )}
 

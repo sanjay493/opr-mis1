@@ -51,6 +51,15 @@ PLANT_UNITS = [
     ("BSP", "MILL", "BRM",       0, 120),
     ("BSP", "MILL", "WRM",       0, 130),
     ("BSP", "MILL", "Plate Mill",0, 140),
+    # Sinter Plant / Coke Ovens / Plant-Level General — no individual units
+    # registered for ANY plant (single "Shop" = whole sinter plant / whole
+    # coke oven battery / plant-wide, same "one unit == the shop" pattern as
+    # ISP's single BF below). All three are deliberately Shop-only across
+    # every plant — data-entry/breakdown's form locks their Unit selector to
+    # this one value (inactive, no real choice) rather than a real dropdown.
+    ("BSP", "SINTER",  "Shop",    1, 150),
+    ("BSP", "COKE",    "Shop",    1, 160),
+    ("BSP", "GENERAL", "Shop",    1, 170),
 
     # ── DSP (Durgapur Steel Plant) ───────────────────────────────────────────
     ("DSP", "BF",   "BF-2",      0,  10),
@@ -62,6 +71,9 @@ PLANT_UNITS = [
     ("DSP", "MILL", "WAP",       0,  70),
     ("DSP", "MILL", "MM",        0,  80),
     ("DSP", "MILL", "MSM",       0,  90),
+    ("DSP", "SINTER",  "Shop",   1, 100),
+    ("DSP", "COKE",    "Shop",   1, 110),
+    ("DSP", "GENERAL", "Shop",   1, 120),
 
     # ── RSP (Rourkela Steel Plant) ───────────────────────────────────────────
     ("RSP", "BF",   "BF-1",      0,  10),
@@ -74,6 +86,9 @@ PLANT_UNITS = [
     ("RSP", "MILL", "PM",        0,  80),
     ("RSP", "MILL", "NPM",       0,  90),
     ("RSP", "MILL", "HSM-2",     0, 100),
+    ("RSP", "SINTER",  "Shop",   1, 110),
+    ("RSP", "COKE",    "Shop",   1, 120),
+    ("RSP", "GENERAL", "Shop",   1, 130),
 
     # ── BSL (Bokaro Steel Plant) ─────────────────────────────────────────────
     ("BSL", "BF",   "BF-1",      0,  10),
@@ -88,6 +103,9 @@ PLANT_UNITS = [
     ("BSL", "MILL", "HSM",       0, 100),
     ("BSL", "MILL", "CRM-1&2",   0, 110),
     ("BSL", "MILL", "CRM-3",     0, 120),
+    ("BSL", "SINTER",  "Shop",   1, 130),
+    ("BSL", "COKE",    "Shop",   1, 140),
+    ("BSL", "GENERAL", "Shop",   1, 150),
 
     # ── ISP (IISCO Steel Plant) ──────────────────────────────────────────────
     ("ISP", "BF",   "BF-5",      0,  10),
@@ -97,6 +115,9 @@ PLANT_UNITS = [
     ("ISP", "MILL", "USM",       0,  50),
     ("ISP", "MILL", "BRM",       0,  60),
     ("ISP", "MILL", "WRM",       0,  70),
+    ("ISP", "SINTER",  "Shop",   1,  80),
+    ("ISP", "COKE",    "Shop",   1,  90),
+    ("ISP", "GENERAL", "Shop",   1, 100),
 ]
 
 # ---------------------------------------------------------------------------

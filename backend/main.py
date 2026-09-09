@@ -230,8 +230,13 @@ _INDEX_SECTIONS = [
     # generate_special_steel_plant x5 + generate_special_steel_sail) + the
     # Trend/performance-analysis sentinel page right after SAIL's page
     # (TREND_PAGE_ID, sentinel id 1024, not part of the 1-40 numbering) —
-    # merged into one Index row, see module-level comment above.
-    ("Plant Wise Special Steel Production & SAIL Trend", 7),
+    # merged into one Index row, see module-level comment above. The trend
+    # sentinel used to render as 2 physical pages (a Saleable-Steel-
+    # PRODUCTION-denominated page followed by a page-break into a 2nd,
+    # despatch-denominated page); per direct instruction the production
+    # page was dropped and despatch is now the sentinel's only page, so
+    # this row's count dropped from 7 to 6.
+    ("Plant Wise Special Steel Production & SAIL Trend", 6),
     # ASP/SSP/VISP multi-year physical-performance grid + annual IPT
     # requirement list (SS_PHYSICAL_PAGE_ID = 1025, landscape sentinel page
     # inserted right after the trend page) — see page_special_steel_physical.py.
@@ -4194,6 +4199,35 @@ async def steel_sector_performance_preview(file: UploadFile = File(...), month: 
                 os.unlink(tmp_path)
             except Exception:
                 pass
+
+
+@app.post("/api/steel-sector-performance/preview-url")
+async def steel_sector_performance_preview_url(payload: dict):
+    """Extract every table + text section from the monthly PIB 'Indian
+    Steel Sector Performance' release given its PressReleasePage.aspx URL
+    (no file upload) — same preview shape as the PDF-upload endpoint above,
+    so the frontend's review/edit/save flow is identical either way."""
+    url = (payload.get("url") or "").strip()
+    month = (payload.get("month") or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="url is required")
+    if not month:
+        raise HTTPException(status_code=400, detail="month is required")
+
+    import sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
+    try:
+        import html_extractor_steel_sector_performance as _ssp_html_mod
+        result = _ssp_html_mod.extract_preview_from_url(url, month)
+        result["source_file"] = url
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import requests
+        if isinstance(e, requests.exceptions.RequestException):
+            raise HTTPException(status_code=400, detail=f"Could not fetch that URL: {e}")
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {type(e).__name__}: {e}")
 
 
 @app.post("/api/steel-sector-performance/confirm")
