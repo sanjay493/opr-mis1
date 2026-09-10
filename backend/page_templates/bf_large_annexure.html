@@ -1,3 +1,17 @@
+        {# Light background tint per SAIL BF column (BSP/ISP only — RSP left
+           unshaded, per direct instruction) reusing the same plant_color_*
+           pastels the trend pages (7-13) already use for plant identity, so
+           this page stays visually consistent with the rest of the app.
+           ISP reuses plant_color_dsp (a light-orange tone) rather than its
+           own plant_color_isp (a teal) — DSP itself never appears on this
+           3-BF page, so there's no clash, and the palette stays limited to
+           colors already defined elsewhere rather than a new one-off.
+           Text stays plain black throughout — only the "month" period
+           columns get this tint (the bulk of the table, and the only
+           columns with no other background); Prev FY/ABP/Till Month keep
+           their own existing period-meaning tint unchanged for every BF, so
+           the two color systems never mix into a muddy blend. #}
+        {% set _plant_bg = {'BSP': colors.plant_color_bsp, 'ISP': colors.plant_color_dsp} %}
         <div style="padding:3px;font-family:Arial,sans-serif;font-size:7.5pt;">
           <div style="text-align:center;font-weight:700;font-size:11pt;margin-bottom:3px;color:rgb(0,0,255);">{{ page.title }}</div>
           <div style="overflow-x:auto;">
@@ -5,15 +19,25 @@
             <thead>
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_rust_brown }};">
                 <th rowspan="2" style="padding:3px 6px;border:1px solid {{ colors.border_dark }};text-align:left;">Parameter</th>
-                <th rowspan="2" style="padding:3px 6px;border:1px solid {{ colors.border_dark }};border-right:1px solid {{ colors.border_darkest }};">Unit</th>
+                <th rowspan="2" style="padding:3px 6px;border:1px solid {{ colors.border_dark }};border-right:1.5px solid {{ colors.border_black }};">Unit</th>
+                {# Every period (Prev FY, ABP, each individual month, Till
+                   Month) gets its own fully-black outer border on this
+                   label cell — not just a left divider, and not just at the
+                   boundary between column GROUPS as before — so consecutive
+                   months are clearly boxed off from each other, not only
+                   from the ABP/Till Month blocks flanking them. #}
                 {% for period in page.periods %}
-                <th colspan="{{ page.sail_cols|length }}" style="padding:2px 5px;border:1px solid {{ colors.border_dark }};line-height:1.2;{% if period.group_start %}border-left:1px solid {{ colors.border_darkest }};{% endif %}{% if period.group_end %}border-right:1px solid {{ colors.border_darkest }};{% endif %}{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ period.label }}</th>
+                <th colspan="{{ page.sail_cols|length }}" style="padding:2px 5px;border:1.5px solid {{ colors.border_black }};line-height:1.2;{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ period.label }}</th>
                 {% endfor %}
               </tr>
+              {# Furnace-name row (BSP BF-8 / RSP BF-5 / ISP BF-5) — plain
+                 border throughout, no black divider, per direct
+                 instruction: only the period-label row above gets the
+                 black outer border. #}
               <tr style="background:{{ colors.table_header_bg }};color:{{ colors.text_rust_brown }};">
                 {% for period in page.periods %}
                 {% for bf in page.sail_cols %}
-                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};line-height:1.15;{% if period.group_start and loop.first %}border-left:1px solid {{ colors.border_darkest }};{% endif %}{% if period.group_end and loop.last %}border-right:1px solid {{ colors.border_darkest }};{% endif %}{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% endif %}">{{ bf.plant }}<br/>{{ bf.unit }}</th>
+                <th style="padding:2px 4px;border:1px solid {{ colors.border_dark }};line-height:1.15;{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }};{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }};{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }};{% elif bf.plant in _plant_bg %}background:{{ _plant_bg[bf.plant] }};{% endif %}">{{ bf.plant }}<br/>{{ bf.unit }}</th>
                 {% endfor %}
                 {% endfor %}
               </tr>
@@ -22,11 +46,11 @@
             {% for row in page.rows %}
               <tr>
                 <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;line-height:1.1;color:{{ colors.text_rust_brown }};background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.parameter }}</td>
-                <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};border-right:1px solid {{ colors.border_darkest }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};line-height:1.1;background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.unit }}</td>
+                <td style="padding:1.5px 6px;border:1px solid {{ colors.border_medium }};border-right:1.5px solid {{ colors.border_black }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};line-height:1.1;background:{{ colors.highlight_alt_section_bg if loop.index0 % 2 else 'transparent' }};">{{ row.unit }}</td>
                 {% for period in page.periods %}
                 {% for bf in page.sail_cols %}
                 {% set v = row.sail[bf.label][period.key] %}
-                <td style="padding:1.5px 4px;border:1px solid {{ colors.border_medium }};text-align:right;line-height:1.1;{% if period.group_start and loop.first %}border-left:1px solid {{ colors.border_darkest }};{% endif %}{% if period.group_end and loop.last %}border-right:1px solid {{ colors.border_darkest }};{% endif %}{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }}66;{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }}66;{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }}66;{% else %}background:transparent;{% endif %}">{{ v if v is not none else '—' }}</td>
+                <td style="padding:1.5px 4px;border:1px solid {{ colors.border_medium }};text-align:right;line-height:1.1;{% if loop.first %}border-left:1.5px solid {{ colors.border_black }};{% endif %}{% if period.kind == 'prev_fy' %}background:{{ colors.highlight_target_band_bg }}66;{% elif period.kind == 'abp' %}background:{{ colors.highlight_achieved_band_bg }}66;{% elif period.kind == 'ytd' %}background:{{ colors.highlight_cumulative_bg }}66;{% elif bf.plant in _plant_bg %}background:{{ _plant_bg[bf.plant] }}66;{% else %}background:transparent;{% endif %}">{{ v if v is not none else '—' }}</td>
                 {% endfor %}
                 {% endfor %}
               </tr>
