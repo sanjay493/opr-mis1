@@ -120,18 +120,12 @@
     "plant": "BSP",
     "no_convert": [
       "COB#1-8",
-      "COB#9-10",
       "COB#9-11",
       "Oven Pushing (nos/day)"
     ],
     "cells_rc": {
       "COB#1-8": [
         3,
-        5,
-        false
-      ],
-      "COB#9-10": [
-        4,
         5,
         false
       ],

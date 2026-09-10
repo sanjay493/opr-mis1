@@ -18,15 +18,6 @@
     {
       "basis": "mtd-average",
       "cell": "S1!F5",
-      "item_name": "COB#9-10",
-      "pdf_label": "F5",
-      "status": "ok",
-      "unit": "nos/d",
-      "value": 236.0
-    },
-    {
-      "basis": "mtd-average",
-      "cell": "S1!F5",
       "item_name": "COB#9-11",
       "pdf_label": "F5",
       "status": "ok",

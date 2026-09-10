@@ -264,9 +264,6 @@ def _ppc_mis_config() -> Dict[str, tuple]:
 
     default_rc = {
         "COB#1-8":             (3,  5,  False),
-        "COB#9-10":            (4,  5,  False),
-        # Same cell as COB#9-10 — see _PPC_GUARDED_ITEMS's "COB#9-11" entry
-        # for why both item_names coexist on this one row.
         "COB#9-11":            (4,  5,  False),
         "Oven Pushing (nos/day)": (5,  5,  False),
         "SP-2":                (7,  5,  True),
@@ -352,25 +349,20 @@ _PPC_GUARDED_ITEMS = {
     "RSM_RAIL":          (17, 0, "RSM"),
     "URM_RAIL":          (21, 0, "URM"),
     "COB#1-8":           (3,  0, "BATT"),
-    # Coke Oven Batteries 9-10 (a 3rd battery group alongside #1-8 and #11 —
-    # see the ABP plan sheet's own 3 separate COB rows) got a dedicated row
-    # inserted just below COB#1-8 only once those batteries were
-    # commissioned — older reports have no such row (guard correctly skips
-    # them, since the batteries didn't exist yet), which is also why
-    # "Oven Pushing (nos/day)" below it needs a stable-label search rather than
-    # a fixed row: this insertion is exactly what pushed it down by one row.
-    "COB#9-10":          (4,  0, "BATT"),
-    # Same row as COB#9-10 above, but with a narrower guard: this row's own
-    # label text has drifted from "9&10"/"10-11"/"9-11" (older eras — kept
-    # under COB#9-10 only, its long-standing name) to "9 TO 11" from
-    # 2018-10 onward (confirmed against every archived report vintage in
-    # Report_format/MONTHEND/BSP: every file from 2018-10 through the
-    # present reads "BATT : 9 TO 11", every earlier one doesn't) — per
-    # direct instruction, this newer-era battery grouping gets its own
-    # honestly-named item alongside (not instead of) COB#9-10, so both
-    # co-exist on this one row: COB#9-10 keeps receiving every era's data
-    # exactly as it always has, while COB#9-11 only ever fills in for the
-    # eras that row's own label actually calls "9 to 11".
+    # Coke Oven Batteries 9-11 (a 3rd battery group alongside #1-8 — see the
+    # ABP plan sheet's own separate "COB#9-10"/"COB#11" rows, which still
+    # budget batteries 9-10 and 11 apart) got a dedicated row inserted just
+    # below COB#1-8 once commissioned — older reports have no such row
+    # (guard correctly skips them). This row's own label text only reads
+    # "BATT : 9 TO 11" from 2018-10 onward (confirmed against every archived
+    # report vintage in Report_format/MONTHEND/BSP); earlier eras used
+    # various names for the (then batteries-9&10-only, #11 not yet
+    # commissioned) same row and were previously kept under a separate
+    # "COB#9-10" item — removed per direct instruction since 2018-10 onward
+    # it was an exact duplicate of this item, not a distinct figure. Older
+    # (pre-2018-10) history for that row lives only in the production_table
+    # rows already written under "COB#9-10" — not reachable through this
+    # extractor's guard, which only ever matches the post-2018-10 label.
     "COB#9-11":          (4,  0, "9 TO 11"),
     "RSMPRIME":          (37, 2, "RSM"),
     "URMPRIME":          (37, 7, "URM"),
