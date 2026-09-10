@@ -56,8 +56,14 @@ instruction — see _raw_cell/_desp_item_sum:
 Periods (columns): the current FY's Annual ABP Plan, the report month, and
 Apr-report month (YTD) — mirrors the exact three periods
 page_special_steel_trend.py's annual/month/till-month charts already use.
-Entities (rows): BSP/DSP/RSP/BSL/ISP, SSPs (the ASP+VISL+SSP bundle — see
-page_special_steel._SSPS_PLANTS), and SAIL (all 8 plants). 7 entities.
+Entities (rows): BSP/DSP/RSP/BSL/ISP, SSP (Salem Steel Plant — shown under
+the internal entity key "SSPs" throughout this module, matching
+page_special_steel._SSPS_PLANTS/special_steel_abp_table's own stored key,
+but displayed as "SSP" per _DISPLAY_LABEL and resolved to SSP alone, not
+the wider ASP/VISL/SSP bundle, for every figure computed here — only Salem
+itself produces Special Steel, so ASP/VISL's ordinary-steel production has
+no place in a row now labeled as SSP's own), and SAIL (all 8 plants). 7
+entities.
 
 Saleable Steel (production) and Special Steel (despatch) are different
 physical flows for the same plant and aren't guaranteed exact subsets of
@@ -77,10 +83,11 @@ Dashed quadrant dividers sit at the mean X/mean Y of the plotted plants
 (not a fixed 50%, since neither share clusters near the middle) with
 "High/Low Value Addition" labels in the upper/lower right, matching a
 reference mock-up. SAIL is excluded (it's the sum of the other rows, not
-a peer plant to compare); SSPs is included as the ASP+VISL+SSP bundle,
-same as the table above. A plant with no YTD despatch data at all is
-silently dropped from the plot (nothing meaningful to place at either
-axis) rather than plotted at a misleading 0.
+a peer plant to compare); SSP is included as its own point (shown under
+the "SSPs" entity key — see the module's "Entities" note above), same as
+the table above. A plant with no YTD despatch data at all is silently
+dropped from the plot (nothing meaningful to place at either axis) rather
+than plotted at a misleading 0.
 
 Data sources:
   Saleable Steel — Annual ABP Plan: production_plan_table (Finished Steel +
@@ -125,6 +132,17 @@ _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 _ABP_ENTITIES = _PLANTS + ["SSPs"]   # special_steel_abp_table's own plant set
 _ROWS = _PLANTS + ["SSPs", "SAIL"]
 
+# Display-only rename: the internal entity key "SSPs" (matching
+# _SSPS_PLANTS/special_steel_abp_table's own stored key — left unrenamed
+# throughout this module to avoid touching either) shows on the page as
+# "SSP" instead, per direct instruction — only Salem Steel Plant itself
+# produces Special Steel among ASP/VISL/SSP (see _prod_item_sum/
+# _desp_item_sum's own entity=="SSPs" branch below, changed to resolve to
+# SSP alone rather than the 3-plant bundle for exactly that reason), so the
+# row is now SSP's own figures throughout and the old plural/bundle label
+# would be misleading.
+_DISPLAY_LABEL = {"SSPs": "SSP"}
+
 # special_steel_orders.product values that belong to a plant's Semis group —
 # mirrors page_special_steel.py's own per-plant groupings (_gen_bsp/_gen_dsp/
 # _gen_rsp/_gen_bsl/_gen_isp), but as raw `product` values rather than the
@@ -151,19 +169,27 @@ def _prod_item_sum(cur, months: list, entity: str, item: str, is_plan: bool = Fa
     entity: those each open their own connection per call, and the ABP
     period needs one call per fy month).
 
-    'Saleable Semis' additionally folds in a residual for any of ASP/VISL/
-    SSP present in `plants` (that plant's own Saleable Steel minus Finished
+    'Saleable Semis' additionally folds in a residual for ASP/VISL/SSP
+    present in `plants` (that plant's own Saleable Steel minus Finished
     Steel) — confirmed against production_table/production_plan_table that
     none of the three ever carries a 'Saleable Semis' row of its own, so a
-    plain item_name='Saleable Semis' sum silently shows them (and SAIL/SSPs,
-    which both include them) as 100% Finished / 0% Semis. See
+    plain item_name='Saleable Semis' sum silently shows them (and SAIL,
+    which includes them) as 100% Finished / 0% Semis. See
     _ssps_semis_residual's docstring for why the residual is computed this
-    way rather than by summing a 'Saleable Semis' row that doesn't exist."""
+    way rather than by summing a 'Saleable Semis' row that doesn't exist.
+
+    entity=="SSPs" resolves to SSP alone, not the full ASP/VISL/SSP bundle
+    (_SSPS_PLANTS) — per direct instruction, this page's "SSP" row (see
+    _DISPLAY_LABEL) is Salem Steel Plant's own figures only: it's the only
+    one of the three that actually produces Special Steel, so bundling
+    ASP/VISL's ordinary-steel production into a row now labeled "SSP" would
+    overstate it and mismatch the despatch-side Spl. FS/Spl. Semis figures
+    below (_special_fin_semis_split), which were already SSP-only."""
     table = "production_plan_table" if is_plan else "production_table"
     if entity == "SAIL":
         plants = ALL_PLANTS
     elif entity == "SSPs":
-        plants = list(_SSPS_PLANTS)
+        plants = ["SSP"]
     else:
         plants = [entity]
 
@@ -240,18 +266,18 @@ def _desp_item_sum(cur, months: list, entity: str, item: str):
     Saleable Steel distribution is the same whichever side it's read from).
 
     Same plants-per-entity resolution as _prod_item_sum (SAIL -> all 8
-    plants, SSPs -> ASP+VISL+SSP, else -> the one plant) but no
-    Finished-Steel alias/conversion handling — those are production-table-
-    specific mechanisms (SSP/VISL's Finished Steel alias, SAIL's inter-
-    plant conversion adjustment) that don't apply to despatch, and aren't
-    needed here anyway: 'Semis Despatch' simply doesn't exist for SSP/VISL/
-    RSP (see module's _SEMIS_PRODUCTS), so _raw_cell's total-minus-semis
+    plants, SSPs -> SSP alone, else -> the one plant) but no Finished-Steel
+    alias/conversion handling — those are production-table-specific
+    mechanisms (SSP/VISL's Finished Steel alias, SAIL's inter-plant
+    conversion adjustment) that don't apply to despatch, and aren't needed
+    here anyway: 'Semis Despatch' simply doesn't exist for SSP/VISL/RSP
+    (see module's _SEMIS_PRODUCTS), so _raw_cell's total-minus-semis
     derivation of Finished Despatch already comes out as 100% Finished for
     them with no alias needed."""
     if entity == "SAIL":
         plants = ALL_PLANTS
     elif entity == "SSPs":
-        plants = list(_SSPS_PLANTS)
+        plants = ["SSP"]
     else:
         plants = [entity]
 
@@ -461,7 +487,7 @@ def _entity_metrics(cur, entity: str, fy_months: list, month: str, ytd_months: l
     for i, row in enumerate(rows):
         row["is_entity_first"] = (i == 0)
 
-    return {"label": entity, "rowspan": len(rows), "rows": rows}
+    return {"label": _DISPLAY_LABEL.get(entity, entity), "rowspan": len(rows), "rows": rows}
 
 
 # ── bubble chart: till-month (YTD) value-addition positioning ──────────────
@@ -490,7 +516,7 @@ def _bubble_data(cur, ytd_months: list) -> list:
         if not d["total"] or d["spl_fin"] is None:
             continue
         points.append({
-            "label": ent,
+            "label": _DISPLAY_LABEL.get(ent, ent),
             "x": (d["fin"] or 0) / d["total"] * 100,
             "y": d["spl_fin"] / d["total"] * 100,
             "size": d["total"],

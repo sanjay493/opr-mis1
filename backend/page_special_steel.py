@@ -900,10 +900,18 @@ def generate_special_steel_sail(report_month: str) -> dict:
                 "cum_pct_growth": _growth(ca, cc),
             })
 
-        # SSPs row — no order-book data (special_steel_orders has no rows
-        # for 'SSPs'), so "orders"/"cum_orders" stay blank ('-' below) while
-        # "actual"/"cply"/"cum_actual"/"cum_cply" are derived from
-        # production_table via _ssps_special_steel (see its docstring).
+        # SSP row (shown under the internal "SSPs" key, matching _SSPS_PLANTS/
+        # special_steel_abp_table's own stored key — see _DISPLAY_LABEL note
+        # below for why only the rendered label changes) — no order-book
+        # data (special_steel_orders has no live rows for 'SSPs', only stale
+        # leftovers from a retired manual-entry screen — see
+        # page_special_steel_trend.py's _sum_actual docstring), so
+        # "orders"/"cum_orders" stay blank ('-' below) while "actual"/
+        # "cply"/"cum_actual"/"cum_cply" are derived from production_table
+        # via _ssps_special_steel (see its docstring) — already Salem Steel
+        # Plant's own figures only, since only SSP among ASP/VISL/SSP
+        # actually produces Special Steel; nothing to change there, only
+        # the label below.
         cur.execute("""
             SELECT COALESCE(SUM(order_qty),0) FROM special_steel_orders
             WHERE report_month=? AND plant_name='SSPs'
@@ -924,7 +932,7 @@ def generate_special_steel_sail(report_month: str) -> dict:
         sail_abp_fy += ssps_abp_fy or 0
 
         rows.append({
-            "type": "plant", "label": "SSPs",
+            "type": "plant", "label": "SSP",
             "abp_fy": _fmt(ssps_abp_fy),
             "orders": "-" if not ssps_o else _fmt(ssps_o),
             "actual": _fmt(ssps_a), "pct_ful": "",
