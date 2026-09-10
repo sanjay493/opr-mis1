@@ -8,10 +8,16 @@
 
           {# ── Production KPI tiles ── #}
           <div style="font-size:10pt;font-weight:700;color:{{ colors.text_heading_dark }};text-transform:capitalize;margin-bottom:3px;">Production Performance — ('000 T)</div>
+          {# One solid accent color per tile (Hot Metal/Crude Steel/Finished
+             Steel/Saleable Steel, in page.production's own order) instead of
+             the same 4-band gradient repeated identically inside every
+             tile — each tile's left border is now a single color, distinct
+             from its neighbours'. #}
+          {% set _prod_accents = [colors.misc_accent_blue, colors.khv_assessment_green, colors.khv_assessment_amber, colors.cover_molten_red] %}
           <div style="display:flex;gap:7px;margin-bottom:3px;">
             {% for row in page.production %}
             <div style="flex:1;position:relative;border:1px solid {{ colors.border_light }};border-radius:4px;padding:5px 8px 5px 12px;overflow:hidden;">
-              <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg, {{ colors.misc_accent_blue }} 0 25%, {{ colors.khv_assessment_green }} 25% 50%, {{ colors.khv_assessment_amber }} 50% 75%, {{ colors.cover_molten_red }} 75% 100%);"></div>
+              <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:{{ _prod_accents[loop.index0 % _prod_accents|length] }};"></div>
               <div style="font-size:8.5pt;color:{{ colors.text_secondary }};text-transform:capitalize;font-weight:700;letter-spacing:0.2px;">{{ row.item }}</div>
               <div style="font-size:16pt;font-weight:700;color:{{ colors.text_primary }};line-height:1.2;">{{ row.month_act if row.month_act else '—' }}</div>
               <div style="font-size:8pt;color:{{ colors.text_secondary }};">%Ful: <b style="color:{{ colors.text_primary }};">{{ row.month_pct_ful if row.month_pct_ful else '—' }}%</b></div>
