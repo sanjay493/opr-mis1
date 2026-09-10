@@ -327,6 +327,13 @@
         .pg-25.content-page { padding: 0; margin: -4mm 0; }
         .pg-4-5 .coal-c-heading { margin: 8px 0 3px; }
         .pg-4-5 .coal-table { font-size: 8pt; margin-bottom: 8px !important; }
+        /* Coal Mines Production/Washery/Despatch — only 2-3 rows and 6
+           columns each (far narrower than the 11-column Iron Ore/Sales
+           tables above them), so stretching them to the full page width
+           left a lot of empty cell padding. Sized to content instead and
+           left-aligned (a table's own default block position — no
+           margin:auto override needed) per direct instruction. */
+        .coal-table-narrow { width: auto; min-width: 280px; }
         .pg-4-5 .coal-table th, .pg-4-5 .coal-table td { padding: 2.4px 5px; }
 
         .coal-ab-row {

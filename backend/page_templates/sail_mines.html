@@ -1,6 +1,6 @@
-{% macro sail_mines_table(t) %}
+{% macro sail_mines_table(t, narrow=false) %}
 <div class="coal-c-heading">{{ t.title }}</div>
-<table class="coal-table" style="margin-bottom:8px;">
+<table class="coal-table{{ ' coal-table-narrow' if narrow else '' }}" style="margin-bottom:8px;">
     <thead>
         {% if t.kind == 'production_despatch' %}
         <tr>
@@ -63,11 +63,31 @@
 {# Iron Ore Production+Despatch — full-width 11-column table, unchanged. #}
 {{ sail_mines_table(tables_by_key['iron_ore_prod']) }}
 
-{# Sales of Iron Ore + the three Coal tables — full width, stacked. #}
+{# Sales of Iron Ore — full width. The three Coal tables are much narrower
+   (2-3 rows, 6 columns) — sized to content and left-aligned instead of
+   stretched full width, per direct instruction. #}
 {{ sail_mines_table(tables_by_key['iron_ore_sales']) }}
-{{ sail_mines_table(tables_by_key['coal_prod']) }}
-{{ sail_mines_table(tables_by_key['washery']) }}
-{{ sail_mines_table(tables_by_key['coal_despatch']) }}
+
+{# The three Coal tables sit in a left column now that they're narrow
+   (not stretched full width — see coal-table-narrow); the Sales of Iron
+   Ore waterfall sits beside them in the horizontal space that freed up,
+   rather than adding a new row below (this page is tuned to fit
+   everything on one physical page — see .pg-4-5's own CSS comment — so a
+   new full-width row would have pushed the chart cluster below onto a
+   2nd page for no real gain, when the room was already sitting empty to
+   the right of these narrow tables). #}
+<div style="display:flex;align-items:flex-start;gap:16px;">
+    <div style="flex:0 0 auto;">
+        {{ sail_mines_table(tables_by_key['coal_prod'], narrow=true) }}
+        {{ sail_mines_table(tables_by_key['washery'], narrow=true) }}
+        {{ sail_mines_table(tables_by_key['coal_despatch'], narrow=true) }}
+    </div>
+    {% if page.sales_waterfall_svg %}
+    <div style="flex:1 1 auto;min-width:0;border:1px solid #e2e8f0;border-radius:3px;padding:3px 8px;">
+        {{ page.sales_waterfall_svg | safe }}
+    </div>
+    {% endif %}
+</div>
 
 {# Mines Performance chart cluster — full width: 4 single-series bar charts
    (Iron Ore / Clean Coal / Flux production + Sales booking, 3 FYs each on

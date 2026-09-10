@@ -78,6 +78,8 @@ _C_IRON_ORE = "#2a78d6"   # blue
 _C_CLEAN_COAL = "#eb6834"  # orange
 _C_FLUX = "#1baf7a"        # aqua
 _C_SALES = "#eda100"       # yellow
+_C_SALES_DARK = "#a66900"  # darker shade of _C_SALES, for the waterfall's own YTD-total bar
+_C_BALANCE = "#cbd5e1"     # neutral gray, for the waterfall's remaining-gap-to-target bar
 
 # All figures on this page that have no DB source yet (the 3-year trend bars,
 # the despatch-mix donuts, and the iron-ore group table) are hand-maintained
@@ -322,6 +324,75 @@ def _share_donut_svg(title: str, cats: list, values: list, colors: list) -> str:
     return "".join(out)
 
 
+def _sales_waterfall_svg(title: str, month_labels: list, monthly_values: list, target: float) -> str:
+    """Horizontal waterfall/bridge chart: each month's bar floats from the
+    running cumulative total before it to the total after it, so the chart
+    reads top-to-bottom as the months accumulate left-to-right toward the
+    Annual Plan target — a bold "YTD Actual" bar (from 0) and, if the
+    target hasn't been reached yet, a "Balance to Target" bar in a neutral
+    gray close it out, with a dashed target line running through every row.
+
+    Horizontal bars (rows stacked vertically, each bar itself running
+    left-to-right along the tonnage axis) per direct instruction — a
+    portrait page has much more vertical room to spend on ~7 category rows
+    than horizontal room for a tonnage axis, the opposite of what a
+    vertical (column) waterfall would need.
+
+    Returns "" when there's nothing to plot (no target and no actual at
+    all) rather than an empty/degenerate chart."""
+    if not target and not any(monthly_values):
+        return ""
+
+    cum = 0.0
+    segments = []  # (label, start, end, color, bold)
+    for lab, v in zip(month_labels, monthly_values):
+        segments.append((lab, cum, cum + v, _C_SALES, False))
+        cum += v
+    total_actual = cum
+    segments.append(("YTD Actual", 0.0, total_actual, _C_SALES_DARK, True))
+    balance = (target or 0.0) - total_actual
+    if balance > 0:
+        segments.append(("Balance to Target", total_actual, target, _C_BALANCE, False))
+
+    n = len(segments)
+    vw = 400
+    ml, mr, mt, mb = 84, 52, 18, 3
+    row_h = 15.5
+    vh = mt + mb + n * row_h
+    cw = vw - ml - mr
+    xmax = max(target or 0.0, total_actual, 1.0) * 1.1
+    bar_h = row_h * 0.62
+
+    def xpos(v):
+        return ml + cw * v / xmax
+
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
+           f'style="width:100%;height:auto;display:block;">']
+    out.append(f'<text x="{vw / 2:.0f}" y="8" text-anchor="middle" font-size="8" font-weight="bold" '
+               f'font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
+
+    if target:
+        tx = xpos(target)
+        out.append(f'<line x1="{tx:.1f}" y1="{mt - 1:.1f}" x2="{tx:.1f}" y2="{vh - mb + 2:.1f}" '
+                   f'stroke="#64748b" stroke-width="1" stroke-dasharray="3,2"/>')
+        out.append(f'<text x="{tx:.1f}" y="{mt - 4:.1f}" text-anchor="middle" font-size="6.6" '
+                   f'font-family="Arial,sans-serif" fill="#334155">Target {_num(round(target))}</text>')
+
+    for i, (lab, s, e, color, bold) in enumerate(segments):
+        y = mt + i * row_h + (row_h - bar_h) / 2
+        x0, x1 = xpos(min(s, e)), xpos(max(s, e))
+        w = max(x1 - x0, 1.2)
+        out.append(f'<rect x="{x0:.1f}" y="{y:.1f}" width="{w:.1f}" height="{bar_h:.1f}" rx="2" fill="{color}"/>')
+        out.append(f'<text x="{ml - 6:.1f}" y="{y + bar_h / 2 + 2.6:.1f}" text-anchor="end" font-size="7" '
+                   f'font-weight="{700 if bold else 400}" font-family="Arial,sans-serif" fill="#1e293b">{lab}</text>')
+        val = e if bold else (e - s)
+        out.append(f'<text x="{x1 + 4:.1f}" y="{y + bar_h / 2 + 2.6:.1f}" font-size="6.8" font-weight="600" '
+                   f'font-family="Arial,sans-serif" fill="#1e293b">{_num(round(val))}</text>')
+
+    out.append("</svg>")
+    return "".join(out)
+
+
 def _mines_charts_html() -> str:
     """The chart cluster for this page: four independent single-series bar
     charts (Iron Ore / Clean Coal / Flux production + Sales booking, 3 FYs
@@ -353,6 +424,46 @@ def _mines_charts_html() -> str:
         f'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin-top:4px;">{drow}</div>'
         '</div>'
     )
+
+
+def _mon_label(report_month: str) -> str:
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    return f"{_MON_ABBR[m]}'{y % 100:02d}"
+
+
+def _sales_waterfall_data(report_month: str) -> dict:
+    """SAIL-wide (all 3 mine groups summed) Annual Plan target and each YTD
+    month's Actual for Iron Ore 'Despatch — Sales to 3rd Party' — unlike
+    the Sales of Iron Ore table above (still hard-coded per the module
+    docstring), this reads the real, live-entered data on
+    /data-entry/mines-production-despatch: mines_despatch_actual_monthly/
+    mines_despatch_plan_monthly filtered to end_use_code='SALES', via
+    db.get_iron_ore_sales_group_rollup_monthly's own "iron_ore_sales_
+    despatch" section (per direct instruction — reusing that function's
+    query rather than a new one keeps this chart from ever drifting off
+    that table's own figures once it's un-hardcoded too). Plan already has
+    no Rail/Road split at entry time ("Plan (Rail+Road)" is a single
+    combined figure — see mines_despatch_plan_monthly's own schema), so
+    summing it across groups/months for the FY total needs no further
+    combining; Actual is per transport_mode but this rollup already sums
+    that away."""
+    fy_months = db.get_fy_months(report_month)
+    ytd_months = db.get_ytd_months(report_month)
+    rollup = db.get_iron_ore_sales_group_rollup_monthly(fy_months)
+
+    target = sum(
+        (v.get("plan") or 0.0)
+        for rm in fy_months
+        for v in rollup.get(rm, {}).get("iron_ore_sales_despatch", {}).values()
+    )
+    monthly = [
+        (_mon_label(rm), sum(
+            (v.get("actual") or 0.0)
+            for v in rollup.get(rm, {}).get("iron_ore_sales_despatch", {}).values()
+        ))
+        for rm in ytd_months
+    ]
+    return {"target": target, "monthly": monthly}
 
 
 def generate_sail_mines(report_month: str) -> dict:
@@ -445,6 +556,12 @@ def generate_sail_mines(report_month: str) -> dict:
                 "rows": [section_rows[section["key"]][label] for label in item_order],
             })
 
+    wf = _sales_waterfall_data(report_month)
+    sales_waterfall_svg = _sales_waterfall_svg(
+        "Sales of Iron Ore — Despatch to 3rd Party, Month-wise Build-up to Annual Target ('000 T)",
+        [lab for lab, _ in wf["monthly"]], [v for _, v in wf["monthly"]], wf["target"],
+    )
+
     return {
         "type": "sail_mines",
         "title": "SAIL Mines Production & Despatch Performance",
@@ -452,4 +569,5 @@ def generate_sail_mines(report_month: str) -> dict:
         "unit": "'000 T",
         "tables": tables,
         "mines_charts_html": _mines_charts_html(),
+        "sales_waterfall_svg": sales_waterfall_svg,
     }
