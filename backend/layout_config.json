@@ -3,7 +3,7 @@
 
   "_doc_table": "Each page/group entry may set a 'table' object with independent point sizes for 'thead' (header row group), 'th' (header cell), 'tbody' (body row group) and 'td' (body cell). You usually only need 'th' (header size) and 'td' (body size) — 'thead' mirrors 'th' and 'tbody' mirrors 'td' automatically when not given separately, so most entries can just set {\"th\": X, \"td\": Y}.",
 
-  "_doc_groups": "Page keys under 'pages' may be a single page number (\"9\"), a hyphen range (\"7-13\"), or a comma list (\"5,6,9\") — all are expanded to one entry per page. If a specific page number also has its own key, it overrides the group's values for that page only.",
+  "_doc_groups": "Page keys under 'pages' may be a single page number (\"9\"), a hyphen range (\"7-13\", whole numbers only), or a comma list (\"5,6,9\") — all are expanded to one entry per page. If a specific page number also has its own key, it overrides the group's values for that page only. Sentinel decimal page ids (e.g. \"4.5\", \"2.1\") are supported too, individually or via comma list (\"2.1,2.2,2.3\") — not via hyphen range, since they aren't evenly spaced.",
 
   "global": {
     "font_family":  "Aptos",

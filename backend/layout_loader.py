@@ -8,17 +8,23 @@ _RESERVED_KEYS = {k for k in ("_doc", "_doc_table", "_doc_groups") }
 
 
 def _expand_page_key(key: str):
-    """'7-13' -> [7,8,...,13]; '5,6,9' -> [5,6,9]; '9' -> [9]."""
+    """'7-13' -> [7,8,...,13]; '5,6,9' -> [5,6,9]; '9' -> [9];
+    '4.5' -> [4.5]; '2.1,2.2,2.3' -> [2.1,2.2,2.3].
+
+    Sentinel float page ids (2.1, 3.5, 4.5, 29.5, ...) are never evenly
+    spaced, so a hyphen "range" of them has no natural meaning — only
+    whole-number keys ("7-13") support the range form; a decimal key must
+    be listed individually or via comma list, one float per part."""
     pages = []
     for part in key.split(","):
         part = part.strip()
         if not part:
             continue
-        if "-" in part:
+        if "-" in part and "." not in part:
             lo, hi = part.split("-", 1)
             pages.extend(range(int(lo), int(hi) + 1))
         else:
-            pages.append(int(part))
+            pages.append(float(part) if "." in part else int(part))
     return pages
 
 
