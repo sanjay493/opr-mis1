@@ -19,6 +19,7 @@ bcrypt>=4.0.0
 pyjwt>=2.8.0
 python-dotenv>=1.0.0
 email-validator>=2.0.0
+pymysql
 
 # Testing
 pytest>=8.0
