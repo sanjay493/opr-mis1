@@ -155,7 +155,7 @@ export default function IronOreMinesPage() {
   // ── formatting ──
   const fmt = (v) => {
     if (v == null) return '—';
-    return inTonnes ? Math.round(v * 1000).toLocaleString('en-IN') : v.toFixed(2);
+    return inTonnes ? Math.round(v * 1000).toLocaleString('en-IN') : v.toFixed(3);
   };
   const pct = (a, b) => (a == null || b == null || b === 0 ? '—' : `${(a / b * 100).toFixed(1)}%`);
   const pctColor = (a, b) => {
