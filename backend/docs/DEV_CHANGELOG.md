@@ -30,6 +30,21 @@ named in it instead of re-discovering the whole area from scratch.
 
 ---
 
+### 2026-09-13 — Steel Sector page 2.1: table 1b (Producer wise Production) shrink-to-fit column
+**Commit:** `c86bc5a` — Steel Sector page 2.1: table 1b columns shrink-to-fit, no wrap
+**What:** Table 1b's producer-name column was wrapping at the shared
+`.ssp-table` 100%-width column sizing. Scoped table 1b (only, via a new
+`.ssp-table-1b` wrapper) to `table-layout:auto` with the label column at
+`width:1%;white-space:nowrap` — the same shrink-to-fit trick as page 3's
+TE table — so the column widens to its content while the table stays at
+100% width overall (no horizontal or next-page spill). Tables 1a/1c/2/3a/4a/5
+still share the untouched `.ssp-table` even-width layout.
+**Why:** direct instruction to fix wrapped producer names on page 2.1
+without letting the table spill off the page or onto page 2.2.
+**Key files:** `backend/page_templates/main.html` (`.ssp-table-1b` rules),
+`backend/page_templates/steel_sector_performance.html` (wraps
+`generic_table(page.tables.get('1b'))` in the `.ssp-table-1b` div).
+
 ### 2026-09-13 — Page 3 (SAIL Performance Summary): 12pt typography pass + dynamic layout
 **Commit:** `7281674` — Page 3 (SAIL Performance Summary): 12pt typography pass + dynamic layout
 **What:**
