@@ -963,7 +963,7 @@ def _param_svg(p: dict, vw: int = 290, vh: int = 168) -> str:
     # measure the target true point size once Chromium shrinks the
     # 290-wide viewBox down to this chart's real on-page width (~half of
     # page 3's content column).
-    label_fs = 11.30  # true ~8.4pt on the page (was 12.78 / ~9.5pt, -1.1pt per direct instruction)
+    label_fs = 10.22  # true ~7.6pt on the page (was 11.30 / ~8.4pt, -0.8pt per direct instruction, 2026-09-13)
     mt   = 24
     # vh (168, was 230) and mb (32, was 85) trimmed together: the old bottom
     # band was ~53 viewBox-units of dead space below the deepest x-axis label,

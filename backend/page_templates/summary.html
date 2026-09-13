@@ -59,11 +59,16 @@
             {% endif %}
 
             {# ── TE table: Target | Month | CPLY | Apr-Mon | CPLY Apr-Mon ── #}
-            <p class="page3-section-heading" style="margin-top:5px;">TE parameters performance:</p>
-            <table class="report-table" style="table-layout:fixed;width:100%;">
+            <p class="page3-section-heading" style="margin-top:{{ page.highlights_gap_px if page.highlights_gap_px is not none else 5 }}px;">TE parameters performance:</p>
+            {# table-layout:auto (not the production table's :fixed) + Parameter's
+               own width:1%/white-space:nowrap is the standard "shrink column to
+               its content, give everything else the rest" trick — per direct
+               instruction, this column should never wrap regardless of how long
+               a parameter name gets. #}
+            <table class="report-table te-table" style="table-layout:auto;width:100%;">
                 <thead>
                     <tr>
-                        <th style="width:24%;text-align:left;">Parameter</th>
+                        <th style="width:1%;white-space:nowrap;text-align:left;">Parameter</th>
                         <th style="width:10%;">Unit</th>
                         <th style="width:13%;">{{ target_header }}</th>
                         <th style="width:13%;font-weight:700;">{{ short_m }}'{{ short_y }}</th>
@@ -75,7 +80,7 @@
                 <tbody>
                     {% for row in page.te_table %}
                     <tr>
-                        <td class="label-cell" style="font-weight:600;">{{ row.parameter }}</td>
+                        <td class="label-cell" style="font-weight:600;white-space:nowrap;">{{ row.parameter }}</td>
                         <td class="label-cell" style="font-style:italic;color:{{ colors.text_secondary }};">{{ row.unit }}</td>
                         <td style="text-align:right;">{{ row['values'][0] if row['values']|length > 0 else '' }}</td>
                         <td style="font-weight:700;text-align:right;">{{ row['values'][1] if row['values']|length > 1 else '' }}</td>

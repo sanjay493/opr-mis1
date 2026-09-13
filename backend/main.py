@@ -95,6 +95,17 @@ def _safe_chart_data(month):
     except Exception:
         return {}
 
+def _page3_highlights_gap_px(highlights: list) -> int:
+    """Page 3's fixed 5px gap before "TE parameters performance:" left a lot
+    of dead space when a month has few Highlights lines and risked crowding
+    the page when it has many — this scales the gap down as the highlights
+    list grows instead, so the page keeps using its own full height well
+    regardless of how many lines Highlights has that month. Linear, clamped
+    to [5, 28]px; -1.5px per highlight line off a 28px base (per direct
+    instruction, 2026-09-13) — no highlights at all keeps the old max gap,
+    ~15+ lines bottoms out at the original fixed 5px."""
+    return max(5, min(28, round(28 - len(highlights or []) * 1.5)))
+
 _MAJOR_TECHNO_EXCLUDE = {"Sp. CO2 Emission", "Sp. Water Consumption", "Sp. PM Emission"}
 
 
@@ -737,6 +748,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                         row["values"] = compute_item_row(month, row.get("item"))
                     page["production_narrative"] = build_production_narrative(page.get("production_table", []))
                     page["highlights"] = generate_page3_highlights(month)
+                    page["highlights_gap_px"] = _page3_highlights_gap_px(page["highlights"])
                     te_result = _safe_te_table(month)
                     # Handle both dict and list returns (for backwards compatibility)
                     if isinstance(te_result, dict) and 'te_table' in te_result:
@@ -1165,6 +1177,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         pg = p.get("page", 0)
         if pg == 3 or p.get("type") == "summary":
             p["te_table"] = _safe_te_table(request.month)
+            p["highlights_gap_px"] = _page3_highlights_gap_px(p.get("highlights"))
         if pg == 1:
             p.update(generate_cover(request.month))
         if pg == 2:

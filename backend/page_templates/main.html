@@ -1054,26 +1054,32 @@
             text-align: center;
         }
 
-        /* ─── Page 3 – SAIL Performance Summary ─────────────── */
+        /* ─── Page 3 – SAIL Performance Summary ───────────────
+           Font-size/padding here are page-3-only (per direct instruction,
+           2026-09-13) — .report-table's own font-size/padding stay as-is
+           for every other page that uses it (page4, page5-6, techno, ...),
+           so this is scoped either via a page3-* class or, for the shared
+           .report-table itself, via the .pg-3 prefix below rather than
+           edited at the shared rule. */
         .page3-section-heading {
-            font-size: 10pt;
+            font-size: 12pt;
             font-weight: 700;
             margin: 5px 0 3px 0;
             color: {{ colors.text_primary }};
         }
         .page3-narrative {
-            font-size: var(--sz-td);
+            font-size: 12pt;
             line-height: 1.4;
             margin: 2px 0 4px 0;
         }
         .page3-footnote {
-            font-size: 7.5pt;
+            font-size: 12pt;
             font-style: italic;
             color: {{ colors.text_secondary }};
             margin-top: 2px;
         }
         .page3-highlights {
-            font-size: var(--sz-td);
+            font-size: 12pt;
             line-height: 1.4;
         }
         .page3-highlight-heading {
@@ -1087,6 +1093,17 @@
         .page3-chart-grid { margin-top: 6px; }
         .page3-chart-row  { display: flex; gap: 4px; margin-bottom: 3px; }
         .page3-chart-cell { flex: 1; border: 0.5px solid {{ colors.border_divider }}; border-radius: 3px; padding: 2px; }
+        /* Both page-3 tables (Production + TE Parameters) — was 5px 4px /
+           4px 4px, too tight for 12pt content; header stays bold (already
+           true site-wide) at the same explicit 12pt. */
+        .pg-3 .report-table th,
+        .pg-3 .report-table td {
+            font-size: 12pt;
+            padding: 7px 6px;
+        }
+        .pg-3 .report-table th {
+            font-weight: 700;
+        }
 
         /* ─── Page 4 – Production Performance vs APP ─────────── */
         .page4-heading {
