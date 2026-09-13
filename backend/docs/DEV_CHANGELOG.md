@@ -49,33 +49,6 @@ re-discovering the whole area from scratch.
 
 ## Page 2.1 — Steel Sector Performance (Production & Prices)
 
-### 2026-09-13 — ~1.5-line separation above every section/table/chart
-**Commit:** `fed0245` — Steel Sector pages 2.1/2.2: ~1.5-line separation above every section/table/chart
-**What:** `.ssp-section-heading`/`.ssp-table-heading`'s `margin-top` bumped
-to 24px (~1.5 lines of this page's ~11pt compact-mode body text, up from
-the 2-6px compaction gap the previous entry below left them at) so every
-numbered section (1-5) and table (1a/1b/1c/2/3a/4a/5) reads as a clearly
-separate block from whatever content sits above it. Gave the price-trend
-chart's wrapper div a new `ssp-chart-block` class (it's inline-styled with
-no class previously, generated once in Python and shared by both the
-steel-price and NMDC charts) so it could get the same 24px treatment.
-Paid for by shaving page padding (6mm→3mm), table row/note padding, and
-table 1b's header padding a bit further, plus the steel-price chart's own
-SVG height (`vh` 100→85 — the NMDC chart on page 2.2 had enough headroom
-already and is untouched).
-**Why:** direct instruction — tables/sections/chart were blending into
-the content above them after the previous compaction pass.
-**Files:**
-- `backend/page_templates/main.html:1789-1806` — `.pg-2-1`/`.pg-2-2`
-  `.ssp-section-heading`/`.ssp-table-heading`/`.ssp-chart-block` margins
-  and the compensating padding trims.
-- `backend/page_steel_sector_performance.py:266` — `class="ssp-chart-block"`
-  added to `_price_chart_html()`'s wrapper div.
-- `backend/page_steel_sector_performance.py:371` — steel-price chart's
-  `_price_chart_html(..., vh=85)` call (was 100).
-**Verified:** real single-page PDF renders across all 3 archived months
-(2026-06/07/08) — both pages still fit one physical page each.
-
 ### 2026-09-13 — Table 1b table-layout:fixed (no right-margin overflow) + compact mode
 **Commit:** `1000a76` — Steel Sector pages 2.1/2.2: compact mode so bottom chart fits on page
 **What:** Table 1b's `table-layout:auto` + `width:1%` label-column trick
@@ -191,12 +164,6 @@ wanted — as of this commit, page 2.1 may spill onto 2 physical pages
 depending on the report month's data.
 
 ## Page 2.2 — Steel Sector Performance (Demand & Trade)
-
-### 2026-09-13 — ~1.5-line separation above every section/table/chart
-See the 2026-09-13 "~1.5-line separation above every section/table/chart"
-entry under Page 2.1 (`fed0245`) — this page shares the same
-`.pg-2-2` rules, so tables 2/3a/4a/5, section headings 3/4, and the NMDC
-price-trend chart all get the same ~24px separation.
 
 ### 2026-09-13 — Compact mode so the NMDC chart fits on the page
 See the 2026-09-13 "Table 1b table-layout:fixed ... + compact mode" entry
