@@ -30,6 +30,22 @@ named in it instead of re-discovering the whole area from scratch.
 
 ---
 
+### 2026-09-13 — Trim legend/x-axis font-size on the 6-month trend chart
+**Commit:** `5614fab` — Trim legend/x-axis font-size by 1pt on the 6-month trend chart
+**What:** On the "Saleable Steel & Finished Steel Production Trend — Last 6
+Months" chart, legend text 9.5→8.5 and month-axis labels 10→9 (SVG
+user-units).
+**Why:** direct instruction, a small readability adjustment.
+**Key files:** `backend/page_at_a_glance.py` — `_trend_line_svg()`, legend
+text at ~line 274, axis labels at ~line 283.
+**Known issues:** this is a partial mitigation, not a fix — the chart's
+month-axis labels still visually overlap the "Semis by plant" heading/note
+that follows it (same root cause as the 2026-09-13 At-a-Glance typography
+entry below: the chart's `vh=95` canvas was never grown to match any of
+its enlarged text). Per-point value labels (still 9.5) and the chart
+canvas height were left untouched — only the two sizes named above were
+in scope for this change.
+
 ### 2026-09-13 — At-a-Glance page typography pass (KNOWN ISSUE)
 **Commit:** `1f3c9e0` — At-a-Glance page typography pass (KNOWN ISSUE: chart overlap, see DEV_CHANGELOG.md)
 **What:** Increased font sizes across `at_a_glance.html` (title, section
