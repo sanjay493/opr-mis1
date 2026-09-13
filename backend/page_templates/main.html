@@ -515,26 +515,26 @@
             text-align: center;
             font-size: 10pt;
             color: {{ colors.text_black }};
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
         .ssp-section-heading {
             font-weight: 700;
             font-size: 12pt;
             color: {{ colors.text_black }};
-            margin: 10px 0 4px;
+            margin: 7px 0 4px;
             border-bottom: 1px solid {{ colors.border_dark }};
-            padding-bottom: 2px;
+            padding-bottom: 5px;
         }
         .ssp-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 6px;
-            font-size: 11pt;
+            margin-bottom: 3px;
+            font-size: 12pt;
             color: {{ colors.text_black }};
         }
         .ssp-table th, .ssp-table td {
             border: 1px solid {{ colors.border_dark }};
-            padding: 7px 9px;
+            padding: 8px;
             vertical-align: middle !important;
             color: {{ colors.text_black }};
         }
@@ -553,8 +553,8 @@
         }
         .ssp-share-bracket {
             display: block;
-            font-size: 10.5pt;
-            color: {{ colors.text_black }};
+            font-size: 11pt;
+            color: {{ colors.text_rust_brown }};
             font-weight: 400;
         }
         /* india_value_cell (steel_sector_performance.html): the invisible
@@ -580,9 +580,9 @@
         }
         .ssp-table-heading {
             font-weight: 700;
-            font-size: 11pt;
-            margin: 16px 0 3px;
-            padding-bottom: 2px;
+            font-size: 12pt;
+            margin: 10px 0 5px;
+            padding-bottom: 5px;
             color: {{ colors.text_black }};
         }
         .ssp-note {
@@ -593,20 +593,22 @@
             padding-bottom: 8px;
         }
         .ssp-para {
-            font-size: 11pt;
-            line-height: 1.4;
-            margin: 0 0 6px;
+            font-size: 12pt;
+            line-height: 1.7;
+            margin:10px;
             text-align: justify;
             color: {{ colors.text_black }};
         }
         .ssp-policy-section {
-            padding: 0 10mm;
+            padding: 10mm;
         }
         .ssp-prodprices-section {
-            padding-left: 10mm;
+           
+            padding-bottom: 10mm;
         }
         .ssp-demandtrade-section {
-            padding-right: 10mm;
+           
+            padding-bottom: 10mm;
         }
         .pwr-num {
             text-align: right;
@@ -1711,6 +1713,25 @@
         .pg-7, .pg-7 th, .pg-7 td {
             font-family: 'Arial Narrow', Arial, sans-serif !important;
         }
+
+        /* Steel Sector page 2.1 (prod_prices) — Table 1a + 1b + 1c plus the
+           price-trend chart at the bottom no longer fit one page at the
+           shared .ssp-* sizes, so this page alone gets a tighter margin +
+           smaller type/padding (scoped via .pg-2-1, same technique as .pg-7
+           above — an !important stylesheet rule beats the page div's own
+           non-important inline "padding: 15mm ..." from page_layouts). Only
+           this page is touched; 2.2/2.3 keep the shared .ssp-* sizes. */
+        /* .pg-2-1 {
+            padding: 10mm !important;
+        }
+        .pg-2-1 .ssp-title { font-size: 13pt; margin-bottom: 1px; }
+        .pg-2-1 .ssp-subtitle { font-size: 8.5pt; margin-bottom: 4px; }
+        .pg-2-1 .ssp-section-heading { font-size: 10pt; margin: 4px 0 2px; padding-bottom: 1px; }
+        .pg-2-1 .ssp-table-heading { font-size: 9pt; margin: 6px 0 2px; }
+        .pg-2-1 .ssp-table { font-size: 8.5pt; margin-bottom: 3px; }
+        .pg-2-1 .ssp-table th, .pg-2-1 .ssp-table td { padding: 3px 5px; }
+        .pg-2-1 .ssp-share-bracket { font-size: 7.5pt; }
+        .pg-2-1 .ssp-note { font-size: 7.5pt; margin-top: 1px; padding-bottom: 3px; } */
     </style>
     {% if page_layouts %}
     <style>

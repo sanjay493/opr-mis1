@@ -61,6 +61,7 @@
 <div class="ssp-section-heading">4. Raw Materials</div>
 {{ generic_table(page.tables.get('4a')) }}
 {{ generic_table(page.tables.get('5')) }}
+{% if page.nmdc_price_chart_html %}{{ page.nmdc_price_chart_html | safe }}{% endif %}
 </div>
 
 {% elif page.section == 'policy_green' %}
@@ -109,5 +110,6 @@
 <div class="ssp-note">Bracketed value under each SAIL figure: SAIL's % share of India.</div>
 {{ generic_table(page.tables.get('1b')) }}
 {{ generic_table(page.tables.get('1c')) }}
+{% if page.steel_price_chart_html %}{{ page.steel_price_chart_html | safe }}{% endif %}
 </div>
 {% endif %}
