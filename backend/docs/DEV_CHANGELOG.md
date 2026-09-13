@@ -49,6 +49,35 @@ re-discovering the whole area from scratch.
 
 ## Page 2.1 — Steel Sector Performance (Production & Prices)
 
+### 2026-09-13 — Table 1b table-layout:fixed (no right-margin overflow) + compact mode
+**Commit:** `1000a76` — Steel Sector pages 2.1/2.2: compact mode so bottom chart fits on page
+**What:** Table 1b's `table-layout:auto` + `width:1%` label-column trick
+(previous entry below) turned out to only treat that width as a MINIMUM —
+with every column forced `nowrap`, the 4 long headers together needed
+more than the page's content width, so the table silently rendered wider
+than 100% and its right edge visibly crossed the page margin. Switched to
+`table-layout:fixed` (a hard cap the table can never exceed) with the
+label column at a fixed 27%; the other 4 columns now share the remaining
+78% and wrap their header text onto 2 lines instead of forcing overflow.
+That header wrap made table 1b (and therefore the whole page) taller, so
+page 2.1 — and page 2.2, which has the same "table(s) + chart" shape —
+also get the previously-disabled `.pg-2-1` compaction block, reworked as
+a *slight* reduction (title 14pt, body ~10.5-11pt, page padding
+15mm→6mm) and extended to `.pg-2-2`. Page 2.3 (policy_green, plain text)
+is left on the shared `.ssp-*` sizes.
+**Why:** direct instruction — table 1b's overflow past the right margin
+"was not looking good"; the follow-up compaction was needed because
+fixing that overflow (by allowing the headers to wrap) made the page tall
+enough to push the price-trend chart onto a 2nd physical page.
+**Files:**
+- `backend/page_templates/main.html:554-596` — `.ssp-table-1b` rules
+  (`table-layout:fixed`, 27% label column, trimmed header-row padding).
+- `backend/page_templates/main.html:1774-1799` — `.pg-2-1, .pg-2-2`
+  compaction block.
+**Verified:** real single-page PDF renders across all 3 archived months
+(2026-06/07/08) — both pages fit one physical page each, table 1b's right
+edge aligns with 1a/1c, no clipping.
+
 ### 2026-09-13 — Fill leftover page space: 12pt subtitle/notes + padding
 **Commit:** `f46ebc1` — Steel Sector page 2.1: fill leftover page space, 12pt subtitle/notes
 **What:** `.ssp-subtitle` (10→12pt) and `.ssp-note` (10.5→12pt) bumped to
@@ -136,6 +165,12 @@ depending on the report month's data.
 
 ## Page 2.2 — Steel Sector Performance (Demand & Trade)
 
+### 2026-09-13 — Compact mode so the NMDC chart fits on the page
+See the 2026-09-13 "Table 1b table-layout:fixed ... + compact mode" entry
+under Page 2.1 (`1000a76`) — this page shares the same `.pg-2-2`
+compaction block, added for the same reason (its own bottom-of-page NMDC
+price-trend chart was no longer fitting on one physical page).
+
 ### 2026-09-13 — NMDC price-trend chart
 **Commit:** `8aeb565` — Add Steel Sector Performance price-trend charts; page 2.1 typography pass
 **What:** Page 2.2 (`demand_trade`) gets an "NMDC Iron Ore Price Trend"
@@ -149,6 +184,42 @@ chart under Table 4a (Lump/Fines), built by the same aggregator as Page
   point for `page.nmdc_price_chart_html`.
 
 ## Page 2.5 — At-a-Glance
+
+### 2026-09-13 — Fix page-2 spill: stray div bug + chart/table size trims
+**Commit:** `f7b9cad` — At-a-Glance page: fix page-2 spill, trim chart sizes and stray div bug
+**What:** Removed a stray `</div><div>` pair in `at_a_glance.html`
+(introduced by the 2026-09-13 "At-a-Glance page typography pass" commit
+below, `1f3c9e0`) that closed the page's whole 7.8pt-font wrapper early —
+the trend section + semis-by-plant table ended up outside it, so the
+semis table (which sets no font-size of its own) was silently inheriting
+the browser's ~12pt default instead of the page's intended small size, a
+likely major contributor to it spilling onto its own near-blank 2nd
+physical page. On top of that fix, per direct instruction: trimmed the
+6-month trend chart's legend (8.5→7.5pt) and x-axis labels (9→8pt) plus
+its own plot geometry; gave the semis table an explicit 7.5pt font and
+tighter cell padding instead of relying on inherited context; and trimmed
+the Value Added Steel Performance combo charts (`vh` 350→245) and the
+Production Trend YTD bar chart (`vh` 215→190) to reduce excess vertical
+whitespace and free more room.
+**Why:** direct instruction — the page's content was spilling onto a 2nd
+physical page (semis-by-plant table), and there was visibly excess gap at
+the bottom of the Value Added Steel Performance box.
+**Files:**
+- `backend/page_templates/at_a_glance.html:75-76` — removed the stray
+  `</div><div>` pair.
+- `backend/page_at_a_glance.py:218-226` — `_trend_line_svg()` plot
+  geometry (`mt`/`ch`/`mb`) and legend/axis font-size.
+- `backend/page_at_a_glance.py:300-304` — `_semis_table_html()`'s `cell`
+  style string.
+- `backend/page_at_a_glance.py:514-517` — `_ytd_trend_section()`'s
+  `_ytd_bar_chart_svg(..., vh=190)` call.
+- `backend/page_at_a_glance.py:895-910` — `_special_steel_section()`'s
+  `five_year_svg`/`quarter_svg` calls (`vh=245`).
+- `backend/page_at_a_glance.py:921-924` — `_trend_section()`'s
+  `_trend_line_svg(..., vh=86)` call.
+**Verified:** real single-page PDF renders across all 3 archived months
+(2026-06/07/08) — page now fits one physical page each, with all 5 semis
+plants + Total visible.
 
 ### 2026-09-13 — Trim legend/x-axis font-size on the 6-month trend chart
 **Commit:** `5614fab` — Trim legend/x-axis font-size by 1pt on the 6-month trend chart
