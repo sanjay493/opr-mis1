@@ -513,28 +513,28 @@
         }
         .ssp-subtitle {
             text-align: center;
-            font-size: 10pt;
+            font-size: 12pt;
             color: {{ colors.text_black }};
-            margin-bottom: 5px;
+            margin-bottom: 7px;
         }
         .ssp-section-heading {
             font-weight: 700;
             font-size: 12pt;
             color: {{ colors.text_black }};
-            margin: 7px 0 4px;
+            margin: 9px 0 5px;
             border-bottom: 1px solid {{ colors.border_dark }};
-            padding-bottom: 5px;
+            padding-bottom: 6px;
         }
         .ssp-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 3px;
+            margin-bottom: 5px;
             font-size: 12pt;
             color: {{ colors.text_black }};
         }
         .ssp-table th, .ssp-table td {
             border: 1px solid {{ colors.border_dark }};
-            padding: 8px;
+            padding: 9px 8px;
             vertical-align: middle !important;
             color: {{ colors.text_black }};
         }
@@ -557,9 +557,19 @@
            table-layout:auto + label-column width:1%/white-space:nowrap
            "shrink column to its content, give everything else the rest"
            trick used for page 3's TE table (summary.html), not a plain
-           width:auto that would let the table grow past the page. Scoped
-           to this table only via .ssp-table-1b so 1a/1c/2/3a/4a/5 keep
-           their even 100%-width columns. */
+           width:auto that would let the table grow past the page. The
+           other 4 columns (Annual Crude Steel Capacity / Crude Steel
+           Production / Hot Metal Production / Finished Steel Production)
+           were asked to allow wrapping on their long headers instead of
+           forcing nowrap everywhere — tried it (dropping nowrap from just
+           those 4), but table-layout:auto recomputes every column's width
+           once any column's content can break, and here that shrank the
+           data columns enough to visibly reflow table 1a's header row too
+           and push table 1c + the price chart onto a 2nd physical page.
+           Reverted to nowrap across the whole table since that's what
+           actually keeps page 2.1 on one page. Scoped to this table only
+           via .ssp-table-1b so 1a/1c/2/3a/4a/5 keep their even 100%-width
+           columns. */
         .ssp-table-1b .ssp-table {
             table-layout: auto;
             width: 100%;
@@ -602,16 +612,16 @@
         .ssp-table-heading {
             font-weight: 700;
             font-size: 12pt;
-            margin: 10px 0 5px;
-            padding-bottom: 5px;
+            margin: 12px 0 6px;
+            padding-bottom: 6px;
             color: {{ colors.text_black }};
         }
         .ssp-note {
-            font-size: 10.5pt;
+            font-size: 12pt;
             font-style: italic;
             color: {{ colors.text_black }};
-            margin-top: 2px;
-            padding-bottom: 8px;
+            margin-top: 3px;
+            padding-bottom: 9px;
         }
         .ssp-para {
             font-size: 12pt;
