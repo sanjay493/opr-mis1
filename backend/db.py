@@ -3204,11 +3204,23 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
     and 'iron_ore_despatch' sections only (per direct instruction,
     2026-08-26 — the mine-level entry form is now the single source of
     truth for Iron Ore Production/Despatch; every other section still comes
-    from sail_mines_monthly as before). Production = fresh Lump+Fines
-    actual/plan, summed per group. Despatch = ALL materials' (fresh +
+    from sail_mines_monthly as before). Despatch = ALL materials' (fresh +
     legacy) despatch Actual summed per group (Rail+Road combined) and Plan
     summed per group (Plan has no Rail/Road split — see
-    mines_despatch_plan_monthly)."""
+    mines_despatch_plan_monthly).
+
+    Production = fresh Lump+Fines actual/plan (the only materials
+    mine_materials_master flags has_production=1 for) PLUS two despatch-only
+    components that have no production entry of their own, so they're
+    counted at the point they leave the mine instead (per direct
+    instruction, 2026-09-12): Dump Fines/Tailings despatched to end_use
+    SALES (legacy recovered material sold off, not part of planned Lump/
+    Fines output), and Pellets despatch of any end_use (SAIL's pellet
+    plants have no separate "production" entry at all — their despatch
+    figure IS their production). Dump Fines sent CAPTIVE (currently only
+    GUA) is deliberately excluded — that tonnage already reaches the
+    consuming plant as ore movement, not a standalone recovered-and-sold
+    quantity."""
     init_db()
     conn = connect()
     cur = conn.cursor()
@@ -3218,6 +3230,7 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
         return out
     ph = ",".join("?" * len(report_months))
 
+    prod_actual, prod_plan = {}, {}
     cur.execute(f"""
         SELECT p.report_month, mm.group_code, SUM(p.qty_actual), SUM(p.qty_plan)
         FROM mines_production_monthly p
@@ -3226,7 +3239,40 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
         GROUP BY p.report_month, mm.group_code
     """, report_months)
     for rm, group_code, actual, plan in cur.fetchall():
-        out[rm]["iron_ore_prod"][group_code] = {"actual": actual, "plan": plan}
+        prod_actual.setdefault(rm, {})[group_code] = actual
+        prod_plan.setdefault(rm, {})[group_code] = plan
+
+    cur.execute(f"""
+        SELECT d.report_month, mm.group_code, SUM(d.qty_actual)
+        FROM mines_despatch_actual_monthly d
+        JOIN mines_master mm ON mm.mine_code = d.mine_code
+        WHERE d.report_month IN ({ph})
+          AND (d.material_code = 'PELLETS'
+               OR (d.material_code IN ('DUMP_FINES', 'TAILINGS') AND d.end_use_code = 'SALES'))
+        GROUP BY d.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, actual in cur.fetchall():
+        prod_actual.setdefault(rm, {})[group_code] = (prod_actual.get(rm, {}).get(group_code) or 0) + (actual or 0)
+
+    cur.execute(f"""
+        SELECT pl.report_month, mm.group_code, SUM(pl.qty_plan)
+        FROM mines_despatch_plan_monthly pl
+        JOIN mines_master mm ON mm.mine_code = pl.mine_code
+        WHERE pl.report_month IN ({ph})
+          AND (pl.material_code = 'PELLETS'
+               OR (pl.material_code IN ('DUMP_FINES', 'TAILINGS') AND pl.end_use_code = 'SALES'))
+        GROUP BY pl.report_month, mm.group_code
+    """, report_months)
+    for rm, group_code, plan in cur.fetchall():
+        prod_plan.setdefault(rm, {})[group_code] = (prod_plan.get(rm, {}).get(group_code) or 0) + (plan or 0)
+
+    for rm in report_months:
+        groups = set(prod_actual.get(rm, {})) | set(prod_plan.get(rm, {}))
+        for group_code in groups:
+            out[rm]["iron_ore_prod"][group_code] = {
+                "actual": prod_actual.get(rm, {}).get(group_code),
+                "plan": prod_plan.get(rm, {}).get(group_code),
+            }
 
     despatch_actual = {}
     cur.execute(f"""

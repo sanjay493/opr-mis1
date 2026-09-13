@@ -18,9 +18,7 @@
     },
 
     "iron_ore_group_kt": {
-      "_doc": "Iron Ore Production / Despatch and Sales of Iron Ore (Booked Qty / Despatch), delinked from the mine-level rollups per direct instruction 2026-08-27 (mine-level despatch/sales actuals were never entered). Each item -> [APP, YTD Actual Apr-Jul'26, YTD CPLY] in '000 T. The 'SAIL' rows stay derived (CGoM + OGoM + JGoM) and are NOT listed here. Restore the rollup calls in generate_sail_mines() once real figures land.",
-      "iron_ore_prod":           {"CGoM": [3675, 3126, 2841], "OGoM": [7507, 6532, 5279], "JGoM": [5138, 3914, 3645]},
-      "iron_ore_despatch":       {"CGoM": [3675, 2996, 2878], "OGoM": [7507, 6940, 5410], "JGoM": [5138, 4026, 3785]},
+      "_doc": "Sales of Iron Ore (Booked Qty / Despatch) only, delinked from the mine-level rollups per direct instruction 2026-08-27 (mine-level Booked Quantity actuals were never entered). iron_ore_prod/iron_ore_despatch were restored to the live mine-level rollup (db.get_iron_ore_group_rollup_monthly) on 2026-09-12, once real mine-level despatch actuals existed, so they no longer live here. Each item -> [APP, YTD Actual, YTD CPLY] in '000 T. The 'SAIL' rows stay derived (CGoM + OGoM + JGoM) and are NOT listed here.",
       "iron_ore_sales":          {"CGoM": [20, 20, 0],        "OGoM": [2008, 1619, 524],  "JGoM": [0, 0, 0]},
       "iron_ore_sales_despatch": {"CGoM": [0, 0, 0],          "OGoM": [2008, 1598, 465],  "JGoM": [443, 0, 0]}
     }
