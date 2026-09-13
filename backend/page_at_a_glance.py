@@ -264,14 +264,14 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
             # extends left into the value labels — start it to the right of
             # the point instead; every other point stays centered.
             anchor, tx = ("start", x + 3) if i == 0 else ("middle", x)
-            lines.append(f'<text x="{tx:.1f}" y="{y + label_dy:.1f}" text-anchor="{anchor}" font-size="6.5" '
+            lines.append(f'<text x="{tx:.1f}" y="{y + label_dy:.1f}" text-anchor="{anchor}" font-size="8" '
                          f'font-weight="bold" font-family="Arial,sans-serif" fill="{color}">{v:.0f}</text>')
 
     lx, ly = ml, 9
     for name in series:
         color = colors.get(name, "#0284c7")
         lines.append(f'<rect x="{lx}" y="{ly - 5}" width="9" height="3" fill="{color}"/>')
-        lines.append(f'<text x="{lx + 12}" y="{ly - 2}" font-size="7" font-weight="bold" '
+        lines.append(f'<text x="{lx + 12}" y="{ly - 2}" font-size="9.5" font-weight="bold" '
                      f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{name}</text>')
         lx += 12 + len(name) * 4.6 + 16
 
@@ -280,7 +280,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
 
     for i, label in enumerate(labels):
         lines.append(f'<text x="{xs(i):.1f}" y="{base + 12:.1f}" text-anchor="middle" '
-                     f'font-size="6.6" font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
+                     f'font-size="10" font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -301,7 +301,7 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
     # no vertical slack left (see .at-a-glance-page's own comment in
     # main.html: the page was already pushed onto a second page once before
     # by this same section, back when it was a stacked bar).
-    cell = "padding:1px 5px;line-height:1.15;"
+    cell = "padding:2px 5px;line-height:1.15;"
     month_keys = list(semis_by_month.keys())
     header_cells = "".join(
         f'<th style="{cell}text-align:center;font-weight:700;color:{_SEMIS_INK};'
@@ -346,12 +346,12 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
 
     return (
         f'<div style="margin-top:2px;display:flex;justify-content:space-between;align-items:baseline;">'
-        f'<div style="font-size:8.5pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px;">'
+        f'<div style="font-size:12pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px; padding:2px">'
         f'Semis by plant (\'000T &amp; %)</div>'
-        f'<div style="font-size:6.5pt;font-style:italic;font-weight:600;color:{_SEMIS_OWN_PCT_COLOR};">'
+        f'<div style="font-size:10.5pt;font-style:italic;font-weight:600;color:{_SEMIS_OWN_PCT_COLOR};">'
         f'% = share of plant\'s own Saleable Steel</div>'
         f'</div>'
-        f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:7.5pt;">'
+        f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:10.5pt;">'
         f'<thead><tr><th style="{cell}text-align:left;color:#475569;'
         f'border-bottom:1px solid #cbd5e1;">Plant</th>{header_cells}</tr></thead>'
         f'<tbody>{"".join(body_rows)}</tbody>'
@@ -921,7 +921,7 @@ def _trend_section(report_month: str) -> dict:
     semis_by_month = _semis_breakdown_data(months)
     return {
         "months": labels,
-        "svg": _trend_line_svg(labels, series, colors, vh=95) + _semis_table_html(labels, semis_by_month),
+        "svg": _trend_line_svg(labels, series, colors, vh=100) + _semis_table_html(labels, semis_by_month),
     }
 
 
