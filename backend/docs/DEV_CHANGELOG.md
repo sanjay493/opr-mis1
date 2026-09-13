@@ -30,6 +30,45 @@ named in it instead of re-discovering the whole area from scratch.
 
 ---
 
+### 2026-09-13 — Page 3 (SAIL Performance Summary): 12pt typography pass + dynamic layout
+**Commit:** `7281674` — Page 3 (SAIL Performance Summary): 12pt typography pass + dynamic layout
+**What:**
+- `.report-table` padding/font-size loosened to 12pt (was 5px 4px / 4px 4px
+  padding, `var(--sz-td)`/`var(--sz-th)` size) — scoped to this page only
+  via `.pg-3`, every other page using `.report-table` (page4, page5-6,
+  techno, ...) is untouched. Table headers stay bold at the same 12pt.
+- `.page3-section-heading`/`.page3-narrative`/`.page3-footnote`/
+  `.page3-highlights` all set to 12pt (were 10pt / `var(--sz-td)` / 7.5pt /
+  `var(--sz-td)`).
+- The TE Parameters table's Parameter column now sizes to its own content
+  and never wraps (`table-layout:auto` + `width:1%` + `white-space:nowrap`
+  — the standard "shrink-to-fit" trick) instead of a fixed `width:24%`.
+- The gap between Highlights and "TE parameters performance:" is now
+  computed from the highlights line count instead of a fixed 5px, so a
+  light-highlights month doesn't leave the page looking half-empty and a
+  heavy one doesn't risk overflow.
+- The 4 TE bar charts' shared x-axis/data-point label size trimmed a
+  further 0.8pt (true, rendered) smaller.
+**Why:** direct instruction — table felt cramped at the old sizes, the
+Parameter column wrapped long parameter names awkwardly, and the fixed
+highlights gap didn't adapt to how much Highlights content a given month
+actually has.
+**Key files:** `backend/main.py` — `_page3_highlights_gap_px()` (28px base,
+-1.5px per highlight line, clamped to `[5, 28]`), wired in at both places
+page 3 gets assembled: `get_data()` (live preview, ~line 739) and
+`_enrich_pdf_pages()` (PDF generation, ~line 1166). `backend/page_templates/
+main.html` — the `.pg-3 .report-table th/td` block plus the `.page3-*`
+size edits (~line 1057). `backend/page_templates/summary.html` — the TE
+table's `te-table` class + Parameter column markup, and the
+`page.highlights_gap_px` margin-top on the TE section heading.
+`backend/page_techno.py` — `_param_svg()`'s `label_fs` (11.30 → 10.22; see
+that line's own comment for the ~1.346 viewBox-to-page scale factor this
+chart uses to convert a "true pt" instruction into a literal SVG value).
+**Verified:** rendered a real PDF (Aug'26, 5 highlights lines → 20px gap)
+— table padding/font legible, Parameter column stayed on one line for
+"Specific Energy Consumption" (the longest name), all 4 charts rendered
+with no overlap, whole page still fit on one physical page.
+
 ### 2026-09-13 — Trim legend/x-axis font-size on the 6-month trend chart
 **Commit:** `5614fab` — Trim legend/x-axis font-size by 1pt on the 6-month trend chart
 **What:** On the "Saleable Steel & Finished Steel Production Trend — Last 6
