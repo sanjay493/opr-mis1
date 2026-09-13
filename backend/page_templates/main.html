@@ -551,6 +551,27 @@
             color: {{ colors.text_accent_navy }};
             background: {{ colors.highlight_target_band_bg }};
         }
+        /* Table 1b (Producer wise Production) on page 2.1: the producer-name
+           column must never wrap, but the table still has to stay within
+           the page (no horizontal/next-page spill) — so this is the same
+           table-layout:auto + label-column width:1%/white-space:nowrap
+           "shrink column to its content, give everything else the rest"
+           trick used for page 3's TE table (summary.html), not a plain
+           width:auto that would let the table grow past the page. Scoped
+           to this table only via .ssp-table-1b so 1a/1c/2/3a/4a/5 keep
+           their even 100%-width columns. */
+        .ssp-table-1b .ssp-table {
+            table-layout: auto;
+            width: 100%;
+        }
+        .ssp-table-1b .ssp-table th,
+        .ssp-table-1b .ssp-table td {
+            white-space: nowrap;
+        }
+        .ssp-table-1b .ssp-table .ssp-label,
+        .ssp-table-1b .ssp-table thead th:first-child {
+            width: 1%;
+        }
         .ssp-share-bracket {
             display: block;
             font-size: 11pt;
