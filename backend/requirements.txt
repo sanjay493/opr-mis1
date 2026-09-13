@@ -1,25 +1,36 @@
-fastapi>=0.100.0
-uvicorn>=0.20.0
-playwright>=1.40.0
-jinja2>=3.0.0
-pydantic>=2.0.0
-python-multipart>=0.0.7
-openpyxl>=3.1.0
-python-docx>=1.1.0  # Monthly D.O. Letter (page_do_letter.py) — mutates do_letter_templates/*.docx in place
-xlrd>=2.0.1
-pandas>=2.0.0
-pdfplumber>=0.9.0
-pypdf>=4.0.0
-requests>=2.31.0
-beautifulsoup4>=4.12.0  # steel-sector-performance URL extraction (html_extractor_steel_sector_performance.py)
-schedule>=1.2.0
-Pillow>=10.0.0
-pytesseract>=0.3.10  # also requires the Tesseract OCR binary on the host (e.g. `winget install --id UB-Mannheim.TesseractOCR`) — used only for ISP Special Steel image extraction
-bcrypt>=4.0.0
-pyjwt>=2.8.0
-python-dotenv>=1.0.0
-email-validator>=2.0.0
-pymysql
+# Pinned to exact versions (not >=) so `pip install -r requirements.txt` gives
+# every machine running this app the same Playwright/Chromium build and the
+# same library versions — unpinned ranges let two machines' venvs drift apart
+# over time (installed on different days), which was silently changing PDF
+# text metrics and print timing between machines. See requirements-lock.txt
+# for the full transitive dependency set (fastapi/pandas/etc.'s own deps)
+# pinned the same way, generated via `pip freeze`.
+#
+# To upgrade deliberately: bump a version here, `pip install -r
+# requirements.txt` in the venv, then regenerate the lock with
+# `pip freeze > requirements-lock.txt` and commit both.
+fastapi==0.141.1
+uvicorn==0.52.4
+playwright==1.62.0
+jinja2==3.1.6
+pydantic==2.13.5
+python-multipart==0.0.32
+openpyxl==3.1.5
+python-docx==1.2.0  # Monthly D.O. Letter (page_do_letter.py) — mutates do_letter_templates/*.docx in place
+xlrd==2.0.2
+pandas==3.0.5
+pdfplumber==0.11.10
+pypdf==6.18.1
+requests==2.34.2
+beautifulsoup4==4.15.0  # steel-sector-performance URL extraction (html_extractor_steel_sector_performance.py)
+schedule==1.2.2
+Pillow==12.3.0
+pytesseract==0.3.13  # also requires the Tesseract OCR binary on the host (e.g. `winget install --id UB-Mannheim.TesseractOCR`) — used only for ISP Special Steel image extraction
+bcrypt==5.0.0
+pyjwt==2.13.0
+python-dotenv==1.2.3
+email-validator==2.3.0
+pymysql==1.2.0
 
 # Testing
-pytest>=8.0
+pytest==9.1.1

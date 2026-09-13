@@ -72,10 +72,23 @@ _jinja_env.filters['pgclass'] = _pgclass
 # every Chromium launch (see _measure_page3_overflow) even though
 # request.font_config is always
 # None in practice today (backend/main.py always calls build_pdf_response
-# with font_config=None, so _DEFAULT_FONT/layout_config.json's "Arial
-# Narrow" is what actually renders) — but the picker exists in the schema,
+# with font_config=None, so _DEFAULT_FONT/layout_config.json's "Aptos"
+# is what actually renders) — but the picker exists in the schema,
 # so this keeps it offline-capable if it's ever wired up. Files + source
 # URLs are in backend/fonts/manifest.json.
+#
+# "Aptos" here is NOT Microsoft's Aptos (a proprietary font bundled with
+# Office 2021+/Microsoft 365 — never guaranteed to be present, or present
+# at the same version, on two different Windows installs, which is exactly
+# what silently changed this report's text metrics — and therefore its
+# shrink-to-fit widths and page breaks — between machines). It's Hanken
+# Grotesk (OFL-licensed, visually close: similar x-height, grotesque
+# humanist skeleton) self-hosted under the family name "Aptos" so every
+# existing "Aptos" reference (layout_config.json, FontConfig defaults)
+# keeps working unchanged while actually being deterministic everywhere.
+# Likewise "Roboto Condensed" below stands in for the hardcoded
+# 'Arial Narrow' in several page templates — Arial Narrow ships with MS
+# Office, not with Windows itself, so it has the identical failure mode.
 _FONTS_DIR = os.path.join(os.path.dirname(__file__), 'fonts')
 
 _FONT_SLUGS = {
@@ -84,6 +97,7 @@ _FONT_SLUGS = {
     "Roboto": "roboto", "Roboto Mono": "roboto-mono",
     "Noto Sans": "noto-sans", "Noto Sans Mono": "noto-sans-mono",
     "Lato": "lato",
+    "Aptos": "aptos-sub", "Roboto Condensed": "roboto-condensed",
 }
 
 
@@ -135,6 +149,9 @@ FONT_CATALOG = {
     "Roboto":        {"import": _catalog_import("Roboto", "Roboto Mono"), "mono": "Roboto Mono"},
     "Noto Sans":     {"import": _catalog_import("Noto Sans", "Noto Sans Mono"), "mono": "Noto Sans Mono"},
     "Lato":          {"import": _catalog_import("Lato", "Roboto Mono"), "mono": "Roboto Mono"},
+    # "Aptos" is layout_config.json's global default — see the self-hosting
+    # note above on why this catalog entry has to exist at all.
+    "Aptos":         {"import": _catalog_import("Aptos", "Roboto Mono"), "mono": "Roboto Mono"},
 }
 _DEFAULT_FONT = "IBM Plex Sans"
 
@@ -1612,27 +1629,28 @@ async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, p
         )
         fc = font_config or request.font_config or _cfg_fc
         # Only apply FONT_CATALOG's @font-face CSS when fc.family is actually
-        # one of its own web fonts. The previous fallback-to-IBM-Plex-Sans
-        # here was misleading: it always injected *some* font CSS even when
-        # fc.family (e.g. "Arial Narrow", the current layout_config.json
-        # default and every techno-page override's own choice) isn't a
-        # catalog key at all — _font_family_css below always lists fc.family
-        # first, so that CSS was never actually applied to any rendered text;
-        # it just cost real work building a ~300-400KB base64 @font-face
-        # block (see FONT_CATALOG / _local_font_face_css above) for nothing.
-        # Arial Narrow and Arial are both preinstalled Windows fonts, so this
-        # is normally a no-op eliminated entirely; a real catalog font
-        # (family="Roboto", etc., e.g. via request.font_config) still gets
-        # its @font-face CSS as before.
+        # one of its own web fonts — _font_family_css below always lists
+        # fc.family first, so a family with no catalog entry would just cost
+        # real work building a ~300-400KB base64 @font-face block (see
+        # FONT_CATALOG / _local_font_face_css above) for nothing. In
+        # practice fc.family is always "Aptos" (layout_config.json's
+        # default, self-hosted under that name — see the note above
+        # _FONT_SLUGS) or a real request.font_config catalog pick.
         _catalog_entry = FONT_CATALOG.get(fc.family)
         _font_imports   = _catalog_entry["import"] if _catalog_entry else ""
         # Cover page (.page1-container in main.html) always renders in Roboto
         # regardless of the report's chosen body font, so its @font-face has
         # to be embedded unconditionally rather than only when fc.family
-        # itself is "Roboto" (see comment above on _font_imports normally
-        # being a no-op for the "Arial Narrow" default).
+        # itself is "Roboto".
         if fc.family != "Roboto":
             _font_imports += "\n" + _local_font_face_css("Roboto")
+        # Several page templates (at-a-glance, key highlights, best-ever /
+        # best-calendar-month, special steel, the .pg-7 override, and the
+        # non-major techno_params pages) hardcode 'Arial Narrow' directly in
+        # their own inline styles, independent of fc.family entirely — so
+        # that @font-face has to be embedded unconditionally too, the same
+        # way Roboto is above for the cover page.
+        _font_imports += "\n" + _local_font_face_css("Roboto Condensed")
         _font_family_css = f"'{fc.family}', sans-serif"
         _mono_name = _catalog_entry["mono"] if _catalog_entry else "Courier New"
         _mono_family_css = f"'{_mono_name}', 'Courier New', monospace"

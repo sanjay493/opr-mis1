@@ -14,7 +14,7 @@
            get the month-count font-shrink in main.py. Page 27 (MAJOR) was
            never part of that shrink logic and isn't affected by it either
            way - it keeps its original Roboto regardless of table layout. #}
-        {% set _font_family = "'Roboto',sans-serif" if _major27 else "'Arial Narrow',Arial,sans-serif" %}
+        {% set _font_family = "'Roboto',sans-serif" if _major27 else "'Roboto Condensed','Arial Narrow',Arial,sans-serif" %}
         <div style="padding:4px;font-family:{{ _font_family }};font-size:{{ _tsz }};">
           {% if page.group == 'IRON_MAKING' and page.subtitle %}
           {# Iron Making (29 + its 29.5 continuation) only - single line

@@ -1,5 +1,63 @@
 [
   {
+    "_note": "Below: family 'Aptos' is served from Hanken Grotesk (OFL, fonts.google.com/specimen/Hanken+Grotesk) — a visual stand-in self-hosted under the 'Aptos' name so layout_config.json's global font_family keeps working unchanged. Real Microsoft Aptos is proprietary and can't be redistributed; it also isn't reliably present on a plain Windows install (ships with Office 2021+/M365), which is what made report layout differ between machines that did/didn't have it.",
+    "family": "Aptos",
+    "style": "normal",
+    "weight": "300",
+    "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59A.woff2",
+    "local_path": "backend/fonts/aptos-sub/aptos-sub-300-normal.woff2"
+  },
+  {
+    "family": "Aptos",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59A.woff2",
+    "local_path": "backend/fonts/aptos-sub/aptos-sub-400-normal.woff2"
+  },
+  {
+    "family": "Aptos",
+    "style": "italic",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVo2YZDLWuGJpnzaiwFXS9tYtpY_d6T_POl0fRJeyWyosBO5Xw.woff2",
+    "local_path": "backend/fonts/aptos-sub/aptos-sub-400-italic.woff2"
+  },
+  {
+    "family": "Aptos",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59A.woff2",
+    "local_path": "backend/fonts/aptos-sub/aptos-sub-500-normal.woff2"
+  },
+  {
+    "family": "Aptos",
+    "style": "normal",
+    "weight": "600",
+    "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59A.woff2",
+    "local_path": "backend/fonts/aptos-sub/aptos-sub-600-normal.woff2"
+  },
+  {
+    "family": "Aptos",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59A.woff2",
+    "local_path": "backend/fonts/aptos-sub/aptos-sub-700-normal.woff2"
+  },
+  {
+    "_note": "family 'Roboto Condensed' stands in for several page templates' hardcoded 'Arial Narrow' — same problem as Aptos above: Arial Narrow ships with MS Office, not with a plain Windows install.",
+    "family": "Roboto Condensed",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/robotocondensed/v31/ieVl2ZhZI2eCN5jzbjEETS9weq8-19K7DQ.woff2",
+    "local_path": "backend/fonts/roboto-condensed/roboto-condensed-400-normal.woff2"
+  },
+  {
+    "family": "Roboto Condensed",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/robotocondensed/v31/ieVl2ZhZI2eCN5jzbjEETS9weq8-19K7DQ.woff2",
+    "local_path": "backend/fonts/roboto-condensed/roboto-condensed-700-normal.woff2"
+  },
+  {
     "family": "IBM Plex Mono",
     "style": "normal",
     "weight": "400",
