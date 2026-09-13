@@ -221,8 +221,8 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
     # already labeled directly on its line/bar, so the axis scale was
     # redundant).
     ml, mr = 26, 26
-    mt, ch = 13, 70
-    mb = 16
+    mt, ch = 11, 60
+    mb = 14
     cw = vw - ml - mr
     base = mt + ch
 
@@ -271,7 +271,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
     for name in series:
         color = colors.get(name, "#0284c7")
         lines.append(f'<rect x="{lx}" y="{ly - 5}" width="9" height="3" fill="{color}"/>')
-        lines.append(f'<text x="{lx + 12}" y="{ly - 2}" font-size="8.5" font-weight="bold" '
+        lines.append(f'<text x="{lx + 12}" y="{ly - 2}" font-size="7.5" font-weight="bold" '
                      f'font-family="Arial,sans-serif" fill="{_SEMIS_INK}">{name}</text>')
         lx += 12 + len(name) * 4.6 + 16
 
@@ -280,7 +280,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
 
     for i, label in enumerate(labels):
         lines.append(f'<text x="{xs(i):.1f}" y="{base + 12:.1f}" text-anchor="middle" '
-                     f'font-size="9" font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
+                     f'font-size="8" font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -301,7 +301,7 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
     # no vertical slack left (see .at-a-glance-page's own comment in
     # main.html: the page was already pushed onto a second page once before
     # by this same section, back when it was a stacked bar).
-    cell = "padding:2px 5px;line-height:1.15;"
+    cell = "padding:1px 3px;line-height:1.0;font-size:7.5pt;"
     month_keys = list(semis_by_month.keys())
     header_cells = "".join(
         f'<th style="{cell}text-align:center;font-weight:700;color:{_SEMIS_INK};'
@@ -514,7 +514,7 @@ def _ytd_trend_section(report_month: str) -> dict:
     return {
         "fy_labels": fy_labels,
         "period_label": period_label,
-        "svg": _ytd_bar_chart_svg(_PROD_ITEMS, data, fy_labels, growth, vh=215),
+        "svg": _ytd_bar_chart_svg(_PROD_ITEMS, data, fy_labels, growth, vh=190),
     }
 
 
@@ -904,10 +904,10 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
         "month_qty": month_qty,
         "five_year_svg": _value_added_combo_svg(
             fy_cats, fy_pct, fy_qty, [_VA_ORANGE] * len(fy_cats),
-            "Last 5 Years", vw=560, vh=350, label_fs=17.4),
+            "Last 5 Years", vw=560, vh=245, label_fs=17.4),
         "quarter_svg": _value_added_combo_svg(
             q_cats, q_pct, q_qty, [_VA_ORANGE_LIGHT, _VA_ORANGE],
-            "Quarter Just Ended vs CPLY", vw=300, vh=350, label_fs=16.5),
+            "Quarter Just Ended vs CPLY", vw=300, vh=245, label_fs=16.5),
     }
 
 
@@ -921,7 +921,7 @@ def _trend_section(report_month: str) -> dict:
     semis_by_month = _semis_breakdown_data(months)
     return {
         "months": labels,
-        "svg": _trend_line_svg(labels, series, colors, vh=100) + _semis_table_html(labels, semis_by_month),
+        "svg": _trend_line_svg(labels, series, colors, vh=86) + _semis_table_html(labels, semis_by_month),
     }
 
 
