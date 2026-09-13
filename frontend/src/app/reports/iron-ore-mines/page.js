@@ -20,6 +20,11 @@ const MAT_LABEL = {
   TAILINGS: 'Tailings', PELLETS: 'Pellets',
 };
 
+const MODES_ALL = ['RAIL', 'ROAD'];
+const MODE_LABEL = { RAIL: 'Rail', ROAD: 'Road' };
+const END_USES = ['CAPTIVE', 'PELLET_CONV', 'SALES'];
+const END_USE_LABEL = { CAPTIVE: 'Captive', PELLET_CONV: 'Pellet Conv.', SALES: 'Sales' };
+
 const TH = {
   padding: '7px 9px', border: '1px solid #cbd5e1', fontWeight: 700,
   fontSize: 12.5, backgroundColor: '#1e3a5f', color: '#fff', whiteSpace: 'nowrap',
@@ -100,12 +105,56 @@ export default function IronOreMinesPage() {
     return out;
   }, [data, months, scopeMatch]);
 
-  // ── Despatch: desp[month][mat] = actual (respecting mode filter); despPlan[month] ──
+  // ── Despatch detail: despDetail[month][mode][end_use][mat] = actual (full split, ignores mode toggle) ──
+  const despDetail = useMemo(() => {
+    const out = {};
+    months.forEach(m => {
+      out[m] = {};
+      MODES_ALL.forEach(mode => {
+        out[m][mode] = {};
+        END_USES.forEach(eu => { out[m][mode][eu] = {}; });
+      });
+    });
+    (data?.despatch || []).filter(scopeMatch).forEach(r => {
+      if (r.actual == null) return;
+      const bucket = out[r.report_month]?.[r.transport_mode]?.[r.end_use_code];
+      if (!bucket) return;
+      bucket[r.material_code] = (bucket[r.material_code] ?? 0) + r.actual;
+    });
+    return out;
+  }, [data, months, scopeMatch]);
+
+  // ── Which (mode > end_use > material) columns actually have any FY data for this
+  // scope — used to hide all-zero/empty columns and collapse empty groups. Respects
+  // the Rail/Road toggle (a de-selected mode is simply omitted, not just zeroed). ──
+  const despStructure = useMemo(() => {
+    const totals = {};
+    MODES_ALL.forEach(mode => {
+      totals[mode] = {};
+      END_USES.forEach(eu => { totals[mode][eu] = {}; DESP_MATS.forEach(mat => { totals[mode][eu][mat] = 0; }); });
+    });
+    months.forEach(m => {
+      MODES_ALL.forEach(mode => END_USES.forEach(eu => DESP_MATS.forEach(mat => {
+        const v = despDetail[m]?.[mode]?.[eu]?.[mat];
+        if (v) totals[mode][eu][mat] += v;
+      })));
+    });
+    return MODES_ALL
+      .filter(mode => despMode === 'ALL' || despMode === mode)
+      .map(mode => ({
+        mode,
+        enduses: END_USES
+          .map(eu => ({ eu, materials: DESP_MATS.filter(mat => Math.abs(totals[mode][eu][mat]) > 1e-9) }))
+          .filter(e => e.materials.length > 0),
+      }))
+      .filter(m => m.enduses.length > 0);
+  }, [despDetail, months, despMode]);
+
+  // ── desp[month].total = actual respecting mode filter; despPlan[month]; despModeSplit = per-mode total (unfiltered) ──
   const { desp, despPlan, despModeSplit } = useMemo(() => {
     const d = {}, dp = {}, ms = {};
     months.forEach(m => {
       d[m] = { total: null };
-      DESP_MATS.forEach(mat => { d[m][mat] = null; });
       dp[m] = null;
       ms[m] = { RAIL: null, ROAD: null };
     });
@@ -115,7 +164,6 @@ export default function IronOreMinesPage() {
         ms[r.report_month][r.transport_mode] = (ms[r.report_month][r.transport_mode] ?? 0) + r.actual;
       }
       if (despMode !== 'ALL' && r.transport_mode !== despMode) return;
-      d[r.report_month][r.material_code] = (d[r.report_month][r.material_code] ?? 0) + r.actual;
       d[r.report_month].total = (d[r.report_month].total ?? 0) + r.actual;
     });
     (data?.despatch_plan || []).filter(scopeMatch).forEach(r => {
@@ -175,12 +223,75 @@ export default function IronOreMinesPage() {
     FINES: { plan: sumCol(prod, x => x?.FINES?.plan), act: sumCol(prod, x => x?.FINES?.act) },
     total: { plan: sumCol(prod, x => x?.total?.plan), act: sumCol(prod, x => x?.total?.act) },
   };
-  const despTotals = Object.fromEntries(
-    [...DESP_MATS, 'total'].map(k => [k, sumCol(desp, x => x?.[k])])
-  );
+  const despTotals = { total: sumCol(desp, x => x?.total) };
+  const despLeafTotal = (mode, eu, mat) => sumCol(despDetail, x => x?.[mode]?.[eu]?.[mat]);
   const despPlanTotal = sumCol(despPlan, x => x);
   const despRailTotal = sumCol(despModeSplit, x => x?.RAIL);
   const despRoadTotal = sumCol(despModeSplit, x => x?.ROAD);
+
+  // ── Despatch table header/body cell builders (mode > end-use > material,
+  // empty combos already excluded from despStructure) ──
+  const despHeaderRow1 = despStructure.map(({ mode, enduses }, mi) => {
+    const matCount = enduses.reduce((s, e) => s + e.materials.length, 0);
+    return (
+      <th key={mode} colSpan={matCount + 1} style={{ ...TH, textAlign: 'center', borderLeft: mi > 0 ? '2px solid #64748b' : TH.border }}>
+        {MODE_LABEL[mode]}
+      </th>
+    );
+  });
+  const despHeaderRow2 = [];
+  despStructure.forEach(({ mode, enduses }, mi) => {
+    enduses.forEach(({ eu, materials }, ei) => {
+      const borderLeft = ei === 0 ? (mi > 0 ? '2px solid #64748b' : TH.border) : '1.5px solid #7c94b3';
+      despHeaderRow2.push(
+        <th key={`${mode}-${eu}`} colSpan={materials.length} style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, borderLeft }}>
+          {END_USE_LABEL[eu]}
+        </th>
+      );
+    });
+    despHeaderRow2.push(
+      <th key={`${mode}-total`} rowSpan={2} style={{ ...TH, borderLeft: '2px solid #64748b', verticalAlign: 'middle' }}>Total</th>
+    );
+  });
+  const despHeaderRow3 = [];
+  despStructure.forEach(({ mode, enduses }, mi) => {
+    enduses.forEach(({ eu, materials }, ei) => {
+      materials.forEach((mat, mj) => {
+        const borderLeft = mj === 0 ? (ei === 0 ? (mi > 0 ? '2px solid #64748b' : TH.border) : '1.5px solid #7c94b3') : TH.border;
+        despHeaderRow3.push(
+          <th key={`${mode}-${eu}-${mat}`} style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, borderLeft }}>
+            {MAT_LABEL[mat]}
+          </th>
+        );
+      });
+    });
+  });
+  const despBodyCells = (m) => {
+    const cells = [];
+    despStructure.forEach(({ mode, enduses }, mi) => {
+      enduses.forEach(({ eu, materials }, ei) => {
+        materials.forEach((mat, mj) => {
+          const borderLeft = mj === 0 ? (ei === 0 ? (mi > 0 ? '2px solid #94a3b8' : TD.border) : '1.5px solid #b6c2d9') : TD.border;
+          cells.push(<td key={`${mode}-${eu}-${mat}`} style={{ ...TD, borderLeft }}>{fmt(despDetail[m]?.[mode]?.[eu]?.[mat])}</td>);
+        });
+      });
+      cells.push(<td key={`${mode}-total`} style={{ ...TD, fontWeight: 700, borderLeft: '2px solid #94a3b8' }}>{fmt(despModeSplit[m][mode])}</td>);
+    });
+    return cells;
+  };
+  const despFYTotalCells = () => {
+    const cells = [];
+    despStructure.forEach(({ mode, enduses }, mi) => {
+      enduses.forEach(({ eu, materials }, ei) => {
+        materials.forEach((mat, mj) => {
+          const borderLeft = mj === 0 ? (ei === 0 ? (mi > 0 ? '2px solid #94a3b8' : TD.border) : '1.5px solid #b6c2d9') : TD.border;
+          cells.push(<td key={`${mode}-${eu}-${mat}`} style={{ ...TD, fontWeight: 600, color: '#9a3412', borderLeft }}>{fmt(despLeafTotal(mode, eu, mat))}</td>);
+        });
+      });
+      cells.push(<td key={`${mode}-total`} style={{ ...TD, fontWeight: 700, color: '#9a3412', borderLeft: '2px solid #94a3b8' }}>{fmt(mode === 'RAIL' ? despRailTotal : despRoadTotal)}</td>);
+    });
+    return cells;
+  };
 
   const hasAny =
     months.some(m => prod[m]?.total?.act != null || prod[m]?.total?.plan != null || desp[m]?.total != null);
@@ -211,20 +322,33 @@ export default function IronOreMinesPage() {
       cv(prodTotals.FINES.plan), cv(prodTotals.FINES.act),
       cv(prodTotals.total.plan), cv(prodTotals.total.act),
       prodTotals.total.plan ? (prodTotals.total.act / prodTotals.total.plan * 100).toFixed(1) : '']);
+    const despColumns = [];
+    despStructure.forEach(({ mode, enduses }) => {
+      enduses.forEach(({ eu, materials }) => {
+        materials.forEach(mat => despColumns.push({ mode, eu, mat }));
+      });
+      despColumns.push({ mode, isModeTotal: true });
+    });
+    const despColLabel = (c) => c.isModeTotal
+      ? `${MODE_LABEL[c.mode]} Total`
+      : `${MODE_LABEL[c.mode]} ${END_USE_LABEL[c.eu]} ${MAT_LABEL[c.mat]}`;
+    const despColValue = (c, m) => c.isModeTotal ? despModeSplit[m][c.mode] : despDetail[m]?.[c.mode]?.[c.eu]?.[c.mat];
+    const despColFYTotal = (c) => c.isModeTotal
+      ? (c.mode === 'RAIL' ? despRailTotal : despRoadTotal)
+      : despLeafTotal(c.mode, c.eu, c.mat);
+
     lines.push([]);
     lines.push([`DESPATCH (${despMode === 'ALL' ? 'Rail + Road' : despMode})`,
-      ...DESP_MATS.map(x => MAT_LABEL[x]), 'Total', 'Plan', '% Ach', 'Rail', 'Road']);
+      ...despColumns.map(despColLabel), 'Total', 'Plan', '% Ach']);
     months.forEach(m => {
       lines.push([
         `${MONTH_LABEL[m.slice(5)]} ${m.slice(0, 4)}`,
-        ...DESP_MATS.map(x => cv(desp[m][x])), cv(desp[m].total),
+        ...despColumns.map(c => cv(despColValue(c, m))), cv(desp[m].total),
         cv(despPlan[m]), despPlan[m] ? (desp[m].total / despPlan[m] * 100).toFixed(1) : '',
-        cv(despModeSplit[m].RAIL), cv(despModeSplit[m].ROAD),
       ]);
     });
-    lines.push(['FY Total', ...DESP_MATS.map(x => cv(despTotals[x])), cv(despTotals.total),
-      cv(despPlanTotal), despPlanTotal ? (despTotals.total / despPlanTotal * 100).toFixed(1) : '',
-      cv(despRailTotal), cv(despRoadTotal)]);
+    lines.push(['FY Total', ...despColumns.map(c => cv(despColFYTotal(c))), cv(despTotals.total),
+      cv(despPlanTotal), despPlanTotal ? (despTotals.total / despPlanTotal * 100).toFixed(1) : '']);
 
     if (showMinesSummary) {
       lines.push([]);
@@ -408,14 +532,14 @@ export default function IronOreMinesPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th style={{ ...TH, textAlign: 'left' }}>Month</th>
-                    {DESP_MATS.map(x => <th key={x} style={TH}>{MAT_LABEL[x]}</th>)}
-                    <th style={{ ...TH, borderLeft: '2px solid #64748b' }}>Total Desp.</th>
-                    <th style={TH}>Plan</th>
-                    <th style={TH}>% Ach</th>
-                    <th style={{ ...TH, borderLeft: '2px solid #64748b' }}>Rail</th>
-                    <th style={TH}>Road</th>
+                    <th rowSpan={3} style={{ ...TH, textAlign: 'left', verticalAlign: 'middle' }}>Month</th>
+                    {despHeaderRow1}
+                    <th rowSpan={3} style={{ ...TH, borderLeft: '2px solid #64748b', verticalAlign: 'middle' }}>Total Desp.</th>
+                    <th rowSpan={3} style={{ ...TH, verticalAlign: 'middle' }}>Plan</th>
+                    <th rowSpan={3} style={{ ...TH, verticalAlign: 'middle' }}>% Ach</th>
                   </tr>
+                  <tr>{despHeaderRow2}</tr>
+                  <tr>{despHeaderRow3}</tr>
                 </thead>
                 <tbody>
                   {months.map((m, i) => {
@@ -425,30 +549,26 @@ export default function IronOreMinesPage() {
                         <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>
                           {MONTH_LABEL[m.slice(5)]} <span style={{ color: '#9ca3af', fontWeight: 400 }}>{m.slice(0, 4)}</span>
                         </td>
-                        {DESP_MATS.map(x => <td key={x} style={TD}>{fmt(dr[x])}</td>)}
+                        {despBodyCells(m)}
                         <td style={{ ...TD, fontWeight: 700, borderLeft: '2px solid #94a3b8' }}>{fmt(dr.total)}</td>
                         <td style={{ ...TD, color: '#6b7280' }}>{fmt(despPlan[m])}</td>
                         <td style={{ ...TD, fontWeight: 600, color: pctColor(dr.total, despPlan[m]) }}>{pct(dr.total, despPlan[m])}</td>
-                        <td style={{ ...TD, borderLeft: '2px solid #94a3b8' }}>{fmt(despModeSplit[m].RAIL)}</td>
-                        <td style={TD}>{fmt(despModeSplit[m].ROAD)}</td>
                       </tr>
                     );
                   })}
                   <tr style={{ background: '#fff7ed', borderTop: '2px solid #f59e0b' }}>
                     <td style={{ ...TD, textAlign: 'left', fontWeight: 700, color: '#9a3412' }}>FY Total</td>
-                    {DESP_MATS.map(x => <td key={x} style={{ ...TD, fontWeight: 600, color: '#9a3412' }}>{fmt(despTotals[x])}</td>)}
+                    {despFYTotalCells()}
                     <td style={{ ...TD, fontWeight: 700, color: '#9a3412', borderLeft: '2px solid #94a3b8' }}>{fmt(despTotals.total)}</td>
                     <td style={{ ...TD, fontWeight: 600, color: '#9a3412' }}>{fmt(despPlanTotal)}</td>
                     <td style={{ ...TD, fontWeight: 700, color: '#9a3412' }}>{pct(despTotals.total, despPlanTotal)}</td>
-                    <td style={{ ...TD, fontWeight: 600, color: '#9a3412', borderLeft: '2px solid #94a3b8' }}>{fmt(despRailTotal)}</td>
-                    <td style={{ ...TD, fontWeight: 600, color: '#9a3412' }}>{fmt(despRoadTotal)}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: -14, marginBottom: 20 }}>
-              Material columns follow the Rail/Road toggle; the Rail &amp; Road columns on the right always show the
-              full split (all materials). Despatch Plan has no Rail/Road split.
+              Columns show only end-use/material combinations with non-zero data for this scope &amp; FY. Each
+              mode&apos;s &quot;Total&quot; sums all its end-uses/materials. Despatch Plan has no Rail/Road split.
             </div>
 
             {/* ── MINES SUMMARY (FY totals) ── */}
