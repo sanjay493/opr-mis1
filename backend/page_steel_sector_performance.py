@@ -263,7 +263,7 @@ def _price_chart_html(title: str, table_key: str, label_match, colors: dict, flo
     series = {name: [series_by_item[name].get(mk) for mk in all_months] for name in colors if name in series_by_item}
     svg = _price_trend_svg(labels, series, colors, vh=vh)
     return (
-        '<div style="font-family:Arial,sans-serif;margin-top:4px;">'
+        '<div class="ssp-chart-block" style="font-family:Arial,sans-serif;margin-top:4px;">'
         f'<div style="font-weight:700;font-size:11pt;margin:1px 0 2px;color:#1e293b; padding-bottom:5px">{title}</div>'
         f'<div style="border:1px solid #e2e8f0;border-radius:3px;padding:3px 5px;">{svg}</div>'
         '</div>'
@@ -368,7 +368,7 @@ def generate_steel_sector_performance(report_month: str, section: str = "all") -
     if section in ("prod_prices", "all"):
         page["steel_price_chart_html"] = _price_chart_html(
             "Steel Prices Trend (₹/tonne)", "1c", _match_steel_price_item,
-            _STEEL_PRICE_CHART_COLORS, floor_month, vh=100,
+            _STEEL_PRICE_CHART_COLORS, floor_month, vh=85,
         )
     if section in ("demand_trade", "all"):
         page["nmdc_price_chart_html"] = _price_chart_html(

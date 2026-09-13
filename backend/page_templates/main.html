@@ -1782,18 +1782,30 @@
            (policy_green — plain text, no chart, nothing to fit) on the
            shared .ssp-* sizes entirely. */
         .pg-2-1, .pg-2-2 {
-            padding: 6mm !important;
+            padding: 3mm !important;
         }
         .pg-2-1 .ssp-title, .pg-2-2 .ssp-title { font-size: 14pt; margin-bottom: 2px; }
         .pg-2-1 .ssp-subtitle, .pg-2-2 .ssp-subtitle { font-size: 10.5pt; margin-bottom: 3px; }
-        .pg-2-1 .ssp-section-heading, .pg-2-2 .ssp-section-heading { font-size: 11pt; margin: 5px 0 2px; padding-bottom: 3px; }
-        .pg-2-1 .ssp-table-heading, .pg-2-2 .ssp-table-heading { font-size: 11pt; margin: 6px 0 3px; padding-bottom: 3px; }
-        .pg-2-1 .ssp-table, .pg-2-2 .ssp-table { font-size: 10.5pt; margin-bottom: 2px; }
+        .pg-2-1 .ssp-section-heading, .pg-2-2 .ssp-section-heading { font-size: 11pt; margin: 24px 0 2px; padding-bottom: 2px; }
+        .pg-2-1 .ssp-table-heading, .pg-2-2 .ssp-table-heading { font-size: 11pt; margin: 24px 0 2px; padding-bottom: 2px; }
+        .pg-2-1 .ssp-table, .pg-2-2 .ssp-table { font-size: 10.5pt; margin-bottom: 1px; }
         .pg-2-1 .ssp-table th, .pg-2-1 .ssp-table td,
-        .pg-2-2 .ssp-table th, .pg-2-2 .ssp-table td { padding: 4px; }
+        .pg-2-2 .ssp-table th, .pg-2-2 .ssp-table td { padding: 3px; }
         .pg-2-1 .ssp-share-bracket, .pg-2-2 .ssp-share-bracket { font-size: 9.5pt; }
-        .pg-2-1 .ssp-note, .pg-2-2 .ssp-note { font-size: 10.5pt; margin-top: 1px; padding-bottom: 3px; }
-        .pg-2-1 .ssp-table-1b .ssp-table thead th { font-size: 9.5pt; padding-top: 2px; padding-bottom: 2px; }
+        .pg-2-1 .ssp-note, .pg-2-2 .ssp-note { font-size: 10.5pt; margin-top: 0; padding-bottom: 2px; }
+        .pg-2-1 .ssp-table-1b .ssp-table thead th { font-size: 9.5pt; padding-top: 1px; padding-bottom: 1px; }
+        /* Direct instruction: every numbered section (1/2/3/4/5) and table
+           (1a/1b/1c/2/3a/4a/5) heading, plus each page's price-trend chart,
+           should read as a clearly separate block from whatever content
+           sits above it — about 1.5 lines of this page's ~11pt body text
+           (~24px), via .ssp-section-heading/.ssp-table-heading's margin-top
+           above and .ssp-chart-block below — rather than the tight
+           2-6px compaction gap used elsewhere on this page. Paid for by
+           shaving page padding/row padding/note spacing a little further
+           and the steel-price chart's own vh (100->85, prod_prices only —
+           2.2's NMDC chart had headroom to spare already) so both pages
+           still fit one physical page (verified: all 3 archived months). */
+        .pg-2-1 .ssp-chart-block, .pg-2-2 .ssp-chart-block { margin-top: 24px !important; }
     </style>
     {% if page_layouts %}
     <style>
