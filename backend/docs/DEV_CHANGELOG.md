@@ -423,6 +423,45 @@ this scale were losing meaningful precision).
 
 ## Cross-Page & Infrastructure
 
+### 2026-09-13 — Self-host Aptos/Arial Narrow substitutes + pin backend deps
+**Commit:** `3eae680` — Self-host Aptos/Arial Narrow substitutes + pin backend deps for cross-machine determinism
+**What:** `layout_config.json`'s global `font_family` ("Aptos") and several
+page templates' hardcoded `'Arial Narrow'` were the only fonts in the
+report not actually self-hosted — both ship with MS Office, not with a
+stock Windows install, so `FONT_CATALOG` had no entry for "Aptos" and the
+`'Arial Narrow'` templates never embedded anything at all; Chromium just
+silently substituted whatever it had locally. Self-hosted Hanken Grotesk
+(OFL) under the family name "Aptos" and Roboto Condensed as the
+`'Arial Narrow'` stand-in, both embedded as base64 `@font-face` the same
+way every other catalog font already is. Also pinned
+`backend/requirements.txt` to exact versions (was `>=` ranges) and added
+`backend/requirements-lock.txt` (full `pip freeze`).
+**Why:** user reported the same report renders with a different page
+layout, and takes different time, on their home vs. office PC. Root
+cause: since `pdf.py` measures rendered text at runtime to decide
+shrink-to-fit column widths and page breaks, a machine with Office
+installed (real Aptos/Arial Narrow) and one without (generic
+fallback font) compute different page breaks for the identical report.
+Unpinned deps compounded this — confirmed on the reporting machine itself,
+which had two different cached Chromium builds (`chromium-1091` and
+`chromium-1234`) left over from past `pip install`s at different
+`playwright>=` versions.
+**Files:**
+- `backend/pdf.py:70-90` — self-hosting note, `_FONT_SLUGS`, `FONT_CATALOG`
+  ("Aptos" entry) additions.
+- `backend/pdf.py:1630-1651` — unconditional `Roboto Condensed` embed
+  alongside the existing unconditional `Roboto` (cover page) embed.
+- `backend/fonts/aptos-sub/`, `backend/fonts/roboto-condensed/` — new
+  self-hosted woff2 files.
+- `backend/fonts/manifest.json` — provenance entries for both.
+- `backend/page_templates/{at_a_glance,best_calendar_month,best_ever_highlights,key_highlights,main,special_steel,special_steel_trend,techno_params}.html`
+  — `'Arial Narrow'` references now list `'Roboto Condensed'` first.
+- `backend/requirements.txt`, `backend/requirements-lock.txt` (new).
+**Verified:** `_local_font_face_css` builds valid `@font-face` CSS for
+both new families; all edited templates parse via the real `_jinja_env`
+(including the custom `split_label` filter); a real PDF generated
+end-to-end successfully with the new fonts embedded.
+
 ### 2026-09-12 — RMG data backfills into `mis_reports` (no code commit — DB content only)
 **Commit:** none — data-only changes, `mis_reports` database.
 **What:** Backfilled `mines_production_monthly` and
