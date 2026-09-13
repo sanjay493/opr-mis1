@@ -553,34 +553,43 @@
         }
         /* Table 1b (Producer wise Production) on page 2.1: the producer-name
            column must never wrap, but the table still has to stay within
-           the page (no horizontal/next-page spill) — so this is the same
-           table-layout:auto + label-column width:1%/white-space:nowrap
-           "shrink column to its content, give everything else the rest"
-           trick used for page 3's TE table (summary.html), not a plain
-           width:auto that would let the table grow past the page. The
-           other 4 columns (Annual Crude Steel Capacity / Crude Steel
-           Production / Hot Metal Production / Finished Steel Production)
-           were asked to allow wrapping on their long headers instead of
-           forcing nowrap everywhere — tried it (dropping nowrap from just
-           those 4), but table-layout:auto recomputes every column's width
-           once any column's content can break, and here that shrank the
-           data columns enough to visibly reflow table 1a's header row too
-           and push table 1c + the price chart onto a 2nd physical page.
-           Reverted to nowrap across the whole table since that's what
-           actually keeps page 2.1 on one page. Scoped to this table only
-           via .ssp-table-1b so 1a/1c/2/3a/4a/5 keep their even 100%-width
-           columns. */
+           the page (no horizontal overflow past the right margin, and no
+           next-page vertical spill). table-layout:auto + width:1% on the
+           label column (the "shrink column to its content" trick used for
+           page 3's TE table) was tried first, but auto layout only treats
+           a specified width as a MINIMUM — with every column forced
+           nowrap, the 4 long headers (Annual Crude Steel Capacity / Crude
+           Steel Production / Hot Metal Production / Finished Steel
+           Production) together needed more than the page's content width,
+           so the table silently rendered wider than 100% and its right
+           edge crossed the page margin. table-layout:fixed instead makes
+           the specified widths a HARD cap — the table can never exceed
+           100%, no matter how wide the (now wrappable) header text wants
+           to be. The label column gets a fixed 27% (comfortably nowrap for
+           "Public Sector Share (%)", its longest value); fixed layout
+           splits the remaining 78% evenly across the other 4 columns,
+           which wrap normally if their header text doesn't fit. Scoped to
+           this table only via .ssp-table-1b so 1a/1c/2/3a/4a/5 keep their
+           auto-layout even-width columns. */
         .ssp-table-1b .ssp-table {
-            table-layout: auto;
+            table-layout: fixed;
             width: 100%;
-        }
-        .ssp-table-1b .ssp-table th,
-        .ssp-table-1b .ssp-table td {
-            white-space: nowrap;
         }
         .ssp-table-1b .ssp-table .ssp-label,
         .ssp-table-1b .ssp-table thead th:first-child {
-            width: 1%;
+            width: 27%;
+            white-space: nowrap;
+        }
+        /* The 4 wrapped headers make this table's own header row ~1 line
+           taller than every other .ssp-table's single-line header — trim
+           just that row's padding back down so table 1b doesn't eat into
+           the page's overall vertical budget and push table 1c + the price
+           chart onto a 2nd page. */
+        .ssp-table-1b .ssp-table thead th {
+            padding-top: 3px;
+            padding-bottom: 3px;
+            font-size: 10.5pt;
+            line-height: 1.15;
         }
         .ssp-share-bracket {
             display: block;
@@ -1762,24 +1771,29 @@
             font-family: 'Arial Narrow', Arial, sans-serif !important;
         }
 
-        /* Steel Sector page 2.1 (prod_prices) — Table 1a + 1b + 1c plus the
-           price-trend chart at the bottom no longer fit one page at the
-           shared .ssp-* sizes, so this page alone gets a tighter margin +
-           smaller type/padding (scoped via .pg-2-1, same technique as .pg-7
-           above — an !important stylesheet rule beats the page div's own
-           non-important inline "padding: 15mm ..." from page_layouts). Only
-           this page is touched; 2.2/2.3 keep the shared .ssp-* sizes. */
-        /* .pg-2-1 {
-            padding: 10mm !important;
+        /* Steel Sector pages 2.1 (prod_prices) and 2.2 (demand_trade) —
+           each has a chart pinned to the bottom (price-trend / NMDC
+           price-trend) that no longer fits on the same physical page at
+           the shared .ssp-* sizes, so these two pages get a slightly
+           tighter margin + type/padding (scoped via .pg-2-1, .pg-2-2, same
+           !important-beats-page-padding technique as .pg-7 above). Direct
+           instruction: keep this a SLIGHT reduction (not the old, much
+           more aggressive 7.5-10pt block this replaced), and leave 2.3
+           (policy_green — plain text, no chart, nothing to fit) on the
+           shared .ssp-* sizes entirely. */
+        .pg-2-1, .pg-2-2 {
+            padding: 6mm !important;
         }
-        .pg-2-1 .ssp-title { font-size: 13pt; margin-bottom: 1px; }
-        .pg-2-1 .ssp-subtitle { font-size: 8.5pt; margin-bottom: 4px; }
-        .pg-2-1 .ssp-section-heading { font-size: 10pt; margin: 4px 0 2px; padding-bottom: 1px; }
-        .pg-2-1 .ssp-table-heading { font-size: 9pt; margin: 6px 0 2px; }
-        .pg-2-1 .ssp-table { font-size: 8.5pt; margin-bottom: 3px; }
-        .pg-2-1 .ssp-table th, .pg-2-1 .ssp-table td { padding: 3px 5px; }
-        .pg-2-1 .ssp-share-bracket { font-size: 7.5pt; }
-        .pg-2-1 .ssp-note { font-size: 7.5pt; margin-top: 1px; padding-bottom: 3px; } */
+        .pg-2-1 .ssp-title, .pg-2-2 .ssp-title { font-size: 14pt; margin-bottom: 2px; }
+        .pg-2-1 .ssp-subtitle, .pg-2-2 .ssp-subtitle { font-size: 10.5pt; margin-bottom: 3px; }
+        .pg-2-1 .ssp-section-heading, .pg-2-2 .ssp-section-heading { font-size: 11pt; margin: 5px 0 2px; padding-bottom: 3px; }
+        .pg-2-1 .ssp-table-heading, .pg-2-2 .ssp-table-heading { font-size: 11pt; margin: 6px 0 3px; padding-bottom: 3px; }
+        .pg-2-1 .ssp-table, .pg-2-2 .ssp-table { font-size: 10.5pt; margin-bottom: 2px; }
+        .pg-2-1 .ssp-table th, .pg-2-1 .ssp-table td,
+        .pg-2-2 .ssp-table th, .pg-2-2 .ssp-table td { padding: 4px; }
+        .pg-2-1 .ssp-share-bracket, .pg-2-2 .ssp-share-bracket { font-size: 9.5pt; }
+        .pg-2-1 .ssp-note, .pg-2-2 .ssp-note { font-size: 10.5pt; margin-top: 1px; padding-bottom: 3px; }
+        .pg-2-1 .ssp-table-1b .ssp-table thead th { font-size: 9.5pt; padding-top: 2px; padding-bottom: 2px; }
     </style>
     {% if page_layouts %}
     <style>
