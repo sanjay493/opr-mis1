@@ -49,6 +49,38 @@ re-discovering the whole area from scratch.
 
 ## Page 2.1 — Steel Sector Performance (Production & Prices)
 
+### 2026-09-13 — Fill leftover page space: 12pt subtitle/notes + padding
+**Commit:** `f46ebc1` — Steel Sector page 2.1: fill leftover page space, 12pt subtitle/notes
+**What:** `.ssp-subtitle` (10→12pt) and `.ssp-note` (10.5→12pt) bumped to
+match the rest of the page's 12pt text; table cell padding and
+section/table-heading margins loosened slightly, to use up the visible
+blank space at the bottom of the page. Verified by generating real
+single-page PDFs for Aug/Jul/Jun 2026 after each increment — still one
+physical page, less wasted space at the bottom.
+**Why:** direct instruction — the page was rendering with a lot of unused
+space below the price-trend chart; legibility should be raised (up to
+12pt) and the page's own room used instead of left blank.
+**Files:**
+- `backend/page_templates/main.html:514-519` — `.ssp-subtitle` font-size
+  + margin.
+- `backend/page_templates/main.html:520-527` — `.ssp-section-heading`
+  margin/padding.
+- `backend/page_templates/main.html:528-540` — `.ssp-table` margin-bottom,
+  `.ssp-table th/td` padding.
+- `backend/page_templates/main.html:611-624` — `.ssp-table-heading`
+  margin/padding, `.ssp-note` font-size/margin/padding.
+**Known issues (tried, reverted):** also asked to let table 1b's 4
+non-producer columns (Annual Crude Steel Capacity / Crude Steel
+Production / Hot Metal Production / Finished Steel Production) wrap their
+headers instead of staying `nowrap`. Tried it — `table-layout:auto`
+recomputes every column's width once any column's content can break, and
+here that shrank table 1b's data columns enough to reflow table 1a's
+header row too and push table 1c + the price chart onto a 2nd physical
+page, confirmed across all 3 archived months. Reverted to `nowrap` across
+all of table 1b (see the comment on `.ssp-table-1b`,
+`backend/page_templates/main.html:554-568`) since that's what actually
+renders on one page.
+
 ### 2026-09-13 — Table 1b (Producer wise Production) shrink-to-fit column
 **Commit:** `c86bc5a` — Steel Sector page 2.1: table 1b columns shrink-to-fit, no wrap
 **What:** Table 1b's producer-name column was wrapping at the shared
