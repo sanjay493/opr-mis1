@@ -3,15 +3,17 @@
 SAIL-level receipt/consumption/stock figures from EMD's monthly
 "Coal OMI - <Mon><YY>.xlsx" workbook (2 sheets, OIS-1 and OIS-2).
 
-This is a separate, higher-precision source for the same 4 coal-consumption
-keys (indigenous_pcc, indigenous_mcc, imported_hard_coal, imported_soft_coal)
-that coal_co2_epi_extractor.py's PDF/docx path already writes to
-techno_data (unit="General") — that older path reads whole numbers off a
-PDF table and never populates till_month for these keys. This extractor
-reads the workbook's actual decimal cell values directly, and till_month is
-computed by summing DB-stored monthly values via techno_cumulative.py
-(see plant_and_sail_techno_json / SAIL/till-month handling in
-api_coal_omi_techno.py, which calls this module).
+This is the sole source for the 4 coal-consumption keys (indigenous_pcc,
+indigenous_mcc, imported_hard_coal, imported_soft_coal) in techno_data
+(unit="General") — coal_co2_epi_extractor.py (the CO2/Water/PM EPI report's
+extractor) used to also read a rougher version of these off some report
+formats' own Coal Consumption table, but that's been removed so the two
+extractors never write the same field for the same plant/month (see that
+module's own docstring). This extractor reads the workbook's actual decimal
+cell values directly, and till_month is computed by summing DB-stored
+monthly values via techno_cumulative.py (see plant_and_sail_techno_json /
+SAIL/till-month handling in api_coal_omi_techno.py, which calls this
+module).
 
 extract_ois1_detail reads OIS-1's full as-printed row (Total Coking Coal,
 CDI Coal, and both blend% column groups, not just the 4 raw quantities) for

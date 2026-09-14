@@ -1,45 +1,32 @@
 """
-Coal Consumption & Environmental Performance Indicators (EPI) Extractor —
-pulls plant-level monthly figures from EMD's monthly environmental report,
-which comes in four source formats:
+Environmental Performance Indicators (EPI) Extractor — pulls plant-level
+monthly Sp. CO2 Emission / Sp. Water Consumption / Sp. PM Emission figures
+from EMD's monthly "Major Environmental Performance Indicators (EPIs)"
+report, which comes in four source formats:
 
-PDF, old "Major Environmental Performance Indicators" style (2 pages,
-  page-1 title has NO "EMD Flash Report" text) —
-
-  Page 1 — "Major Environmental Performance Indicators (EPIs)" table, one
-    3-row-header block per parameter (Sp. CO2 Emission / Sp. Water Consumption
-    / Sp. PM Emission), each with exactly 6 data rows (BSP, DSP, RSP, BSL, ISP,
-    SAIL) in that fixed order. Column layout (which month columns exist, and
-    whether "Target 2026-27" / "Actual <month>" split into Existing
-    Calculation# / Additional Emission* sub-columns) varies month to month —
-    columns are located by their own header text/position, not fixed indices.
-    We only want the "Existing Calculation" figure where a split exists (the
-    WSA CO2 baseline methodology), matching the other two params which never
-    split. Located by text position (`page.get_text("words")`), not by
-    PyMuPDF's `find_tables()` — table auto-detection was found to be unreliable
-    across report months here (drops plant labels non-deterministically,
-    splits one logical table into inconsistent fragments across sample months).
-
-  Page 2 — "Consumption of Coking Coal and CDI Coal" table, left ('000 T
-    quantity) half only. Each plant contributes one row per month it appears
-    in the report (current month, plus running FY-cumulative rows for months
-    after April) - we match on the exact current-month row label (e.g.
-    "May'26", not "Apr-May'26") to avoid picking up the cumulative row. Same
-    table, same extract_page2_coal(), is also used by the "EMD Flash Report"
-    PDF's page 2 and by a standalone "Coal OMI" PDF that carries only this
-    table as its own page 1 - extract_pdf() locates it by title text
-    ("Consumption of Coking Coal"), not a fixed page index, for exactly
-    that reason.
+PDF, old "Major Environmental Performance Indicators" style (page-1 title
+  has NO "EMD Flash Report" text) — one 3-row-header block per parameter
+  (Sp. CO2 Emission / Sp. Water Consumption / Sp. PM Emission), each with
+  exactly 6 data rows (BSP, DSP, RSP, BSL, ISP, SAIL) in that fixed order.
+  Column layout (which month columns exist, and whether "Target 2026-27" /
+  "Actual <month>" split into Existing Calculation# / Additional Emission*
+  sub-columns) varies month to month — columns are located by their own
+  header text/position, not fixed indices. We only want the "Existing
+  Calculation" figure where a split exists (the WSA CO2 baseline
+  methodology), matching the other two params which never split. Located by
+  text position (`page.get_text("words")`), not by PyMuPDF's
+  `find_tables()` — table auto-detection was found to be unreliable across
+  report months here (drops plant labels non-deterministically, splits one
+  logical table into inconsistent fragments across sample months).
 
 DOCX, "EMD Flash Report" .docx (seen Jul'26 only) — a slimmer preliminary
   release: a single table with Specific Water Consumption / Specific CO2
   Emission (each Target / <month> / FY-cumulative sub-columns) and BF Slag
-  Utilisation (not currently stored). No Sp. PM Emission or Coal
-  Consumption table at all (that's a separate .pdf attachment for this
-  format, if sent). Columns are located by header text via python-docx's
-  table grid (merged header cells repeat their text across every column
-  they span), not fixed indices, for the same month-to-month resilience as
-  the old PDF path. Parsed by _extract_docx_flash_report().
+  Utilisation (not currently stored). No Sp. PM Emission. Columns are
+  located by header text via python-docx's table grid (merged header cells
+  repeat their text across every column they span), not fixed indices, for
+  the same month-to-month resilience as the old PDF path. Parsed by
+  _extract_docx_flash_report().
 
 DOCX, "Major EPIs" .docx (seen starting Aug'26) — the same underlying
   "Major Environmental Performance Indicators (EPIs)" report as the old
@@ -47,24 +34,23 @@ DOCX, "Major EPIs" .docx (seen starting Aug'26) — the same underlying
   column per period (month, FY-cumulative, comparable-prior-year month/
   cumulative, annual target), one "Parameters"/"Plant" row per plant per
   parameter (all 3 params, including Sp. PM Emission — unlike the Flash
-  Report .docx above). No Coal Consumption table. Distinguished from the
-  Flash Report .docx by _is_major_epis_docx() (its "Parameters"/"Plant"
-  header columns) and parsed by _extract_docx_major_epis(); extract_docx()
-  dispatches between the two by that check, not by report date, since a
-  filename/date alone can't be trusted to predict which layout a given
-  upload uses.
+  Report .docx above). Distinguished from the Flash Report .docx by
+  _is_major_epis_docx() (its "Parameters"/"Plant" header columns) and
+  parsed by _extract_docx_major_epis(); extract_docx() dispatches between
+  the two by that check, not by report date, since a filename/date alone
+  can't be trusted to predict which layout a given upload uses.
 
-PDF, "EMD Flash Report" style (2 pages, page-1 title HAS "EMD Flash Report"
-  text) — the same Flash Report as the .docx above, just delivered as a PDF
-  (e.g. one plant row "BSP 2.70 2.74 2.74 2.45 2.51 2.53 92 94" — Water
-  [Target, month, cum], CO2 [Target, month, cum], BF Slag [month, cum], in
-  that fixed left-to-right order; PyMuPDF renders one token per line here,
-  so extract_page1_flash() reads 8 consecutive numeric lines after each
-  plant-label line rather than using word-position matching). Page 2 is the
-  same Coal Consumption table as the old PDF style. The report's own
-  "EMD Flash Report for <Month>, <Year>" page-1 title is checked against the
-  selected report_month so a wrong month selection fails clearly instead of
-  silently reading the right numbers under the wrong month.
+PDF, "EMD Flash Report" style (page-1 title HAS "EMD Flash Report" text) —
+  the same Flash Report as the .docx above, just delivered as a PDF (e.g.
+  one plant row "BSP 2.70 2.74 2.74 2.45 2.51 2.53 92 94" — Water [Target,
+  month, cum], CO2 [Target, month, cum], BF Slag [month, cum], in that
+  fixed left-to-right order; PyMuPDF renders one token per line here, so
+  extract_page1_flash() reads 8 consecutive numeric lines after each
+  plant-label line rather than using word-position matching). The report's
+  own "EMD Flash Report for <Month>, <Year>" page-1 title is checked
+  against the selected report_month so a wrong month selection fails
+  clearly instead of silently reading the right numbers under the wrong
+  month.
 
   Because "Major Environmental Performance Indicators (EPIs)" appears as a
   section heading in BOTH PDF styles, extract_pdf() distinguishes them by
@@ -76,15 +62,19 @@ XLSX, "Major EPIs <Mon>'<YY>.xlsx" workbook — see extract_xlsx()'s own
   api_coal_co2_techno.py's /preview and /insert), not just the standalone
   load_xlsx() script entry point.
 
+Coal Consumption (Indigenous PCC/MCC, Imported Hard/Soft coking coal) is
+NOT extracted here, even though some of these reports carry a "Consumption
+of Coking Coal and CDI Coal" table alongside the EPI one — that field is
+exclusively the job of techno_project/coal_omi_extractor.py's dedicated,
+higher-precision "Coal OMI" workbook extractor now (see its own docstring),
+so this module and that one never write the same techno_data field for the
+same plant/month and can't clobber each other's figures.
+
 Every format but the old PDF and the "Major EPIs" .docx carries no Sp. PM
-Emission — enviro's "pm" key is simply absent then, and no format but
-the old/Flash PDF carries a Coal Consumption table, and
+Emission — enviro's "pm" key is simply absent then, and
 plant_techno_json()/plant_till_techno_json() treat every param key as
 optional so whatever a given report doesn't carry is left unset (not
-overwritten to None) rather than erroring. Likewise "coal" is {} for any
-report with no Coal Consumption table (e.g. a standalone "Coal OMI" PDF,
-which has that table as its own page 1 - see extract_pdf()'s
-page-detection-by-title, not fixed index).
+overwritten to None) rather than erroring.
 
 Values land in techno_data (unit='General', techno_json["month"]) via
 db.merge_upsert_techno_data — plant-level only; SAIL is intentionally never
@@ -110,12 +100,6 @@ ENVIRO_KEY_UNITS = {
     "sp_co2_emission":      "T/tcs",
     "sp_water_consumption": "m\u00b3/tcs",
     "sp_pm_emission":       "kg/tcs",
-}
-COAL_KEY_UNITS = {
-    "indigenous_pcc":     "'000 T",
-    "indigenous_mcc":     "'000 T",
-    "imported_hard_coal": "'000 T",
-    "imported_soft_coal": "'000 T",
 }
 
 # Display param name (as used in generate_major_techno_from_db /
@@ -173,6 +157,15 @@ def till_mlabel_from_report_month(report_month: str) -> str:
     if mon_num == 4:
         return mlabel_from_report_month(report_month)
     return f"Apr'{str(fy_year)[-2:]}-{mlabel_from_report_month(report_month)}"
+
+
+def cply_report_month_from(report_month: str) -> str:
+    """"2026-08" -> "2025-08" - the Comparable-Prior-Year month: same
+    calendar month, one year earlier. Shared by extract_xlsx and
+    _extract_docx_major_epis, the two formats that carry a same-month-
+    last-year column alongside the current month's own."""
+    year, mon_num = report_month.split("-")
+    return f"{int(year) - 1}-{mon_num}"
 
 
 def _norm(s: str) -> str:
@@ -282,43 +275,6 @@ def extract_page1_enviro(page, mlabel) -> dict:
     return out
 
 
-def extract_page2_coal(page, mlabel) -> dict:
-    """-> {plant: {"pcc":.., "mcc":.., "hard":.., "soft":..}} (Indigenous
-    PCC/MCC, Imported Hard/Soft coking coal, '000 T) for the exact current
-    month's row (not any FY-cumulative row also on the page). Includes SAIL
-    (the report's own total) as a cross-check only."""
-    words = _words(page)
-
-    def hdr_x(text):
-        hits = _find(words, text, x_max=400, y_max=110)
-        if not hits:
-            raise ValueError(f"coal-table header not found: {text}")
-        w = hits[0]
-        return (w[0] + w[2]) / 2
-
-    pcc_x, mcc_x, hard_x, soft_x = hdr_x("PCC"), hdr_x("MCC"), hdr_x("Hard"), hdr_x("Soft")
-
-    expected = PLANTS + ["SAIL"]
-    month_row_hits = sorted(_find(words, mlabel, x_max=110), key=lambda w: w[1])
-    if len(month_row_hits) != len(expected):
-        raise ValueError(f"expected {len(expected)} '{mlabel}' rows on the coal page, got "
-                          f"{len(month_row_hits)}: {[round(w[1], 1) for w in month_row_hits]}")
-
-    out = {}
-    for plant, mw in zip(expected, month_row_hits):
-        ry0, ry1 = mw[1] - 3, mw[3] + 3
-        vals = {}
-        for name, cx in [("pcc", pcc_x), ("mcc", mcc_x), ("hard", hard_x), ("soft", soft_x)]:
-            v = _nearest_in_row(words, ry0, ry1, cx, tol=25, x_max=400)
-            if v is not None:
-                try:
-                    vals[name] = float(v)
-                except ValueError:
-                    pass
-        out[plant] = vals
-    return out
-
-
 _FLASH_TITLE_RE = re.compile(r"EMD Flash Report\s+for\s*([A-Za-z]+)[,.]?\s*(\d{4})", re.I)
 
 
@@ -380,10 +336,7 @@ def extract_page1_flash(page) -> dict:
 
 def _find_page(doc, title_substr: str):
     """First page in doc whose text contains title_substr (case-insensitive),
-    or None. Used instead of a fixed page index because some source reports
-    (e.g. the standalone "Coal OMI" PDF, which carries only the Consumption
-    of Coking Coal table as its own page 1) don't share the combined "Major
-    EPI" report's page-1-enviro/page-2-coal layout."""
+    or None."""
     for page in doc:
         if title_substr.lower() in (page.get_text() or "").lower():
             return page
@@ -391,45 +344,34 @@ def _find_page(doc, title_substr: str):
 
 
 def extract_pdf(pdf_path, report_month: str, mlabel: str) -> dict:
-    """Full extraction for one month's report. Locates the EPI table and the
-    Coal Consumption table each by their own title text rather than by fixed
-    page index, so this also handles single-table PDFs that carry only one
-    of the two (e.g. a standalone "Coal OMI" report has no EPI page) -
-    whichever table is missing is simply left empty, same graceful handling
-    as extract_docx's missing PM/Coal data. The EPI page is further
-    dispatched to the old 18-row parser or the newer "EMD Flash Report"
-    parser based on which one that specific page's own text matches (see
-    module docstring) - a wrong month selection against a Flash Report PDF
-    fails clearly via its own title date, same as extract_docx's mlabel check.
-    -> {"enviro": {...} or {}, "coal": {...from extract_page2_coal} or {}}"""
+    """Full extraction for one month's report. Locates the EPI table by its
+    title text rather than a fixed page index. Further dispatched to the old
+    18-row parser or the newer "EMD Flash Report" parser based on which one
+    that specific page's own text matches (see module docstring) - a wrong
+    month selection against a Flash Report PDF fails clearly via its own
+    title date, same as extract_docx's mlabel check.
+    -> {"enviro": {...}}"""
     import fitz
     doc = fitz.open(pdf_path)
     enviro_page = _find_page(doc, "Major Environmental Performance Indicators")
-    coal_page = _find_page(doc, "Consumption of Coking Coal")
-    if enviro_page is None and coal_page is None:
+    if enviro_page is None:
         raise ValueError(
-            "Could not find either the 'Major Environmental Performance Indicators' "
-            "table or the 'Consumption of Coking Coal' table in this PDF."
+            "Could not find the 'Major Environmental Performance Indicators' table in this PDF."
         )
 
-    enviro = {}
-    if enviro_page is not None:
-        page_text = enviro_page.get_text() or ""
-        if "emd flash report" in page_text.lower():
-            detected_month = _detect_flash_report_month(page_text)
-            if detected_month and detected_month != report_month:
-                raise ValueError(
-                    f"This PDF's own header shows {detected_month}, but {report_month} "
-                    f"was selected — please select the matching month."
-                )
-            enviro = extract_page1_flash(enviro_page)
-        else:
-            enviro = extract_page1_enviro(enviro_page, mlabel)
+    page_text = enviro_page.get_text() or ""
+    if "emd flash report" in page_text.lower():
+        detected_month = _detect_flash_report_month(page_text)
+        if detected_month and detected_month != report_month:
+            raise ValueError(
+                f"This PDF's own header shows {detected_month}, but {report_month} "
+                f"was selected — please select the matching month."
+            )
+        enviro = extract_page1_flash(enviro_page)
+    else:
+        enviro = extract_page1_enviro(enviro_page, mlabel)
 
-    return {
-        "enviro": enviro,
-        "coal": extract_page2_coal(coal_page, mlabel) if coal_page is not None else {},
-    }
+    return {"enviro": enviro}
 
 
 def _is_major_epis_docx(table) -> bool:
@@ -457,7 +399,14 @@ def _extract_docx_major_epis(table, report_month: str, mlabel: str) -> dict:
     that order) located by its own "BSP" cell in the Plant column, mirroring
     extract_xlsx's _xlsx_block_starts. Unlike the old "EMD Flash Report"
     .docx, this format DOES carry Sp. PM Emission.
-    -> {"co2": {"month": {...}, "till_month": {...}, "target": {...}}, "water": ..., "pm": ...}"""
+
+    The table also carries a Comparable-Prior-Year month column (e.g.
+    "Aug'25") and its own FY-cumulative ("Apr.-Aug'25") — same
+    year-over-year comparison extract_xlsx's workbook carries, so this
+    returns both report_month's and cply_report_month's figures in one
+    pass, same shape/reasoning as extract_xlsx.
+    -> {report_month: {"co2": {"month":.., "till_month":.., "target":..}, "water":.., "pm":..},
+        cply_report_month: {"co2": {"month":.., "till_month":..}, "water":.., "pm":..}}"""
     n_rows, n_cols = len(table.rows), len(table.columns)
 
     def cell(r, c):
@@ -482,14 +431,21 @@ def _extract_docx_major_epis(table, report_month: str, mlabel: str) -> dict:
     mon_num = int(mon_num)
     fy = int(year) if mon_num >= 4 else int(year) - 1
     target_label = f"{fy}-{(fy + 1) % 100:02d}"
+    cply_report_month = cply_report_month_from(report_month)
+    cply_mlabel = mlabel_from_report_month(cply_report_month)
     # April has no "Apr.-Apr'YY" cumulative column (same edge case as
     # till_mlabel_from_report_month) - cumulative simply isn't read for an
     # April report_month.
     till_label = f"Apr.-{mlabel}" if mon_num != 4 else None
+    cply_till_label = f"Apr.-{cply_mlabel}" if mon_num != 4 else None
 
-    month_c = find_col(mlabel)
-    target_c = find_col(target_label)
-    till_c = find_col(till_label) if till_label else None
+    cols = {
+        "month":      find_col(mlabel),
+        "cply_month": find_col(cply_mlabel),
+        "till_month": find_col(till_label) if till_label else None,
+        "cply_till":  find_col(cply_till_label) if cply_till_label else None,
+        "target":     find_col(target_label),
+    }
 
     plants_seq = PLANTS + ["SAIL"]
     block_starts = [r for r in range(n_rows) if cell(r, 1) == "BSP"]
@@ -499,26 +455,32 @@ def _extract_docx_major_epis(table, report_month: str, mlabel: str) -> dict:
             f"Plant column), found {len(block_starts)} in this .docx table")
 
     def parse_block(start_row):
-        month_vals, till_vals, target_vals = {}, {}, {}
+        out = {k: {} for k in cols}
         for i, plant in enumerate(plants_seq):
             r = start_row + i
             got = cell(r, 1) if r < n_rows else None
             if got != plant:
                 raise ValueError(
                     f"unexpected plant label {got!r} at row {r} (expected {plant!r})")
-            for col, into in ((month_c, month_vals), (till_c, till_vals), (target_c, target_vals)):
+            for key, col in cols.items():
                 if col is None:
                     continue
                 v = cell(r, col)
                 if v:
                     try:
-                        into[plant] = float(v)
+                        out[key][plant] = float(v)
                     except ValueError:
                         pass
-        return {"month": month_vals, "till_month": till_vals, "target": target_vals}
+        return out
 
-    return {key: parse_block(start_row)
-            for (key, _label, _jk), start_row in zip(ENVIRO_PARAM_ORDER, block_starts)}
+    enviro_cur, enviro_cply = {}, {}
+    for (key, _label, _jk), start_row in zip(ENVIRO_PARAM_ORDER, block_starts):
+        parsed = parse_block(start_row)
+        enviro_cur[key]  = {"month": parsed["month"],      "till_month": parsed["till_month"],
+                             "target": parsed["target"]}
+        enviro_cply[key] = {"month": parsed["cply_month"], "till_month": parsed["cply_till"]}
+
+    return {report_month: enviro_cur, cply_report_month: enviro_cply}
 
 
 def _extract_docx_flash_report(table, report_month: str, mlabel: str) -> dict:
@@ -595,7 +557,11 @@ def extract_docx(docx_path, report_month: str, mlabel: str) -> dict:
     Aug'26) or the older "EMD Flash Report" format (see
     _extract_docx_flash_report) - distinguished by _is_major_epis_docx's
     header check, the same "identify by content, not filename/order" stance
-    the rest of this module takes."""
+    the rest of this module takes.
+    -> {report_month: {...}} for the Flash Report format (no CPLY data
+    available); {report_month: {...}, cply_report_month: {...}} for the
+    "Major EPIs" format - same two-shapes-by-key-count contract
+    extract_report() unpacks for both this and extract_xlsx()."""
     import docx as _docx
     doc = _docx.Document(docx_path)
     if not doc.tables:
@@ -603,7 +569,7 @@ def extract_docx(docx_path, report_month: str, mlabel: str) -> dict:
     table = doc.tables[0]
     if _is_major_epis_docx(table):
         return _extract_docx_major_epis(table, report_month, mlabel)
-    return _extract_docx_flash_report(table, report_month, mlabel)
+    return {report_month: _extract_docx_flash_report(table, report_month, mlabel)}
 
 
 def _xlsx_norm(v) -> str:
@@ -670,14 +636,14 @@ def extract_xlsx(xlsx_path, report_month: str, mlabel: str) -> dict:
             f"'{mlabel}' column not found in {xlsx_path} — "
             f"check the selected month matches the uploaded file")
 
-    year, mon_num = report_month.split("-")
-    cply_report_month = f"{int(year) - 1}-{mon_num}"
+    mon_num = int(report_month.split("-")[1])
+    cply_report_month = cply_report_month_from(report_month)
     cply_mlabel = mlabel_from_report_month(cply_report_month)
     # April has no "Apr.- Apr'YY" cumulative column in this workbook (same
     # edge case as till_mlabel_from_report_month above) — cumulative simply
     # isn't extracted for an April report_month.
-    till_label      = f"Apr.- {mlabel}"      if int(mon_num) != 4 else None
-    cply_till_label = f"Apr.- {cply_mlabel}" if int(mon_num) != 4 else None
+    till_label      = f"Apr.- {mlabel}"      if mon_num != 4 else None
+    cply_till_label = f"Apr.- {cply_mlabel}" if mon_num != 4 else None
 
     cols = {
         "month":      _xlsx_find_col(ws, header_row, mlabel),
@@ -758,7 +724,7 @@ def load_xlsx(xlsx_path, report_month: str, write: bool = True) -> dict:
     if write:
         for rm, enviro in results.items():
             for plant in PLANTS:
-                month_json = plant_techno_json(enviro, {}, plant)
+                month_json = plant_techno_json(enviro, plant)
                 till_json = plant_till_techno_json(enviro, plant)
                 if month_json or till_json:
                     db.merge_upsert_techno_data(
@@ -769,38 +735,39 @@ def load_xlsx(xlsx_path, report_month: str, write: bool = True) -> dict:
 
 
 def extract_report(path, report_month: str, mlabel: str) -> dict:
-    """Dispatches to the PDF, .docx or .xlsx extractor by file extension.
-    -> {"enviro": {...}, "coal": {...}} — "coal" is always {} for .docx and
-    .xlsx (neither carries a Coal Consumption table); "enviro" has no "pm"
-    key for the older "EMD Flash Report" .docx or for .xlsx, and no
+    """Dispatches to the PDF, .docx or .xlsx extractor by file extension and
+    normalizes their differing native return shapes into one envelope:
+    -> {"enviro": {...report_month's own data...},
+        "cply": {"report_month": "YYYY-MM", "enviro": {...}} | None}
+    "enviro" has no "pm" key for the older "EMD Flash Report" .docx, and no
     "target" key for .xlsx (see extract_xlsx's docstring) — the newer
-    "Major EPIs" .docx has both;
+    "Major EPIs" .docx and old-style PDF have both;
     plant_techno_json()/plant_till_techno_json() treat every key as
-    optional. For .xlsx, extract_xlsx() also returns the comparable-prior-
-    year month's figures (see its docstring) - this entry point only
-    surfaces report_month's own data, matching the one-file-one-month shape
-    every other extract_* here returns; the API/UI have no way to act on a
-    second report_month from a single upload anyway."""
+    optional. "cply" carries the Comparable-Prior-Year month's figures
+    (same month, one year earlier) for the two formats that print it
+    alongside the current month (extract_xlsx, _extract_docx_major_epis) -
+    None for every other format, which prints only the current month."""
     suffix = Path(path).suffix.lower()
     if suffix == ".docx":
-        return {"enviro": extract_docx(path, report_month, mlabel), "coal": {}}
-    if suffix in (".xlsx", ".xlsm"):
-        return {"enviro": extract_xlsx(path, report_month, mlabel)[report_month], "coal": {}}
-    return extract_pdf(path, report_month, mlabel)
+        blob = extract_docx(path, report_month, mlabel)
+    elif suffix in (".xlsx", ".xlsm"):
+        blob = extract_xlsx(path, report_month, mlabel)
+    else:
+        return {"enviro": extract_pdf(path, report_month, mlabel)["enviro"], "cply": None}
+
+    cply_months = [rm for rm in blob if rm != report_month]
+    cply = {"report_month": cply_months[0], "enviro": blob[cply_months[0]]} if cply_months else None
+    return {"enviro": blob[report_month], "cply": cply}
 
 
-def plant_techno_json(enviro: dict, coal: dict, plant: str) -> dict:
+def plant_techno_json(enviro: dict, plant: str) -> dict:
     """techno_data["month"] dict for one plant from one month's extraction
-    (SAIL deliberately excluded - see module docstring)."""
+    (SAIL deliberately excluded - see module docstring). Coal Consumption
+    is not part of this - see module docstring on coal_omi_extractor.py
+    being its sole source now."""
     out = {}
     for key, _label, json_key in ENVIRO_PARAM_ORDER:
         v = enviro.get(key, {}).get("month", {}).get(plant)
-        if v is not None:
-            out[json_key] = v
-    cvals = coal.get(plant, {})
-    for src_key, json_key in [("pcc", "indigenous_pcc"), ("mcc", "indigenous_mcc"),
-                               ("hard", "imported_hard_coal"), ("soft", "imported_soft_coal")]:
-        v = cvals.get(src_key)
         if v is not None:
             out[json_key] = v
     return out
@@ -825,8 +792,11 @@ def load_folder(folder: str, write: bool = True) -> dict:
     techno_data (per plant, unit='General') and techno_plan_fy (per plant +
     SAIL, unit='Shop', FY of the LAST month processed - the annual target
     column is FY-constant so any month's PDF carries the same figures).
-    Returns {report_month: {"enviro":..., "coal":...}} for inspection either
-    way."""
+    Returns {report_month: {"enviro":..., "cply":...}} for inspection either
+    way. CPLY figures, when a file carries them, are not written here - see
+    extract_report()'s docstring; this script entry point only persists
+    each file's own report_month, matching load_xlsx's narrower script
+    entry point instead (which does write both)."""
     sys.path.insert(0, str(Path(__file__).parent.parent))
     import db  # noqa: E402
 
@@ -843,7 +813,7 @@ def load_folder(folder: str, write: bool = True) -> dict:
 
     for report_month, blob in sorted(results.items()):
         for plant in PLANTS:
-            month_json = plant_techno_json(blob["enviro"], blob["coal"], plant)
+            month_json = plant_techno_json(blob["enviro"], plant)
             till_json = plant_till_techno_json(blob["enviro"], plant)
             if month_json or till_json:
                 db.merge_upsert_techno_data(plant, report_month, "General",

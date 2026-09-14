@@ -81,33 +81,87 @@ function StatusMsg({ status }) {
   );
 }
 
-// ── Coal Consumption & CO2/Water/PM EPI extractor ────────────────────────────
+// ── CO2/Water/PM EPI extractor ────────────────────────────────────────────────
 // Unlike a per-plant extractor, one uploaded PDF/.docx/.xlsx here covers all
 // 5 plants (BSP/DSP/RSP/BSL/ISP) at once plus their shared FY annual target,
 // so this is a standalone component (no `plant` prop) — /api/coal-co2/preview
 // and /insert return/accept a `plants: [...]` array instead of one plant's
-// `records`.
+// `records`. Coal Consumption is NOT part of this card — see the dedicated
+// Coal OMI Excel extractor below (backend/coal_co2_epi_extractor.py's module
+// docstring explains why the two are kept from ever writing the same field).
 const _COAL_CO2_PARAM_ROWS = [
   { key: 'sp_co2_emission', label: 'Sp. CO2 Emission', targetLabel: 'Sp. CO2 Emission' },
   { key: 'sp_water_consumption', label: 'Sp. Water Consumption', targetLabel: 'Sp. Water Consumption' },
   { key: 'sp_pm_emission', label: 'Sp. PM Emission', targetLabel: 'Sp. PM Emission' },
-  { key: 'indigenous_pcc', label: 'Indigenous PCC' },
-  { key: 'indigenous_mcc', label: 'Indigenous MCC' },
-  { key: 'imported_hard_coal', label: 'Imported Hard Coal' },
-  { key: 'imported_soft_coal', label: 'Imported Soft Coal' },
 ];
+
+// Loose-enough float compare that "2.600000001"-style round-trip noise from
+// JSON doesn't get flagged as a mismatch against a DB value that started
+// life as the plain "2.6" a person typed into the manual-entry page.
+function _valuesDiffer(a, b) {
+  if (a === null || a === undefined || b === null || b === undefined) return false;
+  return Math.abs(Number(a) - Number(b)) > 1e-6;
+}
+
+// One Extracted-vs-Existing-in-DB table for a single month (used for the
+// main report month's Till Month, and — when the source report carries one
+// — its Comparable-Prior-Year month's Month and Till Month) — shared via
+// the `field` prop. `sail` (optional, {month:{}, till_month:{}}) renders an
+// extra, non-editable "SAIL (reported)" column from the report's own SAIL
+// row — informational only, since SAIL is never saved from this report
+// (see backend module docstring): no existing-DB comparison for it.
+function EpiCompareTable({ plants, field, sail, warnStyle, cellStyle, labelCellStyle, fmt }) {
+  const sailCellStyle = { ...cellStyle, color: '#5f6368', fontStyle: 'italic' };
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden' }}>
+        <thead>
+          <tr style={{ background: '#f8f9fa' }}>
+            <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Parameter</th>
+            {PLANTS.map(p => <th key={p} style={{ ...cellStyle, fontWeight: 700 }}>{p}</th>)}
+            {sail && <th style={{ ...cellStyle, fontWeight: 700 }} title="Reported by EMD, not saved — computed separately elsewhere">SAIL (reported)</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {_COAL_CO2_PARAM_ROWS.map(row => (
+            <tr key={row.key}>
+              <td style={labelCellStyle}>{row.label}</td>
+              {PLANTS.map(p => {
+                const rec = plants.find(r => r.plant === p);
+                const extracted = rec?.techno_json?.[field]?.[row.key];
+                const existing = rec?.existing?.[field]?.[row.key];
+                const mismatch = _valuesDiffer(extracted, existing);
+                return (
+                  <td key={p} style={cellStyle}>
+                    {fmt(extracted)}
+                    {mismatch && (
+                      <span style={warnStyle} title={`Existing DB value: ${existing}`}>⚠</span>
+                    )}
+                  </td>
+                );
+              })}
+              {sail && <td style={sailCellStyle}>{fmt(sail[field]?.[row.key])}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
   const [file, setFile] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState(null);
   const [preview, setPreview] = React.useState(null);
+  const [includeCply, setIncludeCply] = React.useState(false);
   const inputRef = React.useRef();
 
   React.useEffect(() => {
     setFile(null);
     setStatus(null);
     setPreview(null);
+    setIncludeCply(false);
     if (inputRef.current) inputRef.current.value = '';
   }, [reportMonth]);
 
@@ -116,6 +170,7 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
     setBusy(true);
     setStatus(null);
     setPreview(null);
+    setIncludeCply(false);
     const form = new FormData();
     form.append('file', file);
     form.append('report_month', reportMonth);
@@ -140,6 +195,9 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
         source_file: preview.source_file,
         plants: preview.plants,
         targets: preview.targets,
+        ...(includeCply && preview.cply
+          ? { cply: { report_month: preview.cply.report_month, plants: preview.cply.plants } }
+          : {}),
         ...(confirmReplace ? { confirm_replace: true } : {}),
       }),
     });
@@ -163,10 +221,12 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
       setStatus({
         type: 'success',
         text: `✓ Saved ${json.plants_saved.length} plants for ${json.report_month}`
-          + (json.targets_saved.length ? ` + FY targets for ${json.targets_saved.length}` : ''),
+          + (json.targets_saved.length ? ` + FY targets for ${json.targets_saved.length}` : '')
+          + (json.cply_plants_saved.length ? ` + ${json.cply_plants_saved.length} plants for ${json.cply_report_month}` : ''),
       });
       setPreview(null);
       setFile(null);
+      setIncludeCply(false);
       if (inputRef.current) inputRef.current.value = '';
       onSuccess();
     } catch (err) {
@@ -176,11 +236,12 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
     }
   };
 
-  const handleCancel = () => { setPreview(null); setStatus(null); };
+  const handleCancel = () => { setPreview(null); setStatus(null); setIncludeCply(false); };
 
   const fmt = (v) => (v === null || v === undefined ? '—' : v);
   const cellStyle = { padding: '4px 8px', fontSize: 12.5, textAlign: 'right', borderBottom: '1px solid #f1f3f4' };
   const labelCellStyle = { padding: '4px 8px', fontSize: 12.5, borderBottom: '1px solid #f1f3f4', color: '#374151' };
+  const warnStyle = { color: '#b45309', fontWeight: 700, marginLeft: 4, cursor: 'help' };
 
   return (
     <div style={{
@@ -188,15 +249,16 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
       background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8,
     }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: '#166534', marginBottom: 4 }}>
-        Coal Consumption &amp; CO2/Water/PM EPI Report — all 5 plants at once
+        CO2/Water/PM EPI Report — all 5 plants at once
       </div>
       <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
-        One "Major Environmental Performance Indicators (EPIs)" report (PDF, the "EMD Flash Report" .docx, or the
-        "Major EPIs" .xlsx workbook) covers BSP/DSP/RSP/BSL/ISP for {reportMonth}, plus their shared FY annual target
-        (not carried by the .docx or .xlsx). The .docx Flash Report carries only Sp. CO2 Emission and Sp. Water
-        Consumption (no Sp. PM Emission or Coal Consumption); the .xlsx carries CO2/Water/PM but no Coal Consumption
-        either — those fields are left as-is. Saved into the same techno_data table (unit=&quot;General&quot;) as the
-        rest of the Techno Data page.
+        One "Major Environmental Performance Indicators (EPIs)" report (PDF, the "EMD Flash Report" .docx, the newer
+        "Major EPIs" .docx, or the "Major EPIs" .xlsx workbook) covers BSP/DSP/RSP/BSL/ISP for {reportMonth}, plus
+        their shared FY annual target (not carried by the .xlsx, or by the older Flash Report .docx). The Flash
+        Report .docx carries only Sp. CO2 Emission and Sp. Water Consumption (no Sp. PM Emission) — those fields are
+        left as-is. Coal Consumption is handled by the dedicated Coal OMI extractor below, not here. Saved into the
+        same techno_data table (unit=&quot;General&quot;) as the rest of the Techno Data page. ⚠ next to a value
+        means it differs from what&apos;s already saved for that month — hover for the existing figure.
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <input ref={inputRef} type="file" accept=".pdf,.docx,.xlsx"
@@ -252,12 +314,16 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
               saving will ask to confirm overwriting them.
             </div>
           )}
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+            Month ({preview.report_month})
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden' }}>
               <thead>
                 <tr style={{ background: '#f8f9fa' }}>
                   <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Parameter</th>
                   {PLANTS.map(p => <th key={p} style={{ ...cellStyle, fontWeight: 700 }}>{p}</th>)}
+                  <th style={{ ...cellStyle, fontWeight: 700 }} title="Reported by EMD, not saved — computed separately elsewhere">SAIL (reported)</th>
                   <th style={{ ...cellStyle, fontWeight: 700 }}>FY Target (SAIL)</th>
                 </tr>
               </thead>
@@ -271,9 +337,19 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
                       <td style={labelCellStyle}>{row.label}</td>
                       {PLANTS.map(p => {
                         const rec = preview.plants.find(r => r.plant === p);
-                        const v = rec?.techno_json?.month?.[row.key];
-                        return <td key={p} style={cellStyle}>{fmt(v)}</td>;
+                        const extracted = rec?.techno_json?.month?.[row.key];
+                        const existing = rec?.existing?.month?.[row.key];
+                        const mismatch = _valuesDiffer(extracted, existing);
+                        return (
+                          <td key={p} style={cellStyle}>
+                            {fmt(extracted)}
+                            {mismatch && (
+                              <span style={warnStyle} title={`Existing DB value: ${existing}`}>⚠</span>
+                            )}
+                          </td>
+                        );
                       })}
+                      <td style={{ ...cellStyle, color: '#5f6368', fontStyle: 'italic' }}>{fmt(preview.sail?.month?.[row.key])}</td>
                       <td style={cellStyle}>{fmt(sailTarget)}</td>
                     </tr>
                   );
@@ -281,6 +357,40 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
               </tbody>
             </table>
           </div>
+
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#374151', margin: '10px 0 4px' }}>
+            Till Month (FY cumulative through {preview.report_month})
+          </div>
+          <EpiCompareTable plants={preview.plants} field="till_month" sail={preview.sail}
+            warnStyle={warnStyle} cellStyle={cellStyle} labelCellStyle={labelCellStyle} fmt={fmt} />
+
+          {preview.cply && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed #86efac' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: '#166534', marginBottom: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={includeCply} onChange={e => setIncludeCply(e.target.checked)} />
+                Also update Comparable-Prior-Year data for {preview.cply.report_month} (this report&apos;s own year-over-year column)
+              </label>
+              {preview.cply.has_existing && (
+                <div style={{
+                  marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+                  background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+                }}>
+                  ⚠ {preview.cply.report_month} already has values for {preview.cply.existing_conflicts.map(c => c.plant).join(', ')} —
+                  saving will ask to confirm overwriting them.
+                </div>
+              )}
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                CPLY Month ({preview.cply.report_month})
+              </div>
+              <EpiCompareTable plants={preview.cply.plants} field="month" sail={preview.cply.sail}
+                warnStyle={warnStyle} cellStyle={cellStyle} labelCellStyle={labelCellStyle} fmt={fmt} />
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#374151', margin: '8px 0 4px' }}>
+                CPLY Till Month (FY cumulative through {preview.cply.report_month})
+              </div>
+              <EpiCompareTable plants={preview.cply.plants} field="till_month" sail={preview.cply.sail}
+                warnStyle={warnStyle} cellStyle={cellStyle} labelCellStyle={labelCellStyle} fmt={fmt} />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -288,12 +398,15 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
 }
 
 // ── Coal OMI Excel extractor ─────────────────────────────────────────────────
-// Higher-precision sibling to CoalCo2ExtractRow above — same 4 coal keys,
-// but read directly from the "Coal OMI - <Mon><YY>.xlsx" workbook's decimal
-// cells instead of a PDF table, plus till_month (computed server-side by
-// summing this FY's monthly values — the PDF/docx/xlsx path above never
-// populates till_month for these keys) and a new SAIL-only Receipt/
-// Consumption/Stock record. See backend/api_coal_omi_techno.py.
+// The sole source of Coal Consumption data (Indigenous PCC/MCC, Imported
+// Hard/Soft coking coal) — read directly from the "Coal OMI - <Mon><YY>.xlsx"
+// workbook's decimal cells instead of a PDF table, plus till_month (computed
+// server-side by summing this FY's monthly values) and a new SAIL-only
+// Receipt/Consumption/Stock record. See backend/api_coal_omi_techno.py.
+// (The CO2/Water/PM EPI card above used to also extract these same 4 keys
+// from some report formats' own Coal Consumption table, but that's been
+// removed — see coal_co2_epi_extractor.py's module docstring — so this is
+// now the only writer for them, and the two cards never race each other.)
 const _COAL_OMI_ROWS = [
   { key: 'indigenous_pcc', label: 'Indigenous PCC' },
   { key: 'indigenous_mcc', label: 'Indigenous MCC' },
