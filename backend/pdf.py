@@ -67,38 +67,60 @@ def _pgclass(page_num) -> str:
 _jinja_env.filters['pgclass'] = _pgclass
 
 
-# Self-hosted from Google Fonts (Latin subset only) rather than the previous
+# Self-hosted from Google Fonts (each family embeds both its "latin" and
+# "latin-ext" subsets — see _LATIN_EXT_RANGE below for why latin alone
+# isn't enough) rather than the previous
 # @import url('https://fonts.googleapis.com/...') — that hit the network on
 # every Chromium launch (see _measure_page3_overflow) even though
 # request.font_config is always
 # None in practice today (backend/main.py always calls build_pdf_response
-# with font_config=None, so _DEFAULT_FONT/layout_config.json's "Aptos"
-# is what actually renders) — but the picker exists in the schema,
-# so this keeps it offline-capable if it's ever wired up. Files + source
-# URLs are in backend/fonts/manifest.json.
+# with font_config=None, so _DEFAULT_FONT/layout_config.json's font_family
+# is what actually renders) — but the picker exists in the schema, so this
+# keeps it offline-capable if it's ever wired up. Files + source URLs are
+# in backend/fonts/manifest.json.
 #
-# "Aptos" here is NOT Microsoft's Aptos (a proprietary font bundled with
-# Office 2021+/Microsoft 365 — never guaranteed to be present, or present
-# at the same version, on two different Windows installs, which is exactly
-# what silently changed this report's text metrics — and therefore its
-# shrink-to-fit widths and page breaks — between machines). It's Hanken
-# Grotesk (OFL-licensed, visually close: similar x-height, grotesque
-# humanist skeleton) self-hosted under the family name "Aptos" so every
-# existing "Aptos" reference (layout_config.json, FontConfig defaults)
-# keeps working unchanged while actually being deterministic everywhere.
-# Likewise "Roboto Condensed" below stands in for the hardcoded
-# 'Arial Narrow' in several page templates — Arial Narrow ships with MS
-# Office, not with Windows itself, so it has the identical failure mode.
+# The report's body font (layout_config.json's global font_family) and its
+# narrow-column font (used directly by several page templates) both used
+# to be Microsoft fonts — "Aptos" and "Arial Narrow" — neither of which
+# ships with a plain Windows install (both come bundled with Office
+# 2021+/Microsoft 365 instead), so whether they rendered correctly, and
+# identically, depended on what happened to be installed on whichever
+# machine generated the PDF. That silently changed this report's text
+# metrics — and therefore its shrink-to-fit widths and page breaks —
+# between machines. Both are now real, fully self-hosted, open-license
+# fonts instead: "IBM Plex Sans" (body) and "IBM Plex Sans Condensed"
+# (narrow columns) — same type family, so the two cuts stay visually
+# coherent, and IBM Plex was chosen specifically for dense-table
+# legibility. "Aptos" (Hanken Grotesk under that name) and
+# "Roboto Condensed" remain below as selectable catalog fonts — no longer
+# the defaults anywhere, but harmless to leave in place since a font is
+# only ever actually embedded when something requests it by name.
 _FONTS_DIR = os.path.join(os.path.dirname(__file__), 'fonts')
 
 _FONT_SLUGS = {
     "IBM Plex Sans": "ibm-plex-sans", "IBM Plex Mono": "ibm-plex-mono",
+    "IBM Plex Sans Condensed": "ibm-plex-sans-condensed",
     "Source Sans 3": "source-sans-3", "Source Code Pro": "source-code-pro",
     "Roboto": "roboto", "Roboto Mono": "roboto-mono",
     "Noto Sans": "noto-sans", "Noto Sans Mono": "noto-sans-mono",
     "Lato": "lato",
     "Aptos": "aptos-sub", "Roboto Condensed": "roboto-condensed",
 }
+
+
+# Currency symbols — including the Indian Rupee sign, U+20B9, used all
+# over this report's price/cost tables — live in Google Fonts' "latin-ext"
+# subset, not "latin". Every font here was only ever self-hosted from
+# "latin" (see the module-level comment above _FONTS_DIR), so ₹ silently
+# rendered blank (no glyph at all, not even a tofu box, since font-display:
+# block paints nothing until a face resolves) on any font actually used
+# for report body text. Confirmed identical across every family fetched
+# here — this is Google's standard subset boundary, not font-specific.
+_LATIN_EXT_RANGE = (
+    "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, "
+    "U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, "
+    "U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+)
 
 
 @functools.lru_cache(maxsize=None)
@@ -112,9 +134,14 @@ def _local_font_face_css(family: str) -> str:
 
     slug = _FONT_SLUGS[family]
     blocks = []
+    weight_styles = []
+    ext_name = f"{slug}-ext.woff2"
     for path in sorted(glob.glob(os.path.join(_FONTS_DIR, slug, f"{slug}-*.woff2"))):
+        if os.path.basename(path) == ext_name:
+            continue  # the latin-ext companion file, handled below
         name = os.path.splitext(os.path.basename(path))[0]
         weight, style = name.rsplit("-", 2)[-2:]
+        weight_styles.append((weight, style))
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode("ascii")
         blocks.append(
@@ -136,6 +163,17 @@ def _local_font_face_css(family: str) -> str:
             f"font-weight: {weight}; font-display: block; "
             f"src: url(data:font/woff2;base64,{b64}) format('woff2'); }}"
         )
+    ext_path = os.path.join(_FONTS_DIR, slug, ext_name)
+    if os.path.exists(ext_path) and weight_styles:
+        with open(ext_path, "rb") as f:
+            ext_b64 = base64.b64encode(f.read()).decode("ascii")
+        for weight, style in weight_styles:
+            blocks.append(
+                f"@font-face {{ font-family: '{family}'; font-style: {style}; "
+                f"font-weight: {weight}; font-display: block; "
+                f"unicode-range: {_LATIN_EXT_RANGE}; "
+                f"src: url(data:font/woff2;base64,{ext_b64}) format('woff2'); }}"
+            )
     return "\n".join(blocks)
 
 
@@ -149,9 +187,11 @@ FONT_CATALOG = {
     "Roboto":        {"import": _catalog_import("Roboto", "Roboto Mono"), "mono": "Roboto Mono"},
     "Noto Sans":     {"import": _catalog_import("Noto Sans", "Noto Sans Mono"), "mono": "Noto Sans Mono"},
     "Lato":          {"import": _catalog_import("Lato", "Roboto Mono"), "mono": "Roboto Mono"},
-    # "Aptos" is layout_config.json's global default — see the self-hosting
-    # note above on why this catalog entry has to exist at all.
+    # "Aptos" and "Roboto Condensed" are no longer layout_config.json's
+    # defaults (see the self-hosting note above _FONT_SLUGS) — kept as
+    # selectable catalog fonts only.
     "Aptos":         {"import": _catalog_import("Aptos", "Roboto Mono"), "mono": "Roboto Mono"},
+    "IBM Plex Sans Condensed": {"import": _catalog_import("IBM Plex Sans Condensed", "IBM Plex Mono"), "mono": "IBM Plex Mono"},
 }
 _DEFAULT_FONT = "IBM Plex Sans"
 
@@ -1633,9 +1673,8 @@ async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, p
         # fc.family first, so a family with no catalog entry would just cost
         # real work building a ~300-400KB base64 @font-face block (see
         # FONT_CATALOG / _local_font_face_css above) for nothing. In
-        # practice fc.family is always "Aptos" (layout_config.json's
-        # default, self-hosted under that name — see the note above
-        # _FONT_SLUGS) or a real request.font_config catalog pick.
+        # practice fc.family is always "IBM Plex Sans" (layout_config.json's
+        # default) or a real request.font_config catalog pick.
         _catalog_entry = FONT_CATALOG.get(fc.family)
         _font_imports   = _catalog_entry["import"] if _catalog_entry else ""
         # Cover page (.page1-container in main.html) always renders in Roboto
@@ -1645,12 +1684,17 @@ async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, p
         if fc.family != "Roboto":
             _font_imports += "\n" + _local_font_face_css("Roboto")
         # Several page templates (at-a-glance, key highlights, best-ever /
-        # best-calendar-month, special steel, the .pg-7 override, and the
-        # non-major techno_params pages) hardcode 'Arial Narrow' directly in
+        # best-calendar-month, special steel, the .pg-7 override, the
+        # non-major techno_params pages, and the .pg-27 major-TEP override)
+        # hardcode 'IBM Plex Sans Condensed'/'IBM Plex Sans' directly in
         # their own inline styles, independent of fc.family entirely — so
-        # that @font-face has to be embedded unconditionally too, the same
-        # way Roboto is above for the cover page.
-        _font_imports += "\n" + _local_font_face_css("Roboto Condensed")
+        # the condensed cut's @font-face has to be embedded unconditionally
+        # too, the same way Roboto is above for the cover page. (The
+        # regular cut doesn't need this: it's already covered by
+        # FONT_CATALOG above whenever fc.family is "IBM Plex Sans", which
+        # is every render today.)
+        if fc.family != "IBM Plex Sans Condensed":
+            _font_imports += "\n" + _local_font_face_css("IBM Plex Sans Condensed")
         _font_family_css = f"'{fc.family}', sans-serif"
         _mono_name = _catalog_entry["mono"] if _catalog_entry else "Courier New"
         _mono_family_css = f"'{_mono_name}', 'Courier New', monospace"

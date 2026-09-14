@@ -7,14 +7,15 @@
            pages to fit inside the tighter margins main.py gives these two
            pages (see IRON_MAKING_PAGE_2_ID in main.py). #}
         {% set _tsz = '8.5pt' if page.group == 'IRON_MAKING' else ('10pt' if _is_major else '9pt') %}
-        {# Arial Narrow (condensed, fits more per column) is for pages whose
+        {# IBM Plex Sans Condensed (fits more per column) is for pages whose
            layout actually has to accommodate a growing number of YTD-month
            columns (28/29/29.5/30's auto-layout table, and the mill pages'
            own auto-layout) - that pressure is exactly why those pages also
            get the month-count font-shrink in main.py. Page 27 (MAJOR) was
            never part of that shrink logic and isn't affected by it either
-           way - it keeps its original Roboto regardless of table layout. #}
-        {% set _font_family = "'Roboto',sans-serif" if _major27 else "'Roboto Condensed','Arial Narrow',Arial,sans-serif" %}
+           way - it keeps the regular (non-condensed) IBM Plex Sans cut
+           regardless of table layout. #}
+        {% set _font_family = "'IBM Plex Sans',sans-serif" if _major27 else "'IBM Plex Sans Condensed','IBM Plex Sans',sans-serif" %}
         <div style="padding:4px;font-family:{{ _font_family }};font-size:{{ _tsz }};">
           {% if page.group == 'IRON_MAKING' and page.subtitle %}
           {# Iron Making (29 + its 29.5 continuation) only - single line

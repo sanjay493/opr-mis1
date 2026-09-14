@@ -1,5 +1,124 @@
 [
   {
+    "family": "IBM Plex Sans Condensed",
+    "style": "italic",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8nN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHYas-KzLgA.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans-condensed/ibm-plex-sans-condensed-400-italic.woff2"
+  },
+  {
+    "family": "IBM Plex Sans Condensed",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8lN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHYapyK4.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans-condensed/ibm-plex-sans-condensed-400-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans Condensed",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8gN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHY5a67vspYY.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans-condensed/ibm-plex-sans-condensed-500-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans Condensed",
+    "style": "normal",
+    "weight": "600",
+    "url": "https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8gN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHY527LvspYY.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans-condensed/ibm-plex-sans-condensed-600-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans Condensed",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/ibmplexsanscondensed/v15/Gg8gN4UfRSqiPg7Jn2ZI12V4DCEwkj1E4LVeHY4S7bvspYY.woff2",
+    "local_path": "backend/fonts/ibm-plex-sans-condensed/ibm-plex-sans-condensed-700-normal.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "IBM Plex Sans",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/ibm-plex-sans/ibm-plex-sans-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "IBM Plex Mono",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/ibm-plex-mono/ibm-plex-mono-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "IBM Plex Sans Condensed",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/ibm-plex-sans-condensed/ibm-plex-sans-condensed-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Source Sans 3",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/source-sans-3/source-sans-3-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Source Code Pro",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/source-code-pro/source-code-pro-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Roboto",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/roboto/roboto-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Roboto Mono",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/roboto-mono/roboto-mono-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Noto Sans",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/noto-sans/noto-sans-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Noto Sans Mono",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/noto-sans-mono/noto-sans-mono-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Lato",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/lato/lato-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Aptos",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/aptos-sub/aptos-sub-ext.woff2"
+  },
+  {
+    "_note": "latin-ext subset — covers currency symbols (incl. the Indian Rupee sign, U+20B9) and other Latin Extended-A characters that the 'latin'-subset files above don't include. Used for every weight/style of this family via pdf.py's _LATIN_EXT_RANGE.",
+    "family": "Roboto Condensed",
+    "style": "normal (multi-weight variable file)",
+    "weight": "all",
+    "local_path": "backend/fonts/roboto-condensed/roboto-condensed-ext.woff2"
+  },
+  {
     "_note": "Below: family 'Aptos' is served from Hanken Grotesk (OFL, fonts.google.com/specimen/Hanken+Grotesk) — a visual stand-in self-hosted under the 'Aptos' name so layout_config.json's global font_family keeps working unchanged. Real Microsoft Aptos is proprietary and can't be redistributed; it also isn't reliably present on a plain Windows install (ships with Office 2021+/M365), which is what made report layout differ between machines that did/didn't have it.",
     "family": "Aptos",
     "style": "normal",
