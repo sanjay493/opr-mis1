@@ -201,11 +201,14 @@
             padding-bottom: 0;
         }
 
-        /* EPI / Key Highlights — landscape. Both coal pages
-           (coal_consumption, coal_receipt_stock) used to share this
-           landscape layout too, but are portrait now per direct
-           instruction — each falls through to the default @page rule
-           instead. Their .coal-*/.coal-stock-table styling below is
+        /* EPI / Key Highlights — landscape (this @page rule only actually
+           takes effect for EPI, via pdf.py's _LANDSCAPE_TYPES splice-render
+           mechanism — see the Best-Ever/Best-Calendar comment further down
+           for why Key Highlights still renders portrait despite carrying
+           this same class). Both coal pages (coal_consumption,
+           coal_receipt_stock) used to share this landscape layout too, but
+           are portrait now per direct instruction — each falls through to
+           the default @page rule instead. Their .coal-* styling below is
            layout-agnostic (fixed-width tables, not width:100%) so nothing
            else needed changing when they moved off this landscape page. */
         @page coal-landscape-layout {
@@ -392,36 +395,6 @@
            the grid's 2nd row still fits on the same page. */
         .coal-consumption-page {
             padding: 1mm 0;
-        }
-        /* Fixed (not 100%-stretched) column widths — however many months
-           happen to have data yet, each column stays the same width as
-           every other row's, instead of the table's columns stretching
-           to fill the full page width whenever few months are populated
-           (e.g. early in an FY, before most months have stock data: a
-           lone 2-3-column table would otherwise balloon each column to
-           several times a fully-populated row's width). table-layout:
-           fixed makes the explicit widths below authoritative regardless
-           of cell content or column count. */
-        .coal-stock-table {
-            width: auto;
-            table-layout: fixed;
-        }
-        .coal-stock-table th, .coal-stock-table td {
-            font-size: 8pt;
-            width: 68px;
-        }
-        .coal-stock-table .coal-label-cell {
-            width: 95px;
-        }
-        .coal-stock-table .coal-gap-col-wide {
-            width: 14px;
-        }
-        /* Two stacked mini-tables (first 6 FY months, then the remaining
-           7), matching the reference PDF's own two-row layout rather than
-           one row growing wider as the FY progresses — see
-           page_coal_receipts_stock.py's _fy_stock_months. */
-        .coal-stock-table-2 {
-            margin-top: 6px;
         }
 
         /* "Monthly Summary of Power Data" — a portrait page reproducing
@@ -726,15 +699,17 @@
            tables, same tight top/bottom padding treatment as at-a-glance-
            page. NOT .coal-landscape-page: that class's `page: coal-
            landscape-layout` (size: A4 landscape) silently has no effect in
-           this merged single-document render (confirmed empirically — EPI/
-           Key Highlights, which also carry it, render at plain A4 portrait
-           dimensions too; only bf_large_annexure gets genuine landscape,
-           via pdf.py's separate splice-render mechanism). Both new pages
-           were designed and verified to fit comfortably at portrait width,
-           so reusing that class here would just be a misleading label with
-           a latent hazard: if that landscape rule is ever fixed to actually
-           work, EPI/Key Highlights/these pages would all silently jump to
-           landscape at once, without anyone having re-checked column
+           this merged single-document render (confirmed empirically — Key
+           Highlights, which also carries it, renders at plain A4 portrait
+           dimensions too; only pages listed in pdf.py's _LANDSCAPE_TYPES
+           — bf_large_annexure, cost_trend, special_steel_physical, and now
+           epi — get genuine landscape, via its separate splice-render
+           mechanism). Both new pages were designed and verified to fit
+           comfortably at portrait width, so reusing that class here would
+           just be a misleading label with a latent hazard: if that
+           landscape rule is ever fixed to actually work for every class
+           carrying it, Key Highlights/these pages would all silently jump
+           to landscape at once, without anyone having re-checked column
            widths for the new page. A page-type-specific class keeps that
            decision independent. */
         .highlights-page {

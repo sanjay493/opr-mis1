@@ -1476,13 +1476,16 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     # a correct "Page N of TOTAL" without this.
     # Pages that need a genuinely wider physical page: "Large BFs" +
     # the 3 Cost Trend pages right after it (one contiguous block near
-    # page 3.6), and "Special Steel Plants Physical Performance" (a
-    # second block near page 24). Each contiguous run is rendered
-    # separately at true A4-landscape and spliced back into the merged
-    # document at its original position, then every main-content page's
-    # header/footer is re-stamped from scratch (Chromium's own
-    # pageNumber/totalPages counters are per-call).
-    _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend", "special_steel_physical")
+    # page 3.6), "Special Steel Plants Physical Performance" (a second
+    # block near page 24), and "Major Environmental Performance
+    # Indicators (EPIs) - Plant Wise" (page_epi.py, per direct
+    # instruction — its many FY-to-date monthly columns need the extra
+    # width). Each contiguous run is rendered separately at true A4-
+    # landscape and spliced back into the merged document at its
+    # original position, then every main-content page's header/footer
+    # is re-stamped from scratch (Chromium's own pageNumber/totalPages
+    # counters are per-call).
+    _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend", "special_steel_physical", "epi")
     _landscape_pages = [p for p in main_pages if p.get("type") in _LANDSCAPE_TYPES]
     if not _landscape_pages:
         main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
