@@ -902,12 +902,29 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
         "special_pct": sail.get("special_pct", {}).get("current", ""),
         "month_title": f"For the Month ({month_label})",
         "month_qty": month_qty,
+        # vh 245 (both charts) left visible blank margin above/below the
+        # bars: at_a_glance.html's row (`five_year_svg`/`quarter_svg`/the
+        # "For the Month" text column, `align-items:center`) is only as
+        # tall as its tallest child, the text column — at each chart's own
+        # flex-allocated WIDTH, vh=245 rendered shorter than that (width:
+        # 100%;height:auto scales height off vw:vh, and width is fixed by
+        # flex-basis), so `align-items:center` centered each chart inside
+        # extra vertical space instead of filling it. Direct instruction
+        # (2026-09-14) — bars read as short with wasted margin. vh raised
+        # just enough per chart (560:341 / 300:322, not the same ratio —
+        # each chart's own flex width differs) so both now render at
+        # exactly the text column's height, filling the row with zero
+        # dead space, without growing the row itself (verified: rendering
+        # at the old vh=245 and the new vh here produces the identical
+        # 1-row spill of the Semis-by-plant table's Total row onto page 2
+        # either way — a pre-existing, unrelated overflow, not caused by
+        # this change).
         "five_year_svg": _value_added_combo_svg(
             fy_cats, fy_pct, fy_qty, [_VA_ORANGE] * len(fy_cats),
-            "Last 5 Years", vw=560, vh=245, label_fs=17.4),
+            "Last 5 Years", vw=560, vh=341, label_fs=17.4),
         "quarter_svg": _value_added_combo_svg(
             q_cats, q_pct, q_qty, [_VA_ORANGE_LIGHT, _VA_ORANGE],
-            "Quarter Just Ended vs CPLY", vw=300, vh=245, label_fs=16.5),
+            "Quarter Just Ended vs CPLY", vw=300, vh=322, label_fs=16.5),
     }
 
 

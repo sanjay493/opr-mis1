@@ -368,7 +368,7 @@ def generate_steel_sector_performance(report_month: str, section: str = "all") -
     if section in ("prod_prices", "all"):
         page["steel_price_chart_html"] = _price_chart_html(
             "Steel Prices Trend (₹/tonne)", "1c", _match_steel_price_item,
-            _STEEL_PRICE_CHART_COLORS, floor_month, vh=85,
+            _STEEL_PRICE_CHART_COLORS, floor_month, vh=105,
         )
     if section in ("demand_trade", "all"):
         page["nmdc_price_chart_html"] = _price_chart_html(

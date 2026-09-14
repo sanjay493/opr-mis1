@@ -643,8 +643,10 @@
             padding: 10mm;
         }
         .ssp-prodprices-section {
-           
-            padding-bottom: 10mm;
+            /* was 10mm — pure trailing dead space below the last element
+               (the price-trend chart); reclaimed 2026-09-14 to help fit the
+               taller chart (vh 85->98) on one physical page. */
+            padding-bottom: 0;
         }
         .ssp-demandtrade-section {
            
@@ -1135,11 +1137,14 @@
         .page3-chart-cell { flex: 1; border: 0.5px solid {{ colors.border_divider }}; border-radius: 3px; padding: 2px; }
         /* Both page-3 tables (Production + TE Parameters) — was 5px 4px /
            4px 4px, too tight for 12pt content; header stays bold (already
-           true site-wide) at the same explicit 12pt. */
+           true site-wide) at the same explicit 12pt. Vertical padding
+           bumped again 7px->9px (direct instruction, 2026-09-14 — rows
+           read as cramped) for a bit more row breathing room; horizontal
+           stays 6px. */
         .pg-3 .report-table th,
         .pg-3 .report-table td {
             font-size: 12pt;
-            padding: 7px 6px;
+            padding: 9px 6px;
         }
         .pg-3 .report-table th {
             font-weight: 700;
@@ -1786,8 +1791,8 @@
         }
         .pg-2-1 .ssp-title, .pg-2-2 .ssp-title { font-size: 14pt; margin-bottom: 2px; }
         .pg-2-1 .ssp-subtitle, .pg-2-2 .ssp-subtitle { font-size: 10.5pt; margin-bottom: 3px; }
-        .pg-2-1 .ssp-section-heading, .pg-2-2 .ssp-section-heading { font-size: 11pt; margin: 24px 0 2px; padding-bottom: 2px; }
-        .pg-2-1 .ssp-table-heading, .pg-2-2 .ssp-table-heading { font-size: 11pt; margin: 24px 0 2px; padding-bottom: 2px; }
+        .pg-2-2 .ssp-section-heading { font-size: 11pt; margin: 24px 0 2px; padding-bottom: 2px; }
+        .pg-2-2 .ssp-table-heading { font-size: 11pt; margin: 24px 0 2px; padding-bottom: 2px; }
         .pg-2-1 .ssp-table, .pg-2-2 .ssp-table { font-size: 10.5pt; margin-bottom: 1px; }
         .pg-2-1 .ssp-table th, .pg-2-1 .ssp-table td,
         .pg-2-2 .ssp-table th, .pg-2-2 .ssp-table td { padding: 3px; }
@@ -1804,8 +1809,25 @@
            shaving page padding/row padding/note spacing a little further
            and the steel-price chart's own vh (100->85, prod_prices only —
            2.2's NMDC chart had headroom to spare already) so both pages
-           still fit one physical page (verified: all 3 archived months). */
-        .pg-2-1 .ssp-chart-block, .pg-2-2 .ssp-chart-block { margin-top: 24px !important; }
+           still fit one physical page (verified: all 3 archived months).
+           2026-09-14, page 2.1 only: the price-trend chart's own vh grew
+           85->98 (bigger chart, clearer per-point value labels — direct
+           instruction) — that alone pushed page 2.1 (only; 2.2 still has
+           headroom) back over one physical page, so its own 3 "~1.5 line"
+           gaps above section/table headings are dialed back to "~1 line"
+           (24px->14px) and the chart's own gap to 10px, freeing enough
+           room for the taller chart while keeping a visibly separate,
+           just slightly tighter, gap than 2.2's untouched 24px. 2.2 (NMDC
+           chart, unchanged vh) keeps the original 24px throughout.
+           Verified via real page.pdf() renders (not just DOM-height math —
+           Chromium's print pagination doesn't match a plain file:// print-
+           media measurement closely enough to trust) across all 3 archived
+           months (2026-06/07/08): vh=100 still fits, vh=102 already
+           spills to a 2nd page, so vh=98 is used for margin. */
+        .pg-2-1 .ssp-section-heading { font-size: 11pt; margin: 14px 0 2px; padding-bottom: 2px; }
+        .pg-2-1 .ssp-table-heading { font-size: 11pt; margin: 14px 0 2px; padding-bottom: 2px; }
+        .pg-2-1 .ssp-chart-block { margin-top: 10px !important; }
+        .pg-2-2 .ssp-chart-block { margin-top: 24px !important; }
     </style>
     {% if page_layouts %}
     <style>
