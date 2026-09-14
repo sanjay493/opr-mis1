@@ -390,6 +390,58 @@ this scale were losing meaningful precision).
 
 ## Cross-Page & Infrastructure
 
+### 2026-09-14 — Adopt IBM Plex Sans as the real font default; fix missing ₹
+**Commit:** `207666e` — Adopt IBM Plex Sans as the real font default; fix missing Rupee sign (₹)
+**What:** Replaced the Hanken Grotesk/Roboto Condensed stand-ins from the
+previous entry below with the real, permanent default: `layout_config.json`'s
+global `font_family` and page 27's override now say `"IBM Plex Sans"`
+directly, and all 8 templates that referenced `'Arial Narrow'`/`'Roboto'`
+now reference `'IBM Plex Sans Condensed'`/`'IBM Plex Sans'` directly —
+with no Arial/system-font fallback left at all, so rendering depends on
+nothing installed on the host OS and nothing fetched over the network.
+Added `IBM Plex Sans Condensed` as a real, permanent `FONT_CATALOG`/
+`_FONT_SLUGS` entry, force-embedded unconditionally like the cover page's
+Roboto. Hanken Grotesk (`"Aptos"`) and `"Roboto Condensed"` stay in the
+catalog as selectable-but-unused options.
+Also fixed a real bug surfaced while testing: every self-hosted font here
+only ever embedded Google Fonts' "latin" subset, which excludes the
+Indian Rupee sign (₹, U+20B9) — it lives in the separate "latin-ext"
+subset. ₹ was rendering as nothing at all (not even a tofu box) on the
+Steel Sector price pages (150+ occurrences). Added a `unicode-range`-
+scoped latin-ext companion `@font-face` for every self-hosted font
+family (not just the new ones), so this can't recur for any future font
+choice either.
+**Why:** direct instruction, after reviewing rendered test PDFs of
+Plant Wise Major TEPs (page 27), 10 Years Month-Wise Production (7/8),
+Plant-Wise Performance (5/6), Inter Plant Performance Comparison (3.5),
+At-a-Glance (2.5), and Steel Sector Performance (2.1/2.2) in both the
+previous stand-in fonts and this IBM Plex Sans candidate — chosen partly
+because it's already self-hosted for `_DEFAULT_FONT`, has a real
+Condensed cut from the same family (visually coherent, unlike pairing
+Hanken Grotesk with Roboto Condensed), and has genuinely tabular figures
+for the report's dense numeric tables.
+**Files:**
+- `backend/layout_config.json` — `global.font_family`, `pages."27".fontFamily`.
+- `backend/pdf.py:94-121` — `_FONT_SLUGS`/`FONT_CATALOG` "IBM Plex Sans
+  Condensed" entries, updated self-hosting note.
+- `backend/pdf.py:~104-177` — `_local_font_face_css()` now also embeds a
+  `{slug}-ext.woff2` face per weight/style when present, scoped via the
+  new `_LATIN_EXT_RANGE` constant.
+- `backend/pdf.py:~1685-1700` — unconditional `IBM Plex Sans Condensed`
+  embed replacing the old unconditional `Roboto Condensed` embed.
+- `backend/page_templates/{at_a_glance,best_calendar_month,best_ever_highlights,key_highlights,main,special_steel,special_steel_trend,techno_params}.html`
+  — font-family references updated; `techno_params.html`'s major-27
+  branch also switched from hardcoded `'Roboto'` to `'IBM Plex Sans'`.
+- `backend/fonts/ibm-plex-sans-condensed/` — new self-hosted woff2 files
+  (5 latin weights + 1 latin-ext).
+- `backend/fonts/{ibm-plex-sans,ibm-plex-mono,ibm-plex-sans-condensed,source-sans-3,source-code-pro,roboto,roboto-mono,noto-sans,noto-sans-mono,lato,aptos-sub,roboto-condensed}/*-ext.woff2`
+  — new latin-ext companion file per family.
+- `backend/fonts/manifest.json` — provenance entries for all of the above.
+**Verified:** real full 65-page report generated end-to-end from live
+MySQL data (Aug 2026) with the new setup, no errors; targeted 9-page test
+renders (both before/after the ₹ fix) confirmed visually before this was
+approved for full rollout.
+
 ### 2026-09-13 — Self-host Aptos/Arial Narrow substitutes + pin backend deps
 **Commit:** `3eae680` — Self-host Aptos/Arial Narrow substitutes + pin backend deps for cross-machine determinism
 **What:** `layout_config.json`'s global `font_family` ("Aptos") and several
