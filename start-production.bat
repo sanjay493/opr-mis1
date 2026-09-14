@@ -27,6 +27,28 @@ if errorlevel 1 (
   echo MySQL already running.
 )
 
+rem Keeps this machine's venv/Chromium build in sync with whatever's
+rem committed (backend\requirements.txt is pinned to exact versions) -
+rem unpinned/drifted versions across machines is what used to cause the
+rem same report to render with a different layout and take different
+rem time to generate on different PCs. Cheap no-op when already in sync
+rem (pip/playwright both skip anything already satisfied), so safe to run
+rem on every startup rather than relying on remembering to do it by hand
+rem after a `git pull`.
+echo Syncing backend Python dependencies to the pinned versions...
+call "%~dp0backend\venv\Scripts\pip.exe" install -r "%~dp0backend\requirements.txt"
+if errorlevel 1 (
+  echo WARNING: pip install failed - continuing with whatever is already installed.
+  echo   Run manually:  backend\venv\Scripts\pip install -r backend\requirements.txt
+)
+
+echo Syncing Playwright's Chromium build to match...
+call "%~dp0backend\venv\Scripts\playwright.exe" install chromium
+if errorlevel 1 (
+  echo WARNING: playwright install failed - continuing with whatever Chromium build is already cached.
+  echo   Run manually:  backend\venv\Scripts\playwright install chromium
+)
+
 echo Starting FastAPI backend on port 8082...
 start "MIS Backend (8082)" cmd /k "cd /d %~dp0backend && venv\Scripts\python.exe main.py"
 
