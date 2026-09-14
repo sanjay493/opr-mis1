@@ -459,6 +459,96 @@ standalone recovered-and-sold quantity).
 (Lump+Fines only) → 2.846 MT (correct, +153.8 kt of Dump Fines/Tailings
 sales that month).
 
+## Page 35.4 — CO2/Water/PM EPI
+
+### 2026-09-14 — Render EPI page in genuine landscape
+**Commit:** `28672f6` — Render EPI page in genuine landscape; drop the redundant stock table (C)
+**What:** Added `"epi"` to `_LANDSCAPE_TYPES` so this page is genuinely
+spliced into the merged PDF as A4 landscape via `_render_landscape_page_pdf`,
+instead of the `@page coal-landscape-layout` CSS rule that declared
+`size: A4 landscape` but was silently ignored by Chromium's single
+portrait `page.pdf()` call for every other main-content page.
+**Why:** direct instruction — the table's many FY-to-date monthly columns
+were cramped at portrait width.
+**Files:**
+- `backend/pdf.py:1488` — `_LANDSCAPE_TYPES`.
+**Verified against:** standalone render of the real Aug'26 data measures
+842.9×595.9pt (genuine A4 landscape) with all 11 data columns laid out
+cleanly.
+
+### 2026-09-14 — Support new EPI docx layout; drop duplicate Coal Consumption extraction; preview comparisons + CPLY
+**Commit:** `f62dab5` — Support the new EPI docx layout, drop duplicate coal extraction, add EPI preview comparisons + CPLY
+**What:** `coal_co2_epi_extractor.py` now parses the new "Major EPIs" .docx
+layout (seen starting Aug'26 — one wide table, one column per period,
+including Sp. PM Emission and a Comparable-Prior-Year column) alongside
+the older "EMD Flash Report" .docx, dispatched by content
+(`_is_major_epis_docx`) not filename. All Coal Consumption extraction was
+removed from this module — `coal_omi_extractor.py` is now the sole writer
+of those 4 techno_data fields, so the two extractors can never race each
+other for the same plant/month. `/api/coal-co2/preview` now returns each
+plant's existing techno_data value next to every extracted one (not just a
+conflict flag), the report's own reported SAIL row (display-only, never
+saved), and — for formats that carry one — the Comparable-Prior-Year
+month's figures, optionally saved by `/insert` in the same call. The
+uploads page card lost its Coal Consumption columns and gained
+Existing-vs-Extracted (⚠) markers, a Till Month table, and an opt-in
+"also update CPLY" section.
+**Why:** direct instruction, after the Aug'26 report's docx silently
+extracted nothing under the old parser; the coal-extraction removal and
+preview comparisons were separate follow-up instructions in the same
+session once the overlap with Coal OMI and the missing SAIL/till-month
+display were noticed.
+**Files:**
+- `backend/techno_project/coal_co2_epi_extractor.py:387` —
+  `_extract_docx_major_epis()`.
+- `backend/techno_project/coal_co2_epi_extractor.py:554` — `extract_docx()`
+  dispatcher.
+- `backend/techno_project/coal_co2_epi_extractor.py:162` —
+  `cply_report_month_from()`.
+- `backend/techno_project/coal_co2_epi_extractor.py:763` —
+  `plant_techno_json()` (coal-key loop removed).
+- `backend/api_coal_co2_techno.py:68` — `_existing_values()`.
+- `backend/api_coal_co2_techno.py:112` — `_sail_reported()`.
+- `backend/api_coal_co2_techno.py:125` — `_month_group_preview()`.
+- `backend/api_coal_co2_techno.py:206` — `_save_month_group()` /
+  `insert_coal_co2()` (`:229`) — two-group conflict check before either
+  group is written.
+- `frontend/src/app/data-entry/uploads/page.js` — `CoalCo2ExtractRow`,
+  `EpiCompareTable`.
+**Verified against:** the real Aug'26 `.docx` and the July'26 `.xlsx`,
+read-only, against the live DB.
+
+## Page 35.5 — Coal Consumption
+
+### 2026-09-14 — Coal Consumption no longer extracted from the EPI report path
+See the 2026-09-14 entry under Page 35.4 — `coal_omi_extractor.py` is now
+the sole source of these 4 techno_data fields.
+
+## Page 35.6 — Coking Coal Receipts & Stock
+
+### 2026-09-14 — Drop redundant table (C) "Month-wise stocks at plants"
+**Commit:** `28672f6` — Render EPI page in genuine landscape; drop the redundant stock table (C)
+**What:** Removed table (C) from both the PDF (`coal_receipt_stock.html`)
+and the `/report` preview (`CoalReceiptStockTemplate.js`), and the
+now-unused `_stock_col()`/`_fy_stock_months()` helpers and
+`stock_cols_1`/`stock_cols_2`/`stock_gap_after` fields from the generator.
+**Why:** direct instruction — redundant with the 3 "Month-wise Opening
+Stock" tables directly below it, which already include the current FY as
+their own top row alongside the 3 FYs before it.
+**Files:**
+- `backend/page_coal_receipts_stock.py:107` — `generate_coal_receipts_sail()`.
+- `backend/page_coal_receipts_stock.py:79` — `_stock_history_tables()`
+  (unchanged logic, now the page's sole stock-history source).
+- `backend/page_templates/coal_receipt_stock.html:41` — table (C) markup
+  removed.
+- `frontend/src/components/CoalReceiptStockTemplate.js` — `StockTable`
+  component removed; caught and fixed mid-session as a missed preview-side
+  mirror of the same change (see `docs/DATA_MODEL_AND_REPORT_PAGES.md`'s
+  "keep the two renderers in sync" rule).
+**Verified against:** standalone render of the page with real Aug'26 data —
+table (C) absent from both the HTML and the rendered PDF, three
+opening-stock tables render cleanly right after (A)/(B).
+
 ## Frontend Reports (non-PDF pages)
 
 ### 2026-09-13 — Redesign Iron Ore Mines despatch table: full mode/end-use/material breakdown
@@ -496,6 +586,34 @@ this scale were losing meaningful precision).
 - `frontend/src/app/reports/iron-ore-mines/page.js:204` — `fmt()`.
 
 ## Cross-Page & Infrastructure
+
+### 2026-09-14 — Add Missing Data Checklist page under To-Do
+**Commit:** `e82a624` — Add Missing Data Checklist page under To-Do
+**What:** New `/todo/missing-data` page: for a selected month, checks ~46
+monthly data sources behind the OMI Report (`/report`), grouped by report
+page/section and broken out per plant/source where the underlying table
+is plant-keyed, each with the data-entry/upload page(s) that would supply
+it. Built from `docs/DATA_MODEL_AND_REPORT_PAGES.md`'s own table/page
+mapping.
+**Why:** direct instruction — a page-wise, source-wise view of what
+hasn't been submitted yet for a month, so nothing gets missed before
+generating the report.
+**Files:**
+- `backend/page_missing_data.py:123` — `generate_missing_data()`, the
+  section/check registry (see its own docstring for what's deliberately
+  excluded and why — annual/FY-keyed tables, reference data, tables not
+  yet wired into the live report).
+- `backend/page_missing_data.py:92` — `_techno_data_presence()` — one pass
+  over `techno_data` splitting plants into "other unit" (pages 27-35),
+  EPI, and Coal Consumption presence.
+- `backend/api_missing_data.py` — `GET /api/missing-data?month=YYYY-MM`.
+- `backend/main.py` — router registration.
+- `frontend/src/app/todo/missing-data/page.js` — month picker, per-section
+  status cards.
+- `frontend/src/components/GlobalNavbar.js` — nav link under To-Do.
+**Verified against:** the live DB for Aug'26 (read-only) — 9 of 46 sources
+correctly flagged missing, including Coal Consumption (consistent with
+the 2026-09-14 Page 35.4/35.5 entries above removing that extraction path).
 
 ### 2026-09-14 — Auto-sync pinned deps + Chromium build on every startup
 **Commit:** `2aea24b` — Auto-sync pinned backend deps + Chromium build on every startup
