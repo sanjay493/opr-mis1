@@ -49,6 +49,39 @@ re-discovering the whole area from scratch.
 
 ## Page 2.1 — Steel Sector Performance (Production & Prices)
 
+### 2026-09-14 — Taller Steel Prices Trend chart (vh 85->98), rebalanced to still fit one page
+**Commit:** `3ec302d` — Taller/clearer report tables and charts: pages 2.1, 2.5, 3, 3.5
+**What:** The Steel Prices Trend chart's `vh` grew from 85 to 98 (a ~15%
+taller chart, more room around each point's value label). On its own this
+pushed page 2.1 onto a 2nd physical page, so 3 things were freed to pay for
+it, page-2.1-only: `.ssp-prodprices-section`'s trailing `padding-bottom:
+10mm` (pure dead space below the chart, reclaimed to 0), the "~1.5 line"
+24px margin-top above `.ssp-section-heading`/`.ssp-table-heading` dialed
+back to 14px ("~1 line", still clearly separate from the tight 2-6px used
+elsewhere), and the chart block's own 24px margin-top down to 10px. Page
+2.2 (NMDC chart) is untouched — same shared rules, split into page-specific
+`.pg-2-1`/`.pg-2-2` selectors so 2.2 keeps the original 24px/vh throughout.
+**Why:** direct instruction — give the chart's per-point value labels
+clearer space, while keeping the whole page on one physical sheet.
+**Files:**
+- `backend/page_steel_sector_performance.py:371` — `vh=85` -> `vh=98`.
+- `backend/page_templates/main.html:645-652` — `.ssp-prodprices-section`
+  padding-bottom 10mm -> 0.
+- `backend/page_templates/main.html:1788-1822` — split `.pg-2-1`/`.pg-2-2`
+  selectors apart; `.pg-2-1`'s heading margins 24px->14px, chart-block
+  margin-top 24px->10px (`.pg-2-2` unchanged).
+**Verified:** real `page.pdf()` renders (a plain file://-loaded print-media
+DOM height check disagreed with actual Chromium pagination by several mm
+and was abandoned) across all 3 archived months (2026-06/07/08) — vh=100
+still fit, vh=102 already spilled to a 2nd page, so vh=98 was chosen for a
+safety margin; all 3 months confirmed one physical page at vh=98.
+**Known issues:** page 2.2 (NMDC chart) was found to *already* spill onto a
+2nd physical page even before this change, unrelated to it — pre-existing,
+introduced by an earlier, apparently unverified pass (`fed0245`, "~1.5-line
+separation") that added the same margin-top gaps to both pages without a
+compensating cut for 2.2. Left alone since it's outside this change's
+scope; needs its own fix.
+
 ### 2026-09-13 — Table 1b table-layout:fixed (no right-margin overflow) + compact mode
 **Commit:** `1000a76` — Steel Sector pages 2.1/2.2: compact mode so bottom chart fits on page
 **What:** Table 1b's `table-layout:auto` + `width:1%` label-column trick
@@ -185,6 +218,33 @@ chart under Table 4a (Lump/Fines), built by the same aggregator as Page
 
 ## Page 2.5 — At-a-Glance
 
+### 2026-09-14 — Value Added Steel charts fill their block's full height
+**Commit:** `3ec302d` — Taller/clearer report tables and charts: pages 2.1, 2.5, 3, 3.5
+**What:** `five_year_svg`/`quarter_svg` (the "Last 5 Years" and "Quarter
+Just Ended vs CPLY" combo charts) grew from `vh=245` (both) to `vh=341`
+and `vh=322` respectively. Their row (`five_year_svg` / `quarter_svg` /
+the "For the Month" text column, `align-items:center`) is only ever as
+tall as its tallest child — the text column — and at vh=245 both charts
+rendered shorter than that at their own flex-allocated width, so
+`align-items:center` centered them inside the leftover vertical space
+instead of filling it (visible as short bars with dead space above and
+below). Each chart's vh is raised just enough — not the same ratio for
+both, since their flex widths differ — to render at exactly the text
+column's height, so bars now use the block's full available height with
+zero leftover margin, and the block itself doesn't grow.
+**Why:** direct instruction — the two bar charts read as short, with
+wasted bottom margin, and should use the full available height of their
+block.
+**Files:**
+- `backend/page_at_a_glance.py:905-923` — `_special_steel_section()`'s
+  `five_year_svg`/`quarter_svg` calls' `vh=`.
+**Verified:** measured via a real render that both charts now match the
+row's height (~51.6mm) almost exactly (previously ~12-14mm short) across
+2026-06/07/08. Confirmed the page's pre-existing 2nd-page spill (the
+Semis-by-plant table's Total row only) is unchanged by this — same at the
+old vh=245 and the new vh, so it's unrelated to this change, not a
+regression.
+
 ### 2026-09-13 — Fix page-2 spill: stray div bug + chart/table size trims
 **Commit:** `f7b9cad` — At-a-Glance page: fix page-2 spill, trim chart sizes and stray div bug
 **What:** Removed a stray `</div><div>` pair in `at_a_glance.html`
@@ -269,6 +329,27 @@ larger text room (and re-check the semis table still fits after).
 
 ## Page 3 — SAIL Performance Summary
 
+### 2026-09-14 — A bit more row padding on both tables
+**Commit:** `3ec302d` — Taller/clearer report tables and charts: pages 2.1, 2.5, 3, 3.5
+**What:** `.pg-3 .report-table th/td` vertical padding 7px -> 9px (horizontal
+stays 6px) — affects both of page 3's tables (Production and TE
+Parameters), same shared rule.
+**Why:** direct instruction — rows on both tables read as cramped.
+**Files:**
+- `backend/page_templates/main.html:1141-1148` — `.pg-3 .report-table`
+  padding.
+**Known issues:** this is the STATIC default only. Page 3 also has its own
+overflow-recovery mechanism (`pdf.py`'s `_measure_page3_overflow`,
+triggered per-month since narrative/highlights length and which TE
+parameters have values both vary) that force-overrides table padding down
+to a hard-coded 0.5px (`_generate_pdf_sync`'s `_p3_entry["tablePaddingV"]`)
+whenever a month's content would otherwise spill page 3 onto a 2nd
+physical page — confirmed 2026-08 trips this (collapses back to the old
+tight spacing regardless of this change), while 2026-06/07 don't (get the
+new 9px). Tried raising that 0.5px override to 2px to match — broke 2026-08
+into 4 physical pages instead of 1, so left at 0.5px; a real fix would need
+its own dedicated pass, not a quick padding bump.
+
 ### 2026-09-13 — 12pt typography pass + dynamic layout
 **Commit:** `7281674` — Page 3 (SAIL Performance Summary): 12pt typography pass + dynamic layout
 **What:**
@@ -316,6 +397,32 @@ actually has.
 — table padding/font legible, Parameter column stayed on one line for
 "Specific Energy Consumption" (the longest name), all 4 charts rendered
 with no overlap, whole page still fit on one physical page.
+
+## Page 3.5 — Inter Plant Performance Comparison
+
+### 2026-09-14 — Larger font, more row padding, filling the free page space
+**Commit:** `3ec302d` — Taller/clearer report tables and charts: pages 2.1, 2.5, 3, 3.5
+**What:** `key_parameters.html`'s table (~54 rows across the Parameter/UoM/
+5-plant columns) grew from 8pt font / 1.6px vertical cell padding to
+8.2pt / 2px. Both the outer wrapper `font-size` and the table's own are
+bumped together so nothing falls out of sync.
+**Why:** direct instruction — rows read as cramped, and the page had
+~21mm of unused space below the table (at 300dpi print margins, verified
+by measuring the table's real bottom border against the footer's own top
+edge in a rendered PDF).
+**Files:**
+- `backend/page_templates/key_parameters.html:1-38` — wrapper/table
+  `font-size` and every cell's `padding` (header, section-label rows, data
+  rows).
+**Verified:** real `page.pdf()` renders — first tried 8.5pt/2.5px (using
+the full ~21mm), which overflowed 4 rows onto a 2nd physical page (that
+budget includes AFTER the row grows, not before — a ~16% per-row growth
+needed only ~9% of headroom, the rest was consumed by every one of the
+~54 rows growing together). Backed off to 8.2pt/2px (~7% per-row growth),
+which leaves ~10mm of margin at the bottom of the page across both
+archived months checked (2026-06, 2026-08) — kept short of the full ~21mm
+on purpose, as a safety margin against any month whose row count/wrapping
+differs slightly.
 
 ## Page 4.5 — SAIL Mines
 
