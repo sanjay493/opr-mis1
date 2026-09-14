@@ -31,14 +31,28 @@ PDF, old "Major Environmental Performance Indicators" style (2 pages,
     ("Consumption of Coking Coal"), not a fixed page index, for exactly
     that reason.
 
-DOCX, "EMD Flash Report" .docx (seen starting Jul'26) — a slimmer
-  preliminary release: a single table with Specific Water Consumption /
-  Specific CO2 Emission (each Target / <month> / FY-cumulative sub-columns)
-  and BF Slag Utilisation (not currently stored). No Coal Consumption table
-  at all (that's a separate .pdf attachment for this format, if sent).
-  Columns are located by header text via python-docx's table grid (merged
-  header cells repeat their text across every column they span), not fixed
-  indices, for the same month-to-month resilience as the old PDF path.
+DOCX, "EMD Flash Report" .docx (seen Jul'26 only) — a slimmer preliminary
+  release: a single table with Specific Water Consumption / Specific CO2
+  Emission (each Target / <month> / FY-cumulative sub-columns) and BF Slag
+  Utilisation (not currently stored). No Sp. PM Emission or Coal
+  Consumption table at all (that's a separate .pdf attachment for this
+  format, if sent). Columns are located by header text via python-docx's
+  table grid (merged header cells repeat their text across every column
+  they span), not fixed indices, for the same month-to-month resilience as
+  the old PDF path. Parsed by _extract_docx_flash_report().
+
+DOCX, "Major EPIs" .docx (seen starting Aug'26) — the same underlying
+  "Major Environmental Performance Indicators (EPIs)" report as the old
+  PDF/xlsx formats above, just delivered as a single wide Word table: one
+  column per period (month, FY-cumulative, comparable-prior-year month/
+  cumulative, annual target), one "Parameters"/"Plant" row per plant per
+  parameter (all 3 params, including Sp. PM Emission — unlike the Flash
+  Report .docx above). No Coal Consumption table. Distinguished from the
+  Flash Report .docx by _is_major_epis_docx() (its "Parameters"/"Plant"
+  header columns) and parsed by _extract_docx_major_epis(); extract_docx()
+  dispatches between the two by that check, not by report date, since a
+  filename/date alone can't be trusted to predict which layout a given
+  upload uses.
 
 PDF, "EMD Flash Report" style (2 pages, page-1 title HAS "EMD Flash Report"
   text) — the same Flash Report as the .docx above, just delivered as a PDF
@@ -62,8 +76,8 @@ XLSX, "Major EPIs <Mon>'<YY>.xlsx" workbook — see extract_xlsx()'s own
   api_coal_co2_techno.py's /preview and /insert), not just the standalone
   load_xlsx() script entry point.
 
-Every format but the old PDF carries no Sp. PM Emission (the old PDF always
-has it) — enviro's "pm" key is simply absent then, and neither format but
+Every format but the old PDF and the "Major EPIs" .docx carries no Sp. PM
+Emission — enviro's "pm" key is simply absent then, and no format but
 the old/Flash PDF carries a Coal Consumption table, and
 plant_techno_json()/plant_till_techno_json() treat every param key as
 optional so whatever a given report doesn't carry is left unset (not
@@ -418,17 +432,101 @@ def extract_pdf(pdf_path, report_month: str, mlabel: str) -> dict:
     }
 
 
-def extract_docx(docx_path, report_month: str, mlabel: str) -> dict:
+def _is_major_epis_docx(table) -> bool:
+    """True for the newer "Major EPIs" .docx format (seen starting Aug'26) -
+    identified by its "Parameters"/"Plant" header columns, which the older
+    "EMD Flash Report" .docx table never has (that one's first column is the
+    merged per-parameter header, e.g. "Specific CO2 Emission")."""
+    def cell(r, c):
+        return _norm(table.cell(r, c).text.strip()).lower()
+    return cell(0, 0) == "parameters" and cell(0, 1) == "plant"
+
+
+def _extract_docx_major_epis(table, report_month: str, mlabel: str) -> dict:
+    """Extract from the newer "Major EPIs" .docx format (seen starting
+    Aug'26) - the same underlying "Major Environmental Performance
+    Indicators (EPIs)" report as the old PDF/xlsx formats, just delivered as
+    a single wide Word table instead: one column per period, located by its
+    own header text in row 2 (0-indexed 1) - e.g. "Aug'26" (month),
+    "Apr.-Aug'26" (FY-cumulative, no space after the dash - unlike
+    extract_xlsx's "Apr.- <mlabel>"), "2026-27" (annual target) - column
+    position isn't fixed, same resilience approach as extract_xlsx. Row
+    layout: 3 fixed parameter blocks (Sp. CO2 Emission, Sp. Water
+    Consumption, Sp. PM Emission, same ENVIRO_PARAM_ORDER as every other
+    format), each with exactly 6 plant rows (BSP/DSP/RSP/BSL/ISP/SAIL, in
+    that order) located by its own "BSP" cell in the Plant column, mirroring
+    extract_xlsx's _xlsx_block_starts. Unlike the old "EMD Flash Report"
+    .docx, this format DOES carry Sp. PM Emission.
+    -> {"co2": {"month": {...}, "till_month": {...}, "target": {...}}, "water": ..., "pm": ...}"""
+    n_rows, n_cols = len(table.rows), len(table.columns)
+
+    def cell(r, c):
+        return _norm(table.cell(r, c).text.strip())
+
+    header_row = None
+    for r in range(min(n_rows, 5)):
+        if any(cell(r, c) == mlabel for c in range(n_cols)):
+            header_row = r
+            break
+    if header_row is None:
+        raise ValueError(
+            f"'{mlabel}' column not found — check the selected month matches the uploaded file")
+
+    def find_col(label):
+        for c in range(n_cols):
+            if cell(header_row, c) == label:
+                return c
+        return None
+
+    year, mon_num = report_month.split("-")
+    mon_num = int(mon_num)
+    fy = int(year) if mon_num >= 4 else int(year) - 1
+    target_label = f"{fy}-{(fy + 1) % 100:02d}"
+    # April has no "Apr.-Apr'YY" cumulative column (same edge case as
+    # till_mlabel_from_report_month) - cumulative simply isn't read for an
+    # April report_month.
+    till_label = f"Apr.-{mlabel}" if mon_num != 4 else None
+
+    month_c = find_col(mlabel)
+    target_c = find_col(target_label)
+    till_c = find_col(till_label) if till_label else None
+
+    plants_seq = PLANTS + ["SAIL"]
+    block_starts = [r for r in range(n_rows) if cell(r, 1) == "BSP"]
+    if len(block_starts) != len(ENVIRO_PARAM_ORDER):
+        raise ValueError(
+            f"expected {len(ENVIRO_PARAM_ORDER)} parameter blocks (one 'BSP' row each in the "
+            f"Plant column), found {len(block_starts)} in this .docx table")
+
+    def parse_block(start_row):
+        month_vals, till_vals, target_vals = {}, {}, {}
+        for i, plant in enumerate(plants_seq):
+            r = start_row + i
+            got = cell(r, 1) if r < n_rows else None
+            if got != plant:
+                raise ValueError(
+                    f"unexpected plant label {got!r} at row {r} (expected {plant!r})")
+            for col, into in ((month_c, month_vals), (till_c, till_vals), (target_c, target_vals)):
+                if col is None:
+                    continue
+                v = cell(r, col)
+                if v:
+                    try:
+                        into[plant] = float(v)
+                    except ValueError:
+                        pass
+        return {"month": month_vals, "till_month": till_vals, "target": target_vals}
+
+    return {key: parse_block(start_row)
+            for (key, _label, _jk), start_row in zip(ENVIRO_PARAM_ORDER, block_starts)}
+
+
+def _extract_docx_flash_report(table, report_month: str, mlabel: str) -> dict:
     """Extract Sp. CO2 Emission / Sp. Water Consumption from the "EMD Flash
     Report" .docx format's single table, including its FY-cumulative
     ("Apr'YY-<mlabel>") column into "till_month". No Sp. PM Emission or Coal
     Consumption data exists in this report, so the returned dict has no
     "pm" key. -> {"co2": {"month": {...}, "till_month": {...}, "target": {...}}, "water": ...}"""
-    import docx as _docx
-    doc = _docx.Document(docx_path)
-    if not doc.tables:
-        raise ValueError("no tables found in the .docx report")
-    table = doc.tables[0]
     n_rows, n_cols = len(table.rows), len(table.columns)
     if n_rows < 3:
         raise ValueError(f"expected a header + data table, got only {n_rows} row(s)")
@@ -489,6 +587,23 @@ def extract_docx(docx_path, report_month: str, mlabel: str) -> dict:
         "co2":   block("CO2", "Specific CO2 Emission"),
         "water": block("Water", "Specific Water Consumption"),
     }
+
+
+def extract_docx(docx_path, report_month: str, mlabel: str) -> dict:
+    """Dispatches to whichever .docx table layout this report uses - the
+    newer "Major EPIs" format (see _extract_docx_major_epis, seen starting
+    Aug'26) or the older "EMD Flash Report" format (see
+    _extract_docx_flash_report) - distinguished by _is_major_epis_docx's
+    header check, the same "identify by content, not filename/order" stance
+    the rest of this module takes."""
+    import docx as _docx
+    doc = _docx.Document(docx_path)
+    if not doc.tables:
+        raise ValueError("no tables found in the .docx report")
+    table = doc.tables[0]
+    if _is_major_epis_docx(table):
+        return _extract_docx_major_epis(table, report_month, mlabel)
+    return _extract_docx_flash_report(table, report_month, mlabel)
 
 
 def _xlsx_norm(v) -> str:
@@ -655,9 +770,11 @@ def load_xlsx(xlsx_path, report_month: str, write: bool = True) -> dict:
 
 def extract_report(path, report_month: str, mlabel: str) -> dict:
     """Dispatches to the PDF, .docx or .xlsx extractor by file extension.
-    -> {"enviro": {...}, "coal": {...}} — for .docx and .xlsx, "enviro" has
-    no "pm"/"target" (.docx) or no "target" (.xlsx) keys and "coal" is
-    always {}, since those reports don't carry those figures;
+    -> {"enviro": {...}, "coal": {...}} — "coal" is always {} for .docx and
+    .xlsx (neither carries a Coal Consumption table); "enviro" has no "pm"
+    key for the older "EMD Flash Report" .docx or for .xlsx, and no
+    "target" key for .xlsx (see extract_xlsx's docstring) — the newer
+    "Major EPIs" .docx has both;
     plant_techno_json()/plant_till_techno_json() treat every key as
     optional. For .xlsx, extract_xlsx() also returns the comparable-prior-
     year month's figures (see its docstring) - this entry point only
