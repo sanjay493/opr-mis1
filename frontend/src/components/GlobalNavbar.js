@@ -134,7 +134,8 @@ export default function GlobalNavbar() {
       icon: '✅',
       submenu: [
         { label: 'Upcoming Jobs', link: '/todo', icon: '✅' },
-        { label: 'Daily Work Log', link: '/worklog', icon: '📝' }
+        { label: 'Daily Work Log', link: '/worklog', icon: '📝' },
+        { label: 'Missing Data Checklist', link: '/todo/missing-data', icon: '📋' }
       ]
     }
   ];

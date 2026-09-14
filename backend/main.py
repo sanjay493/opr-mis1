@@ -315,6 +315,7 @@ from api_coal_omi_techno import router as coal_omi_techno_router
 from api_power_omi import router as power_omi_router
 from api_todo import router as todo_router
 from api_worklog import router as worklog_router
+from api_missing_data import router as missing_data_router
 from api_auth import router as auth_router
 from api_admin import router as admin_router
 from api_admin_backup import router as admin_backup_router
@@ -640,6 +641,7 @@ app.include_router(coal_omi_techno_router)
 app.include_router(power_omi_router)
 app.include_router(todo_router)
 app.include_router(worklog_router)
+app.include_router(missing_data_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_backup_router)
