@@ -390,6 +390,20 @@ this scale were losing meaningful precision).
 
 ## Cross-Page & Infrastructure
 
+### 2026-09-14 — Auto-sync pinned deps + Chromium build on every startup
+**Commit:** `2aea24b` — Auto-sync pinned backend deps + Chromium build on every startup
+**What:** `start-development.bat` and `start-production.bat` now run
+`pip install -r backend/requirements.txt` then
+`playwright install chromium` right before launching the backend.
+**Why:** the pinning work in the 2026-09-13 entry below only helps if
+every machine actually re-syncs to it — this closes the "forgot to
+`pip install` after `git pull`" gap that let this machine and the office
+PC drift onto different dependency/Chromium versions to begin with. Both
+commands are no-ops when already in sync (verified on this machine).
+**Files:**
+- `start-development.bat`, `start-production.bat` — sync step inserted
+  between the MySQL check and the backend launch.
+
 ### 2026-09-14 — Adopt IBM Plex Sans as the real font default; fix missing ₹
 **Commit:** `207666e` — Adopt IBM Plex Sans as the real font default; fix missing Rupee sign (₹)
 **What:** Replaced the Hanken Grotesk/Roboto Condensed stand-ins from the
