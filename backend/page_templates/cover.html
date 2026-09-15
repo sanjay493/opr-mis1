@@ -27,10 +27,10 @@
                             <div class="page1-hex page1-hex-{{ loop.index0 }}{% if k.kind == 'ore' %} page1-hex--ore{% endif %}">
                                 <div class="page1-hex-border"></div>
                                 <div class="page1-hex-inner">
-                                    <svg class="page1-hex-icon" viewBox="0 0 24 24">
+                                    <!-- <svg class="page1-hex-icon" viewBox="0 0 24 24">
                                         {{ (kpi_icons.get(k.label, '') | replace('{c}', accent)) | safe }}
-                                    </svg>
-                                    <div class="page1-hex-label">{{ k.label }}</div>
+                                    </svg> -->
+                                    <div class="page1-hex-label">{{ k.label }}  </div>
                                     <div class="page1-hex-value">{{ k.mt }}<span class="page1-hex-unit">MT</span></div>
                                     <div class="page1-hex-sub">
                                         APP {{ k.pct_ful }}%

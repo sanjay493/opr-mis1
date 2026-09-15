@@ -559,9 +559,9 @@
            the page's overall vertical budget and push table 1c + the price
            chart onto a 2nd page. */
         .ssp-table-1b .ssp-table thead th {
-            padding-top: 3px;
-            padding-bottom: 3px;
-            font-size: 10.5pt;
+            padding-top: 3.5px;
+            padding-bottom: 3.5px;
+            font-size: 12t;
             line-height: 1.15;
         }
         .ssp-share-bracket {
@@ -599,21 +599,21 @@
             color: {{ colors.text_black }};
         }
         .ssp-note {
-            font-size: 12pt;
+            font-size: 9pt;
             font-style: italic;
             color: {{ colors.text_black }};
-            margin-top: 3px;
-            padding-bottom: 9px;
+            margin-top: 1px;
+            padding-bottom: 1px;
         }
         .ssp-para {
             font-size: 12pt;
-            line-height: 1.7;
+            line-height: 1.5;
             margin:10px;
             text-align: justify;
             color: {{ colors.text_black }};
         }
         .ssp-policy-section {
-            padding: 10mm;
+            padding: 8mm;
         }
         .ssp-prodprices-section {
             /* was 10mm — pure trailing dead space below the last element
@@ -961,7 +961,8 @@
         .page1-hex-inner {
             position: absolute;
             inset: 1.2px;
-            background: linear-gradient(155deg, #ffffff 45%, #e5edfb);
+            background:#ffffff;
+        
             clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
             display: flex;
             flex-direction: column;
@@ -981,9 +982,9 @@
             margin-bottom: 1px;
         }
         .page1-hex-label {
-            font-size: 8.5pt;
-            font-weight: 700;
-            color: {{ colors.cover_navy_dark }};
+            font-size: 9pt;
+            font-weight: 800;
+            color: {{ colors.cover_label }};
             text-transform: capitalize;
             letter-spacing: 0.01em;
             line-height: 1.03;
@@ -991,7 +992,7 @@
         .page1-hex-value {
             font-size: 13pt;
             font-weight: 800;
-            color: {{ colors.cover_royal_blue }};
+            color: {{ colors.cover_value }};
             line-height: 1.28;
         }
         .page1-hex-unit {
@@ -1149,16 +1150,44 @@
            supposed to show it — box-shadow draws outside the collapsed
            border model entirely, so it can't lose that fight. */
         .page4-table { table-layout: fixed; width: 100%; box-shadow: 0 0 0 1px {{ colors.border_black }}; }
-        .page4-table th { font-size: 8.1pt; padding: 1.8px 2px; line-height: 1.05; font-family: 'Roboto', sans-serif !important; }
-        .page4-table td { font-size: 8.2pt; padding: 1.8px 2px; line-height: 1.05; }
+        .page4-table th { font-size: 8pt; padding: 1.8px 1px; line-height: 1.05; font-family: Arial Narrow !important; }
+        .page4-table td { font-size: 8pt; padding: 1.8px 1px; line-height: 1.05; }
         .page4-table th, .page4-table td { color: {{ colors.text_black }} !important; }
-        .page4-table col.c-items    { width:  8%; }
-        .page4-table col.c-plant    { width:  6%; }
-        .page4-table col.c-cap      { width:5.5%; }
-        .page4-table col.c-ann      { width:  7%; }
-        .page4-table col.c-num      { width:  6%; }
-        .page4-table col.c-num-sm   { width:5.5%; }
+        /* .page4-table col.c-items    { width: fit-content; }
+        .page4-table col.c-plant    { width:  fit-content; }
+        .page4-table col.c-cap      { width:fit-content; }
+        .page4-table col.c-ann      { width:  fit-content; }
+        .page4-table col.c-num      { width:  fit-content; }
+        .page4-table col.c-num-sm   { width:fit-content; } */
 
+        /* ---------- Page 4 column widths (WeasyPrint friendly) ---------- */
+
+            /* Items */
+            .page4-table col.c-items  { width: 50px; }
+
+            /* Plant names never wrap */
+            .page4-table col.c-plant  { width: 28px; }
+
+            /* Annual Capacity */
+            .page4-table col.c-cap    { width: 32px; }
+
+            /* APP column */
+            .page4-table col.c-ann    { width: 32px; }
+
+            /* Normal numeric columns (APP / Act / Var) */
+            .page4-table col.c-num    { width: 35px; }
+
+            /* Compact percentage columns (%Ful, %Gr, CU%) */
+            .page4-table col.c-num-sm { width: 22px; }
+
+
+            /* Compact headers only */
+.page4-table thead th.hdr-small {
+    font-size: 6.8pt !important;
+    line-height: 0.95;
+    padding: 1px 0;
+    font-family: Arial Narrow !important;
+}
         /* Same doubled-line issue as item-group-cell above, but for every
            other cell touching the table's outer edge: the header row's own
            top border, every row's first/last actual cell (left/right), and
@@ -1222,8 +1251,8 @@
            row where it's not itself group-first. */
         .page4-table td.item-group-cell,
         .page4-table td.page4-col1-label {
-            font-size: 8.2pt !important;
-            font-family: 'Roboto', sans-serif !important;
+            font-size: 8pt !important;
+            font-family: Arial Narrow !important;
         }
 
         /* Annual Capacity column — slightly more intense than the shared
@@ -1766,13 +1795,13 @@
         }
         .pg-2-1 .ssp-title, .pg-2-2 .ssp-title { font-size: 14pt; margin-bottom: 2px; }
         .pg-2-1 .ssp-subtitle, .pg-2-2 .ssp-subtitle { font-size: 10.5pt; margin-bottom: 3px; }
-        .pg-2-2 .ssp-section-heading { font-size: 11pt; margin: 24px 0 2px; padding-bottom: 2px; }
+        .pg-2-2 .ssp-section-heading { font-size: 11pt; margin: 15px 0 2px; padding-bottom: 2px; }
         .pg-2-2 .ssp-table-heading { font-size: 11pt; margin: 24px 0 2px; padding-bottom: 2px; }
         .pg-2-1 .ssp-table, .pg-2-2 .ssp-table { font-size: 10.5pt; margin-bottom: 1px; }
         .pg-2-1 .ssp-table th, .pg-2-1 .ssp-table td,
         .pg-2-2 .ssp-table th, .pg-2-2 .ssp-table td { padding: 3px; }
         .pg-2-1 .ssp-share-bracket, .pg-2-2 .ssp-share-bracket { font-size: 9.5pt; }
-        .pg-2-1 .ssp-note, .pg-2-2 .ssp-note { font-size: 10.5pt; margin-top: 0; padding-bottom: 2px; }
+        .pg-2-1 .ssp-note, .pg-2-2 .ssp-note { font-size: 10pt; margin-top: 0; padding-bottom: 1px; }
         .pg-2-1 .ssp-table-1b .ssp-table thead th { font-size: 9.5pt; padding-top: 1px; padding-bottom: 1px; }
         /* Direct instruction: every numbered section (1/2/3/4/5) and table
            (1a/1b/1c/2/3a/4a/5) heading, plus each page's price-trend chart,
@@ -1799,10 +1828,10 @@
            media measurement closely enough to trust) across all 3 archived
            months (2026-06/07/08): vh=100 still fits, vh=102 already
            spills to a 2nd page, so vh=98 is used for margin. */
-        .pg-2-1 .ssp-section-heading { font-size: 11pt; margin: 14px 0 2px; padding-bottom: 2px; }
-        .pg-2-1 .ssp-table-heading { font-size: 11pt; margin: 14px 0 2px; padding-bottom: 2px; }
-        .pg-2-1 .ssp-chart-block { margin-top: 10px !important; }
-        .pg-2-2 .ssp-chart-block { margin-top: 24px !important; }
+        .pg-2-1 .ssp-section-heading { font-size: 12pt; margin: 2px 0 2px; padding-bottom: 2px; }
+        .pg-2-1 .ssp-table-heading { font-size: 12pt; margin: 2px 0 2px; padding-bottom: 2px; }
+        .pg-2-1 .ssp-chart-block { margin-top: 4px !important; }
+        .pg-2-2 .ssp-chart-block { margin-top: 4px !important; }
     </style>
     {% if page_layouts %}
     <style>

@@ -106,9 +106,12 @@ _ROW_KEYS = [
     "_coke_ash", "_sinter_fe", "lump_ore_fe", "pellet_fe", "_avg_burden_fe",
     "slag_rate", "hot_blast_temp", "o2_enrichment", "steam_rate_hr", "top_pressure",
     "silicon_in_hm", "sulphur_in_hm", "avg_hot_metal_temperature",
-    "slag_mgo", "slag_al2o3", "slag_b2", "eta_co", "heat_load_flux",
+    "slag_mgo", "slag_al2o3", "slag_b2", "eta_co",
     "tapping_duration", "availability", "utilisation",
 ]
+
+#  "heat_load_flux",
+
 
 _SPECIAL_ROWS = {
     "_avg_daily_rate":         ("Avg. Daily Rate", "TPD"),
@@ -611,7 +614,12 @@ def generate_bf_large_annexure(report_month: str) -> dict:
                 sail_out[bf_label] = out
                 continue
             sail_out[bf_label] = {p: _clean(pvals.get(p), dp) for p in periods}
-        rows.append({"parameter": label, "unit": unit, "sail": sail_out})
+        # "key" (the internal _ROW_KEYS entry, e.g. "_avg_daily_rate") rides
+        # along separately from "parameter" (its display label, e.g. "Avg.
+        # Daily Rate") so the template's _highlight_rows list - written in
+        # terms of these internal keys - can match rows without having to
+        # duplicate/maintain a second list of display labels.
+        rows.append({"parameter": label, "unit": unit, "key": key, "sail": sail_out})
 
     period_defs = [{"key": "prev_fy", "label": prev_fy_col_label, "kind": "prev_fy"},
                    {"key": "abp", "label": f"ABP Targets for<br/>{fy_label}", "kind": "abp"}]

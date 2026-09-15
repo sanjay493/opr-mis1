@@ -216,7 +216,7 @@ def _declutter_1d(values: list, min_gap: float, iterations: int = 6) -> list:
 
 
 def _trend_line_svg(labels: list, series: dict, colors: dict,
-                     vw: int = 480, vh: int = 108) -> str:
+                     vw: int = 480, vh: int = 112) -> str:
     # No Y-axis (removed along with its value labels — every data point is
     # already labeled directly on its line/bar, so the axis scale was
     # redundant).
@@ -236,13 +236,20 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
              f'style="width:100%;height:auto;display:block;">']
 
     # No gridlines; every point already carries its own value label, so the
-    # axis scale is redundant.
+    # axis scale is redundant. The y-range is zoomed to the data's own
+    # min/max (not anchored at 0) so the line's actual shape fills the
+    # plot area instead of hugging the top of a mostly-empty chart — safe
+    # to do since there's no axis scale/ticks a reader could misjudge
+    # against (see the class-level comment above), and the base line at
+    # y=base is purely a decorative floor for the month labels, not a
+    # value reference.
     all_vals = [v for vals in series.values() for v in vals if v is not None]
-    yhi = max(all_vals) * 1.15 if all_vals else 10.0
-    yhi = max(yhi, 5.0)
+    yhi = max(all_vals) * 1.08 if all_vals else 10.0
+    ylo = min(all_vals) * 0.9 if all_vals else 0.0
+    yhi = max(yhi, ylo + 5.0)
 
     def ys(v):
-        return mt + ch * (1.0 - v / yhi)
+        return mt + ch * (1.0 - (v - ylo) / (yhi - ylo))
 
     # Each series' data labels sit on a fixed side of its own line (above for
     # the first series, below for the second) rather than both hugging their
@@ -253,7 +260,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
         pts = [(xs(i), ys(v)) for i, v in enumerate(vals) if v is not None]
         if len(pts) > 1:
             d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in pts)
-            lines.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.6"/>')
+            lines.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.2"/>')
         label_dy = -6 if si == 0 else 12
         for i, v in enumerate(vals):
             if v is None:
@@ -280,7 +287,7 @@ def _trend_line_svg(labels: list, series: dict, colors: dict,
 
     for i, label in enumerate(labels):
         lines.append(f'<text x="{xs(i):.1f}" y="{base + 12:.1f}" text-anchor="middle" '
-                     f'font-size="8" font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
+                     f'font-size="7" font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
 
     lines.append("</svg>")
     return "\n".join(lines)
@@ -345,10 +352,10 @@ def _semis_table_html(labels: list, semis_by_month: dict) -> str:
     )
 
     return (
-        f'<div style="margin-top:2px;display:flex;justify-content:space-between;align-items:baseline;">'
-        f'<div style="font-size:12pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px; padding:2px">'
+        f'<div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:2px">'
+        f'<div style="font-size:10.5pt;font-weight:700;color:{_SEMIS_INK};margin-bottom:1px; padding:2px">'
         f'Semis by plant (\'000T &amp; %)</div>'
-        f'<div style="font-size:10.5pt;font-style:italic;font-weight:600;color:{_SEMIS_OWN_PCT_COLOR};">'
+        f'<div style="font-size:9.5pt;font-style:italic;font-weight:600;color:{_SEMIS_OWN_PCT_COLOR};">'
         f'% = share of plant\'s own Saleable Steel</div>'
         f'</div>'
         f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:10.5pt;">'
@@ -380,7 +387,7 @@ def _bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
 
 def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
                         vw: int = 980, vh: int = 250) -> str:
-    ml, mr, mt, mb = 34, 10, 46, 40
+    ml, mr, mt, mb = 34, 10, 14, 40
     cw, ch = vw - ml - mr, vh - mt - mb
 
     all_vals = [v for item in items for (_, v) in data[item] if v is not None]
@@ -762,7 +769,14 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
         legend2_y = legend_y + row_gap
         lx2 = 10
 
-    ml, mr, mt, mb = 10, 10, legend2_y + 34, 80
+    # mb reserves room below the bars for the (up to 2-line) category label
+    # - main_cat at +18, sub_cat (the "(YTD rate)"-style annotation, only
+    # when present) at +32, so ~35-38 units actually get used; was 80 (more
+    # than double that) leaving a visible dead band at the very bottom of
+    # the chart once vh dropped from 300 to 250 (2026-09-15, direct
+    # instruction - grow the bars into that leftover space instead of
+    # widening vh again).
+    ml, mr, mt, mb = 10, 10, legend2_y + 34, 45
     cw, ch = vw - ml - mr, vh - mt - mb
     sub_fs = round(label_fs * 7.5 / 11, 1)  # keep the (YTD rate)-style sub-annotation's size proportional to label_fs, same ratio as the original 7.5-vs-11 pair
 
@@ -902,29 +916,26 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
         "special_pct": sail.get("special_pct", {}).get("current", ""),
         "month_title": f"For the Month ({month_label})",
         "month_qty": month_qty,
-        # vh 245 (both charts) left visible blank margin above/below the
-        # bars: at_a_glance.html's row (`five_year_svg`/`quarter_svg`/the
-        # "For the Month" text column, `align-items:center`) is only as
-        # tall as its tallest child, the text column — at each chart's own
-        # flex-allocated WIDTH, vh=245 rendered shorter than that (width:
-        # 100%;height:auto scales height off vw:vh, and width is fixed by
-        # flex-basis), so `align-items:center` centered each chart inside
-        # extra vertical space instead of filling it. Direct instruction
-        # (2026-09-14) — bars read as short with wasted margin. vh raised
-        # just enough per chart (560:341 / 300:322, not the same ratio —
-        # each chart's own flex width differs) so both now render at
-        # exactly the text column's height, filling the row with zero
-        # dead space, without growing the row itself (verified: rendering
-        # at the old vh=245 and the new vh here produces the identical
-        # 1-row spill of the Semis-by-plant table's Total row onto page 2
-        # either way — a pre-existing, unrelated overflow, not caused by
-        # this change).
+        # at_a_glance.html's row (`five_year_svg`/`quarter_svg`/the "For the
+        # Month" text column, `align-items:center`) is only as tall as its
+        # tallest child — at each chart's own flex-allocated WIDTH, width:
+        # 100%;height:auto scales height off vw:vh, width fixed by
+        # flex-basis, so vh has to be tuned to the text column's own height
+        # or `align-items:center` centers the chart inside dead space
+        # instead of filling the row (direct instruction, 2026-09-14).
+        # Lowered from 300 to 250 (2026-09-15, direct instruction — shrink
+        # this block slightly so the trend chart's x-axis below it stops
+        # getting clipped) to match the text column's own height shrinking
+        # (at_a_glance.html's text column: line-height 1.5 -> 1.25); both
+        # were reduced by the same ~17% so the charts keep filling the row
+        # exactly, without reintroducing the dead space this vh tuning was
+        # originally added to remove.
         "five_year_svg": _value_added_combo_svg(
             fy_cats, fy_pct, fy_qty, [_VA_ORANGE] * len(fy_cats),
-            "Last 5 Years", vw=560, vh=341, label_fs=17.4),
+            "Last 5 Years", vw=510, vh=250, label_fs=16),
         "quarter_svg": _value_added_combo_svg(
             q_cats, q_pct, q_qty, [_VA_ORANGE_LIGHT, _VA_ORANGE],
-            "Quarter Just Ended vs CPLY", vw=300, vh=322, label_fs=16.5),
+            "Quarter Just Ended vs CPLY", vw=290, vh=250, label_fs=16),
     }
 
 
@@ -938,7 +949,15 @@ def _trend_section(report_month: str) -> dict:
     semis_by_month = _semis_breakdown_data(months)
     return {
         "months": labels,
-        "svg": _trend_line_svg(labels, series, colors, vh=86) + _semis_table_html(labels, semis_by_month),
+        # vh must be >= mt+ch+mb (11+60+14=85, see _trend_line_svg) - that's
+        # the viewBox height the month-axis labels (drawn at y=base+12=83)
+        # need to not get clipped by the SVG's own default overflow:hidden.
+        # vh=80 (5 short) was silently cutting them off, which read as the
+        # Semis-by-plant table right below (concatenated into this same
+        # bordered box, not a separate one) "suppressing" the axis - it
+        # wasn't a z-order/overlap issue, the labels just weren't being
+        # drawn inside the SVG's own visible box at all.
+        "svg": _trend_line_svg(labels, series, colors, vh=90) + _semis_table_html(labels, semis_by_month),
     }
 
 

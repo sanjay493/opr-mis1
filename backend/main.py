@@ -1075,25 +1075,39 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     dynamic_page_layouts = {}
     _static_pages_cfg = load_layout_config()["pages"]
     _pages_list = [page.dict() for page in request.pages]
+    # Every "if missing, auto-insert this sentinel page" block below exists
+    # for ONE reason: a page list saved/built before a given sentinel page
+    # existed shouldn't silently lose it on a FULL report export. It was
+    # never meant to fire for a deliberate partial export (e.g. selecting
+    # just "MIS at a Glance" to preview one page) — but every check here
+    # only asked "is the sentinel present", not "is this a full report",
+    # so a partial selection missing an anchor page (Steel Sector
+    # Performance, EPI, Cost Trend, ...) got it silently glued back in
+    # regardless. Gated on page 2 (Index) being present — the same
+    # full-vs-partial signal pdf.py's _has_index/footer_total_override
+    # already uses — so a genuine full/select-all export (which always
+    # includes the Index) keeps this backward-compat behavior, while a
+    # deliberate few-page export is taken as submitted.
+    _is_full_export = any(p.get("page") == 2 for p in _pages_list)
     # Page 24 (SAIL) and the trend/performance-analysis sentinel page: ensure
     # both are present even for requests built from a page list saved before
     # either existed in its current form.
-    if not any(p.get("page") == 24 for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == 24 for p in _pages_list):
         _idx23 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 23), None)
         if _idx23 is not None:
             _pages_list.insert(_idx23 + 1, {"page": 24})
-    if not any(p.get("page") == TREND_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == TREND_PAGE_ID for p in _pages_list):
         _idx24 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 24), None)
         if _idx24 is not None:
             _pages_list.insert(_idx24 + 1, {"page": TREND_PAGE_ID})
-    if not any(p.get("page") == SS_PHYSICAL_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == SS_PHYSICAL_PAGE_ID for p in _pages_list):
         _idxtr = next((i for i, p in enumerate(_pages_list) if p.get("page") == TREND_PAGE_ID), None)
         if _idxtr is not None:
             _pages_list.insert(_idxtr + 1, {"page": SS_PHYSICAL_PAGE_ID})
     # "MIS at a Glance" sentinel page: always inserted right after the Index
     # (page 2), so it becomes the first NUMBERED page ("Page 1") — same
     # unconditional-insert pattern as above.
-    if not any(p.get("page") == AT_A_GLANCE_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == AT_A_GLANCE_PAGE_ID for p in _pages_list):
         _idx2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 2), None)
         if _idx2 is not None:
             _pages_list.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
@@ -1101,7 +1115,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     # right BEFORE "MIS at a Glance" (i.e. right after the Index), anchored
     # on AT_A_GLANCE_PAGE_ID's own (now-guaranteed-present) position so they
     # land ahead of it without touching the AT_A_GLANCE_PAGE_ID insert above.
-    if not any(p.get("page") in STEEL_SECTOR_PAGES for p in _pages_list):
+    if _is_full_export and not any(p.get("page") in STEEL_SECTOR_PAGES for p in _pages_list):
         _idx_aag = next((i for i, p in enumerate(_pages_list) if p.get("page") == AT_A_GLANCE_PAGE_ID), None)
         if _idx_aag is not None:
             for _i, _pg in enumerate(sorted(STEEL_SECTOR_PAGES)):
@@ -1110,29 +1124,29 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     # inserted right after "SAIL Performance Summary" (page 3), ahead of
     # Key Parameters — see their comment above main.py's constant
     # definitions.
-    if not any(p.get("page") == BEST_EVER_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == BEST_EVER_PAGE_ID for p in _pages_list):
         _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 3), None)
         if _idx3 is not None:
             _pages_list.insert(_idx3 + 1, {"page": BEST_EVER_PAGE_ID})
-    if not any(p.get("page") == BEST_CAL_MONTH_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == BEST_CAL_MONTH_PAGE_ID for p in _pages_list):
         _idxbe = next((i for i, p in enumerate(_pages_list) if p.get("page") == BEST_EVER_PAGE_ID), None)
         if _idxbe is not None:
             _pages_list.insert(_idxbe + 1, {"page": BEST_CAL_MONTH_PAGE_ID})
     # "Key Parameters" sentinel page: always inserted right after "Best
     # Calendar Month" (chained off it, rather than off page 3 directly, so
     # it lands after both new pages above regardless of insertion order).
-    if not any(p.get("page") == KEY_PARAMS_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == KEY_PARAMS_PAGE_ID for p in _pages_list):
         _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == BEST_CAL_MONTH_PAGE_ID), None)
         if _idx3 is not None:
             _pages_list.insert(_idx3 + 1, {"page": KEY_PARAMS_PAGE_ID})
     # "Large BFs" sentinel page: always inserted right after Key Parameters.
-    if not any(p.get("page") == BF_LARGE_ANNEXURE_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == BF_LARGE_ANNEXURE_PAGE_ID for p in _pages_list):
         _idxkp = next((i for i, p in enumerate(_pages_list) if p.get("page") == KEY_PARAMS_PAGE_ID), None)
         if _idxkp is not None:
             _pages_list.insert(_idxkp + 1, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
     # "Cost Trend" sentinel pages: HM, CS, SS each on their own physical
     # page, always inserted right after Large BFs, in that order.
-    if not any(p.get("page") == COST_TREND_HM_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == COST_TREND_HM_PAGE_ID for p in _pages_list):
         _idxbf = next((i for i, p in enumerate(_pages_list) if p.get("page") == BF_LARGE_ANNEXURE_PAGE_ID), None)
         if _idxbf is not None:
             _pages_list.insert(_idxbf + 1, {"page": COST_TREND_HM_PAGE_ID})
@@ -1140,25 +1154,25 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
             _pages_list.insert(_idxbf + 3, {"page": COST_TREND_SS_PAGE_ID})
     # "SAIL Mines Production & Despatch Performance" sentinel page: always
     # inserted right after fixed page 4.
-    if not any(p.get("page") == SAIL_MINES_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == SAIL_MINES_PAGE_ID for p in _pages_list):
         _idx4 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 4), None)
         if _idx4 is not None:
             _pages_list.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
     # "Iron Making (contd.)" sentinel page: always inserted right after
     # page 29, same unconditional-insert pattern as above.
-    if not any(p.get("page") == IRON_MAKING_PAGE_2_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == IRON_MAKING_PAGE_2_ID for p in _pages_list):
         _idx29 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 29), None)
         if _idx29 is not None:
             _pages_list.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
     # EPI sentinel page: always inserted right after page 35, same
     # unconditional-insert pattern as above.
-    if not any(p.get("page") == EPI_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == EPI_PAGE_ID for p in _pages_list):
         _idx35 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 35), None)
         if _idx35 is not None:
             _pages_list.insert(_idx35 + 1, {"page": EPI_PAGE_ID})
     # "Coking Coal Receipts & Stock" sentinel pages: always inserted right
     # after the EPI page, same unconditional-insert pattern as above.
-    if not any(p.get("page") == COAL_RECEIPTS_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == COAL_RECEIPTS_PAGE_ID for p in _pages_list):
         _idxepi = next((i for i, p in enumerate(_pages_list) if p.get("page") == EPI_PAGE_ID), None)
         if _idxepi is not None:
             _pages_list.insert(_idxepi + 1, {"page": COAL_RECEIPTS_PAGE_ID})
@@ -1166,7 +1180,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     # "Monthly Summary of Power Data" sentinel page: always inserted right
     # after the "Receipt, Consumption & Stocks of Coking Coal" page, same
     # unconditional-insert pattern as above.
-    if not any(p.get("page") == POWER_DATA_PAGE_ID for p in _pages_list):
+    if _is_full_export and not any(p.get("page") == POWER_DATA_PAGE_ID for p in _pages_list):
         _idxcoal2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == COAL_RECEIPTS_PAGE_2_ID), None)
         if _idxcoal2 is not None:
             _pages_list.insert(_idxcoal2 + 1, {"page": POWER_DATA_PAGE_ID})
