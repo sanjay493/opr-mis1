@@ -241,7 +241,7 @@ def _dsp(cur, rm, pm, fy, ytd, cply_ytd):
     # figure on this page rather than shown as its own row.
     dsp_rounds_items = ["MM", "SPU Jagdishpur"]
     for label in ("Rounds-Total", "  Merchant Mill-TMT"):
-        rows.append(_row(label, "data",
+        row = _row(label, "data",
                          _ann_sum(cur, "DSP", dsp_rounds_items, fy),
                          _sum_items(cur, "plan", "DSP", dsp_rounds_items, rm),
                          _sum_items(cur, "act",  "DSP", dsp_rounds_items, rm),
@@ -249,14 +249,22 @@ def _dsp(cur, rm, pm, fy, ytd, cply_ytd):
                          _ytd_sum_items(cur, "plan", "DSP", dsp_rounds_items, ytd),
                          _ytd_sum_items(cur, "act",  "DSP", dsp_rounds_items, ytd),
                          _ytd_sum_items(cur, "act",  "DSP", dsp_rounds_items, cply_ytd),
-                         category="LONG"))
+                         category="LONG")
+        # "Merchant Mill-TMT" is long enough at the label column's normal
+        # font-size to wrap onto a 2nd line at this column's fixed 16%
+        # width — tight_label shrinks just this row's own font instead of
+        # widening the column (which would eat into the number columns) or
+        # shrinking every row's label just for this one long one.
+        if label == "  Merchant Mill-TMT":
+            row["tight_label"] = True
+        rows.append(row)
 
     # Section Mill ran alongside MSM through FY2025-26 and was decommissioned
     # in Oct'25 - it has no plan/current-FY actuals any more, but its CPLY
     # actuals (pm / cply_ytd, reaching back into last FY) are real and must
     # still count toward Med.Structurals Total.
     msm_items = ["MSM", "Section Mill"]
-    rows.append(_row("Med.Structurals Total", "data",
+    _msm_row = _row("Med.Structurals Total", "data",
                      _ann_sum(cur, "DSP", msm_items, fy),
                      _sum_items(cur, "plan", "DSP", msm_items, rm),
                      _sum_items(cur, "act",  "DSP", msm_items, rm),
@@ -264,7 +272,10 @@ def _dsp(cur, rm, pm, fy, ytd, cply_ytd):
                      _ytd_sum_items(cur, "plan", "DSP", msm_items, ytd),
                      _ytd_sum_items(cur, "act",  "DSP", msm_items, ytd),
                      _ytd_sum_items(cur, "act",  "DSP", msm_items, cply_ytd),
-                     category="LONG"))
+                     category="LONG")
+    # Same fixed-16%-column wrapping issue as "Merchant Mill-TMT" above.
+    _msm_row["tight_label"] = True
+    rows.append(_msm_row)
     for label, item in [
         ("  MSM",           "MSM"),
         ("  Section Mill",  "Section Mill"),

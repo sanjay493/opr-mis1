@@ -18,8 +18,8 @@
 
   "General": {
     "coal_to_hm":                20,
-    "specific_water_consumption": 55,
-    "specific_co2_emissions":56
+    "sp_water_consumption": 55,
+    "sp_co2_emission":56
   },
 
   "SMS-2": {

@@ -8375,14 +8375,14 @@
     "source_file": "backend/techno_project/bsp_oisco_extractor.py",
     "function": "BspOiscoExtractor.extract",
     "sheet": "Sheet1",
-    "item_name": "General: specific_co2_emissions",
+    "item_name": "General: sp_co2_emission",
     "cell_ref": "Row 56, data col (dynamic, from row-6 scan), cum col = data_col+1",
     "ref_type": "rc_1based",
     "unit": "",
     "conversion": "none",
     "configurable": true,
-    "config_key": "General.specific_co2_emissions",
-    "notes": "Row number is sourced from backend/techno_project/bsp_oisco_map.json ('General.specific_co2_emissions'), a per-module JSON row-map separate from the shared excel_cells_config.json/cells_loader.py system. No counterpart in excel_extractor_bsp_oisco.py's PARAM_MAP — only extracted by this parallel techno_project pipeline."
+    "config_key": "General.sp_co2_emission",
+    "notes": "Row number is sourced from backend/techno_project/bsp_oisco_map.json ('General.sp_co2_emission'), a per-module JSON row-map separate from the shared excel_cells_config.json/cells_loader.py system. No counterpart in excel_extractor_bsp_oisco.py's PARAM_MAP — only extracted by this parallel techno_project pipeline. Key renamed from 'specific_co2_emissions' (per direct instruction, 2026-09-15) to unify onto the same techno_data field the EMD Major EPIs extractor writes."
   },
   {
     "plant": "BSP",
@@ -8390,14 +8390,14 @@
     "source_file": "backend/techno_project/bsp_oisco_extractor.py",
     "function": "BspOiscoExtractor.extract",
     "sheet": "Sheet1",
-    "item_name": "General: specific_water_consumption",
+    "item_name": "General: sp_water_consumption",
     "cell_ref": "Row 55, data col (dynamic, from row-6 scan), cum col = data_col+1",
     "ref_type": "rc_1based",
     "unit": "",
     "conversion": "none",
     "configurable": true,
-    "config_key": "General.specific_water_consumption",
-    "notes": "Row number is sourced from backend/techno_project/bsp_oisco_map.json ('General.specific_water_consumption'), a per-module JSON row-map separate from the shared excel_cells_config.json/cells_loader.py system. *** DIVERGENCE ***: excel_extractor_bsp_oisco.py's PARAM_MAP has 'Sp. Water Consumption' (General/Utilities) hardcoded at ROW 54, but this JSON map says ROW 55 for the same field in the same source file (OISCO_<Mon>'YY.xlsx). One of the two is reading the wrong row — same class of bug as the historical BSL Pig Iron cell drift between config and stale hardcoded preview copy. Needs verification against an actual workbook."
+    "config_key": "General.sp_water_consumption",
+    "notes": "Row number is sourced from backend/techno_project/bsp_oisco_map.json ('General.sp_water_consumption'), a per-module JSON row-map separate from the shared excel_cells_config.json/cells_loader.py system. Key renamed from 'specific_water_consumption' (per direct instruction, 2026-09-15) to unify onto the same techno_data field the EMD Major EPIs extractor writes. *** DIVERGENCE (pre-existing, unrelated to the rename) ***: excel_extractor_bsp_oisco.py's PARAM_MAP has 'Sp. Water Consumption' (General/Utilities) hardcoded at ROW 55 as of this file's current contents — this note previously said ROW 54, which no longer matches; re-verify against an actual workbook before trusting either row number."
   },
   {
     "plant": "BSP",

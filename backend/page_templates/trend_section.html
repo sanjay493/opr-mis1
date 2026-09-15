@@ -5,17 +5,23 @@
         {% set item_idx = loop.index0 %}
         <div class="page7-13-item-block">
             <table class="page7-13-yearly-table">
+                {# Year column widened 5.5% -> 6.7% (the 1.2pp taken evenly, 0.1pp
+                   each, off the 12 plain month columns below — Q1-Q4/H1-H2/Total
+                   keep their own width unchanged) per direct instruction: at
+                   5.5% the widest year label ("P 26-27", the Plan row) left almost
+                   no right-hand margin before its own column border, reading as
+                   text overlapping that vertical line. #}
                 <colgroup>
                     <col style="width:1.8%"/>
-                    <col style="width:5.5%"/>
-                    <col style="width:4.6%"/><col style="width:4.6%"/><col style="width:4.6%"/>
+                    <col style="width:6.7%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
                     <col style="width:5.1%"/>
-                    <col style="width:4.6%"/><col style="width:4.6%"/><col style="width:4.6%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
                     <col style="width:5.1%"/>
                     <col style="width:5.6%"/>
-                    <col style="width:4.6%"/><col style="width:4.6%"/><col style="width:4.6%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
                     <col style="width:5.1%"/>
-                    <col style="width:4.6%"/><col style="width:4.6%"/><col style="width:4.6%"/>
+                    <col style="width:4.5%"/><col style="width:4.5%"/><col style="width:4.5%"/>
                     <col style="width:5.1%"/>
                     <col style="width:5.6%"/>
                     <col style="width:5.9%"/>
@@ -26,7 +32,7 @@
                         <th colspan="4" class="heading-unit">Unit: {{ item.unit }}</th>
                     </tr>
                     <tr>
-                        <th></th><th>Year</th>
+                        <th></th><th class="year-hdr">Year</th>
                         <th>Apr</th><th>May</th><th>Jun</th><th class="qtr-hdr">Q1</th>
                         <th>Jul</th><th>Aug</th><th>Sep</th><th class="qtr-hdr">Q2</th><th class="hh-hdr">H1</th>
                         <th>Oct</th><th>Nov</th><th>Dec</th><th class="qtr-hdr">Q3</th>

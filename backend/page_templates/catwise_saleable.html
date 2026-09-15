@@ -44,7 +44,7 @@
                         {% if row.cat_first %}
                         <td rowspan="{{ row.cat_rowspan }}" class="cat-td">{{ row.category }}</td>
                         {% endif %}
-                        <td class="lbl-td">{{ row.label }}</td>
+                        <td class="lbl-td{{ ' lbl-td-tight' if row.tight_label else '' }}">{{ row.label }}</td>
                         <td class="num-td">{{ row.ann_plan }}</td>
                         <td class="num-td">{{ row.m_plan }}</td>
                         <td class="num-td m-act-td">{{ row.m_act }}</td>

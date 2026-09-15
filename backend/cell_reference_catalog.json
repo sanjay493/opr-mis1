@@ -968,8 +968,8 @@
         "SMS-2 pellet_consumption": 34,
         "SMS-3 lime_consumtion": 48,
         "SMS-3 pellet_consumption": 49,
-        "General specific_water_consumption": 55,
-        "General specific_co2_emissions": 56
+        "General sp_water_consumption": 55,
+        "General sp_co2_emission": 56
       }
     },
     {
@@ -1280,8 +1280,8 @@
           },
           "map_json_extra_rows": {
             "specific_energy_consumption": 24,
-            "specific_water_consumption": 27,
-            "specific_co2_emissions": 28
+            "sp_water_consumption": 27,
+            "sp_co2_emission": 28
           }
         }
       }

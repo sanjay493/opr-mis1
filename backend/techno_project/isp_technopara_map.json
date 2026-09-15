@@ -124,8 +124,8 @@
       "coal_to_hm": 15,
       "specific_energy_consumption": 24,
       "sp_power_consumption": 25,
-      "specific_water_consumption": 27,
-      "specific_co2_emissions": 28
+      "sp_water_consumption": 27,
+      "sp_co2_emission": 28
     }
   }
 }

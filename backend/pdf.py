@@ -1201,6 +1201,86 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
             page.set_content(html, wait_until="domcontentloaded")
             page.evaluate("document.fonts.ready")
 
+        # Relax pass: _enforce_trend_min_segments only ever ADDS a forced
+        # break_before, never removes one — even once a later pass's own
+        # natural layout no longer needs it (each pass measures the page as
+        # it stands WITH every break added so far, so a break's own reason
+        # for existing can never be re-examined once forced). Confirmed
+        # against a real report (2011-09 Crude Steel): an early pass's
+        # transient layout left too few rows before the "5 Plants" boundary,
+        # forcing that whole ~12-row group onto a fresh page — but a later
+        # pass's own natural layout no longer needed the break there at all,
+        # which left most of the previous page blank for no reason.
+        #
+        # First try clearing EVERY break_before this loop added at once and
+        # re-probing (cheap — one extra pass): if that's already fully
+        # self-consistent (no group ends up with a too-short segment on
+        # either side of a break anywhere), it's also the most page-
+        # efficient outcome, so keep it as-is. A large multi-item document
+        # can easily have at least one break that really is still needed
+        # even after all the unnecessary ones are gone, though — clearing
+        # ALL of them at once would then fail this check and (wrongly)
+        # restore every one of them, including the unnecessary ones. So on
+        # a failure here, fall back to a backward greedy pass instead: walk
+        # the forced breaks from the last row in the document to the first
+        # (removing a later break can never change whether an earlier one
+        # is still needed, so testing back-to-front keeps every prior
+        # trial's result valid), clearing and re-probing one at a time,
+        # restoring only the ones that individually prove still necessary.
+        # Bounded to at most one reprobe per currently-forced break either
+        # way, so this can only ever reduce or match the break count the
+        # main loop above converged on, never add to it.
+        def _measure_page_of(page_texts: list) -> dict:
+            result = {}
+            for tp in trend_pages:
+                page_of = {}
+                for ii, it in enumerate(tp.get("items", [])):
+                    for k in range(len(it.get("rows", []))):
+                        marker = f"@@TROW_{ii}_{k}@@"
+                        for pno, text in enumerate(page_texts):
+                            if marker in text:
+                                page_of[(ii, k)] = pno
+                                break
+                result[id(tp)] = page_of
+            return result
+
+        def _reprobe() -> dict:
+            trial_html = template.render(pages=pages_list, **render_kwargs)
+            page.set_content(trial_html, wait_until="domcontentloaded")
+            page.evaluate("document.fonts.ready")
+            trial_bytes = page.pdf(
+                format="A4", print_background=True, display_header_footer=False, margin=margin,
+            )
+            trial_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(trial_bytes)).pages]
+            return _measure_page_of(trial_texts)
+
+        forced_rows = [
+            row
+            for tp in trend_pages for it in tp.get("items", []) for row in it.get("rows", [])
+            if row.get("break_before")
+        ]
+        if forced_rows:
+            for row in forced_rows:
+                row["break_before"] = False
+            page_of_by_page = _reprobe()
+
+            if not _min_segment_violation(trend_pages, page_of_by_page):
+                for tp in trend_pages:
+                    _apply_trend_page_splits(tp, page_of_by_page[id(tp)])
+            else:
+                for row in forced_rows:
+                    row["break_before"] = True
+                for row in reversed(forced_rows):
+                    row["break_before"] = False
+                    page_of_by_page = _reprobe()
+                    if _min_segment_violation(trend_pages, page_of_by_page):
+                        row["break_before"] = True  # this one really is still needed
+                    else:
+                        for tp in trend_pages:
+                            _apply_trend_page_splits(tp, page_of_by_page[id(tp)])
+
+            html = template.render(pages=pages_list, **render_kwargs)
+
         _cache_trend_split_result(cache_key, trend_pages, render_kwargs)
         return html
 
@@ -1316,6 +1396,46 @@ def _enforce_trend_min_segments(trend_page: dict, page_of: dict) -> None:
                         # earlier so exactly MIN rows carry over
                         _force(j - MIN)
             i = j
+
+
+def _min_segment_violation(trend_pages: list, page_of_by_page: dict) -> bool:
+    """Read-only check: True if any plant/SAIL group, anywhere across
+    trend_pages, currently has a split segment (per that page's own
+    page_of_by_page[id(trend_page)] mapping) shorter than
+    _TREND_MIN_SPLIT_SEGMENT_ROWS on either side of a page break — the same
+    condition _enforce_trend_min_segments fixes by forcing a break, but
+    without mutating anything. Used by _make_trend_split_hook's relax step
+    to verify a trial state (every currently-forced break_before cleared)
+    is actually safe before committing to it, and to fall back cleanly to
+    the already-converged state when it isn't."""
+    MIN = _TREND_MIN_SPLIT_SEGMENT_ROWS
+    for tp in trend_pages:
+        page_of = page_of_by_page.get(id(tp), {})
+        for ii, it in enumerate(tp.get("items", [])):
+            rows = it.get("rows", [])
+            n = len(rows)
+            page_for_row = [page_of.get((ii, k)) for k in range(n)]
+            i = 0
+            while i < n:
+                plant = rows[i]["plant"]
+                j = i
+                while j < n and rows[j]["plant"] == plant:
+                    j += 1
+                pages = page_for_row[i:j]
+                if pages and all(p is not None for p in pages):
+                    seg_start = i
+                    segs = []
+                    for k in range(i + 1, j):
+                        if pages[k - i] != pages[k - i - 1]:
+                            segs.append((seg_start, k))
+                            seg_start = k
+                    segs.append((seg_start, j))
+                    if len(segs) > 1:
+                        for (s0, s1) in segs:
+                            if s1 - s0 < MIN:
+                                return True
+                i = j
+    return False
 
 
 def _fix_orphaned_small_groups(trend_page: dict, page_of: dict) -> None:

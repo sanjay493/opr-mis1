@@ -230,8 +230,13 @@ PARAM_ALIASES = {
     # ---- General -------------------------------------------------------------------
     "Coke Screen Loss":               ("General", "coke_screen_loss"),
     "**Energy consumption. ":         "specific_energy_consumption",
-    "Make-Up Water Cons.":            "specific_water_consumption",
-    "Sp. CO2 Emmission ":             "specific_co2_emissions",
+    # sp_water_consumption/sp_co2_emission (not the older specific_water_
+    # consumption/specific_co2_emissions names) — unified onto the same
+    # techno_data keys the EMD "Major EPIs" report extractor writes
+    # (techno_project/coal_co2_epi_extractor.py), now the single canonical
+    # field for these two params across every plant's own extractor too.
+    "Make-Up Water Cons.":            "sp_water_consumption",
+    "Sp. CO2 Emmission ":             "sp_co2_emission",
     "Dry Coal input":                 ("General", "specific_heat_coke_ovens"),
     # Sp. Power Consumption — the "Saleable Steel" row under the
     # "Elect.Cons.Per Ton of:" table (its own section header text varies

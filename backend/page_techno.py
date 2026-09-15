@@ -1140,12 +1140,13 @@ BF_SAIL_SPECS = {
     # Environmental Performance Indicators (EMD's monthly EPI report, see
     # techno_project/coal_co2_epi_extractor.py) - whole-plant figures, same
     # "General" unit and Crude-Steel weighting as Specific Energy
-    # Consumption above, not a per-BF-unit measurement. Note these keys are
-    # distinct from the older, differently-sourced (and not always
-    # populated across all 5 plants) "specific_co2_emissions" /
-    # "specific_water_consumption" keys some plants' own self-reported
-    # extractors also write - the two aren't interchangeable and are
-    # deliberately not aliased together.
+    # Consumption above, not a per-BF-unit measurement. These are now the
+    # single canonical "sp_co2_emission"/"sp_water_consumption" keys for
+    # these two params: every plant's own techno extractor (ISP/RSP/
+    # BSP-OISCO) that used to write the older, differently-sourced
+    # "specific_co2_emissions"/"specific_water_consumption" keys has been
+    # switched to write these same keys instead (per direct instruction,
+    # 2026-09-15) — there's exactly one field per param now, not two.
     "Sp. CO2 Emission":            ("sp_co2_emission",             ["General"],             "cs", False, None),
     "Sp. Water Consumption":       ("sp_water_consumption",        ["General"],             "cs", False, None),
     "Sp. PM Emission":             ("sp_pm_emission",              ["General"],             "cs", False, None),

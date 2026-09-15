@@ -17,8 +17,8 @@
 
   "General": {
     "coal_to_hm":                 "Coal to Hot Metal ratio",
-    "specific_water_consumption": "Sp.Water consmpn",
-    "specific_co2_emissions":     "Sp.CO2 Emission"
+    "sp_water_consumption": "Sp.Water consmpn",
+    "sp_co2_emission":     "Sp.CO2 Emission"
   },
 
   "SMS-2": {

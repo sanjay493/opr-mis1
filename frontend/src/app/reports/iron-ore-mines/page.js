@@ -150,6 +150,62 @@ export default function IronOreMinesPage() {
       .filter(m => m.enduses.length > 0);
   }, [despDetail, months, despMode]);
 
+  // ── Sales of Iron Ore detail: salesDetail[month][mode][mat] = actual (SALES end-use only, full material/mode split) ──
+  const salesDetail = useMemo(() => {
+    const out = {};
+    months.forEach(m => {
+      out[m] = {};
+      MODES_ALL.forEach(mode => { out[m][mode] = {}; });
+    });
+    (data?.despatch || []).filter(scopeMatch).forEach(r => {
+      if (r.actual == null || r.end_use_code !== 'SALES') return;
+      const bucket = out[r.report_month]?.[r.transport_mode];
+      if (!bucket) return;
+      bucket[r.material_code] = (bucket[r.material_code] ?? 0) + r.actual;
+    });
+    return out;
+  }, [data, months, scopeMatch]);
+
+  // ── Which (mode > material) Sales columns actually have any FY data for this
+  // scope — same "hide empty columns" convention as despStructure above. ──
+  const salesStructure = useMemo(() => {
+    const totals = {};
+    MODES_ALL.forEach(mode => { totals[mode] = {}; DESP_MATS.forEach(mat => { totals[mode][mat] = 0; }); });
+    months.forEach(m => {
+      MODES_ALL.forEach(mode => DESP_MATS.forEach(mat => {
+        const v = salesDetail[m]?.[mode]?.[mat];
+        if (v) totals[mode][mat] += v;
+      }));
+    });
+    return MODES_ALL
+      .filter(mode => despMode === 'ALL' || despMode === mode)
+      .map(mode => ({ mode, materials: DESP_MATS.filter(mat => Math.abs(totals[mode][mat]) > 1e-9) }))
+      .filter(mm => mm.materials.length > 0);
+  }, [salesDetail, months, despMode]);
+
+  // ── sales[month].total = actual respecting mode filter; salesPlan[month] (no Rail/Road split); salesModeSplit = per-mode total (unfiltered) ──
+  const { sales, salesPlan, salesModeSplit } = useMemo(() => {
+    const s = {}, sp = {}, ms = {};
+    months.forEach(m => {
+      s[m] = { total: null };
+      sp[m] = null;
+      ms[m] = { RAIL: null, ROAD: null };
+    });
+    (data?.despatch || []).filter(scopeMatch).forEach(r => {
+      if (r.actual == null || r.end_use_code !== 'SALES') return;
+      if (r.transport_mode === 'RAIL' || r.transport_mode === 'ROAD') {
+        ms[r.report_month][r.transport_mode] = (ms[r.report_month][r.transport_mode] ?? 0) + r.actual;
+      }
+      if (despMode !== 'ALL' && r.transport_mode !== despMode) return;
+      s[r.report_month].total = (s[r.report_month].total ?? 0) + r.actual;
+    });
+    (data?.despatch_plan || []).filter(scopeMatch).forEach(r => {
+      if (r.end_use_code !== 'SALES' || r.plan == null) return;
+      sp[r.report_month] = (sp[r.report_month] ?? 0) + r.plan;
+    });
+    return { sales: s, salesPlan: sp, salesModeSplit: ms };
+  }, [data, months, scopeMatch, despMode]);
+
   // ── desp[month].total = actual respecting mode filter; despPlan[month]; despModeSplit = per-mode total (unfiltered) ──
   const { desp, despPlan, despModeSplit } = useMemo(() => {
     const d = {}, dp = {}, ms = {};
@@ -229,6 +285,12 @@ export default function IronOreMinesPage() {
   const despRailTotal = sumCol(despModeSplit, x => x?.RAIL);
   const despRoadTotal = sumCol(despModeSplit, x => x?.ROAD);
 
+  const salesTotals = { total: sumCol(sales, x => x?.total) };
+  const salesLeafTotal = (mode, mat) => sumCol(salesDetail, x => x?.[mode]?.[mat]);
+  const salesPlanTotal = sumCol(salesPlan, x => x);
+  const salesRailTotal = sumCol(salesModeSplit, x => x?.RAIL);
+  const salesRoadTotal = sumCol(salesModeSplit, x => x?.ROAD);
+
   // ── Despatch table header/body cell builders (mode > end-use > material,
   // empty combos already excluded from despStructure) ──
   const despHeaderRow1 = despStructure.map(({ mode, enduses }, mi) => {
@@ -293,6 +355,51 @@ export default function IronOreMinesPage() {
     return cells;
   };
 
+  // ── Sales of Iron Ore table header/body cell builders (mode > material,
+  // one level shallower than the despatch table above since end-use is
+  // already fixed to SALES — empty combos already excluded from salesStructure) ──
+  const salesHeaderRow1 = salesStructure.map(({ mode, materials }, mi) => (
+    <th key={mode} colSpan={materials.length + 1} style={{ ...TH, textAlign: 'center', borderLeft: mi > 0 ? '2px solid #64748b' : TH.border }}>
+      {MODE_LABEL[mode]}
+    </th>
+  ));
+  const salesHeaderRow2 = [];
+  salesStructure.forEach(({ mode, materials }, mi) => {
+    materials.forEach((mat, mj) => {
+      const borderLeft = mj === 0 ? (mi > 0 ? '2px solid #64748b' : TH.border) : TH.border;
+      salesHeaderRow2.push(
+        <th key={`${mode}-${mat}`} style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, borderLeft }}>
+          {MAT_LABEL[mat]}
+        </th>
+      );
+    });
+    salesHeaderRow2.push(
+      <th key={`${mode}-total`} style={{ ...TH, borderLeft: '2px solid #64748b' }}>Total</th>
+    );
+  });
+  const salesBodyCells = (m) => {
+    const cells = [];
+    salesStructure.forEach(({ mode, materials }, mi) => {
+      materials.forEach((mat, mj) => {
+        const borderLeft = mj === 0 ? (mi > 0 ? '2px solid #94a3b8' : TD.border) : TD.border;
+        cells.push(<td key={`${mode}-${mat}`} style={{ ...TD, borderLeft }}>{fmt(salesDetail[m]?.[mode]?.[mat])}</td>);
+      });
+      cells.push(<td key={`${mode}-total`} style={{ ...TD, fontWeight: 700, borderLeft: '2px solid #94a3b8' }}>{fmt(salesModeSplit[m][mode])}</td>);
+    });
+    return cells;
+  };
+  const salesFYTotalCells = () => {
+    const cells = [];
+    salesStructure.forEach(({ mode, materials }, mi) => {
+      materials.forEach((mat, mj) => {
+        const borderLeft = mj === 0 ? (mi > 0 ? '2px solid #94a3b8' : TD.border) : TD.border;
+        cells.push(<td key={`${mode}-${mat}`} style={{ ...TD, fontWeight: 600, color: '#9a3412', borderLeft }}>{fmt(salesLeafTotal(mode, mat))}</td>);
+      });
+      cells.push(<td key={`${mode}-total`} style={{ ...TD, fontWeight: 700, color: '#9a3412', borderLeft: '2px solid #94a3b8' }}>{fmt(mode === 'RAIL' ? salesRailTotal : salesRoadTotal)}</td>);
+    });
+    return cells;
+  };
+
   const hasAny =
     months.some(m => prod[m]?.total?.act != null || prod[m]?.total?.plan != null || desp[m]?.total != null);
 
@@ -349,6 +456,32 @@ export default function IronOreMinesPage() {
     });
     lines.push(['FY Total', ...despColumns.map(c => cv(despColFYTotal(c))), cv(despTotals.total),
       cv(despPlanTotal), despPlanTotal ? (despTotals.total / despPlanTotal * 100).toFixed(1) : '']);
+
+    const salesColumns = [];
+    salesStructure.forEach(({ mode, materials }) => {
+      materials.forEach(mat => salesColumns.push({ mode, mat }));
+      salesColumns.push({ mode, isModeTotal: true });
+    });
+    const salesColLabel = (c) => c.isModeTotal
+      ? `${MODE_LABEL[c.mode]} Total`
+      : `${MODE_LABEL[c.mode]} ${MAT_LABEL[c.mat]}`;
+    const salesColValue = (c, m) => c.isModeTotal ? salesModeSplit[m][c.mode] : salesDetail[m]?.[c.mode]?.[c.mat];
+    const salesColFYTotal = (c) => c.isModeTotal
+      ? (c.mode === 'RAIL' ? salesRailTotal : salesRoadTotal)
+      : salesLeafTotal(c.mode, c.mat);
+
+    lines.push([]);
+    lines.push([`SALES OF IRON ORE (${despMode === 'ALL' ? 'Rail + Road' : despMode})`,
+      ...salesColumns.map(salesColLabel), 'Total', 'Plan', '% Ach']);
+    months.forEach(m => {
+      lines.push([
+        `${MONTH_LABEL[m.slice(5)]} ${m.slice(0, 4)}`,
+        ...salesColumns.map(c => cv(salesColValue(c, m))), cv(sales[m].total),
+        cv(salesPlan[m]), salesPlan[m] ? (sales[m].total / salesPlan[m] * 100).toFixed(1) : '',
+      ]);
+    });
+    lines.push(['FY Total', ...salesColumns.map(c => cv(salesColFYTotal(c))), cv(salesTotals.total),
+      cv(salesPlanTotal), salesPlanTotal ? (salesTotals.total / salesPlanTotal * 100).toFixed(1) : '']);
 
     if (showMinesSummary) {
       lines.push([]);
@@ -569,6 +702,52 @@ export default function IronOreMinesPage() {
             <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: -14, marginBottom: 20 }}>
               Columns show only end-use/material combinations with non-zero data for this scope &amp; FY. Each
               mode&apos;s &quot;Total&quot; sums all its end-uses/materials. Despatch Plan has no Rail/Road split.
+            </div>
+
+            {/* ── SALES OF IRON ORE ── */}
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1e3a5f', margin: '4px 0 8px' }}>
+              Sales of Iron Ore — {despMode === 'ALL' ? 'Rail + Road' : despMode === 'RAIL' ? 'Rail only' : 'Road only'} ({inTonnes ? 'Tonnes' : "'000 T"})
+            </h3>
+            <div className="iom-wrap" style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 8, marginBottom: 22 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th rowSpan={2} style={{ ...TH, textAlign: 'left', verticalAlign: 'middle' }}>Month</th>
+                    {salesHeaderRow1}
+                    <th rowSpan={2} style={{ ...TH, borderLeft: '2px solid #64748b', verticalAlign: 'middle' }}>Total Sales</th>
+                    <th rowSpan={2} style={{ ...TH, verticalAlign: 'middle' }}>Plan</th>
+                    <th rowSpan={2} style={{ ...TH, verticalAlign: 'middle' }}>% Ach</th>
+                  </tr>
+                  <tr>{salesHeaderRow2}</tr>
+                </thead>
+                <tbody>
+                  {months.map((m, i) => {
+                    const sr = sales[m];
+                    return (
+                      <tr key={m} style={{ background: i % 2 ? '#f8fafc' : '#fff', opacity: monthHasData(m) ? 1 : 0.4 }}>
+                        <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>
+                          {MONTH_LABEL[m.slice(5)]} <span style={{ color: '#9ca3af', fontWeight: 400 }}>{m.slice(0, 4)}</span>
+                        </td>
+                        {salesBodyCells(m)}
+                        <td style={{ ...TD, fontWeight: 700, borderLeft: '2px solid #94a3b8' }}>{fmt(sr.total)}</td>
+                        <td style={{ ...TD, color: '#6b7280' }}>{fmt(salesPlan[m])}</td>
+                        <td style={{ ...TD, fontWeight: 600, color: pctColor(sr.total, salesPlan[m]) }}>{pct(sr.total, salesPlan[m])}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{ background: '#fff7ed', borderTop: '2px solid #f59e0b' }}>
+                    <td style={{ ...TD, textAlign: 'left', fontWeight: 700, color: '#9a3412' }}>FY Total</td>
+                    {salesFYTotalCells()}
+                    <td style={{ ...TD, fontWeight: 700, color: '#9a3412', borderLeft: '2px solid #94a3b8' }}>{fmt(salesTotals.total)}</td>
+                    <td style={{ ...TD, fontWeight: 600, color: '#9a3412' }}>{fmt(salesPlanTotal)}</td>
+                    <td style={{ ...TD, fontWeight: 700, color: '#9a3412' }}>{pct(salesTotals.total, salesPlanTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: -14, marginBottom: 20 }}>
+              Sales despatch (end-use = Sales to 3rd party) only, out of the Despatch table above. Columns show only
+              material/mode combinations with non-zero Sales data for this scope &amp; FY. Sales Plan has no Rail/Road split.
             </div>
 
             {/* ── MINES SUMMARY (FY totals) ── */}

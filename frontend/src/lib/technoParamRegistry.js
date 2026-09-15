@@ -103,8 +103,8 @@ export const PARAM_TEMPLATES = {
     'specific_energy_consumption','sp_power_consumption',
     'bof_slag_utilisation','coke_screen_loss',
     'coal_to_hm',
-    'specific_water_consumption','water_consumption',
-    'specific_co2_emissions',
+    'sp_water_consumption','water_consumption',
+    'sp_co2_emission',
     // Key Parameters page (page 5) — no other source yet, filled here
     'hm_to_pcm_sandpit_drypit',
     'capex','labour_productivity','avg_rake_detention_time','rltifr',
@@ -137,9 +137,9 @@ export const KNOWN_UNITS = [
 export const _LABEL_MAP = {
   // Coal / energy
   coal_to_hm:                           'Coal to Hot Metal',
-  specific_water_consumption:           'Specific Water Consumption',
+  sp_water_consumption:                 'Sp. Water Consumption',
   water_consumption:                    'Water Consumption',
-  specific_co2_emissions:               'Specific CO₂ Emissions',
+  sp_co2_emission:                      'Sp. CO₂ Emission',
   coke_screen_loss:                     'Coke Screen Loss (%)',
   specific_energy_consumption:          'Specific Energy Consumption (GCal/TCS)',
   bof_slag_utilisation:                 'BOF Slag Utilisation (%)',

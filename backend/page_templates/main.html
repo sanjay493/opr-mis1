@@ -379,22 +379,36 @@
             font-size: 9.5pt;
             margin: 6px 0 4px;
         }
-        /* "Consumption of Coking Coal and CDI Coal" — more generous row
-           padding than the shared .coal-table base (2px 5px), per direct
-           instruction, to fill more of this specific portrait page's
-           height. Scoped to this table's own class rather than the base
-           rule so "Receipt, Consumption & Stocks of Coking Coal" (the
-           other .coal-table page) is unaffected. */
+        /* "Consumption of Coking Coal and CDI Coal" — slightly more
+           generous row padding than the shared .coal-table base (2px 5px),
+           per direct instruction, to fill more of this specific portrait
+           page's height. Scoped to this table's own class rather than the
+           base rule so "Receipt, Consumption & Stocks of Coking Coal" (the
+           other .coal-table page) is unaffected. Trimmed from 3.6px per
+           direct instruction (2026-09-15) — with the (C) chart grid below
+           now needing 2 rows of 3 mini bar charts, the original 3.6px
+           (chosen before that grid existed) was the reason its 2nd row no
+           longer fit on the page at all. */
         .coal-consumption-table th, .coal-consumption-table td {
-            padding: 3.6px 5px;
+            padding: 2.4px 5px;
         }
         /* Page-level top/bottom margin — default .page padding (3mm) plus
            the 6px table padding above used to comfortably fill this
            portrait page on its own; now that the %import chart grid below
            also needs room, both are trimmed back per direct instruction so
-           the grid's 2nd row still fits on the same page. */
+           the grid's 2nd row still fits on the same page. !important:
+           .page's own base rule (padding: 3mm 0, defined later in this
+           file) has equal selector specificity and was silently winning
+           the cascade over this override by source order alone — this
+           page has actually been rendering at the base 3mm this whole
+           time, not the 1mm this rule intended. Top trimmed further to
+           0mm per direct instruction (2026-09-15) — bottom stays a hair of
+           breathing room above the footer band. */
         .coal-consumption-page {
-            padding: 1mm 0;
+            padding-top: 0mm !important;
+            padding-bottom: 0.5mm !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
 
         /* "Monthly Summary of Power Data" — a portrait page reproducing
@@ -1498,14 +1512,18 @@
 
         .page7-13-yearly-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
         .page7-13-yearly-table th {
-            font-size: 10pt; padding: 3.5px 3px; line-height: 1;
+            font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
             background: {{ colors.table_header_bg }}; color: {{ colors.text_primary }}; text-align: center; white-space: nowrap; font-weight: 700;
         }
+        /* "Year" header — left-aligned to match its column's data cells
+           (td.year-cell is already text-align:left below), per direct
+           instruction; every other header stays centered. */
+        .page7-13-yearly-table th.year-hdr { text-align: left; }
         .page7-13-yearly-table th.qtr-hdr { background: {{ colors.table_header_bg_qtr }}; }
         .page7-13-yearly-table th.hh-hdr { background: {{ colors.table_header_bg_hh }}; }
         .page7-13-yearly-table th.tot-hdr { background: {{ colors.table_header_bg_total }}; }
         .page7-13-yearly-table td {
-            font-size: 10pt; padding: 3.5px 3px; line-height: 1;
+            font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
             text-align: right; border: 0.3pt solid {{ colors.border_light }};
         }
         .page7-13-yearly-table td.plant-cell {
@@ -1517,8 +1535,8 @@
                now guaranteed per split segment (see pdf.py's
                _enforce_trend_min_segments), a normal 3-letter plant label
                (BSP, DSP, …) always has 3 rows of column height to fill. */
-            font-size: 8.8pt; font-weight: 700; text-align: center;
-            vertical-align: middle; padding: 3.5px 1px; line-height: 1.15;
+            font-size: 8.3pt; font-weight: 700; text-align: center;
+            vertical-align: middle; padding: 3.5px 1.5px; line-height: 1.15;
             background: {{ colors.highlight_plant_label_bg }}; color: {{ colors.text_plant_cell }};
         }
         /* A group with an abbreviated 1-2 letter plant label (see
@@ -1526,7 +1544,7 @@
            on Hot Metal/Crude Steel, where it's usually a single-row group)
            gets a smaller font so that one row doesn't grow taller than its
            neighbours just to fit the vertically-stacked letters. */
-        .page7-13-yearly-table td.plant-cell.compact { font-size: 6.5pt; }
+        .page7-13-yearly-table td.plant-cell.compact { font-size: 6pt; }
         /* "5 Plants" (7 letters once its space is dropped — see
            trend_section.html's plant_chars) is by far the longest stacked
            label on these pages; at the normal 8.5pt/1.15 line-height its
@@ -1537,7 +1555,7 @@
            (not folded into .compact, which is sized for 1-2 letter
            abbreviations like VISL's "VI" and would be too small to read
            at 7 letters). */
-        .page7-13-yearly-table td.plant-cell.tight { font-size: 6pt; line-height: 1.05; }
+        .page7-13-yearly-table td.plant-cell.tight { font-size: 5.5pt; line-height: 1.05; }
         .page7-13-yearly-table td.plant-cell.agg-sail  { background: {{ colors.highlight_agg_sail_bg }}; }
         .page7-13-yearly-table td.plant-cell.agg-5p    { background: {{ colors.highlight_agg_5plants_bg }}; }
         /* One fixed color per individual plant (see trend_section.html's
@@ -1553,18 +1571,17 @@
         .page7-13-yearly-table td.plant-cell.plant-ssp  { background: {{ colors.plant_color_ssp }}; }
         .page7-13-yearly-table td.plant-cell.plant-visl { background: {{ colors.plant_color_visl }}; }
         .page7-13-yearly-table td.year-cell {
-            font-size: 9pt; text-align: left; padding-left: 3px; white-space: nowrap;
+            font-size: 8.5pt; text-align: left; padding-left: 1.5px; white-space: nowrap;
         }
         /* The Plan row's year label ("P 26-27") is 2 characters longer than
-           every other row's ("26-27") — at the normal 9pt/3px-left-padding
-           sizing used for every other year-cell, those 2 extra characters
-           were overflowing the fixed-width year column into the next one.
-           Column-fit fix, scoped to plan rows only: no padding at all (so
-           the full column width is available to the text) plus a slightly
-           smaller font, rather than shrinking every year-cell's font just
-           for this one row type. */
+           every other row's ("26-27") — kept at a slightly smaller font than
+           every other year-cell so it doesn't need its own wider column.
+           Left padding matches the base td.year-cell rule above now that the
+           Year column itself has been widened (see trend_section.html's
+           colgroup comment) — it no longer needs to give up its padding just
+           to fit. */
         .page7-13-yearly-table tr.plan-row td.year-cell {
-            padding-left: 0; padding-right: 0; font-size: 8pt;
+            font-size: 7.5pt;
         }
         .page7-13-yearly-table tr.plan-row   { background: {{ colors.highlight_actual_bg }}; font-weight: 700; }
         .page7-13-yearly-table tr.sail-row   { background: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
@@ -1595,18 +1612,18 @@
             text-decoration-thickness: 1.5pt;
             text-underline-offset: 2px;
         }
-        .page7-13-legend { font-size: 8pt; color: {{ colors.text_secondary }}; margin-top: 4px; }
+        .page7-13-legend { font-size: 7.5pt; color: {{ colors.text_secondary }}; margin-top: 4px; }
         .page7-13-legend .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: middle; }
         .page7-13-yearly-table thead tr.item-heading-row th {
             background: {{ colors.table_header_bg }}; border-bottom: 2px solid {{ colors.text_primary }}; border-top: none;
             padding: 0 0 4px 0; vertical-align: bottom;
         }
         .page7-13-yearly-table thead tr.item-heading-row th.heading-title {
-            font-size: 12pt; font-weight: 700; color: {{ colors.text_accent_navy }};
+            font-size: 11.5pt; font-weight: 700; color: {{ colors.text_accent_navy }};
             text-transform: none; text-align: left;
         }
         .page7-13-yearly-table thead tr.item-heading-row th.heading-unit {
-            font-size: 10pt; font-weight: 700; color: {{ colors.border_darkest }};
+            font-size: 9.5pt; font-weight: 700; color: {{ colors.border_darkest }};
             text-transform: none; text-align: right; white-space: nowrap;
         }
 
@@ -1676,6 +1693,13 @@
         .catwise-table td { padding: 2px 4px; border: 1px solid {{ colors.border_light }}; line-height: 1.5; }
         .catwise-table td.cat-td { text-align: center; font-weight: 700; vertical-align: middle; background-color: {{ colors.misc_white }}; color: {{ colors.text_black }}; font-size: 10pt; border-right: 2px solid {{ colors.border_medium }}; writing-mode: vertical-rl; transform: rotate(180deg); }
         .catwise-table td.lbl-td { text-align: left; }
+        /* "Merchant Mill-TMT" / "Med.Structurals Total" (page 16, DSP
+           section) — long enough at the base 10pt to wrap onto a 2nd line
+           within the label column's fixed 16% width. Shrunk + nowrap so it
+           stays on one line instead, without widening the column (which
+           would eat into the number columns) or shrinking every row's
+           label just for these two. */
+        .catwise-table td.lbl-td.lbl-td-tight { font-size: 8pt; white-space: nowrap; }
         .catwise-table td.num-td { text-align: right; }
         /* Report-month Actual (m-act-td) / till-month Actual (cum-td) stay
            highlighted only on plain data rows — total/subtotal/pct rows already

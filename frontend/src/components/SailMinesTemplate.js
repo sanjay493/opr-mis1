@@ -15,12 +15,12 @@ const C = {
   borderDark: '#334155',
 };
 
-function Table({ table }) {
+function Table({ table, narrow = false }) {
   const isProdDespatch = table.kind === 'production_despatch';
   return (
     <>
       <div style={{ fontWeight: 700, fontSize: '9.5pt', margin: '6px 0 4px' }}>{table.title}</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8pt', marginBottom: 8 }}>
+      <table style={{ width: narrow ? 'auto' : '100%', minWidth: narrow ? 280 : undefined, borderCollapse: 'collapse', fontSize: '8pt', marginBottom: 8 }}>
         <thead>
           {isProdDespatch ? (
             <>
@@ -90,7 +90,10 @@ function Table({ table }) {
 }
 
 export default function SailMinesTemplate({ data }) {
-  const { title = '', period_label: periodLabel, unit, tables = [], mines_charts_html: chartsHtml } = data || {};
+  const {
+    title = '', period_label: periodLabel, unit, tables = [],
+    mines_charts_html: chartsHtml, sales_waterfall_svg: waterfallSvg,
+  } = data || {};
   const byKey = Object.fromEntries(tables.map((t) => [t.key, t]));
 
   return (
@@ -105,11 +108,33 @@ export default function SailMinesTemplate({ data }) {
       {/* Iron Ore Production+Despatch — full-width 11-column table, unchanged. */}
       {byKey.iron_ore_prod && <Table table={byKey.iron_ore_prod} />}
 
-      {/* Sales of Iron Ore + the three Coal tables — full width, stacked. */}
+      {/* Sales of Iron Ore — full width. */}
       {byKey.iron_ore_sales && <Table table={byKey.iron_ore_sales} />}
-      {byKey.coal_prod && <Table table={byKey.coal_prod} />}
-      {byKey.washery && <Table table={byKey.washery} />}
-      {byKey.coal_despatch && <Table table={byKey.coal_despatch} />}
+
+      {/* Coal Mines Production Performance and Washery Performance sit
+          inline side by side (both narrow — sized to content, not
+          stretched full width) rather than stacked. justifyContent:
+          'space-between' pins Washery to the row's right edge. */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        {byKey.coal_prod && <div style={{ flex: '0 0 auto' }}><Table table={byKey.coal_prod} narrow /></div>}
+        {byKey.washery && <div style={{ flex: '0 0 auto' }}><Table table={byKey.washery} narrow /></div>}
+      </div>
+
+      {/* Coal Despatch stays narrow; the Sales of Iron Ore waterfall sits
+          to its right in the freed-up horizontal space rather than
+          adding a new full-width row. alignItems:'stretch' (rather than
+          'flex-start') makes the waterfall's wrapper div take on the
+          row's full height (set by the taller Despatch table); the svg
+          itself carries height:100%/preserveAspectRatio="none" (see
+          page_sail_mines.py's _sales_waterfall_svg) so it spreads across
+          that full width AND height. */}
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 16 }}>
+        {byKey.coal_despatch && <div style={{ flex: '0 0 auto' }}><Table table={byKey.coal_despatch} narrow /></div>}
+        {waterfallSvg && (
+          <div style={{ flex: '1 1 auto', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: 3, padding: '3px 8px' }}
+               dangerouslySetInnerHTML={{ __html: waterfallSvg }} />
+        )}
+      </div>
 
       {/* Mines Performance chart cluster — full width: 4 single-series bar
           charts (Iron Ore / Clean Coal / Flux production + Sales booking,

@@ -1329,7 +1329,12 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
                 if font_size < base_size or pg in (29, IRON_MAKING_PAGE_2_ID):
                     entry = copy.deepcopy(base_entry)
                     if pg in (29, IRON_MAKING_PAGE_2_ID):
-                        entry["marginTop"] = 1
+                        # Page 29 itself (not its "(contd.)" page 29.5) gets a
+                        # touch less top margin still — per direct instruction,
+                        # its last row was slightly spilling into the footer
+                        # band at 1mm. 29.5 keeps 1mm (untouched, no reported
+                        # issue there).
+                        entry["marginTop"] = 0 if pg == 29 else 1
                         entry["marginBottom"] = 1.5
                         entry["marginLR"] = entry.get("marginLR", 4)
                         # 8 furnace-wise sections need a smaller base than the
@@ -6751,12 +6756,13 @@ _RADAR_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 # the shop figure, same fallback api_techno_manual.py's _get_bf_shop_data uses).
 #
 # CO2 uses "sp_co2_emission" (from the EMD monthly EPI report — see
-# techno_project/coal_co2_epi_extractor.py), not the older "specific_co2_emissions"
-# key some plants' own self-reported extractors write — that legacy key is
-# never populated for DSP (its PDF extractor never mapped a CO2 row at all)
-# and is not currently populated for ISP either, which left both plants blank
-# on this chart. Same "sole source, populated across all 5 plants" key
-# page_techno.py's BF_SAIL_SPECS already uses for "Sp. CO2 Emission".
+# techno_project/coal_co2_epi_extractor.py). The older "specific_co2_emissions"
+# key some plants' own self-reported extractors used to write has been
+# retired — every plant's own techno extractor (ISP/RSP/BSP-OISCO) now
+# writes this same "sp_co2_emission" key too (per direct instruction,
+# 2026-09-15), so there's exactly one field to read here. Same "sole
+# source, populated across all 5 plants" key page_techno.py's BF_SAIL_SPECS
+# already uses for "Sp. CO2 Emission".
 _RADAR_PARAMS = {
     "coal_to_hm":                   ("General", ["coal_to_hm"]),
     "specific_energy_consumption":  ("General", ["specific_energy_consumption", "sp_energy", "specific_energy"]),

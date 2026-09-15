@@ -327,35 +327,40 @@ def _share_donut_svg(title: str, cats: list, values: list, colors: list) -> str:
     return "".join(out)
 
 
-def _sales_waterfall_svg(title: str, month_labels: list, monthly_values: list, target: float) -> str:
-    """Horizontal waterfall/bridge chart: each month's bar floats from the
-    running cumulative total before it to the total after it, so the chart
-    reads top-to-bottom as the months accumulate left-to-right toward the
-    Annual Plan target — a bold "YTD Actual" bar (from 0) and, if the
-    target hasn't been reached yet, a "Balance to Target" bar in a neutral
-    gray close it out, with a dashed target line running through every row.
+def _sales_waterfall_svg(title: str, report_month_label: str, report_month_actual: float,
+                          ytd_actual: float, target: float) -> str:
+    """3-bar waterfall/bridge chart per direct instruction (2026-09-15):
+    just the report month's own sales, the April-report_month cumulative
+    ("Till <mon> Sales", bold) and, if the target hasn't been reached yet,
+    a "Balance to Target" bar in neutral gray bridging the cumulative up to
+    the dashed Annual Plan target line — replaces the earlier month-by-month
+    build-up (one bar per YTD month) with just these 3 rows, compact enough
+    to sit beside the Coal Despatch table rather than needing its own row.
 
     Horizontal bars (rows stacked vertically, each bar itself running
-    left-to-right along the tonnage axis) per direct instruction — a
-    portrait page has much more vertical room to spend on ~7 category rows
-    than horizontal room for a tonnage axis, the opposite of what a
-    vertical (column) waterfall would need.
+    left-to-right along the tonnage axis) per direct instruction. The svg
+    itself carries height:100% + preserveAspectRatio="none" (rather than
+    the usual height:auto that preserves the viewBox aspect ratio) per
+    direct instruction (2026-09-15) — its host div sits beside the
+    Despatch table in a stretch-aligned flex row (see sail_mines.html /
+    SailMinesTemplate.js), so the chart should spread to fill that div's
+    full width AND height rather than floating at its own fixed aspect
+    ratio with blank space below it.
 
-    Returns "" when there's nothing to plot (no target and no actual at
+    Returns "" when there's nothing to plot (no target and no actuals at
     all) rather than an empty/degenerate chart."""
-    if not target and not any(monthly_values):
+    if not target and not report_month_actual and not ytd_actual:
         return ""
 
-    cum = 0.0
-    segments = []  # (label, start, end, color, bold)
-    for lab, v in zip(month_labels, monthly_values):
-        segments.append((lab, cum, cum + v, _C_SALES, False))
-        cum += v
-    total_actual = cum
-    segments.append(("YTD Actual", 0.0, total_actual, _C_SALES_DARK, True))
-    balance = (target or 0.0) - total_actual
+    report_month_actual = report_month_actual or 0.0
+    ytd_actual = ytd_actual or 0.0
+    segments = [  # (label, start, end, color, bold)
+        (f"{report_month_label} Sales", 0.0, report_month_actual, _C_SALES, False),
+        (f"Till {report_month_label} Sales", 0.0, ytd_actual, _C_SALES_DARK, True),
+    ]
+    balance = (target or 0.0) - ytd_actual
     if balance > 0:
-        segments.append(("Balance to Target", total_actual, target, _C_BALANCE, False))
+        segments.append(("Balance to Target", ytd_actual, target, _C_BALANCE, False))
 
     n = len(segments)
     vw = 400
@@ -363,14 +368,14 @@ def _sales_waterfall_svg(title: str, month_labels: list, monthly_values: list, t
     row_h = 15.5
     vh = mt + mb + n * row_h
     cw = vw - ml - mr
-    xmax = max(target or 0.0, total_actual, 1.0) * 1.1
+    xmax = max(target or 0.0, ytd_actual, 1.0) * 1.1
     bar_h = row_h * 0.62
 
     def xpos(v):
         return ml + cw * v / xmax
 
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
-           f'style="width:100%;height:auto;display:block;">']
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" preserveAspectRatio="none" '
+           f'style="width:100%;height:100%;display:block;">']
     out.append(f'<text x="{vw / 2:.0f}" y="8" text-anchor="middle" font-size="8" font-weight="bold" '
                f'font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
 
@@ -435,38 +440,39 @@ def _mon_label(report_month: str) -> str:
 
 
 def _sales_waterfall_data(report_month: str) -> dict:
-    """SAIL-wide (all 3 mine groups summed) Annual Plan target and each YTD
-    month's Actual for Iron Ore 'Despatch — Sales to 3rd Party' — unlike
-    the Sales of Iron Ore table above (still hard-coded per the module
-    docstring), this reads the real, live-entered data on
-    /data-entry/mines-production-despatch: mines_despatch_actual_monthly/
-    mines_despatch_plan_monthly filtered to end_use_code='SALES', via
-    db.get_iron_ore_sales_group_rollup_monthly's own "iron_ore_sales_
-    despatch" section (per direct instruction — reusing that function's
-    query rather than a new one keeps this chart from ever drifting off
-    that table's own figures once it's un-hardcoded too). Plan already has
-    no Rail/Road split at entry time ("Plan (Rail+Road)" is a single
-    combined figure — see mines_despatch_plan_monthly's own schema), so
-    summing it across groups/months for the FY total needs no further
+    """SAIL-wide (all 3 mine groups summed) Annual Plan target, the report
+    month's own Actual, and the April-report_month cumulative Actual for
+    Iron Ore 'Despatch — Sales to 3rd Party' — unlike the Sales of Iron Ore
+    table above (still hard-coded per the module docstring), this reads the
+    real, live-entered data on /data-entry/mines-production-despatch:
+    mines_despatch_actual_monthly/mines_despatch_plan_monthly filtered to
+    end_use_code='SALES', via db.get_iron_ore_sales_group_rollup_monthly's
+    own "iron_ore_sales_despatch" section (per direct instruction — reusing
+    that function's query rather than a new one keeps this chart from ever
+    drifting off that table's own figures once it's un-hardcoded too). Plan
+    already has no Rail/Road split at entry time ("Plan (Rail+Road)" is a
+    single combined figure — see mines_despatch_plan_monthly's own schema),
+    so summing it across groups/months for the FY total needs no further
     combining; Actual is per transport_mode but this rollup already sums
     that away."""
     fy_months = db.get_fy_months(report_month)
     ytd_months = db.get_ytd_months(report_month)
     rollup = db.get_iron_ore_sales_group_rollup_monthly(fy_months)
 
+    def month_actual(rm):
+        return sum(
+            (v.get("actual") or 0.0)
+            for v in rollup.get(rm, {}).get("iron_ore_sales_despatch", {}).values()
+        )
+
     target = sum(
         (v.get("plan") or 0.0)
         for rm in fy_months
         for v in rollup.get(rm, {}).get("iron_ore_sales_despatch", {}).values()
     )
-    monthly = [
-        (_mon_label(rm), sum(
-            (v.get("actual") or 0.0)
-            for v in rollup.get(rm, {}).get("iron_ore_sales_despatch", {}).values()
-        ))
-        for rm in ytd_months
-    ]
-    return {"target": target, "monthly": monthly}
+    report_month_actual = month_actual(report_month)
+    ytd_actual = sum(month_actual(rm) for rm in ytd_months)
+    return {"target": target, "report_month_actual": report_month_actual, "ytd_actual": ytd_actual}
 
 
 def generate_sail_mines(report_month: str) -> dict:
@@ -578,8 +584,8 @@ def generate_sail_mines(report_month: str) -> dict:
 
     wf = _sales_waterfall_data(report_month)
     sales_waterfall_svg = _sales_waterfall_svg(
-        "Sales of Iron Ore — Despatch to 3rd Party, Month-wise Build-up to Annual Target ('000 T)",
-        [lab for lab, _ in wf["monthly"]], [v for _, v in wf["monthly"]], wf["target"],
+        "Sales of Iron Ore — Despatch to 3rd Party ('000 T)",
+        _mon_label(report_month), wf["report_month_actual"], wf["ytd_actual"], wf["target"],
     )
 
     return {
