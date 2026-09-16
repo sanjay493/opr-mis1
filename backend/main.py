@@ -304,6 +304,7 @@ from layout_loader import load_layout_config
 from api_rsp_techno import router as rsp_techno_router
 from api_rsp_bf_glance import router as rsp_bf_glance_router
 from api_bsp_techno import router as bsp_techno_router
+from api_bsp_bf_techno import router as bsp_bf_techno_router
 from api_isp_techno import router as isp_techno_router
 from api_dsp_techno import router as dsp_techno_router
 from api_unified_techno import router as unified_techno_router
@@ -630,6 +631,7 @@ app.add_middleware(
 app.include_router(rsp_techno_router)
 app.include_router(rsp_bf_glance_router)
 app.include_router(bsp_techno_router)
+app.include_router(bsp_bf_techno_router)
 app.include_router(isp_techno_router)
 app.include_router(dsp_techno_router)
 app.include_router(unified_techno_router)

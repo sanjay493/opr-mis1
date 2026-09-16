@@ -228,22 +228,20 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
 # ---------------------------------------------------------------------------
 # Despatch (Saleable Steel Despatch / Direct Despatch / Semis Export /
 # Finished Export / Road Despatch / Semis Despatch) — per direct
-# instruction. Two sheets:
-#   'Maj Despatch Summ'  — row numbers confirmed IDENTICAL across every
-#     vintage sampled (Mar'22 through Mar'26), unlike 'Maj Production
-#     Summ' above — only the label WORDING on these rows drifts a little
-#     ("EXPORT DIR" (2022) vs "EXPORT " (2024+), "MKTG DIR (DEF)" vs
-#     "MKTG DIR"), never the row number. Safe as fixed offsets.
-#   'DETAIL DESP  ' (sheet name carries trailing spaces, looked up by
-#     substring) — row numbers DO drift here (confirmed), so every row is
-#     label-searched instead, same approach as _resolve_prod_row_map above.
+# instruction, all read from 'DETAIL DESP  ' (sheet name carries trailing
+# spaces, looked up by substring). Row numbers DO drift on this sheet
+# between vintages (confirmed: the "Saleable Steel (mill-wise)" section's
+# own TOTAL row alone was 45 in the Mar'22 file, 76 in Mar'26, 78 in
+# Aug'26) — every row is label-searched off its own section header
+# instead, same approach as _resolve_prod_row_map above. Previously
+# Saleable Steel Despatch/Road Despatch came from 'Maj Despatch Summ'
+# (fixed offsets — that sheet's row numbers don't drift) and Semis/
+# Finished Export were a residual estimate off that sheet's own EXPORT
+# row; moved to DETAIL DESP's own more granular breakdown instead, per
+# direct instruction — every figure below was cross-checked against
+# 'Maj Despatch Summ'’s equivalent row and reconciles to the tonne for
+# real months (Jun/Jul/Aug'26).
 # ---------------------------------------------------------------------------
-
-_DESPATCH_SUMM_ROWS = {
-    "total":  12,   # "TOTAL" under "Saleable Steel (mill-wise)" -> Saleable Steel Despatch
-    "export": 19,   # "EXPORT"/"EXPORT DIR" under "Saleable Steel (Sale type-wise)"
-    "road":   23,   # "ROAD" under "Saleable Steel (Shipping Mode-wise)"
-}
 
 
 def _find_first_after(ws, label: str, after_row: int, window: int = 40, col: int = 2) -> Optional[int]:
@@ -279,7 +277,8 @@ def _resolve_detail_desp_direct_rows(ws) -> tuple:
 
 def _resolve_detail_desp_export_total_row(ws, section_label: str) -> Optional[int]:
     """First "TOTAL" row after the named EXPORT section header (EXPORT
-    WRM / EXPORT BAR MILL / EXPORT US MILL) — each section's own position
+    WRM / EXPORT BAR MILL / EXPORT US MILL — pre-2026 vintages only, see
+    _resolve_detail_desp_export_rows) — each section's own position
     drifts between vintages (confirmed), but the header text and the
     "first TOTAL below it" pattern do not."""
     header = _find_label_row_in_range(ws, section_label, 1, ws.max_row)
@@ -288,26 +287,77 @@ def _resolve_detail_desp_export_total_row(ws, section_label: str) -> Optional[in
     return _find_first_after(ws, "TOTAL", header)
 
 
+def _resolve_detail_desp_millwise_rows(ws) -> tuple:
+    """(semis_row, total_row) — DETAIL DESP's "Saleable Steel (mill-wise)"
+    section's own SEMIS row (Semis Despatch) and TOTAL row (Saleable Steel
+    Despatch: the WR MILL + BAR MILL + US MILL + SEMIS aggregate), located
+    by that section's own header since exact row numbers drift heavily
+    between vintages (confirmed: this section's TOTAL row alone was 45 in
+    the Mar'22 file, 76 in Mar'26, 78 in Aug'26). Cross-checked against
+    'Maj Despatch Summ'’s own TOTAL row (used here until the entity's
+    despatch data went missing there for Aug'26) and reconciles to the
+    tonne."""
+    header = _find_label_row_in_range(ws, "SALEABLE STEEL (MILL-WISE)", 1, ws.max_row)
+    if header is None:
+        return None, None
+    return _find_first_after(ws, "SEMIS", header), _find_first_after(ws, "TOTAL", header)
+
+
+def _resolve_detail_desp_road_row(ws) -> Optional[int]:
+    """ROAD row under DETAIL DESP's "Saleable Steel (Total Shipping
+    Mode-wise)" section — cross-checked against 'Maj Despatch Summ'’s own
+    ROAD row and reconciles to the tonne."""
+    header = _find_label_row_in_range(ws, "SALEABLE STEEL (TOTAL SHIPPING MODE-WISE)", 1, ws.max_row)
+    if header is None:
+        return None
+    return _find_first_after(ws, "ROAD", header)
+
+
+def _resolve_detail_desp_export_rows(ws) -> tuple:
+    """(semis_export_row, total_export_row) — the "CMO EXP" row under
+    DETAIL DESP's own top-level "SEMIS" product section (Semis Export:
+    export-channel despatch of just the Semis product) and the "CMO EXP"
+    row under its "Saleable Steel (Total sale type-wise)" section (Total
+    export, Finished+Semis combined — confirmed identical to 'Maj
+    Despatch Summ'’s own EXPORT row to the tonne). Finished Export is the
+    difference between the two (see _extract_despatch), not its own row.
+
+    Both located by their section's own header, not a fixed row (same
+    drift as _resolve_detail_desp_millwise_rows). Returns (None, None) on
+    vintages before ~2026 that don't break "Saleable Steel"/"SEMIS" out
+    by CMO EXP/CMO DIR/... sale-type columns at all (confirmed on the
+    Mar'22 file) — callers fall back to the older EXPORT WRM/BAR/US MILL
+    section total for those (_resolve_detail_desp_export_total_row)."""
+    semis_header = _find_label_row_in_range(ws, "SEMIS", 1, ws.max_row)
+    semis_export_row = _find_first_after(ws, "CMO EXP", semis_header) if semis_header is not None else None
+    sale_type_header = _find_label_row_in_range(ws, "SALEABLE STEEL (TOTAL SALE TYPE-WISE)", 1, ws.max_row)
+    total_export_row = _find_first_after(ws, "CMO EXP", sale_type_header) if sale_type_header is not None else None
+    return semis_export_row, total_export_row
+
+
 def _extract_despatch(wb, col: str, db_report_month: str) -> dict:
     """{item_name: value_in_Tonnes_or_None} for the 6 despatch items —
     called from _extract_monthly_report, sharing its already-resolved
-    month column (despatch sheets use the identical column layout as
-    'Maj Production Summ' — confirmed via _PROD_COL_MAP)."""
+    month column ('DETAIL DESP' uses the identical column layout as 'Maj
+    Production Summ' — confirmed via _PROD_COL_MAP).
+
+    All 6 items now come from 'DETAIL DESP' (sheet name carries trailing
+    spaces, looked up by substring below) — per direct instruction,
+    Saleable Steel Despatch/Road Despatch moved off 'Maj Despatch Summ'
+    (a second, separate sheet — both actually carried the real Aug'26
+    figures when checked directly, so this move is about sourcing all 6
+    items from one consistent, already label-searched sheet rather than
+    two, not a data-availability fix in itself), and Semis/Finished
+    Export moved off the old residual estimate (mds_export minus a sum of
+    per-mill EXPORT section totals) onto DETAIL DESP's own direct CMO EXP
+    breakdown. Every row is label-searched off its own section header
+    rather than a fixed offset — row numbers drift heavily on this sheet
+    between vintages (confirmed)."""
     vals = {}
-    if "Maj Despatch Summ" not in wb.sheetnames:
-        logger.info("ISP despatch: no 'Maj Despatch Summ' sheet found — "
-                    "despatch items skipped for %s.", db_report_month)
-        return vals
-
-    ws_mds = wb["Maj Despatch Summ"]
-    vals["Saleable Steel Despatch"] = clean_val(ws_mds[f"{col}{_DESPATCH_SUMM_ROWS['total']}"].value)
-    vals["Road Despatch"] = clean_val(ws_mds[f"{col}{_DESPATCH_SUMM_ROWS['road']}"].value)
-    mds_export = clean_val(ws_mds[f"{col}{_DESPATCH_SUMM_ROWS['export']}"].value)
-
     detail_desp_name = next((s for s in wb.sheetnames if "DETAIL DESP" in s.upper()), None)
     if not detail_desp_name:
-        logger.info("ISP despatch: no 'DETAIL DESP' sheet found — Direct Despatch/"
-                    "Semis Export/Finished Export skipped for %s.", db_report_month)
+        logger.info("ISP despatch: no 'DETAIL DESP' sheet found — "
+                    "despatch items skipped for %s.", db_report_month)
         return vals
     ws_dd = wb[detail_desp_name]
 
@@ -321,40 +371,141 @@ def _extract_despatch(wb, col: str, db_report_month: str) -> dict:
                     "changed) — Direct Despatch skipped for %s.",
                     detail_desp_name, db_report_month)
 
-    # Semis Despatch — "DETAIL DESP"'s own "SEMIS" section total (row 37 on
-    # the file cited directly, but that row drifts like everything else on
-    # this sheet — see _resolve_detail_desp_export_total_row's docstring —
-    # so found the same way as the EXPORT sections below: SEMIS's own
-    # header, then the first TOTAL after it).
-    semis_row = _resolve_detail_desp_export_total_row(ws_dd, "SEMIS")
-    if semis_row is not None:
-        v = clean_val(ws_dd[f"{col}{semis_row}"].value)
+    semis_desp_row, total_desp_row = _resolve_detail_desp_millwise_rows(ws_dd)
+    if total_desp_row is not None:
+        vals["Saleable Steel Despatch"] = clean_val(ws_dd[f"{col}{total_desp_row}"].value)
+    else:
+        logger.info("ISP despatch: 'Saleable Steel (mill-wise)' section not found in "
+                    "%r — Saleable Steel Despatch skipped for %s.",
+                    detail_desp_name, db_report_month)
+    if semis_desp_row is not None:
+        v = clean_val(ws_dd[f"{col}{semis_desp_row}"].value)
         if v is not None:
             vals["Semis Despatch"] = v
     else:
-        logger.info("ISP despatch: 'SEMIS' section not found in %r — "
-                    "Semis Despatch skipped for %s.", detail_desp_name, db_report_month)
+        logger.info("ISP despatch: 'SEMIS' row not found under 'Saleable Steel "
+                    "(mill-wise)' in %r — Semis Despatch skipped for %s.",
+                    detail_desp_name, db_report_month)
 
-    finished_export = 0.0
-    found_any_export = False
-    for section in ("EXPORT WRM", "EXPORT BAR MILL", "EXPORT US MILL"):
-        row = _resolve_detail_desp_export_total_row(ws_dd, section)
-        if row is None:
-            continue
-        v = clean_val(ws_dd[f"{col}{row}"].value)
-        if v is not None:
-            finished_export += v
-            found_any_export = True
-    if found_any_export:
-        vals["Finished Export"] = finished_export
-        # Clamped at 0 — the "Maj Despatch Summ" despatch total and the
-        # "DETAIL DESP" finance CENVAT export breakdown don't always
-        # reconcile to the tonne in every month; a small negative residual
-        # is a timing artifact, not a real negative Semis Export.
-        if mds_export is not None:
-            vals["Semis Export"] = max(mds_export - finished_export, 0.0)
+    road_row = _resolve_detail_desp_road_row(ws_dd)
+    if road_row is not None:
+        vals["Road Despatch"] = clean_val(ws_dd[f"{col}{road_row}"].value)
+    else:
+        logger.info("ISP despatch: 'Saleable Steel (Total Shipping Mode-wise)' "
+                    "section not found in %r — Road Despatch skipped for %s.",
+                    detail_desp_name, db_report_month)
+
+    semis_export_row, total_export_row = _resolve_detail_desp_export_rows(ws_dd)
+    semis_export = clean_val(ws_dd[f"{col}{semis_export_row}"].value) if semis_export_row is not None else None
+    total_export = clean_val(ws_dd[f"{col}{total_export_row}"].value) if total_export_row is not None else None
+
+    if semis_export is not None and total_export is not None:
+        vals["Semis Export"] = semis_export
+        # Clamped at 0 — the two CMO EXP rows don't always reconcile to
+        # the tonne to the last decimal; a small negative residual is a
+        # rounding artifact, not a real negative Finished Export.
+        vals["Finished Export"] = max(total_export - semis_export, 0.0)
+    else:
+        # Pre-2026 vintages don't break despatch out by CMO EXP/CMO DIR/...
+        # sale-type columns at all (confirmed on the Mar'22 file) — fall
+        # back to the older per-mill EXPORT section totals for Finished
+        # Export, same as before this change. No equivalent fallback
+        # exists for Semis Export specifically, so it's left unwritten
+        # rather than guessed at.
+        logger.info("ISP despatch: 'CMO EXP' sale-type columns not found in %r — "
+                    "falling back to per-mill EXPORT section totals for Finished "
+                    "Export, Semis Export skipped, for %s.", detail_desp_name, db_report_month)
+        finished_export = 0.0
+        found_any_export = False
+        for section in ("EXPORT WRM", "EXPORT BAR MILL", "EXPORT US MILL"):
+            row = _resolve_detail_desp_export_total_row(ws_dd, section)
+            if row is None:
+                continue
+            v = clean_val(ws_dd[f"{col}{row}"].value)
+            if v is not None:
+                finished_export += v
+                found_any_export = True
+        if found_any_export:
+            vals["Finished Export"] = finished_export
 
     return vals
+
+
+def _despatch_preview_rows(wb, col: str) -> list:
+    """production_rows-shaped preview of the same 6 despatch items
+    _extract_despatch saves — mirrors its row resolution and value
+    computation exactly, but keeps each item's own source cell(s) for
+    display before saving (see extract_preview, called from the Final
+    Monthly Report preview branch). Kept as a separate function rather
+    than having _extract_despatch return cells too, matching this file's
+    existing preview/save split for 'Maj Production Summ' itself (compare
+    _resolve_prod_row_map/_monthly_report_rows_for_col above against
+    _extract_monthly_report's own separate production_cells loop) — if
+    _extract_despatch's row/value logic changes, mirror the change here."""
+    rows = []
+    detail_desp_name = next((s for s in wb.sheetnames if "DETAIL DESP" in s.upper()), None)
+    if not detail_desp_name:
+        return rows
+    ws_dd = wb[detail_desp_name]
+    sheet_label = detail_desp_name.strip()
+
+    def add(item_name: str, value, cell_label: str):
+        rows.append({
+            "item_name": item_name if cell_label else f"(not found) {item_name}",
+            "value":     round(value / 1000.0, 3) if value is not None else None,
+            "cell":      f"{sheet_label}!{cell_label}" if cell_label else "",
+            "unit":      "'000T",
+            "status":    "ok" if value is not None else ("unmapped" if not cell_label else "no value"),
+        })
+
+    cmo_dir_row, mktg_dir_row = _resolve_detail_desp_direct_rows(ws_dd)
+    if cmo_dir_row and mktg_dir_row:
+        cmo_dir = clean_val(ws_dd[f"{col}{cmo_dir_row}"].value) or 0.0
+        mktg_dir = clean_val(ws_dd[f"{col}{mktg_dir_row}"].value) or 0.0
+        add("Direct Despatch", cmo_dir + mktg_dir, f"{col}{cmo_dir_row}+{col}{mktg_dir_row}")
+    else:
+        add("Direct Despatch", None, "")
+
+    semis_desp_row, total_desp_row = _resolve_detail_desp_millwise_rows(ws_dd)
+    if total_desp_row is not None:
+        add("Saleable Steel Despatch", clean_val(ws_dd[f"{col}{total_desp_row}"].value), f"{col}{total_desp_row}")
+    else:
+        add("Saleable Steel Despatch", None, "")
+    if semis_desp_row is not None:
+        add("Semis Despatch", clean_val(ws_dd[f"{col}{semis_desp_row}"].value), f"{col}{semis_desp_row}")
+    else:
+        add("Semis Despatch", None, "")
+
+    road_row = _resolve_detail_desp_road_row(ws_dd)
+    if road_row is not None:
+        add("Road Despatch", clean_val(ws_dd[f"{col}{road_row}"].value), f"{col}{road_row}")
+    else:
+        add("Road Despatch", None, "")
+
+    semis_export_row, total_export_row = _resolve_detail_desp_export_rows(ws_dd)
+    semis_export = clean_val(ws_dd[f"{col}{semis_export_row}"].value) if semis_export_row is not None else None
+    total_export = clean_val(ws_dd[f"{col}{total_export_row}"].value) if total_export_row is not None else None
+
+    if semis_export is not None and total_export is not None:
+        add("Semis Export", semis_export, f"{col}{semis_export_row}")
+        add("Finished Export", max(total_export - semis_export, 0.0),
+            f"{col}{total_export_row}-{col}{semis_export_row}")
+    else:
+        add("Semis Export", None, "")
+        finished_export, found_any_export, cells_used = 0.0, False, []
+        for section in ("EXPORT WRM", "EXPORT BAR MILL", "EXPORT US MILL"):
+            row = _resolve_detail_desp_export_total_row(ws_dd, section)
+            if row is None:
+                continue
+            v = clean_val(ws_dd[f"{col}{row}"].value)
+            if v is not None:
+                finished_export += v
+                found_any_export = True
+                cells_used.append(f"{col}{row}")
+        add("Finished Export", finished_export if found_any_export else None,
+            "+".join(cells_used))
+
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -798,6 +949,7 @@ def _preview_monthly_report_rows(wb, report_month: str):
     row_map = _resolve_prod_row_map(ws)
     rows = _monthly_report_rows_for_col(ws, col, row_map, sinter_ws, sinter_rows)
     rows += _sms_caster_rows_for_month(wb, month_num, db_report_month[2:4])
+    rows += _despatch_preview_rows(wb, col)
     return rows, db_report_month
 
 
@@ -828,6 +980,7 @@ def _preview_monthly_report_all_months(wb, upto_month: str):
             continue  # not yet reported in this workbook — skip, not an error
         month_rows = _monthly_report_rows_for_col(ws, col, row_map, sinter_ws, sinter_rows)
         month_rows += _sms_caster_rows_for_month(wb, month_num, rm[2:4])
+        month_rows += _despatch_preview_rows(wb, col)
         for r in month_rows:
             r["report_month"] = rm
             rows.append(r)

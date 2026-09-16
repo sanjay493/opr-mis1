@@ -45,7 +45,7 @@
           <th rowspan="2" style="
               padding:3px 6px;
               border:1px solid {{ colors.border_dark }};
-              border-right:2px solid {{ colors.border_black }};
+              border-right:1.5px solid {{ colors.border_black }};
           ">
             Unit
           </th>
@@ -78,7 +78,7 @@
                 padding:3px 4px;
                 border:1px solid {{ colors.border_dark }};
                 {% if loop.last %}
-                    border-right:2px solid {{ colors.border_black }};
+                    border-right:1.5px solid {{ colors.border_black }};
                 {% endif %}
                 line-height:1.15;
                 {% if period.kind == 'prev_fy' %}
@@ -123,7 +123,7 @@
           <td style="
               padding:3px 6px;
               border:1px solid {{ colors.border_medium }};
-              border-right:2px solid {{ colors.border_black }};
+              border-right:1.5px solid {{ colors.border_black }};
               text-align:center;
               font-style:italic;
               font-weight:{{ '700' if is_highlight else 'normal' }};
@@ -143,7 +143,7 @@
                   padding:3px 4px;
                   border:1px solid {{ colors.border_medium }};
                   {% if loop.last %}
-                      border-right:2px solid {{ colors.border_black }};
+                      border-right:1.5px solid {{ colors.border_black }};
                   {% endif %}
                   text-align:right;
                   line-height:1.1;

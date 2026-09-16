@@ -1479,6 +1479,26 @@ def extract_preview(file_path: str, report_month: str) -> dict:
             _assert_p9_month_year_match(ws_p9, report_month)
             production_rows = _preview_production_from_cells(ws_p9, _build_p9_cells(ws_p9, col_p9))
 
+        # Despatch (Saleable Steel Despatch / Direct Despatch / Road Despatch /
+        # Finished Export) — shown in the preview the same way it's actually
+        # saved (see _extract_monthly_report): located by sheet TITLE, not
+        # name, so it's checked independently of whether p9_sheet was found
+        # (a file can have despatch on its own even if page-9 detection
+        # missed, and vice versa — see _find_despatch_sheet's docstring for
+        # why RSP's sheet naming can't be trusted). Reuses the exact same
+        # COL_MAP_P9 column and _preview_production_from_cells row-builder
+        # p9 uses above, since _build_despatch_cells returns the identical
+        # {item_name: cell_ref} shape _build_p9_cells does.
+        despatch_sheet = _find_despatch_sheet(wb, sheet_names)
+        if despatch_sheet:
+            col_despatch = COL_MAP_P9.get(month_num)
+            if col_despatch:
+                ws_despatch = wb[despatch_sheet]
+                production_rows += _preview_production_from_cells(
+                    ws_despatch, _build_despatch_cells(ws_despatch, col_despatch))
+                if despatch_sheet not in sheets_used:
+                    sheets_used = ", ".join(s for s in (sheets_used, despatch_sheet) if s)
+
         if p18_sheet:
             ws_p18 = wb[p18_sheet]
             month_col_idx, cum_col_idx = find_month_cum_columns(ws_p18, month_num)
@@ -1621,7 +1641,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
     sheet_p9 = wb[p9_name]
     _assert_p9_month_year_match(sheet_p9, report_month)
 
-    conn   = db.connect()
+    conn   = _db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
@@ -1696,7 +1716,7 @@ def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
     else:
         logger.info(f"RSP Morning Report: month-end sheet for {db_report_month}.")
 
-    conn   = db.connect()
+    conn   = _db.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 

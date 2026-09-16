@@ -525,38 +525,38 @@ def _bubble_data(cur, ytd_months: list) -> list:
     return points
 
 
-def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 500) -> str:
+def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 420) -> str:
     """Quadrant bubble chart matching a reference mock-up: plain L-shaped
-    axes (no box, no tick numbers), dashed quadrant dividers at the mean
-    X/mean Y of the plotted plants (not a fixed 50% — neither share
-    clusters near the middle in practice), "High/Low Value Addition"
-    labels in the upper/lower right, and a plant-colored, sqrt-scaled
-    bubble per plant with its label centered inside. Returns "" when fewer
-    than 2 plants have data (a quadrant split is meaningless with 0-1
-    points).
+    axes (no box) with 0/20/40/60/80/100% tick marks on X and 6 even ticks
+    up to y_max on Y, dashed quadrant dividers at the mean X/mean Y of the
+    plotted plants (not a fixed 50% — neither share clusters near the
+    middle in practice), "High/Low Value Addition" labels in the upper/
+    lower right, and a plant-colored, sqrt-scaled bubble per plant with its
+    label centered inside. Returns "" when fewer than 2 plants have data
+    (a quadrant split is meaningless with 0-1 points).
 
-    The default vw:vh (1000:640) is tuned, not arbitrary — since the <svg>
+    The default vw:vh (1000:420) is tuned, not arbitrary — since the <svg>
     is only ever set to width:100% (height:auto) in CSS, this ratio IS the
-    chart's rendered aspect ratio on the page. An earlier 1000:700 pass
-    was tuned against a standalone browser preview (not the real PDF
-    pipeline) and turned out ~13pt too tall once actually rendered through
-    Playwright — Chromium's print layout can't split this block (no
-    internal break point), so being even slightly too tall pushed the
-    WHOLE chart onto page 25 (leaving page 24 with the title/subtitle and
-    a large blank gap), rather than just clipping the overflow. 1000:640
-    was instead measured from an ACTUAL generated PDF (pdf.generate_pdf_bytes
-    with pages_override=[this page's dict], inspected via PyMuPDF —
-    fitz.open(...).get_drawings()/search_for() to get real point
-    coordinates) — the table's own row count is fixed regardless of
-    report month (which entities get a Semis/Spl. Semis row is
-    structural, not data-dependent, and every value cell is single-line
-    via white-space:nowrap — see main.html's .ssd-table rules — so digit
-    count doesn't change row height either), so the measured leftover
-    space, and this ratio, stay good without needing to be recomputed per
-    month. If the table's column/row structure changes again, re-measure
-    the SAME way (a synthetic HTML preview is not reliable enough here —
-    it under-counted the real table height by several mm) rather than
-    guessing a new ratio."""
+    chart's rendered aspect ratio on the page, and Chromium's print layout
+    can't split this block (no internal break point): too tall and the
+    WHOLE chart gets pushed onto page 25 instead of just clipping.
+    Lowered from 500 (per direct instruction, alongside tighter
+    pad_l/pad_t/pad_b below) to claw back headroom on page 24 as a whole —
+    at vh=500 this chart was NOT itself the overflow (a page 24 alone
+    render always fit) but the page as a whole had near-zero margin, and
+    lost it entirely whenever page 23 (ISP's special-steel page,
+    immediately before it) was printed in the same job: verified via
+    generate_pdf_bytes(pages_override=[page 23, page 24]) that page 23's
+    own font shrinks below its configured value in that combination even
+    though EITHER page alone, or paired with any OTHER neighbor, renders
+    at full size — i.e. this pairing specifically has (or had) too little
+    combined slack, not a bug in either page's own layout math. Restoring
+    real margin on page 24 (this vh cut, plus main.html's .ssd-table/
+    .ssd-stat font-sizes) is what actually fixes that pairing; re-verify
+    the same way (a synthetic single-page render or a plain
+    page.evaluate()-based height measurement are NOT reliable signals for
+    this page — see git history for the DOM-measurement figure that was
+    off by ~25%) any time page 23's or page 24's own content grows again."""
     if len(points) < 2:
         return ""
 
@@ -569,7 +569,7 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 500) -> str:
     # off the right edge of the viewBox and got clipped — per direct
     # instruction, fixed by widening pad_r past r_max with a small margin
     # rather than by touching x_max/the 100% axis meaning itself.
-    pad_l, pad_r, pad_t, pad_b = 130, 90, 60, 110
+    pad_l, pad_r, pad_t, pad_b = 115, 90, 45, 95
     plot_w = vw - pad_l - pad_r
     plot_h = vh - pad_t - pad_b
 
@@ -602,6 +602,26 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 500) -> str:
     lines.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t + plot_h}" stroke="#000000" stroke-width="2.5"/>')
     lines.append(f'<line x1="{pad_l}" y1="{pad_t + plot_h}" x2="{pad_l + plot_w}" y2="{pad_t + plot_h}" stroke="#000000" stroke-width="2.5"/>')
 
+    # Tick marks + %-value labels on both axes — X at fixed 0/20/40/60/80/100
+    # (x_max is always exactly 100, a real percentage), Y at 5 even steps up
+    # to y_max (dynamic — rounded up to the nearest 10 above the tallest
+    # plotted point, see y_max above), so the ticks always cover the full
+    # plotted range regardless of how high Special FS Share climbs that month.
+    axis_y = pad_t + plot_h
+    for xv in (0, 20, 40, 60, 80, 100):
+        tx = xp(xv)
+        lines.append(f'<line x1="{tx:.1f}" y1="{axis_y:.1f}" x2="{tx:.1f}" y2="{axis_y + 7:.1f}" stroke="#000000" stroke-width="1.5"/>')
+        lines.append(f'<text x="{tx:.1f}" y="{axis_y + 21:.1f}" font-size="14" font-family="Arial, sans-serif" '
+                     f'fill="#374151" text-anchor="middle">{xv}%</text>')
+
+    y_step = y_max / 5
+    for i in range(6):
+        yv = y_step * i
+        ty = yp(yv)
+        lines.append(f'<line x1="{pad_l - 7:.1f}" y1="{ty:.1f}" x2="{pad_l:.1f}" y2="{ty:.1f}" stroke="#000000" stroke-width="1.5"/>')
+        lines.append(f'<text x="{pad_l - 12:.1f}" y="{ty + 4:.1f}" font-size="14" font-family="Arial, sans-serif" '
+                     f'fill="#374151" text-anchor="end">{yv:.0f}%</text>')
+
     # Dashed quadrant dividers at the plotted set's own mean, not a fixed 50%.
     mx, my = xp(mean_x), yp(mean_y)
     lines.append(f'<line x1="{mx:.1f}" y1="{pad_t}" x2="{mx:.1f}" y2="{pad_t + plot_h}" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="7,5"/>')
@@ -614,9 +634,11 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 500) -> str:
     lines.append(f'<text x="{label_x:.1f}" y="{pad_t + plot_h - 14:.1f}" font-size="20" '
                  f'font-family="Arial, sans-serif" fill="#c2410c" font-weight="600">Low Value Addition</text>')
 
-    # Axis titles.
+    # Axis titles — pushed down/left of the tick labels added above (axis_y+21
+    # for X, pad_l-12 for Y), not just off the plot edge, so they never
+    # overlap the new tick text at this shrunk vh/pad.
     xt = pad_l + plot_w / 2
-    lines.append(f'<text x="{xt:.1f}" y="{vh - 38:.1f}" font-size="20" font-family="Arial, sans-serif" '
+    lines.append(f'<text x="{xt:.1f}" y="{vh - 12:.1f}" font-size="18" font-family="Arial, sans-serif" '
                  f'fill="#111827" text-anchor="middle">Finished Steel Share of Saleable Steel Despatch (%)</text>')
     yt = pad_t + plot_h / 2
     # Shorter, abbreviated wording (matching the table's own "FS"/"SS")
@@ -624,8 +646,8 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 500) -> str:
     # runs vertically along plot_h, which is far shorter than plot_w, and
     # appending "Despatch" to the old, already-long spelled-out label
     # pushed it past the chart's own top/bottom bounds.
-    lines.append(f'<text x="32" y="{yt:.1f}" font-size="17" font-family="Arial, sans-serif" fill="#111827" '
-                 f'text-anchor="middle" transform="rotate(-90 32 {yt:.1f})">Special FS Share of Saleable Steel Despatch (%)</text>')
+    lines.append(f'<text x="20" y="{yt:.1f}" font-size="15" font-family="Arial, sans-serif" fill="#111827" '
+                 f'text-anchor="middle" transform="rotate(-90 20 {yt:.1f})">Special FS Share of Saleable Steel Despatch (%)</text>')
 
     # Bubbles, sqrt-scaled by Saleable Steel production, label centered.
     for p in points:

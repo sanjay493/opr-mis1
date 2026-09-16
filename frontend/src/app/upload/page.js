@@ -367,7 +367,7 @@ function EditableProductionTable({ plant, rows, onToggle, onEditName }) {
   );
 }
 
-function RspTechnoPreviewTable({ preview }) {
+function RspTechnoPreviewTable({ preview, title = 'RSP Technopara Preview' }) {
   const [openUnit, setOpenUnit] = useState(null);
 
   if (!preview || !preview.records?.length) return null;
@@ -380,7 +380,7 @@ function RspTechnoPreviewTable({ preview }) {
     <div style={{ padding: '20px', backgroundColor: '#f8f9fa', border: '1px solid #10b981', borderRadius: '8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
         <h3 style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', margin: 0 }}>
-          RSP Technopara Preview
+          {title}
           <span style={{ fontSize: '8.5pt', color: '#5f6368', fontWeight: 400, marginLeft: 10 }}>
             {preview.report_month} · {preview.source_file}
           </span>
@@ -473,6 +473,8 @@ function UploadPageInner() {
   const [isTechnoBusy, setIsTechnoBusy] = useState(false);
   const [isRspTechnoBusy, setIsRspTechnoBusy] = useState(false);
   const [rspTechnoPreview, setRspTechnoPreview] = useState(null);
+  const [isBspBfTechnoBusy, setIsBspBfTechnoBusy] = useState(false);
+  const [bspBfTechnoPreview, setBspBfTechnoPreview] = useState(null);
 
   // ASP PDF state (single-step auto-detect: REP or FL file)
   const [aspResult, setAspResult] = useState(null);
@@ -841,6 +843,7 @@ function UploadPageInner() {
 
   // ── ASP PDF handlers ────────────────────────────────────────────────────
   const isAspPdf = technoPlant === 'ASP';
+  const isBspBfTechno = technoPlant === 'BSP_BF';
   const isRspTechno = technoPlant === 'RSP_TECHNO';
 
   const handleAspExtract = async (e) => {
@@ -988,6 +991,60 @@ function UploadPageInner() {
       addLog('error', `RSP Technopara insert failed: ${err.message}`);
     } finally {
       setIsRspTechnoBusy(false);
+    }
+  };
+
+  // ── BSP Blast Furnace V.PARAMETERS handlers ─────────────────────────────
+  const handleBspBfTechnoExtract = async (e) => {
+    e.preventDefault();
+    if (!technoFile) { alert('Please select the BSP BF_V.PARAMETERS .xls file first.'); return; }
+    const targetPeriod = `${technoYear}-${MONTH_NUM[technoMonthName]}`;
+    setIsBspBfTechnoBusy(true);
+    setBspBfTechnoPreview(null);
+    setLogs([]);
+    addLog('info', `BSP Blast Furnace: extracting ${technoFile.name} for ${targetPeriod}...`);
+    const formData = new FormData();
+    formData.append('file', technoFile);
+    formData.append('report_month', targetPeriod);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bsp-bf-techno/preview`, { method: 'POST', body: formData });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || 'Extraction failed');
+      addLog('success', `Preview ready: ${result.units_extracted} units, ${result.total_params} parameters for ${targetPeriod}. Review below, then Insert.`);
+      setBspBfTechnoPreview(result);
+    } catch (err) {
+      addLog('error', `BSP Blast Furnace extraction failed: ${err.message}`);
+    } finally {
+      setIsBspBfTechnoBusy(false);
+    }
+  };
+
+  const handleBspBfTechnoInsert = async () => {
+    if (!bspBfTechnoPreview) return;
+    setIsBspBfTechnoBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bsp-bf-techno/insert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          report_month: bspBfTechnoPreview.report_month,
+          source_file: bspBfTechnoPreview.source_file,
+          records: bspBfTechnoPreview.records,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || 'Insert failed');
+      addLog('success', result.message);
+      addLog('success', 'View at: Data Entry → Techno → BSP Blast Furnace Excel Extract.');
+      setBspBfTechnoPreview(null);
+      setTechnoFile(null);
+      const fi = document.getElementById('techno-file-input');
+      if (fi) fi.value = '';
+      fetchExtractionLog();
+    } catch (err) {
+      addLog('error', `BSP Blast Furnace insert failed: ${err.message}`);
+    } finally {
+      setIsBspBfTechnoBusy(false);
     }
   };
 
@@ -1496,6 +1553,7 @@ function UploadPageInner() {
                   <option value="DSP">DSP (OMI PDF or MCR-I Excel)</option>
                   <option value="ISP">ISP (Morning/Final Excel, or Special Steel PNG)</option>
                   <option value="BSP">BSP (Flash PDF / PPC MIS Month-End .xls / Special Steel .xlsx)</option>
+                  <option value="BSP_BF">BSP Blast Furnace (V.PARAMETERS .xls — Techno)</option>
                   <option value="BSL">BSL (DPR .xlsx / Corporate SS .xlsx)</option>
                   <option value="ASP">ASP (xlsx or PDF — REP / FL actuals)</option>
                   <option value="SSP">SSP (PDF — Monthly DPR)</option>
@@ -1521,6 +1579,7 @@ function UploadPageInner() {
                     : technoPlant === 'DSP' ? 'DSP Report (.pdf or MCR-I .xls)'
                     : technoPlant === 'ISP' ? 'ISP File (.xlsx production/techno, or .png Special Steel screenshot)'
                     : technoPlant === 'BSP' ? 'BSP File (flash-*.pdf Monthly / .xls Month-End PPC MIS / .xlsx Techno/OISCO/SS)'
+                    : technoPlant === 'BSP_BF' ? 'BSP Blast Furnace V.PARAMETERS (.xls — sheet: FOR GM)'
                     : technoPlant === 'BSL' ? 'BSL — DPR Mail (.xlsx) or Techno (.xls) or Corporate SS (.xlsx) or BF Performance / Main Products PDF (.pdf)'
                     : technoPlant === 'ASP' ? 'ASP file — asp.xlsx  or  REP*.pdf / FL*.pdf'
                     : technoPlant === 'SSP' ? 'SSP DPR PDF (e.g. SSP-DPR-DD.MM.YY.pdf)'
@@ -1528,7 +1587,7 @@ function UploadPageInner() {
                     : 'RSP Excel File (.xlsx)'}
                 </label>
                 <input id="techno-file-input" type="file" className="form-control"
-                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx,.pdf' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : technoPlant === 'ISP' ? '.xlsx,.png,.jpg,.jpeg' : '.xlsx'}
+                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx,.pdf' : technoPlant === 'BSP_BF' ? '.xls' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : technoPlant === 'ISP' ? '.xlsx,.png,.jpg,.jpeg' : '.xlsx'}
                        style={{ padding: '4px', fontSize: '0.8rem' }}
                        suppressHydrationWarning
                        onChange={(e) => setTechnoFile(e.target.files[0])} />
@@ -1541,6 +1600,8 @@ function UploadPageInner() {
                     ? 'Morning Report (DAILYREPORT1): ~19 items, month from K5. Final Monthly: ~17 items, set month above. Summarized Monthly (B-FCE): ~37 techno params. Special Steel screenshot (.png/.jpg of the PPC ISP "Order vs Despatch" email): OCR-read PRODUCTS/ORDER/DESPATCH table (WR COIL, TMT COIL, TMT BAR, STRUCTURALS, 150 BLT, 200 BLM), month auto-detected from the title — always review before inserting.'
                     : technoPlant === 'BSP'
                     ? "File type auto-detected from content: flash-<mon>YY.pdf → BSP Flash Monthly PDF — full production (incl. furnace-wise BF#1/4/5/6/7), ~80 techno params (coke yield, sinter, BF, SMS-2/3, all mills, energy) + closing stock, month auto-detected from cover. BSPMIS*.xls → PPC MIS Month-End (sheet S1) — production + opening stock (closing stock saved as next month). BSP MIS 2_coff_print*.xls/.xlsx → furnace-wise Hot Metal production (tentative; BF-1/4/5/6/7/8, column D CUM, month from row 2). BSP_Spstl-*.xlsx → Special Steel (sheet CORP). BSP-3-page-Tech.xlsx → techno params (Sheet1, month from A3). OISCO_<Mon>'YY.xlsx → OISCO techno params (month from C3)."
+                    : technoPlant === 'BSP_BF'
+                    ? "BSP Blast Furnace \"BF_V.PARAMETERS (<FY>)...xls\" monthly workbook, sheet 'FOR GM'. Extracts 33 techno-economic parameters (Hot Metal Production, Coke/CDI/Fuel/Nut Coke Rate, Sinter %, Slag Rate, Furnace Utilization/Availability, etc.) per furnace (BF-4/5/6/7/8) plus a BF_Shop total, into techno_data under plant BSP_BF (kept separate from the existing BSP techno upload, which already owns a different, smaller BF parameter set). Set the report month above first — the file covers the whole FY in one workbook, and the selected month must already be reported in it."
                     : technoPlant === 'BSL'
                     ? 'DPR XLSX: BSL_DPR_DDMMYYYY.xlsx (sheet DPR) — 19 production items, month auto-detected from O1. | Techno XLS: TECHNO <MON><YYYY>.XLS — 14+ techno params, set month above. | Corp SS XLSX: grade-wise Order Qty & Despatch, month auto-detected. | BF PDF: BSL_BlastFurnace_DDMMYYYY.pdf — furnace-wise HM production (BF-1/2/4/5) into production_table; the other 13 techno params for this PDF are entered via /data-entry/techno. | Main Products PDF: the plant\'s month-end PDF bundle (e.g. "Rev <Mon><YY> (n).pdf") — auto-detected from its "PRODUCTION OF MAIN PRODUCTS" page. Extracts the same 19 production items as the DPR path (Sinter, Hot Metal, Pig Iron, SMS-1/2, Crude Steel, HR Coil/Plate/Sheet, CR Coil/Sheet, GP/GC, Saleable Steel, Finished Steel, Saleable Semis) straight from the finalised report; month auto-detected from the page header. | Saleable Steel — Table 2.1 PDF: the Corporate MIS year-wise PRODUCTION SUMMARY page (auto-detected from "Table No. 2.1") — Thick Plate, HSM HR Coil/Plate, HR Sheet, CR I/II & III Coil, CR Sheets, GP/GC, GPC3, Saleable Semis (Slab), Saleable Steel, and computed Finished Steel, for every month of the FY selected above. Set any month in the target FY, then use "Extract All 12 Months (FY)" below to preview and insert the whole year in one go.'
                     : technoPlant === 'ASP'
@@ -1595,6 +1656,13 @@ function UploadPageInner() {
                                  backgroundColor: '#10b981', border: '1px solid #10b981', color: '#fff',
                                  cursor: isRspTechnoBusy ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
                   {isRspTechnoBusy ? 'Extracting...' : 'Extract & Save RSP Technopara'}
+                </button>
+              ) : isBspBfTechno ? (
+                <button type="button" onClick={handleBspBfTechnoExtract} disabled={isBspBfTechnoBusy}
+                        style={{ width: '100%', padding: '8px', borderRadius: 6, fontWeight: 700,
+                                 backgroundColor: '#10b981', border: '1px solid #10b981', color: '#fff',
+                                 cursor: isBspBfTechnoBusy ? 'not-allowed' : 'pointer', fontSize: '9pt' }}>
+                  {isBspBfTechnoBusy ? 'Extracting...' : 'Extract BSP Blast Furnace Techno'}
                 </button>
               ) : (
                 <button type="submit" className="btn btn-primary" disabled={isTechnoBusy}
@@ -1830,6 +1898,32 @@ function UploadPageInner() {
               </div>
             </div>
           )}
+
+          {/* BSP Blast Furnace preview summary + insert controls */}
+          {bspBfTechnoPreview && (
+            <div>
+              <div style={{ fontSize: '9pt', color: '#5f6368', marginBottom: 10 }}>
+                <strong style={{ color: '#10b981' }}>BSP Blast Furnace</strong> · {bspBfTechnoPreview.report_month}
+                <div style={{ marginTop: 4, color: '#5f6368' }}>
+                  {bspBfTechnoPreview.units_extracted} units · {bspBfTechnoPreview.total_params} parameters
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                <button onClick={handleBspBfTechnoInsert} disabled={isBspBfTechnoBusy}
+                        style={{ flex: 1, padding: '7px 0', fontSize: '8.5pt', fontWeight: 700,
+                                 backgroundColor: '#10b981', border: 'none', color: '#fff',
+                                 borderRadius: 4, cursor: 'pointer' }}>
+                  {isBspBfTechnoBusy ? 'Saving...' : `Save ${bspBfTechnoPreview.units_extracted} units to DB`}
+                </button>
+                <button onClick={() => { setBspBfTechnoPreview(null); }}
+                        disabled={isBspBfTechnoBusy}
+                        style={{ padding: '7px 14px', fontSize: '8.5pt', background: 'none',
+                                 border: '1px solid #5f6368', color: '#5f6368', borderRadius: 4, cursor: 'pointer' }}>
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#5f6368', textAlign: 'center', paddingTop: '15px' }}>
@@ -1982,6 +2076,11 @@ function UploadPageInner() {
               </div>
             );
           })()}
+
+          {/* BSP Blast Furnace techno preview — verify per-furnace values before insertion */}
+          {bspBfTechnoPreview && (
+            <RspTechnoPreviewTable preview={bspBfTechnoPreview} title="BSP Blast Furnace Techno Preview" />
+          )}
 
           {/* RSP extraction preview — verify production + stock + special-steel before insertion */}
           {technoPreview && (
