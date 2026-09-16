@@ -821,8 +821,8 @@ _MAX_TREND_SPLIT_PASSES = 5
 # ROWS below), then the fewest split plant groups overall, wins. Neither
 # floor is ever crossed: any tighter risks crowding the printed header/
 # footer.
-_TREND_MIN_TOP_MARGIN_MM = 4
-_TREND_MIN_BOTTOM_MARGIN_MM = 2
+_TREND_MIN_TOP_MARGIN_MM = 3
+_TREND_MIN_BOTTOM_MARGIN_MM = 1.5
 
 # A split group must leave at least this many rows on BOTH sides of any
 # page break — fewer reads as an orphan (a lone plant-label letter or two
@@ -841,7 +841,7 @@ _TREND_MIN_BOTTOM_MARGIN_MM = 2
 # page (breaking the static Index count in main.py). A short "5 Plants" /
 # "SAIL" segment instead just shrinks its stacked label to 6pt
 # (.plant-cell.tight, see main.html).
-_TREND_MIN_SPLIT_SEGMENT_ROWS = 3
+_TREND_MIN_SPLIT_SEGMENT_ROWS = 4
 
 
 def _trend_group_page_spans(trend_pages: list, page_texts: list) -> list:
@@ -1039,21 +1039,25 @@ _TREND_SPLIT_CACHE_MAX_ENTRIES = 200
 def _trend_content_cache_key(trend_pages: list, template, render_kwargs: dict) -> str:
     """Fingerprints everything that could affect trend-page pagination —
     the actual plant/month values and labels, current font/size settings,
-    and whatever page_layouts margins are configured for these pages right
-    now (before _pick_trend_margins gets a chance to adjust them) — by
+    whatever page_layouts margins are configured for these pages right
+    now (before _pick_trend_margins gets a chance to adjust them), and the
+    pagination algorithm's own source (_TREND_SPLIT_ALGORITHM_FINGERPRINT,
+    so a fix or tweak to that logic can never be masked by a stale entry
+    computed under the old code — see that constant's docstring) — by
     hashing the exact HTML these pages render to *before* any correction
-    pass touches them. Jinja2's render is a pure read of trend_pages/
-    render_kwargs (no mutation), so this is safe to call before the real
-    work starts, and since every one of those inputs is substituted
-    directly into the template's text or inline styles, identical HTML
-    forward-guarantees identical real pagination — there is no case where
-    this hashes the same but the true probe result would differ. Costs
-    one extra small render (only trend_pages, not the full report) on
-    every call, cache hit or miss — a few hundred ms at most, negligible
-    next to the ~5-6 minutes of probe-and-correct passes a hit skips."""
+    pass touches them, plus that fingerprint. Jinja2's render is a pure
+    read of trend_pages/render_kwargs (no mutation), so this is safe to
+    call before the real work starts, and since every one of those inputs
+    is substituted directly into the template's text or inline styles,
+    identical HTML plus an unchanged algorithm forward-guarantees identical
+    real pagination — there is no case where this hashes the same but the
+    true probe result would differ. Costs one extra small render (only
+    trend_pages, not the full report) on every call, cache hit or miss — a
+    few hundred ms at most, negligible next to the ~5-6 minutes of
+    probe-and-correct passes a hit skips."""
     import hashlib
     html = template.render(pages=trend_pages, **render_kwargs)
-    return hashlib.sha256(html.encode("utf-8")).hexdigest()
+    return hashlib.sha256((_TREND_SPLIT_ALGORITHM_FINGERPRINT + html).encode("utf-8")).hexdigest()
 
 
 def _cache_trend_split_result(cache_key: str, trend_pages: list, render_kwargs: dict) -> None:
@@ -1153,7 +1157,7 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
         from pypdf import PdfReader
 
         cache_key = _trend_content_cache_key(trend_pages, template, render_kwargs)
-        cached = _TREND_SPLIT_CACHE.get(cache_key)
+        cached = None if os.environ.get("DEBUG_SKIP_TREND_CACHE") else _TREND_SPLIT_CACHE.get(cache_key)
         if cached is not None:
             page_layouts = render_kwargs.setdefault("page_layouts", {})
             for pkey, margins in cached["page_layouts"].items():
@@ -1499,6 +1503,36 @@ def _fix_orphaned_small_groups(trend_page: dict, page_of: dict) -> None:
                 rows[j]["break_before"] = False
                 rows[i]["break_before"] = True
             i = j
+
+
+def _trend_split_algorithm_fingerprint() -> str:
+    """Hash of the source of every function that decides where a trend
+    table's page breaks fall. Mixed into _trend_content_cache_key so a code
+    change to this pagination logic — a bug fix, a heuristic tweak —
+    invalidates every entry already sitting in _TREND_SPLIT_CACHE, instead
+    of a long-lived server process (no --reload, or one that just hasn't
+    restarted since the edit) silently continuing to serve rowspan/
+    break_before decisions computed by whatever OLD version of this logic
+    happened to be running when that entry was cached. Confirmed against a
+    real case: a report re-generated in the same long-running process
+    after a fix to this logic still showed the pre-fix layout (a plant
+    group's forced break left most of one page blank) purely because the
+    trend content's hash hadn't changed, so the stale cache entry from
+    before the fix was still a "hit" — a cold process (empty cache) or a
+    fresh cache key here produces the corrected layout instead. Computed
+    once at import time since these functions' source doesn't change at
+    runtime."""
+    import hashlib
+    import inspect
+    funcs = (
+        _pick_trend_margins, _apply_trend_page_splits, _enforce_trend_min_segments,
+        _min_segment_violation, _fix_orphaned_small_groups, _make_trend_split_hook,
+    )
+    src = "\n".join(inspect.getsource(f) for f in funcs)
+    return hashlib.sha256(src.encode("utf-8")).hexdigest()[:16]
+
+
+_TREND_SPLIT_ALGORITHM_FINGERPRINT = _trend_split_algorithm_fingerprint()
 
 
 _PW_STATE = {"pw": None, "browser": None}
