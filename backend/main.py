@@ -737,7 +737,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                 BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
                                 COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
-                                SAIL_MINES_PAGE_ID,
+                                SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                 POWER_DATA_PAGE_ID) or page_number in STEEL_SECTOR_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
