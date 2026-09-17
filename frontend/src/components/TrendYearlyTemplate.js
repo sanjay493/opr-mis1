@@ -79,14 +79,17 @@ function TrendTable({ rows, item_display, unit }) {
 
       {/* Table */}
       <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        {/* Plant-name column widened 1.8% -> 3.0% per direct instruction
+            (2026-09-17) — the +1.2pp taken from H1/H2/Total (5.6% -> 5.3%
+            each, 5.9% -> 5.3%), matching trend_section.html's PDF colgroup. */}
         <colgroup>
-          <col style={{ width: '1.8%' }} />
+          <col style={{ width: '3.0%' }} />
           <col style={{ width: '5.5%' }} />
           <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} />
-          <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} /><col style={{ width: '5.6%' }} />
+          <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} /><col style={{ width: '5.3%' }} />
           <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} />
-          <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} /><col style={{ width: '5.6%' }} />
-          <col style={{ width: '5.9%' }} />
+          <col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '4.6%' }} /><col style={{ width: '5.1%' }} /><col style={{ width: '5.3%' }} />
+          <col style={{ width: '5.3%' }} />
         </colgroup>
 
         <thead>
@@ -111,12 +114,16 @@ function TrendTable({ rows, item_display, unit }) {
           {rows.map((row, idx) => {
             const v = row.values || [];
             const cf = row.cell_flags || [];
-            const cellStyle  = i => ({ ...CELL,  ...bestFlagStyle(cf[i]) });
-            const qcellStyle = i => ({ ...QCELL, ...bestFlagStyle(cf[i]) });
-            const hcellStyle = i => ({ ...HHCELL, ...bestFlagStyle(cf[i]) }); 
-            const tcellStyle = i => ({ ...TCELL, ...bestFlagStyle(cf[i]) });
             const { bg, fw } = rowColors(row);
             const isAggregate = AGGREGATES.has(row.plant);
+            // Taller vertical padding on every SAIL/5 Plants row (matches
+            // main.html's tr.sail-row/tr.fp-row td rule) per direct
+            // instruction, 2026-09-17.
+            const vPad = isAggregate ? { paddingTop: 6, paddingBottom: 6 } : null;
+            const cellStyle  = i => ({ ...CELL,  ...bestFlagStyle(cf[i]), ...vPad });
+            const qcellStyle = i => ({ ...QCELL, ...bestFlagStyle(cf[i]), ...vPad });
+            const hcellStyle = i => ({ ...HHCELL, ...bestFlagStyle(cf[i]), ...vPad });
+            const tcellStyle = i => ({ ...TCELL, ...bestFlagStyle(cf[i]), ...vPad });
             const topBorder = row.is_first_in_plant ? '2px solid #64748b' : undefined;
 
             const plantChars = row.plant.replace(/ /g, '');
@@ -142,6 +149,7 @@ function TrendTable({ rows, item_display, unit }) {
               border: '0.5px solid #94a3b8',
               padding: '2px 1px',
               lineHeight: tight ? '1.05' : '1.15',
+              ...vPad,
             };
 
             return (
@@ -163,6 +171,7 @@ function TrendTable({ rows, item_display, unit }) {
                   // row's "26-27" — column-fit fix, scoped to plan rows
                   // only, matching trend_section.html's tr.plan-row rule.
                   ...(row.is_plan ? { paddingLeft: 0, paddingRight: 0, fontSize: '8pt' } : null),
+                  ...vPad,
                 }}>{row.year_label}</td>
                 <td style={cellStyle(0)}>{v[0]}</td>
                 <td style={cellStyle(1)}>{v[1]}</td>

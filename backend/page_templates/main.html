@@ -1586,6 +1586,12 @@
         .page7-13-yearly-table tr.plan-row   { background: {{ colors.highlight_actual_bg }}; font-weight: 700; }
         .page7-13-yearly-table tr.sail-row   { background: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
         .page7-13-yearly-table tr.fp-row     { background: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
+        /* Taller vertical padding on the SAIL/5 Plants aggregate rows only
+           (base td padding stays 3.5px 1.5px for every other row) per direct
+           instruction, 2026-09-17 — makes these two summary rows stand out
+           a bit more from the individual-plant rows above them. */
+        .page7-13-yearly-table tr.sail-row td,
+        .page7-13-yearly-table tr.fp-row td { padding-top: 6px; padding-bottom: 6px; }
         .page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid {{ colors.border_heavy }}; }
         .page7-13-yearly-table td.qtr-cell   { background: {{ colors.highlight_qtr_col_bg }}; font-weight: 600; }
         .page7-13-yearly-table td.hh-cell    { background: {{ colors.highlight_hh_col_bg }}; font-weight: 600; }
