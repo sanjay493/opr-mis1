@@ -1,0 +1,22 @@
+<style>
+    .mp-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6pt; }
+    .mp-unit { font-size: 9pt; font-style: italic; color: {{ colors.text_secondary|default('#5f6368') }}; }
+    .mp-charts { display: flex; flex-direction: column; gap: 8pt; }
+    .mp-chart-card {
+        width: 100%; box-sizing: border-box; border: 1.25pt solid {{ colors.highlight_shortfall_band_bg|default('#fed7aa') }};
+        border-radius: 4pt; padding: 8pt 10pt 6pt;
+    }
+    .mp-source { text-align: right; font-size: 7.6pt; font-style: italic; color: {{ colors.text_secondary|default('#5f6368') }}; margin-top: 4pt; }
+</style>
+
+<div class="mp-header">
+    <div class="coal-title" style="margin-bottom:0;">{{ page.title }}</div>
+    <div class="mp-unit">( {{ page.unit }} )</div>
+</div>
+
+<div class="mp-charts">
+    <div class="mp-chart-card">{{ page.raw_materials_svg }}</div>
+    <div class="mp-chart-card">{{ page.finished_steel_svg }}</div>
+</div>
+
+<div class="mp-source">{{ page.source }} &nbsp;·&nbsp; {{ page.period_label }}</div>

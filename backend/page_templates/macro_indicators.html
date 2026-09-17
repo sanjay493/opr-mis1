@@ -1,0 +1,51 @@
+<style>
+    .mi-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6pt; }
+    .mi-period { font-size: 9pt; font-style: italic; color: {{ colors.text_secondary|default('#5f6368') }}; }
+    .mi-table { border-collapse: collapse; width: 100%; font-size: 7.6pt; table-layout: fixed; }
+    .mi-table th, .mi-table td {
+        border: 0.5pt solid {{ colors.border|default('#b0b0b0') }};
+        padding: 3pt 3pt; text-align: center; overflow: hidden;
+    }
+    .mi-table thead th { background: {{ colors.header_bg|default('#e8eef7') }}; font-weight: 700; font-size: 7.8pt; }
+    .mi-table td.mi-label { text-align: left; font-weight: 600; white-space: normal; font-size: 7.4pt; }
+    .mi-table td.mi-unit { text-align: left; font-style: italic; color: {{ colors.text_secondary|default('#5f6368') }}; font-size: 6.6pt; white-space: normal; }
+    .mi-table td.mi-num { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .mi-footer { margin-top: 6pt; font-size: 7.4pt; color: {{ colors.text_secondary|default('#5f6368') }}; }
+    .mi-footer .mi-footnote { font-style: italic; }
+</style>
+
+<div class="mi-header">
+    <div class="coal-title" style="margin-bottom:0;">{{ page.title }}</div>
+    <div class="mi-period">{{ page.period_label }}</div>
+</div>
+
+<table class="mi-table">
+    <colgroup>
+        <col style="width:15%"/>
+        <col style="width:9%"/>
+        {% for c in page.column_labels %}<col />{% endfor %}
+    </colgroup>
+    <thead>
+        <tr>
+            <th>Key Parameters</th>
+            <th>Unit</th>
+            {% for lab in page.column_labels %}<th>{{ lab }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in page.rows %}
+        <tr>
+            <td class="mi-label">{{ r.label }}</td>
+            <td class="mi-unit">{{ r.unit }}</td>
+            {% for c in r.cells %}
+            <td class="mi-num"{% if c.bg %} style="background:{{ c.bg }};{% if c.fg %} color:{{ c.fg }};{% endif %}"{% endif %}>{{ c.value }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="mi-footer">
+    {{ page.source }}<br>
+    <span class="mi-footnote">{{ page.footnote }}</span>
+</div>

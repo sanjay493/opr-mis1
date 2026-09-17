@@ -39,6 +39,7 @@ export default function GlobalNavbar() {
             { label: 'SAIL Mines Entry (Page 4.5)', link: '/data-entry/sail-mines', icon: '⛏️' },
             { label: 'Rail Production & Dispatch Entry (Page 18.5)', link: '/data-entry/rail-report', icon: '🚆' },
             { label: 'Iron Ore Mines Production & Despatch', link: '/data-entry/mines-production-despatch', icon: '🚂' },
+            { label: 'Market Intelligence Entry (Pages 2.41/2.42)', link: '/data-entry/market-intel', icon: '📈' },
           ]
         },
         {

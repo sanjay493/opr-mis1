@@ -44,6 +44,10 @@ _DEPT_BADGE_GROUPS = [
 # main.py (currently built, not inserted).
 #   2.1, 2.2, 2.3 — "Indian Steel Sector Performance", right after the
 #     Index, ahead of "MIS at a Glance" — same group (1) as its neighbors.
+#   2.41, 2.42 — "Movement of Key Prices - International" / "India Macro
+#     Economic Indicators", right after 2.1-2.3, still ahead of "MIS at a
+#     Glance" — same group (1) as their neighbors, per direct instruction,
+#     2026-09-17.
 #   4.5 — "SAIL Mines Production & Despatch Performance", right after
 #     fixed page 4 — same group (1) as its 3.5/3.6 neighbors.
 #   18.5 — "Rail Production & Dispatch from BSP" — per direct instruction,
@@ -52,7 +56,7 @@ _DEPT_BADGE_GROUPS = [
 #     right before 1025 (Special Steel Plants Physical Performance) — group
 #     changed to 5 to match, same as its new physical neighbors.
 _DEPT_BADGE_EXPLICIT_GROUP = {
-    2.1: 1, 2.2: 1, 2.3: 1,
+    2.1: 1, 2.2: 1, 2.3: 1, 2.41: 1, 2.42: 1,
     2.5: 1, 3: 1, 3.2: 1, 3.3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1,
     18.5: 5,
     1024: 5, 1025: 5,
@@ -104,6 +108,12 @@ def dept_badge_group(page_num) -> Optional[int]:
 # variant of this bug at once: it doesn't matter what list, if any, this
 # page happens to be fetched alongside.
 _CANONICAL_PAGE_ORDER = [
+    # 2.1-2.3 (Indian Steel Sector Performance) and 2.41/2.42 (Movement of
+    # Key Prices - International / India Macro Economic Indicators) were
+    # both missing from this list before 2026-09-17 — a pre-existing gap
+    # (same kind as 1025's, fixed alongside it below) noticed while adding
+    # 2.41/2.42 here.
+    2.1, 2.2, 2.3, 2.41, 2.42,
     2.5, 3, 3.2, 3.3, 3.5, 3.6, 3.61, 3.62, 3.63,
     *range(4, 19), *range(19, 25), 1024, 18.5, 1025,
     25, 26,

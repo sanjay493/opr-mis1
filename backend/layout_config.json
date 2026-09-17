@@ -21,6 +21,7 @@
     "27":   { "fontFamily": "IBM Plex Sans", "table": { "th": 8, "td":  8}, "fontWeight": 300, "marginTop": 3, "marginBottom": 1.5, "marginLR": 4, "fitToPage": true },
     "28-30": { "table": { "th": 9, "td": 9 },    "marginTop": 4,  "marginBottom": 3, "marginLR": 4, "fitToPage": true },
     "31-35": { "table": { "th": 8, "td": 8 },    "marginTop": 4,  "marginBottom": 3, "marginLR": 6, "fitToPage": true },
-    "18.5": { "table": { "th": 8, "td": 8 },     "marginTop": 5,  "marginBottom": 3, "marginLR": 6, "fitToPage": true }
+    "18.5": { "table": { "th": 8, "td": 8 },     "marginTop": 5,  "marginBottom": 3, "marginLR": 6, "fitToPage": true },
+    "2.41,2.42": { "table": { "th": 8, "td": 8 }, "marginTop": 6, "marginBottom": 4, "marginLR": 8, "fitToPage": true }
   }
 }

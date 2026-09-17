@@ -758,6 +758,35 @@ def init_db():
         )
     """)
 
+    # "Movement of Key Prices - International" (MARKET_PRICES_PAGE_ID = 2.41)
+    # and "India Macro Economic Indicators" (MACRO_INDICATORS_PAGE_ID = 2.42)
+    # — two new landscape report pages, per direct instruction (2026-09-17),
+    # scraped once from Report_format/work/"DC-2 pages.pdf" (BigMint market
+    # intelligence snapshot) then extended monthly via a dedicated
+    # data-entry page (/data-entry/market-intel) — see page_market_prices.py
+    # / page_macro_indicators.py for the series/metric registries and
+    # scripts/backfill_market_intel.py for the initial scrape. Both tables
+    # are plain long-format (report_month, code, value) — the small, fixed
+    # series/metric lists live in Python (matching page_rail_report.py's
+    # RAW_METRICS convention) rather than a DB master table, since neither
+    # list is expected to grow/change the way e.g. mines_master does.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS market_price_trend_monthly (
+            report_month TEXT,
+            series_code  TEXT,
+            value        REAL,
+            PRIMARY KEY (report_month, series_code)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS macro_indicators_monthly (
+            report_month TEXT,
+            metric_code  TEXT,
+            value        REAL,
+            PRIMARY KEY (report_month, metric_code)
+        )
+    """)
+
     # Iron Ore Mines Production & Despatch — mine-level detail (11 mines
     # under JGoM/OGoM/CGoM), a finer grain than sail_mines_monthly's
     # iron_ore_prod/iron_ore_despatch sections (which stay at group level).
@@ -958,6 +987,22 @@ def get_fy_months(report_month: str) -> List[str]:
             cur_m = 1
             cur_y += 1
     return result
+
+
+def shift_month(month: str, delta: int) -> str:
+    """'YYYY-MM' shifted by `delta` calendar months (negative = earlier)."""
+    y, m = int(month[:4]), int(month[5:7])
+    idx = y * 12 + (m - 1) + delta
+    return f"{idx // 12}-{idx % 12 + 1:02d}"
+
+
+def get_trailing_months(end_month: str, n: int) -> List[str]:
+    """n calendar months ending at end_month (inclusive), oldest first —
+    a plain rolling window, unlike get_ytd_months/get_fy_months which reset
+    at the April FY boundary. Used by pages whose source data is a rolling
+    snapshot rather than an FY-aligned series (e.g. page_market_prices.py /
+    page_macro_indicators.py's BigMint market-intelligence pages)."""
+    return [shift_month(end_month, -i) for i in range(n - 1, -1, -1)]
 
 
 def get_fy_for_month(report_month: str) -> str:
@@ -3759,6 +3804,78 @@ def save_rail_report_notes(rows: List[Dict[str, Any]]) -> int:
             continue
         cur.execute("INSERT INTO rail_prod_despatch_note (sort_order, note_text) VALUES (?, ?)",
                     (int(r.get("sort_order") or 0), text))
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+# ── "Movement of Key Prices - International" (page 2.41) ───────────────────
+# Backing store for page_market_prices.py + /data-entry/market-intel. See
+# scripts/migrate_add_market_intel.sql.
+
+def get_market_price_trend(report_months: List[str]) -> Dict[str, Dict[str, float]]:
+    """-> {report_month: {series_code: value}}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {m: {} for m in report_months}
+    if report_months:
+        ph = ",".join("?" * len(report_months))
+        cur.execute(f"SELECT report_month, series_code, value FROM market_price_trend_monthly "
+                    f"WHERE report_month IN ({ph})", report_months)
+        for rm, series, value in cur.fetchall():
+            out.setdefault(rm, {})[series] = value
+    conn.close()
+    return out
+
+
+def save_market_price_trend(rows: List[Dict[str, Any]]) -> int:
+    """Upsert market_price_trend_monthly rows: {report_month, series_code, value}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    for r in rows:
+        cur.execute("""
+            INSERT INTO market_price_trend_monthly (report_month, series_code, value)
+            VALUES (?, ?, ?)
+            ON CONFLICT(report_month, series_code) DO UPDATE SET value = excluded.value
+        """, (r["report_month"], r["series_code"], r.get("value")))
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+# ── "India Macro Economic Indicators" (page 2.42) ───────────────────────────
+# Backing store for page_macro_indicators.py + /data-entry/market-intel. See
+# scripts/migrate_add_market_intel.sql.
+
+def get_macro_indicators(report_months: List[str]) -> Dict[str, Dict[str, float]]:
+    """-> {report_month: {metric_code: value}}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {m: {} for m in report_months}
+    if report_months:
+        ph = ",".join("?" * len(report_months))
+        cur.execute(f"SELECT report_month, metric_code, value FROM macro_indicators_monthly "
+                    f"WHERE report_month IN ({ph})", report_months)
+        for rm, metric, value in cur.fetchall():
+            out.setdefault(rm, {})[metric] = value
+    conn.close()
+    return out
+
+
+def save_macro_indicators(rows: List[Dict[str, Any]]) -> int:
+    """Upsert macro_indicators_monthly rows: {report_month, metric_code, value}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    for r in rows:
+        cur.execute("""
+            INSERT INTO macro_indicators_monthly (report_month, metric_code, value)
+            VALUES (?, ?, ?)
+            ON CONFLICT(report_month, metric_code) DO UPDATE SET value = excluded.value
+        """, (r["report_month"], r["metric_code"], r.get("value")))
     conn.commit()
     conn.close()
     return len(rows)

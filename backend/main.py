@@ -42,6 +42,10 @@ from page_cost_trend import generate_cost_trend
 from page_sail_mines import generate_sail_mines
 import page_rail_report
 from page_rail_report import generate_rail_report
+import page_market_prices
+from page_market_prices import generate_market_prices
+import page_macro_indicators
+from page_macro_indicators import generate_macro_indicators
 from page_cover import generate_cover
 from page_coal_receipts_stock import generate_coal_receipts_sail
 from page_power_data import generate_power_data
@@ -209,6 +213,11 @@ def _safe_techno(month, pg):
 #     comment at the bottom of this list.
 _INDEX_SECTIONS = [
     ("Indian Steel Sector Performance", 3),
+    # "Movement of Key Prices - International" (MARKET_PRICES_PAGE_ID = 2.41)
+    # + "India Macro Economic Indicators" (MACRO_INDICATORS_PAGE_ID = 2.42) —
+    # see their own comment above the constant definitions.
+    ("Movement of Key Prices - International", 1),
+    ("India Macro Economic Indicators", 1),
     ("SAIL Performance - At a Glance", 1),
     ("SAIL Performance - 1 Page Summary", 1),
     ("Production Highlights - Best-Ever Records", 1),
@@ -384,6 +393,22 @@ STEEL_SECTOR_PAGES = {
     2.2: "demand_trade",
     2.3: "policy_green",
 }
+
+# "Movement of Key Prices - International" (2 line charts, Raw Materials vs
+# Finished Steel USD/T, BigMint) and "India Macro Economic Indicators" (a
+# 13-month matrix) — two genuine A4-landscape pages (pdf.py's
+# _LANDSCAPE_TYPES), per direct instruction (2026-09-17), inserted right
+# after "Indian Steel Sector Performance" (STEEL_SECTOR_PAGES above), right
+# before "MIS at a Glance" (AT_A_GLANCE_PAGE_ID below) — i.e. still "before
+# SAIL Performance - At a Glance" as asked, without reordering the existing
+# Steel Sector Performance pages. Scraped once from Report_format/work/
+# "DC-2 pages.pdf" (see scripts/backfill_market_intel.py), extended monthly
+# via /data-entry/market-intel. See page_market_prices.py /
+# page_macro_indicators.py. Sentinel ids chosen to avoid the retired 2.4
+# literal (see the STEEL_SECTOR_PAGES cleanup comment below) while still
+# sorting between 2.3 and 2.5.
+MARKET_PRICES_PAGE_ID = 2.41
+MACRO_INDICATORS_PAGE_ID = 2.42
 
 # "MIS at a Glance" infographic snapshot — sits right after the Index (i.e.
 # it's the first NUMBERED page, "Page 1"), so unlike its original position
@@ -750,6 +775,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                 BF_LARGE_ANNEXURE_PAGE_ID,
                                 COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
                                 SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
+                                MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                 POWER_DATA_PAGE_ID) or page_number in STEEL_SECTOR_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
@@ -887,6 +913,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
                                                       SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
+                                                      MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
@@ -916,6 +943,14 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if _idx_aag is not None:
                 for _i, _pg in enumerate(sorted(STEEL_SECTOR_PAGES)):
                     pages_config.insert(_idx_aag + _i, {"page": _pg})
+                # "Movement of Key Prices - International" / "India Macro
+                # Economic Indicators" — right after the 3 Steel Sector
+                # Performance pages just inserted, still ahead of
+                # AT_A_GLANCE_PAGE_ID — see their own comment above the
+                # constant definitions.
+                _n_sect = len(STEEL_SECTOR_PAGES)
+                pages_config.insert(_idx_aag + _n_sect, {"page": MARKET_PRICES_PAGE_ID})
+                pages_config.insert(_idx_aag + _n_sect + 1, {"page": MACRO_INDICATORS_PAGE_ID})
             _idx3 = next((i for i, p in enumerate(pages_config) if p.get("page") == 3), None)
             if _idx3 is not None:
                 # KEY_HIGHLIGHTS_PAGE_ID intentionally NOT inserted here — see
@@ -1013,6 +1048,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == RAIL_REPORT_PAGE_ID:
                 page.update(generate_rail_report(month))
                 page["type"] = "rail_report"
+                page["orientation"] = "landscape"
+            if pg == MARKET_PRICES_PAGE_ID:
+                page.update(generate_market_prices(month))
+                page["orientation"] = "landscape"
+            if pg == MACRO_INDICATORS_PAGE_ID:
+                page.update(generate_macro_indicators(month))
                 page["orientation"] = "landscape"
             if pg == EPI_PAGE_ID:
                 page.update(generate_epi(month))
@@ -1170,6 +1211,19 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if _idx_aag is not None:
             for _i, _pg in enumerate(sorted(STEEL_SECTOR_PAGES)):
                 _pages_list.insert(_idx_aag + _i, {"page": _pg})
+    # "Movement of Key Prices - International" / "India Macro Economic
+    # Indicators" — always inserted right before "MIS at a Glance",
+    # anchored on its own CURRENT position (recomputed fresh here, since
+    # the Steel Sector Performance block above may have just shifted it) —
+    # see their own comment above the constant definitions.
+    if _is_full_export and not any(p.get("page") == MARKET_PRICES_PAGE_ID for p in _pages_list):
+        _idx_aag = next((i for i, p in enumerate(_pages_list) if p.get("page") == AT_A_GLANCE_PAGE_ID), None)
+        if _idx_aag is not None:
+            _pages_list.insert(_idx_aag, {"page": MARKET_PRICES_PAGE_ID})
+    if _is_full_export and not any(p.get("page") == MACRO_INDICATORS_PAGE_ID for p in _pages_list):
+        _idxmp = next((i for i, p in enumerate(_pages_list) if p.get("page") == MARKET_PRICES_PAGE_ID), None)
+        if _idxmp is not None:
+            _pages_list.insert(_idxmp + 1, {"page": MACRO_INDICATORS_PAGE_ID})
     # "Best-Ever Highlights" / "Best Calendar Month" sentinel pages: always
     # inserted right after "SAIL Performance Summary" (page 3), ahead of
     # Key Parameters — see their comment above main.py's constant
@@ -1332,6 +1386,12 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == RAIL_REPORT_PAGE_ID:
             p.update(generate_rail_report(request.month))
             p["type"] = "rail_report"
+            p["orientation"] = "landscape"
+        if pg == MARKET_PRICES_PAGE_ID:
+            p.update(generate_market_prices(request.month))
+            p["orientation"] = "landscape"
+        if pg == MACRO_INDICATORS_PAGE_ID:
+            p.update(generate_macro_indicators(request.month))
             p["orientation"] = "landscape"
         if pg == EPI_PAGE_ID:
             p.update(generate_epi(request.month))
@@ -5571,6 +5631,74 @@ async def api_rail_report_grid_save(payload: dict):
         } for r in payload["rows"]])
     if payload.get("notes") is not None:
         db.save_rail_report_notes(payload["notes"])
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# "Movement of Key Prices - International" (page 2.41) + "India Macro
+# Economic Indicators" (page 2.42) — the report data + a combined
+# data-entry editor for next month's figures. See page_market_prices.py,
+# page_macro_indicators.py and scripts/migrate_add_market_intel.sql.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/market-prices")
+def api_market_prices(report_month: str = Query(default="")):
+    return generate_market_prices(report_month or _latest_report_month())
+
+
+@app.get("/api/macro-indicators")
+def api_macro_indicators(report_month: str = Query(default="")):
+    return generate_macro_indicators(report_month or _latest_report_month())
+
+
+@app.get("/api/market-intel/grid")
+def api_market_intel_grid(report_month: str = Query(...)):
+    """Editable single-month grid for both tables: {series_code/metric_code,
+    label, unit/category, value} — used by /data-entry/market-intel to fill
+    in one more month's BigMint figures without needing another file
+    upload."""
+    prices = db.get_market_price_trend([report_month]).get(report_month, {})
+    macro = db.get_macro_indicators([report_month]).get(report_month, {})
+    return {
+        "report_month": report_month,
+        "market_price_rows": [
+            {"series_code": code, "label": page_market_prices.SERIES_LABEL[code],
+             "category": page_market_prices.SERIES_CATEGORY[code], "value": prices.get(code)}
+            for code in page_market_prices.SERIES_CODES
+        ],
+        "macro_rows": [
+            {"metric_code": code, "label": page_macro_indicators.METRIC_LABEL[code],
+             "unit": page_macro_indicators.METRIC_UNIT[code], "value": macro.get(code)}
+            for code in page_macro_indicators.METRIC_CODES
+        ],
+    }
+
+
+@app.post("/api/market-intel/grid")
+async def api_market_intel_grid_save(payload: dict):
+    """Save the combined grid editor. payload:
+      { report_month, market_price_rows: [{series_code, value}],
+        macro_rows: [{metric_code, value}] }"""
+    report_month = payload.get("report_month")
+    if not report_month:
+        raise HTTPException(status_code=400, detail="report_month is required")
+
+    def _f(v):
+        try:
+            return float(v) if v not in (None, "", "-") else None
+        except (ValueError, TypeError):
+            return None
+
+    if payload.get("market_price_rows"):
+        db.save_market_price_trend([
+            {"report_month": report_month, "series_code": r["series_code"], "value": _f(r.get("value"))}
+            for r in payload["market_price_rows"]
+        ])
+    if payload.get("macro_rows"):
+        db.save_macro_indicators([
+            {"report_month": report_month, "metric_code": r["metric_code"], "value": _f(r.get("value"))}
+            for r in payload["macro_rows"]
+        ])
     return {"status": "ok"}
 
 

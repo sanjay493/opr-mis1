@@ -1600,14 +1600,19 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     # block near page 24), "Major Environmental Performance
     # Indicators (EPIs) - Plant Wise" (page_epi.py, per direct
     # instruction — its many FY-to-date monthly columns need the extra
-    # width), and "Rail Production & Dispatch from BSP" (page 18.5,
+    # width), "Rail Production & Dispatch from BSP" (page 18.5,
     # page_rail_report.py — one column per FY since 2015-16 needs the
-    # extra width too). Each contiguous run is rendered separately at
+    # extra width too), and "Movement of Key Prices - International" /
+    # "India Macro Economic Indicators" (pages 2.41/2.42, page_market_
+    # prices.py / page_macro_indicators.py — a 2-chart landscape page and a
+    # 13-column monthly matrix, per direct instruction, 2026-09-17). Each
+    # contiguous run is rendered separately at
     # true A4-landscape and spliced back into the merged document at its
     # original position, then every main-content page's header/footer
     # is re-stamped from scratch (Chromium's own pageNumber/totalPages
     # counters are per-call).
-    _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend", "special_steel_physical", "epi", "rail_report")
+    _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend", "special_steel_physical", "epi", "rail_report",
+                        "market_prices", "macro_indicators")
     _landscape_pages = [p for p in main_pages if p.get("type") in _LANDSCAPE_TYPES]
     if not _landscape_pages:
         main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""

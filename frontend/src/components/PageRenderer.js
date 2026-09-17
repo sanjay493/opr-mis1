@@ -30,6 +30,8 @@ import EpiTemplate from './EpiTemplate';
 import SteelSectorPerformanceTemplate from './SteelSectorPerformanceTemplate';
 import CostTrendTemplate from './CostTrendTemplate';
 import RailReportTemplate from './RailReportTemplate';
+import MarketPricesTemplate from './MarketPricesTemplate';
+import MacroIndicatorsTemplate from './MacroIndicatorsTemplate';
 
 function IndexTemplate({ data, onCellChange }) {
   const { rows = [] } = data || {};
@@ -178,6 +180,10 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <CostTrendTemplate data={pageData} />;
       case 'rail_report':
         return <RailReportTemplate data={pageData} />;
+      case 'market_prices':
+        return <MarketPricesTemplate data={pageData} />;
+      case 'macro_indicators':
+        return <MacroIndicatorsTemplate data={pageData} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>

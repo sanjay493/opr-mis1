@@ -12,6 +12,8 @@ const PAGE_LABELS = {
    2.1: 'Indian Steel Sector Performance — Production & Prices',
    2.2: 'Indian Steel Sector Performance — Demand, Trade, Raw Materials & Key Indices',
    2.3: 'Indian Steel Sector Performance — Policy & Green Steel Initiatives',
+   2.41: 'Movement of Key Prices - International',
+   2.42: 'India Macro Economic Indicators',
    2.5: 'SAIL Performance - At a Glance',
    3: 'SAIL Performance - 1 Page Summary',
    3.2: 'Production Highlights - Best-Ever Records',
