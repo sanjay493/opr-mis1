@@ -15,7 +15,9 @@ const CELL  = { fontSize: 'var(--report-font-size)', padding: '2px 3px',  textAl
 const QCELL = { ...CELL, background: '#dce8fa', fontWeight: '600' };
 const TCELL = { ...CELL, background: '#eae1f5', fontWeight: '700' };
 const HHCELL = { ...CELL, background: '#d1fae5', fontWeight: '700' };
-const YCELL = { ...CELL, fontSize: 'var(--report-font-size)', textAlign: 'left', paddingLeft: '3px', whiteSpace: 'nowrap', fontWeight: '400' };
+// Year column text is always rust-brown (text_rust_brown), every row —
+// matches main.html's td.year-cell rule, per direct instruction, 2026-09-17.
+const YCELL = { ...CELL, fontSize: 'var(--report-font-size)', textAlign: 'left', paddingLeft: '3px', whiteSpace: 'nowrap', fontWeight: '400', color: '#B7410E' };
 
 // Colours for aggregate / special rows
 // Plan row — a distinct background (colors_config.json's
