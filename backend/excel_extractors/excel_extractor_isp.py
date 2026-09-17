@@ -1375,6 +1375,33 @@ def _old_bf_rows(ws, ac, cum_ac, col, techno_rows, techno_param_rows):
             _emit(name, cross, unit, found[0])
 
 
+_HEATS_TILL_RE = re.compile(r"(\d+(?:\.\d+)?)\s*Heats\s+till\s+(\d{1,2}\.\d{1,2}\.\d{2,4})", re.IGNORECASE)
+
+
+def _parse_converter_life(text) -> Optional[float]:
+    """Extract the current relining-cycle heat count from a "Converter Life
+    (#N)" cell.
+
+    Unlike every other SMS figure, this one isn't a plain number — the cell
+    holds a running narrative of every relining event to date (e.g. "...9th
+    carried out from 05.10.2023-18.10.2023, started from 19.10.2023 resulted
+    in 11439 Heats till 31.08.25"), re-pasted forward and extended with one
+    new "<N> Heats till <date>" clause each month the workbook is reused as
+    next month's template. Since this function is always called on the ACT
+    column already resolved for the target report month (_find_act_col), the
+    LAST such clause in that specific column's text is that month's own
+    reading — earlier clauses are just history carried along in the same
+    cell, not other months' data leaking in. Returns None if the cell holds
+    no such clause (e.g. blank, or free text with a different shape) rather
+    than guessing at some other number in it."""
+    if not text:
+        return None
+    matches = _HEATS_TILL_RE.findall(str(text))
+    if not matches:
+        return None
+    return float(matches[-1][0])
+
+
 def _old_sms_rows(ws, ac, cum_ac, col, techno_rows, techno_param_rows):
     """SMS sheet, old vintage — all rows located by label. Old files carry
     Steel Scrap and Iron Scrap as separate rate rows; their sum is the
@@ -1445,9 +1472,37 @@ def _old_sms_rows(ws, ac, cum_ac, col, techno_rows, techno_param_rows):
         techno_rows.append(_tr("SMS", "Sp O2 Consumption", "Nm³/T", o2,
                                f"SMS!{col}{r_o2}", _lbl(r_o2), o2c))
 
+    # "Converter Life (#1)"/"(#2)"/"(#3)" (rows ~157-159, well past _find1's
+    # 130-row cap — searched with the wider default max_row instead) hold a
+    # running relining narrative per converter, not a plain number — see
+    # _parse_converter_life. ISP's plant registry has one combined "SMS"
+    # unit (no per-converter rows, unlike BSP/BSL), so the 3 converters'
+    # current readings are averaged into one "Average Lining Life" figure
+    # per direct instruction, same simple-average convention this codebase
+    # otherwise defaults to when there's no natural weighting (see
+    # plant_registry.py's simple_avg). A converter with no parseable
+    # reading that month is left out of the average rather than treated as
+    # a zero.
+    cl_vals, cl_cum_vals = [], []
+    for n in (1, 2, 3):
+        r_cl = _find_label_rows(ws, f"Converter Life (#{n})", count=1)
+        if not r_cl:
+            continue
+        r_cl = r_cl[0]
+        v = _parse_converter_life(ws.cell(row=r_cl, column=ac).value)
+        if v is not None:
+            cl_vals.append(v)
+        if cum_ac:
+            vc = _parse_converter_life(ws.cell(row=r_cl, column=cum_ac).value)
+            if vc is not None:
+                cl_cum_vals.append(vc)
+    lining_life = round(sum(cl_vals) / len(cl_vals), 1) if cl_vals else None
+    lining_life_cum = round(sum(cl_cum_vals) / len(cl_cum_vals), 1) if cl_cum_vals else None
+
     for section, unit, so, val, cum in [
         ("Average Blows (Per Day)", "Nos.",    8,  blows_day, cum_blows),
         ("Average Heat Weight",     "T",       15, acw,       acw_c),
+        ("Average Lining Life",     "Heats",   16, lining_life, lining_life_cum),
         ("Oxygen Blowing",          "Nm³/TCS", 34, o2,        o2c),
     ]:
         techno_param_rows.append({
@@ -1923,9 +1978,35 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list, all_mo
             avg_heat_cum = clean_val(ws.cell(row=52, column=cum_ac).value) if cum_ac else None
             o2_val  = clean_val(ws.cell(row=96, column=ac).value)
             o2_cum  = clean_val(ws.cell(row=96, column=cum_ac).value) if cum_ac else None
+            # "Converter Life (#1)"/"(#2)"/"(#3)" hold a running relining
+            # narrative per converter, not a plain number — see
+            # _parse_converter_life. ISP's plant registry has one combined
+            # "SMS" unit (no per-converter rows, unlike BSP/BSL), so the 3
+            # converters' current readings are averaged into one "Average
+            # Lining Life" figure per direct instruction, same simple-average
+            # convention this codebase otherwise defaults to when there's no
+            # natural weighting (see plant_registry.py's simple_avg). A
+            # converter with no parseable reading that month is left out of
+            # the average rather than treated as a zero.
+            cl_vals, cl_cum_vals = [], []
+            for n in (1, 2, 3):
+                r_cl = _find_label_rows(ws, f"Converter Life (#{n})", count=1)
+                if not r_cl:
+                    continue
+                r_cl = r_cl[0]
+                v = _parse_converter_life(ws.cell(row=r_cl, column=ac).value)
+                if v is not None:
+                    cl_vals.append(v)
+                if cum_ac:
+                    vc = _parse_converter_life(ws.cell(row=r_cl, column=cum_ac).value)
+                    if vc is not None:
+                        cl_cum_vals.append(vc)
+            lining_life = round(sum(cl_vals) / len(cl_vals), 1) if cl_vals else None
+            lining_life_cum = round(sum(cl_cum_vals) / len(cl_cum_vals), 1) if cl_cum_vals else None
             for section, unit, val, cum in [
                 ("Average Blows (Per Day)", "Nos.", blows_day,   cum_blows),
                 ("Average Heat Weight",     "T",    avg_heat_val, avg_heat_cum),
+                ("Average Lining Life",     "Heats", lining_life, lining_life_cum),
                 ("Oxygen Blowing",          "Nm³/TCS", o2_val,  o2_cum),
             ]:
                 techno_param_rows.append({
@@ -1933,6 +2014,7 @@ def _preview_summarized_monthly(wb, report_month: str, sheet_names: list, all_mo
                     "parameter": "ISP SMS", "unit": unit,
                     "sort_order": {"Average Blows (Per Day)": 8,
                                    "Average Heat Weight": 15,
+                                   "Average Lining Life": 16,
                                    "Oxygen Blowing": 34}[section],
                     "actual": val, "cum_actual": cum,
                     "cell": f"SMS!{col}10 or R52/R96", "found_via": f"ISP SMS {section}",

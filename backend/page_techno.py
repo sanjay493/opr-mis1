@@ -2493,7 +2493,7 @@ _TECHNO_DB_SCHEMA = {
             # SMS shops — RSP: SMS-1/SMS-2, BSP: SMS-2/SMS-3, ISP/DSP: SMS, BSL: SMS-I/SMS-II
             ("Average Blows/Day",   "Nos",   [("SMS-1", "average_blows_per_day"), ("SMS-2", "average_blows_per_day"), ("SMS-3", "average_blows_per_day"), ("SMS", "average_blows_per_day"), ("SMS-I", "average_blows_per_day"), ("SMS-II", "average_blows_per_day")]),
             ("Average Heat Weight", "t",     [("SMS-1", "average_heat_weight"),   ("SMS-2", "average_heat_weight"),   ("SMS-3", "average_heat_weight"),   ("SMS", "average_heat_weight"), ("SMS-I", "average_heat_weight"), ("SMS-II", "average_heat_weight")]),
-            ("Average Lining Life", "heats", [("SMS-1", "average_lining_life"),   ("SMS-2", "average_lining_life"),   ("SMS-3", "average_lining_life"),   ("SMS-I", "average_lining_life"), ("SMS-II", "average_lining_life")]),
+            ("Average Lining Life", "heats", [("SMS-1", "average_lining_life"),   ("SMS-2", "average_lining_life"),   ("SMS-3", "average_lining_life"),   ("SMS", "average_lining_life"), ("SMS-I", "average_lining_life"), ("SMS-II", "average_lining_life")]),
             ("Fe-Mn Consumption",   "kg/t",  [("SMS-1", "fe-mn"),  ("SMS-2", "fe-mn"),  ("SMS-3", "fe-mn"),  ("SMS", "fe-mn"),  ("SMS-I", "fe-mn"),  ("SMS-II", "fe-mn")]),
             ("Fe-Si Consumption",   "kg/t",  [("SMS-1", "fe-si"),  ("SMS-2", "fe-si"),  ("SMS-3", "fe-si"),  ("SMS", "fe-si"),  ("SMS-I", "fe-si"),  ("SMS-II", "fe-si")]),
             ("Si-Mn Consumption",   "kg/t",  [("SMS-1", "si-mn"),  ("SMS-2", "si-mn"),  ("SMS-3", "si-mn"),  ("SMS", "si-mn"),  ("SMS-I", "si-mn"),  ("SMS-II", "si-mn")]),
