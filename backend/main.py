@@ -239,10 +239,6 @@ _INDEX_SECTIONS = [
     # Category-wise (3 plant-group pages: BSP / DSP&RSP / BSL&ISP) +
     # Segment Wise Production (1 page) - one Index entry covering all 4.
     ("Plant Wise Category Wise Production of Saleable Steel", 4),
-    # "Rail Production & Dispatch from BSP" — a brand-new single page
-    # (RAIL_REPORT_PAGE_ID = 18.5), right after fixed page 18 (Segment Wise
-    # Production), same sentinel-float treatment as SAIL Mines above.
-    ("Rail Production & Dispatch from BSP", 1),
     # BSP/DSP/RSP/BSL/ISP detail + SAIL consolidated (page_special_steel.py's
     # generate_special_steel_plant x5 + generate_special_steel_sail) + the
     # Trend/performance-analysis sentinel page right after SAIL's page
@@ -254,6 +250,16 @@ _INDEX_SECTIONS = [
     # page was dropped and despatch is now the sentinel's only page, so
     # this row's count dropped from 7 to 6.
     ("Plant Wise Special Steel Production & SAIL Trend", 6),
+    # "Rail Production & Dispatch from BSP" — a single page (RAIL_REPORT_
+    # PAGE_ID = 18.5, sentinel-float treatment as SAIL Mines above) — per
+    # direct instruction, 2026-09-17, moved here (right after the Trend
+    # sentinel, right before Special Steel Plants Physical Performance)
+    # from its earlier slot right after fixed page 18 (Segment Wise
+    # Production). Still numbered 18.5 — that sentinel value is purely an
+    # internal bookkeeping key (matching/CSS-class purposes), not the
+    # printed page number, which Chromium computes from physical document
+    # order regardless — so no renumbering was needed to move it.
+    ("Rail Production & Dispatch from BSP", 1),
     # ASP/SSP/VISP multi-year physical-performance grid + annual IPT
     # requirement list (SS_PHYSICAL_PAGE_ID = 1025, landscape sentinel page
     # inserted right after the trend page) — see page_special_steel_physical.py.
@@ -462,14 +468,20 @@ COST_TREND_SS_PAGE_ID = 3.63
 SAIL_MINES_PAGE_ID = 4.5
 
 # "Rail Production & Dispatch from BSP" page (Report_format/"Rail Prod &
-# Despatch Report for OMI.pdf"): sits right after fixed page 18 (Segment
-# Wise Production), before fixed page 19 (Special Steel - BSP). Genuine
-# A4-landscape (see pdf.py's _LANDSCAPE_TYPES) since it carries one column
-# per FY since 2015-16 — see page_rail_report.py for the metric registry.
-# Same sentinel-float treatment as SAIL_MINES_PAGE_ID above, group-4
-# dept-badge (report_utils.py's _DEPT_BADGE_EXPLICIT_GROUP) since it sits
-# among the Category/Segment Wise pages rather than the front-of-report
-# cluster.
+# Despatch Report for OMI.pdf"): sits right after TREND_PAGE_ID (1024),
+# before SS_PHYSICAL_PAGE_ID (1025) — per direct instruction, 2026-09-17,
+# moved here from its earlier slot right after fixed page 18 (Segment Wise
+# Production)/before fixed page 19 (Special Steel - BSP). Still numbered
+# 18.5 — that sentinel value is purely an internal bookkeeping key (page-
+# matching/CSS-class purposes), not the printed page number, which
+# Chromium computes from physical document order regardless, so no
+# renumbering was needed. Genuine A4-landscape (see pdf.py's
+# _LANDSCAPE_TYPES) since it carries one column per FY since 2015-16 —
+# see page_rail_report.py for the metric registry. Same sentinel-float
+# treatment as SAIL_MINES_PAGE_ID above; group-5 dept-badge (report_utils.
+# py's _DEPT_BADGE_EXPLICIT_GROUP) to match its new Special Steel
+# neighbors (1024/1025), changed from group 4 when it sat among the
+# Category/Segment Wise pages.
 RAIL_REPORT_PAGE_ID = 18.5
 
 # "Iron Making (contd.)" — page 29's furnace-wise Slag Rate/Fuel Rate/BF
@@ -885,7 +897,13 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if _idx23 is not None:
                 pages_config.insert(_idx23 + 1, {"page": 24})
                 pages_config.insert(_idx23 + 2, {"page": TREND_PAGE_ID})
-                pages_config.insert(_idx23 + 3, {"page": SS_PHYSICAL_PAGE_ID})
+                # "Rail Production & Dispatch from BSP" — per direct
+                # instruction, 2026-09-17, moved here (right after the Trend
+                # sentinel, right before SS_PHYSICAL_PAGE_ID) from its
+                # earlier slot right after fixed page 18 — see this
+                # constant's own comment above its definition.
+                pages_config.insert(_idx23 + 3, {"page": RAIL_REPORT_PAGE_ID})
+                pages_config.insert(_idx23 + 4, {"page": SS_PHYSICAL_PAGE_ID})
             _idx2 = next((i for i, p in enumerate(pages_config) if p.get("page") == 2), None)
             if _idx2 is not None:
                 pages_config.insert(_idx2 + 1, {"page": AT_A_GLANCE_PAGE_ID})
@@ -920,12 +938,6 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
             if _idx4 is not None:
                 pages_config.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
-            # "Rail Production & Dispatch from BSP" sentinel page: always
-            # inserted right after fixed page 18 (Segment Wise Production),
-            # ahead of fixed page 19 (Special Steel - BSP).
-            _idx18 = next((i for i, p in enumerate(pages_config) if p.get("page") == 18), None)
-            if _idx18 is not None:
-                pages_config.insert(_idx18 + 1, {"page": RAIL_REPORT_PAGE_ID})
             _idx29 = next((i for i, p in enumerate(pages_config) if p.get("page") == 29), None)
             if _idx29 is not None:
                 pages_config.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
@@ -1129,10 +1141,19 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idx24 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 24), None)
         if _idx24 is not None:
             _pages_list.insert(_idx24 + 1, {"page": TREND_PAGE_ID})
-    if _is_full_export and not any(p.get("page") == SS_PHYSICAL_PAGE_ID for p in _pages_list):
+    # "Rail Production & Dispatch from BSP" sentinel page: per direct
+    # instruction, 2026-09-17, moved here (right after the Trend sentinel,
+    # right before SS_PHYSICAL_PAGE_ID below) from its earlier slot right
+    # after fixed page 18 — see this constant's own comment above its
+    # definition.
+    if _is_full_export and not any(p.get("page") == RAIL_REPORT_PAGE_ID for p in _pages_list):
         _idxtr = next((i for i, p in enumerate(_pages_list) if p.get("page") == TREND_PAGE_ID), None)
         if _idxtr is not None:
-            _pages_list.insert(_idxtr + 1, {"page": SS_PHYSICAL_PAGE_ID})
+            _pages_list.insert(_idxtr + 1, {"page": RAIL_REPORT_PAGE_ID})
+    if _is_full_export and not any(p.get("page") == SS_PHYSICAL_PAGE_ID for p in _pages_list):
+        _idxrr = next((i for i, p in enumerate(_pages_list) if p.get("page") == RAIL_REPORT_PAGE_ID), None)
+        if _idxrr is not None:
+            _pages_list.insert(_idxrr + 1, {"page": SS_PHYSICAL_PAGE_ID})
     # "MIS at a Glance" sentinel page: always inserted right after the Index
     # (page 2), so it becomes the first NUMBERED page ("Page 1") — same
     # unconditional-insert pattern as above.
@@ -1187,12 +1208,6 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idx4 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 4), None)
         if _idx4 is not None:
             _pages_list.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
-    # "Rail Production & Dispatch from BSP" sentinel page: always inserted
-    # right after fixed page 18 (Segment Wise Production).
-    if _is_full_export and not any(p.get("page") == RAIL_REPORT_PAGE_ID for p in _pages_list):
-        _idx18b = next((i for i, p in enumerate(_pages_list) if p.get("page") == 18), None)
-        if _idx18b is not None:
-            _pages_list.insert(_idx18b + 1, {"page": RAIL_REPORT_PAGE_ID})
     # "Iron Making (contd.)" sentinel page: always inserted right after
     # page 29, same unconditional-insert pattern as above.
     if _is_full_export and not any(p.get("page") == IRON_MAKING_PAGE_2_ID for p in _pages_list):

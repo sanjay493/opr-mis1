@@ -46,13 +46,15 @@ _DEPT_BADGE_GROUPS = [
 #     Index, ahead of "MIS at a Glance" — same group (1) as its neighbors.
 #   4.5 — "SAIL Mines Production & Despatch Performance", right after
 #     fixed page 4 — same group (1) as its 3.5/3.6 neighbors.
-#   18.5 — "Rail Production & Dispatch from BSP", right after page 18
-#     (Segment Wise Production) — same group (4) as _DEPT_BADGE_GROUPS'
-#     (15, 18, 4) range it's physically inserted right next to.
+#   18.5 — "Rail Production & Dispatch from BSP" — per direct instruction,
+#     2026-09-17, moved from right after page 18 (Segment Wise Production,
+#     group 4) to right after 1024 (Trend/performance-analysis sentinel),
+#     right before 1025 (Special Steel Plants Physical Performance) — group
+#     changed to 5 to match, same as its new physical neighbors.
 _DEPT_BADGE_EXPLICIT_GROUP = {
     2.1: 1, 2.2: 1, 2.3: 1,
     2.5: 1, 3: 1, 3.2: 1, 3.3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1,
-    18.5: 4,
+    18.5: 5,
     1024: 5, 1025: 5,
     29.5: 7,
     35.4: 8, 35.5: 8, 35.6: 8, 35.7: 8,
@@ -103,7 +105,7 @@ def dept_badge_group(page_num) -> Optional[int]:
 # page happens to be fetched alongside.
 _CANONICAL_PAGE_ORDER = [
     2.5, 3, 3.2, 3.3, 3.5, 3.6, 3.61, 3.62, 3.63,
-    *range(4, 19), 18.5, *range(19, 25), 1024,
+    *range(4, 19), *range(19, 25), 1024, 18.5, 1025,
     25, 26,
     27, 28, 29, 29.5, 30,
     31, 32, 33, 34, 35, 35.4, 35.5, 35.6, 35.7,
