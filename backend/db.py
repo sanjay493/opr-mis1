@@ -3342,6 +3342,35 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
     return out
 
 
+def get_iron_ore_despatch_mix(report_months: List[str]) -> Dict[str, float]:
+    """SAIL-wide Iron Ore despatch actual summed across every mine, material
+    and transport mode, grouped by end_use_code (CAPTIVE / SALES /
+    PELLET_CONV) — the source for page_sail_mines.py's despatch-mix donuts
+    (per direct instruction, 2026-09-17, replacing the earlier hand-
+    maintained hardcoded_config.json snapshot). Returns {end_use_code:
+    total_qty_actual} in '000 T; an end_use_code with no despatch at all
+    across these months is simply omitted rather than returned as 0."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out: Dict[str, float] = {}
+    if not report_months:
+        conn.close()
+        return out
+    ph = ",".join("?" * len(report_months))
+    cur.execute(f"""
+        SELECT end_use_code, SUM(qty_actual)
+        FROM mines_despatch_actual_monthly
+        WHERE report_month IN ({ph})
+        GROUP BY end_use_code
+    """, report_months)
+    for end_use, total in cur.fetchall():
+        if total is not None:
+            out[end_use] = total
+    conn.close()
+    return out
+
+
 def get_iron_ore_sales_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any]:
     """Group-level (JGoM/OGoM/CGoM) Sales of Iron Ore — Booked Quantity &
     Despatch, rolled up via mines_master.group_code. Same

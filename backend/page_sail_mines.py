@@ -85,13 +85,21 @@ _C_SALES = "#eda100"       # yellow
 _C_SALES_DARK = "#a66900"  # darker shade of _C_SALES, for the waterfall's own YTD-total bar
 _C_BALANCE = "#cbd5e1"     # neutral gray, for the waterfall's remaining-gap-to-target bar
 
-# All figures on this page that have no DB source yet (the 3-year trend bars,
-# the despatch-mix donuts, and the iron-ore group table) are hand-maintained
-# in hardcoded_config.json's "sail_mines" section — a stopgap per direct
-# instruction (2026-08-27) until real series / mine-level actuals exist. Read
-# via hardcoded_loader inside the functions below so edits need no restart.
-# Only the despatch-mix slice colours stay here (presentation, not data).
+# The 3-year trend bars and the iron-ore group (Sales of Iron Ore) table
+# still have no DB source and are hand-maintained in hardcoded_config.json's
+# "sail_mines" section — a stopgap per direct instruction (2026-08-27) until
+# real series / mine-level actuals exist. Read via hardcoded_loader inside
+# the functions below so edits need no restart.
+#
+# The despatch-mix donuts USED to be hardcoded here too, but are now live
+# (per direct instruction, 2026-09-17) — db.get_iron_ore_despatch_mix,
+# summed across every mine/material/transport-mode and grouped by
+# end_use_code. _DESPATCH_MIX_CATS/_END_USE_CODES below are a fixed
+# 3-slice order (Captive / Conversion Agent / Sales); the colours stay a
+# plain presentation constant.
 _DESPATCH_MIX_COLORS = [_C_IRON_ORE, _C_CLEAN_COAL, _C_SALES]
+_DESPATCH_MIX_CATS = ["Captive", "Conversion Agent", "Sales"]
+_DESPATCH_MIX_END_USE_CODES = ["CAPTIVE", "PELLET_CONV", "SALES"]
 
 # Every (section key, item) pair listed under "items" is entered directly
 # via the SAIL Mines Entry data-entry page; "derived" rows are computed
@@ -405,13 +413,29 @@ def _sales_waterfall_svg(title: str, report_month_label: str, report_month_actua
     return "".join(out)
 
 
-def _mines_charts_html() -> str:
+def _despatch_mix_values(report_months: list) -> list:
+    """[Captive, Conversion Agent, Sales] million-T shares for one donut,
+    live from db.get_iron_ore_despatch_mix — '000 T summed across every
+    mine/material/transport-mode, grouped by end_use_code, divided by 1000
+    and rounded to 3dp (million T) to match the page's other MT figures. A
+    code with no despatch at all across these months reads as 0.0 (an empty
+    donut slice) rather than None, since _share_donut_svg needs a number to
+    plot."""
+    mix = db.get_iron_ore_despatch_mix(report_months)
+    return [round((mix.get(code) or 0.0) / 1000, 3) for code in _DESPATCH_MIX_END_USE_CODES]
+
+
+def _mines_charts_html(report_month: str) -> str:
     """The chart cluster for this page: four independent single-series bar
     charts (Iron Ore / Clean Coal / Flux production + Sales booking, 3 FYs
-    each, each on its own scale) and two despatch-mix donuts (FY 2025-26 vs
-    Apr-Jul'26). All hard-coded — see hardcoded_config.json's "sail_mines"
-    section. One self-contained HTML fragment (inline styles only) so both the
-    React view and the Jinja PDF template can drop it in verbatim."""
+    each, each on its own scale — still hard-coded, see hardcoded_config.json's
+    "sail_mines" section) and two despatch-mix donuts, live from
+    db.get_iron_ore_despatch_mix (per direct instruction, 2026-09-17): the
+    prior complete FY (left) vs April-report_month of the current FY
+    (right) — so the right donut always tracks the report month instead of
+    going stale the way the old hardcoded Apr-Jul'26 snapshot did. One
+    self-contained HTML fragment (inline styles only) so both the React view
+    and the Jinja PDF template can drop it in verbatim."""
     cfg = hardcoded_loader.section("sail_mines")
     fys = cfg["trend_fys"]
     bars = [
@@ -420,9 +444,17 @@ def _mines_charts_html() -> str:
         _mini_bar_svg("Flux Production", fys, cfg["flux_prod_mt"], _C_FLUX),
         _mini_bar_svg("Sales Booking", fys, cfg["sales_booking_mt"], _C_SALES),
     ]
+
+    prev_fy_months = db.get_fy_months(db.get_cply_month(report_month))
+    ytd_months = db.get_ytd_months(report_month)
+    prev_fy_label = f"FY {db.get_fy_for_month(prev_fy_months[0])}"
+    ytd_label = _mon_label(report_month)
+    ytd_label = f"Apr-{ytd_label}"
+
     donuts = [
-        _share_donut_svg(f"Despatch Mix — {label}", cfg["despatch_mix_cats"], vals, _DESPATCH_MIX_COLORS)
-        for label, vals in cfg["despatch_mix"].items()
+        _share_donut_svg(f"Despatch Mix — {label}", _DESPATCH_MIX_CATS,
+                          _despatch_mix_values(months), _DESPATCH_MIX_COLORS)
+        for label, months in ((prev_fy_label, prev_fy_months), (ytd_label, ytd_months))
     ]
     cell = 'border:1px solid #e2e8f0;border-radius:3px;padding:2px 4px;'
     grid = "".join(f'<div style="{cell}">{s}</div>' for s in bars)
@@ -598,6 +630,6 @@ def generate_sail_mines(report_month: str) -> dict:
         "period_label": period_label,
         "unit": "'000 T",
         "tables": tables,
-        "mines_charts_html": _mines_charts_html(),
+        "mines_charts_html": _mines_charts_html(report_month),
         "sales_waterfall_svg": sales_waterfall_svg,
     }

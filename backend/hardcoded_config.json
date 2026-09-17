@@ -10,13 +10,6 @@
     "flux_prod_mt": [2.018, 1.715, 1.279],
     "sales_booking_mt": [1.16, 0.754, 3.01],
 
-    "despatch_mix_cats": ["Captive", "Conversion Agent", "Sales"],
-    "despatch_mix": {
-      "_doc": "Iron-ore despatch mix by end-use, million tonnes, in despatch_mix_cats order. One entry per donut.",
-      "FY 2025-26": [31.014, 4.024, 2.492],
-      "Apr-Jul'26": [10.560, 1.802, 1.598]
-    },
-
     "iron_ore_group_kt": {
       "_doc": "Sales of Iron Ore (Booked Qty / Despatch) only, delinked from the mine-level rollups per direct instruction 2026-08-27 (mine-level Booked Quantity actuals were never entered). iron_ore_prod/iron_ore_despatch were restored to the live mine-level rollup (db.get_iron_ore_group_rollup_monthly) on 2026-09-12, once real mine-level despatch actuals existed, so they no longer live here. Each item -> [APP, YTD Actual, YTD CPLY] in '000 T. The 'SAIL' rows stay derived (CGoM + OGoM + JGoM) and are NOT listed here.",
       "iron_ore_sales":          {"CGoM": [20, 20, 0],        "OGoM": [2008, 1619, 524],  "JGoM": [0, 0, 0]},
