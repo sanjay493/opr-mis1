@@ -3241,17 +3241,18 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
     mines_despatch_plan_monthly).
 
     Production = fresh Lump+Fines actual/plan (the only materials
-    mine_materials_master flags has_production=1 for) PLUS two despatch-only
+    mine_materials_master flags has_production=1 for) PLUS despatch-only
     components that have no production entry of their own, so they're
-    counted at the point they leave the mine instead (per direct
-    instruction, 2026-09-12): Dump Fines/Tailings despatched to end_use
-    SALES (legacy recovered material sold off, not part of planned Lump/
-    Fines output), and Pellets despatch of any end_use (SAIL's pellet
-    plants have no separate "production" entry at all — their despatch
-    figure IS their production). Dump Fines sent CAPTIVE (currently only
-    GUA) is deliberately excluded — that tonnage already reaches the
-    consuming plant as ore movement, not a standalone recovered-and-sold
-    quantity."""
+    counted at the point they leave the mine instead: Dump Fines despatched
+    to SALES or CAPTIVE end_use (currently only GUA sends Dump Fines
+    CAPTIVE — per direct instruction, 2026-09-17, that tonnage is now
+    counted as production too, reversing the 2026-09-12 exclusion), Tailings
+    despatched to end_use SALES only (legacy recovered material sold off,
+    not part of planned Lump/Fines output — no CAPTIVE flow exists for
+    Tailings), and Pellets despatch of any end_use (SAIL's pellet plants,
+    currently only DALLI, have no separate "production" entry at all —
+    their despatch figure, to SALES or CAPTIVE alike, IS their
+    production)."""
     init_db()
     conn = connect()
     cur = conn.cursor()
@@ -3279,7 +3280,8 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
         JOIN mines_master mm ON mm.mine_code = d.mine_code
         WHERE d.report_month IN ({ph})
           AND (d.material_code = 'PELLETS'
-               OR (d.material_code IN ('DUMP_FINES', 'TAILINGS') AND d.end_use_code = 'SALES'))
+               OR (d.material_code = 'DUMP_FINES' AND d.end_use_code IN ('SALES', 'CAPTIVE'))
+               OR (d.material_code = 'TAILINGS' AND d.end_use_code = 'SALES'))
         GROUP BY d.report_month, mm.group_code
     """, report_months)
     for rm, group_code, actual in cur.fetchall():
@@ -3291,7 +3293,8 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
         JOIN mines_master mm ON mm.mine_code = pl.mine_code
         WHERE pl.report_month IN ({ph})
           AND (pl.material_code = 'PELLETS'
-               OR (pl.material_code IN ('DUMP_FINES', 'TAILINGS') AND pl.end_use_code = 'SALES'))
+               OR (pl.material_code = 'DUMP_FINES' AND pl.end_use_code IN ('SALES', 'CAPTIVE'))
+               OR (pl.material_code = 'TAILINGS' AND pl.end_use_code = 'SALES'))
         GROUP BY pl.report_month, mm.group_code
     """, report_months)
     for rm, group_code, plan in cur.fetchall():

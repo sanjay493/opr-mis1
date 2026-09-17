@@ -24,11 +24,13 @@ and Iron Ore Despatch are the odd ones out (per direct instruction,
 entered via the separate Iron Ore Mines Production & Despatch form) via
 db.get_iron_ore_group_rollup_monthly, NOT from sail_mines_monthly — see
 that function's docstring for exactly what Production vs Despatch mean at
-this rolled-up group level (per direct instruction, 2026-09-12: Production
-is not just fresh Lump+Fines — it also folds in Dump Fines/Tailings SALES
-despatch and Pellets despatch, since neither has a production entry of its
-own). The SAIL Mines Entry form no longer has "Iron Ore Mines Performance"
-or "Sales of Iron Ore" inputs — both moved to the mine-level form above
+this rolled-up group level (per direct instruction, 2026-09-12, revised
+2026-09-17: Production is not just fresh Lump+Fines — it also folds in
+Dump Fines despatch to SALES or CAPTIVE (GUA), Tailings despatch to SALES,
+and Pellets despatch of any end_use (DALLI), since none of those has a
+production entry of its own). The SAIL Mines Entry form no longer has
+"Iron Ore Mines Performance" or "Sales of Iron Ore" inputs — both moved
+to the mine-level form above
 (Iron Ore Production/Despatch AND Sales' Booked Quantity/Despatch are now
 entered there, then rolled up to group level here; only Sales' old
 "Auction" item, renamed "Booked Quantity", needed a brand new mine-level
@@ -364,8 +366,10 @@ def _sales_waterfall_svg(title: str, report_month_label: str, report_month_actua
 
     n = len(segments)
     vw = 400
-    ml, mr, mt, mb = 84, 52, 18, 3
-    row_h = 15.5
+    # Margins/row-height widened (per direct instruction, 2026-09-17) to fit
+    # the larger label/legend text below without clipping.
+    ml, mr, mt, mb = 92, 60, 22, 3
+    row_h = 18
     vh = mt + mb + n * row_h
     cw = vw - ml - mr
     xmax = max(target or 0.0, ytd_actual, 1.0) * 1.1
@@ -376,14 +380,14 @@ def _sales_waterfall_svg(title: str, report_month_label: str, report_month_actua
 
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" preserveAspectRatio="none" '
            f'style="width:100%;height:100%;display:block;">']
-    out.append(f'<text x="{vw / 2:.0f}" y="8" text-anchor="middle" font-size="8" font-weight="bold" '
+    out.append(f'<text x="{vw / 2:.0f}" y="10" text-anchor="middle" font-size="10" font-weight="bold" '
                f'font-family="Arial,sans-serif" fill="#1e293b">{title}</text>')
 
     if target:
         tx = xpos(target)
         out.append(f'<line x1="{tx:.1f}" y1="{mt - 1:.1f}" x2="{tx:.1f}" y2="{vh - mb + 2:.1f}" '
                    f'stroke="#64748b" stroke-width="1" stroke-dasharray="3,2"/>')
-        out.append(f'<text x="{tx:.1f}" y="{mt - 4:.1f}" text-anchor="middle" font-size="6.6" '
+        out.append(f'<text x="{tx:.1f}" y="{mt - 5:.1f}" text-anchor="middle" font-size="8.2" '
                    f'font-family="Arial,sans-serif" fill="#334155">Target {_num(round(target))}</text>')
 
     for i, (lab, s, e, color, bold) in enumerate(segments):
@@ -391,10 +395,10 @@ def _sales_waterfall_svg(title: str, report_month_label: str, report_month_actua
         x0, x1 = xpos(min(s, e)), xpos(max(s, e))
         w = max(x1 - x0, 1.2)
         out.append(f'<rect x="{x0:.1f}" y="{y:.1f}" width="{w:.1f}" height="{bar_h:.1f}" rx="2" fill="{color}"/>')
-        out.append(f'<text x="{ml - 6:.1f}" y="{y + bar_h / 2 + 2.6:.1f}" text-anchor="end" font-size="7" '
+        out.append(f'<text x="{ml - 6:.1f}" y="{y + bar_h / 2 + 3.0:.1f}" text-anchor="end" font-size="8.6" '
                    f'font-weight="{700 if bold else 400}" font-family="Arial,sans-serif" fill="#1e293b">{lab}</text>')
         val = e if bold else (e - s)
-        out.append(f'<text x="{x1 + 4:.1f}" y="{y + bar_h / 2 + 2.6:.1f}" font-size="6.8" font-weight="600" '
+        out.append(f'<text x="{x1 + 4:.1f}" y="{y + bar_h / 2 + 3.0:.1f}" font-size="8.4" font-weight="600" '
                    f'font-family="Arial,sans-serif" fill="#1e293b">{_num(round(val))}</text>')
 
     out.append("</svg>")
@@ -487,9 +491,9 @@ def generate_sail_mines(report_month: str) -> dict:
     # db.get_iron_ore_group_rollup_monthly, NOT sail_mines_monthly (restored
     # 2026-09-12 now that real mine-level despatch actuals exist — see that
     # function's docstring for exactly what "Production" includes: fresh
-    # Lump+Fines plus Dump Fines/Tailings SALES despatch and Pellets despatch,
-    # neither of which has its own production entry). Every other section
-    # stays on sail_mines_monthly.
+    # Lump+Fines plus Dump Fines despatch to SALES or CAPTIVE, Tailings SALES
+    # despatch, and Pellets despatch of any end_use, none of which has its
+    # own production entry). Every other section stays on sail_mines_monthly.
     iron_ore_monthly = db.get_iron_ore_group_rollup_monthly(ytd_months)
     iron_ore_cply_monthly = db.get_iron_ore_group_rollup_monthly(cply_months)
     for mo in ytd_months:
