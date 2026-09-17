@@ -598,6 +598,13 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 420) -> str:
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
              f'style="width:100%;height:auto;display:block;">']
 
+    # Fine orange frame around the whole chart (per direct instruction,
+    # 2026-09-17) — inset by half the stroke width so the 1px-wide line
+    # itself isn't clipped by the viewBox edge. Same orange as the report's
+    # other fixed-categorical orange (pdf.py's trends band / _SERIES_COLORS).
+    lines.append(f'<rect x="0.75" y="0.75" width="{vw - 1.5}" height="{vh - 1.5}" '
+                 f'fill="none" stroke="#eb6834" stroke-width="1.5"/>')
+
     # L-shaped axes (Y then X), solid black — no surrounding box.
     lines.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t + plot_h}" stroke="#000000" stroke-width="2.5"/>')
     lines.append(f'<line x1="{pad_l}" y1="{pad_t + plot_h}" x2="{pad_l + plot_w}" y2="{pad_t + plot_h}" stroke="#000000" stroke-width="2.5"/>')
