@@ -1583,9 +1583,25 @@
         .page7-13-yearly-table tr.plan-row td.year-cell {
             font-size: 7.5pt;
         }
-        .page7-13-yearly-table tr.plan-row   { background: {{ colors.highlight_actual_bg }}; font-weight: 700; }
         .page7-13-yearly-table tr.sail-row   { background: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
         .page7-13-yearly-table tr.fp-row     { background: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
+        /* Plan row — a distinct background (highlight_shortfall_band_bg, not
+           otherwise used anywhere on pages 7-13) plus rust-brown text, per
+           direct instruction, 2026-09-17. Declared AFTER tr.sail-row/tr.fp-row
+           above (equal selector specificity, so source order decides) so a
+           group's own Plan row keeps this look even when that group IS SAIL
+           or 5 Plants, instead of the SAIL/5-Plants row color winning. */
+        .page7-13-yearly-table tr.plan-row {
+            background: {{ colors.highlight_shortfall_band_bg }};
+            color: {{ colors.text_rust_brown }};
+            font-weight: 700;
+        }
+        /* The rowspan'd plant-label cell (td.plant-cell) is always physically
+           inside the Plan row (it's each group's first row) — its own color
+           rule (td.plant-cell, equal specificity to tr.plan-row above) would
+           otherwise lose to tr.plan-row's later position and turn every
+           plant's stacked letters rust-brown too. Restore it explicitly. */
+        .page7-13-yearly-table tr.plan-row td.plant-cell { color: {{ colors.text_plant_cell }}; }
         /* Taller vertical padding on the SAIL/5 Plants aggregate rows only
            (base td padding stays 3.5px 1.5px for every other row) per direct
            instruction, 2026-09-17 — makes these two summary rows stand out

@@ -18,7 +18,15 @@ const HHCELL = { ...CELL, background: '#d1fae5', fontWeight: '700' };
 const YCELL = { ...CELL, fontSize: 'var(--report-font-size)', textAlign: 'left', paddingLeft: '3px', whiteSpace: 'nowrap', fontWeight: '400' };
 
 // Colours for aggregate / special rows
-const PLAN_BG = '#dbeafe';   // light blue  — plan row
+// Plan row — a distinct background (colors_config.json's
+// highlight_shortfall_band_bg, not otherwise used anywhere on pages 7-13)
+// plus rust-brown text (text_rust_brown), per direct instruction,
+// 2026-09-17 — matches main.html's tr.plan-row rule. Kept as its own text
+// color (not folded into `fw`) since rowColors() below already checks
+// is_plan before SAIL/5 Plants, so a group's own Plan row keeps this look
+// even when that group IS SAIL or 5 Plants.
+const PLAN_BG = '#fed7aa';
+const PLAN_TEXT = '#B7410E';
 const SAIL_BG = '#dcfce7';   // light green — SAIL / aggregate row
 const FP_BG   = '#fef9c3';   // light yellow — 5 Plants aggregate
 const HH_BG   = '#d1fae5';   // light teal — Half Yearly aggregate
@@ -58,10 +66,10 @@ const PLANT_COLORS = {
 };
 
 function rowColors(row) {
-  if (row.is_plan)             return { bg: PLAN_BG, fw: '700' };
-  if (row.plant === 'SAIL')    return { bg: SAIL_BG, fw: '700' };
-  if (row.plant === '5 Plants') return { bg: FP_BG,  fw: '700' };
-  return { bg: undefined, fw: '400' };
+  if (row.is_plan)             return { bg: PLAN_BG, fw: '700', color: PLAN_TEXT };
+  if (row.plant === 'SAIL')    return { bg: SAIL_BG, fw: '700', color: undefined };
+  if (row.plant === '5 Plants') return { bg: FP_BG,  fw: '700', color: undefined };
+  return { bg: undefined, fw: '400', color: undefined };
 }
 
 function TrendTable({ rows, item_display, unit }) {
@@ -114,7 +122,7 @@ function TrendTable({ rows, item_display, unit }) {
           {rows.map((row, idx) => {
             const v = row.values || [];
             const cf = row.cell_flags || [];
-            const { bg, fw } = rowColors(row);
+            const { bg, fw, color: rowText } = rowColors(row);
             const isAggregate = AGGREGATES.has(row.plant);
             // Taller vertical padding on every SAIL/5 Plants row (matches
             // main.html's tr.sail-row/tr.fp-row td rule) per direct
@@ -153,7 +161,7 @@ function TrendTable({ rows, item_display, unit }) {
             };
 
             return (
-              <tr key={idx} style={{ background: bg, fontWeight: fw, borderTop: topBorder }}>
+              <tr key={idx} style={{ background: bg, color: rowText, fontWeight: fw, borderTop: topBorder }}>
                 {row.rowspan_start && (
                   <td rowSpan={row.plant_row_count} style={plantCellStyle}>
                     {plantChars.split('').map((ch, i) => (
