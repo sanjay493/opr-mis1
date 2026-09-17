@@ -5,7 +5,7 @@ from openpyxl.utils import get_column_letter, column_index_from_string
 from openpyxl.utils.cell import coordinate_from_string
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 logger = logging.getLogger("excel_extractor")
@@ -1392,6 +1392,23 @@ def _detect_month_from_fax_sheet(fax_ws) -> Optional[str]:
         val = fax_ws.cell(row, col).value
         if isinstance(val, datetime):
             return f"{val.year}-{val.month:02d}"
+        # Some months' files store this same header cell as a bare Excel
+        # date serial (General/Number format) rather than an actual date
+        # type, so openpyxl hands back a plain number instead of a
+        # datetime even though the cell unambiguously holds a real date —
+        # confirmed on TECHNO AUGUST 2026.xls and Techno August 2025.xls,
+        # both of which decode correctly to their own report month here
+        # while row 9's free-text banner (below) is stale ("FEBRUARY 2026"
+        # / "JULY 2025" respectively, left over from being reused as next
+        # month's template). Decode it the same way rather than falling
+        # through to that banner, which is exactly the unreliable signal
+        # this header-date check exists to be trusted over.
+        if isinstance(val, (int, float)) and 1 <= val <= 100000:
+            try:
+                dt = datetime(1899, 12, 30) + timedelta(days=val)
+                return f"{dt.year}-{dt.month:02d}"
+            except (OverflowError, ValueError):
+                pass
 
     for row in range(1, 12):
         for col in range(1, 6):
