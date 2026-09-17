@@ -1,20 +1,36 @@
 """
-DSP MCR Techno Extractor — month-end MCR report, techno page (mcr1_*.xlsx).
+DSP MCR Techno Extractor — month-end MCR report, techno page
+(Report_format/MONTHEND/DSP/mcr_<date>.xls — a single sheet with the BF/SMS
+block in columns E onward and a second, independent Coke-Ovens/Sinter-Plant
+block in columns A-D that this extractor also now reads).
 
 The MCR is a daily management control report; when generated on the last day
 of a month its "Todate" columns hold the (tentative) for-the-month values.
 This extractor reads only those month values — cumulative (till_month) is
 left empty and can be computed later via the shared cumulative rules.
 
-Layout (see Report_format/MONTHEND/mcr1_.xlsx):
+Layout (see Report_format/MONTHEND/DSP/mcr_<date>.xls):
   C1                    — report date "DD.MM.YYYY" (month-end date)
   Column E              — parameter labels for the BF and SMS blocks
   Columns J,K,L,M       — BF "Todate" values for BF2, BF3, BF4, Shop
   Columns F,G           — SMS "Ondate"/"Todate" values (G = Todate)
+  Column A              — parameter labels for the separate Coke-Ovens/
+                           Sinter-Plant block (left of the BF/SMS block,
+                           same sheet) — only "FE (%)" (TFe in Sinter, under
+                           the "SINTER PLANT" > "SINTER QUALITY" sub-section)
+                           is read from it so far.
+  Column D              — that block's "Todate" values (header row: Norm /
+                           ondate / Todate in columns B/C/D)
 
-Rows are located by matching the label in column E (startswith, case
-insensitive) so small row shifts between report versions don't break
-extraction; a missing label produces a warning, not a crash.
+Rows are located by matching the label in column E, or column A for the
+Sinter Plant block (startswith, case insensitive) so small row shifts
+between report versions don't break extraction; a missing label produces a
+warning, not a crash. "FE (%)" (row ~44 in every sampled file, 2025-01
+through 2026-08) is stored as tfe_in_sinter under unit "BF_Shop" — DSP has
+one plant-wide Sinter Fe reading (unlike RSP, which records it per Sinter
+Plant unit), and "BF_Shop" is the unit page_key_parameters.py's
+_sinter_fe_val/_bf_val fallback already reads for every plant not in
+_SP_UNIT_MAP.
 
 Note on SMS cells: the request referenced J29/J30/J31, but in the MCR sheet
 column J of the SMS block holds "No. of Heats" per casting machine — the
@@ -62,6 +78,14 @@ _BF_UNIT_COLS = [("BF-2", 10), ("BF-3", 11), ("BF-4", 12), ("BF_Shop", 13)]
 
 _LABEL_COL = 5        # column E
 _SMS_TODATE_COL = 7   # column G
+
+# Sinter Plant Quality block (separate mini-table in columns A-D, left of
+# the BF/SMS block) — (column-A label prefix, canonical param key, unit).
+_SINTER_PARAMS = [
+    ("FE (%)", "tfe_in_sinter", "BF_Shop"),
+]
+_SINTER_LABEL_COL = 1     # column A
+_SINTER_TODATE_COL = 4    # column D
 
 _MAX_ROWS = 80
 _MAX_COLS = 14
@@ -143,10 +167,12 @@ class DspMcrTechnoExtractor:
             return None
         return row[col_1b - 1]
 
-    def _find_row(self, grid, label_prefix: str) -> Optional[int]:
-        """1-based row whose column-E label starts with label_prefix."""
+    def _find_row(self, grid, label_prefix: str, label_col: int = _LABEL_COL) -> Optional[int]:
+        """1-based row whose label_col label starts with label_prefix
+        (column E by default — the BF/SMS block; pass _SINTER_LABEL_COL for
+        the separate Sinter Plant Quality block in column A)."""
         for i, row in enumerate(grid, start=1):
-            v = row[_LABEL_COL - 1] if len(row) >= _LABEL_COL else None
+            v = row[label_col - 1] if len(row) >= label_col else None
             if v is None:
                 continue
             if str(v).strip().upper().startswith(label_prefix):
@@ -248,6 +274,15 @@ class DspMcrTechnoExtractor:
                 self.warnings.append(f"Label '{label}' not found in column E — skipped.")
                 continue
             put("SMS", key, _clean_val(self._cell(grid, row, _SMS_TODATE_COL)))
+
+        # Sinter Plant Quality block — separate mini-table in columns A-D,
+        # Todate is column D.
+        for label, key, unit in _SINTER_PARAMS:
+            row = self._find_row(grid, label, label_col=_SINTER_LABEL_COL)
+            if row is None:
+                self.warnings.append(f"Label '{label}' not found in column A — skipped.")
+                continue
+            put(unit, key, _clean_val(self._cell(grid, row, _SINTER_TODATE_COL)))
 
         # Drop units where every value came back empty
         records = []
