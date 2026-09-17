@@ -529,6 +529,26 @@ CREATE TABLE IF NOT EXISTS sail_mines_monthly (
     PRIMARY KEY (report_month, section, item)
 ) ENGINE=InnoDB;
 
+-- Rail Production & Dispatch from BSP (page 18.5, right after Segment Wise
+-- Production) — entirely manually entered per financial year (Apr-Mar); the
+-- FY containing the report month holds a running Apr-<report month>
+-- cumulative in the same row. See backend/scripts/migrate_add_rail_report.sql
+-- and backend/page_rail_report.py.
+CREATE TABLE IF NOT EXISTS rail_prod_despatch (
+    financial_year CHAR(7)     NOT NULL,
+    metric         VARCHAR(32) NOT NULL,
+    value          DOUBLE,
+    note           VARCHAR(64),
+    PRIMARY KEY (financial_year, metric)
+) ENGINE=InnoDB;
+
+-- Free-text footer remarks under the Rail Production & Dispatch table —
+-- standing footnotes, not scoped to a FY. sort_order = display order.
+CREATE TABLE IF NOT EXISTS rail_prod_despatch_note (
+    sort_order INT          PRIMARY KEY,
+    note_text  VARCHAR(500) NOT NULL
+) ENGINE=InnoDB;
+
 -- Iron Ore Mines Production & Despatch — mine-level detail (11 mines under
 -- JGoM/OGoM/CGoM). Master tables are DB-backed (not a Python registry) so a
 -- mine/material/end-use can be added/renamed/deactivated via a data change.

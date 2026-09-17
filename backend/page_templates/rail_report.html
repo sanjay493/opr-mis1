@@ -1,0 +1,56 @@
+<style>
+    .rr-table { border-collapse: collapse; width: 100%; font-size: 8pt; table-layout: fixed; }
+    .rr-table th, .rr-table td {
+        border: 0.5pt solid {{ colors.border|default('#b0b0b0') }};
+        padding: 3pt 4pt; text-align: center; overflow: hidden;
+    }
+    .rr-table thead th { background: {{ colors.header_bg|default('#e8eef7') }}; font-weight: 700; }
+    .rr-table td.rr-label { text-align: left; font-weight: 600; white-space: normal; }
+    .rr-table td.rr-num { text-align: center; font-variant-numeric: tabular-nums; }
+    .rr-table .rr-note { display: block; font-size: 6.4pt; font-style: italic; color: {{ colors.text_secondary|default('#5f6368') }}; }
+    .rr-table tr.rr-band-green  td.rr-num { background: {{ colors.highlight_achieved_band_bg|default('#dcfce7') }}; }
+    .rr-table tr.rr-band-yellow td.rr-num { background: {{ colors.highlight_target_band_bg|default('#fef9c3') }}; }
+    .rr-table tr.rr-band-orange td.rr-num { background: {{ colors.highlight_shortfall_band_bg|default('#fed7aa') }}; }
+    .rr-table tr.rr-band-blue   td.rr-num { background: {{ colors.highlight_info_band_bg|default('#e0f2fe') }}; }
+    .rr-table tr.rr-bold td { font-weight: 700; }
+    .rr-till-badge {
+        display: inline-block; background: {{ colors.highlight_shortfall_band_bg|default('#fed7aa') }};
+        color: {{ colors.text_primary|default('#0f172a') }}; font-weight: 700; padding: 2pt 6pt; font-size: 7.5pt;
+        border-radius: 2pt;
+    }
+    .rr-notes { margin: 8pt 0 4pt; font-size: 8pt; color: {{ colors.text_variance_red|default('#9a3412') }}; font-weight: 600; padding-left: 16pt; }
+    .rr-notes li { margin-bottom: 2pt; }
+</style>
+
+<div class="coal-title">{{ page.title }}</div>
+
+<table class="rr-table">
+    <colgroup>
+        <col style="width:15%"/>
+        {% for c in page.columns %}<col />{% endfor %}
+    </colgroup>
+    <thead>
+        <tr>
+            <th>FY</th>
+            {% for c in page.columns %}
+            <th>{% if loop.last %}<span class="rr-till-badge">{{ c.label }}</span>{% else %}{{ c.label }}{% endif %}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in page.rows %}
+        <tr class="{% if r.band %}rr-band-{{ r.band }}{% endif %}{% if r.bold %} rr-bold{% endif %}">
+            <td class="rr-label">{{ r.label }}</td>
+            {% for c in page.columns %}
+            <td class="rr-num">{{ r.cells[c.key] }}{% if r.notes and r.notes.get(c.key) %}<span class="rr-note">({{ r.notes[c.key] }})</span>{% endif %}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if page.notes %}
+<ul class="rr-notes">
+    {% for n in page.notes %}<li>{{ n }}</li>{% endfor %}
+</ul>
+{% endif %}

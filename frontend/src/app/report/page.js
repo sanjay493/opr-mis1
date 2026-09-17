@@ -37,6 +37,7 @@ const PAGE_LABELS = {
   16: 'Category Wise – DSP & RSP',
   17: 'Category Wise – BSL & ISP',
   18: 'Segment Wise Production',
+  18.5: 'Rail Production & Dispatch from BSP',
   19: 'Special Steel – BSP',
   20: 'Special Steel – DSP',
   21: 'Special Steel – RSP',

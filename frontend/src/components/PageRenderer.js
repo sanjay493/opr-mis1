@@ -29,6 +29,7 @@ import PowerDataTemplate from './PowerDataTemplate';
 import EpiTemplate from './EpiTemplate';
 import SteelSectorPerformanceTemplate from './SteelSectorPerformanceTemplate';
 import CostTrendTemplate from './CostTrendTemplate';
+import RailReportTemplate from './RailReportTemplate';
 
 function IndexTemplate({ data, onCellChange }) {
   const { rows = [] } = data || {};
@@ -175,6 +176,8 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <SteelSectorPerformanceTemplate data={pageData} />;
       case 'cost_trend':
         return <CostTrendTemplate data={pageData} />;
+      case 'rail_report':
+        return <RailReportTemplate data={pageData} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>

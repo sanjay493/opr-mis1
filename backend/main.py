@@ -40,6 +40,8 @@ from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
 from page_cost_trend import generate_cost_trend
 from page_sail_mines import generate_sail_mines
+import page_rail_report
+from page_rail_report import generate_rail_report
 from page_cover import generate_cover
 from page_coal_receipts_stock import generate_coal_receipts_sail
 from page_power_data import generate_power_data
@@ -237,6 +239,10 @@ _INDEX_SECTIONS = [
     # Category-wise (3 plant-group pages: BSP / DSP&RSP / BSL&ISP) +
     # Segment Wise Production (1 page) - one Index entry covering all 4.
     ("Plant Wise Category Wise Production of Saleable Steel", 4),
+    # "Rail Production & Dispatch from BSP" — a brand-new single page
+    # (RAIL_REPORT_PAGE_ID = 18.5), right after fixed page 18 (Segment Wise
+    # Production), same sentinel-float treatment as SAIL Mines above.
+    ("Rail Production & Dispatch from BSP", 1),
     # BSP/DSP/RSP/BSL/ISP detail + SAIL consolidated (page_special_steel.py's
     # generate_special_steel_plant x5 + generate_special_steel_sail) + the
     # Trend/performance-analysis sentinel page right after SAIL's page
@@ -454,6 +460,17 @@ COST_TREND_SS_PAGE_ID = 3.63
 # section registry and computation. Same sentinel-float treatment as
 # BF_LARGE_ANNEXURE_PAGE_ID above (numbered main flow, group-1 dept-badge).
 SAIL_MINES_PAGE_ID = 4.5
+
+# "Rail Production & Dispatch from BSP" page (Report_format/"Rail Prod &
+# Despatch Report for OMI.pdf"): sits right after fixed page 18 (Segment
+# Wise Production), before fixed page 19 (Special Steel - BSP). Genuine
+# A4-landscape (see pdf.py's _LANDSCAPE_TYPES) since it carries one column
+# per FY since 2015-16 — see page_rail_report.py for the metric registry.
+# Same sentinel-float treatment as SAIL_MINES_PAGE_ID above, group-4
+# dept-badge (report_utils.py's _DEPT_BADGE_EXPLICIT_GROUP) since it sits
+# among the Category/Segment Wise pages rather than the front-of-report
+# cluster.
+RAIL_REPORT_PAGE_ID = 18.5
 
 # "Iron Making (contd.)" — page 29's furnace-wise Slag Rate/Fuel Rate/BF
 # Productivity/Pellet in Burden sections spill onto this second physical
@@ -857,7 +874,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                                       BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID,
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
-                                                      SAIL_MINES_PAGE_ID,
+                                                      SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
@@ -903,6 +920,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
             if _idx4 is not None:
                 pages_config.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
+            # "Rail Production & Dispatch from BSP" sentinel page: always
+            # inserted right after fixed page 18 (Segment Wise Production),
+            # ahead of fixed page 19 (Special Steel - BSP).
+            _idx18 = next((i for i, p in enumerate(pages_config) if p.get("page") == 18), None)
+            if _idx18 is not None:
+                pages_config.insert(_idx18 + 1, {"page": RAIL_REPORT_PAGE_ID})
             _idx29 = next((i for i, p in enumerate(pages_config) if p.get("page") == 29), None)
             if _idx29 is not None:
                 pages_config.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
@@ -975,6 +998,10 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == SAIL_MINES_PAGE_ID:
                 page.update(generate_sail_mines(month))
                 page["type"] = "sail_mines"
+            if pg == RAIL_REPORT_PAGE_ID:
+                page.update(generate_rail_report(month))
+                page["type"] = "rail_report"
+                page["orientation"] = "landscape"
             if pg == EPI_PAGE_ID:
                 page.update(generate_epi(month))
                 page["orientation"] = "landscape"
@@ -1160,6 +1187,12 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idx4 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 4), None)
         if _idx4 is not None:
             _pages_list.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
+    # "Rail Production & Dispatch from BSP" sentinel page: always inserted
+    # right after fixed page 18 (Segment Wise Production).
+    if _is_full_export and not any(p.get("page") == RAIL_REPORT_PAGE_ID for p in _pages_list):
+        _idx18b = next((i for i, p in enumerate(_pages_list) if p.get("page") == 18), None)
+        if _idx18b is not None:
+            _pages_list.insert(_idx18b + 1, {"page": RAIL_REPORT_PAGE_ID})
     # "Iron Making (contd.)" sentinel page: always inserted right after
     # page 29, same unconditional-insert pattern as above.
     if _is_full_export and not any(p.get("page") == IRON_MAKING_PAGE_2_ID for p in _pages_list):
@@ -1281,6 +1314,10 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == SAIL_MINES_PAGE_ID:
             p.update(generate_sail_mines(request.month))
             p["type"] = "sail_mines"
+        if pg == RAIL_REPORT_PAGE_ID:
+            p.update(generate_rail_report(request.month))
+            p["type"] = "rail_report"
+            p["orientation"] = "landscape"
         if pg == EPI_PAGE_ID:
             p.update(generate_epi(request.month))
             p["orientation"] = "landscape"
@@ -5466,6 +5503,59 @@ async def api_ss_physical_grid_save(payload: dict):
         } for r in payload["perf"]])
     if payload.get("notes") is not None:
         db.save_ss_phys_notes(fy, payload["notes"])
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# "Rail Production & Dispatch from BSP" (page 18.5) — the report data + its
+# data-entry editor. See page_rail_report.py and
+# scripts/migrate_add_rail_report.sql.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/rail-report")
+def api_rail_report(report_month: str = Query(default="")):
+    return generate_rail_report(report_month or _latest_report_month())
+
+
+@app.get("/api/rail-report/grid")
+def api_rail_report_grid(financial_year: str = Query(...)):
+    """Editable single-FY grid: {metric, label, value, note} for the 9
+    entered metrics of one financial year, plus the standing footer
+    remarks (shared across every FY, not scoped to financial_year)."""
+    fy_data = db.get_rail_report_data([financial_year]).get(financial_year, {})
+    rows = [
+        {"metric": code, "label": page_rail_report.RAW_METRIC_LABEL[code],
+         "value": fy_data.get(code, {}).get("value"), "note": fy_data.get(code, {}).get("note")}
+        for code in page_rail_report.RAW_METRIC_CODES
+    ]
+    return {
+        "financial_year": financial_year,
+        "rows": rows,
+        "notes": [{"sort_order": so, "note_text": t} for so, t in db.get_rail_report_notes()],
+    }
+
+
+@app.post("/api/rail-report/grid")
+async def api_rail_report_grid_save(payload: dict):
+    """Save the grid editor. payload:
+      { financial_year, rows: [{metric, value, note}], notes: [{sort_order, note_text}] }"""
+    fy = payload.get("financial_year")
+    if not fy:
+        raise HTTPException(status_code=400, detail="financial_year is required")
+
+    def _f(v):
+        try:
+            return float(v) if v not in (None, "", "-") else None
+        except (ValueError, TypeError):
+            return None
+
+    if payload.get("rows"):
+        db.save_rail_report_data([{
+            "financial_year": fy, "metric": r["metric"],
+            "value": _f(r.get("value")), "note": (r.get("note") or "").strip() or None,
+        } for r in payload["rows"]])
+    if payload.get("notes") is not None:
+        db.save_rail_report_notes(payload["notes"])
     return {"status": "ok"}
 
 

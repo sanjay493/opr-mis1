@@ -37,6 +37,7 @@ export default function GlobalNavbar() {
             { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
             { label: 'Large BF Benchmarking Entry', link: '/data-entry/bf-benchmark', icon: '🏗️' },
             { label: 'SAIL Mines Entry (Page 4.5)', link: '/data-entry/sail-mines', icon: '⛏️' },
+            { label: 'Rail Production & Dispatch Entry (Page 18.5)', link: '/data-entry/rail-report', icon: '🚆' },
             { label: 'Iron Ore Mines Production & Despatch', link: '/data-entry/mines-production-despatch', icon: '🚂' },
           ]
         },

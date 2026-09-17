@@ -727,6 +727,37 @@ def init_db():
         )
     """)
 
+    # Rail Production & Dispatch from BSP (Report_format/"Rail Prod &
+    # Despatch Report for OMI.pdf") — page 18.5, right after Segment Wise
+    # Production. Entirely manually entered per financial year (Apr-Mar);
+    # the FY containing the report month holds a running Apr-<report month>
+    # cumulative in the same row (same "typed in directly, not auto-summed"
+    # convention as Cost Trend's till_month) — see page_rail_report.py for
+    # the metric registry and the 4 rows computed from these at read time.
+    # note is optional free text riding along a value (e.g. R350HT's "9
+    # Rakes" annotation in the source PDF).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rail_prod_despatch (
+            financial_year TEXT,
+            metric         TEXT,
+            value          REAL,
+            note           TEXT,
+            PRIMARY KEY (financial_year, metric)
+        )
+    """)
+
+    # Free-text footer remarks under the Rail Production & Dispatch table —
+    # standing footnotes (not scoped to a FY, unlike special_steel_phys_note)
+    # since they document one-time events (a grade change, a plant going
+    # live) that stay relevant regardless of which month the report is run
+    # for. sort_order = display order; edited via /data-entry/rail-report.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rail_prod_despatch_note (
+            sort_order INTEGER PRIMARY KEY,
+            note_text  TEXT NOT NULL
+        )
+    """)
+
     # Iron Ore Mines Production & Despatch — mine-level detail (11 mines
     # under JGoM/OGoM/CGoM), a finer grain than sail_mines_monthly's
     # iron_ore_prod/iron_ore_despatch sections (which stay at group level).
@@ -3634,3 +3665,68 @@ def delete_ss_ipt_requirement(financial_year, item, from_plant, to_plant):
                 "AND from_plant=? AND to_plant=?", (financial_year, item, from_plant, to_plant))
     conn.commit()
     conn.close()
+
+
+# ── "Rail Production & Dispatch from BSP" (page 18.5) ──────────────────────
+# Backing store for page_rail_report.py + /data-entry/rail-report. See
+# scripts/migrate_add_rail_report.sql.
+
+def get_rail_report_data(fys: List[str]) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """-> {financial_year: {metric: {"value": v, "note": n}}}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {fy: {} for fy in fys}
+    if fys:
+        ph = ",".join("?" * len(fys))
+        cur.execute(f"SELECT financial_year, metric, value, note FROM rail_prod_despatch "
+                    f"WHERE financial_year IN ({ph})", fys)
+        for fy, metric, value, note in cur.fetchall():
+            out.setdefault(fy, {})[metric] = {"value": value, "note": note}
+    conn.close()
+    return out
+
+
+def save_rail_report_data(rows: List[Dict[str, Any]]) -> int:
+    """Upsert rail_prod_despatch rows: {financial_year, metric, value, note}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    for r in rows:
+        cur.execute("""
+            INSERT INTO rail_prod_despatch (financial_year, metric, value, note)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(financial_year, metric) DO UPDATE SET
+                value = excluded.value, note = excluded.note
+        """, (r["financial_year"], r["metric"], r.get("value"), r.get("note")))
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def get_rail_report_notes() -> List[tuple]:
+    """-> [(sort_order, note_text), ...] ordered."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT sort_order, note_text FROM rail_prod_despatch_note ORDER BY sort_order")
+    rows = cur.fetchall()
+    conn.close()
+    return [(so, t) for so, t in rows]
+
+
+def save_rail_report_notes(rows: List[Dict[str, Any]]) -> int:
+    """Replace every footer remark with `rows`: {sort_order, note_text}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM rail_prod_despatch_note")
+    for r in rows:
+        text = (r.get("note_text") or "").strip()
+        if not text:
+            continue
+        cur.execute("INSERT INTO rail_prod_despatch_note (sort_order, note_text) VALUES (?, ?)",
+                    (int(r.get("sort_order") or 0), text))
+    conn.commit()
+    conn.close()
+    return len(rows)
