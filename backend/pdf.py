@@ -1202,7 +1202,23 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
                             row["rowspan_start"], row["plant_row_count"], row["break_before"] = saved
             return template.render(pages=pages_list, **render_kwargs)
 
-        _pick_trend_margins(page, template, pages_list, render_kwargs, margin, trend_pages)
+        # _pick_trend_margins (tightens top/bottom margins when the default
+        # ones leave an orphaned split — a plant's row-group stranded alone
+        # at a page break) is disabled per direct instruction, 2026-09-18:
+        # it made the trend section's own physical page count vary by
+        # month's data (e.g. 12 pages for 2026-07's content but 8 for
+        # 2026-08's, root-caused to a Chromium print-pagination difference
+        # between rendering these pages alone vs. embedded in the full
+        # report — never fully explained, see _pick_trend_margins' own
+        # docstring), which drifted out of sync with _INDEX_SECTIONS'
+        # hardcoded page-2 (Index) row count for this section, throwing off
+        # every later Index row's page number. Keeping the default margins
+        # unconditionally trades away this function's orphan-avoidance for
+        # a stable, Index-matching page count instead. If re-enabling this,
+        # _INDEX_SECTIONS' trend-section count needs to become a real
+        # per-request measurement rather than a hardcoded constant, or this
+        # same drift comes back.
+        # _pick_trend_margins(page, template, pages_list, render_kwargs, margin, trend_pages)
 
         html = None
         prev_snapshot = _trend_split_snapshot(trend_pages)

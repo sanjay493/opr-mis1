@@ -658,7 +658,7 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 600) -> str:
     # for X, pad_l-12 for Y), not just off the plot edge, so they never
     # overlap the new tick text at this shrunk vh/pad.
     xt = pad_l + plot_w / 2
-    lines.append(f'<text x="{xt:.1f}" y="{vh - 12:.1f}" font-size="18" font-family="Arial, sans-serif" '
+    lines.append(f'<text x="{xt:.1f}" y="{vh - 12:.1f}" font-size="12" font-family="Arial, sans-serif" '
                  f'fill="#111827" text-anchor="middle">Finished Steel Share of Saleable Steel Despatch (%)</text>')
     yt = pad_t + plot_h / 2
     # Shorter, abbreviated wording (matching the table's own "FS"/"SS")
@@ -666,7 +666,7 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 600) -> str:
     # runs vertically along plot_h, which is far shorter than plot_w, and
     # appending "Despatch" to the old, already-long spelled-out label
     # pushed it past the chart's own top/bottom bounds.
-    lines.append(f'<text x="20" y="{yt:.1f}" font-size="15" font-family="Arial, sans-serif" fill="#111827" '
+    lines.append(f'<text x="20" y="{yt:.1f}" font-size="12" font-family="Arial, sans-serif" fill="#111827" '
                  f'text-anchor="middle" transform="rotate(-90 20 {yt:.1f})">Special FS Share of Saleable Steel Despatch (%)</text>')
 
     # Bubbles, sqrt-scaled by Saleable Steel production, label centered.
