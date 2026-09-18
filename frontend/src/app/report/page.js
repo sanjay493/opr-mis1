@@ -411,7 +411,18 @@ export default function ReportPage() {
       return;
     }
     generatePDF(
-      { month: selectedMonth, pages: pagesToExport },
+      {
+        month: selectedMonth,
+        pages: pagesToExport,
+        // Tells the backend this is a deliberate full-report export (every
+        // page checked) vs. a partial one — see PDFRequest.full_export /
+        // _enrich_pdf_pages' _is_full_export in main.py. Inferring this
+        // from "Index page present" used to misfire on ordinary partial
+        // exports that happen to include the Index (e.g. "pages 1-9"),
+        // silently gluing in unrelated sentinel pages all the way through
+        // Cost Trend.
+        full_export: selectedPages.size === ALL_PAGE_NUMBERS.length,
+      },
       {
         onSuccess: (blob) => {
           const url = window.URL.createObjectURL(blob);

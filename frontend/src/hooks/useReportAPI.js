@@ -164,11 +164,11 @@ async function throwForErrorResponse(response) {
 
 export function useGeneratePDF() {
   return useMutation({
-    mutationFn: async ({ month, pages }) => {
+    mutationFn: async ({ month, pages, full_export }) => {
       const startRes = await fetch(`${API_BASE_URL}/api/generate-pdf/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, pages }),
+        body: JSON.stringify({ month, pages, full_export }),
       });
       if (!startRes.ok) await throwForErrorResponse(startRes);
       const { job_id } = await startRes.json();

@@ -1619,7 +1619,25 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
             _p3_entry["marginTop"] = 2
             _p3_entry["marginBottom"] = 1
             _p3_entry["tablePaddingV"] = 0.5
+            # Margins/table padding alone still weren't enough on months with
+            # more Highlights sections (quarter/half/FY-end months, up to 9
+            # lines) — verified empirically (generate_pdf_bytes against 10
+            # real report months) that neither lever fixes those months on
+            # its own, but tightening the narrative/Highlights line-height
+            # (1.4 -> 1.15, font size untouched) together with a shorter
+            # chart SVG viewBox (168 -> 130, main_pages' page-3 dict is
+            # mutated in place below) reliably does. Chart height alone,
+            # even down to a viewBox of 40, did nothing by itself in the
+            # same test — page 3's content above the charts already ran the
+            # page out of room with zero slack left for row 2 of the chart
+            # grid, so it's the combination that creates the needed margin,
+            # not either change alone.
+            _p3_entry["p3TextLineHeight"] = 1.15
             merged_page_layouts["3"] = _p3_entry
+            _p3 = next((p for p in main_pages if p.get("page") == 3), None)
+            if _p3 is not None and _p3.get("chart_data"):
+                from page_techno import generate_summary_chart_html
+                _p3["_chart_html"] = generate_summary_chart_html(_p3["chart_data"], vh=130)
 
     # Page 1 (Cover) is rendered as its own document with a zero page
     # margin (see _render_pdf's docstring — page.pdf()'s margin option

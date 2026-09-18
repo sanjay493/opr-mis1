@@ -65,6 +65,12 @@ class PDFRequest(BaseModel):
     pages: List[PageData]
     page_layouts: Optional[Dict[str, Any]] = None
     font_config: Optional[FontConfig] = None
+    # True only when the caller deliberately asked for every report page
+    # (e.g. the report page's "Select All" state) — see _enrich_pdf_pages'
+    # _is_full_export in main.py for why this can't be inferred from the
+    # submitted page list itself (Index being present doesn't mean "all
+    # pages"; a deliberate partial export almost always includes it too).
+    full_export: Optional[bool] = False
 
 
 class Page3NarrativeRequest(BaseModel):

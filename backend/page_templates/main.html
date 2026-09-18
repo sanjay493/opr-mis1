@@ -1948,6 +1948,19 @@
     .pg-{{ page.page|pgclass }} .report-table th,
     .pg-{{ page.page|pgclass }} .report-table td { padding: {{ _pl.get('tablePaddingV') }}px 4px !important; }
     {% endif %}
+    {% if _pl.get('p3TextLineHeight') is not none %}
+    {# Same "only when this month's content actually spilled" gating as
+       tablePaddingV above, for page 3's narrative/highlights text (its own
+       fixed 1.4 line-height, set in the static <style> block, wasn't
+       reachable from page_layouts before — needed once tightening every
+       other page-3 dimension still wasn't enough, see pdf.py's page-3
+       overflow correction. Font size is left alone — the line-height
+       tighten alone was enough, measured empirically across several
+       months' worth of real data). #}
+    .pg-{{ page.page|pgclass }} .page3-narrative,
+    .pg-{{ page.page|pgclass }} .page3-highlights,
+    .pg-{{ page.page|pgclass }} .page3-footnote { line-height: {{ _pl.get('p3TextLineHeight') }} !important; }
+    {% endif %}
     {% endif %}
     {% endfor %}
     </style>

@@ -1165,12 +1165,16 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     # only asked "is the sentinel present", not "is this a full report",
     # so a partial selection missing an anchor page (Steel Sector
     # Performance, EPI, Cost Trend, ...) got it silently glued back in
-    # regardless. Gated on page 2 (Index) being present — the same
-    # full-vs-partial signal pdf.py's _has_index/footer_total_override
-    # already uses — so a genuine full/select-all export (which always
-    # includes the Index) keeps this backward-compat behavior, while a
-    # deliberate few-page export is taken as submitted.
-    _is_full_export = any(p.get("page") == 2 for p in _pages_list)
+    # regardless. Previously gated on page 2 (Index) being present, on the
+    # theory that a genuine full/select-all export always includes the
+    # Index — but so does almost any deliberate partial export that starts
+    # from the front matter (e.g. "pages 1-9"), which was then misread as
+    # "full report" and had this whole chain of sentinel pages glued back
+    # in regardless, cascading through every anchor the (accidentally also
+    # selected) earlier sentinels satisfied. full_export is now an explicit
+    # signal from the caller (the report page sets it only when every page
+    # is selected — see PDFRequest.full_export) instead of being inferred.
+    _is_full_export = bool(request.full_export)
     # Page 24 (SAIL) and the trend/performance-analysis sentinel page: ensure
     # both are present even for requests built from a page list saved before
     # either existed in its current form.

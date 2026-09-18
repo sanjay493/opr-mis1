@@ -1083,7 +1083,12 @@ def _param_svg(p: dict, vw: int = 290, vh: int = 168) -> str:
     return "\n".join(lines)
 
 
-def generate_summary_chart_html(chart_data: dict) -> str:
+def generate_summary_chart_html(chart_data: dict, vh: int = 168) -> str:
+    """vh is _param_svg's own viewBox height (default 168, its normal size) —
+    pdf.py's page-3 overflow correction re-calls this with a shorter vh
+    (see _generate_pdf_sync) to claw back just enough height to keep the
+    2nd chart row off a spilled 2nd physical page, without touching every
+    other month's chart size."""
     params = (chart_data or {}).get("params", [])
     if len(params) < 4:
         return ""
@@ -1093,9 +1098,9 @@ def generate_summary_chart_html(chart_data: dict) -> str:
         rows_html += (
             '<div style="display:flex;gap:4px;margin-bottom:1px;">'
             f'<div style="flex:1;border:0.5px solid #e2e8f0;border-radius:3px;padding:1px;">'
-            f'{_param_svg(p0)}</div>'
+            f'{_param_svg(p0, vh=vh)}</div>'
             f'<div style="flex:1;border:0.5px solid #e2e8f0;border-radius:3px;padding:1px;">'
-            f'{_param_svg(p1)}</div>'
+            f'{_param_svg(p1, vh=vh)}</div>'
             "</div>"
         )
     return '<div style="margin-top:3px;">' + rows_html + "</div>"
