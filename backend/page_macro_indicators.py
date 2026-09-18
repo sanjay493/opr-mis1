@@ -16,16 +16,13 @@ PDF itself shows Jul'25-Jul'26 for an Aug'26 report (a 1-month lag), since
 government/industry macro stats are published with that lag; matched here
 exactly rather than showing the report month's own (not-yet-published) figure.
 
-Cell shading is a per-row SEQUENTIAL heatmap (one hue, light->dark, by that
-row's own min-max across the displayed window) rather than the source PDF's
-red/yellow/green per-row shading — the source's colouring implies a
-"good/bad" direction (e.g. lower Coal Imports shaded green, lower Automobile
-Sales shaded red — opposite polarities), but that "better direction" isn't
-stated anywhere in the source for any of the 14 rows, so asserting one here
-per metric would be an editorial guess this page has no basis for. A plain
-magnitude heatmap (dataviz skill: sequential = magnitude, diverging =
-polarity) shows the same at-a-glance shape — which months in a row ran high
-or low — without asserting which end is "better."
+Cell shading is a per-row red/yellow/green 3-color scale (low->mid->high by
+that row's own min-max across the displayed window), copied inline from the
+source PDF's own colouring (Excel's default 3-Color Scale palette: #f8696b
+low, #ffeb84 mid, #63be7b high) per direct instruction, 2026-09-17 — an
+earlier version here used a single-hue sequential ramp instead, reasoning
+that red/yellow/green implies a "good/bad" direction the source never
+states per metric, but the source's own look takes precedence now.
 """
 from typing import Dict, List, Optional
 
@@ -58,11 +55,11 @@ METRIC_UNIT = {m: u for m, _, u in _METRICS}
 _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-# Sequential ramp endpoints — reuses colors_config.json's already-validated
-# highlight_actual_bg (light) / highlight_actual_border (dark) pair rather
-# than introducing a new hue.
-_RAMP_LIGHT = (0xdb, 0xea, 0xfe)  # highlight_actual_bg  #dbeafe
-_RAMP_DARK = (0x1d, 0x4e, 0xd8)   # highlight_actual_border #1d4ed8
+# Excel's default 3-Color Scale (Red-Yellow-Green) preset — matches the
+# source PDF's own per-row heatmap colours exactly.
+_RAMP_LOW = (0xf8, 0x69, 0x6b)   # #f8696b
+_RAMP_MID = (0xff, 0xeb, 0x84)   # #ffeb84
+_RAMP_HIGH = (0x63, 0xbe, 0x7b)  # #63be7b
 
 
 def _mon_label(month: str) -> str:
@@ -78,14 +75,13 @@ def _fmt(v: Optional[float]) -> str:
 
 
 def _ramp_color(frac: float) -> tuple:
-    """Linear-interpolate _RAMP_LIGHT -> _RAMP_DARK at frac in [0, 1] ->
-    (hex, text_color) — text flips to white once the fill's relative
-    luminance drops low enough that black text would be hard to read (the
-    darker 2/3 of the ramp, roughly _RAMP_DARK-ward of the midpoint)."""
-    r, g, b = (round(lo + (hi - lo) * frac) for lo, hi in zip(_RAMP_LIGHT, _RAMP_DARK))
-    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    text = "#ffffff" if luminance < 0.55 else None  # None = default dark text
-    return f"#{r:02x}{g:02x}{b:02x}", text
+    """Piecewise-interpolate _RAMP_LOW -> _RAMP_MID -> _RAMP_HIGH at frac in
+    [0, 1] -> (hex, text_color). All 3 stops are pale enough that default
+    dark text stays readable throughout (matches the source, which never
+    flips to white text either), so text_color is always None."""
+    lo, hi, t = (_RAMP_LOW, _RAMP_MID, frac / 0.5) if frac <= 0.5 else (_RAMP_MID, _RAMP_HIGH, (frac - 0.5) / 0.5)
+    r, g, b = (round(a + (b - a) * t) for a, b in zip(lo, hi))
+    return f"#{r:02x}{g:02x}{b:02x}", None
 
 
 def _row_colors(values: List[Optional[float]]) -> List[Optional[tuple]]:

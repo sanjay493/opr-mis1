@@ -4,13 +4,13 @@ import React from 'react';
 
 // Mirrors backend/page_templates/macro_indicators.html — see
 // backend/page_macro_indicators.py for the metric registry and the
-// per-row sequential heatmap (bg/fg computed server-side per cell).
-// Genuine A4-landscape page (spliced in by pdf.py's _LANDSCAPE_TYPES
-// handling).
+// per-row red/yellow/green 3-color heatmap (bg/fg computed server-side
+// per cell). Genuine A4-landscape page (spliced in by pdf.py's
+// _LANDSCAPE_TYPES handling).
 
 const C = { border: '#b0b0b0', headerBg: '#e8eef7', secondary: '#5f6368' };
 
-const cell = { border: `0.5pt solid ${C.border}`, padding: '3pt 3pt', textAlign: 'center', overflow: 'hidden', fontSize: '7.6pt' };
+const cell = { border: `0.5pt solid ${C.border}`, padding: '5pt 3pt', textAlign: 'center', overflow: 'hidden', fontSize: '7.6pt' };
 const th = { ...cell, background: C.headerBg, fontWeight: 700, fontSize: '7.8pt' };
 
 export default function MacroIndicatorsTemplate({ data }) {
@@ -44,11 +44,11 @@ export default function MacroIndicatorsTemplate({ data }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.label}>
-              <td style={{ ...cell, textAlign: 'left', fontWeight: 600 }}>{r.label}</td>
-              <td style={{ ...cell, textAlign: 'left', fontStyle: 'italic', color: C.secondary, fontSize: '6.6pt' }}>{r.unit}</td>
+              <td style={{ ...cell, textAlign: 'left', fontWeight: 600, fontSize: '11.5pt' }}>{r.label}</td>
+              <td style={{ ...cell, textAlign: 'left', fontStyle: 'italic', color: C.secondary, fontSize: '11pt' }}>{r.unit}</td>
               {r.cells.map((c, i) => (
                 <td key={i} style={{
-                  ...cell, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+                  ...cell, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11.5pt',
                   background: c.bg || undefined, color: c.fg || undefined,
                 }}>{c.value}</td>
               ))}
@@ -57,7 +57,7 @@ export default function MacroIndicatorsTemplate({ data }) {
         </tbody>
       </table>
 
-      <div style={{ marginTop: 6, fontSize: '7.4pt', color: C.secondary }}>
+      <div style={{ marginTop: 6, fontSize: '9pt', color: C.secondary }}>
         {source}<br />
         <span style={{ fontStyle: 'italic' }}>{footnote}</span>
       </div>
