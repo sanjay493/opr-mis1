@@ -6,9 +6,24 @@
 # for the full transitive dependency set (fastapi/pandas/etc.'s own deps)
 # pinned the same way, generated via `pip freeze`.
 #
+# IMPORTANT — pinning `playwright` here only pins the *Python package*, not
+# the Chromium *binary* it drives. `pip install` never re-downloads that
+# binary; only `playwright install` does. A machine whose browser cache
+# predates this pin (or was populated by an earlier one) keeps using its old
+# Chromium build forever, invisibly — `pip freeze` still reports the correct
+# pinned playwright version either way. Confirmed root cause (2026-09-19) of
+# two machines on the identical commit, with identical `pip freeze` output,
+# still rendering the trend section's pagination differently. After ANY
+# `pip install -r requirements.txt` on a machine that already had a
+# venv/browser cache, also run `python -m playwright install --force
+# chromium` — see pdf.py's `_get_persistent_browser`, which now logs the
+# actual running Chromium version/path on launch so this doesn't have to be
+# discovered by diffing two PDFs again.
+#
 # To upgrade deliberately: bump a version here, `pip install -r
 # requirements.txt` in the venv, then regenerate the lock with
-# `pip freeze > requirements-lock.txt` and commit both.
+# `pip freeze > requirements-lock.txt` and commit both — and re-run
+# `playwright install chromium` if the playwright version itself changed.
 fastapi==0.141.1
 uvicorn==0.52.4
 playwright==1.62.0

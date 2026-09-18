@@ -1577,6 +1577,19 @@ def _get_persistent_browser():
         _PW_STATE["pw"] = sync_playwright().start()
     browser = _PW_STATE["pw"].chromium.launch()
     _PW_STATE["browser"] = browser
+    # `pip install -r requirements.txt` pins the playwright *package* but
+    # never re-downloads the Chromium *binary* it drives — a machine whose
+    # browser cache predates the current pin (or was populated under a
+    # different one) keeps rendering with a stale Chromium build forever,
+    # completely invisibly: `pip freeze` still reports the pinned package
+    # version. Confirmed root cause of two machines on the identical commit
+    # (identical pip freeze too) producing a different physical page count
+    # for the same month's trend section, 2026-09-19 — one had chromium-1234
+    # (151.0.7922.34), the other an older cached build. Logged once per
+    # process (not per report) so a future drift like this shows up in the
+    # server's own logs instead of only surfacing as a mismatched PDF
+    # someone has to notice and diff by hand.
+    print(f"[pdf] Chromium: {browser.version} ({_PW_STATE['pw'].chromium.executable_path})")
     return browser
 
 
