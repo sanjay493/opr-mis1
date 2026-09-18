@@ -16,7 +16,7 @@
             <tbody>
               {% for ent in page.entities %}
               {% for row in ent.rows %}
-              <tr class="{{ 'ssd-sail-row' if ent.label == 'SAIL' else '' }} {{ 'ssd-plant-start' if row.is_entity_first else '' }}">
+              <tr class="{{ 'ssd-sail-row' if ent.label == 'SAIL' else '' }} {{ 'ssd-plant-start' if row.is_entity_first else '' }} {{ 'ssd-special-start' if (row.special and row.is_block_first) else '' }}">
                 {% if row.is_entity_first %}<td class="ssd-lbl" rowspan="{{ ent.rowspan }}">{{ ent.label }}</td>{% endif %}
                 <td class="ssd-metric-lbl {{ 'ssd-special-txt' if row.special else '' }}">{{ row.metric_label }}</td>
                 {% if row.is_block_first %}

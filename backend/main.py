@@ -34,6 +34,7 @@ import page_special_steel_physical
 from page_special_steel_physical import generate_special_steel_physical
 from page_at_a_glance import generate_at_a_glance
 from page_key_highlights import generate_key_highlights
+from page_steel_sales_performance import generate_steel_sales_performance
 from page_best_ever import generate_best_ever_highlights
 from page_best_calendar_month import generate_best_calendar_month
 from page_key_parameters import generate_key_parameters
@@ -220,6 +221,12 @@ _INDEX_SECTIONS = [
     ("India Macro Economic Indicators", 1),
     ("SAIL Performance - At a Glance", 1),
     ("SAIL Performance - 1 Page Summary", 1),
+    # 1 physical page: report-month and YTD bullets both run full page
+    # width, single column, bisected font/padding (steel_sales_performance.
+    # html) to fit ~30 combined bullets on one page — per direct
+    # instruction, 2026-09-18. Recheck if either bullet list grows enough
+    # to need a 2nd page again.
+    ("Steel Sales Performance", 1),
     ("Production Highlights - Best-Ever Records", 1),
     ("Production Highlights - Best Calendar Month", 1),
     ("Inter Plant Performance Comparison", 1),
@@ -343,9 +350,11 @@ from api_admin import router as admin_router
 from api_admin_backup import router as admin_backup_router
 from api_visits import router as visits_router
 from api_bf_benchmark import router as bf_benchmark_router
+from api_techno_bf_furnace import router as techno_bf_furnace_router
 from api_breakdown import router as breakdown_router
 from api_production_loss import router as production_loss_router
 from api_key_highlights import router as key_highlights_router
+from api_steel_sales_highlights import router as steel_sales_highlights_router
 from api_capacity import router as capacity_router
 from api_cost_trend_extract import router as cost_trend_extract_router
 
@@ -441,6 +450,18 @@ AT_A_GLANCE_PAGE_ID = 2.5
 # _DEPT_BADGE_EXPLICIT_GROUP and frontend PAGE_LABELS — see git history for
 # the exact diff.
 KEY_HIGHLIGHTS_PAGE_ID = 3.1
+
+# "Steel Sales Performance" — two report-month/YTD Key Performance Parameter
+# bullet lists (Cash Collection, Total/LP/FP+PET Sales, despatch figures,
+# etc. — Report_format/RMT_0109_partial.pdf), sits right after "SAIL
+# Performance - 1 Page Summary" (page 3), ahead of Best-Ever Highlights, per
+# direct instruction. Numbered main flow, group-1 dept-badge (same simple
+# mechanism as Key Highlights/EPI — see report_utils.py's
+# _DEPT_BADGE_EXPLICIT_GROUP), never persisted, always synthesized fresh
+# from steel_sales_highlights (db.get_steel_sales_highlights) — same
+# sentinel-float treatment as BEST_EVER_PAGE_ID below. 3.05 (not 3.1) since
+# 3.1 is already KEY_HIGHLIGHTS_PAGE_ID above.
+STEEL_SALES_PAGE_ID = 3.05
 
 # "Best-Ever Highlights" / "Best Calendar Month" — print versions of the
 # /reports/highlights "Best-Ever Records" table and the /reports/records-
@@ -703,9 +724,11 @@ app.include_router(admin_router)
 app.include_router(admin_backup_router)
 app.include_router(visits_router)
 app.include_router(bf_benchmark_router)
+app.include_router(techno_bf_furnace_router)
 app.include_router(breakdown_router)
 app.include_router(production_loss_router)
 app.include_router(key_highlights_router)
+app.include_router(steel_sales_highlights_router)
 app.include_router(capacity_router)
 app.include_router(cost_trend_extract_router)
 
@@ -771,6 +794,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
 
         if page_number is not None:
             if page_number in (24, TREND_PAGE_ID, SS_PHYSICAL_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
+                                STEEL_SALES_PAGE_ID,
                                 BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
                                 COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
@@ -909,6 +933,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             # filtered list to anchor off of.)
             pages_config = [p for p in pages_config
                             if p.get("page") not in (24, TREND_PAGE_ID, SS_PHYSICAL_PAGE_ID, AT_A_GLANCE_PAGE_ID, KEY_HIGHLIGHTS_PAGE_ID,
+                                                      STEEL_SALES_PAGE_ID,
                                                       BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID,
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
@@ -958,16 +983,20 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 # currently wired into the report pending a design rework).
                 # Still listed in the strip-tuple just above so any stale
                 # cached page:3.1 entry from while this WAS wired in gets
-                # cleaned out rather than lingering. BEST_EVER_PAGE_ID /
-                # BEST_CAL_MONTH_PAGE_ID sit in that same conceptual slot
-                # (see their comment above main.py's constant definitions).
-                pages_config.insert(_idx3 + 1, {"page": BEST_EVER_PAGE_ID})
-                pages_config.insert(_idx3 + 2, {"page": BEST_CAL_MONTH_PAGE_ID})
-                pages_config.insert(_idx3 + 3, {"page": KEY_PARAMS_PAGE_ID})
-                pages_config.insert(_idx3 + 4, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
-                pages_config.insert(_idx3 + 5, {"page": COST_TREND_HM_PAGE_ID})
-                pages_config.insert(_idx3 + 6, {"page": COST_TREND_CS_PAGE_ID})
-                pages_config.insert(_idx3 + 7, {"page": COST_TREND_SS_PAGE_ID})
+                # cleaned out rather than lingering. STEEL_SALES_PAGE_ID sits
+                # right after page 3, ahead of everything else in this
+                # cluster — see its own comment above the constant
+                # definition. BEST_EVER_PAGE_ID / BEST_CAL_MONTH_PAGE_ID sit
+                # in that same conceptual slot (see their comment above
+                # main.py's constant definitions).
+                pages_config.insert(_idx3 + 1, {"page": STEEL_SALES_PAGE_ID})
+                pages_config.insert(_idx3 + 2, {"page": BEST_EVER_PAGE_ID})
+                pages_config.insert(_idx3 + 3, {"page": BEST_CAL_MONTH_PAGE_ID})
+                pages_config.insert(_idx3 + 4, {"page": KEY_PARAMS_PAGE_ID})
+                pages_config.insert(_idx3 + 5, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
+                pages_config.insert(_idx3 + 6, {"page": COST_TREND_HM_PAGE_ID})
+                pages_config.insert(_idx3 + 7, {"page": COST_TREND_CS_PAGE_ID})
+                pages_config.insert(_idx3 + 8, {"page": COST_TREND_SS_PAGE_ID})
             # "SAIL Mines Production & Despatch Performance" sentinel page:
             # always inserted right after fixed page 4, ahead of fixed page 5.
             _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
@@ -1018,6 +1047,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == KEY_HIGHLIGHTS_PAGE_ID:
                 page.update(generate_key_highlights(month))
                 page["orientation"] = "landscape"
+            if pg == STEEL_SALES_PAGE_ID:
+                page.update(generate_steel_sales_performance(month))
+                page["type"] = "steel_sales_performance"
             if pg == BEST_EVER_PAGE_ID:
                 page.update(generate_best_ever_highlights(month))
                 page["type"] = "best_ever_highlights"
@@ -1228,12 +1260,22 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idxmp = next((i for i, p in enumerate(_pages_list) if p.get("page") == MARKET_PRICES_PAGE_ID), None)
         if _idxmp is not None:
             _pages_list.insert(_idxmp + 1, {"page": MACRO_INDICATORS_PAGE_ID})
-    # "Best-Ever Highlights" / "Best Calendar Month" sentinel pages: always
-    # inserted right after "SAIL Performance Summary" (page 3), ahead of
-    # Key Parameters — see their comment above main.py's constant
-    # definitions.
-    if _is_full_export and not any(p.get("page") == BEST_EVER_PAGE_ID for p in _pages_list):
+    # "Steel Sales Performance" sentinel page: always inserted right after
+    # "SAIL Performance Summary" (page 3), ahead of Best-Ever Highlights —
+    # see its own comment above the constant definition.
+    if _is_full_export and not any(p.get("page") == STEEL_SALES_PAGE_ID for p in _pages_list):
         _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 3), None)
+        if _idx3 is not None:
+            _pages_list.insert(_idx3 + 1, {"page": STEEL_SALES_PAGE_ID})
+    # "Best-Ever Highlights" / "Best Calendar Month" sentinel pages: always
+    # inserted right after Steel Sales Performance (chained off it, rather
+    # than off page 3 directly, so it lands after Steel Sales Performance
+    # regardless of insertion order), ahead of Key Parameters — see their
+    # comment above main.py's constant definitions.
+    if _is_full_export and not any(p.get("page") == BEST_EVER_PAGE_ID for p in _pages_list):
+        _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == STEEL_SALES_PAGE_ID), None)
+        if _idx3 is None:
+            _idx3 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 3), None)
         if _idx3 is not None:
             _pages_list.insert(_idx3 + 1, {"page": BEST_EVER_PAGE_ID})
     if _is_full_export and not any(p.get("page") == BEST_CAL_MONTH_PAGE_ID for p in _pages_list):
@@ -1360,6 +1402,9 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == KEY_HIGHLIGHTS_PAGE_ID:
             p.update(generate_key_highlights(request.month))
             p["orientation"] = "landscape"
+        if pg == STEEL_SALES_PAGE_ID:
+            p.update(generate_steel_sales_performance(request.month))
+            p["type"] = "steel_sales_performance"
         if pg == BEST_EVER_PAGE_ID:
             p.update(generate_best_ever_highlights(request.month))
             p["type"] = "best_ever_highlights"

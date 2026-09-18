@@ -578,6 +578,38 @@
             font-size: 12t;
             line-height: 1.15;
         }
+        /* Tables 1c ("Steel Prices"), 4a ("Domestic Raw Material Prices")
+           and 5 ("Key Indices") — same table-layout:fixed + nowrap label
+           column fix as 1b above (auto layout was letting the label column
+           get squeezed under the other columns' combined width, wrapping
+           product/commodity/index names like "GP Sheet (0.63 mm)" or
+           "NMDC Iron Ore Baila Lump (65.5%, 10-40 mm)" onto a 2nd line),
+           per direct instruction. Label width tuned per table's own column
+           count/longest-label rather than reusing 1b's 27% flat: 1c and 5
+           both have 6 columns total with short labels (~20 chars); 4a has
+           only 5 columns but its commodity names run much longer
+           (~40+ chars), so its label needs proportionally more room. */
+        .ssp-table-1c .ssp-table,
+        .ssp-table-5 .ssp-table {
+            table-layout: fixed;
+            width: 100%;
+        }
+        .ssp-table-1c .ssp-table .ssp-label,
+        .ssp-table-1c .ssp-table thead th:first-child,
+        .ssp-table-5 .ssp-table .ssp-label,
+        .ssp-table-5 .ssp-table thead th:first-child {
+            width: 30%;
+            white-space: nowrap;
+        }
+        .ssp-table-4a .ssp-table {
+            table-layout: fixed;
+            width: 100%;
+        }
+        .ssp-table-4a .ssp-table .ssp-label,
+        .ssp-table-4a .ssp-table thead th:first-child {
+            width: 45%;
+            white-space: nowrap;
+        }
         .ssp-share-bracket {
             display: block;
             font-size: 11pt;
@@ -1798,41 +1830,66 @@
            specifically to shorten that longest line enough to fit,
            per direct instruction.
 
-           Cross-page note: growing this table's own padding/font size
-           (2026-09-18, alongside the bubble chart's vh bump — see
-           page_special_steel_donut.py's _bubble_chart_svg docstring)
-           measurably shifts page 23's (ISP special-steel) content up by a
-           few mm in a combined render, even though nothing on page 23
-           itself changed and page 23 prints BEFORE page 24 in document
-           order — confirmed real (not rendering noise: two renders of
-           identical code are byte-identical) via
-           generate_pdf_bytes(pages_override=[page 23, page 24]), but the
-           exact mechanism wasn't tracked down (no JS, no shared CSS
-           classes, and .page's page-break-after:always/page-break-inside:
-           avoid shouldn't let a later sibling affect an earlier one's
-           layout — plain block flow simply shouldn't do this). At the
-           current sizes it's a small in-place reflow with no visible
-           defect on either page (verified by pixel-diffing the same probe
-           render), but it means page 24's OWN vertical footprint isn't
-           the only thing worth re-checking before growing it further —
-           re-run that same paired probe and eyeball page 23 too. */
+           Cross-page note (2026-09-18): an earlier attempt to grow this
+           table's padding/font to th/td.ssd-lbl/td.ssd-metric-lbl/.ssd-stat
+           all at 11.5pt (alongside the bubble chart's vh bump — see
+           page_special_steel_donut.py's _bubble_chart_svg docstring) was
+           mistaken at the time for a harmless "few mm reflow" on page 23,
+           found via generate_pdf_bytes(pages_override=[page 23, page 24])
+           pixel-diffing. It was NOT harmless: that page-count-preserving
+           "reflow" was Chromium's whole-print-job scale-to-fit (page.pdf's
+           preferCSSPageSize doesn't prevent this — that flag only concerns
+           explicit @page-rule sized pages, and this isn't one), silently
+           kicking in because the taller table no longer fit page 24 on one
+           physical page. Confirmed live in a full report export: EVERY
+           page sharing that print job (all of pages 3-40ish) rendered
+           ~30% smaller than configured whenever page 24 was included — the
+           "shrinking issue of whole report" reported 2026-09-18. Root
+           cause isolated by rendering page 24 alone via generate_pdf_bytes
+           (pages_override=[24]) and reading back actual glyph sizes
+           (PyMuPDF span "size", not just page count / bbox position, which
+           looks unchanged under a uniform scale) — at 11.5pt-everywhere it
+           renders ~8pt even by itself, i.e. it already doesn't fit one A4
+           page alone, before page 23 is ever involved. Reverted this
+           table's font-size/padding to their pre-2026-09-18 values (below)
+           to restore one-page fit; the bubble chart's vh=600 was NOT the
+           cause (confirmed via the same isolated probe with vh reverted to
+           420 alone — still shrank) and is left as-is. Any future
+           font/padding growth on .ssd-table or .ssd-stat MUST be re-probed
+           the same way — via actual glyph sizes on page 24 ALONE, not a
+           paired render or a bounding-box/page-count diff — before
+           landing, since either of those blind spots is exactly what let
+           this regression through undetected the first time. */
         .ssd-wrap { padding: 2px 8px; font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif; }
         .ssd-title-row { position: relative; padding: 2px 46px 2px 0; margin-bottom: 1px; }
         .ssd-title { text-align: center; font-weight: 700; font-size: 11.5pt; color: rgb(0,0,255); }
         .ssd-unit-tag { position: absolute; top: 50%; right: 0; transform: translateY(-50%); font-size: 7.5pt; font-weight: 700; color: {{ colors.text_secondary }}; }
         .ssd-table { width: auto; margin: 0 auto; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; table-layout: auto; }
-        .ssd-table th { background: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 3px 5px; border: 1px solid {{ colors.border_dark }}; font-size: 11.5pt; text-align: center; white-space: nowrap; }
-        .ssd-table td.ssd-lbl { font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 11.5pt; white-space: nowrap; }
+        .ssd-table th { background: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 1.5px 5px; border: 1px solid {{ colors.border_dark }}; font-size: 9.5pt; text-align: center; white-space: nowrap; }
+        .ssd-table td.ssd-lbl { font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 11pt; white-space: nowrap; }
         .ssd-table tr.ssd-sail-row td.ssd-lbl { background: {{ colors.highlight_achieved_band_bg }}; }
         /* No horizontal line between an entity's own rows — only left/right
            borders — with a dark divider reintroduced solely at each
            entity's first row (tr.ssd-plant-start, same pattern as
            .segwise-table above) so the grid reads as "one block per
            plant" per direct instruction. */
-        .ssd-table td.ssd-metric-lbl { font-weight: 600; text-align: center; vertical-align: middle; border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; font-size: 11.5pt; white-space: nowrap; }
-        .ssd-table td.ssd-cell { border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; padding: 4px 5px; text-align: center; vertical-align: middle; }
+        .ssd-table td.ssd-metric-lbl { font-weight: 600; text-align: center; vertical-align: middle; border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; font-size: 8.3pt; white-space: nowrap; }
+        .ssd-table td.ssd-cell { border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; padding: 1px 5px; text-align: center; vertical-align: middle; }
         .ssd-table tr.ssd-plant-start > td { border-top: 2px solid {{ colors.border_darkest }}; }
-        .ssd-stat { font-size: 11.5pt; line-height: 1.15; white-space: nowrap; }
+        /* Dashed separator between each plant's production block (FS,
+           Semis) and its despatch/special-steel block (Spl. FS, Spl.
+           Semis) — per direct instruction, on the row where the despatch
+           block starts (Spl. FS), covering every cell in that physical row
+           (metric label, the rowspanned Spl. SS total, and every period's
+           Spl. FS value) so the line runs the full table width, not just
+           under the metric label. ssd-plant-start's own solid top border
+           (a plant's FIRST row, which is always an FS row, never a Spl. FS
+           row — the two classes never collide on the same row) takes
+           precedence by being solid + heavier at equal specificity; that's
+           fine, a plant boundary should read stronger than an in-plant
+           section boundary anyway. */
+        .ssd-table tr.ssd-special-start > td { border-top: 1px dashed {{ colors.border_dark }}; }
+        .ssd-stat { font-size: 7.5pt; line-height: 1.0; white-space: nowrap; }
         .ssd-total-col { font-weight: 700; background: #f1f5f9; }
         .ssd-special-txt { color: #166534; }
         .ssd-emphasis .ssd-stat { font-weight: 700; }
@@ -1972,13 +2029,14 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('special_steel', 'special_steel_donut') %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical', 'rail_report', 'market_prices', 'macro_indicators') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('special_steel', 'special_steel_donut') %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines', 'steel_sales_performance') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical', 'rail_report', 'market_prices', 'macro_indicators') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
         {% else %}
         {% if page.type == 'index' %}{% include 'index.html' %}
         {% elif page.type == 'at_a_glance' %}{% include 'at_a_glance.html' %}
+        {% elif page.type == 'steel_sales_performance' %}{% include 'steel_sales_performance.html' %}
         {% elif page.type == 'best_ever_highlights' %}{% include 'best_ever_highlights.html' %}
         {% elif page.type == 'best_calendar_month' %}{% include 'best_calendar_month.html' %}
         {% elif page.type == 'summary' %}{% include 'summary.html' %}

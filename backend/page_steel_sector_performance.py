@@ -373,6 +373,6 @@ def generate_steel_sector_performance(report_month: str, section: str = "all") -
     if section in ("demand_trade", "all"):
         page["nmdc_price_chart_html"] = _price_chart_html(
             "NMDC Iron Ore Price Trend (₹/tonne)", "4a", _match_nmdc_item,
-            _NMDC_PRICE_CHART_COLORS, floor_month,vh=100
+            _NMDC_PRICE_CHART_COLORS, floor_month,vh=90
         )
     return page

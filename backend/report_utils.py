@@ -55,9 +55,11 @@ _DEPT_BADGE_GROUPS = [
 #     group 4) to right after 1024 (Trend/performance-analysis sentinel),
 #     right before 1025 (Special Steel Plants Physical Performance) — group
 #     changed to 5 to match, same as its new physical neighbors.
+#   3.05 — "Steel Sales Performance", right after page 3, ahead of
+#     Best-Ever Highlights (3.2) — same group (1) as its neighbors.
 _DEPT_BADGE_EXPLICIT_GROUP = {
     2.1: 1, 2.2: 1, 2.3: 1, 2.41: 1, 2.42: 1,
-    2.5: 1, 3: 1, 3.2: 1, 3.3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1,
+    2.5: 1, 3: 1, 3.05: 1, 3.2: 1, 3.3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1,
     18.5: 5,
     1024: 5, 1025: 5,
     29.5: 7,
@@ -114,7 +116,7 @@ _CANONICAL_PAGE_ORDER = [
     # (same kind as 1025's, fixed alongside it below) noticed while adding
     # 2.41/2.42 here.
     2.1, 2.2, 2.3, 2.41, 2.42,
-    2.5, 3, 3.2, 3.3, 3.5, 3.6, 3.61, 3.62, 3.63,
+    2.5, 3, 3.05, 3.2, 3.3, 3.5, 3.6, 3.61, 3.62, 3.63,
     *range(4, 19), *range(19, 25), 1024, 18.5, 1025,
     25, 26,
     27, 28, 29, 29.5, 30,
