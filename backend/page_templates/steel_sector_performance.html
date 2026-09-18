@@ -59,8 +59,8 @@
 <div class="ssp-section-heading">3. Trade Dynamics</div>
 {{ generic_table(page.tables.get('3a')) }}
 <div class="ssp-section-heading">4. Raw Materials</div>
-{{ generic_table(page.tables.get('4a')) }}
-{{ generic_table(page.tables.get('5')) }}
+<div class="ssp-table-4a">{{ generic_table(page.tables.get('4a')) }}</div>
+<div class="ssp-table-5">{{ generic_table(page.tables.get('5')) }}</div>
 {% if page.nmdc_price_chart_html %}{{ page.nmdc_price_chart_html | safe }}{% endif %}
 </div>
 
@@ -109,7 +109,7 @@
 </table>
 <div class="ssp-note">Bracketed value under each SAIL figure: SAIL's % share of India.</div>
 <div class="ssp-table-1b">{{ generic_table(page.tables.get('1b')) }}</div>
-{{ generic_table(page.tables.get('1c')) }}
+<div class="ssp-table-1c">{{ generic_table(page.tables.get('1c')) }}</div>
 {% if page.steel_price_chart_html %}{{ page.steel_price_chart_html | safe }}{% endif %}
 </div>
 {% endif %}

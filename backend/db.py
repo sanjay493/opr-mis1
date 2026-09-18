@@ -615,6 +615,26 @@ def init_db():
         )
     """)
 
+    # 17c. "Steel Sales Performance" page (STEEL_SALES_PAGE_ID in main.py,
+    # inserted right after "SAIL Performance - 1 Page Summary") — two lists
+    # of free-text KPI highlight bullets (report-month and YTD-so-far),
+    # modeled on Report_format/RMT_0109_partial.pdf's "<Mon>'YY Key
+    # Performance Parameters" / "<Apr-Mon>'YY Key Performance Parameters"
+    # pages. Same one-row-per-report_month/JSON-column shape as
+    # key_highlights_narrative above and for the same reason: this is a
+    # human-entered monthly bulletin, not derivable from any numeric table,
+    # so it's kept in its own table independent of page_configs. See
+    # page_steel_sales_performance.py and api_steel_sales_highlights.py.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS steel_sales_highlights (
+            report_month   TEXT PRIMARY KEY,
+            month_items    TEXT,   -- JSON: ["...", "...", ...] - report-month bullets
+            ytd_items      TEXT,   -- JSON: ["...", "...", ...] - Apr-to-report-month bullets
+            updated_by     TEXT,
+            updated_at     TEXT
+        )
+    """)
+
     # 18. Static Working Volume per SAIL blast furnace (bf_benchmark_registry.
     # SAIL_BF_UNITS_BY_PLANT — the whole fleet, not just the 3 flagship BFs
     # the Large BF Benchmark comparison itself uses); monthly operating data
@@ -1442,6 +1462,50 @@ def save_key_highlights_narrative(month: str, achievements: list, shortfalls: li
                        updated_at  = excluded.updated_at
     """, (month, json.dumps(achievements or []), json.dumps(shortfalls or []),
           json.dumps(focus_areas or []), updated_by or ""))
+    conn.commit()
+    conn.close()
+
+def get_steel_sales_highlights(month: str) -> Optional[dict]:
+    """Saved Steel Sales Performance bullets (report-month + YTD lists) for
+    a month, or None if nothing has ever been saved for it — the report
+    page shows empty sections in that case rather than inventing text."""
+    init_db()
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT month_items, ytd_items, updated_by, updated_at "
+        "FROM steel_sales_highlights WHERE report_month = ?",
+        (month,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    month_items, ytd_items, updated_by, updated_at = row
+    return {
+        "month_items": json.loads(month_items) if month_items else [],
+        "ytd_items":   json.loads(ytd_items) if ytd_items else [],
+        "updated_by":  updated_by or "",
+        "updated_at":  updated_at or "",
+    }
+
+def save_steel_sales_highlights(month: str, month_items: list, ytd_items: list, updated_by: str = ""):
+    """Saves/updates the Steel Sales Performance bullets for a month, keyed
+    only by report_month — independent of page_configs, same as
+    save_key_highlights_narrative above."""
+    init_db()
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO steel_sales_highlights
+            (report_month, month_items, ytd_items, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(report_month)
+        DO UPDATE SET month_items = excluded.month_items,
+                       ytd_items   = excluded.ytd_items,
+                       updated_by  = excluded.updated_by,
+                       updated_at  = excluded.updated_at
+    """, (month, json.dumps(month_items or []), json.dumps(ytd_items or []), updated_by or ""))
     conn.commit()
     conn.close()
 

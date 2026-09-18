@@ -26,10 +26,15 @@ import calendar
 import datetime as _dt
 import math
 import db
-from page_special_steel import _ssps_special_steel, _SSPS_PLANTS
+from page_special_steel import _ssps_special_steel
 
 _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
-_SSPS = "SSPs"
+# Salem Steel Plant's own slice/entity — labeled "SSP" (not the ASP+SSP+VISL
+# "SSPs" bundle used elsewhere in this app), since both its numerator
+# (_ssps_special_steel, always Salem-only) and, per direct instruction, its
+# denominator (_period_saleable) are Salem-only here — see both functions'
+# docstrings.
+_SSPS = "SSP"
 _ENTITIES = _PLANTS + ["SAIL"]
 # Display order for the 6 annual blocks: BSP/DSP/RSP top row, BSL/ISP/SAIL
 # bottom row (per spec) - not the same order as _ENTITIES above.
@@ -43,7 +48,7 @@ _COLORS = {
     "RSP": "#A5A5A5",
     "BSL": "#FFC000",
     "ISP": "#5B9BD5",
-    "SSPs": "#8E44AD",
+    "SSP": "#8E44AD",
     "SAIL": "#70AD47",
 }
 # Annual chart: same entity across 4 periods, so color encodes "how recent"
@@ -84,7 +89,7 @@ def _entity_plants(entity: str) -> list:
 def _sum_actual(cur, months: list, entity: str):
     """(total_T, has_data) summed over the entity's underlying plant(s) for these months.
 
-    SSPs is special-cased: it carries no real order-book rows in
+    SSP is special-cased: it carries no real order-book rows in
     special_steel_orders (any plant_name='SSPs' rows there are a leftover
     from the old manual-entry screen, before that field became read-only —
     see page_special_steel.py's _ssps_special_steel docstring), so summing
@@ -92,11 +97,24 @@ def _sum_actual(cur, months: list, entity: str):
     used stale/legacy figures instead of the live-computed one that page 24
     (generate_special_steel_sail) and /reports/special-steel-fy already use.
     Routing through _ssps_special_steel keeps every "Value Added Steel"
-    figure across the app consistent."""
+    figure across the app consistent.
+
+    Matches BOTH _SSPS ("SSP", this module's own current key — see its
+    comment) and the legacy literal "SSPs": page_special_steel_donut.py
+    calls this function directly with its OWN entity key, which is still
+    "SSPs" (that module's _DISPLAY_LABEL renames it to "SSP" only for
+    display, not internally) — after _SSPS was renamed here from "SSPs" to
+    "SSP" (2026-09-18, alongside the SSP denominator fix), an external
+    caller passing the old "SSPs" spelling silently stopped matching this
+    branch and fell through to the plain special_steel_orders query below,
+    which returns no rows for it (has_any=False) — surfacing as page 24's
+    Spl. FS/Spl. SS totals going N/A for the SSP row specifically. Accept
+    both spellings here rather than assuming every caller was updated in
+    lockstep with this module's own rename."""
     ph = ",".join("?" * len(months))
     total, has_any = 0.0, False
     for p in _entity_plants(entity):
-        if p == _SSPS:
+        if p in (_SSPS, "SSPs"):
             cur.execute(f"""
                 SELECT COUNT(*) FROM production_table
                 WHERE report_month IN ({ph}) AND plant_name='SSP'
@@ -143,14 +161,15 @@ def _period_saleable(cur, months: list, entity: str, item_name: str = "Saleable 
     instruction, a 2nd metric alongside — not replacing — this one; see
     generate_special_steel_trend's own despatch-side block).
 
-    SSPs has no 'Saleable Steel'/'Saleable Steel Despatch' row of its own
-    in production_table (the label is a display-only bundle, not a real
-    plant_name there) — its denominator is instead ASP+SSP+VISL's own
-    figure, the same three plants _ssps_special_steel's docstring says the
-    'SSPs' bundle actually covers everywhere else in this app (see
-    _SSPS_PLANTS)."""
+    SSP's own "% of Saleable Steel" (Despatch) here is Salem's special
+    steel divided by Salem's OWN Saleable Steel — not the ASP+SSP+VISL
+    "SSPs" bundle's combined figure used elsewhere in this app (see
+    _ssps_special_steel's docstring / _SSPS_PLANTS) — per direct
+    instruction, since the numerator (_ssps_special_steel) is already
+    Salem-only, mixing in ASP/VISL's Saleable Steel understated this
+    ratio against a denominator the numerator doesn't actually cover."""
     if entity == _SSPS:
-        plants = list(_SSPS_PLANTS)
+        plants = ["SSP"]
     else:
         plants = _PLANTS if entity == "SAIL" else [entity]
     total, has = 0.0, False
@@ -448,15 +467,15 @@ def _build_trend_bundle(cur, report_month: str, fys: list, ytd_months: list,
         bars.append((f"{_fy_axis_label(cur_fy)} (Likely)", cur_qty, cur_pct, _FY_BAR_COLORS[3]))
         annual_svgs[ent] = _bar_group_svg(bars, ent, vw=240, vh=200, pct_font_size=12)
 
-    # SSPs (Salem's own special-steel despatch, per _ssps_special_steel)
+    # SSP (Salem's own special-steel despatch, per _ssps_special_steel)
     # gets its own slice alongside the 5 plants — SAIL's center total
-    # already includes it (_entity_plants("SAIL") = _PLANTS + [SSPs]),
+    # already includes it (_entity_plants("SAIL") = _PLANTS + [SSP]),
     # so omitting it here previously left the slices summing to less
-    # than the center total with no visual account of the gap. SSPs'
-    # own "% of Saleable Steel" is its special steel divided by
-    # ASP+SSP+VISL's combined Saleable Steel (see _period_saleable) —
-    # there's no plant_name='SSPs' row in production_table to read a
-    # denominator from directly.
+    # than the center total with no visual account of the gap. SSP's own
+    # "% of Saleable Steel" is its special steel divided by Salem's OWN
+    # Saleable Steel (see _period_saleable) — per direct instruction, not
+    # the ASP+SSP+VISL "SSPs" bundle's combined figure used elsewhere in
+    # this app, since the numerator here only ever counts Salem.
     month_slices, ytd_slices = [], []
     for ent in _PLANTS + [_SSPS]:
         qty, pct = _period_value_pct(cur, [report_month], ent, denom_item)
@@ -467,7 +486,7 @@ def _build_trend_bundle(cur, report_month: str, fys: list, ytd_months: list,
     # SAIL's own despatch/denominator ratio — a real aggregate over SAIL's
     # own totals, not derivable from averaging the plant slices above (and
     # not equal to summing the plant slices' qty either, since entity=
-    # "SAIL" also includes SSPs — see _entity_plants).
+    # "SAIL" also includes SSP — see _entity_plants).
     sail_month_qty, sail_month_pct = _period_value_pct(cur, [report_month], "SAIL", denom_item)
     sail_ytd_qty, sail_ytd_pct = _period_value_pct(cur, ytd_months, "SAIL", denom_item)
 

@@ -16,6 +16,7 @@ const PAGE_LABELS = {
    2.42: 'India Macro Economic Indicators',
    2.5: 'SAIL Performance - At a Glance',
    3: 'SAIL Performance - 1 Page Summary',
+   3.05: 'Steel Sales Performance',
    3.2: 'Production Highlights - Best-Ever Records',
    3.3: 'Production Highlights - Best Calendar Month',
    3.5: 'Inter Plant Performance Comparison',
@@ -39,13 +40,14 @@ const PAGE_LABELS = {
   16: 'Category Wise – DSP & RSP',
   17: 'Category Wise – BSL & ISP',
   18: 'Segment Wise Production',
-  18.5: 'Rail Production & Dispatch from BSP',
   19: 'Special Steel – BSP',
   20: 'Special Steel – DSP',
   21: 'Special Steel – RSP',
   22: 'Special Steel – BSL',
   23: 'Special Steel – ISP + SAIL (Consolidated)',
   24: 'Special Steel – Saleable/Value-Added Share (Donut)',
+  1024: 'Special Steel – Production & SAIL Trend',
+  18.5: 'Rail Production & Dispatch from BSP',
   1025: 'Special Steel Plants Physical Performance',
   25: 'Opening Stock at Plants & Stockyards',
   26: 'IPT Status',
@@ -77,9 +79,20 @@ const PAGE_LABELS = {
 // Sort key ≠ id for the big-int sentinels: SS Physical Performance keeps its
 // backend id 1025 (that's what /api/data?page_number= expects and what the
 // page object comes back tagged with), but physically sits right after
-// page 24, so it's sorted there — not after page 40. Same slot the Special
-// Steel trend sentinel (1024) would take if it were ever surfaced here.
-const _PAGE_SORT_POS = { 1024: 24.5, 1025: 24.6 };
+// page 24, so it's sorted there — not after page 40. The Special Steel
+// trend sentinel (1024) takes the next slot after that.
+//
+// 18.5 (Rail Production & Dispatch) also needs an override: its id was
+// chosen back when it printed right after page 18, but per main.py's
+// RAIL_REPORT_PAGE_ID comment it was moved (2026-09-17) to print right
+// after the Trend sentinel (1024) and right before SS Physical Performance
+// (1025) — see backend/main.py's get_data/_enrich_pdf_pages insertion
+// order, the actual source of truth for physical page order. Its own id
+// was left at 18.5 (internal bookkeeping only, not a printed number) so
+// nothing else needed renumbering, but that means a plain numeric sort
+// still puts it between 18 and 19 here — wrong. Override it into its real
+// slot instead of relying on the literal value.
+const _PAGE_SORT_POS = { 1024: 24.5, 18.5: 24.55, 1025: 24.6 };
 const _pageSortPos = (n) => _PAGE_SORT_POS[n] ?? n;
 const ALL_PAGE_NUMBERS = Object.keys(PAGE_LABELS).map(Number).sort((a, b) => _pageSortPos(a) - _pageSortPos(b));
 

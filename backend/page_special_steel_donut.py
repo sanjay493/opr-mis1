@@ -525,7 +525,7 @@ def _bubble_data(cur, ytd_months: list) -> list:
     return points
 
 
-def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 600) -> str:
+def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 750) -> str:
     """Quadrant bubble chart matching a reference mock-up: plain L-shaped
     axes (no box) with 0/20/40/60/80/100% tick marks on X and 6 even ticks
     up to y_max on Y, dashed quadrant dividers at the mean X/mean Y of the
@@ -558,18 +558,51 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 600) -> str:
     own font shrank below its configured value in that combination even
     though EITHER page alone, or paired with any OTHER neighbor, rendered
     at full size — i.e. that pairing specifically had too little combined
-    slack, not a bug in either page's own layout math. Since then
-    main.html's .ssd-table/.ssd-stat sizes have grown substantially (9.5pt/
-    7.5pt -> 11pt across the board, per direct instruction, 2026-09-18)
-    yet the SAME generate_pdf_bytes(pages_override=[page 23, page 24])
-    check confirms page 24 still has ~80mm of blank vertical room below
-    the chart at 1000:420 — i.e. plenty of margin even after that font
-    growth, so 1000:600 (using roughly half that slack, not all of it) is
-    still comfortably within budget. Re-verify the same way (a synthetic
-    single-page render or a plain page.evaluate()-based height measurement
-    are NOT reliable signals for this page — see git history for the
-    DOM-measurement figure that was off by ~25%) any time page 23's or
-    page 24's own content grows again."""
+    slack, not a bug in either page's own layout math.
+
+    2026-09-18 regression + revert: main.html's .ssd-table/.ssd-stat sizes
+    were bumped to 11.5pt across the board the same day, and a
+    generate_pdf_bytes(pages_override=[page 23, page 24]) check at the time
+    read that as "page 24 still has ~80mm of blank room below the chart,
+    plenty of margin" — but that check only compared page count and content
+    bounding boxes, both of which look unchanged under a uniform Chromium
+    print-job scale-to-fit (page.pdf's preferCSSPageSize does NOT prevent
+    this — that flag only concerns pages with an explicit differently-sized
+    @page rule, and this isn't one). The real signal, actual glyph point
+    sizes (PyMuPDF span "size"), showed page 24 rendering ~8pt text at its
+    configured 11.5pt even in COMPLETE ISOLATION (pages_override=[24] alone,
+    no page 23 involved) — the table+chart combination no longer fit one A4
+    page by itself, so Chromium silently shrank the entire print job
+    (~30% smaller on every page sharing that job — the whole exported
+    report, in a full run) rather than spilling page 24 onto a 2nd physical
+    page. vh was NOT the cause (re-confirmed with vh=420 and the 11.5pt
+    fonts still in place — still shrank); reverted only main.html's
+    .ssd-table/.ssd-stat sizes back to their pre-2026-09-18 values (9.5pt/
+    11pt/8.3pt/7.5pt) to restore one-page fit at this vh.
+
+    2026-09-18, later same day — reclaiming the blank space properly: with
+    .ssd-table/.ssd-stat back at their safe sizes above, page 24 alone still
+    had ~30mm of genuine blank room below the chart (measured from the real
+    PDF content's bottom y-coordinate, not a DOM height probe — see the
+    regression note above for why DOM/bbox measurements misled the last
+    attempt). Tried reclaiming that room by growing .ssd-table/.ssd-stat
+    again instead of vh: even a small bump (.ssd-stat 7.5->9pt, .ssd-
+    metric-lbl 8.3->9pt, cell padding 1px->2px) shrank page 23 to ~87% —
+    those classes each repeat 100+ times across the table's rows, so a
+    fraction-of-a-point-per-cell increase multiplies into several mm of
+    real page height. The chart doesn't have that multiplication problem
+    (it's one block, not 100+ repeated cells), so vh is the safe lever for
+    this specific blank space: bisected via isolated pages_override=[24]
+    and paired pages_override=[23,24] renders (checking real glyph sizes,
+    per the method above) that page 24 stays on one physical page, at full
+    configured size, up to vh=780; it spills onto a 2nd physical page
+    (still no shrink — prefer_css_page_size's job here is exactly this:
+    extend rather than scale) starting at vh=820. Settled on vh=750 — a
+    ~25px/~16mm safety margin under the measured 780 ceiling, since the
+    exact ceiling can shift a little month to month with y_max/label
+    length — leaving page 24 with only ~16mm of blank room now, vs. ~30mm
+    before. Re-verify the same way (isolated + paired real-glyph-size
+    probes, never DOM/bbox) before pushing vh higher again."""
     if len(points) < 2:
         return ""
 

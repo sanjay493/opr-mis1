@@ -34,6 +34,7 @@ export default function GlobalNavbar() {
             { label: 'CO2 / Water / PM Manual Entry', link: '/data-entry/co2-water-pm-manual', icon: '🌫️' },
             { label: 'Key Parameters Manual Entry', link: '/data-entry/key-parameters-manual', icon: '🔑' },
             { label: 'Key Highlights & Variances', link: '/data-entry/key-highlights', icon: '📝' },
+            { label: 'Steel Sales Performance (Page 3.05)', link: '/data-entry/steel-sales-highlights', icon: '🛒' },
             { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
             { label: 'Large BF Benchmarking Entry', link: '/data-entry/bf-benchmark', icon: '🏗️' },
             { label: 'SAIL Mines Entry (Page 4.5)', link: '/data-entry/sail-mines', icon: '⛏️' },

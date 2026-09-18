@@ -448,6 +448,20 @@ CREATE TABLE IF NOT EXISTS key_highlights_narrative (
     updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
+-- "Steel Sales Performance" page bullets — report-month and Apr-to-report-
+-- month (YTD) Key Performance Parameter highlights (Cash Collection, Total/
+-- LP/FP+PET Sales, despatch figures, etc. — Report_format/
+-- RMT_0109_partial.pdf), keyed only by report_month, same independent-of-
+-- page_configs rationale as key_highlights_narrative above. See
+-- page_steel_sales_performance.py / api_steel_sales_highlights.py.
+CREATE TABLE IF NOT EXISTS steel_sales_highlights (
+    report_month   CHAR(7) NOT NULL PRIMARY KEY,
+    month_items    TEXT,
+    ytd_items      TEXT,
+    updated_by     VARCHAR(190),
+    updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 -- Large BF Benchmarking — static Working Volume for SAIL's 3 fixed large
 -- BFs (BSP BF-8, RSP BF-5, ISP BF-5). Their monthly operating data already
 -- lives in techno_data; only Working Volume (rarely changes) is here.
