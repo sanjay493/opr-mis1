@@ -1796,31 +1796,50 @@
            and inflating row height — the "T" unit itself was moved out of
            every cell into one ssd-unit-tag at the table's top-right corner
            specifically to shorten that longest line enough to fit,
-           per direct instruction. */
+           per direct instruction.
+
+           Cross-page note: growing this table's own padding/font size
+           (2026-09-18, alongside the bubble chart's vh bump — see
+           page_special_steel_donut.py's _bubble_chart_svg docstring)
+           measurably shifts page 23's (ISP special-steel) content up by a
+           few mm in a combined render, even though nothing on page 23
+           itself changed and page 23 prints BEFORE page 24 in document
+           order — confirmed real (not rendering noise: two renders of
+           identical code are byte-identical) via
+           generate_pdf_bytes(pages_override=[page 23, page 24]), but the
+           exact mechanism wasn't tracked down (no JS, no shared CSS
+           classes, and .page's page-break-after:always/page-break-inside:
+           avoid shouldn't let a later sibling affect an earlier one's
+           layout — plain block flow simply shouldn't do this). At the
+           current sizes it's a small in-place reflow with no visible
+           defect on either page (verified by pixel-diffing the same probe
+           render), but it means page 24's OWN vertical footprint isn't
+           the only thing worth re-checking before growing it further —
+           re-run that same paired probe and eyeball page 23 too. */
         .ssd-wrap { padding: 2px 8px; font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif; }
         .ssd-title-row { position: relative; padding: 2px 46px 2px 0; margin-bottom: 1px; }
         .ssd-title { text-align: center; font-weight: 700; font-size: 11.5pt; color: rgb(0,0,255); }
         .ssd-unit-tag { position: absolute; top: 50%; right: 0; transform: translateY(-50%); font-size: 7.5pt; font-weight: 700; color: {{ colors.text_secondary }}; }
         .ssd-table { width: auto; margin: 0 auto; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; table-layout: auto; }
-        .ssd-table th { background: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 1.5px 5px; border: 1px solid {{ colors.border_dark }}; font-size: 9.5pt; text-align: center; white-space: nowrap; }
-        .ssd-table td.ssd-lbl { font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 11pt; white-space: nowrap; }
+        .ssd-table th { background: {{ colors.table_header_bg }}; color: {{ colors.text_black }}; padding: 3px 5px; border: 1px solid {{ colors.border_dark }}; font-size: 11.5pt; text-align: center; white-space: nowrap; }
+        .ssd-table td.ssd-lbl { font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; font-size: 11.5pt; white-space: nowrap; }
         .ssd-table tr.ssd-sail-row td.ssd-lbl { background: {{ colors.highlight_achieved_band_bg }}; }
         /* No horizontal line between an entity's own rows — only left/right
            borders — with a dark divider reintroduced solely at each
            entity's first row (tr.ssd-plant-start, same pattern as
            .segwise-table above) so the grid reads as "one block per
            plant" per direct instruction. */
-        .ssd-table td.ssd-metric-lbl { font-weight: 600; text-align: center; vertical-align: middle; border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; font-size: 8.3pt; white-space: nowrap; }
-        .ssd-table td.ssd-cell { border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; padding: 1px 5px; text-align: center; vertical-align: middle; }
+        .ssd-table td.ssd-metric-lbl { font-weight: 600; text-align: center; vertical-align: middle; border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; font-size: 11.5pt; white-space: nowrap; }
+        .ssd-table td.ssd-cell { border-left: 1px solid {{ colors.border_medium }}; border-right: 1px solid {{ colors.border_medium }}; border-top: none; border-bottom: none; padding: 4px 5px; text-align: center; vertical-align: middle; }
         .ssd-table tr.ssd-plant-start > td { border-top: 2px solid {{ colors.border_darkest }}; }
-        .ssd-stat { font-size: 7.5pt; line-height: 1.0; white-space: nowrap; }
+        .ssd-stat { font-size: 11.5pt; line-height: 1.15; white-space: nowrap; }
         .ssd-total-col { font-weight: 700; background: #f1f5f9; }
         .ssd-special-txt { color: #166534; }
         .ssd-emphasis .ssd-stat { font-weight: 700; }
         .ssd-bubble-wrap { margin-top: 5px; }
-        .ssd-bubble-title { text-align: center; font-weight: 700; font-size: 9.5pt; color: {{ colors.text_black }}; }
-        .ssd-bubble-sub { text-align: center; font-size: 6.5pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 1px; }
-        .ssd-bubble-chart { width: 100%; }
+        .ssd-bubble-title { text-align: center; font-weight: 700; font-size: 10pt; color: {{ colors.text_black }}; }
+        .ssd-bubble-sub { text-align: center; font-size: 9.5pt; font-style: italic; color: {{ colors.text_rust_brown }}; margin-bottom: 1px; }
+        .ssd-bubble-chart { width: 90%; }
 
         /* ── Page-specific font overrides ───────────────────────────────── */
         .pg-7, .pg-7 th, .pg-7 td {

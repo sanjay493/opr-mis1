@@ -729,8 +729,40 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
             f'<span>Page <span class="pageNumber"></span> of {_total_html}</span>'
             f'</div>'
         )
+        # prefer_css_page_size=True (2026-09-18): per Chrome DevTools
+        # Protocol's own Page.printToPDF docs, preferCSSPageSize "Defaults
+        # to false, in which case the content will be scaled to fit the
+        # paper size" — that default-false scale-to-fit is the documented
+        # root cause behind page_techno.py's techno_month_table_font_size()
+        # and this file's own page-3-overflow handling: ANY main-content
+        # page overflowing format="A4" here can silently rescale the WHOLE
+        # merged document, not just that one page. True=off disables that
+        # global rescale, so an overflowing page just extends onto extra
+        # physical pages instead of shrinking every other page with it.
+        # Verified no regression from flipping this on a representative
+        # sample (generate_pdf_bytes(pages_override=[...]), pixel-diffed):
+        # a normal content page (4), the special-steel donut pairing (23,
+        # 24 — see page_special_steel_donut.py's _bubble_chart_svg
+        # docstring), and — the highest-risk case, since named @page rules
+        # like .techno-mill-page's "size: A4 landscape" already silently
+        # take effect TODAY even with this flag at its default false, per
+        # the base @page{} rule's own comment above re: a past landscape-
+        # bleed bug — a techno-mill page (31) alone. All came out
+        # pixel-identical bar sub-point page-box rounding (<0.5mm, from
+        # Chromium computing "A4" from the CSS keyword rather than from
+        # Playwright's format="A4" inches conversion). Could NOT reproduce
+        # the original whole-document-shrink failure itself even forcing a
+        # raw (unmitigated) 12-YTD-month page 28/29 techno table — those
+        # already fit the printable width fine at their static config font
+        # size given the layout tuning done since that bug was first
+        # logged, so this is defense-in-depth for whenever a page DOES
+        # overflow again, not a fix verified against a live repro. Re-run
+        # that same pages_override probe (or a full real-report render)
+        # before trusting this further if content grows enough to actually
+        # overflow a page again.
         main_bytes = page.pdf(
             format="A4",
+            prefer_css_page_size=True,
             print_background=True,
             display_header_footer=main_header_footer,
             header_template=(
@@ -975,7 +1007,8 @@ def _pick_trend_margins(page, template, pages_list: list, render_kwargs: dict, m
         page.set_content(html, wait_until="domcontentloaded")
         page.evaluate("document.fonts.ready")
         probe_bytes = page.pdf(
-            format="A4", print_background=True, display_header_footer=False, margin=margin,
+            format="A4", prefer_css_page_size=True, print_background=True,
+            display_header_footer=False, margin=margin,
         )
         page_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(probe_bytes)).pages]
         spans = _trend_group_page_spans(trend_pages, page_texts)
@@ -1175,7 +1208,8 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
         prev_snapshot = _trend_split_snapshot(trend_pages)
         for _ in range(_MAX_TREND_SPLIT_PASSES):
             probe_bytes = page.pdf(
-                format="A4", print_background=True, display_header_footer=False, margin=margin,
+                format="A4", prefer_css_page_size=True, print_background=True,
+                display_header_footer=False, margin=margin,
             )
             page_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(probe_bytes)).pages]
 
@@ -1249,7 +1283,8 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
             page.set_content(trial_html, wait_until="domcontentloaded")
             page.evaluate("document.fonts.ready")
             trial_bytes = page.pdf(
-                format="A4", print_background=True, display_header_footer=False, margin=margin,
+                format="A4", prefer_css_page_size=True, print_background=True,
+                display_header_footer=False, margin=margin,
             )
             trial_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(trial_bytes)).pages]
             return _measure_page_of(trial_texts)

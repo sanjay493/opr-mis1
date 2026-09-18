@@ -525,7 +525,7 @@ def _bubble_data(cur, ytd_months: list) -> list:
     return points
 
 
-def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 420) -> str:
+def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 600) -> str:
     """Quadrant bubble chart matching a reference mock-up: plain L-shaped
     axes (no box) with 0/20/40/60/80/100% tick marks on X and 6 even ticks
     up to y_max on Y, dashed quadrant dividers at the mean X/mean Y of the
@@ -535,28 +535,41 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 420) -> str:
     label centered inside. Returns "" when fewer than 2 plants have data
     (a quadrant split is meaningless with 0-1 points).
 
-    The default vw:vh (1000:420) is tuned, not arbitrary — since the <svg>
-    is only ever set to width:100% (height:auto) in CSS, this ratio IS the
-    chart's rendered aspect ratio on the page, and Chromium's print layout
-    can't split this block (no internal break point): too tall and the
-    WHOLE chart gets pushed onto page 25 instead of just clipping.
-    Lowered from 500 (per direct instruction, alongside tighter
-    pad_l/pad_t/pad_b below) to claw back headroom on page 24 as a whole —
-    at vh=500 this chart was NOT itself the overflow (a page 24 alone
-    render always fit) but the page as a whole had near-zero margin, and
-    lost it entirely whenever page 23 (ISP's special-steel page,
-    immediately before it) was printed in the same job: verified via
+    The default vw:vh is tuned, not arbitrary — since the <svg> is only
+    ever set to width:100% (height:auto) in CSS, this ratio IS the chart's
+    rendered aspect ratio on the page, and Chromium's print layout can't
+    split this block (no internal break point): too tall and the WHOLE
+    chart gets pushed onto page 25 instead of just clipping. Widening the
+    ratio (taller relative to its width) doesn't grow the chart's own
+    PRINTED width, which is capped by .ssd-bubble-chart's CSS width — it
+    only spends the page's remaining blank vertical room (page 24's table
+    is well short of a full page even with main.html's current .ssd-table/
+    .ssd-stat font sizes) on spreading the plotted bubbles apart, which was
+    otherwise their main legibility problem (the "High Value Addition"
+    label sitting right on top of a bubble at the old, shorter vh).
+
+    History: 1000:420 (bumped from an original 1000:500, alongside tighter
+    pad_l/pad_t/pad_b) was chosen specifically to claw back headroom that a
+    MUCH smaller table font (main.html's old 7.5pt .ssd-stat) had almost
+    entirely used up — at 1000:500 the page as a whole had near-zero
+    margin, and lost it entirely whenever page 23 (ISP's special-steel
+    page, immediately before it) was printed in the same job: verified via
     generate_pdf_bytes(pages_override=[page 23, page 24]) that page 23's
-    own font shrinks below its configured value in that combination even
-    though EITHER page alone, or paired with any OTHER neighbor, renders
-    at full size — i.e. this pairing specifically has (or had) too little
-    combined slack, not a bug in either page's own layout math. Restoring
-    real margin on page 24 (this vh cut, plus main.html's .ssd-table/
-    .ssd-stat font-sizes) is what actually fixes that pairing; re-verify
-    the same way (a synthetic single-page render or a plain
-    page.evaluate()-based height measurement are NOT reliable signals for
-    this page — see git history for the DOM-measurement figure that was
-    off by ~25%) any time page 23's or page 24's own content grows again."""
+    own font shrank below its configured value in that combination even
+    though EITHER page alone, or paired with any OTHER neighbor, rendered
+    at full size — i.e. that pairing specifically had too little combined
+    slack, not a bug in either page's own layout math. Since then
+    main.html's .ssd-table/.ssd-stat sizes have grown substantially (9.5pt/
+    7.5pt -> 11pt across the board, per direct instruction, 2026-09-18)
+    yet the SAME generate_pdf_bytes(pages_override=[page 23, page 24])
+    check confirms page 24 still has ~80mm of blank vertical room below
+    the chart at 1000:420 — i.e. plenty of margin even after that font
+    growth, so 1000:600 (using roughly half that slack, not all of it) is
+    still comfortably within budget. Re-verify the same way (a synthetic
+    single-page render or a plain page.evaluate()-based height measurement
+    are NOT reliable signals for this page — see git history for the
+    DOM-measurement figure that was off by ~25%) any time page 23's or
+    page 24's own content grows again."""
     if len(points) < 2:
         return ""
 
