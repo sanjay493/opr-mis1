@@ -221,10 +221,11 @@ _INDEX_SECTIONS = [
     ("India Macro Economic Indicators", 1),
     ("SAIL Performance - At a Glance", 1),
     ("SAIL Performance - 1 Page Summary", 1),
-    # 1 physical page: report-month and YTD bullets sit in two side-by-side
-    # columns (steel_sales_performance.html), not stacked — per direct
-    # instruction, 2026-09-18, to fit ~30 combined bullets on one page.
-    # Recheck if either bullet list grows enough to need a 2nd page again.
+    # 1 physical page: report-month and YTD bullets both run full page
+    # width, single column, bisected font/padding (steel_sales_performance.
+    # html) to fit ~30 combined bullets on one page — per direct
+    # instruction, 2026-09-18. Recheck if either bullet list grows enough
+    # to need a 2nd page again.
     ("Steel Sales Performance", 1),
     ("Production Highlights - Best-Ever Records", 1),
     ("Production Highlights - Best Calendar Month", 1),
@@ -349,6 +350,7 @@ from api_admin import router as admin_router
 from api_admin_backup import router as admin_backup_router
 from api_visits import router as visits_router
 from api_bf_benchmark import router as bf_benchmark_router
+from api_techno_bf_furnace import router as techno_bf_furnace_router
 from api_breakdown import router as breakdown_router
 from api_production_loss import router as production_loss_router
 from api_key_highlights import router as key_highlights_router
@@ -722,6 +724,7 @@ app.include_router(admin_router)
 app.include_router(admin_backup_router)
 app.include_router(visits_router)
 app.include_router(bf_benchmark_router)
+app.include_router(techno_bf_furnace_router)
 app.include_router(breakdown_router)
 app.include_router(production_loss_router)
 app.include_router(key_highlights_router)
