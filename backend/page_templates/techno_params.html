@@ -7,6 +7,15 @@
            pages to fit inside the tighter margins main.py gives these two
            pages (see IRON_MAKING_PAGE_2_ID in main.py). #}
         {% set _tsz = '8.5pt' if page.group == 'IRON_MAKING' else ('10pt' if _is_major else '9pt') %}
+        {# Mill pages (31-35) run noticeably shorter than the other techno
+           groups here - 6 mills x 5-6 rows each leaves a lot of blank space
+           below the table on these landscape pages. Slightly taller cells
+           (vertical padding only, data columns are already comfortably
+           wide) use up some of that room and read easier, per direct
+           instruction, 2026-09-19. Every other group's row/header padding
+           is unchanged. #}
+        {% set _td_pad = '1.5px 1.5px' if _is_mill else '0.5px 1px' %}
+        {% set _th_pad = '1.5px 1.5px' if _is_mill else '0.5px 1px' %}
         {# IBM Plex Sans Condensed (fits more per column) is for pages whose
            layout actually has to accommodate a growing number of YTD-month
            columns (28/29/29.5/30's auto-layout table, and the mill pages'
@@ -67,27 +76,27 @@
             <thead>
               <tr>
                 {% if _is_major %}
-                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};text-align:left;">Parameters</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Plants</th>
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};text-align:left;">Parameters</th>
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Plants</th>
                 {% else %}
-                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Mill</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};text-align:left;">Parameters</th>
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Mill</th>
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};text-align:left;">Parameters</th>
                 {% endif %}
-                <th colspan="3" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};background:{{ colors.highlight_target_band_bg }};">{{ page.target_label }}</th>
-                <th colspan="{{ page.month_labels | length }}" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Actual</th>
-                <th rowspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.cply_label }}<br/>Actual</th>
-                <th colspan="2" style="padding:2px 3px;border:1px solid {{ colors.border_black }};">Actual</th>
+                <th colspan="3" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};background:{{ colors.highlight_target_band_bg }};">{{ page.target_label }}</th>
+                <th colspan="{{ page.month_labels | length }}" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cply_label }}<br/>Actual</th>
+                <th colspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
               </tr>
               <tr>
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.fy3_label }}</th>
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.fy2_label }}</th>
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.fy1_label }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.fy3_label }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.fy2_label }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.fy1_label }}</th>
                 {% for m in page.month_labels %}
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ m }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ m }}</th>
                 {% endfor %}
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.cum_label }}</th>
-                <th style="padding:2px 3px;border:1px solid {{ colors.border_black }};">{{ page.cum_cply_label }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cum_label }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cum_cply_label }}</th>
               </tr>
             </thead>
             <tbody>
@@ -107,15 +116,27 @@
                  already-validated palette color instead of a new one. #}
               {% set _bold_bg = colors.highlight_info_band_bg if page.group == 'IRON_MAKING' else colors.highlight_bold_row_bg %}
               {% set _row_bg = ('background:' ~ colors.highlight_achieved_band_bg ~ ';') if _sail else (('background:' ~ _bold_bg ~ ';') if row.bold else '') %}
-              <tr style="{{ _row_bg }}">
+              {# Page 27's SAIL row and Iron Making's plant-total rows get a
+                 rust-brown accent instead of plain black-on-tint, matching
+                 the same color already used for the trend section's Plan
+                 row (production_trend.css) - a bold row reading as plain
+                 black on a light tint looked like an unstyled default next
+                 to the report's other emphasis rows, per direct
+                 instruction, 2026-09-19. Pages 28/30's own row.bold tint
+                 (highlight_bold_row_bg) is untouched - not in scope. Set on
+                 the <tr> (color inherits down to every <td>, none of which
+                 sets its own color) rather than repeated per cell. #}
+              {% set _accent_row = _sail or (row.bold and page.group == 'IRON_MAKING') %}
+              {% set _row_color = ('color:' ~ colors.text_rust_brown ~ ';') if _accent_row else '' %}
+              <tr style="{{ _row_bg }}{{ _row_color }}">
                 {% if loop.first %}
                 {% if _is_major %}
                 {% set _sec_unit = sec.rows[0].unit if sec.rows else '' %}
                 {% set _sec_label = (sec.label ~ ' (' ~ _sec_unit ~ ')') if _sec_unit else sec.label %}
                 {% set _sec_valign = 'middle' if page.group == 'IRON_MAKING' else 'top' %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:0.5px 1.5px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;vertical-align:{{ _sec_valign }};word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:{{ _td_pad }};border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;vertical-align:{{ _sec_valign }};word-wrap:break-word;overflow-wrap:break-word;">{{ _sec_label }}</td>
                 {% else %}
-                <td rowspan="{{ sec.rows | length }}" style="padding:2px 1.5px;border:1px solid {{ colors.border_black }};text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label }}</td>
+                <td rowspan="{{ sec.rows | length }}" style="padding:{{ _td_pad }};border:1px solid {{ colors.border_black }};text-align:center;font-weight:700;vertical-align:middle;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);">{{ sec.label }}</td>
                 {% endif %}
                 {% endif %}
                 {% set _row_label = (row.label ~ ' (' ~ row.unit ~ ')') if (not _is_major and row.unit) else row.label %}
@@ -125,17 +146,17 @@
                    column carries the longer combined-shop labels ("BSP
                    SMS-2", "RSP SMS-1", ...) that do need to wrap onto 2
                    lines rather than force the column wide. #}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:left;{% if _major27 %}white-space:nowrap;{% else %}word-wrap:break-word;overflow-wrap:break-word;{% endif %}">{{ _row_label }}</td>
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy3 }}</td>
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy2 }}</td>
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.fy1 }}</td>
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;background:{{ colors.highlight_target_band_bg }};">{{ row.target }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:left;{% if _major27 %}white-space:nowrap;{% else %}word-wrap:break-word;overflow-wrap:break-word;{% endif %}">{{ _row_label }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy3 }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy2 }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy1 }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;background:{{ colors.highlight_target_band_bg }};">{{ row.target }}</td>
                 {% for v in row.months %}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ v }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ v }}</td>
                 {% endfor %}
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.cply }}</td>
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.cum }}</td>
-                <td style="padding:0.5px 1.5px;{{ _td }}text-align:center;">{{ row.cum_cply }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.cply }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.cum }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.cum_cply }}</td>
               </tr>
               {% endfor %}
             {% endfor %}

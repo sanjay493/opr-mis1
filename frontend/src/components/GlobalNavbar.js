@@ -59,6 +59,7 @@ export default function GlobalNavbar() {
             { label: 'Conversion Data', link: '/data-entry/conversion', icon: '⚡' },
             { label: 'Capital Repair', link: '/data-entry/capital-repair', icon: '🛠️' },
             { label: 'Breakdown Entry', link: '/data-entry/breakdown', icon: '⚠️' },
+            { label: 'Rakes Detention (Pages 1026-1040)', link: '/data-entry/rake-detention', icon: '🚃' },
           ]
         },
         {

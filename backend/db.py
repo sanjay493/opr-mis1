@@ -969,6 +969,112 @@ def init_db():
             ],
         )
 
+    # "Details of Rakes Detention Plant Wise" (RAKE_DETENTION_* sentinel
+    # pages) — Report_format's "Average Plant Detention Report" (SAIL Rail
+    # Movement Cell). Pure extract, no computation (same convention as
+    # special_steel_phys_perf / page_coal_consumption's OIS-1 table): every
+    # figure here, including the Total Inward/Outward/Overall Wagon summary
+    # rows, is a value someone entered — the source report's own totals are
+    # rake-count-weighted (a figure we don't have), so recomputing them
+    # ourselves risks a silently wrong number in an official-looking report.
+    #
+    # rake_detention_master is the *row registry*, split out from the actual
+    # figures (rake_detention_monthly) the same way special_steel_phys_meta
+    # is split from special_steel_phys_perf — this is the "add a new wagon
+    # type for a plant later" provision: insert a master row, no code
+    # change. commodity/wagon_type/direction are NULL for a section's own
+    # "Total ..."/"Overall Wagon" summary row (is_total=1); is_active lets a
+    # retired wagon type stop appearing on new months without deleting its
+    # history. See page_rake_detention.py and scripts/migrate_add_rake_
+    # detention.sql.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rake_detention_master (
+            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+            plant                   TEXT NOT NULL,
+            section                 TEXT NOT NULL,
+            commodity               TEXT,
+            wagon_type              TEXT,
+            row_label               TEXT NOT NULL,
+            is_total                INTEGER NOT NULL DEFAULT 0,
+            direction               TEXT,
+            freetime_hours          REAL,
+            freetime_effective_from TEXT,
+            sort_order              INTEGER NOT NULL DEFAULT 0,
+            is_active               INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    # One row per (report_month, master row). A master row with no entry
+    # for a given month simply renders blank (matching the source PDF's
+    # blank not-yet-reported months) — this is also how the "Overall Wagon"
+    # master row alone carries page 4's multi-year trend back to 2021-22
+    # even though the granular commodity/wagon breakdown (pages 1-2) only
+    # realistically exists for recent months.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rake_detention_monthly (
+            report_month TEXT NOT NULL,
+            master_id    INTEGER NOT NULL REFERENCES rake_detention_master(id),
+            value_hours  REAL,
+            PRIMARY KEY (report_month, master_id)
+        )
+    """)
+    # "Improvement in Average Detention per Wagon in Hrs" — the source
+    # report's own 3-period (current month / YTD / full FY) CPLY comparison
+    # table, entered directly per its "UPTO <report_month>" heading rather
+    # than derived from rake_detention_monthly (same rake-count-weighting
+    # concern as the Total/Overall rows above).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rake_detention_summary (
+            report_month TEXT NOT NULL,
+            period_row   TEXT NOT NULL,
+            plant        TEXT NOT NULL,
+            value        REAL,
+            PRIMARY KEY (report_month, period_row, plant)
+        )
+    """)
+    # Page 4's own "APR-MAR" full-FY average column, per plant per FY — a
+    # 13th figure alongside that row's 12 months, entered directly rather
+    # than averaged from them: the source PDF's own figure doesn't always
+    # equal a straight mean of its (already-rounded) displayed monthly
+    # values (their internal precision runs deeper than what's printed).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rake_detention_annual (
+            plant          TEXT NOT NULL,
+            financial_year TEXT NOT NULL,
+            avg_hours      REAL,
+            PRIMARY KEY (plant, financial_year)
+        )
+    """)
+
+    # "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) — static
+    # reference content (process-flow diagram + 2 rich tables per plant)
+    # from Report_format's "Ready Reckoner (Plant wise Details).pdf" /
+    # "Ready Reckoner Special Steel Plant.docx". Deliberately NOT keyed by
+    # report_month like page_configs — this content is the same regardless
+    # of which month's report is open, so it gets its own table and its own
+    # save endpoint (see page_ready_reckoner.py) rather than the generic
+    # per-month /api/data flow. capacity_html/product_mix_html are edited
+    # HTML (irregular merged cells/colors per plant, not worth normalizing
+    # into rows given how rarely this content changes), rendered with
+    # Jinja's |safe — same trust level already given to other admin-
+    # entered free text (e.g. rail_prod_despatch_note). The image is a
+    # file on disk (backend/static/ready_reckoner/), not embedded here —
+    # PDF generation base64-encodes it at render time (see page_cover.py's
+    # own background-image handling for why: no live network access at
+    # Playwright render time).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ready_reckoner_pages (
+            plant_code              TEXT PRIMARY KEY,
+            plant_name               TEXT,
+            plant_group              TEXT NOT NULL,
+            process_flow_image_path  TEXT,
+            capacity_html            TEXT,
+            product_mix_html         TEXT,
+            sort_order               INTEGER NOT NULL DEFAULT 0,
+            updated_by               TEXT,
+            updated_at               TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -3943,3 +4049,360 @@ def save_macro_indicators(rows: List[Dict[str, Any]]) -> int:
     conn.commit()
     conn.close()
     return len(rows)
+
+
+# ── "Details of Rakes Detention Plant Wise" (RAKE_DETENTION_* pages) ───────
+# Backing store for page_rake_detention.py + /data-entry/rake-detention. See
+# scripts/migrate_add_rake_detention.sql / scripts/backfill_rake_detention.py.
+
+_RAKE_MASTER_COLS = (
+    "id", "plant", "section", "commodity", "wagon_type", "row_label",
+    "is_total", "direction", "freetime_hours", "freetime_effective_from",
+    "sort_order", "is_active",
+)
+
+
+def get_rake_detention_master(plants: Optional[List[str]] = None, active_only: bool = True) -> List[dict]:
+    """-> list of master rows (dicts, _RAKE_MASTER_COLS keys), ordered for
+    display. active_only=False is for the data-entry UI, which also needs
+    to show/reactivate a retired wagon type."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    where, args = [], []
+    if plants:
+        where.append(f"plant IN ({','.join('?' * len(plants))})")
+        args.extend(plants)
+    if active_only:
+        where.append("is_active = 1")
+    sql = f"SELECT {','.join(_RAKE_MASTER_COLS)} FROM rake_detention_master"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY plant, section, sort_order, id"
+    cur.execute(sql, args)
+    rows = [dict(zip(_RAKE_MASTER_COLS, r)) for r in cur.fetchall()]
+    conn.close()
+    return _group_rake_master_rows(rows)
+
+
+def _group_rake_master_rows(rows: List[dict]) -> List[dict]:
+    """Regroups rows so every row sharing the same (plant, section,
+    commodity) is always contiguous, at that commodity's first-seen slot
+    within its section — commodity grouping, not sort_order alone, is
+    what the printed report's rowspan-merged Commodity column (see
+    rake_detention_detail.html) actually depends on, and a bare
+    "ORDER BY sort_order" can't guarantee that on its own: a newly added
+    row can only be given a sort_order that's safely between its OWN
+    commodity's neighbours, never one that's also guaranteed to fall
+    outside every OTHER commodity's own range in the same section —
+    collide with the very next commodity's own starting value (confirmed
+    by a real add: e.g. Ind.Coking Coal's rows 1-3, Imp.Coking Coal's rows
+    4-6 — a new Ind.Coking Coal row given sort_order 4 lands ON Imp.Coking
+    Coal's own first row, splitting Imp.Coking Coal's group in two on the
+    printed page) and there's no sort_order value that avoids every
+    possible future collision like that. Grouping by the commodity value
+    itself has no such blind spot, and self-heals any row that already
+    landed in the wrong spot for this same reason (its commodity string
+    still matches, so it rejoins that group here regardless of its own
+    sort_order). Sort_order still decides ordering WITHIN one commodity's
+    own rows (e.g. BSP Inward's Ind.Coking Coal group still prints
+    BOXN/BOST/BOSM, its own original order, not alphabetical); is_total
+    rows always sort last within their section, same as before."""
+    section_buckets = {}  # (plant, section) -> {"totals": [...], "by_commodity": {commodity: [rows]}}
+    for r in rows:
+        bucket = section_buckets.setdefault((r["plant"], r["section"]), {"totals": [], "by_commodity": {}})
+        if r["is_total"]:
+            bucket["totals"].append(r)
+        else:
+            bucket["by_commodity"].setdefault(r["commodity"], []).append(r)
+
+    out = []
+    for bucket in section_buckets.values():
+        for commodity_rows in bucket["by_commodity"].values():
+            out.extend(commodity_rows)
+        out.extend(bucket["totals"])
+    return out
+
+
+def save_rake_detention_master_row(row: Dict[str, Any]) -> int:
+    """Insert (row.get('id') falsy) or update (id given) one master row.
+    Returns the row's id. This is the "add a wagon type later" provision —
+    called from /data-entry/rake-detention, never needs a code change."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    if row.get("id"):
+        cur.execute("""
+            UPDATE rake_detention_master SET
+                plant = ?, section = ?, commodity = ?, wagon_type = ?, row_label = ?,
+                is_total = ?, direction = ?, freetime_hours = ?, freetime_effective_from = ?,
+                sort_order = ?, is_active = ?
+            WHERE id = ?
+        """, (
+            row["plant"], row["section"], row.get("commodity"), row.get("wagon_type"), row["row_label"],
+            int(bool(row.get("is_total"))), row.get("direction"), row.get("freetime_hours"),
+            row.get("freetime_effective_from"), int(row.get("sort_order") or 0),
+            int(bool(row.get("is_active", True))), row["id"],
+        ))
+        row_id = row["id"]
+    else:
+        cur.execute("""
+            INSERT INTO rake_detention_master
+                (plant, section, commodity, wagon_type, row_label, is_total, direction,
+                 freetime_hours, freetime_effective_from, sort_order, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            row["plant"], row["section"], row.get("commodity"), row.get("wagon_type"), row["row_label"],
+            int(bool(row.get("is_total"))), row.get("direction"), row.get("freetime_hours"),
+            row.get("freetime_effective_from"), int(row.get("sort_order") or 0),
+            int(bool(row.get("is_active", True))),
+        ))
+        row_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+
+def deactivate_rake_detention_master_row(master_id: int) -> None:
+    """Retires a wagon type without deleting its history (is_active=0 —
+    get_rake_detention_master's default active_only=True then skips it on
+    future months, but every already-saved rake_detention_monthly value
+    stays intact)."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("UPDATE rake_detention_master SET is_active = 0 WHERE id = ?", (master_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_rake_detention_monthly(report_month: str, master_ids: Optional[List[int]] = None) -> Dict[int, float]:
+    """-> {master_id: value_hours} for one report_month."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    sql = "SELECT master_id, value_hours FROM rake_detention_monthly WHERE report_month = ?"
+    args = [report_month]
+    if master_ids:
+        sql += f" AND master_id IN ({','.join('?' * len(master_ids))})"
+        args.extend(master_ids)
+    cur.execute(sql, args)
+    out = {mid: val for mid, val in cur.fetchall()}
+    conn.close()
+    return out
+
+
+def save_rake_detention_monthly(report_month: str, rows: List[Dict[str, Any]]) -> int:
+    """Upsert rake_detention_monthly rows: {master_id, value_hours} for report_month."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    for r in rows:
+        cur.execute("""
+            INSERT INTO rake_detention_monthly (report_month, master_id, value_hours)
+            VALUES (?, ?, ?)
+            ON CONFLICT(report_month, master_id) DO UPDATE SET value_hours = excluded.value_hours
+        """, (report_month, r["master_id"], r.get("value_hours")))
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def get_rake_detention_trend(master_ids: List[int]) -> Dict[int, Dict[str, float]]:
+    """-> {master_id: {report_month: value_hours}} across every month on
+    record — used for page 4's multi-year "Overall Wagon" trend, where the
+    granular per-plant "Overall Wagon" master row is the only one that
+    realistically has years of history behind it."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out: Dict[int, Dict[str, float]] = {mid: {} for mid in master_ids}
+    if master_ids:
+        ph = ",".join("?" * len(master_ids))
+        cur.execute(
+            f"SELECT master_id, report_month, value_hours FROM rake_detention_monthly "
+            f"WHERE master_id IN ({ph})", master_ids,
+        )
+        for mid, rm, val in cur.fetchall():
+            out.setdefault(mid, {})[rm] = val
+    conn.close()
+    return out
+
+
+def get_rake_detention_summary(report_month: str) -> Dict[str, Dict[str, float]]:
+    """-> {period_row: {plant: value}} for one 'UPTO <report_month>' snapshot."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT period_row, plant, value FROM rake_detention_summary WHERE report_month = ?",
+        (report_month,),
+    )
+    out: Dict[str, Dict[str, float]] = {}
+    for period_row, plant, value in cur.fetchall():
+        out.setdefault(period_row, {})[plant] = value
+    conn.close()
+    return out
+
+
+def save_rake_detention_summary(report_month: str, rows: List[Dict[str, Any]]) -> int:
+    """Upsert rake_detention_summary rows: {period_row, plant, value} for report_month."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    for r in rows:
+        cur.execute("""
+            INSERT INTO rake_detention_summary (report_month, period_row, plant, value)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(report_month, period_row, plant) DO UPDATE SET value = excluded.value
+        """, (report_month, r["period_row"], r["plant"], r.get("value")))
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def get_rake_detention_annual(plants: List[str], fys: List[str]) -> Dict[str, Dict[str, float]]:
+    """-> {plant: {financial_year: avg_hours}} — page 4's per-FY "APR-MAR" column."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    out = {p: {} for p in plants}
+    if plants and fys:
+        ph_p, ph_f = ",".join("?" * len(plants)), ",".join("?" * len(fys))
+        cur.execute(
+            f"SELECT plant, financial_year, avg_hours FROM rake_detention_annual "
+            f"WHERE plant IN ({ph_p}) AND financial_year IN ({ph_f})", plants + fys,
+        )
+        for plant, fy, val in cur.fetchall():
+            out.setdefault(plant, {})[fy] = val
+    conn.close()
+    return out
+
+
+def save_rake_detention_annual(rows: List[Dict[str, Any]]) -> int:
+    """Upsert rake_detention_annual rows: {plant, financial_year, avg_hours}."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    for r in rows:
+        cur.execute("""
+            INSERT INTO rake_detention_annual (plant, financial_year, avg_hours)
+            VALUES (?, ?, ?)
+            ON CONFLICT(plant, financial_year) DO UPDATE SET avg_hours = excluded.avg_hours
+        """, (r["plant"], r["financial_year"], r.get("avg_hours")))
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+# ── "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) ─────────────
+# Backing store for page_ready_reckoner.py + the inline editor in the /report
+# live preview (ReadyReckonerTemplate.js). See scripts/migrate_add_ready_
+# reckoner.sql. Not month-scoped — see this table's own comment in init_db().
+
+_READY_RECKONER_COLS = (
+    "plant_code", "plant_name", "plant_group", "process_flow_image_path",
+    "capacity_html", "product_mix_html", "sort_order", "updated_by", "updated_at",
+)
+
+
+def get_ready_reckoner_pages() -> List[dict]:
+    """-> every plant's row (dict, _READY_RECKONER_COLS keys), ordered for
+    display (ISPs then SSPs, each group in its own sort_order)."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT {','.join(_READY_RECKONER_COLS)} FROM ready_reckoner_pages "
+        f"ORDER BY plant_group, sort_order, plant_code"
+    )
+    rows = [dict(zip(_READY_RECKONER_COLS, r)) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_ready_reckoner_page(plant_code: str) -> Optional[dict]:
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT {','.join(_READY_RECKONER_COLS)} FROM ready_reckoner_pages WHERE plant_code = ?",
+        (plant_code,),
+    )
+    row = cur.fetchone()
+    conn.close()
+    return dict(zip(_READY_RECKONER_COLS, row)) if row else None
+
+
+def upsert_ready_reckoner_master(row: Dict[str, Any]) -> None:
+    """Insert or update the non-editable identity fields of one plant's row
+    (plant_name/plant_group/sort_order) — used by the one-time backfill, not
+    the inline editor (which only ever touches content via the functions
+    below)."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO ready_reckoner_pages (plant_code, plant_name, plant_group, sort_order)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(plant_code) DO UPDATE SET
+            plant_name = excluded.plant_name, plant_group = excluded.plant_group,
+            sort_order = excluded.sort_order
+    """, (row["plant_code"], row.get("plant_name"), row["plant_group"], int(row.get("sort_order") or 0)))
+    conn.commit()
+    conn.close()
+
+
+def save_ready_reckoner_content(
+    plant_code: str, capacity_html: Optional[str] = None,
+    product_mix_html: Optional[str] = None, updated_by: str = "",
+) -> None:
+    """Updates one or both editable rich-HTML blocks for one plant, from
+    the inline editor's Save action. None (not just an empty string) means
+    "leave this field alone" — since Ready Reckoner is now 3 separate
+    pages per plant (process flow / capacity / product mix, 2026-09-20),
+    the capacity page's own Save action only ever has capacity_html to
+    send, and must NOT blank out product_mix_html just because that field
+    wasn't part of this particular page's payload. A plain UPDATE, not an
+    upsert: the row always already exists by this point (created by the
+    one-time backfill via upsert_ready_reckoner_master, which owns
+    plant_name/plant_group/sort_order) — MySQL's ON DUPLICATE KEY UPDATE
+    still validates every column in the INSERT list against NOT NULL
+    constraints even when it ends up taking the UPDATE branch, so a
+    partial insert (omitting plant_group here) fails outright rather than
+    falling through."""
+    import datetime as _dt
+    sets, args = [], []
+    if capacity_html is not None:
+        sets.append("capacity_html = ?")
+        args.append(capacity_html)
+    if product_mix_html is not None:
+        sets.append("product_mix_html = ?")
+        args.append(product_mix_html)
+    if not sets:
+        return
+    sets += ["updated_by = ?", "updated_at = ?"]
+    args += [updated_by, _dt.datetime.now().isoformat(timespec="seconds"), plant_code]
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute(f"UPDATE ready_reckoner_pages SET {', '.join(sets)} WHERE plant_code = ?", args)
+    conn.commit()
+    conn.close()
+
+
+def save_ready_reckoner_image(plant_code: str, image_path: str, updated_by: str) -> None:
+    """Updates just the process-flow diagram's file path for one plant, from
+    the inline editor's image-upload control. Same plain-UPDATE reasoning
+    as save_ready_reckoner_content."""
+    import datetime as _dt
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE ready_reckoner_pages
+        SET process_flow_image_path = ?, updated_by = ?, updated_at = ?
+        WHERE plant_code = ?
+    """, (image_path, updated_by, _dt.datetime.now().isoformat(timespec="seconds"), plant_code))
+    conn.commit()
+    conn.close()

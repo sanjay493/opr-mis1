@@ -6,7 +6,7 @@ import sqlite3
 import time
 import uuid
 import asyncio
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Depends
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
@@ -56,6 +56,18 @@ from page_epi import generate_epi
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt, _ITEM_ORDER as _IPT_ITEM_ORDER, _ITEM_RANK as _IPT_ITEM_RANK
 from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month, format_cr_actual
+from page_rake_detention import (
+    DETAIL_PAGES as RAKE_DETENTION_DETAIL_PAGES,
+    SUMMARY_PAGE_ID as RAKE_DETENTION_SUMMARY_PAGE_ID,
+    TREND_PAGE_ID as RAKE_DETENTION_TREND_PAGE_ID,
+    generate_rake_detention_detail, generate_rake_detention_summary, generate_rake_detention_trend,
+)
+import page_ready_reckoner
+from page_ready_reckoner import (
+    ISP_PAGES as READY_RECKONER_ISP_PAGES,
+    SSP_PAGES as READY_RECKONER_SSP_PAGES,
+    generate_ready_reckoner_page,
+)
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
                           generate_major_techno_from_db, generate_techno_from_db,
@@ -209,9 +221,9 @@ def _safe_techno(month, pg):
 #     content "(empty page contents awaited)", so it exists as a titled
 #     slot with no data yet, not a real report section.
 #   - "Details of Rakes Detention Plant Wise" (index.txt's last line, marked
-#     "(to added seperatly)") is listed in the Index table per direct
-#     instruction, but has no real pages behind it yet — see its own
-#     comment at the bottom of this list.
+#     "(to added seperatly)") now has real pages behind it — see
+#     RAKE_DETENTION_DETAIL_PAGES/RAKE_DETENTION_SUMMARY_PAGE_ID/
+#     RAKE_DETENTION_TREND_PAGE_ID above and page_rake_detention.py.
 _INDEX_SECTIONS = [
     ("Indian Steel Sector Performance", 3),
     # "Movement of Key Prices - International" (MARKET_PRICES_PAGE_ID = 2.41)
@@ -291,17 +303,20 @@ _INDEX_SECTIONS = [
     ("Details of Coking Coal Consumption, Blend and Stocks", 2),
     ("Plant Wise Power Data", 1),
     ("Status of Capital/Major Repairs Planned in ABP - Plant Wise", 5),
-    # index.txt marks this row "(to added seperatly)" — listed in the Index
-    # table (per direct instruction) with its stated page range, but no
-    # actual pages 57-60 exist in the report yet; unlike SAIL_MINES_PAGE_ID
-    # above, this is Index-row-only until a rake-detention data source
-    # exists and the real per-page split is known.
-    ("Details of Rakes Detention Plant Wise", 4),
-    # Annexures — reference "ready reckoner" documents. Listed in the Index
-    # with their stated page counts but no generated pages behind them yet
-    # (Index-row-only, same as "Details of Rakes Detention" above).
-    ("Annexure-1 : 5 ISPs Ready Reckoner", 10),
-    ("Annexure-2 : 3 SSPs Ready Reckoner", 15),
+    # SAIL Rail Movement Cell's "Average Plant Detention Report" — 7 pages:
+    # 5 portrait commodity/wagon-type detail pages, one per plant
+    # (RAKE_DETENTION_DETAIL_PAGES — split from the source PDF's own
+    # 3-plant/2-plant landscape groupings, 2026-09-20), then the
+    # "Improvement" summary and multi-year trend pages. See
+    # page_rake_detention.py.
+    ("Details of Rakes Detention Plant Wise", 7),
+    # "Ready Reckoner" — 3 pages per plant (process-flow diagram, Unit-wise
+    # Capacity, Product Mix — split from one combined page per plant,
+    # 2026-09-20), right after Rake Detention, at the very end. See
+    # READY_RECKONER_ISP_PAGES/READY_RECKONER_SSP_PAGES above and
+    # page_ready_reckoner.py.
+    ("Annexure-1 : 5 ISPs Ready Reckoner", 15),
+    ("Annexure-2 : 3 SSPs Ready Reckoner", 9),
 ]
 
 
@@ -569,6 +584,31 @@ COAL_RECEIPTS_PAGE_2_ID = 35.6
 # orientation override) rather than landscape, per direct instruction.
 POWER_DATA_PAGE_ID = 35.7
 
+# "Details of Rakes Detention Plant Wise" — SAIL Rail Movement Cell's
+# "Average Plant Detention Report", inserted right after Capital Repair
+# (pages 36-40), right before the Annexures (which are reference-only Index
+# rows, not real pages — see _INDEX_SECTIONS). 4 sentinel pages, same plain-
+# int-outside-1-40 treatment as CR_PAGES: 2 landscape commodity/wagon-type
+# detail pages (RAKE_DETENTION_DETAIL_PAGES, plant subsets matching the
+# source PDF's own page break), then the "Improvement" summary and
+# multi-year trend pages, both portrait. See page_rake_detention.py.
+# (RAKE_DETENTION_DETAIL_PAGES, RAKE_DETENTION_SUMMARY_PAGE_ID,
+# RAKE_DETENTION_TREND_PAGE_ID are imported above, aliased from
+# page_rake_detention's own DETAIL_PAGES/SUMMARY_PAGE_ID/TREND_PAGE_ID —
+# that last name would otherwise collide with this file's own
+# TREND_PAGE_ID = 1024 above.)
+
+# "Ready Reckoner" — Annexure-1 (5 ISPs) / Annexure-2 (3 SSPs), inserted
+# right after the Rake Detention pages, at the very end of the report
+# (nothing follows it — the Annexures were reference-only Index rows until
+# now). 3 sentinel pages per plant, portrait — process-flow diagram,
+# Unit-wise Capacity, Product Mix (split from one combined page per plant,
+# 2026-09-20) — each edited inline in the /report live preview (not
+# month-scoped — see ready_reckoner_pages' own comment in db.py).
+# READY_RECKONER_ISP_PAGES/READY_RECKONER_SSP_PAGES are imported above,
+# aliased from page_ready_reckoner's own ISP_PAGES/SSP_PAGES. See
+# page_ready_reckoner.py.
+
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
     description="Python API backend to compile and export SAIL MIS reports using WeasyPrint.",
@@ -801,7 +841,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                 SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
                                 MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
-                                POWER_DATA_PAGE_ID) or page_number in STEEL_SECTOR_PAGES:
+                                POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID) \
+                    or page_number in STEEL_SECTOR_PAGES or page_number in RAKE_DETENTION_DETAIL_PAGES \
+                    or page_number in READY_RECKONER_ISP_PAGES or page_number in READY_RECKONER_SSP_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
                 # glance" sentinel page, the "key parameters" sentinel
                 # page, the "Iron Making (contd.)" sentinel page, and the
@@ -940,8 +982,11 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                                       SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
                                                       MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
-                                                      POWER_DATA_PAGE_ID)
+                                                      POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
+                            and p.get("page") not in RAKE_DETENTION_DETAIL_PAGES
+                            and p.get("page") not in READY_RECKONER_ISP_PAGES
+                            and p.get("page") not in READY_RECKONER_SSP_PAGES
                             and p.get("page") != 2.4]  # retired 4th steel-sector page (folded into 2.2) —
                             # explicit literal so a pre-existing cached pages_config with this id
                             # still gets cleaned out even though 2.4 is no longer a STEEL_SECTOR_PAGES key
@@ -1011,6 +1056,20 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 pages_config.insert(_idx35 + 2, {"page": COAL_RECEIPTS_PAGE_ID})
                 pages_config.insert(_idx35 + 3, {"page": COAL_RECEIPTS_PAGE_2_ID})
                 pages_config.insert(_idx35 + 4, {"page": POWER_DATA_PAGE_ID})
+            # "Details of Rakes Detention Plant Wise" — appended after
+            # everything else (Capital Repair, pages 36-40, is always the
+            # last real section by this point in a full-month fetch) since
+            # it sits right before the Annexures, which aren't real pages.
+            for _pg in RAKE_DETENTION_DETAIL_PAGES:
+                pages_config.append({"page": _pg})
+            pages_config.append({"page": RAKE_DETENTION_SUMMARY_PAGE_ID})
+            pages_config.append({"page": RAKE_DETENTION_TREND_PAGE_ID})
+            # "Ready Reckoner" — appended right after Rake Detention, now
+            # the true end of the report (nothing follows it).
+            for _pg in READY_RECKONER_ISP_PAGES:
+                pages_config.append({"page": _pg})
+            for _pg in READY_RECKONER_SSP_PAGES:
+                pages_config.append({"page": _pg})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -1081,6 +1140,17 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page.update(generate_rail_report(month))
                 page["type"] = "rail_report"
                 page["orientation"] = "landscape"
+            if pg in RAKE_DETENTION_DETAIL_PAGES:
+                page.update(generate_rake_detention_detail(month, RAKE_DETENTION_DETAIL_PAGES[pg]))
+                page["orientation"] = "landscape"
+            if pg == RAKE_DETENTION_SUMMARY_PAGE_ID:
+                page.update(generate_rake_detention_summary(month))
+            if pg == RAKE_DETENTION_TREND_PAGE_ID:
+                page.update(generate_rake_detention_trend(month))
+            if pg in READY_RECKONER_ISP_PAGES:
+                page.update(generate_ready_reckoner_page(*READY_RECKONER_ISP_PAGES[pg]))
+            if pg in READY_RECKONER_SSP_PAGES:
+                page.update(generate_ready_reckoner_page(*READY_RECKONER_SSP_PAGES[pg]))
             if pg == MARKET_PRICES_PAGE_ID:
                 page.update(generate_market_prices(month))
                 page["orientation"] = "landscape"
@@ -1334,6 +1404,26 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idxcoal2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == COAL_RECEIPTS_PAGE_2_ID), None)
         if _idxcoal2 is not None:
             _pages_list.insert(_idxcoal2 + 1, {"page": POWER_DATA_PAGE_ID})
+    # "Details of Rakes Detention Plant Wise" sentinel pages: appended at
+    # the very end (right before the Annexures, which aren't real pages) —
+    # same unconditional-insert-if-missing pattern as above, brand new so
+    # every currently-saved page list predates it.
+    if _is_full_export and not any(p.get("page") in RAKE_DETENTION_DETAIL_PAGES for p in _pages_list):
+        for _pg in RAKE_DETENTION_DETAIL_PAGES:
+            _pages_list.append({"page": _pg})
+    if _is_full_export and not any(p.get("page") == RAKE_DETENTION_SUMMARY_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": RAKE_DETENTION_SUMMARY_PAGE_ID})
+    if _is_full_export and not any(p.get("page") == RAKE_DETENTION_TREND_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": RAKE_DETENTION_TREND_PAGE_ID})
+    # "Ready Reckoner" sentinel pages: appended right after Rake Detention,
+    # now the true end of the report — same unconditional-insert-if-missing
+    # pattern as above.
+    if _is_full_export and not any(p.get("page") in READY_RECKONER_ISP_PAGES for p in _pages_list):
+        for _pg in READY_RECKONER_ISP_PAGES:
+            _pages_list.append({"page": _pg})
+    if _is_full_export and not any(p.get("page") in READY_RECKONER_SSP_PAGES for p in _pages_list):
+        for _pg in READY_RECKONER_SSP_PAGES:
+            _pages_list.append({"page": _pg})
     # Corner badge (group + side) is a pure function of _pages_list's own
     # (already-final) physical order — recomputed fresh rather than trusted
     # from the submitted payload, since PageData doesn't declare this field
@@ -1436,6 +1526,17 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
             p.update(generate_rail_report(request.month))
             p["type"] = "rail_report"
             p["orientation"] = "landscape"
+        if pg in RAKE_DETENTION_DETAIL_PAGES:
+            p.update(generate_rake_detention_detail(request.month, RAKE_DETENTION_DETAIL_PAGES[pg]))
+            p["orientation"] = "landscape"
+        if pg == RAKE_DETENTION_SUMMARY_PAGE_ID:
+            p.update(generate_rake_detention_summary(request.month))
+        if pg == RAKE_DETENTION_TREND_PAGE_ID:
+            p.update(generate_rake_detention_trend(request.month))
+        if pg in READY_RECKONER_ISP_PAGES:
+            p.update(generate_ready_reckoner_page(*READY_RECKONER_ISP_PAGES[pg]))
+        if pg in READY_RECKONER_SSP_PAGES:
+            p.update(generate_ready_reckoner_page(*READY_RECKONER_SSP_PAGES[pg]))
         if pg == MARKET_PRICES_PAGE_ID:
             p.update(generate_market_prices(request.month))
             p["orientation"] = "landscape"
@@ -5680,6 +5781,190 @@ async def api_rail_report_grid_save(payload: dict):
         } for r in payload["rows"]])
     if payload.get("notes") is not None:
         db.save_rail_report_notes(payload["notes"])
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# "Details of Rakes Detention Plant Wise" (RAKE_DETENTION_* pages) — the
+# report data + its data-entry editor. See page_rake_detention.py and
+# scripts/migrate_add_rake_detention.sql.
+#
+# Two independent editable pieces, each with its own GET/POST pair:
+#   - master: the row registry (plant/section/commodity/wagon type/
+#     freetime) — the "add a new wagon type for a plant later" provision.
+#     Edited far less often than the monthly figures, so it's a separate
+#     save action rather than bundled into the month grid below.
+#   - grid: one report_month's monthly detail values (keyed against
+#     whatever master rows currently exist) plus that month's
+#     "Improvement" summary figures — the two things that actually change
+#     every reporting cycle.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/rake-detention/master")
+def api_rake_detention_master():
+    """Every master row (active and retired — the editor needs to see and
+    reactivate a retired wagon type, unlike the report generator which only
+    ever reads active_only=True)."""
+    return {"rows": db.get_rake_detention_master(active_only=False)}
+
+
+@app.post("/api/rake-detention/master")
+def api_rake_detention_master_save(payload: dict):
+    """Insert (no id) or update (id given) one master row. payload is the
+    row itself: {id?, plant, section, commodity, wagon_type, row_label,
+    is_total, direction, freetime_hours, freetime_effective_from,
+    sort_order, is_active}."""
+    for field in ("plant", "section", "row_label"):
+        if not payload.get(field):
+            raise HTTPException(status_code=400, detail=f"{field} is required")
+    row_id = db.save_rake_detention_master_row(payload)
+    return {"status": "ok", "id": row_id}
+
+
+@app.post("/api/rake-detention/master/deactivate")
+def api_rake_detention_master_deactivate(payload: dict):
+    """payload: {id} — retires a wagon type without deleting its history."""
+    master_id = payload.get("id")
+    if not master_id:
+        raise HTTPException(status_code=400, detail="id is required")
+    db.deactivate_rake_detention_master_row(master_id)
+    return {"status": "ok"}
+
+
+@app.get("/api/rake-detention/grid")
+def api_rake_detention_grid(report_month: str = Query(...)):
+    """Editable single-month grid: every active master row alongside that
+    row's report_month value (blank if not yet entered), plus the same
+    month's 9-period x 6-plant "Improvement" summary figures."""
+    master_rows = db.get_rake_detention_master(active_only=True)
+    monthly = db.get_rake_detention_monthly(report_month, master_ids=[r["id"] for r in master_rows])
+    summary_data = db.get_rake_detention_summary(report_month)
+    from page_rake_detention import PERIOD_ROWS, SUMMARY_PLANTS, _period_row_labels
+    labels = _period_row_labels(report_month)
+    return {
+        "report_month": report_month,
+        "rows": [
+            {**r, "value_hours": monthly.get(r["id"])}
+            for r in master_rows
+        ],
+        "summary_period_rows": [
+            {"code": code, "row_kind": row_kind, "label": labels[code]}
+            for code, row_kind in PERIOD_ROWS
+        ],
+        "summary_plants": SUMMARY_PLANTS,
+        "summary": [
+            {"period_row": code, "plant": p, "value": summary_data.get(code, {}).get(p)}
+            for code, _ in PERIOD_ROWS for p in SUMMARY_PLANTS
+        ],
+    }
+
+
+@app.post("/api/rake-detention/extract-pdf")
+async def api_rake_detention_extract_pdf(
+    file: UploadFile = File(...),
+    report_month: str = Form(...),
+):
+    """Alternate, faster way to fill the month grid above: upload the same
+    monthly "Average Plant Detention Report" PDF the Rail Movement Cell
+    already emails out, get back a preview (matched against the current
+    Wagon Types registry, positionally — see page_rake_detention_pdf_
+    extractor.py's module docstring for why), and let the frontend prefill
+    the grid/summary editors from it for review before Save. Never writes
+    to the DB itself — the existing grid/summary Save actions above still
+    own that."""
+    import shutil
+    import tempfile
+
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    suffix = os.path.splitext(file.filename or "")[1] or ".pdf"
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        import page_rake_detention_pdf_extractor as _rd_pdf
+        try:
+            result = _rd_pdf.extract_rake_detention_pdf(tmp_path, report_month)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return result
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+@app.post("/api/rake-detention/grid")
+async def api_rake_detention_grid_save(payload: dict):
+    """Save the month grid editor. payload:
+      { report_month, monthly: [{master_id, value_hours}],
+        summary: [{period_row, plant, value}] }"""
+    report_month = payload.get("report_month")
+    if not report_month:
+        raise HTTPException(status_code=400, detail="report_month is required")
+
+    def _f(v):
+        try:
+            return float(v) if v not in (None, "", "-") else None
+        except (ValueError, TypeError):
+            return None
+
+    if payload.get("monthly"):
+        db.save_rake_detention_monthly(report_month, [{
+            "master_id": r["master_id"], "value_hours": _f(r.get("value_hours")),
+        } for r in payload["monthly"]])
+    if payload.get("summary"):
+        db.save_rake_detention_summary(report_month, [{
+            "period_row": r["period_row"], "plant": r["plant"], "value": _f(r.get("value")),
+        } for r in payload["summary"]])
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) — the report
+# data + its inline editor (contentEditable in the /report live preview,
+# ReadyReckonerTemplate.js — not a separate /data-entry/* form page). See
+# page_ready_reckoner.py and scripts/migrate_add_ready_reckoner.sql.
+#
+# Deliberately NOT month-scoped: reads/writes go straight to
+# ready_reckoner_pages regardless of request.month, unlike every other
+# save endpoint in this file. Both write routes are role-checked
+# server-side (Depends(_auth.require_editor_or_admin)) — the frontend also
+# hides the edit affordance for a non-editor session, but that's a UX
+# nicety, not the actual access control.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/ready-reckoner")
+def api_ready_reckoner_list():
+    """All 8 plants' current content, for the live preview."""
+    return {"rows": db.get_ready_reckoner_pages()}
+
+
+@app.post("/api/ready-reckoner/{plant_code}")
+def api_ready_reckoner_save(plant_code: str, payload: dict, user: dict = Depends(_auth.require_editor_or_admin)):
+    """payload: {capacity_html?, product_mix_html?} — either or both; a
+    field simply absent from the payload (not just empty) is left
+    untouched (see db.save_ready_reckoner_content)."""
+    db.save_ready_reckoner_content(
+        plant_code,
+        capacity_html=payload.get("capacity_html"),
+        product_mix_html=payload.get("product_mix_html"),
+        updated_by=user.get("email") or "",
+    )
+    return {"status": "ok"}
+
+
+@app.post("/api/ready-reckoner/{plant_code}/image")
+async def api_ready_reckoner_image(
+    plant_code: str, file: UploadFile = File(...), user: dict = Depends(_auth.require_editor_or_admin),
+):
+    """Replaces the process-flow diagram for one plant."""
+    dest = page_ready_reckoner.image_path_for(plant_code, file.filename or "diagram.png")
+    contents = await file.read()
+    with open(dest, "wb") as f:
+        f.write(contents)
+    db.save_ready_reckoner_image(plant_code, dest, user.get("email") or "")
     return {"status": "ok"}
 
 

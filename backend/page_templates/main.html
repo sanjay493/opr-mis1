@@ -246,14 +246,6 @@
         .coal-table thead th {
             font-weight: 700;
         }
-        .coal-unit-row td {
-            border: none;
-            font-size: 7.5pt;
-            font-style: italic;
-            text-decoration: underline;
-            text-align: right;
-            padding: 0 5px 2px;
-        }
         .coal-plant-cell {
             font-weight: 700;
             vertical-align: middle;
@@ -267,20 +259,6 @@
         }
         .coal-group-last td {
             border-bottom: 1px solid {{ colors.border_dark }};
-        }
-        /* Blank divider columns either side of CDI Coal, matching the
-           reference PDF's spacer columns between the quantity groups and
-           again before the Blend% section — thinner before CDI (it's
-           still "inside" the quantity block), wider after (the real
-           divider ahead of Blend%). No border on these cells at all, so
-           they read as pure whitespace framed by their neighbours' own
-           borders, not as an extra ruled column. */
-        .coal-gap-col-thin { width: 1%; }
-        .coal-gap-col-wide { width: 2%; }
-        .coal-gap-cell {
-            border: none !important;
-            background: transparent;
-            padding: 0 !important;
         }
         .coal-plant-spacer-row td {
             border: none;
@@ -857,34 +835,6 @@
             font-weight: 500;
         }
 
-        .highlights-box {
-            background-color: {{ colors.misc_highlights_box_bg }};
-            border-left: 3px solid {{ colors.misc_highlights_box_border }};
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-            font-size: 12pt;
-        }
-
-        .highlights-box h4 {
-            font-weight: 700;
-            text-transform: uppercase;
-            color: {{ colors.text_primary }};
-            margin: 0 0 5px 0;
-            font-size: 13pt;
-        }
-
-        .highlights-box ul {
-            margin: 0;
-            padding: 0 0 0 15px;
-            list-style-type: disc;
-        }
-
-        .highlights-box li {
-            margin-bottom: 4px;
-            line-height: 1.3;
-        }
-
         /* ══════════════════════════════════════════════════════
            PAGE-SPECIFIC STYLES  (pages 1 – 14)
            Naming: .pageN-{element}  |  common stays in .report-table
@@ -1154,9 +1104,6 @@
             color: #b45309;
             padding-left: 18px;
         }
-        .page3-chart-grid { margin-top: 6px; }
-        .page3-chart-row  { display: flex; gap: 4px; margin-bottom: 3px; }
-        .page3-chart-cell { flex: 1; border: 0.5px solid {{ colors.border_divider }}; border-radius: 3px; padding: 2px; }
         /* Both page-3 tables (Production + TE Parameters) — was 5px 4px /
            4px 4px, too tight for 12pt content; header stays bold (already
            true site-wide) at the same explicit 12pt. Vertical padding
@@ -1522,205 +1469,13 @@
            group already uses; bold text alone is what marks it as SAIL. */
         .page5-6-table tr.sail-row td { font-weight: 700; }
 
-        /* ─── Pages 7–13 – Month-wise Production Trend ──────── */
-        .page7-13-heading {
-            font-size: 12pt;
-            font-weight: 700;
-            color: {{ colors.text_accent_navy }};
-            margin: 0;
-            text-transform: none;
-        }
-
-        .page7-13-unit {
-            font-size: 9pt;
-            font-weight: 500;
-            color: {{ colors.text_secondary }};
-            text-transform: vertical-rl;
-        }
-
-        .page7-13-trend-table { font-size: 6pt !important; }
-        .page7-13-trend-table th { font-size: 5pt !important; padding: 3px 1.5px; }
-        .page7-13-trend-table td { font-size: 5.5pt !important; padding: 2.5px 1.5px; }
-
-        .page7-13-yearly-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
-        .page7-13-yearly-table th {
-            font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
-            background: {{ colors.table_header_bg }}; color: {{ colors.text_primary }}; text-align: center; white-space: nowrap; font-weight: 700;
-        }
-        /* "Year" header — left-aligned to match its column's data cells
-           (td.year-cell is already text-align:left below), per direct
-           instruction; every other header stays centered. */
-        .page7-13-yearly-table th.year-hdr { text-align: left; }
-        .page7-13-yearly-table th.qtr-hdr { background: {{ colors.table_header_bg_qtr }}; }
-        .page7-13-yearly-table th.hh-hdr { background: {{ colors.table_header_bg_hh }}; }
-        .page7-13-yearly-table th.tot-hdr { background: {{ colors.table_header_bg_total }}; }
-        .page7-13-yearly-table td {
-            font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
-            text-align: right; border: 0.3pt solid {{ colors.border_light }};
-        }
-        .page7-13-yearly-table td.plant-cell {
-            /* Letter-per-line (one character per row) rather than the whole
-               name sideways, so the column shrinks to a single character's
-               width — freeing horizontal room for the H1/H2 columns — while
-               still reading top-to-bottom normally. */
-            /* 8.8pt: +0.3pt over the previous 8.5pt — with a 3-row minimum
-               now guaranteed per split segment (see pdf.py's
-               _enforce_trend_min_segments), a normal 3-letter plant label
-               (BSP, DSP, …) always has 3 rows of column height to fill. */
-            font-size: 8.3pt; font-weight: 700; text-align: center;
-            vertical-align: middle; padding: 3.5px 1.5px; line-height: 1.15;
-            background: {{ colors.highlight_plant_label_bg }}; color: {{ colors.text_plant_cell }};
-        }
-        /* A group with an abbreviated 1-2 letter plant label (see
-           page7_13.py's plant_label_overrides — currently just VISL -> VI
-           on Hot Metal/Crude Steel, where it's usually a single-row group)
-           gets a smaller font so that one row doesn't grow taller than its
-           neighbours just to fit the vertically-stacked letters. */
-        .page7-13-yearly-table td.plant-cell.compact { font-size: 6pt; }
-        /* "5 Plants" (7 letters once its space is dropped — see
-           trend_section.html's plant_chars) is by far the longest stacked
-           label on these pages; at the normal 8.5pt/1.15 line-height its
-           7 lines run taller than most other groups' whole page-1 segment
-           when a page break lands early in its rows, which was forcing
-           those rows visibly taller than their neighbours just to fit the
-           label. Shrunk font + tighter line-height here specifically
-           (not folded into .compact, which is sized for 1-2 letter
-           abbreviations like VISL's "VI" and would be too small to read
-           at 7 letters). */
-        .page7-13-yearly-table td.plant-cell.tight { font-size: 5.5pt; line-height: 1.05; }
-        .page7-13-yearly-table td.plant-cell.agg-sail  { background: {{ colors.highlight_agg_sail_bg }}; }
-        .page7-13-yearly-table td.plant-cell.agg-5p    { background: {{ colors.highlight_agg_5plants_bg }}; }
-        /* One fixed color per individual plant (see trend_section.html's
-           _plant_color_map), kept the same wherever that plant's group
-           appears across every page 7-13 table — SAIL/5 Plants keep their
-           own agg-sail/agg-5p colors above instead. */
-        .page7-13-yearly-table td.plant-cell.plant-bsp  { background: {{ colors.plant_color_bsp }}; }
-        .page7-13-yearly-table td.plant-cell.plant-dsp  { background: {{ colors.plant_color_dsp }}; }
-        .page7-13-yearly-table td.plant-cell.plant-rsp  { background: {{ colors.plant_color_rsp }}; }
-        .page7-13-yearly-table td.plant-cell.plant-bsl  { background: {{ colors.plant_color_bsl }}; }
-        .page7-13-yearly-table td.plant-cell.plant-isp  { background: {{ colors.plant_color_isp }}; }
-        .page7-13-yearly-table td.plant-cell.plant-asp  { background: {{ colors.plant_color_asp }}; }
-        .page7-13-yearly-table td.plant-cell.plant-ssp  { background: {{ colors.plant_color_ssp }}; }
-        .page7-13-yearly-table td.plant-cell.plant-visl { background: {{ colors.plant_color_visl }}; }
-        .page7-13-yearly-table td.year-cell {
-            font-size: 8.5pt; text-align: left; padding-left: 1.5px; white-space: nowrap;
-            color: {{ colors.text_rust_brown }};
-        }
-        /* The Plan row's year label ("P 26-27") is 2 characters longer than
-           every other row's ("26-27") — kept at a slightly smaller font than
-           every other year-cell so it doesn't need its own wider column.
-           Left padding matches the base td.year-cell rule above now that the
-           Year column itself has been widened (see trend_section.html's
-           colgroup comment) — it no longer needs to give up its padding just
-           to fit. */
-        .page7-13-yearly-table tr.plan-row td.year-cell {
-            font-size: 7.5pt;
-        }
-        .page7-13-yearly-table tr.sail-row   { background: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
-        .page7-13-yearly-table tr.fp-row     { background: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
-        /* Plan row — a distinct background (highlight_shortfall_band_bg, not
-           otherwise used anywhere on pages 7-13) plus rust-brown text, per
-           direct instruction, 2026-09-17. Declared AFTER tr.sail-row/tr.fp-row
-           above (equal selector specificity, so source order decides) so a
-           group's own Plan row keeps this look even when that group IS SAIL
-           or 5 Plants, instead of the SAIL/5-Plants row color winning. */
-        .page7-13-yearly-table tr.plan-row {
-            background: {{ colors.highlight_shortfall_band_bg }};
-            color: {{ colors.text_rust_brown }};
-            font-weight: 700;
-        }
-        /* The rowspan'd plant-label cell (td.plant-cell) is always physically
-           inside the Plan row (it's each group's first row) — its own color
-           rule (td.plant-cell, equal specificity to tr.plan-row above) would
-           otherwise lose to tr.plan-row's later position and turn every
-           plant's stacked letters rust-brown too. Restore it explicitly. */
-        .page7-13-yearly-table tr.plan-row td.plant-cell { color: {{ colors.text_plant_cell }}; }
-        /* Taller vertical padding on the SAIL/5 Plants aggregate rows only
-           (base td padding stays 3.5px 1.5px for every other row) per direct
-           instruction, 2026-09-17 — makes these two summary rows stand out
-           a bit more from the individual-plant rows above them. */
-        .page7-13-yearly-table tr.sail-row td,
-        .page7-13-yearly-table tr.fp-row td { padding-top: 6px; padding-bottom: 6px; }
-        .page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid {{ colors.border_heavy }}; }
-        .page7-13-yearly-table td.qtr-cell   { background: {{ colors.highlight_qtr_col_bg }}; font-weight: 600; }
-        .page7-13-yearly-table td.hh-cell    { background: {{ colors.highlight_hh_col_bg }}; font-weight: 600; }
-        .page7-13-yearly-table td.total-cell { background: {{ colors.highlight_total_col_bg }}; font-weight: 700; }
-        /* Two record flags: best-ever (all-time record, month/quarter/
-           annual) is a background fill only — no border, so it doesn't
-           compete with the plan/SAIL/5 Plants row backgrounds it can land
-           on top of. best-month (this column's own record, but not the
-           single all-time best) is the weaker signal and gets only an
-           underline on the value text, no fill/border — a cell border
-           was easy to mistake for a stray gridline once it landed on a
-           colored row background; an underline reads unambiguously as
-           "this value" regardless of what's behind it. !important wins
-           over qtr-cell/total-cell/plan-row/sail-row/fp-row backgrounds
-           since a record can land on any of those. */
-        .page7-13-yearly-table td.best-ever {
-            background: {{ colors.highlight_best_ever_bg }} !important;
-            font-weight: 700; color: {{ colors.text_black }};
-        }
-        .page7-13-yearly-table td.best-month {
-            font-weight: 700; color: {{ colors.text_black }};
-            text-decoration: underline !important;
-            text-decoration-color: {{ colors.highlight_best_month_border_light }};
-            text-decoration-thickness: 1.5pt;
-            text-underline-offset: 2px;
-        }
-        .page7-13-legend { font-size: 7.5pt; color: {{ colors.text_secondary }}; margin-top: 4px; }
-        .page7-13-legend .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: middle; }
-        .page7-13-yearly-table thead tr.item-heading-row th {
-            background: {{ colors.table_header_bg }}; border-bottom: 2px solid {{ colors.text_primary }}; border-top: none;
-            padding: 0 0 4px 0; vertical-align: bottom;
-        }
-        .page7-13-yearly-table thead tr.item-heading-row th.heading-title {
-            font-size: 11.5pt; font-weight: 700; color: {{ colors.text_accent_navy }};
-            text-transform: none; text-align: left;
-        }
-        .page7-13-yearly-table thead tr.item-heading-row th.heading-unit {
-            font-size: 9.5pt; font-weight: 700; color: {{ colors.border_darkest }};
-            text-transform: none; text-align: right; white-space: nowrap;
-        }
-
-        .page7-13-section-page {
-            position: relative;
-            page: content-layout;
-            page-break-before: always;
-            break-before: page;
-            /* Also force a break AFTER the section so the page that follows
-               it ("Crude Steel Production Details - Concast") always starts
-               on its own fresh physical page instead of rendering in the
-               leftover space below the last trend item — the static Index
-               (main.py _INDEX_SECTIONS) already counts Concast as a separate
-               page, so this makes the physical layout match it. */
-            page-break-after: always;
-            break-after: page;
-            padding: 0;
-            /* This one div holds the whole pages-7-13 flow and spills
-               across many physical pages via ordinary table-row page
-               breaks (see trend_section.html) — its own padding (set
-               inline, per-page-config marginTop/marginLR/marginBottom)
-               would otherwise only land on the div's true first/last
-               fragment by default CSS fragmentation behavior ("slice"),
-               giving physical page 1 extra top padding on top of
-               page.pdf()'s own uniform margin while every later physical
-               page in the flow got none. box-decoration-break: clone
-               makes each physical-page fragment repeat the full padding
-               box instead, so every page in the flow gets the same
-               margin. -webkit- prefix required: Chromium never shipped
-               the unprefixed property. */
-            -webkit-box-decoration-break: clone;
-            box-decoration-break: clone;
-        }
-        .page7-13-item-block {
-            padding-top: 2mm;
-            margin-bottom: 0;
-        }
-        .page7-13-separator {
-            border: none;
-            border-top: 1.5pt solid {{ colors.text_primary }};
-            margin: 16pt 0 10pt 0;
-        }
+        /* ─── Pages 7–13 – Month-wise Production Trend ──────────
+           Moved out to its own file (still Jinja, still PDF-only —
+           this <style> block is never sent to the live preview) so the
+           production-trend rules aren't buried in this 2000+ line file.
+           See css/production_trend.css for the actual rules + their
+           per-rule rationale comments. */
+        {% include 'css/production_trend.css' %}
 
         /* ─── Page 14 – Production by Process ───────────────── */
         .page14-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 2px solid {{ colors.border_darkest }}; margin-bottom: 10pt; }
@@ -1994,8 +1749,6 @@
     .pg-{{ page.page|pgclass }} th,
     .pg-{{ page.page|pgclass }} td { padding: {{ _pl.get('tdPaddingV', 0.5) }}px 1.5px !important; line-height: {{ _pl.get('lineHeight', 1.0) }} !important; }
     .pg-{{ page.page|pgclass }} .report-title-section { margin-bottom: 6px !important; }
-    .pg-{{ page.page|pgclass }} .highlights-box { padding: 5px !important; margin: 4px 0 !important; {% if not _tbl.get('td') %}font-size: 7pt !important;{% endif %} }
-    .pg-{{ page.page|pgclass }} .highlights-box li { margin-bottom: 1px !important; }
     {% endif %}
     {% if _pl.get('tablePaddingV') is not none %}
     {# Set only when pdf.py's page-3 overflow measurement (build_pdf_response)
@@ -2029,7 +1782,7 @@
     {% set _pl = page_layouts.get(page.page|string, {}) %}
     {% if page.type == 'trend_section' %}{% include 'trend_section.html' %}
     {% else %}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('special_steel', 'special_steel_donut') %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines', 'steel_sales_performance') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical', 'rail_report', 'market_prices', 'macro_indicators') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('special_steel', 'special_steel_donut') %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines', 'steel_sales_performance', 'rake_detention_summary', 'rake_detention_trend', 'rake_detention_detail', 'ready_reckoner') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical', 'rail_report', 'market_prices', 'macro_indicators') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
@@ -2040,8 +1793,6 @@
         {% elif page.type == 'best_ever_highlights' %}{% include 'best_ever_highlights.html' %}
         {% elif page.type == 'best_calendar_month' %}{% include 'best_calendar_month.html' %}
         {% elif page.type == 'summary' %}{% include 'summary.html' %}
-        {% elif page.type == 'trend' %}{% include 'trend.html' %}
-        {% elif page.type == 'trend_yearly' %}{% include 'trend_yearly.html' %}
         {% elif page.type == 'page4_table' %}{% include 'page4_table.html' %}
         {% elif page.type == 'performance_summary_table' %}{% include 'performance_summary_table.html' %}
         {% elif page.type == 'concast_performance' %}{% include 'concast_performance.html' %}
@@ -2069,6 +1820,10 @@
         {% elif page.type == 'rail_report' %}{% include 'rail_report.html' %}
         {% elif page.type == 'market_prices' %}{% include 'market_prices.html' %}
         {% elif page.type == 'macro_indicators' %}{% include 'macro_indicators.html' %}
+        {% elif page.type == 'rake_detention_detail' %}{% include 'rake_detention_detail.html' %}
+        {% elif page.type == 'rake_detention_summary' %}{% include 'rake_detention_summary.html' %}
+        {% elif page.type == 'rake_detention_trend' %}{% include 'rake_detention_trend.html' %}
+        {% elif page.type == 'ready_reckoner' %}{% include 'ready_reckoner_plant.html' %}
         {% else %}
             <div class="report-title-section">
                 <h2>{{ page.title }}</h2>

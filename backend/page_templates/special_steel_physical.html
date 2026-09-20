@@ -1,8 +1,8 @@
 <style>
-    .ssp-phys-table { border-collapse: collapse; width: 100%; font-size: 7pt; table-layout: fixed; }
+    .ssp-phys-table { border-collapse: collapse; width: 100%; font-size: 8pt; table-layout: fixed; }
     .ssp-phys-table th, .ssp-phys-table td {
         border: 0.5pt solid {{ colors.border|default('#b0b0b0') }};
-        padding: 2.5pt 2pt; text-align: center; overflow: hidden;
+        padding: 6pt 3pt; text-align: center; overflow: hidden;
     }
     .ssp-phys-table thead th { background: {{ colors.header_bg|default('#e8eef7') }}; font-weight: 700; }
     .ssp-phys-table .ssp-plant { font-weight: 700; background: {{ colors.header_bg|default('#e8eef7') }}; }
@@ -15,14 +15,14 @@
     /* Apr-<report month> YTD block: cool tint */
     .ssp-phys-table .ssp-ytd { background: #e7f3ea; }
     .ssp-phys-table thead th.ssp-ytd { background: #c8e6cf; }
-    .ssp-phys-table .ssp-remark { text-align: left; font-size: 6.2pt; color: {{ colors.text_secondary|default('#5f6368') }}; white-space: normal; }
-    .ssp-phys-notes { margin: 6pt 0 4pt; font-size: 7.5pt; }
-    .ssp-phys-notes li { margin-bottom: 1.5pt; }
+    .ssp-phys-table .ssp-remark { text-align: left; font-size: 7pt; color: {{ colors.text_secondary|default('#5f6368') }}; white-space: normal; }
+    .ssp-phys-notes { margin: 6pt 0 4pt; font-size: 8.5pt; }
+    .ssp-phys-notes li { margin-bottom: 2pt; }
     .ssp-ipt-wrap { margin-top: 6pt; }
-    .ssp-ipt-title { font-weight: 700; font-size: 8.5pt; margin-bottom: 3pt; }
-    .ssp-ipt-table { border-collapse: collapse; font-size: 8pt; }
+    .ssp-ipt-title { font-weight: 700; font-size: 10pt; margin-bottom: 4pt; }
+    .ssp-ipt-table { border-collapse: collapse; font-size: 9pt; }
     .ssp-ipt-table th, .ssp-ipt-table td {
-        border: 0.5pt solid {{ colors.border|default('#b0b0b0') }}; padding: 2pt 10pt;
+        border: 0.5pt solid {{ colors.border|default('#b0b0b0') }}; padding: 4pt 11pt;
     }
     .ssp-ipt-table th { background: {{ colors.header_bg|default('#e8eef7') }}; font-weight: 700; }
     .ssp-ipt-table .ssp-ipt-plan { text-align: right; font-variant-numeric: tabular-nums; }

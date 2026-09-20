@@ -193,7 +193,7 @@ def _import_pct_bar_svg(bars: list, title: str, vw: int = 220, vh: int = 150) ->
             fill = text_color or _contrast_text(color)
             ty = by + bh / 2 + 3.4
             lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" font-size="9.5" '
-                         f'font-weight="bold" font-family="Arial,sans-serif" fill="{fill}">{val:.1f}%</text>')
+                         f'font-weight="bold" font-family="Arial,sans-serif" fill="{fill}">{val:.1f}</text>')
         lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 12:.1f}" text-anchor="middle" font-size="7.5" '
                      f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{label}</text>')
 

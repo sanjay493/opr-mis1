@@ -1,0 +1,211 @@
+{# ============================================================================
+   Pages 7-13 - Month-wise Production Trend (PDF only, not the live preview)
+   ----------------------------------------------------------------------------
+   Included from inside main.html's <style> block via
+   {% include 'css/production_trend.css' %}. Still a Jinja template (not a
+   plain .css file) so the {{ colors.* }} lookups below keep resolving
+   against the same context main.html renders with — colors_config.json
+   stays the single source of truth for every value here.
+
+   Markup consumer: trend_section.html (the page.type == 'trend_section'
+   branch in main.html) — the only branch pages 7-12 can ever reach in the
+   normal case, since main.py retags them "trend_yearly"/"trend_combined"
+   and pdf.py unconditionally merges those into one "trend_section" page
+   before main.html renders (see pdf.py ~line 1929). The raw stored
+   "trend"/"trend_yearly" page.type values (and the trend.html/
+   trend_yearly.html templates that used to handle them) only ever
+   survive that retagging if a report month has zero rows in both
+   production_table and production_plan_table — both templates were
+   deleted as dead code (2026-09-19); that edge case now falls through to
+   main.html's generic bare-table {% else %} instead.
+   Class names below are grouped to match trend_section.html's layout:
+   yearly table shell -> plant-label cell -> plant colors -> row
+   highlighting -> column highlighting -> record flags -> legend ->
+   page/section pagination.
+   ============================================================================ #}
+
+/* ---- Yearly table shell: fixed layout + header bands ---- */
+.page7-13-yearly-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+.page7-13-yearly-table th {
+    font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
+    background: {{ colors.table_header_bg }}; color: {{ colors.text_primary }}; text-align: center; white-space: nowrap; font-weight: 700;
+}
+.page7-13-yearly-table th.qtr-hdr { background: {{ colors.table_header_bg_qtr }}; }
+.page7-13-yearly-table th.hh-hdr { background: {{ colors.table_header_bg_hh }}; }
+.page7-13-yearly-table th.tot-hdr { background: {{ colors.table_header_bg_total }}; }
+.page7-13-yearly-table td {
+    font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
+    text-align: right; border: 0.3pt solid {{ colors.border_light }};
+}
+
+/* ---- Plant-label cell (the rowspan'd column stacking each plant's
+   letters top-to-bottom) — three font-size tiers depending on how many
+   stacked letters must fit in the row count actually available. ---- */
+.page7-13-yearly-table td.plant-cell {
+    /* Letter-per-line (one character per row) rather than the whole
+       name sideways, so the column shrinks to a single character's
+       width — freeing horizontal room for the H1/H2 columns — while
+       still reading top-to-bottom normally. */
+    /* 8.8pt: +0.3pt over the previous 8.5pt — with a 3-row minimum
+       now guaranteed per split segment (see pdf.py's
+       _enforce_trend_min_segments), a normal 3-letter plant label
+       (BSP, DSP, …) always has 3 rows of column height to fill. */
+    font-size: 8.3pt; font-weight: 700; text-align: center;
+    vertical-align: middle; padding: 3.5px 1.5px; line-height: 1.15;
+    background: {{ colors.highlight_plant_label_bg }}; color: {{ colors.text_plant_cell }};
+}
+/* A group with an abbreviated 1-2 letter plant label (see
+   page7_13.py's plant_label_overrides — currently just VISL -> VI
+   on Hot Metal/Crude Steel, where it's usually a single-row group)
+   gets a smaller font so that one row doesn't grow taller than its
+   neighbours just to fit the vertically-stacked letters. */
+.page7-13-yearly-table td.plant-cell.compact { font-size: 6pt; }
+/* "5 Plants" (7 letters once its space is dropped — see
+   trend_section.html's plant_chars) is by far the longest stacked
+   label on these pages; at the normal 8.5pt/1.15 line-height its
+   7 lines run taller than most other groups' whole page-1 segment
+   when a page break lands early in its rows, which was forcing
+   those rows visibly taller than their neighbours just to fit the
+   label. Shrunk font + tighter line-height here specifically
+   (not folded into .compact, which is sized for 1-2 letter
+   abbreviations like VISL's "VI" and would be too small to read
+   at 7 letters). */
+.page7-13-yearly-table td.plant-cell.tight { font-size: 5.5pt; line-height: 1.05; }
+.page7-13-yearly-table td.plant-cell.agg-sail  { background: {{ colors.highlight_agg_sail_bg }}; }
+.page7-13-yearly-table td.plant-cell.agg-5p    { background: {{ colors.highlight_agg_5plants_bg }}; }
+
+{# One fixed color per individual plant (see trend_section.html's
+   _plant_color_map), kept the same wherever that plant's group appears
+   across every page 7-13 table — SAIL/5 Plants keep their own
+   agg-sail/agg-5p colors above instead. Looped (rather than one rule per
+   plant) so adding/renaming a plant only ever touches this one list plus
+   colors_config.json's matching plant_color_<code> entry. #}
+{% for _code in ['bsp', 'dsp', 'rsp', 'bsl', 'isp', 'asp', 'ssp', 'visl'] %}
+.page7-13-yearly-table td.plant-cell.plant-{{ _code }} { background: {{ colors['plant_color_' + _code] }}; }
+{% endfor %}
+
+/* ---- Year-label cell (left column inside each plant group) ---- */
+.page7-13-yearly-table td.year-cell {
+    font-size: 8.5pt; text-align: left; padding-left: 1.5px; white-space: nowrap;
+    color: {{ colors.text_rust_brown }};
+}
+/* The Plan row's year label ("P 26-27") is 2 characters longer than
+   every other row's ("26-27") — kept at a slightly smaller font than
+   every other year-cell so it doesn't need its own wider column.
+   Left padding matches the base td.year-cell rule above now that the
+   Year column itself has been widened (see trend_section.html's
+   colgroup comment) — it no longer needs to give up its padding just
+   to fit. */
+.page7-13-yearly-table tr.plan-row td.year-cell {
+    font-size: 7.5pt;
+}
+
+/* ---- Row-type highlighting: Actual/SAIL, First Production/5 Plants, Plan ---- */
+.page7-13-yearly-table tr.sail-row   { background: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
+.page7-13-yearly-table tr.fp-row     { background: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
+/* Plan row — a distinct background (highlight_shortfall_band_bg, not
+   otherwise used anywhere on pages 7-13) plus rust-brown text, per
+   direct instruction, 2026-09-17. Declared AFTER tr.sail-row/tr.fp-row
+   above (equal selector specificity, so source order decides) so a
+   group's own Plan row keeps this look even when that group IS SAIL
+   or 5 Plants, instead of the SAIL/5-Plants row color winning. */
+.page7-13-yearly-table tr.plan-row {
+    background: {{ colors.highlight_shortfall_band_bg }};
+    color: {{ colors.text_rust_brown }};
+    font-weight: 700;
+}
+/* The rowspan'd plant-label cell (td.plant-cell) is always physically
+   inside the Plan row (it's each group's first row) — its own color
+   rule (td.plant-cell, equal specificity to tr.plan-row above) would
+   otherwise lose to tr.plan-row's later position and turn every
+   plant's stacked letters rust-brown too. Restore it explicitly. */
+.page7-13-yearly-table tr.plan-row td.plant-cell { color: {{ colors.text_plant_cell }}; }
+/* Taller vertical padding on the SAIL/5 Plants aggregate rows only
+   (base td padding stays 3.5px 1.5px for every other row) per direct
+   instruction, 2026-09-17 — makes these two summary rows stand out
+   a bit more from the individual-plant rows above them. */
+.page7-13-yearly-table tr.sail-row td,
+.page7-13-yearly-table tr.fp-row td { padding-top: 6px; padding-bottom: 6px; }
+.page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid {{ colors.border_heavy }}; }
+
+/* ---- Column highlighting: quarter / half-year / total bands ---- */
+.page7-13-yearly-table td.qtr-cell   { background: {{ colors.highlight_qtr_col_bg }}; font-weight: 600; }
+.page7-13-yearly-table td.hh-cell    { background: {{ colors.highlight_hh_col_bg }}; font-weight: 600; }
+.page7-13-yearly-table td.total-cell { background: {{ colors.highlight_total_col_bg }}; font-weight: 700; }
+
+/* ---- Record flags: best-ever vs. best-for-this-calendar-period ----
+   Two record flags: best-ever (all-time record, month/quarter/
+   annual) is a background fill only — no border, so it doesn't
+   compete with the plan/SAIL/5 Plants row backgrounds it can land
+   on top of. best-month (this column's own record, but not the
+   single all-time best) is the weaker signal and gets only an
+   underline on the value text, no fill/border — a cell border
+   was easy to mistake for a stray gridline once it landed on a
+   colored row background; an underline reads unambiguously as
+   "this value" regardless of what's behind it. !important wins
+   over qtr-cell/total-cell/plan-row/sail-row/fp-row backgrounds
+   since a record can land on any of those. */
+.page7-13-yearly-table td.best-ever {
+    background: {{ colors.highlight_best_ever_bg }} !important;
+    font-weight: 700; color: {{ colors.text_black }};
+}
+.page7-13-yearly-table td.best-month {
+    font-weight: 700; color: {{ colors.text_black }};
+    text-decoration: underline !important;
+    text-decoration-color: {{ colors.highlight_best_month_border_light }};
+    text-decoration-thickness: 1.5pt;
+    text-underline-offset: 2px;
+}
+
+/* ---- Legend + the item-heading row above each table ---- */
+.page7-13-legend { font-size: 7.5pt; color: {{ colors.text_secondary }}; margin-top: 4px; }
+.page7-13-legend .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: middle; }
+.page7-13-yearly-table thead tr.item-heading-row th {
+    background: {{ colors.table_header_bg }}; border-bottom: 2px solid {{ colors.text_primary }}; border-top: none;
+    padding: 0 0 4px 0; vertical-align: bottom;
+}
+.page7-13-yearly-table thead tr.item-heading-row th.heading-title {
+    font-size: 11.5pt; font-weight: 700; color: {{ colors.text_accent_navy }};
+    text-transform: none; text-align: left;
+}
+.page7-13-yearly-table thead tr.item-heading-row th.heading-unit {
+    font-size: 9.5pt; font-weight: 700; color: {{ colors.border_darkest }};
+    text-transform: none; text-align: right; white-space: nowrap;
+}
+
+/* ---- Section container: the one div holding all of pages 7-13, and its
+   own pagination/spacing quirks ---- */
+.page7-13-section-page {
+    position: relative;
+    page: content-layout;
+    page-break-before: always;
+    break-before: page;
+    /* Also force a break AFTER the section so the page that follows
+       it ("Crude Steel Production Details - Concast") always starts
+       on its own fresh physical page instead of rendering in the
+       leftover space below the last trend item — the static Index
+       (main.py _INDEX_SECTIONS) already counts Concast as a separate
+       page, so this makes the physical layout match it. */
+    page-break-after: always;
+    break-after: page;
+    padding: 0;
+    /* This one div holds the whole pages-7-13 flow and spills
+       across many physical pages via ordinary table-row page
+       breaks (see trend_section.html) — its own padding (set
+       inline, per-page-config marginTop/marginLR/marginBottom)
+       would otherwise only land on the div's true first/last
+       fragment by default CSS fragmentation behavior ("slice"),
+       giving physical page 1 extra top padding on top of
+       page.pdf()'s own uniform margin while every later physical
+       page in the flow got none. box-decoration-break: clone
+       makes each physical-page fragment repeat the full padding
+       box instead, so every page in the flow gets the same
+       margin. -webkit- prefix required: Chromium never shipped
+       the unprefixed property. */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+.page7-13-item-block {
+    padding-top: 2mm;
+    margin-bottom: 0;
+}

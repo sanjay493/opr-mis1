@@ -70,6 +70,41 @@ const PAGE_LABELS = {
   38: 'Capital Repair – RSP',
   39: 'Capital Repair – BSL',
   40: 'Capital Repair – ISP',
+  1026: 'Rakes Detention – Commodity Wise – BSP',
+  1027: 'Rakes Detention – Commodity Wise – DSP',
+  1038: 'Rakes Detention – Commodity Wise – RSP',
+  1039: 'Rakes Detention – Commodity Wise – BSL',
+  1040: 'Rakes Detention – Commodity Wise – ISP',
+  1028: 'Rakes Detention – Improvement Summary',
+  1029: 'Rakes Detention – Average Detention Trend',
+  // 3 pages per plant (process flow / unit-wise capacity / product mix —
+  // split from one combined page per plant, 2026-09-20). Ids 1041-1064,
+  // clear of Rake Detention's own 1026-1029/1038-1040 — see
+  // backend/page_ready_reckoner.py.
+  1041: 'Ready Reckoner – Bhilai Steel Plant – Process Flow',
+  1042: 'Ready Reckoner – Bhilai Steel Plant – Unit-wise Capacity',
+  1043: 'Ready Reckoner – Bhilai Steel Plant – Product Mix',
+  1044: 'Ready Reckoner – Durgapur Steel Plant – Process Flow',
+  1045: 'Ready Reckoner – Durgapur Steel Plant – Unit-wise Capacity',
+  1046: 'Ready Reckoner – Durgapur Steel Plant – Product Mix',
+  1047: 'Ready Reckoner – Rourkela Steel Plant – Process Flow',
+  1048: 'Ready Reckoner – Rourkela Steel Plant – Unit-wise Capacity',
+  1049: 'Ready Reckoner – Rourkela Steel Plant – Product Mix',
+  1050: 'Ready Reckoner – Bokaro Steel Plant – Process Flow',
+  1051: 'Ready Reckoner – Bokaro Steel Plant – Unit-wise Capacity',
+  1052: 'Ready Reckoner – Bokaro Steel Plant – Product Mix',
+  1053: 'Ready Reckoner – IISCO Steel Plant – Process Flow',
+  1054: 'Ready Reckoner – IISCO Steel Plant – Unit-wise Capacity',
+  1055: 'Ready Reckoner – IISCO Steel Plant – Product Mix',
+  1056: 'Ready Reckoner – Alloy Steels Plant – Process Flow',
+  1057: 'Ready Reckoner – Alloy Steels Plant – Unit-wise Capacity',
+  1058: 'Ready Reckoner – Alloy Steels Plant – Product Mix',
+  1059: 'Ready Reckoner – Salem Steel Plant – Process Flow',
+  1060: 'Ready Reckoner – Salem Steel Plant – Unit-wise Capacity',
+  1061: 'Ready Reckoner – Salem Steel Plant – Product Mix',
+  1062: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Process Flow',
+  1063: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Unit-wise Capacity',
+  1064: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Product Mix',
 };
 
 // Page list/count is fixed regardless of report month, so the page selector
@@ -92,7 +127,14 @@ const PAGE_LABELS = {
 // nothing else needed renumbering, but that means a plain numeric sort
 // still puts it between 18 and 19 here — wrong. Override it into its real
 // slot instead of relying on the literal value.
-const _PAGE_SORT_POS = { 1024: 24.5, 18.5: 24.55, 1025: 24.6 };
+// 1038-1040 (Rake Detention detail for RSP/BSL/ISP) were added after
+// 1028/1029 (Rake Detention summary/trend) and 1030-1037 (Ready Reckoner)
+// already claimed the numbers right after 1026/1027 — so numerically
+// they'd sort past the whole Ready Reckoner section. They physically
+// print right after 1027 (DSP's detail page) and before 1028 (summary),
+// matching main.py's DETAIL_PAGES iteration order — see
+// page_rake_detention.py.
+const _PAGE_SORT_POS = { 1024: 24.5, 18.5: 24.55, 1025: 24.6, 1038: 1027.1, 1039: 1027.2, 1040: 1027.3 };
 const _pageSortPos = (n) => _PAGE_SORT_POS[n] ?? n;
 const ALL_PAGE_NUMBERS = Object.keys(PAGE_LABELS).map(Number).sort((a, b) => _pageSortPos(a) - _pageSortPos(b));
 

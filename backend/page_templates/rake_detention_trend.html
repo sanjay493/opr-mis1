@@ -1,0 +1,74 @@
+<style>
+    .rdt-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 8pt; margin-bottom: 2pt; }
+    .rdt-table th, .rdt-table td {
+        border: 0.5pt solid {{ colors.border_dark|default('#5f6368') }};
+        padding: 2pt 3pt; text-align: center;
+    }
+    .rdt-table thead th { background: {{ colors.table_header_bg|default('#e8eef7') }}; font-weight: 700; }
+    .rdt-year-col { width: 9%; }
+    .rdt-num { text-align: center; font-variant-numeric: tabular-nums; }
+    .rdt-annual-col { background: {{ colors.highlight_total_col_bg|default('#eae1f5') }}; font-weight: 700; }
+    /* Current (open) FY — the one row still being filled in month by
+       month, per direct instruction matching the source PDF's own bold
+       first row. */
+    .rdt-current-fy td { font-weight: 700; background: {{ colors.highlight_achieved_band_bg|default('#dcfce7') }}; }
+    /* Title/subtitle/column-header live in ONE table's own <thead> (not
+       separate divs above it, and not repeated per plant) specifically so
+       Chromium's print engine reprints the whole thead — title included —
+       at the top of every physical page this table spans, per direct
+       instruction ("continue ... with heading in the middle" when the
+       6-plant table runs past one page). A <thead> repeating on page
+       break is standard paged-table behavior, not something built here. */
+    .rdt-title-row th {
+        font-weight: 700; font-size: 11pt; text-decoration: underline;
+        color: rgb(0,0,255); background: {{ colors.misc_white|default('#ffffff') }};
+        border: none; padding: 2pt 0 4pt;
+    }
+    .rdt-subtitle-row th {
+        font-weight: 600; font-style: italic; font-size: 9pt; text-align: right;
+        color: {{ colors.text_secondary|default('#5f6368') }};
+        background: {{ colors.misc_white|default('#ffffff') }};
+        border: none; padding: 0 2pt 4pt;
+    }
+    .rdt-plant-heading-cell {
+        text-align: left; font-weight: 700; font-size: 9pt;
+        color: {{ colors.text_accent_navy|default('#1e3a8a') }};
+        background: {{ colors.highlight_group_label_bg|default('#f8fafc') }};
+        padding: 3pt 4pt;
+    }
+    .rdt-footnote {
+        text-align: right; font-size: 8pt; font-style: italic;
+        color: {{ colors.text_secondary|default('#5f6368') }}; margin-top: 4pt;
+    }
+</style>
+
+<table class="rdt-table">
+    <colgroup>
+        <col class="rdt-year-col"/>
+        {% for m in page.month_labels %}<col/>{% endfor %}
+        <col class="rdt-year-col"/>
+    </colgroup>
+    <thead>
+        <tr class="rdt-title-row"><th colspan="{{ page.month_labels|length + 2 }}">{{ page.title }}</th></tr>
+        <tr class="rdt-subtitle-row"><th colspan="{{ page.month_labels|length + 2 }}">{{ page.subtitle }}</th></tr>
+        <tr>
+            <th>Year</th>
+            {% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}
+            <th>Apr-Mar</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for plant in page.plants %}
+        <tr><td class="rdt-plant-heading-cell" colspan="{{ page.month_labels|length + 2 }}">{{ plant.plant }}</td></tr>
+        {% for fy_row in plant.fy_rows %}
+        <tr{% if loop.first %} class="rdt-current-fy"{% endif %}>
+            <td>{{ fy_row.fy }}</td>
+            {% for v in fy_row.vals %}<td class="rdt-num">{{ v }}</td>{% endfor %}
+            <td class="rdt-num rdt-annual-col">{{ fy_row.annual }}</td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="rdt-footnote">RAIL MOVEMENT CELL, L &amp; I DEPARTMENT,</div>

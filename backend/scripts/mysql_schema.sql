@@ -687,3 +687,78 @@ INSERT IGNORE INTO mine_materials_master
 
 INSERT IGNORE INTO mine_end_uses_master (end_use_code, end_use_name, sort_order) VALUES
  ('CAPTIVE','Captive Plants',1), ('SALES','Sales to 3rd Party',2), ('PELLET_CONV','Pellet Conversion Agents',3);
+
+-- "Details of Rakes Detention Plant Wise" (RAKE_DETENTION_* sentinel pages)
+-- — SAIL Rail Movement Cell's "Average Plant Detention Report". Pure
+-- extract, no computation (same convention as special_steel_phys_perf):
+-- every figure, including the Total Inward/Outward/Overall Wagon summary
+-- rows, is entered directly. rake_detention_master is the row registry
+-- (plant/section/commodity/wagon type), split out from the actual monthly
+-- figures the same way special_steel_phys_meta is split from _perf — this
+-- is the "add a new wagon type for a plant later" provision: insert a
+-- master row, no code change. See backend/scripts/migrate_add_rake_
+-- detention.sql and backend/page_rake_detention.py.
+CREATE TABLE IF NOT EXISTS rake_detention_master (
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    plant                   VARCHAR(8)  NOT NULL,
+    section                 VARCHAR(8)  NOT NULL,   -- INWARD / OUTWARD / OVERALL
+    commodity               VARCHAR(48),            -- NULL for Outward/Overall/total rows
+    wagon_type              VARCHAR(24),            -- NULL for a section's own total row
+    row_label               VARCHAR(48) NOT NULL,   -- display label: wagon_type, or "Total Inward" etc.
+    is_total                TINYINT(1)  NOT NULL DEFAULT 0,
+    direction               VARCHAR(4),             -- L-E / E-L
+    freetime_hours          DOUBLE,
+    freetime_effective_from CHAR(10),               -- 'YYYY-MM-DD'
+    sort_order              INT         NOT NULL DEFAULT 0,
+    is_active               TINYINT(1)  NOT NULL DEFAULT 1
+) ENGINE=InnoDB;
+
+-- One row per (report_month, master row) — a master row with no entry for
+-- a given month simply renders blank. The "Overall Wagon" master row alone
+-- carries page 4's multi-year trend back to 2021-22.
+CREATE TABLE IF NOT EXISTS rake_detention_monthly (
+    report_month CHAR(7) NOT NULL,
+    master_id    INT     NOT NULL,
+    value_hours  DOUBLE,
+    PRIMARY KEY (report_month, master_id),
+    FOREIGN KEY (master_id) REFERENCES rake_detention_master(id)
+) ENGINE=InnoDB;
+
+-- "Improvement in Average Detention per Wagon in Hrs" — the source
+-- report's own 3-period CPLY comparison table, entered directly per its
+-- "UPTO <report_month>" heading.
+CREATE TABLE IF NOT EXISTS rake_detention_summary (
+    report_month CHAR(7)     NOT NULL,
+    period_row   VARCHAR(24) NOT NULL,
+    plant        VARCHAR(8)  NOT NULL,
+    value        DOUBLE,
+    PRIMARY KEY (report_month, period_row, plant)
+) ENGINE=InnoDB;
+
+-- Page 4's own "APR-MAR" full-FY average column, per plant per FY — a 13th
+-- figure alongside that row's 12 months, entered directly rather than
+-- averaged from them (the source PDF's own figure doesn't always equal a
+-- straight mean of its already-rounded displayed monthly values).
+CREATE TABLE IF NOT EXISTS rake_detention_annual (
+    plant          VARCHAR(8) NOT NULL,
+    financial_year CHAR(7)    NOT NULL,
+    avg_hours      DOUBLE,
+    PRIMARY KEY (plant, financial_year)
+) ENGINE=InnoDB;
+
+-- "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) — static
+-- reference content (process-flow diagram + 2 rich tables per plant), not
+-- month-scoped. capacity_html/product_mix_html are edited HTML, edited
+-- inline in the /report live preview. See backend/scripts/migrate_add_
+-- ready_reckoner.sql and backend/page_ready_reckoner.py.
+CREATE TABLE IF NOT EXISTS ready_reckoner_pages (
+    plant_code              VARCHAR(8)   PRIMARY KEY,
+    plant_name               VARCHAR(64),
+    plant_group              VARCHAR(4)   NOT NULL,
+    process_flow_image_path  VARCHAR(255),
+    capacity_html            LONGTEXT,
+    product_mix_html         LONGTEXT,
+    sort_order               INT          NOT NULL DEFAULT 0,
+    updated_by               VARCHAR(128),
+    updated_at               DATETIME
+) ENGINE=InnoDB;

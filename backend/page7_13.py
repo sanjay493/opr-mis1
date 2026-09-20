@@ -92,8 +92,8 @@ TREND_PAGES = {
         # a single row — the vertical letter-per-line plant label (V/I/S/L,
         # 4 lines) then forces that one row far taller than its neighbours
         # just to fit the name. Abbreviated + smaller font (see
-        # trend_yearly.html/trend_section.html's plant-cell rendering)
-        # keeps a lone VISL row the same height as everyone else's.
+        # trend_section.html's plant-cell rendering) keeps a lone VISL
+        # row the same height as everyone else's.
         "plant_label_overrides": {"VISL": "VI"},
     },
     10: {

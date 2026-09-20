@@ -38,7 +38,7 @@
                         <th colspan="4" class="heading-unit">Unit: {{ item.unit }}</th>
                     </tr>
                     <tr>
-                        <th></th><th class="year-hdr">Year</th>
+                        <th></th><th>Year</th>
                         <th>Apr</th><th>May</th><th>Jun</th><th class="qtr-hdr">Q1</th>
                         <th>Jul</th><th>Aug</th><th>Sep</th><th class="qtr-hdr">Q2</th><th class="hh-hdr">H1</th>
                         <th>Oct</th><th>Nov</th><th>Dec</th><th class="qtr-hdr">Q3</th>
@@ -94,11 +94,20 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {# Skipped after the LAST item only: this legend is identical
+               every time (already shown once per earlier item, so nothing
+               new is lost), and being the final thing in the whole
+               section's flow, it's the one copy at risk of landing alone
+               on an otherwise-blank trailing page whenever the last item's
+               table happens to fill its page exactly (confirmed on a real
+               report, 2026-09-19). Every other occurrence is unaffected. #}
+            {% if not loop.last %}
             <div class="page7-13-legend">
                 <span class="swatch" style="background:{{ colors.highlight_best_ever_bg }};"></span>Best Ever (month / quarter / Half yearly / annual record)
                 &nbsp;&nbsp;
                 <span style="text-decoration:underline;text-decoration-color:{{ colors.highlight_best_month_border_light }};text-decoration-thickness:1.5pt;font-weight:700;margin-right:3px;">123</span>Best for that Calendar Month/Quarter/Half Year (e.g. best April, best Q3)
             </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

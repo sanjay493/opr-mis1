@@ -1,0 +1,47 @@
+<style>
+    .rds-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 10pt; }
+    .rds-table th, .rds-table td {
+        border: 0.5pt solid {{ colors.border_dark|default('#5f6368') }};
+        padding: 5pt 4pt; text-align: center;
+    }
+    .rds-table thead th { background: {{ colors.table_header_bg|default('#e8eef7') }}; font-weight: 700; }
+    /* Wide enough that "Apr'25-Mar'26"-style range labels (the longest
+       period labels this table prints) always fit on one line — per
+       direct instruction, they were wrapping to 2 lines at 12%. */
+    .rds-period-col { width: 21%; white-space: nowrap; }
+    .rds-label-cell { text-align: left; font-weight: 700; color: {{ colors.text_accent_navy|default('#1e3a8a') }}; }
+    .rds-num { text-align: center; font-variant-numeric: tabular-nums; }
+    .rds-pct-row td { font-style: italic; background: {{ colors.highlight_shortfall_band_bg|default('#fed7aa') }}; }
+    .rds-footnote {
+        text-align: right; font-size: 8pt; font-style: italic;
+        color: {{ colors.text_secondary|default('#5f6368') }}; margin-top: 8pt;
+    }
+</style>
+
+<div class="coal-title">{{ page.title }}</div>
+<div style="text-align:right;font-size:9pt;font-style:italic;color:{{ colors.text_secondary|default('#5f6368') }};margin-bottom:6px;">
+    {{ page.subtitle }}
+</div>
+
+<table class="rds-table">
+    <colgroup>
+        <col class="rds-period-col"/>
+        {% for p in page.plants %}<col/>{% endfor %}
+    </colgroup>
+    <thead>
+        <tr>
+            <th>Period</th>
+            {% for p in page.plants %}<th>{{ p }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in page.rows %}
+        <tr{% if row.is_pct %} class="rds-pct-row"{% endif %}>
+            <td class="rds-label-cell">{{ row.label }}</td>
+            {% for v in row.vals %}<td class="rds-num">{{ v }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="rds-footnote">RAIL MOVEMENT CELL, L &amp; I DEPARTMENT,</div>

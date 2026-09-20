@@ -1,0 +1,132 @@
+<style>
+    /* One plant per page (see page_rake_detention.py's DETAIL_PAGES
+       comment) leaves comfortable room for a much larger, more legible
+       size than the old 3-plant/2-plant layout's 6.5pt/1.5px squeeze.
+       Portrait (per direct instruction, 2026-09-20 — was landscape)
+       leaves ~180mm of content width instead of landscape's ~270mm, so
+       the font here is a notch smaller than a landscape layout could
+       afford, but still well above the original 6.5pt; the page's much
+       taller portrait content area more than makes up for it — see the
+       lack of any vertical-squeeze workaround below. */
+    .rdd-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 7.8pt; margin-bottom: 6pt; }
+    .rdd-table th, .rdd-table td {
+        border: 0.5pt solid {{ colors.border_dark|default('#5f6368') }};
+        padding: 2.6px 2.5px; text-align: center; overflow: hidden;
+    }
+    /* Header row and Freetime column get their own fixed colors here
+       rather than the shared colors.table_header_bg token — that token
+       is deliberately "transparent" site-wide, so reusing it would have
+       left this page's header just as blank as before. Freetime is the
+       reference every monthly figure's own heatmap color (see
+       page_rake_detention.py's _heatmap_bg) is graded against, so it
+       gets a visually distinct "this is the yardstick" amber, separate
+       from the green/red the graded figures use. */
+    .rdd-table thead th { background: #ccdcf2; font-weight: 700; }
+    .rdd-freetime-cell { background: #fdf0d5; }
+    .rdd-commodity-col { width: 14%; }
+    .rdd-wagon-col { width: 11%; }
+    .rdd-freetime-col { width: 6%; }
+    .rdd-data-col { width: 5.75%; }
+    /* Over all table: no Commodity column at all (every row's commodity
+       is empty there — nothing to merge into, unlike Inward/Outward), so
+       its Wagon Type column absorbs that freed space (11% -> 15%). No
+       Freetime column either — per direct instruction, this section's
+       own freetime figure isn't a plain sum of the matching Inward +
+       Outward freetimes (e.g. BSP: Inward BOST 8.0 + Outward BOST 16.0 =
+       24.0, but Overall BOST shows 34.0) and showing it alongside the
+       real per-commodity freetimes above invited exactly that (wrong)
+       reading. All the freed space goes to the month columns, which come
+       out noticeably wider than Inward/Outward's. */
+    .rdd-wagon-col-solo { width: 15%; }
+    .rdd-data-col-wide { width: 7.0833%; }
+    .rdd-commodity-cell { text-align: left; font-weight: 600; vertical-align: middle; overflow-wrap: break-word; word-break: break-word; }
+    .rdd-wagon-cell { text-align: left; overflow-wrap: break-word; word-break: break-word; }
+    .rdd-num { text-align: right; font-variant-numeric: tabular-nums; }
+    /* A section's own "Total Inward"/"Total Outward"/"Overall Wagon" row —
+       directly-entered, not computed here (see page_rake_detention.py's
+       module docstring for why). A fixed, more visible color of its own,
+       not the shared colors.highlight_bold_row_bg token (a much paler
+       tint reused across many other pages). */
+    .rdd-total-row td { font-weight: 700; background: #c7d6ec; }
+    .rdd-plant-heading {
+        font-weight: 700; font-size: 13pt; color: {{ colors.text_accent_navy|default('#1e3a8a') }};
+        text-align: center; margin: 2pt 0 6pt;
+    }
+    .rdd-section-heading {
+        font-weight: 700; font-size: 9.5pt; margin: 5pt 0 2pt;
+    }
+    .rdd-direction {
+        display: inline-block; font-size: 8pt; font-weight: 600; color: {{ colors.text_secondary|default('#5f6368') }};
+        margin-left: 8pt;
+    }
+    .rdd-footnote {
+        text-align: right; font-size: 7.5pt; font-style: italic;
+        color: {{ colors.text_secondary|default('#5f6368') }}; margin-top: 3pt;
+    }
+</style>
+
+<div class="coal-title">{{ page.title }}</div>
+<div style="text-align:center;font-size:9pt;font-weight:600;margin-bottom:3px;">{{ page.subtitle }}</div>
+
+{% for plant in page.plants %}
+<div class="rdd-plant-heading">{{ plant.plant }}</div>
+{% for sec in plant.sections %}
+<div class="rdd-section-heading">
+    {{ sec.heading }}
+    {% if sec.direction %}<span class="rdd-direction">({{ sec.direction }})</span>{% endif %}
+</div>
+{% if sec.section == 'OVERALL' %}
+<table class="rdd-table">
+    <colgroup>
+        <col class="rdd-wagon-col-solo"/>
+        {% for m in page.month_labels %}<col class="rdd-data-col-wide"/>{% endfor %}
+    </colgroup>
+    <thead>
+        <tr>
+            <th>Wagon Type</th>
+            {% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in sec.rows %}
+        <tr{% if row.is_total %} class="rdd-total-row"{% endif %}>
+            <td class="rdd-wagon-cell">{{ row.row_label }}</td>
+            {% for v in row.vals %}<td class="rdd-num"{% if v.bg %} style="background:{{ v.bg }};"{% endif %}>{{ v.text }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<table class="rdd-table">
+    <colgroup>
+        <col class="rdd-commodity-col"/><col class="rdd-wagon-col"/><col class="rdd-freetime-col"/>
+        {% for m in page.month_labels %}<col class="rdd-data-col"/>{% endfor %}
+    </colgroup>
+    <thead>
+        <tr>
+            <th>Commodity</th><th>Wagon Type</th><th>Freetime</th>
+            {% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in sec.rows %}
+        <tr{% if row.is_total %} class="rdd-total-row"{% endif %}>
+            {% if row.is_total %}
+            <td class="rdd-commodity-cell" colspan="3">{{ row.row_label }}</td>
+            {% else %}
+            {% if row.commodity_rowspan > 0 %}
+            <td class="rdd-commodity-cell" rowspan="{{ row.commodity_rowspan }}">{{ row.commodity or '' }}</td>
+            {% endif %}
+            <td class="rdd-wagon-cell">{{ row.row_label }}</td>
+            <td class="rdd-num rdd-freetime-cell">{{ row.freetime_hours }}</td>
+            {% endif %}
+            {% for v in row.vals %}<td class="rdd-num"{% if v.bg %} style="background:{{ v.bg }};"{% endif %}>{{ v.text }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+<div class="rdd-footnote">RAIL MOVEMENT CELL, L &amp; I DEPARTMENT,</div>
