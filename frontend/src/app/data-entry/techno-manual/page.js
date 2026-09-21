@@ -79,6 +79,20 @@ function countChanges(current, initial) {
   return n;
 }
 
+// Keys the user explicitly blanked out this session (had a real saved
+// value in `initial`, now null/missing in `current`) — the backend's
+// merge-upsert otherwise treats a null incoming value as "field wasn't
+// touched, keep whatever's in the DB", so clearing an input and saving
+// silently did nothing and the old value kept reappearing on reload (e.g.
+// ISP's Average Lining Life). These get sent as an explicit delete list
+// alongside the normal month_data/till_month_data payload — see
+// api_techno_manual.py's SaveRequest.clear_month_keys/clear_till_keys.
+function clearedKeys(current, initial, period) {
+  const cur = current?.[period] || {};
+  const ini = initial?.[period] || {};
+  return Object.keys(ini).filter(k => ini[k] !== null && ini[k] !== undefined && (cur[k] === null || cur[k] === undefined));
+}
+
 // ── Tiny shared components ────────────────────────────────────────────────────
 function Notice({ type, text, onClose }) {
   if (!text) return null;
@@ -650,6 +664,7 @@ function TechnoManualPageInner() {
     setSaving(true); setNotice(null);
     try {
       const d = unitData[unit] || {};
+      const init = initData[unit] || {};
       const r = await fetch(`${API}/api/techno/manual/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -657,6 +672,8 @@ function TechnoManualPageInner() {
           plant, report_month: reportMonth, unit,
           month_data:      d.month      || {},
           till_month_data: d.till_month || {},
+          clear_month_keys: clearedKeys(d, init, 'month'),
+          clear_till_keys:  clearedKeys(d, init, 'till_month'),
         }),
       });
       const res = await r.json();
@@ -682,11 +699,14 @@ function TechnoManualPageInner() {
     for (const unit of changed) {
       try {
         const d = unitData[unit] || {};
+        const init = initData[unit] || {};
         const r = await fetch(`${API}/api/techno/manual/save`, {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
             plant, report_month: reportMonth, unit,
             month_data: d.month || {}, till_month_data: d.till_month || {},
+            clear_month_keys: clearedKeys(d, init, 'month'),
+            clear_till_keys:  clearedKeys(d, init, 'till_month'),
           }),
         });
         const res = await r.json();

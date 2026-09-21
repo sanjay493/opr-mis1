@@ -2654,9 +2654,20 @@ def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str, co
 _SAIL_BF_UNITS = ("BF_Shop", "BF-5")
 
 
-def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techno_json: Dict, source_file: str = '', conn=None):
+def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techno_json: Dict, source_file: str = '', conn=None, clear_keys: Optional[Dict[str, list]] = None):
     """Merge new_techno_json into any existing row (non-null values win; existing non-null kept if new value is null).
     Use this when multiple source files contribute different parameters to the same plant/unit/month.
+
+    clear_keys: optional {"month": [key, ...], "till_month": [key, ...]} —
+    keys to actually DELETE from the existing stored row before applying
+    new_techno_json, for a caller that needs to distinguish "this key
+    wasn't part of the request" (leave alone, the normal null-keeps-
+    existing rule below) from "this key was explicitly cleared" (remove
+    it). Without this, a manual-entry form clearing a field to blank had
+    no way to ever delete a previously-saved value — the null-keeps-
+    existing rule made the old value silently reappear on next load (see
+    api_techno_manual.py's SaveRequest.clear_month_keys/clear_till_keys,
+    the only caller that passes this today).
 
     `conn`: pass an already-open connection to reuse it for this call (and
     every downstream upsert_techno_data/_raw_upsert_techno_data/
@@ -2690,6 +2701,8 @@ def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techn
         merged: Dict = {}
         for period in ("month", "till_month"):
             base = dict(existing.get(period, {}))
+            for k in (clear_keys or {}).get(period, []):
+                base.pop(k, None)
             for k, v in new_techno_json.get(period, {}).items():
                 if v is not None:
                     base[k] = v        # new non-null overwrites

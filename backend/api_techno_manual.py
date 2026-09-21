@@ -52,6 +52,15 @@ class SaveRequest(BaseModel):
     # techno-manual/page.js's number input, parseFloat-or-null).
     month_data: Dict[str, Optional[Union[float, str]]] = {}
     till_month_data: Dict[str, Optional[Union[float, str]]] = {}
+    # Keys the user explicitly blanked out this session (had a real value
+    # before, cleared to empty in the form) — distinct from a key simply
+    # absent from month_data/till_month_data (never touched, DB value
+    # untouched either way). Without this, merge_upsert_techno_data's
+    # "null incoming value keeps the existing one" rule made a cleared
+    # field's old value silently reappear on next load — see that
+    # function's own docstring and this endpoint's clear_keys usage below.
+    clear_month_keys: list = []
+    clear_till_keys: list = []
 
 
 class SailCalcRequest(BaseModel):
@@ -230,8 +239,10 @@ async def save_entry(body: SaveRequest):
     """
     Upsert techno data for one unit.
     Sends month_data and till_month_data separately.
-    Null values in the payload leave existing DB values unchanged
-    (uses merge_upsert so other params in the same unit are preserved).
+    A null value in month_data/till_month_data leaves the existing DB value
+    unchanged UNLESS that same key is also listed in clear_month_keys/
+    clear_till_keys, in which case it's actually deleted from the stored
+    row (see SaveRequest's own comment).
     """
     _validate_month(body.report_month)
     _db.init_db()
@@ -240,7 +251,7 @@ async def save_entry(body: SaveRequest):
     month_clean     = {k: v for k, v in body.month_data.items()      if v is not None}
     till_clean      = {k: v for k, v in body.till_month_data.items() if v is not None}
 
-    if not month_clean and not till_clean:
+    if not month_clean and not till_clean and not body.clear_month_keys and not body.clear_till_keys:
         raise HTTPException(400, "No values provided — nothing to save.")
 
     techno_json = {
@@ -254,12 +265,15 @@ async def save_entry(body: SaveRequest):
         unit=body.unit,
         new_techno_json=techno_json,
         source_file="manual",
+        clear_keys={"month": body.clear_month_keys, "till_month": body.clear_till_keys},
     )
 
     return {"status": "ok", "plant": body.plant.upper(),
             "report_month": body.report_month, "unit": body.unit,
             "saved_month_params": len(month_clean),
-            "saved_till_params": len(till_clean)}
+            "saved_till_params": len(till_clean),
+            "cleared_month_params": len(body.clear_month_keys),
+            "cleared_till_params": len(body.clear_till_keys)}
 
 
 def _apply_sail_bf(report_month: str, overwrite_manual: bool = False) -> Optional[Dict]:
