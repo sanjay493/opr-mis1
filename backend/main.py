@@ -1255,6 +1255,8 @@ def save_page3_narrative(request: Page3NarrativeRequest):
 
 def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     import datetime as _dt
+    _enrich_t0 = time.perf_counter()
+    _page_times = []  # (page_id, type_after_enrichment, seconds) — see this function's own timing print, below
     enriched = []
     dynamic_page_layouts = {}
     _static_pages_cfg = load_layout_config()["pages"]
@@ -1430,6 +1432,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     # and Pydantic would silently drop it on the way in.
     assign_dept_badges(_pages_list)
     for p in _pages_list:
+        _page_t0 = time.perf_counter()
         pg = p.get("page", 0)
         if pg == 3 or p.get("type") == "summary":
             p["te_table"] = _safe_te_table(request.month)
@@ -1696,10 +1699,17 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
             p.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(request.month)))
             p["type"] = "capital_repair"
             p["orientation"] = "portrait"
+        _page_times.append((pg, p.get("type"), time.perf_counter() - _page_t0))
         enriched.append(p)
     # Layout/typography come from backend layout_config.json, plus the
     # dynamic techno month-table font sizes computed just above; frontend
     # overrides are otherwise ignored.
+    _enrich_total = time.perf_counter() - _enrich_t0
+    print(f"[pdf-timing] page data enrichment: {_enrich_total:.1f}s for {len(_page_times)} pages")
+    for pg, ptype, secs in sorted(_page_times, key=lambda t: -t[2])[:10]:
+        if secs < 0.05:
+            break
+        print(f"[pdf-timing]   {secs:6.2f}s  page {pg} ({ptype})")
     return _subscript_co2(enriched), dynamic_page_layouts
 
 
@@ -1711,8 +1721,11 @@ async def generate_pdf(request: PDFRequest):
     20+ minutes, far past any HTTP client/proxy's reasonable timeout, and a
     synchronous request has no way to hand back a partial result if the
     caller gives up and disconnects first."""
+    _t0 = time.perf_counter()
     enriched, dynamic_page_layouts = _enrich_pdf_pages(request)
-    return await build_pdf_response(request, pages_override=enriched, page_layouts=dynamic_page_layouts or None, font_config=None)
+    response = await build_pdf_response(request, pages_override=enriched, page_layouts=dynamic_page_layouts or None, font_config=None)
+    print(f"[pdf-timing] /api/generate-pdf: TOTAL request time {time.perf_counter() - _t0:.1f}s")
+    return response
 
 
 # Job store for async PDF generation, persisted to disk under
@@ -1800,10 +1813,12 @@ def _purge_old_pdf_jobs():
 
 async def _run_pdf_job(job_id: str, request: PDFRequest, enriched: list, dynamic_page_layouts: dict):
     meta = _read_pdf_job_meta(job_id) or {"created": time.time()}
+    _job_t0 = time.perf_counter()
     try:
         pdf_bytes, filename = await generate_pdf_bytes(
             request, pages_override=enriched, page_layouts=dynamic_page_layouts or None, font_config=None,
         )
+        _render_secs = time.perf_counter() - _job_t0
         pdf_path = _pdf_job_pdf_path(job_id)
         tmp_pdf_path = pdf_path + ".tmp"
         with open(tmp_pdf_path, "wb") as f:
@@ -1811,10 +1826,18 @@ async def _run_pdf_job(job_id: str, request: PDFRequest, enriched: list, dynamic
         os.replace(tmp_pdf_path, pdf_path)
         meta.update({"status": "done", "filename": filename})
         _write_pdf_job_meta(job_id, meta)
+        # Grand total for this job: enrichment (timed/printed separately by
+        # _enrich_pdf_pages, before this task even started) + the render
+        # phase timed here (itself broken down by pdf.py's own
+        # [pdf-timing] prints from inside generate_pdf_bytes). Printed last
+        # so it's the summary line a terminal scrollback search lands on.
+        print(f"[pdf-timing] job {job_id}: DONE — render phase {_render_secs:.1f}s "
+              f"(see per-page/per-phase breakdown above for what dominated it)")
     except Exception as e:
         detail = e.detail if isinstance(e, HTTPException) else str(e)
         meta.update({"status": "error", "error": detail})
         _write_pdf_job_meta(job_id, meta)
+        print(f"[pdf-timing] job {job_id}: FAILED after {time.perf_counter() - _job_t0:.1f}s — {detail[:200]}")
     finally:
         _pdf_job_tasks.pop(job_id, None)
 
@@ -1826,9 +1849,10 @@ async def generate_pdf_start(request: PDFRequest):
     /api/generate-pdf/result/{job_id}. Decouples render time (20+ minutes
     for a full report) from any HTTP request timeout."""
     _purge_old_pdf_jobs()
-    enriched, dynamic_page_layouts = _enrich_pdf_pages(request)
+    enriched, dynamic_page_layouts = _enrich_pdf_pages(request)  # prints its own [pdf-timing] breakdown
     job_id = uuid.uuid4().hex
     _write_pdf_job_meta(job_id, {"status": "pending", "created": time.time()})
+    print(f"[pdf-timing] job {job_id}: queued, {len(enriched)} pages, render starting")
     task = asyncio.create_task(_run_pdf_job(job_id, request, enriched, dynamic_page_layouts))
     _pdf_job_tasks[job_id] = task
     return {"job_id": job_id}
@@ -5923,9 +5947,13 @@ async def api_rake_detention_grid_save(payload: dict):
 
 # ---------------------------------------------------------------------------
 # "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) — the report
-# data + its inline editor (contentEditable in the /report live preview,
-# ReadyReckonerTemplate.js — not a separate /data-entry/* form page). See
-# page_ready_reckoner.py and scripts/migrate_add_ready_reckoner.sql.
+# data. Capacity/product-mix are structured plain data (no HTML/markup —
+# see db.py's own comment above _READY_RECKONER_COLS, 2026-09-21), edited
+# exclusively via the dedicated /data-entry/ready-reckoner form; the
+# /report live preview (ReadyReckonerTemplate.js) only displays them
+# read-only now. The process-flow diagram upload is still preview-only
+# (that page has no plant image to show it against). See page_ready_
+# reckoner.py and scripts/migrate_ready_reckoner_structured.sql.
 #
 # Deliberately NOT month-scoped: reads/writes go straight to
 # ready_reckoner_pages regardless of request.month, unlike every other
@@ -5943,13 +5971,17 @@ def api_ready_reckoner_list():
 
 @app.post("/api/ready-reckoner/{plant_code}")
 def api_ready_reckoner_save(plant_code: str, payload: dict, user: dict = Depends(_auth.require_editor_or_admin)):
-    """payload: {capacity_html?, product_mix_html?} — either or both; a
-    field simply absent from the payload (not just empty) is left
-    untouched (see db.save_ready_reckoner_content)."""
+    """payload: {capacity_rows?, product_mix_headers?, product_mix_rows?,
+    product_mix_caption?} — plain data only (see db.py's own comment above
+    _READY_RECKONER_COLS), any subset; a field simply absent from the
+    payload (not just empty) is left untouched (see db.
+    save_ready_reckoner_content)."""
     db.save_ready_reckoner_content(
         plant_code,
-        capacity_html=payload.get("capacity_html"),
-        product_mix_html=payload.get("product_mix_html"),
+        capacity_rows=payload.get("capacity_rows"),
+        product_mix_headers=payload.get("product_mix_headers"),
+        product_mix_rows=payload.get("product_mix_rows"),
+        product_mix_caption=payload.get("product_mix_caption"),
         updated_by=user.get("email") or "",
     )
     return {"status": "ok"}

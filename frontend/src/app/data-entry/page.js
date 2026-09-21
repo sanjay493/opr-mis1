@@ -80,6 +80,14 @@ function DataEntryPageInner() {
       color: '#b45309',
       bgColor: 'rgba(180, 83, 9, 0.1)'
     },
+    {
+      title: 'Ready Reckoner',
+      description: 'Edit each plant\'s Unit-wise Capacity and Product Mix reference tables shown at the end of the report.',
+      icon: '📋',
+      link: '/data-entry/ready-reckoner',
+      color: '#0f766e',
+      bgColor: 'rgba(15, 118, 110, 0.1)'
+    },
   ];
 
   return (

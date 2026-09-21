@@ -1046,29 +1046,30 @@ def init_db():
     """)
 
     # "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) — static
-    # reference content (process-flow diagram + 2 rich tables per plant)
-    # from Report_format's "Ready Reckoner (Plant wise Details).pdf" /
-    # "Ready Reckoner Special Steel Plant.docx". Deliberately NOT keyed by
+    # reference content (process-flow diagram + 2 tables per plant) from
+    # Report_format's "Ready Reckoner (Plant wise Details).pdf" / "Ready
+    # Reckoner Special Steel Plant.docx". Deliberately NOT keyed by
     # report_month like page_configs — this content is the same regardless
     # of which month's report is open, so it gets its own table and its own
     # save endpoint (see page_ready_reckoner.py) rather than the generic
-    # per-month /api/data flow. capacity_html/product_mix_html are edited
-    # HTML (irregular merged cells/colors per plant, not worth normalizing
-    # into rows given how rarely this content changes), rendered with
-    # Jinja's |safe — same trust level already given to other admin-
-    # entered free text (e.g. rail_prod_despatch_note). The image is a
-    # file on disk (backend/static/ready_reckoner/), not embedded here —
-    # PDF generation base64-encodes it at render time (see page_cover.py's
-    # own background-image handling for why: no live network access at
-    # Playwright render time).
+    # per-month /api/data flow. capacity_rows/product_mix_headers/
+    # product_mix_rows are plain JSON data (no HTML/markup/style) — see this
+    # table's own comment just above _READY_RECKONER_COLS for their exact
+    # shape; presentation is applied entirely at render time instead. The
+    # image is a file on disk (backend/static/ready_reckoner/), not
+    # embedded here — PDF generation base64-encodes it at render time (see
+    # page_cover.py's own background-image handling for why: no live
+    # network access at Playwright render time).
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ready_reckoner_pages (
             plant_code              TEXT PRIMARY KEY,
             plant_name               TEXT,
             plant_group              TEXT NOT NULL,
             process_flow_image_path  TEXT,
-            capacity_html            TEXT,
-            product_mix_html         TEXT,
+            capacity_rows            TEXT,
+            product_mix_headers      TEXT,
+            product_mix_rows         TEXT,
+            product_mix_caption      TEXT,
             sort_order               INTEGER NOT NULL DEFAULT 0,
             updated_by               TEXT,
             updated_at               TEXT
@@ -4296,19 +4297,53 @@ def save_rake_detention_annual(rows: List[Dict[str, Any]]) -> int:
 
 
 # ── "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) ─────────────
-# Backing store for page_ready_reckoner.py + the inline editor in the /report
-# live preview (ReadyReckonerTemplate.js). See scripts/migrate_add_ready_
-# reckoner.sql. Not month-scoped — see this table's own comment in init_db().
+# Backing store for page_ready_reckoner.py + its editor (/data-entry/ready-
+# reckoner). See scripts/migrate_ready_reckoner_structured.sql. Not month-
+# scoped — see this table's own comment in init_db().
+#
+# capacity_rows/product_mix_headers/product_mix_rows store PLAIN DATA only
+# (JSON, no HTML/markup/style of any kind) — per direct instruction,
+# 2026-09-21: the previous design (capacity_html/product_mix_html, raw
+# editor-authored HTML strings rendered with Jinja's |safe) let formatting
+# leak into the stored content itself. All presentation (colors, bold
+# totals, line breaks) is now applied at render time instead — React in the
+# live preview/editor, Jinja+CSS in the PDF template (ready_reckoner_
+# plant.html) — never stored. See scripts/migrate_ready_reckoner_
+# structured.py for the one-time migration that parsed the old HTML into
+# this shape.
+#
+# Shapes (all json.dumps'd into TEXT columns, json.loads'd back out below):
+#   capacity_rows:       [{"item": str, "details": str, "capacity": str, "is_total": bool}, ...]
+#   product_mix_headers: [str, ...]                 -- this plant's own column titles
+#   product_mix_rows:    [{"cells": [str, ...], "is_total": bool}, ...]  -- len(cells) == len(headers)
+# product_mix_caption is plain TEXT (not JSON) — a one-line note some plants
+# carry above their Product Mix table (e.g. BSL's "representative grade
+# families per product — see full spec sheet for exhaustive list"); most
+# plants leave it blank.
+# A cell's "\n" means a line break (rendered as <br> at display time), never
+# literal HTML.
 
 _READY_RECKONER_COLS = (
     "plant_code", "plant_name", "plant_group", "process_flow_image_path",
-    "capacity_html", "product_mix_html", "sort_order", "updated_by", "updated_at",
+    "capacity_rows", "product_mix_headers", "product_mix_rows", "product_mix_caption",
+    "sort_order", "updated_by", "updated_at",
 )
+
+_READY_RECKONER_JSON_COLS = ("capacity_rows", "product_mix_headers", "product_mix_rows")
+
+
+def _decode_ready_reckoner_row(row: tuple) -> dict:
+    d = dict(zip(_READY_RECKONER_COLS, row))
+    for col in _READY_RECKONER_JSON_COLS:
+        d[col] = json.loads(d[col]) if d.get(col) else []
+    d["product_mix_caption"] = d.get("product_mix_caption") or ""
+    return d
 
 
 def get_ready_reckoner_pages() -> List[dict]:
-    """-> every plant's row (dict, _READY_RECKONER_COLS keys), ordered for
-    display (ISPs then SSPs, each group in its own sort_order)."""
+    """-> every plant's row (dict, _READY_RECKONER_COLS keys, JSON columns
+    already decoded to lists), ordered for display (ISPs then SSPs, each
+    group in its own sort_order)."""
     init_db()
     conn = connect()
     cur = conn.cursor()
@@ -4316,7 +4351,7 @@ def get_ready_reckoner_pages() -> List[dict]:
         f"SELECT {','.join(_READY_RECKONER_COLS)} FROM ready_reckoner_pages "
         f"ORDER BY plant_group, sort_order, plant_code"
     )
-    rows = [dict(zip(_READY_RECKONER_COLS, r)) for r in cur.fetchall()]
+    rows = [_decode_ready_reckoner_row(r) for r in cur.fetchall()]
     conn.close()
     return rows
 
@@ -4331,7 +4366,7 @@ def get_ready_reckoner_page(plant_code: str) -> Optional[dict]:
     )
     row = cur.fetchone()
     conn.close()
-    return dict(zip(_READY_RECKONER_COLS, row)) if row else None
+    return _decode_ready_reckoner_row(row) if row else None
 
 
 def upsert_ready_reckoner_master(row: Dict[str, Any]) -> None:
@@ -4354,16 +4389,18 @@ def upsert_ready_reckoner_master(row: Dict[str, Any]) -> None:
 
 
 def save_ready_reckoner_content(
-    plant_code: str, capacity_html: Optional[str] = None,
-    product_mix_html: Optional[str] = None, updated_by: str = "",
+    plant_code: str, capacity_rows: Optional[list] = None,
+    product_mix_headers: Optional[list] = None, product_mix_rows: Optional[list] = None,
+    product_mix_caption: Optional[str] = None, updated_by: str = "",
 ) -> None:
-    """Updates one or both editable rich-HTML blocks for one plant, from
-    the inline editor's Save action. None (not just an empty string) means
-    "leave this field alone" — since Ready Reckoner is now 3 separate
-    pages per plant (process flow / capacity / product mix, 2026-09-20),
-    the capacity page's own Save action only ever has capacity_html to
-    send, and must NOT blank out product_mix_html just because that field
-    wasn't part of this particular page's payload. A plain UPDATE, not an
+    """Updates one or more of the plain-data fields for one plant, from the
+    /data-entry/ready-reckoner form's Save action. None (not just an empty
+    list) means "leave this field alone" — the capacity editor's Save action
+    only ever sends capacity_rows, and must NOT blank out product_mix_*
+    just because those fields weren't part of this particular payload.
+    product_mix_headers and product_mix_rows are always sent together by
+    the editor (changing column count means both change), but are still
+    independently optional here for the same reason. A plain UPDATE, not an
     upsert: the row always already exists by this point (created by the
     one-time backfill via upsert_ready_reckoner_master, which owns
     plant_name/plant_group/sort_order) — MySQL's ON DUPLICATE KEY UPDATE
@@ -4373,12 +4410,18 @@ def save_ready_reckoner_content(
     falling through."""
     import datetime as _dt
     sets, args = [], []
-    if capacity_html is not None:
-        sets.append("capacity_html = ?")
-        args.append(capacity_html)
-    if product_mix_html is not None:
-        sets.append("product_mix_html = ?")
-        args.append(product_mix_html)
+    if capacity_rows is not None:
+        sets.append("capacity_rows = ?")
+        args.append(json.dumps(capacity_rows))
+    if product_mix_headers is not None:
+        sets.append("product_mix_headers = ?")
+        args.append(json.dumps(product_mix_headers))
+    if product_mix_rows is not None:
+        sets.append("product_mix_rows = ?")
+        args.append(json.dumps(product_mix_rows))
+    if product_mix_caption is not None:
+        sets.append("product_mix_caption = ?")
+        args.append(product_mix_caption)
     if not sets:
         return
     sets += ["updated_by = ?", "updated_at = ?"]

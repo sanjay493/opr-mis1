@@ -747,17 +747,21 @@ CREATE TABLE IF NOT EXISTS rake_detention_annual (
 ) ENGINE=InnoDB;
 
 -- "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) — static
--- reference content (process-flow diagram + 2 rich tables per plant), not
--- month-scoped. capacity_html/product_mix_html are edited HTML, edited
--- inline in the /report live preview. See backend/scripts/migrate_add_
--- ready_reckoner.sql and backend/page_ready_reckoner.py.
+-- reference content (process-flow diagram + 2 tables per plant), not
+-- month-scoped. capacity_rows/product_mix_headers/product_mix_rows are
+-- plain JSON (no HTML/markup/style — see backend/db.py's own comment above
+-- _READY_RECKONER_COLS for their exact shape), edited via /data-entry/
+-- ready-reckoner. See backend/scripts/migrate_ready_reckoner_structured.sql
+-- and backend/page_ready_reckoner.py.
 CREATE TABLE IF NOT EXISTS ready_reckoner_pages (
     plant_code              VARCHAR(8)   PRIMARY KEY,
     plant_name               VARCHAR(64),
     plant_group              VARCHAR(4)   NOT NULL,
     process_flow_image_path  VARCHAR(255),
-    capacity_html            LONGTEXT,
-    product_mix_html         LONGTEXT,
+    capacity_rows            LONGTEXT,
+    product_mix_headers      LONGTEXT,
+    product_mix_rows         LONGTEXT,
+    product_mix_caption      VARCHAR(255),
     sort_order               INT          NOT NULL DEFAULT 0,
     updated_by               VARCHAR(128),
     updated_at               DATETIME

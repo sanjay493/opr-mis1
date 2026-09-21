@@ -1,7 +1,9 @@
 import functools
 import io
 import os
+import time as _time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 
 # All PDF generation runs on this single dedicated thread so the persistent
 # Chromium instance in pdf.py's _PW_STATE (thread-affinity-bound, like every
@@ -19,6 +21,59 @@ from report_utils import dept_badge_group
 
 _TMPL_DIR = os.path.join(os.path.dirname(__file__), 'page_templates')
 _jinja_env = Environment(loader=FileSystemLoader(_TMPL_DIR), autoescape=False)
+
+
+def _rr_cell(value):
+    """Jinja filter for ready_reckoner_plant.html: escapes plain-data cell
+    text (this env's autoescape is off globally, see above, so {{ }} alone
+    never escapes) and turns a "\\n" line break — the one thing these cells
+    are allowed to carry, see db.py's own comment above _READY_RECKONER_COLS
+    — into a real <br>. Never trust this on a field that might already
+    contain HTML; it's for plain-data-only content specifically."""
+    import html as _html_mod
+    if value is None:
+        return ""
+    return _html_mod.escape(str(value)).replace("\n", "<br>")
+
+
+_jinja_env.filters['rr_cell'] = _rr_cell
+
+# ── PDF generation timing (backend terminal diagnostics) ───────────────────
+# Module-level, not per-request: safe because _PDF_EXECUTOR above is a
+# single-worker pool, so only one report ever renders at a time (see its own
+# comment) — no risk of two requests' phases interleaving in this list.
+# _generate_pdf_sync resets it at the start of every render and prints a
+# sorted breakdown + grand total from it at the end (see that function and
+# _print_timing_summary below). Added to answer "which page/phase is slow
+# and why" directly from the terminal instead of guessing — see
+# _make_trend_split_hook's own docstring, which already documents its
+# probe-and-correct loop as the dominant cost on a cache miss; this makes
+# that measurable on every real run rather than trusting the docstring.
+_TIMING_LOG = []
+
+
+@contextmanager
+def _time_phase(label: str):
+    """Records (label, elapsed_seconds) into _TIMING_LOG for the current
+    render. Labels aren't required to be unique — a repeated phase (e.g. one
+    trend-split probe pass per loop iteration) just shows up as multiple
+    rows in the summary, which is useful in itself (how many passes ran)."""
+    t0 = _time.perf_counter()
+    try:
+        yield
+    finally:
+        _TIMING_LOG.append((label, _time.perf_counter() - t0))
+
+
+def _print_timing_summary(total_seconds: float):
+    print(f"[pdf-timing] TOTAL render time: {total_seconds:.1f}s")
+    # Rows are a flat log, not a clean partition — a "— TOTAL"/"(TOTAL)" row
+    # (e.g. "main content — TOTAL", "trend-split hook (cache MISS, TOTAL)")
+    # already includes the time of the individual pass/reprobe rows listed
+    # below it, so don't add those together expecting 100%.
+    for label, secs in sorted(_TIMING_LOG, key=lambda t: -t[1]):
+        pct = (secs / total_seconds * 100) if total_seconds else 0
+        print(f"[pdf-timing]   {secs:7.1f}s ({pct:4.1f}%)  {label}")
 
 
 def _split_label(label, threshold: int = 20, tail_scale: float = 0.82) -> str:
@@ -637,7 +692,7 @@ def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report
 
 def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DEFAULT_FONT, report_month: str = "",
                  dept_badges: dict = None, cover_html: str = "", main_header_footer: bool = True,
-                 main_pre_pdf_hook=None, total_pages_override: int = None) -> bytes:
+                 main_pre_pdf_hook=None, total_pages_override: int = None, phase_prefix: str = "render") -> bytes:
     """Render one PDF using an already-launched Chromium `browser`. Callers
     (the page3-overflow measurement pass and the final render, see
     _generate_pdf_sync) all share a single browser instance for the whole
@@ -674,47 +729,51 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
     writer = PdfWriter()
 
     if cover_html:
-        page = browser.new_page()
-        page.set_content(cover_html, wait_until="domcontentloaded")
-        page.evaluate("document.fonts.ready")
-        cover_bytes = page.pdf(
-            format="A4",
-            print_background=True,
-            display_header_footer=False,
-            margin=zero_margin,
-        )
-        page.close()
+        with _time_phase(f"{phase_prefix}: cover page"):
+            page = browser.new_page()
+            page.set_content(cover_html, wait_until="domcontentloaded")
+            page.evaluate("document.fonts.ready")
+            cover_bytes = page.pdf(
+                format="A4",
+                print_background=True,
+                display_header_footer=False,
+                margin=zero_margin,
+            )
+            page.close()
         for p in PdfReader(io.BytesIO(cover_bytes)).pages:
             writer.add_page(p)
 
     if front_html:
-        page = browser.new_page()
-        page.set_content(front_html, wait_until="domcontentloaded")
-        page.evaluate("document.fonts.ready")
-        front_bytes = page.pdf(
-            format="A4",
-            print_background=True,
-            display_header_footer=False,
-            margin=_FRONT_MARGIN,
-        )
-        page.close()
+        with _time_phase(f"{phase_prefix}: front/index page"):
+            page = browser.new_page()
+            page.set_content(front_html, wait_until="domcontentloaded")
+            page.evaluate("document.fonts.ready")
+            front_bytes = page.pdf(
+                format="A4",
+                print_background=True,
+                display_header_footer=False,
+                margin=_FRONT_MARGIN,
+            )
+            page.close()
         for p in PdfReader(io.BytesIO(front_bytes)).pages:
             writer.add_page(p)
 
     if main_html:
         page = browser.new_page()
-        page.set_content(main_html, wait_until="domcontentloaded")
-        # Web fonts load asynchronously; without waiting for them, the
-        # geometry main_pre_pdf_hook measures below could land text with
-        # slightly different fallback/final font metrics than what actually
-        # prints, shifting row heights just enough to move the real page
-        # break away from the one measured.
-        page.evaluate("document.fonts.ready")
+        with _time_phase(f"{phase_prefix}: main content — initial layout"):
+            page.set_content(main_html, wait_until="domcontentloaded")
+            # Web fonts load asynchronously; without waiting for them, the
+            # geometry main_pre_pdf_hook measures below could land text with
+            # slightly different fallback/final font metrics than what actually
+            # prints, shifting row heights just enough to move the real page
+            # break away from the one measured.
+            page.evaluate("document.fonts.ready")
         if main_pre_pdf_hook:
             corrected_html = main_pre_pdf_hook(page)
             if corrected_html:
-                page.set_content(corrected_html, wait_until="domcontentloaded")
-                page.evaluate("document.fonts.ready")
+                with _time_phase(f"{phase_prefix}: main content — corrected re-layout"):
+                    page.set_content(corrected_html, wait_until="domcontentloaded")
+                    page.evaluate("document.fonts.ready")
         # "of N": the Index's declared last page when the caller supplies it
         # (it counts the external annexures the report appends as-is — see
         # _index_declared_total_pages), else Chromium's own page total.
@@ -762,25 +821,27 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
         # that same pages_override probe (or a full real-report render)
         # before trusting this further if content grows enough to actually
         # overflow a page again.
-        main_bytes = page.pdf(
-            format="A4",
-            prefer_css_page_size=True,
-            print_background=True,
-            display_header_footer=main_header_footer,
-            header_template=(
-                f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
-                f'font-family:{hdr_font};font-size:7.5pt;font-weight:500;'
-                f'color:#64748b;text-align:center;border-bottom:0.5px solid #e2e8f0;'
-                f'padding-bottom:3px;">'
-                f'OMI - {report_month}'
-                f'</div>'
-            ) if main_header_footer else '<span></span>',
-            footer_template=_footer_html if main_header_footer else '<span></span>',
-            margin=margin,
-        )
-        page.close()
+        with _time_phase(f"{phase_prefix}: main content — final print"):
+            main_bytes = page.pdf(
+                format="A4",
+                prefer_css_page_size=True,
+                print_background=True,
+                display_header_footer=main_header_footer,
+                header_template=(
+                    f'<div style="width:100%;padding:0 15mm;box-sizing:border-box;'
+                    f'font-family:{hdr_font};font-size:7.5pt;font-weight:500;'
+                    f'color:#64748b;text-align:center;border-bottom:0.5px solid #e2e8f0;'
+                    f'padding-bottom:3px;">'
+                    f'OMI - {report_month}'
+                    f'</div>'
+                ) if main_header_footer else '<span></span>',
+                footer_template=_footer_html if main_header_footer else '<span></span>',
+                margin=margin,
+            )
+            page.close()
         if dept_badges:
-            main_bytes = _apply_dept_badges(main_bytes, dept_badges, browser, font_family)
+            with _time_phase(f"{phase_prefix}: dept badges overlay"):
+                main_bytes = _apply_dept_badges(main_bytes, dept_badges, browser, font_family)
         for p in PdfReader(io.BytesIO(main_bytes)).pages:
             writer.add_page(p)
 
@@ -824,7 +885,8 @@ def _measure_page3_overflow(browser, main_pages: list, template, render_kwargs: 
         measured_pages = main_pages[:idx3 + 2]
 
     html = template.render(pages=measured_pages, **render_kwargs)
-    pdf_bytes = _render_pdf(browser, "", html, font_family, report_month)
+    with _time_phase("page3 overflow check"):
+        pdf_bytes = _render_pdf(browser, "", html, font_family, report_month, phase_prefix="page3-overflow probe")
     reader = PdfReader(_io.BytesIO(pdf_bytes))
 
     p3_physical = next_physical = None
@@ -1187,6 +1249,7 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
     def hook(page):
         from pypdf import PdfReader
 
+        _hook_t0 = _time.perf_counter()
         cache_key = _trend_content_cache_key(trend_pages, template, render_kwargs)
         cached = _TREND_SPLIT_CACHE.get(cache_key)
         if cached is not None:
@@ -1202,7 +1265,9 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
                         saved = cached["rows"].get((pg, ii, k))
                         if saved is not None:
                             row["rowspan_start"], row["plant_row_count"], row["break_before"] = saved
-            return template.render(pages=pages_list, **render_kwargs)
+            result = template.render(pages=pages_list, **render_kwargs)
+            _TIMING_LOG.append(("trend-split hook (cache HIT)", _time.perf_counter() - _hook_t0))
+            return result
 
         # _pick_trend_margins (tightens top/bottom margins when the default
         # ones leave an orphaned split — a plant's row-group stranded alone
@@ -1224,7 +1289,8 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
 
         html = None
         prev_snapshot = _trend_split_snapshot(trend_pages)
-        for _ in range(_MAX_TREND_SPLIT_PASSES):
+        for _pass_num in range(_MAX_TREND_SPLIT_PASSES):
+            _pass_t0 = _time.perf_counter()
             probe_bytes = page.pdf(
                 format="A4", prefer_css_page_size=True, print_background=True,
                 display_header_footer=False, margin=margin,
@@ -1247,11 +1313,15 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
 
             new_snapshot = _trend_split_snapshot(trend_pages)
             if new_snapshot == prev_snapshot:
+                _TIMING_LOG.append((f"trend-split probe-and-correct pass {_pass_num + 1} (converged)",
+                                     _time.perf_counter() - _pass_t0))
                 break
             prev_snapshot = new_snapshot
             html = template.render(pages=pages_list, **render_kwargs)
             page.set_content(html, wait_until="domcontentloaded")
             page.evaluate("document.fonts.ready")
+            _TIMING_LOG.append((f"trend-split probe-and-correct pass {_pass_num + 1}",
+                                 _time.perf_counter() - _pass_t0))
 
         # Relax pass: _enforce_trend_min_segments only ever ADDS a forced
         # break_before, never removes one — even once a later pass's own
@@ -1296,7 +1366,10 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
                 result[id(tp)] = page_of
             return result
 
+        _reprobe_count = [0]
+
         def _reprobe() -> dict:
+            _reprobe_t0 = _time.perf_counter()
             trial_html = template.render(pages=pages_list, **render_kwargs)
             page.set_content(trial_html, wait_until="domcontentloaded")
             page.evaluate("document.fonts.ready")
@@ -1305,6 +1378,9 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
                 display_header_footer=False, margin=margin,
             )
             trial_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(trial_bytes)).pages]
+            _reprobe_count[0] += 1
+            _TIMING_LOG.append((f"trend-split relax-pass reprobe #{_reprobe_count[0]}",
+                                 _time.perf_counter() - _reprobe_t0))
             return _measure_page_of(trial_texts)
 
         forced_rows = [
@@ -1335,6 +1411,7 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
             html = template.render(pages=pages_list, **render_kwargs)
 
         _cache_trend_split_result(cache_key, trend_pages, render_kwargs)
+        _TIMING_LOG.append(("trend-split hook (cache MISS, TOTAL)", _time.perf_counter() - _hook_t0))
         return html
 
     return hook
@@ -1614,6 +1691,9 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     merged_page_layouts (same dict object), so the final template.render()
     below picks up the page-3 adjustment automatically.
     """
+    _TIMING_LOG.clear()
+    _render_t0 = _time.perf_counter()
+
     # Footer "Page N of TOTAL": TOTAL is the Index's declared last page (it
     # counts the external annexures the printed report appends as-is), not
     # the count of pages this PDF renders. Only for a full report (page 2 /
@@ -1697,14 +1777,24 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     # counters are per-call).
     _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend", "special_steel_physical", "epi", "rail_report",
                         "market_prices", "macro_indicators")
-    _landscape_pages = [p for p in main_pages if p.get("type") in _LANDSCAPE_TYPES]
+
+    def _is_landscape_page(p: dict) -> bool:
+        """True for a fixed landscape page type, OR a page that opted into
+        landscape for itself via a "pdf_landscape" flag on its own page
+        dict (e.g. page_ready_reckoner.py's process-flow page, whose
+        orientation follows the uploaded diagram's own shape rather than a
+        page-type-wide rule)."""
+        return p.get("type") in _LANDSCAPE_TYPES or bool(p.get("pdf_landscape"))
+
+    _landscape_pages = [p for p in main_pages if _is_landscape_page(p)]
     if not _landscape_pages:
         main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
         _trend_hook = _make_trend_split_hook(main_pages, template, render_kwargs, _MAIN_MARGIN)
-        pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month,
-                                 dept_badges=dept_badges, cover_html=cover_html,
-                                 main_pre_pdf_hook=_trend_hook,
-                                 total_pages_override=footer_total_override)
+        with _time_phase("main content — TOTAL"):
+            pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month,
+                                     dept_badges=dept_badges, cover_html=cover_html,
+                                     main_pre_pdf_hook=_trend_hook,
+                                     total_pages_override=footer_total_override, phase_prefix="main content")
     else:
         from pypdf import PdfReader, PdfWriter
 
@@ -1714,7 +1804,7 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         _runs = []  # [{"pages": [...], "_end": idx, "next_page": id_or_None}]
         _prev_i = -2
         for _i, _p in enumerate(main_pages):
-            if _p.get("type") not in _LANDSCAPE_TYPES:
+            if not _is_landscape_page(_p):
                 continue
             if _runs and _prev_i == _i - 1:
                 _runs[-1]["pages"].append(_p)
@@ -1725,28 +1815,30 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         for _r in _runs:
             _start = _r["_end"] - len(_r["pages"])
             _r["next_page"] = next((p.get("page") for p in main_pages[_r["_end"]:]
-                                    if p.get("type") not in _LANDSCAPE_TYPES), None)
+                                    if not _is_landscape_page(p)), None)
             # the non-landscape page immediately before this run — used
             # to detect a "marker leak" (next_page's @@PGSTART@@ landing
             # at the bottom of prev_page's own physical page), which would
             # otherwise splice the run one page too early.
             _r["prev_page"] = next((p.get("page") for p in reversed(main_pages[:_start])
-                                    if p.get("type") not in _LANDSCAPE_TYPES), None)
+                                    if not _is_landscape_page(p)), None)
 
-        _rest_pages = [p for p in main_pages if p.get("type") not in _LANDSCAPE_TYPES]
+        _rest_pages = [p for p in main_pages if not _is_landscape_page(p)]
 
         main_html_rest = template.render(pages=_rest_pages, **render_kwargs) if _rest_pages else ""
         _trend_hook = _make_trend_split_hook(_rest_pages, template, render_kwargs, _MAIN_MARGIN)
-        base_bytes = _render_pdf(browser, front_html, main_html_rest, font_family, report_month,
-                                  dept_badges=None, cover_html=cover_html, main_header_footer=False,
-                                  main_pre_pdf_hook=_trend_hook)
+        with _time_phase("main content (portrait pages) — TOTAL"):
+            base_bytes = _render_pdf(browser, front_html, main_html_rest, font_family, report_month,
+                                      dept_badges=None, cover_html=cover_html, main_header_footer=False,
+                                      main_pre_pdf_hook=_trend_hook, phase_prefix="main content (portrait pages)")
 
         base_reader = PdfReader(io.BytesIO(base_bytes))
-        run_readers = [
-            PdfReader(io.BytesIO(_render_landscape_page_pdf(
-                browser, template.render(pages=r["pages"], **render_kwargs), font_family)))
-            for r in _runs
-        ]
+        run_readers = []
+        for _r in _runs:
+            _run_pages_desc = ", ".join(f"{p.get('page')}({p.get('type')})" for p in _r["pages"])
+            with _time_phase(f"landscape run: {_run_pages_desc}"):
+                run_readers.append(PdfReader(io.BytesIO(_render_landscape_page_pdf(
+                    browser, template.render(pages=_r["pages"], **render_kwargs), font_family))))
 
         # Extracted once per page and reused for every marker lookup below
         # (splice positioning AND, if dept_badges is set, its physical-page
@@ -1843,14 +1935,17 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
 
         _total_landscape = sum(len(rr.pages) for rr in run_readers)
         main_count = len(base_reader.pages) + _total_landscape - main_start
-        spliced_bytes = _stamp_main_page_numbers(spliced_bytes, browser, font_family, report_month,
-                                                  main_start, main_count,
-                                                  total_pages=footer_total_override)
+        with _time_phase("re-stamp page numbers (post-splice)"):
+            spliced_bytes = _stamp_main_page_numbers(spliced_bytes, browser, font_family, report_month,
+                                                      main_start, main_count,
+                                                      total_pages=footer_total_override)
         if dept_badges:
-            spliced_bytes = _apply_dept_badges(spliced_bytes, dept_badges, browser, font_family,
-                                                start_of=dept_start_of)
+            with _time_phase("dept badges overlay (post-splice)"):
+                spliced_bytes = _apply_dept_badges(spliced_bytes, dept_badges, browser, font_family,
+                                                    start_of=dept_start_of)
         pdf_bytes = spliced_bytes
 
+    _print_timing_summary(_time.perf_counter() - _render_t0)
     return pdf_bytes
 
 

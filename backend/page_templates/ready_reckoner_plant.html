@@ -9,11 +9,31 @@
         color: {{ colors.text_secondary|default('#5f6368') }};
         margin-bottom: 10px;
     }
+    /* Landscape process-flow pages (BSL/DSP/ISP/RSP + any other plant whose
+       uploaded diagram is auto-detected as wider-than-tall — see page_ready_
+       reckoner.py's pdf_landscape) trim the title/subtitle down so the
+       diagram below gets as much of the page's ~188mm content height as
+       possible to grow into — see .rr-diagram-wrap-landscape img below. */
+    .rr-plant-title.rr-title-landscape { font-size: 12pt; margin-bottom: 1px; }
+    .rr-subtitle.rr-subtitle-landscape { font-size: 9pt; margin-bottom: 4px; }
     /* Diagram now has its own dedicated page (per direct instruction,
        2026-09-20 — was one page shared with both content tables), so it
        can use most of the page instead of competing for space. */
     .rr-diagram-wrap { text-align: center; }
     .rr-diagram-wrap img { max-width: 100%; max-height: 700px; }
+    /* Landscape pages (per direct instruction, 2026-09-20 — "use full
+       width"): tried scaling purely by width (width:100%, no max-height),
+       but these diagrams' own aspect ratio (~1.29-1.32 for BSL/DSP/RSP/ISP)
+       is narrower than an A4-landscape page's (1.41), so filling full width
+       needs ~810px of height against only ~640-660px actually available
+       above pdf.py's _render_landscape_page_pdf margins — genuine edge-to-
+       edge width is only reachable by spilling onto a 2nd physical page or
+       cropping the diagram, both rejected in favor of the largest single-
+       page, undistorted, uncropped size. 630px is empirically the largest
+       max-height that stays on one physical page (tested up to 640px,
+       which already spills to 2) even with the trimmed title/subtitle
+       above; don't raise it without re-verifying page count. */
+    .rr-diagram-wrap.rr-diagram-wrap-landscape img { max-height: 630px; }
     .rr-diagram-missing {
         text-align: center; font-style: italic; padding: 60px 0;
         color: {{ colors.text_secondary|default('#5f6368') }};
@@ -23,21 +43,63 @@
     .rr-content-block table td, .rr-content-block table th {
         border: 0.5pt solid {{ colors.border_dark|default('#5f6368') }}; padding: 3px 5px;
     }
+    .rr-content-block tr.rr-total td { font-weight: 700; }
+    .rr-content-block .rr-caption { font-weight: 700; text-align: left; margin-bottom: 4px; }
+    /* Unit-wise Capacity table only (per direct instruction, 2026-09-20):
+       every plant's capacity table is the same 3-column shape (Item /
+       Details / Capacity — normalized 2026-09-20, RSP/ISP/DSP/BSL
+       previously had a different column count/order), so a single
+       nth-child rule can color column 1 and 2 consistently across all 8
+       plants. Data rows (tbody) only, not the header row — headers keep
+       their existing bold/neutral styling. */
+    .rr-capacity-block table tbody td:nth-child(1) { color: #8b4513; }
+    .rr-capacity-block table tbody td:nth-child(2) { color: #1a56db; }
 </style>
 
-<div class="rr-plant-title">{{ page.plant_name }}</div>
-<div class="rr-subtitle">{{ page.subtype_label }}</div>
+<div class="rr-plant-title{% if page.pdf_landscape %} rr-title-landscape{% endif %}">{{ page.plant_name }}</div>
+<div class="rr-subtitle{% if page.pdf_landscape %} rr-subtitle-landscape{% endif %}">{{ page.subtype_label }}</div>
 
 {% if page.subtype == 'process_flow' %}
     {% if page.image_data_uri %}
-    <div class="rr-diagram-wrap">
+    <div class="rr-diagram-wrap{% if page.pdf_landscape %} rr-diagram-wrap-landscape{% endif %}">
         <img src="{{ page.image_data_uri }}" alt="{{ page.plant_name }} Process Flow">
     </div>
     {% else %}
     <div class="rr-diagram-missing">No process-flow diagram uploaded yet.</div>
     {% endif %}
 {% elif page.subtype == 'capacity' %}
-    <div class="rr-content-block">{{ page.capacity_html|safe }}</div>
+    {# page.capacity_rows: [{item, details, capacity, is_total}, ...] — plain
+       data (db.py's own comment above _READY_RECKONER_COLS), never HTML;
+       |rr_cell (registered in pdf.py) escapes it and turns a "\n" line
+       break into <br>. #}
+    <div class="rr-content-block rr-capacity-block">
+        <table>
+            <thead><tr><th>Facility</th><th>Details</th><th>Capacity</th></tr></thead>
+            <tbody>
+            {% for row in page.capacity_rows %}
+                <tr{% if row.is_total %} class="rr-total"{% endif %}>
+                    <td>{{ row.item|rr_cell }}</td>
+                    <td>{{ row.details|rr_cell }}</td>
+                    <td>{{ row.capacity|rr_cell }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
 {% elif page.subtype == 'product_mix' %}
-    <div class="rr-content-block">{{ page.product_mix_html|safe }}</div>
+    {# page.product_mix_headers/rows: this plant's own column layout (see
+       the schema-design note in db.py) — plain data, same |rr_cell rule. #}
+    <div class="rr-content-block">
+        {% if page.product_mix_caption %}<div class="rr-caption">{{ page.product_mix_caption|rr_cell }}</div>{% endif %}
+        <table>
+            <thead><tr>{% for h in page.product_mix_headers %}<th>{{ h|rr_cell }}</th>{% endfor %}</tr></thead>
+            <tbody>
+            {% for row in page.product_mix_rows %}
+                <tr{% if row.is_total %} class="rr-total"{% endif %}>
+                {% for cell in row.cells %}<td>{{ cell|rr_cell }}</td>{% endfor %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
 {% endif %}

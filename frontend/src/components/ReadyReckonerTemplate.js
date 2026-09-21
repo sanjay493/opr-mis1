@@ -4,24 +4,68 @@ import React, { useRef, useState } from 'react';
 import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
 
 // Mirrors backend/page_templates/ready_reckoner_plant.html. 3 pages per
-// plant (process flow / unit-wise capacity / product mix — split from one
-// combined page per plant, 2026-09-20), distinguished by `data.subtype`.
-// Unlike every other page in this report, this content is static reference
-// material (not month-scoped) — an editor/admin can edit it in place,
-// straight from the live preview, via its own dedicated save endpoints
-// (/api/ready-reckoner/{plant_code} and .../image), bypassing the generic
-// per-report-month onCellChange -> /api/data flow entirely (see
-// backend/page_ready_reckoner.py and db.py's ready_reckoner_pages table).
-// Each page's Save action only ever sends the ONE field it owns — the
-// backend leaves any field absent from the payload untouched, so the
-// capacity page's Save can never blank out product_mix_html and vice
-// versa (see db.save_ready_reckoner_content).
+// plant (process flow / unit-wise capacity / product mix), distinguished
+// by `data.subtype`. Unlike every other page in this report, this content
+// is static reference material (not month-scoped).
 //
-// The content block is an uncontrolled contentEditable div: its innerHTML
-// is set once from `data` via dangerouslySetInnerHTML and read back
-// through a ref at save time, so typing doesn't fight React's render cycle
-// (a controlled contentEditable re-renders on every keystroke and loses
-// the caret position).
+// Capacity/Product Mix are read-only here (per direct instruction,
+// 2026-09-21 — no HTML/formatting entry in table rows/columns): editing
+// happens exclusively in the structured /data-entry/ready-reckoner form,
+// which sends plain data (no markup) to the same backend row this preview
+// reads. Rendering is plain JS/JSX building a real <table> from that data
+// at display time, coloring the Item/Details columns and bolding
+// is_total rows in code — nothing rendered here ever came from
+// dangerouslySetInnerHTML. The process-flow diagram upload is still
+// editable here (it's a file, not a text/table field).
+function CapacityTable({ rows }) {
+  if (!rows || rows.length === 0) {
+    return <div style={{ textAlign: 'center', fontStyle: 'italic', padding: '40px 0', color: '#5f6368' }}>No capacity data yet.</div>;
+  }
+  const th = { border: '0.5pt solid #5f6368', padding: '3px 5px', fontWeight: 700 };
+  const td = { border: '0.5pt solid #5f6368', padding: '3px 5px', whiteSpace: 'pre-line' };
+  return (
+    <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '9pt' }}>
+      <thead>
+        <tr><th style={th}>Facility</th><th style={th}>Details</th><th style={th}>Capacity</th></tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i} style={row.is_total ? { fontWeight: 700 } : undefined}>
+            <td style={{ ...td, color: '#8b4513' }}>{row.item}</td>
+            <td style={{ ...td, color: '#1a56db' }}>{row.details}</td>
+            <td style={td}>{row.capacity}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ProductMixTable({ headers, rows, caption }) {
+  if (!headers || headers.length === 0) {
+    return <div style={{ textAlign: 'center', fontStyle: 'italic', padding: '40px 0', color: '#5f6368' }}>No product mix data yet.</div>;
+  }
+  const th = { border: '0.5pt solid #5f6368', padding: '3px 5px', fontWeight: 700 };
+  const td = { border: '0.5pt solid #5f6368', padding: '3px 5px', whiteSpace: 'pre-line' };
+  return (
+    <>
+      {caption && <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '9pt' }}>{caption}</div>}
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '9pt' }}>
+        <thead>
+          <tr>{headers.map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} style={row.is_total ? { fontWeight: 700 } : undefined}>
+              {row.cells.map((cell, j) => <td key={j} style={td}>{cell}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 export default function ReadyReckonerTemplate({ data }) {
   const { user } = useAuth();
   const isEditor = !!user && (user.role === 'editor' || user.role === 'admin');
@@ -32,37 +76,16 @@ export default function ReadyReckonerTemplate({ data }) {
     subtype,
     subtype_label: subtypeLabel,
     image_data_uri: imageDataUri,
-    capacity_html: capacityHtml,
-    product_mix_html: productMixHtml,
+    capacity_rows: capacityRows,
+    product_mix_headers: productMixHeaders,
+    product_mix_rows: productMixRows,
+    product_mix_caption: productMixCaption,
   } = data || {};
 
-  const contentRef = useRef(null);
   const fileInputRef = useRef(null);
   const [imgSrc, setImgSrc] = useState(imageDataUri || '');
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
-
-  const fieldKey = subtype === 'capacity' ? 'capacity_html' : subtype === 'product_mix' ? 'product_mix_html' : null;
-  const initialHtml = subtype === 'capacity' ? capacityHtml : subtype === 'product_mix' ? productMixHtml : '';
-
-  const handleSaveContent = async () => {
-    if (!fieldKey) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ready-reckoner/${plantCode}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [fieldKey]: contentRef.current ? contentRef.current.innerHTML : initialHtml }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setSavedAt(new Date());
-    } catch (err) {
-      alert('Save failed: ' + err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleImageUpload = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -121,29 +144,25 @@ export default function ReadyReckonerTemplate({ data }) {
         </>
       )}
 
-      {(subtype === 'capacity' || subtype === 'product_mix') && (
+      {subtype === 'capacity' && (
         <>
+          <CapacityTable rows={capacityRows} />
           {isEditor && (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <button type="button" className="btn btn-sm btn-primary" onClick={handleSaveContent} disabled={saving}>
-                {saving ? 'Saving…' : 'Save content'}
-              </button>
-              {savedAt && (
-                <span style={{ fontSize: '8pt', color: '#5f6368' }}>Saved {savedAt.toLocaleTimeString()}</span>
-              )}
+            <div style={{ textAlign: 'center', marginTop: 8, fontSize: '8pt', color: '#5f6368' }}>
+              Read-only here — edit at <a href="/data-entry/ready-reckoner">Data Entry &rarr; Ready Reckoner</a>.
             </div>
           )}
-          <div
-            ref={contentRef}
-            contentEditable={isEditor}
-            suppressContentEditableWarning
-            style={{
-              fontSize: '9pt',
-              outline: isEditor ? '1px dashed #94a3b8' : 'none',
-              padding: isEditor ? 4 : 0,
-            }}
-            dangerouslySetInnerHTML={{ __html: initialHtml || '' }}
-          />
+        </>
+      )}
+
+      {subtype === 'product_mix' && (
+        <>
+          <ProductMixTable headers={productMixHeaders} rows={productMixRows} caption={productMixCaption} />
+          {isEditor && (
+            <div style={{ textAlign: 'center', marginTop: 8, fontSize: '8pt', color: '#5f6368' }}>
+              Read-only here — edit at <a href="/data-entry/ready-reckoner">Data Entry &rarr; Ready Reckoner</a>.
+            </div>
+          )}
         </>
       )}
     </div>

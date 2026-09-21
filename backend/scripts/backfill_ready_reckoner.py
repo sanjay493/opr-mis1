@@ -22,6 +22,19 @@ in-preview "Replace diagram" upload (see ReadyReckonerTemplate.js).
 
 Idempotent: every db call here is an upsert, safe to re-run.
 
+OBSOLETE for capacity/product-mix content as of 2026-09-21: that content
+moved to plain structured data (capacity_rows/product_mix_headers/
+product_mix_rows — see db.py's own comment above _READY_RECKONER_COLS),
+and real edits have since been made to it via the live app, so this
+script's static _CONTENT strings below are stale and run() no longer
+writes them (db.save_ready_reckoner_content's signature changed shape
+entirely — calling it with these old HTML strings would silently write
+garbage into the new columns, not raise). Kept only as the historical
+record of what was originally transcribed from the source PDF/docx, and
+for its still-valid plant-identity/image upserts. See scripts/migrate_
+ready_reckoner_structured.py for the one-time migration that carried the
+real (by-then-edited) content over to the new shape.
+
 Run: python backfill_ready_reckoner.py   (from backend/scripts/, same venv
 as the rest of the backend)
 """
@@ -287,13 +300,14 @@ _CONTENT = {
 
 
 def run():
+    print("NOTE: capacity/product-mix content is no longer seeded by this script "
+          "(obsolete — see this module's own docstring); only plant-identity fields "
+          "and process-flow images are upserted below.")
     for plant_code, (plant_name, plant_group, sort_order, image_filename) in PLANTS.items():
         db.upsert_ready_reckoner_master({
             "plant_code": plant_code, "plant_name": plant_name,
             "plant_group": plant_group, "sort_order": sort_order,
         })
-        capacity_html, product_mix_html = _CONTENT[plant_code]
-        db.save_ready_reckoner_content(plant_code, capacity_html, product_mix_html, "backfill_script")
         if image_filename:
             image_path = os.path.join(_STATIC_DIR, image_filename)
             if os.path.exists(image_path):

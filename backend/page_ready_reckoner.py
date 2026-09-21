@@ -14,13 +14,14 @@ report month is open — so it's read/written straight from
 ready_reckoner_pages (see db.py's own comment), never through the generic
 per-month page_configs flow.
 
-Editing happens inline in the /report live preview (ReadyReckonerTemplate.js
-contentEditable regions, editor/admin only), which POSTs straight to this
-table via /api/ready-reckoner/{plant_code} — see main.py. The two HTML
-blocks are rendered with Jinja's |safe: they're only ever written by an
-authenticated editor/admin (server-side role check in main.py, not just a
-hidden client-side control), the same trust level already given to other
-admin-entered free text elsewhere (e.g. rail_prod_despatch_note).
+Editing happens in the dedicated /data-entry/ready-reckoner form
+(editor/admin only), which POSTs straight to this table via /api/ready-
+reckoner/{plant_code} — see main.py. capacity_rows/product_mix_headers/
+product_mix_rows/product_mix_caption are plain data (no HTML/markup/style —
+see db.py's own comment above _READY_RECKONER_COLS, 2026-09-21); the PDF
+template (ready_reckoner_plant.html) and the live preview (ReadyReckoner
+Template.js) both build the actual <table> markup and apply coloring/bold-
+total styling at render time instead of it being stored.
 
 The process-flow diagram is a file on disk (backend/static/ready_reckoner/)
 so the browser preview can serve it directly over plain HTTP; PDF
@@ -30,6 +31,8 @@ network access at render time, so a /static/... URL that works fine in the
 browser preview won't resolve inside the exported PDF).
 """
 import os
+
+from PIL import Image
 
 from page_cover import _file_data_uri
 import db
@@ -72,6 +75,14 @@ _PLANT_NAMES = {
     "ASP": "Alloy Steels Plant", "SSP": "Salem Steel Plant", "VISL": "Visvesvaraya Iron and Steel Plant",
 }
 
+# These 4 plants' process-flow pages always print in landscape (per direct
+# instruction, 2026-09-20), regardless of the uploaded diagram's own aspect
+# ratio — unlike every other plant, which falls back to the width>height
+# auto-detection in generate_ready_reckoner_page below. Pinned explicitly so
+# the layout doesn't flip back to portrait if an editor later replaces one
+# of these plants' diagrams with a taller image.
+_FORCE_LANDSCAPE_PLANTS = {"BSL", "DSP", "ISP", "RSP"}
+
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static", "ready_reckoner")
 os.makedirs(_STATIC_DIR, exist_ok=True)
 
@@ -95,10 +106,25 @@ def generate_ready_reckoner_page(plant_code: str, subtype: str) -> dict:
     key."""
     row = db.get_ready_reckoner_page(plant_code) or {}
     image_uri = ""
+    image_landscape = False
     image_path = row.get("process_flow_image_path")
     if image_path and os.path.exists(image_path):
         mime = _MIME_BY_EXT.get(os.path.splitext(image_path)[1].lower(), "image/png")
         image_uri = _file_data_uri(image_path, mime)
+        # Pick the PDF page's own physical orientation to match the
+        # diagram's shape, rather than always forcing a wide flowchart
+        # into a portrait page (see pdf.py's _is_landscape_page, which
+        # this "pdf_landscape" flag feeds — the same splice-render
+        # mechanism as bf_large_annexure/epi/etc., just driven by image
+        # shape instead of a fixed page type). Overridden unconditionally
+        # for _FORCE_LANDSCAPE_PLANTS below, regardless of what this
+        # measures.
+        try:
+            with Image.open(image_path) as img:
+                width, height = img.size
+            image_landscape = width > height
+        except Exception:
+            image_landscape = False
 
     plant_name = row.get("plant_name") or _PLANT_NAMES.get(plant_code, plant_code)
     subtype_label = _SUBTYPE_LABELS[subtype]
@@ -111,6 +137,9 @@ def generate_ready_reckoner_page(plant_code: str, subtype: str) -> dict:
         "subtype": subtype,
         "subtype_label": subtype_label,
         "image_data_uri": image_uri,
-        "capacity_html": row.get("capacity_html") or "",
-        "product_mix_html": row.get("product_mix_html") or "",
+        "pdf_landscape": subtype == "process_flow" and (plant_code in _FORCE_LANDSCAPE_PLANTS or image_landscape),
+        "capacity_rows": row.get("capacity_rows") or [],
+        "product_mix_headers": row.get("product_mix_headers") or [],
+        "product_mix_rows": row.get("product_mix_rows") or [],
+        "product_mix_caption": row.get("product_mix_caption") or "",
     }
