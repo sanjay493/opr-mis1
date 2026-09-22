@@ -653,6 +653,56 @@ POWER_DATA_PAGE_ID = 35.7
 # READY_RECKONER_SSP_PAGES are imported above, aliased from page_ready_
 # reckoner's own ISP_PAGES/SSP_PAGES. See page_ready_reckoner.py.
 
+# One entry per _INDEX_SECTIONS row, same order, same length: the `page` id
+# of that row's FIRST page dict in main_pages (pdf.py) — i.e. the id whose
+# own @@PGSTART_{{page.page}}@@ marker (main.html's .pg-badge-marker) marks
+# where that row's content actually begins, however many page dicts or
+# physical pages the row ends up spanning. pdf.py's
+# _correct_dynamic_index_pagination uses this, post-render, to measure every
+# row's TRUE physical-page count from where consecutive rows' anchors land
+# in the printed PDF — the gap between one row's anchor and the next row's
+# is that row's real page count, catching a drift in EITHER direction
+# without needing this list's own placement kept behind
+# _INDEX_SECTIONS (this sits down here, after every constant it references,
+# purely so those constants are already defined at module-exec time).
+# Un-named 1-40 page numbers are plain literals, matching how the rest of
+# this file already refers to them (e.g. "if pg == 13:").
+_INDEX_SECTION_ANCHORS = [
+    min(STEEL_SECTOR_PAGES),           # Indian Steel Sector Performance
+    MARKET_PRICES_PAGE_ID,             # Movement of Key Prices - International
+    MACRO_INDICATORS_PAGE_ID,          # India Macro Economic Indicators
+    AT_A_GLANCE_PAGE_ID,               # SAIL Performance - At a Glance
+    3,                                 # SAIL Performance - 1 Page Summary
+    STEEL_SALES_PAGE_ID,               # Steel Sales Performance
+    BEST_EVER_PAGE_ID,                 # Production Highlights - Best-Ever Records
+    BEST_CAL_MONTH_PAGE_ID,            # Production Highlights - Best Calendar Month
+    KEY_PARAMS_PAGE_ID,                # Inter Plant Performance Comparison
+    BF_LARGE_ANNEXURE_PAGE_ID,         # SAIL Large BFs - Performance Snapshot
+    COST_TREND_HM_PAGE_ID,             # Trend in Cost of Production (HM/CS/SS)
+    4,                                 # Plant Wise Performance of Main Items (w.r.t. ABP)
+    SAIL_MINES_PAGE_ID,                # SAIL Mines Production & Despatch Performance
+    5,                                 # Plant Wise Item Wise Production & CS to HM Ratio
+    min(TREND_PAGES),                  # 10 Years Month Wise Production (Main Item Plant Wise)
+    13,                                # Crude Steel Production Details - Concast & Process Type
+    15,                                # Plant Wise Category Wise Production of Saleable Steel
+    19,                                # Plant Wise Special Steel Production & SAIL Trend
+    RAIL_REPORT_PAGE_ID,               # Rail Production & Dispatch from BSP
+    SS_PHYSICAL_PAGE_ID,               # Special Steel Plants Physical Performance
+    25,                                # Inventory Status (Pig Iron/Semis/Finished Steel)
+    26,                                # IPT
+    27,                                # Plant Wise Major TEPs (Major 12 Parameters)
+    28,                                # Plant Wise Area Wise TEPs
+    EPI_PAGE_ID,                       # Major Environmental Performance Indicators (EPIs) - Plant Wise
+    COAL_RECEIPTS_PAGE_ID,             # Details of Coking Coal Consumption, Blend and Stocks
+    POWER_DATA_PAGE_ID,                # Plant Wise Power Data
+    36,                                # Status of Capital/Major Repairs Planned in ABP - Plant Wise
+    min(RAKE_DETENTION_DETAIL_PAGES),  # Details of Rakes Detention Plant Wise
+    READY_RECKONER_ISP_SEPARATOR_PAGE_ID,  # Annexure-1 : 5 ISPs Ready Reckoner
+    READY_RECKONER_SSP_SEPARATOR_PAGE_ID,  # Annexure-2 : 3 SSPs Ready Reckoner
+]
+assert len(_INDEX_SECTION_ANCHORS) == len(_INDEX_SECTIONS), \
+    "_INDEX_SECTION_ANCHORS must have one entry per _INDEX_SECTIONS row, same order"
+
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
     description="Python API backend to compile and export SAIL MIS reports using WeasyPrint.",

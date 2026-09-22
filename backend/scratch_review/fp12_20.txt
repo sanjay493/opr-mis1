@@ -1,0 +1,33 @@
+--- fp=11 idx=12 ---
+@@PGSTART_3.5@@ | Inter Plant Performance Comparison — Apr-Aug'26 | Parameter UoM BSP DSP RSP BSL ISP | Production of Main Items | Oven Pushings Nos./day 788 312 504 519 274 | Sinter '000 T 3884 1296 2935 2715 
+
+--- fp=12 idx=13 ---
+@@PGSTART_3.6@@ | SAIL Large BFs - Performance Snapshot | Parameter Unit | 25-26 ABP Targets for | 2026-27 Apr-26 May-26 Jun-26 Jul-26 Aug-26 Apr-Aug'26 | BSP | BF-8 | RSP | BF-5 | ISP | BF-5 | BSP | BF-8 | RSP | BF-5 | ISP | BF-5 | B
+
+--- fp=13 idx=14 ---
+@@PGSTART_3.61@@ | Trend in Cost of Production of Hot Metal  (Unit: Rs/T) | TOTAL COST | Plant 20-21 21-22 22-23 23-24 24-25 25-26 Apr-26 May-26 Jun-26 Jul-26 Aug-26 Apr-Aug'26 | BSP 20,790 29,095 38,648 35,5
+
+--- fp=14 idx=15 ---
+@@PGSTART_3.62@@ | Trend in Cost of Production of Crude Steel  (Unit: Rs/T) | TOTAL COST | Plant 20-21 21-22 22-23 23-24 24-25 25-26 Apr-26 May-26 Jun-26 Jul-26 Aug-26 Apr-Aug'26 | BSP 32,907 41,828 52,448 48
+
+--- fp=15 idx=16 ---
+@@PGSTART_3.63@@ | Trend in Cost of Production of Saleable Steel  (Unit: Rs/T) | TOTAL COST | Plant 20-21 21-22 22-23 23-24 24-25 25-26 Apr-26 May-26 Jun-26 Jul-26 Aug-26 Apr-Aug'26 | BSP 40,123 48,746 59,915
+
+--- fp=16 idx=17 ---
+@@PGSTART_4@@ | Plant Wise Performance of Main Items during August'26 and Apr-Aug'26 w.r.t APP | Tentative Unit: '000 T | ITEMS PLANT ANN. | CAP. | APP | 26-27 | AUG'26 AUG'25 | ACT. | %GR. | AUG'25 CU% APR-AUG'26 APR-AU
+
+--- fp=17 idx=18 ---
+@@PGSTART_4.5@@ | SAIL Mines Production & Despatch Performance | April-Aug'26  |  Unit: '000 T (Washery Yield in %) | Iron Ore Mines Performance | Item | PRODUCTION DESPATCH | APP Act. %FF CPLY %Grth APP Act. %FF
+
+--- fp=18 idx=19 ---
+@@PGSTART_5@@ | Plant Wise Item Wise Production & CS to HM Ratio :Aug'26 and Apr-Aug'26 Unit:000 T | 2026-27 | PLAN | AUG'26 AUG'25 | ACT | %GR. | AUG'25 | APR-AUG'26 APR- | AUG'25 | ACT | %GR. | APR- | AUG'25PLAN ACTUAL%FUL P
+
+--- fp=19 idx=20 ---
+@@PGSTART_6@@ | Plant Wise Item Wise Production & CS to HM Ratio :Aug'26 and Apr-Aug'26 Unit:000 T | 2026-27 | PLAN | AUG'26 AUG'25 | ACT | %GR. | AUG'25 | APR-AUG'26 APR- | AUG'25 | ACT | %GR. | APR- | AUG'25PLAN ACTUAL%FUL P
+
+--- fp=20 idx=21 ---
+@@PGSTART_7@@ | 10 Years Month Wise Production : Oven Pushing Unit: Nos./day | Year Apr May Jun Q1 Jul Aug Sep Q2 H1 Oct Nov Dec Q3 Jan Feb Mar Q4 H2 Total | B | S | P | @@TROW_0_0@@P 26-27 786 799 801 795 745 79
+
+--- fp=21 idx=22 ---
+10 Years Month Wise Production : Oven Pushing Unit: Nos./day | Year Apr May Jun Q1 Jul Aug Sep Q2 H1 Oct Nov Dec Q3 Jan Feb Mar Q4 H2 Total | I | S | P | @@TROW_0_48@@P 26-27 275 274 278 276 278 278 278 278 277
+

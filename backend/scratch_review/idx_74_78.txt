@@ -1,0 +1,134 @@
+===== idx 73 =====
+@@PGSTART_1040@@
+Commodity Wise Average Plant Detention at Steel Plants
+During 2026-27
+ISP
+Inward (L-E)
+Commodity Wagon Type Freetime Apr'26 May'26 Jun'26 Jul'26 Aug'26 Sep'26 Oct'26 Nov'26 Dec'26 Jan'27 Feb'27 Mar'27
+Ind. Coking Coal
+BOXN (BCME) 12.0 12.0 13.0 12.0 14.6 11.0
+BOXN (IISD) * 5.0 5.0 5.0 5.0 0.0 5.0
+Imp. Coking Coal
+BOXN (BCME) 12.0 14.0 15.4 15.0 12.5 15.4
+BOXN (IISD) * 5.0 5.2 5.5 5.0 6.2 6.5
+Boiler coal BOXN (BCME) 12.0 0.0 0.0 0.0 0.0 0.0
+Iron Ore
+BOXN (IISD) * 5.0 5.3 5.3 5.4 8.4 9.6
+BOBS/N (IISD) * 2.0 2.0 2.0 2.4 5.4 6.2
+Flux BOXN (IISD) * 5.0 5.2 5.1 5.4 5.4 6.4
+Coke Prod
+
+===== idx 74 =====
+@@PGSTART_1028@@
+Improvement in Average Detention per Wagon in Hrs
+Upto Aug'26
+Period BSP DSP RSP BSL ISP SAIL
+Aug'26 11.41 16.00 31.83 26.09 10.39 18.65
+Aug'25 11.47 21.00 28.68 24.91 12.09 19.08
+Changes CPLY 0.5% 23.8% -11.0% -4.7% 14.1% 2.2%
+Apr'26-Aug'26 8.63 14.18 21.00 19.23 8.95 14.12
+Apr'25-Aug'25 9.29 19.13 23.58 22.44 10.26 16.67
+Changes CPLY 7.1% 25.9% 11.0% 14.3% 12.8% 15.4%
+Apr'25-Mar'26 8.60 18.53 22.99 20.09 11.05 15.80
+Apr'24-Mar'25 7.93 19.85 21.22 17.89 10.45 14.70
+Changes CPLY -8.4% 6.6% -8.4% -12.3% -5.8% -7.5%
+RAIL MOVEMENT CELL, L & I DEPARTMENT,
+OMI - August 2026
+figures
+
+===== idx 75 =====
+@@PGSTART_1029@@
+Average Detention per Wagons in Hours
+Upto Aug'26
+Year Apr May Jun Jul Aug Sep Oct Nov Dec Jan Feb Mar Apr-Mar
+BSP
+2026-27 7.4 7.4 8.1 9.2 11.4 8.6
+2025-26 7.5 7.5 8.4 11.4 11.5 10.3 9.1 8.2 7.3 7.1 7.4 7.5 8.6
+2024-25 7.4 7.5 7.4 8.4 8.3 8.1 8.1 8.1 8.3 8.1 7.4 8.0 7.9
+2023-24 8.3 7.6 8.0 8.1 8.0 9.1 7.4 8.2 7.5 7.3 7.3 7.5 7.8
+2022-23 12.3 12.6 13.4 13.5 14.1 11.0 12.2 10.1 9.1 9.1 8.4 8.2 11.0
+2021-22 13.5 12.6 13.2 13.0 12.5 13.4 12.5 13.3 12.1 11.4 11.3 12.5 12.6
+DSP
+2026-27 14.0 13.0 13.0 16.0 16.0 14.2
+2025-26 16.0 18.0 21.0 20.0 21.0 23.0 24.0 18.0 17.0 16.0 14.0 14.0 
+
+===== idx 76 =====
+@@PGSTART_1041@@
+Annexure-1
+5 ISPs Ready Reckoner
+OMI - August 2026
+figures are provisional MIS Operations OMI - August 2026 for internal circulation only Page 75 of 97
+OPERATIONS DIRECTORATE
+
+===== idx 77 =====
+@@PGSTART_1042@@
+Bhilai Steel Plant
+Process Flow
+OMI - August 2026
+figures are provisional MIS Operations OMI - August 2026 for internal circulation only Page 76 of 97
+OPERATIONS DIRECTORATE
+
+===== idx 78 =====
+@@PGSTART_1043@@
+Bhilai Steel Plant
+Unit-wise Capacity
+Unit-wise Capacity
+Facility Details Capacity
+Coke Ovens
+(11 Nos.)
+8 batteries (#1-8) of 4.3-m height (65 ovens each); 3 batteries (#9-11)
+of 7-m height (67 ovens each); all wet quenching except COB-11 (dry
+quenching / CDCP)
+COB#1-10:
+3.303 MTPA
+COB#11:
+0.880 MTPA
+Total Coke Capacity 4.183 MTPA
+Sinter Plants
+(2 Nos.)
+SP-II: 4 M/cs (M/c1-3: 75 m² & M/c-4: 80 m² hearth area); SP-III: M/c-
+1: 320 m², M/c-2: 360 m²
+3.137 + 3.197
++ 3.707 MTPA
+Total Sinter Capacity 10.04 MTPA
+Blast
+Furnaces (4
+Nos.)
+BF-4,6 (1719/1491 m³ each); BF-7 (2363/2105 m³)
+
+===== idx 89 =====
+@@PGSTART_1051@@
+IISCO Steel Plant
+Unit-wise Capacity & Product Mix
+Unit-wise Capacity
+Facility Details Capacity
+Coke Oven —
+COB#10 78 ovens, 4.4 m height, wet quenching 0.467 (gross
+coke)
+Coke Oven —
+COB#11 2×37 ovens, 7 m height, dry quenching 0.881 (gross
+coke)
+Sinter Plant — M/C-1
+& 2 2×204 m² area each 3.88
+Blast Furnace — BF-5 Useful vol: 4161 m³, working vol: 3551 m³ 2.7
+SMS 3 converters, 3 casters (2×6-strand, 1×4-strand), 2 LF, 1 RHF 2.5
+Mills — WRM Single walking-beam RHF (side charge/discharge), 150 T/hr,
+30 stands 0.55
+Mills — Bar Mill Single walking-beam RHF (side charge/discharge
+
+===== idx 90 =====
+@@PGSTART_1052@@
+Annexure-2
+3 SSPs Ready Reckoner
+OMI - August 2026
+figures are provisional MIS Operations OMI - August 2026 for internal circulation only Page 89 of 97
+OPERATIONS DIRECTORATE
+
+===== idx 91 =====
+@@PGSTART_1053@@
+Alloy Steels Plant
+Process Flow
+OMI - August 2026
+figures are provisional MIS Operations OMI - August 2026 for internal circulation only Page 90 of 97
+OPERATIONS DIRECTORATE
+

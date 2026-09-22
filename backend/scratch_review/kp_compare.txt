@@ -1,0 +1,364 @@
+===== FULL page 12 mediabox WxH pt 594.9599609375 841.9199829101562 mm 209.88865288628472 297.01066063774954
+354 lines
+@@PGSTART_3.5@@
+Inter Plant Performance Comparison — Apr-Aug'26
+Parameter
+UoM
+BSP
+DSP
+RSP
+BSL
+ISP
+Production of Main Items
+Oven Pushings
+Nos./day
+788
+312
+504
+519
+274
+Sinter
+'000 T
+3884
+1296
+2935
+2715
+1571
+Hot Metal
+'000 T
+2627
+942
+1783
+2128
+1129
+Pig Iron
+'000 T
+15.1
+10.8
+42.7
+53.7
+8.6
+Crude Steel
+'000 T
+2511
+845
+1660
+1930
+1058
+Finished Steel
+'000 T
+2027
+455
+1753
+1721
+776
+Saleable Steel
+'000 T
+2304
+794
+1753
+1902
+1008
+Efficiency Parameters
+Imported Coking Coal in Blend
+%
+86.0
+81.5
+86.4
+84.0
+92.9
+Imported Soft Coking Coal in Blend
+%
+23.3
+24.6
+23.6
+24.7
+23.1
+BF Productivity
+t/m³/day
+2.07
+1.84
+2.28
+1.92
+2.32
+BF Coke Rate
+kg/THM
+430
+451
+400
+444
+374
+Nut Coke Rate
+kg/THM
+21
+19
+16
+13
+35
+PCI/CDI Rate
+kg/THM
+116
+69
+142
+91
+134
+BF Fuel Rate
+kg/THM
+566
+539
+559
+548
+543
+Sinter in Burden
+%
+64.8
+68.0
+73.3
+58.5
+69.5
+Pellet in Burden
+%
+15.7
+0.0
+15.1
+12.9
+16.7
+Total Prepared Burden
+%
+80.5
+68.0
+88.4
+71.4
+86.2
+Lump in Burden
+%
+19.5
+32.0
+11.6
+28.6
+13.8
+HBT
+°C
+1067
+961
+1147
+1034
+1167
+O₂ Enrichment
+%
+3.99
+3.37
+5.85
+2.54
+4.58
+Not Dry Casts
+%
+0.04
+0.00
+0.00
+1.89
+0.00
+Coke Ash
+%
+15.13
+15.70
+14.50
+14.68
+13.90
+Sinter Fe
+%
+50.85
+56.56
+53.59
+51.15
+55.80
+BF Slag Rate
+kg/THM
+542
+384
+386
+431
+349
+HM Sent to PCM/Sand P
+===== PARTIAL page 10 mediabox WxH pt 594.9599609375 841.9199829101562 mm 209.88865288628472 297.01066063774954
+354 lines
+@@PGSTART_3.5@@
+Inter Plant Performance Comparison — Apr-Aug'26
+Parameter
+UoM
+BSP
+DSP
+RSP
+BSL
+ISP
+Production of Main Items
+Oven Pushings
+Nos./day
+788
+312
+504
+519
+274
+Sinter
+'000 T
+3884
+1296
+2935
+2715
+1571
+Hot Metal
+'000 T
+2627
+942
+1783
+2128
+1129
+Pig Iron
+'000 T
+15.1
+10.8
+42.7
+53.7
+8.6
+Crude Steel
+'000 T
+2511
+845
+1660
+1930
+1058
+Finished Steel
+'000 T
+2027
+455
+1753
+1721
+776
+Saleable Steel
+'000 T
+2304
+794
+1753
+1902
+1008
+Efficiency Parameters
+Imported Coking Coal in Blend
+%
+86.0
+81.5
+86.4
+84.0
+92.9
+Imported Soft Coking Coal in Blend
+%
+23.3
+24.6
+23.6
+24.7
+23.1
+BF Productivity
+t/m³/day
+2.07
+1.84
+2.28
+1.92
+2.32
+BF Coke Rate
+kg/THM
+430
+451
+400
+444
+374
+Nut Coke Rate
+kg/THM
+21
+19
+16
+13
+35
+PCI/CDI Rate
+kg/THM
+116
+69
+142
+91
+134
+BF Fuel Rate
+kg/THM
+566
+539
+559
+548
+543
+Sinter in Burden
+%
+64.8
+68.0
+73.3
+58.5
+69.5
+Pellet in Burden
+%
+15.7
+0.0
+15.1
+12.9
+16.7
+Total Prepared Burden
+%
+80.5
+68.0
+88.4
+71.4
+86.2
+Lump in Burden
+%
+19.5
+32.0
+11.6
+28.6
+13.8
+HBT
+°C
+1067
+961
+1147
+1034
+1167
+O₂ Enrichment
+%
+3.99
+3.37
+5.85
+2.54
+4.58
+Not Dry Casts
+%
+0.04
+0.00
+0.00
+1.89
+0.00
+Coke Ash
+%
+15.13
+15.70
+14.50
+14.68
+13.90
+Sinter Fe
+%
+50.85
+56.56
+53.59
+51.15
+55.80
+BF Slag Rate
+kg/THM
+542
+384
+386
+431
+349
+HM Sent to PCM/Sand P

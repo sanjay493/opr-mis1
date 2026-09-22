@@ -8,7 +8,7 @@ Per plant, one row per series:
   SSP  : Crude Steel, Saleable Steel, Stainless Steel, Carbon steel
   VISP : Saleable Steel
 
-Columns: Capacity · Best Achieved (Actual + FY) · FY actuals 14-15 →
+Columns: Capacity · Best Achieved (Actual + FY) · FY actuals 16-17 →
 (prev-FY − 1) · prev FY actual (annual) · cur-FY ABP (annual plan) ·
 cur-FY YTD block Apr-<report month> (APP · Actual · %FF · CPLY · %Growth).
 Years are shown yy-yy.
@@ -38,7 +38,7 @@ Stored figures are '000 T; this page displays Tonnes (× 1000).
 import db
 import hardcoded_loader
 
-HISTORY_START_FY_YEAR = 2014  # first history column (14-15), per the PDF
+HISTORY_START_FY_YEAR = 2016  # first history column (16-17); 14-15/15-16 dropped — overflowed the PDF table
 
 _PLANT_ORDER = ["ASP", "SSP", "VISP"]
 _SERIES_LABEL = {

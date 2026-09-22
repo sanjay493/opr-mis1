@@ -994,23 +994,31 @@ _MAX_TREND_SPLIT_PASSES = 5
 _TREND_MIN_TOP_MARGIN_MM = 4
 _TREND_MIN_BOTTOM_MARGIN_MM = 2
 
-# A split group must leave at least this many rows on BOTH sides of any
-# page break — fewer reads as an orphan (a lone plant-label letter or two
-# stranded at the top or bottom of a page). 3 is the smallest acceptable
-# segment (per direct instruction). Two mechanisms use it: _pick_trend_
-# margins treats any smaller segment as a heavy penalty when choosing
-# margins, and _enforce_trend_min_segments then hard-guarantees it by
-# injecting a forced page break (row['break_before']) wherever the probe
-# print still shows a shorter segment.
+# Historically: a split group had to leave at least this many rows on BOTH
+# sides of any page break, or it read as an orphan (a lone plant-label
+# letter or two stranded at the top/bottom of a page) — 3 was the smallest
+# acceptable segment. Superseded 2026-09-22: _enforce_trend_min_segments /
+# _min_segment_violation no longer allow a plant/SAIL group to split across
+# a page boundary AT ALL (even a clean, evenly-sized split still repeated
+# the group's stacked-letter label on a 2nd page, which read as the table
+# abruptly breaking mid-plant — see _enforce_trend_min_segments' own
+# docstring). This constant now only feeds two lesser uses that still
+# reason about "how many rows": _trend_orphan_penalty (a heavier margin-
+# choice penalty in _pick_trend_margins for a natural, uncorrected split
+# that would leave a short segment — still a useful signal even though the
+# real correction pass now defers the whole group regardless of segment
+# size) and _fix_orphaned_small_groups (identifying a COMPLETE small group,
+# not a split one, left alone on its own physical page).
 #
-# A per-group override (7 for "5 Plants", 5 for "SAIL", so the stacked
-# rowspan label always has room) was tried and reverted: those groups are
-# only ~12 rows, so a 7-row minimum means "5 Plants" can essentially never
-# split and gets forced wholesale onto the next page, which pushed the
-# Saleable Steel item — and the whole trend section — onto a 13th physical
-# page (breaking the static Index count in main.py). A short "5 Plants" /
-# "SAIL" segment instead just shrinks its stacked label to 6pt
-# (.plant-cell.tight, see main.html).
+# A per-group override (7 for "5 Plants", 5 for "SAIL") was tried once and
+# reverted for pushing the trend section onto an extra physical page that
+# main.py's then-static _INDEX_SECTIONS count didn't account for — no
+# longer a concern now that _correct_dynamic_index_pagination measures and
+# corrects every section's real page count after every render, trend
+# section included, so an extra page here no longer needs hand-updating
+# anywhere. A short "5 Plants" / "SAIL" segment still shrinks its stacked
+# label to 6pt (.plant-cell.tight, see main.html) on the rare page where a
+# genuinely small group (not itself split) ends up with little room.
 _TREND_MIN_SPLIT_SEGMENT_ROWS = 3
 
 
@@ -1124,7 +1132,7 @@ def _pick_trend_margins(page, template, pages_list: list, render_kwargs: dict, m
     hardcoded _INDEX_SECTIONS count. That's no longer a problem now that
     the Index/footer total are corrected dynamically per-render, from a
     real post-render measurement — see _generate_pdf_sync's call to
-    _correct_dynamic_trend_pagination — rather than assumed from a static
+    _correct_dynamic_index_pagination — rather than assumed from a static
     constant.
 
     The 3rd (page-count) tiebreaker (added 2026-09-22) exists because of a
@@ -1385,7 +1393,7 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
         # Index/footer are corrected dynamically, from a real post-render
         # measurement of this section's true page count, instead of
         # assuming the static count still holds — see
-        # _correct_dynamic_trend_pagination, called from
+        # _correct_dynamic_index_pagination, called from
         # _generate_pdf_sync after the render. main.py's _INDEX_SECTIONS
         # entry for this row is now only ever a *nominal* fallback (used
         # for the live preview, which never runs a real Chromium print, and
@@ -1442,9 +1450,9 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
         #
         # First try clearing EVERY break_before this loop added at once and
         # re-probing (cheap — one extra pass): if that's already fully
-        # self-consistent (no group ends up with a too-short segment on
-        # either side of a break anywhere), it's also the most page-
-        # efficient outcome, so keep it as-is. A large multi-item document
+        # self-consistent (no group ends up split across a page break at
+        # all, anywhere — see _min_segment_violation), it's also the most
+        # page-efficient outcome, so keep it as-is. A large multi-item document
         # can easily have at least one break that really is still needed
         # even after all the unnecessary ones are gone, though — clearing
         # ALL of them at once would then fail this check and (wrongly)
@@ -1510,9 +1518,72 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
                     page_of_by_page = _reprobe()
                     if _min_segment_violation(trend_pages, page_of_by_page):
                         row["break_before"] = True  # this one really is still needed
-                    else:
-                        for tp in trend_pages:
-                            _apply_trend_page_splits(tp, page_of_by_page[id(tp)])
+
+                # Every intermediate trial above applied rowspan bookkeeping
+                # (_apply_trend_page_splits) against ITS OWN page_of -- fine
+                # for whichever trial happens to be tested last, but the loop
+                # walks from the last forced row to the first, so an EARLIER
+                # row restored late in the loop (because clearing it revealed
+                # a violation) reflows everything after it, including groups
+                # a prior "successful" trial already stamped rowspan
+                # bookkeeping for. That stale bookkeeping then doesn't match
+                # where this final, fully-decided break_before configuration
+                # actually paginates -- confirmed against a real report
+                # (2026-09-22, Crude Steel/BSP): the greedy loop's last
+                # restore left BSP's rowspan bookkeeping computed from a
+                # trial where an earlier break was still cleared, so the
+                # final print (with that break correctly restored, shifting
+                # BSP a few rows later) rendered BSP's stale bookkeeping as a
+                # spurious 11+1 split even though no row of it ever carried
+                # break_before -- the "no group may ever split" guarantee
+                # this whole relax pass exists to preserve.
+                #
+                # A second, independent gap: BSP's OWN restored break_before
+                # forces it onto a fresh page, but that group is also the
+                # first in its item, so the fresh page also carries the
+                # item's title/header row -- leaving room for only 11 of its
+                # 12 rows, so it STILL splits even forced. No amount of
+                # additional break_before placement on OTHER rows fixes
+                # that; only _enforce_trend_min_segments' own bounded-orphan
+                # fallback (triggered when a group already carrying
+                # break_before still spans >1 page) can. That fallback needs
+                # its own probe/re-probe loop the same shape as the main
+                # convergence loop above, since moving its split point can
+                # itself shift later content by a row.
+                #
+                # Both gaps are closed the same way: reprobe the loop's true
+                # end state, run the FULL correction pass (not just
+                # _apply_trend_page_splits) against it, and keep reprobing
+                # while that pass still finds something to change -- bounded
+                # by the same _MAX_TREND_SPLIT_PASSES cap the main loop uses,
+                # so a pathological case can't loop forever. If a violation
+                # still remains once that's exhausted (the greedy search
+                # itself failed to reach a safe state and the bounded-orphan
+                # fallback couldn't either), fall back to fully restoring
+                # every originally-forced row rather than ship a
+                # known-inconsistent layout.
+                page_of_by_page = _reprobe()
+                _post_relax_snapshot = _trend_split_snapshot(trend_pages)
+                for _post_pass in range(_MAX_TREND_SPLIT_PASSES):
+                    for tp in trend_pages:
+                        po = page_of_by_page.get(id(tp), {})
+                        if po:
+                            _apply_trend_page_splits(tp, po)
+                            _enforce_trend_min_segments(tp, po)
+                    _new_post_snapshot = _trend_split_snapshot(trend_pages)
+                    if _new_post_snapshot == _post_relax_snapshot:
+                        break
+                    _post_relax_snapshot = _new_post_snapshot
+                    html = template.render(pages=pages_list, **render_kwargs)
+                    page.set_content(html, wait_until="domcontentloaded")
+                    page.evaluate("document.fonts.ready")
+                    page_of_by_page = _reprobe()
+                if _min_segment_violation(trend_pages, page_of_by_page):
+                    for row in forced_rows:
+                        row["break_before"] = True
+                    page_of_by_page = _reprobe()
+                for tp in trend_pages:
+                    _apply_trend_page_splits(tp, page_of_by_page[id(tp)])
 
             html = template.render(pages=pages_list, **render_kwargs)
 
@@ -1572,25 +1643,35 @@ def _apply_trend_page_splits(trend_page: dict, page_of: dict) -> None:
 
 def _enforce_trend_min_segments(trend_page: dict, page_of: dict) -> None:
     """Mutate trend_page's rows in place: set row['break_before'] on the
-    fewest rows needed so that, wherever a plant/SAIL group splits across a
-    physical page break, neither side of the break carries fewer than
-    _TREND_MIN_SPLIT_SEGMENT_ROWS rows.
+    first row of any plant/SAIL group whose rows currently land on more
+    than one physical page, so the WHOLE group moves onto a fresh page
+    together instead of splitting.
+
+    Per direct instruction (2026-09-22): a plant group's stacked-letter
+    rowspan label repeating on a 2nd physical page for a handful of
+    carried-over rows read as the table "abruptly breaking" mid-plant, even
+    when the old rule (each side of the break carrying at least
+    _TREND_MIN_SPLIT_SEGMENT_ROWS rows, no group split across more than 2
+    pages) was satisfied — so no plant/SAIL group may split across a page
+    boundary at all now, full stop, even a clean one. This can leave more
+    blank space at the bottom of a trend page than the old MIN-rows rule
+    did (a page that's 1 row short of fitting the next 12-row group now
+    defers the whole group instead of taking the 1 row and splitting), and
+    can grow the trend section's total physical-page count — both accepted
+    per that same instruction (trend pages are exempt from the general
+    "use maximum page space" goal; other sections are unaffected). The
+    section's real page count is no longer hardcoded anywhere it needs
+    hand-updating either way — see main.py's _INDEX_SECTION_ANCHORS /
+    pdf.py's _correct_dynamic_index_pagination.
 
     page_of is the same probe-print row->page map _apply_trend_page_splits
     reads. This function only ever ADDS a forced break (never clears one)
     and every break it adds pushes rows forward onto a later page, so
-    repeated passes converge: a group with no acceptable interior split just
-    ends up wholly on the later page (any group here is at most ~12 rows, so
-    it always fits once it starts at the top of a fresh page). break_before
-    rides along in _trend_split_snapshot, so _make_trend_split_hook's loop
-    re-probes after a pass that adds one, and its _MAX_TREND_SPLIT_PASSES
-    cap bounds the worst case.
-
-    Handled precisely for the common two-segment split; any 3+ segment
-    group (would need a group taller than a whole page — not possible at
-    these row counts, but guarded anyway) is just shoved wholesale onto the
-    next page and re-probed."""
-    MIN = _TREND_MIN_SPLIT_SEGMENT_ROWS
+    repeated passes converge: a deferred group always fits once it starts
+    at the top of a fresh page (every group here is at most ~12 rows).
+    break_before rides along in _trend_split_snapshot, so
+    _make_trend_split_hook's loop re-probes after a pass that adds one, and
+    its _MAX_TREND_SPLIT_PASSES cap bounds the worst case."""
     for ii, it in enumerate(trend_page.get("items", [])):
         rows = it.get("rows", [])
         n = len(rows)
@@ -1603,48 +1684,73 @@ def _enforce_trend_min_segments(trend_page: dict, page_of: dict) -> None:
             while j < n and rows[j]["plant"] == plant:
                 j += 1
             pages = page_for_row[i:j]
-            if pages and all(p is not None for p in pages):
-                # segment boundaries within [i, j): (start, end-exclusive)
-                segs = []
-                seg_start = i
-                for k in range(i + 1, j):
-                    if pages[k - i] != pages[k - i - 1]:
-                        segs.append((seg_start, k))
-                        seg_start = k
-                segs.append((seg_start, j))
-
-                def _force(target):
-                    target = max(i, min(target, j - 1))
-                    if not rows[target].get("break_before"):
-                        rows[target]["break_before"] = True
-
-                if len(segs) > 2:
-                    _force(i)  # pathological — move the whole group forward
-                elif len(segs) == 2:
-                    (a0, a1), (b0, b1) = segs
-                    if a1 - a0 < MIN:
-                        # too few rows before the break — move the whole
-                        # group onto the next page (the split, if any, then
-                        # lands deeper into the group)
-                        _force(i)
-                    elif b1 - b0 < MIN:
-                        # too few rows in the continuation — pull the break
-                        # earlier so exactly MIN rows carry over
-                        _force(j - MIN)
+            if pages and all(p is not None for p in pages) and len(set(pages)) > 1:
+                if not rows[i].get("break_before"):
+                    rows[i]["break_before"] = True
+                else:
+                    # Already forced onto a fresh page by an earlier pass
+                    # and STILL splits -- this group is genuinely taller
+                    # than one page's available room even starting fresh,
+                    # contrary to this function's own long-standing
+                    # assumption that ~12 rows always fits once deferred.
+                    # Confirmed against a real report (2026-09-22, Crude
+                    # Steel/BSP): BSP is also the first group of a new
+                    # item, so a fresh page for it also carries that item's
+                    # own title/unit/column-header row, leaving only 11 of
+                    # its 12 rows' worth of room -- no break_before
+                    # placement can fix that, since the whole group must
+                    # start there regardless. Falling back to the
+                    # bounded-orphan rule (pre-2026-09-22 behavior, see
+                    # _TREND_MIN_SPLIT_SEGMENT_ROWS) is strictly better than
+                    # leaving whatever 1-2-row orphan the forced fresh start
+                    # happened to produce: pull the split point so at least
+                    # MIN rows land on both sides.
+                    MIN = _TREND_MIN_SPLIT_SEGMENT_ROWS
+                    segs, seg_start = [], i
+                    for k in range(i + 1, j):
+                        if page_for_row[k - i] != page_for_row[k - i - 1]:
+                            segs.append((seg_start, k))
+                            seg_start = k
+                    segs.append((seg_start, j))
+                    if len(segs) == 2:
+                        (a0, a1), (b0, b1) = segs
+                        if b1 - b0 < MIN and (j - MIN) > a0:
+                            target = j - MIN
+                            if not rows[target].get("break_before"):
+                                rows[target]["break_before"] = True
+                        elif a1 - a0 < MIN and (a0 + MIN) < j:
+                            # Orphan on the front side instead (the forced
+                            # break itself landed too close to the group's
+                            # own end) -- push it later so the front segment
+                            # meets MIN too.
+                            target = a0 + MIN
+                            if not rows[target].get("break_before"):
+                                rows[i]["break_before"] = False
+                                rows[target]["break_before"] = True
             i = j
 
 
 def _min_segment_violation(trend_pages: list, page_of_by_page: dict) -> bool:
     """Read-only check: True if any plant/SAIL group, anywhere across
-    trend_pages, currently has a split segment (per that page's own
-    page_of_by_page[id(trend_page)] mapping) shorter than
-    _TREND_MIN_SPLIT_SEGMENT_ROWS on either side of a page break — the same
-    condition _enforce_trend_min_segments fixes by forcing a break, but
-    without mutating anything. Used by _make_trend_split_hook's relax step
-    to verify a trial state (every currently-forced break_before cleared)
-    is actually safe before committing to it, and to fall back cleanly to
-    the already-converged state when it isn't."""
-    MIN = _TREND_MIN_SPLIT_SEGMENT_ROWS
+    trend_pages, currently has its rows landing on more than one physical
+    page at all (per that page's own page_of_by_page[id(trend_page)]
+    mapping) — the same condition _enforce_trend_min_segments fixes by
+    forcing the whole group onto a fresh page, but without mutating
+    anything. Used by _make_trend_split_hook's relax step to verify a trial
+    state (every currently-forced break_before cleared) is actually safe
+    before committing to it, and to fall back cleanly to the already-
+    converged state when it isn't.
+
+    No plant/SAIL group may split across a page boundary at all, per direct
+    instruction (2026-09-22 — see _enforce_trend_min_segments' own
+    docstring): even a clean, evenly-sized split still repeats the group's
+    stacked-letter label on a 2nd physical page, reading as the table
+    abruptly breaking mid-plant. (An earlier version of this check only
+    flagged a split with a too-short segment, or a 3+-way split — confirmed
+    against a real report, 2026-09, Saleable Steel/RSP, where clearing a
+    forced break let RSP's 12-row group naturally fragment 6/3/3 across
+    three pages; every segment was individually fine by that older,
+    narrower rule, but the split itself wasn't.)"""
     for tp in trend_pages:
         page_of = page_of_by_page.get(id(tp), {})
         for ii, it in enumerate(tp.get("items", [])):
@@ -1658,18 +1764,8 @@ def _min_segment_violation(trend_pages: list, page_of_by_page: dict) -> bool:
                 while j < n and rows[j]["plant"] == plant:
                     j += 1
                 pages = page_for_row[i:j]
-                if pages and all(p is not None for p in pages):
-                    seg_start = i
-                    segs = []
-                    for k in range(i + 1, j):
-                        if pages[k - i] != pages[k - i - 1]:
-                            segs.append((seg_start, k))
-                            seg_start = k
-                    segs.append((seg_start, j))
-                    if len(segs) > 1:
-                        for (s0, s1) in segs:
-                            if s1 - s0 < MIN:
-                                return True
+                if pages and all(p is not None for p in pages) and len(set(pages)) > 1:
+                    return True
                 i = j
     return False
 
@@ -1748,18 +1844,65 @@ def _marker_page_index(page_texts: list, page_id) -> int:
     return next((i for i, t in enumerate(page_texts) if marker in t), None)
 
 
-def _correct_dynamic_trend_pagination(pdf_bytes: bytes, browser, front_pages: list, main_pages: list,
+# _INDEX_SECTIONS rows whose OWN nominal page count is never replaced by a
+# real measurement in _correct_dynamic_index_pagination, even though every
+# other row is. Ready Reckoner's per-plant overflow (a plant's combined
+# Unit-wise Capacity + Product Mix page splitting into 2 when it doesn't fit
+# at the configured font — see _split_ready_reckoner_overflow) already tried
+# auto-correcting the Index for this, then had that deliberately reverted on
+# 2026-09-22 in favor of hand-maintaining main.py's _INDEX_SECTIONS counts
+# instead (see _split_ready_reckoner_overflow's own docstring) — the exact
+# reasoning for the revert isn't recorded, so rather than silently re-
+# overriding that recorded decision, this generalization carves these two
+# rows back out. Their STARTING page number is still corrected for free
+# (every row's page_range is computed from the cumulative real counts of
+# every row before it) — only their own span stays hand-maintained.
+_INDEX_ROWS_NOT_AUTO_CORRECTED = {
+    "Annexure-1 : 5 ISPs Ready Reckoner",
+    "Annexure-2 : 3 SSPs Ready Reckoner",
+}
+
+
+def _correct_dynamic_index_pagination(pdf_bytes: bytes, browser, front_pages: list, main_pages: list,
                                        template, render_kwargs: dict, font_family: str, report_month: str,
                                        nominal_total) -> tuple:
-    """Post-render fix-up for _pick_trend_margins (re-enabled 2026-09-22,
-    see its own docstring): now that the trend section's real physical
-    page count can differ from main.py's static _INDEX_SECTIONS entry (a
-    nominal fallback only — see that constant's own comment), this
-    measures the section's TRUE count straight from the just-rendered
-    `pdf_bytes` (the @@PGSTART_N@@ marker technique _measure_page3_
-    overflow uses) and, if it differs, re-renders just the Index (page 2)
-    with corrected page ranges and splices it in, in place of the stale
-    one built with the nominal count.
+    """Post-render fix-up, generalized (2026-09-22) across every
+    main.py._INDEX_SECTIONS row — was _correct_dynamic_trend_pagination,
+    fixing only the trend row, until real reports showed the same drift
+    elsewhere: "SAIL Large BFs - Performance Snapshot" declared 2 physical
+    pages but rendering as 1, and "Plant Wise Area Wise TEPs" declared 10
+    but rendering as 9, each throwing off the Index-declared page number
+    (and the footer's "Page N of TOTAL") for every row after it, including
+    both Ready Reckoner annexures.
+
+    Every row's nominal count in _INDEX_SECTIONS is a hand-maintained
+    number that drifts the moment that row's real content grows or shrinks
+    enough to gain or lose a physical page — the trend row was simply the
+    first place this got a proper per-render fix (_pick_trend_margins,
+    re-enabled 2026-09-22, made its count genuinely data-dependent instead
+    of a rare content change, so it needed this fix first).
+
+    Fixed the same way for every row now: every page dict in `main_pages`
+    still carries its own @@PGSTART_{{page.page}}@@ marker (see main.html's
+    .pg-badge-marker comment). main._INDEX_SECTION_ANCHORS gives, for every
+    _INDEX_SECTIONS row in the same order, the `page` id of that row's FIRST
+    page dict — regardless of how many page dicts or physical pages the row
+    actually ends up spanning. A row's TRUE physical-page count is simply
+    the gap between its own anchor's physical position (from the just-
+    rendered `pdf_bytes`, same @@PGSTART_N@@ marker technique
+    _measure_page3_overflow uses) and the next row's anchor's physical
+    position (or the document's end, for the last row) — this naturally
+    absorbs a page dict overflowing onto an extra physical page anywhere
+    inside the row (e.g. TEPs' own IRON_MAKING_PAGE_2_ID spilling over)
+    without needing to know a row's internal dict structure at all, exactly
+    as it already did for the trend row's own internal item/plant splits.
+
+    _INDEX_ROWS_NOT_AUTO_CORRECTED (Ready Reckoner's two annexure rows)
+    always keep their nominal count rather than a measured one — see that
+    set's own comment. A row whose anchor marker isn't found at all (a
+    genuine partial export missing that section), or whose OWN measured
+    span comes back <= 0 (a marker collision/ordering surprise — don't
+    trust it), falls back to nominal too rather than guess.
 
     Must run on a `pdf_bytes` whose main-content footer band is still
     BLANK (main_header_footer=False on whatever _render_pdf call produced
@@ -1771,58 +1914,49 @@ def _correct_dynamic_trend_pagination(pdf_bytes: bytes, browser, front_pages: li
     branches now defer all footer stamping until after this runs.
 
     Returns (pdf_bytes, total_pages): pdf_bytes is returned unchanged and
-    total_pages == nominal_total in the common case (this month's trend
-    section already matches the nominal count, or there's no trend section
-    /no Index in this render at all — e.g. a partial export)."""
+    total_pages == nominal_total in the common case (every row already
+    matches its nominal count this month, or there's no Index in this
+    render at all — e.g. a partial export)."""
     from pypdf import PdfReader, PdfWriter
-    from main import _INDEX_SECTIONS
+    from main import _INDEX_SECTIONS, _INDEX_SECTION_ANCHORS
 
-    _TREND_TITLE = "10 Years Month Wise Production"
-
-    trend_idx = next((i for i, p in enumerate(main_pages) if p.get("type") == "trend_section"), None)
-    if trend_idx is None:
-        return pdf_bytes, nominal_total
-
-    nominal_trend_count = next((count for title, count in _INDEX_SECTIONS if _TREND_TITLE in title), None)
-    if nominal_trend_count is None:
+    if not main_pages:
         return pdf_bytes, nominal_total
 
     reader = PdfReader(io.BytesIO(pdf_bytes))
     page_texts = [(p.extract_text() or "") for p in reader.pages]
 
-    start_i = _marker_page_index(page_texts, main_pages[trend_idx].get("page"))
-    if start_i is None:
-        return pdf_bytes, nominal_total  # can't determine -- don't guess, leave as-is
-
-    if trend_idx + 1 < len(main_pages):
-        end_i = _marker_page_index(page_texts, main_pages[trend_idx + 1].get("page"))
-        if end_i is None:
-            return pdf_bytes, nominal_total
-        real_trend_count = end_i - start_i
-    else:
-        real_trend_count = len(page_texts) - start_i
-
-    if real_trend_count == nominal_trend_count:
-        return pdf_bytes, nominal_total  # matches the nominal count -- nothing to correct
-
     index_i = _marker_page_index(page_texts, 2)
     if index_i is None:
         return pdf_bytes, nominal_total  # no Index in this render (e.g. a partial export)
 
-    # Rebuild the Index's declared rows exactly as main._index_rows() does,
-    # substituting the real trend count for the nominal one -- every row
-    # AFTER it shifts too, since trend isn't the report's last section
-    # (unlike Ready Reckoner's own Index correction, deliberately NOT
-    # auto-corrected per direct instruction 2026-09-22 — see
-    # _split_ready_reckoner_overflow's docstring).
+    # Physical index of every row's own anchor marker, in row order; None
+    # where that page dict never rendered at all (e.g. a partial export
+    # missing that section entirely).
+    anchor_pos = [_marker_page_index(page_texts, anchor) for anchor in _INDEX_SECTION_ANCHORS]
+
+    n = len(_INDEX_SECTIONS)
     rows = []
     cursor = 1
-    for i, (title, count) in enumerate(_INDEX_SECTIONS, start=1):
-        c = real_trend_count if _TREND_TITLE in title else count
-        page_range = str(cursor) if c == 1 else f"{cursor}-{cursor + c - 1}"
-        rows.append({"sno": str(i), "title": title, "page_range": page_range})
-        cursor += c
+    changed = False
+    for i, (title, nominal_count) in enumerate(_INDEX_SECTIONS):
+        real_count = None
+        start = anchor_pos[i]
+        if title not in _INDEX_ROWS_NOT_AUTO_CORRECTED and start is not None:
+            if i + 1 < n and anchor_pos[i + 1] is not None:
+                real_count = anchor_pos[i + 1] - start
+            elif i + 1 == n:
+                real_count = len(page_texts) - start
+        count = real_count if real_count is not None and real_count > 0 else nominal_count
+        if count != nominal_count:
+            changed = True
+        page_range = str(cursor) if count == 1 else f"{cursor}-{cursor + count - 1}"
+        rows.append({"sno": str(i + 1), "title": title, "page_range": page_range})
+        cursor += count
     new_total = cursor - 1
+
+    if not changed:
+        return pdf_bytes, nominal_total  # every row already matches its nominal count
 
     index_page = next((dict(p) for p in front_pages if p.get("page") == 2), None)
     if index_page is None:
@@ -2032,7 +2166,7 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         # footer straight into this one print call) since 2026-09-22: with
         # _pick_trend_margins re-enabled, the trend section's real page
         # count (and therefore the correct "of TOTAL") isn't known until
-        # AFTER this render — see _correct_dynamic_trend_pagination and the
+        # AFTER this render — see _correct_dynamic_index_pagination and the
         # _stamp_main_page_numbers call below, the same blank-then-stamp
         # pattern the landscape branch already used. Stamping the footer
         # inline here and then overlaying a second, corrected one on top
@@ -2043,8 +2177,8 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                                      dept_badges=dept_badges, cover_html=cover_html,
                                      main_header_footer=False,
                                      main_pre_pdf_hook=_trend_hook, phase_prefix="main content")
-        with _time_phase("dynamic trend pagination check"):
-            pdf_bytes, footer_total_override = _correct_dynamic_trend_pagination(
+        with _time_phase("dynamic index pagination check"):
+            pdf_bytes, footer_total_override = _correct_dynamic_index_pagination(
                 pdf_bytes, browser, front_pages, main_pages, template, render_kwargs,
                 font_family, report_month, footer_total_override)
         _main_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(pdf_bytes)).pages]
@@ -2195,8 +2329,8 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
 
         _total_landscape = sum(len(rr.pages) for rr in run_readers)
         main_count = len(base_reader.pages) + _total_landscape - main_start
-        with _time_phase("dynamic trend pagination check"):
-            spliced_bytes, footer_total_override = _correct_dynamic_trend_pagination(
+        with _time_phase("dynamic index pagination check"):
+            spliced_bytes, footer_total_override = _correct_dynamic_index_pagination(
                 spliced_bytes, browser, front_pages, main_pages, template, render_kwargs,
                 font_family, report_month, footer_total_override)
         with _time_phase("re-stamp page numbers (post-splice)"):
