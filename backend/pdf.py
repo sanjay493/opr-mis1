@@ -1,6 +1,7 @@
 import functools
 import io
 import os
+import re
 import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -366,133 +367,60 @@ _BADGE_COLORS = {
 }
 
 
-def _dept_badge_overlay_html(side: str, group: int, font_family: str) -> str:
-    """A minimal, transparent-background full-page document containing only
-    the corner badge, positioned at true (0,0) — used to stamp the badge
-    directly onto an already-rendered page via pypdf, since Chromium clips
-    anything the *main* document positions outside its printable area (see
-    _apply_dept_badges)."""
+def _dept_badge_html(side: str, group: int, font_family: str) -> str:
+    """The corner department badge, absolutely positioned at its page
+    block's true top corner — part of the one post-render overlay
+    _stamp_main_overlays merges onto each page. Stamped afterward rather
+    than rendered in the main document because Chromium hard-clips anything
+    positioned outside the printable area (the header/footer margin band),
+    so it can't reach the physical corner the way the live preview does."""
     bg, fg = _BADGE_COLORS[group]
     if side == "right":
-        side_css = "right:0; border-radius:999px 0 0 999px; padding-left:12px; padding-right:7px;"
+        side_css = "right:0;border-radius:999px 0 0 999px;padding-left:12px;padding-right:7px;"
     else:
-        side_css = "left:0; border-radius:0 999px 999px 0; padding-left:7px; padding-right:12px;"
+        side_css = "left:0;border-radius:0 999px 999px 0;padding-left:7px;padding-right:12px;"
     return (
-        '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
-        'html,body{margin:0;padding:0;background:transparent;}'
-        '.dept-badge{position:absolute;top:0;' + side_css +
+        '<div style="position:absolute;top:0;' + side_css +
         f"font-family:'{font_family}',Arial,sans-serif;"
         'font-size:6.5pt;font-weight:700;letter-spacing:0.04em;'
         'text-transform:uppercase;white-space:nowrap;line-height:1;'
         'padding-top:4px;padding-bottom:4px;'
-        f'background:{bg};color:{fg};'
-        '}</style></head><body>'
-        '<div class="dept-badge">Operations Directorate</div>'
-        '</body></html>'
+        f'background:{bg};color:{fg};">Operations Directorate</div>'
     )
 
 
-def _apply_dept_badges(main_bytes: bytes, dept_badges: dict, browser, font_family: str,
-                        start_of: dict = None) -> bytes:
-    """Post-render overlay pass: stamps each page's corner badge at the TRUE
-    physical page corner. Chromium's print-to-PDF hard-clips any content the
-    main document positions outside its printable area (Playwright reserves
-    a fixed margin band for header/footer — verified empirically that
-    content pushed past it just disappears), so the badge can't reach the
-    corner the way the live preview does (there, the page container IS the
-    full physical page). Stamping it on afterward, as its own tiny
-    zero-margin PDF merged onto each target page, sidesteps that clip
-    entirely.
+_PGSTART_RE = re.compile(r"@@PGSTART_(\d+(?:\.\d+)?)@@")
 
-    dept_badges: {report_page_number: {"group": int, "side": "left"|"right"}}
-    (see report_utils.assign_dept_badges — the "side" value here is never
-    actually read; every page's side is recomputed below from its own true
-    physical position instead). Physical page positions come from start_of
-    (see below) if given, else are found here via the invisible
-    @@PGSTART_N@@ markers main.html/trend_section.html emit at the start of
-    every page, rather than assumed 1:1 with dept_badges' keys — the trend
-    pages (7-12) can expand into a different number of physical pages than
-    logical entries depending on row count, so a fixed offset would drift
-    out of sync there. The side actually stamped is recomputed from each
-    physical page's own position (matching the footer's "Page X of N"), not
-    copied from the logical entry, so left/right alternation stays correct
-    across a split section's continuation pages too.
 
-    start_of, if given, is a precomputed {report_page: physical_index} for
-    main_bytes — _generate_pdf_sync's landscape-splice branch already knows
-    this arithmetically from how it just assembled main_bytes a moment ago
-    (which source page ended up at which final index), so it passes it
-    straight through instead of paying for a second full-document
-    extract_text() sweep here on top of the one splicing already needed
-    (this used to be close to half of PDF generation's remaining cost after
-    the trend-table hook and page-numbering fixes). Only _render_pdf's
-    single-document caller (no prior splice, so no such mapping to reuse)
-    still triggers the sweep below.
-    """
-    import re
-    from pypdf import PdfReader, PdfWriter
+def _page_markers(page_texts: list) -> dict:
+    """{report page id: physical index of its first page} from every
+    @@PGSTART_N@@ marker in page_texts (see _page_texts). Ids come back as
+    int when whole (3, not 3.0) so they match page dicts' own "page"."""
+    found = {}
+    for k, text in enumerate(page_texts):
+        for m in _PGSTART_RE.finditer(text):
+            rp = float(m.group(1))
+            if rp == int(rp):
+                rp = int(rp)
+            found.setdefault(rp, k)
+    return found
 
-    if not dept_badges:
-        return main_bytes
 
-    reader = PdfReader(io.BytesIO(main_bytes))
-    n = len(reader.pages)
-
-    if start_of is None:
-        marker_re = re.compile(r"@@PGSTART_(\d+(?:\.\d+)?)@@")
-        start_of = {}
-        for k, text in enumerate(_page_texts(main_bytes)):
-            for m in marker_re.finditer(text):
-                rp = float(m.group(1))
-                if rp == int(rp):
-                    rp = int(rp)
-                if rp not in start_of:
-                    start_of[rp] = k
-
-    if not start_of:
-        return main_bytes
-
-    ordered = sorted(start_of.items(), key=lambda kv: kv[1])  # by physical index
-    group_of_physical = {}
+def _badge_group_by_physical(n: int, dept_badges: dict, start_of: dict) -> dict:
+    """{physical page index: badge group} — each report page's badge covers
+    every physical page from its own @@PGSTART@@ marker up to the next
+    report page's, so a page that spills onto extra physical pages (the
+    trend section, a long techno table) badges all of them."""
+    ordered = sorted(start_of.items(), key=lambda kv: kv[1])
+    group_of = {}
     for idx, (report_pg, start_k) in enumerate(ordered):
-        end_k = ordered[idx + 1][1] - 1 if idx + 1 < len(ordered) else n - 1
         badge = dept_badges.get(report_pg)
         if not badge:
             continue
-        for k in range(start_k, end_k + 1):
-            group_of_physical[k] = badge["group"]
-
-    if not group_of_physical:
-        return main_bytes
-
-    overlay_cache = {}
-    writer = PdfWriter()
-    for k in range(n):
-        page = reader.pages[k]
-        group = group_of_physical.get(k)
-        if group is not None:
-            side = "right" if (k + 1) % 2 == 1 else "left"
-            w_pt, h_pt = float(page.mediabox.width), float(page.mediabox.height)
-            cache_key = (side, group, round(w_pt), round(h_pt))
-            overlay_page = overlay_cache.get(cache_key)
-            if overlay_page is None:
-                html = _dept_badge_overlay_html(side, group, font_family)
-                op = browser.new_page()
-                op.set_content(html, wait_until="domcontentloaded")
-                badge_pdf = op.pdf(
-                    width=f"{w_pt * 25.4 / 72}mm", height=f"{h_pt * 25.4 / 72}mm",
-                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
-                    print_background=True,
-                )
-                op.close()
-                overlay_page = PdfReader(io.BytesIO(badge_pdf)).pages[0]
-                overlay_cache[cache_key] = overlay_page
-            page.merge_page(overlay_page)
-        writer.add_page(page)
-
-    out = io.BytesIO()
-    writer.write(out)
-    return out.getvalue()
+        end_k = ordered[idx + 1][1] if idx + 1 < len(ordered) else n
+        for k in range(start_k, end_k):
+            group_of[k] = badge["group"]
+    return group_of
 
 
 def _render_landscape_page_pdf(browser, html: str, font_family: str) -> bytes:
@@ -504,7 +432,7 @@ def _render_landscape_page_pdf(browser, html: str, font_family: str) -> bytes:
     rule (see _render_pdf's docstring re: margin), so genuine landscape
     needs its own separate call, spliced into the final document by
     _generate_pdf_sync. No Chromium-native header/footer here
-    (display_header_footer=False) — _stamp_main_page_numbers draws a
+    (display_header_footer=False) — _stamp_main_overlays draws a
     matching one afterward for every main-content page uniformly, since
     Chromium's own pageNumber/totalPages counters reset to 1/1 for this
     call and can't be offset to match its true position once spliced into
@@ -523,52 +451,17 @@ def _render_landscape_page_pdf(browser, html: str, font_family: str) -> bytes:
     return pdf_bytes
 
 
-def _main_header_footer_overlay_html(font_family: str, report_month: str, page_num: int, total_pages: int,
-                                      margin_side: str = "15mm") -> str:
-    """A minimal, transparent-background full-page document containing a
-    header bar (top) and footer bar (bottom) — visually identical to
-    _render_pdf's own header_template/footer_template, but with `page_num`/
-    `total_pages` baked in as plain Python values instead of Chromium's
-    auto-computed pageNumber/totalPages classes. Used by
-    _stamp_main_page_numbers to give every main-content page a CORRECT
-    "Page N of TOTAL" once a genuinely-landscape page (see
-    _render_landscape_page_pdf) has been spliced into the middle of the
-    sequence: Chromium's own counters are per-page.pdf()-call and can't be
-    offset, so once the sequence is assembled from more than one call, only
-    a post-render, Python-computed stamp can get every page's number right."""
-    hdr_font = f"'{font_family}',Arial,sans-serif"
-    return (
-        '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
-        'html,body{margin:0;padding:0;background:transparent;}'
-        '</style></head><body>'
-        f'<div style="position:fixed;top:0;left:0;right:0;padding:3mm {margin_side} 0;'
-        f'box-sizing:border-box;font-family:{hdr_font};font-size:7.5pt;font-weight:500;'
-        f'color:#64748b;text-align:center;border-bottom:0.5px solid #e2e8f0;'
-        f'padding-bottom:3px;">OMI - {report_month}</div>'
-        f'<div style="position:fixed;bottom:0;left:0;right:0;padding:0 {margin_side} 2.5mm;'
-        f'box-sizing:border-box;font-family:{hdr_font};font-size:7.5pt;color:#64748b;'
-        f'display:flex;justify-content:space-between;'
-        f'border-top:0.5px solid #e2e8f0;padding-top:3px;">'
-        f'<span>figures are provisional</span>'
-        f'<span>MIS Operations</span>'
-        f'<span>OMI - {report_month}</span>'
-        f'<span>for internal circulation only</span>'
-        f'<span>Page {page_num} of {total_pages}</span>'
-        f'</div></body></html>'
-    )
-
-
 def _main_header_footer_overlay_block_html(font_family: str, report_month: str, page_num: int, total_pages: int,
-                                            margin_side: str, w_mm: float, h_mm: float) -> str:
-    """One page's worth of _main_header_footer_overlay_html's header/footer
-    bars, as a single page-sized block (position:absolute within its own
-    explicitly-sized wrapper, not position:fixed on body) meant to be
-    concatenated with other pages' blocks — see _stamp_main_page_numbers,
-    which batches every target page's stamp into one multi-page document
-    (one page.pdf() call per distinct physical page size) instead of one
-    page.pdf() call per page. Visually identical to the single-page version:
-    each block's own box IS that page's full physical rectangle, so top:0/
-    bottom:0/left:0/right:0 land in exactly the same place either way."""
+                                            margin_side: str, w_mm: float, h_mm: float, badge_html: str = "") -> str:
+    """One physical page's post-render overlay: header bar, footer bar with
+    a Python-computed "Page N of TOTAL", and (if given) its corner
+    department badge — as a page-sized block (position:absolute within its
+    own explicitly-sized wrapper) meant to be concatenated with other
+    pages' blocks, so _stamp_main_overlays prints every page's overlay in
+    one page.pdf() call per distinct page size. The block's own box IS the
+    page's full physical rectangle, so top:0/bottom:0/left:0/right:0 land
+    exactly on the physical page edges. Visually identical to _render_pdf's
+    own header_template/footer_template."""
     hdr_font = f"'{font_family}',Arial,sans-serif"
     return (
         f'<div class="stamp-page" style="position:relative;width:{w_mm}mm;height:{h_mm}mm;'
@@ -586,7 +479,7 @@ def _main_header_footer_overlay_block_html(font_family: str, report_month: str, 
         f'<span>OMI - {report_month}</span>'
         f'<span>for internal circulation only</span>'
         f'<span>Page {page_num} of {total_pages}</span>'
-        f'</div></div>'
+        f'</div>{badge_html}</div>'
     )
 
 
@@ -595,7 +488,7 @@ def _wrap_stamp_batch_html(blocks: list) -> str:
     document, each forced onto its own printed page via page-break-after
     (the same CSS-paginated-blocks technique main.html already uses for the
     whole report's many logical pages in one page.pdf() call) — see
-    _stamp_main_page_numbers."""
+    _stamp_main_overlays."""
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
         'html,body{margin:0;padding:0;background:transparent;}'
@@ -625,39 +518,44 @@ def _index_declared_total_pages():
         return None
 
 
-def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report_month: str,
-                              main_start: int, main_count: int,
-                              total_pages: int = None) -> bytes:
-    """Post-render overlay pass (same merge_page technique as
-    _apply_dept_badges): draws a correct, Python-computed header+footer
-    (see _main_header_footer_overlay_html) onto every page in the
-    [main_start, main_start+main_count) physical range — the pages that
-    used to get Chromium's own auto pageNumber/totalPages footer from
-    _render_pdf's single main_html call, before a spliced-in landscape page
-    (_render_landscape_page_pdf) made a single call's auto-numbering
-    impossible to keep correct across the whole range. Cover/Index pages
-    outside this range are untouched (they carry no footer either way).
+def _stamp_main_overlays(pdf_bytes: bytes, browser, font_family: str, report_month: str,
+                         main_start: int, main_count: int, total_pages: int = None,
+                         dept_badges: dict = None, start_of: dict = None) -> bytes:
+    """The single post-render overlay pass over the assembled document:
+    onto every page in the [main_start, main_start+main_count) physical
+    range it merges ONE overlay page carrying the header, the footer's
+    "Page N of TOTAL", and — for pages dept_badges covers — the corner
+    department badge. Cover/Index pages outside that range are untouched.
+
+    Why post-render at all: the main content is assembled from several
+    page.pdf() calls (portrait pages + spliced-in landscape runs, see
+    _render_landscape_page_pdf), and Chromium's own pageNumber/totalPages
+    counters are per call, so only a Python-computed stamp numbers every
+    page correctly; and the badge must sit at the true physical corner,
+    which Chromium clips from in-document content (see _dept_badge_html).
+
+    The header/footer and badge used to be two separate passes, each
+    reading, merging onto and re-writing the whole ~100-page document; one
+    combined overlay per page does that work once. Overlays are batched
+    into as few page.pdf() calls as there are distinct physical page sizes
+    (1, or 2 with landscape pages).
 
     `total_pages` is the "of N" shown in the footer — the Index's declared
     last page (see _index_declared_total_pages), which counts the external
-    annexures too. Falls back to `main_count` (the pages actually rendered)
-    when not supplied. Per-page numbering still runs 1..main_count.
+    annexures too; falls back to `main_count`. Per-page numbering runs
+    1..main_count.
 
-    Every target page's "Page N of TOTAL" text is unique, so a per-page
-    overlay cache (keyed on that text) never hits — this used to mean one
-    browser.new_page()/set_content()/pdf() round-trip PER PAGE (~50-90 for
-    a full report), the single largest cost after the trend-table hook.
-    Batches all of them into as few page.pdf() calls as there are distinct
-    physical page sizes in this range (in practice 1, or 2 if a landscape
-    run got spliced in) — same page-break-CSS-blocks technique main.html
-    already uses to print its own many logical pages in one call — instead
-    of one call per page."""
+    `start_of` ({report page id: physical index}, see _page_markers) is
+    required whenever dept_badges is given. Badge side alternates with the
+    footer's page number (odd = right), so it stays correct across a
+    section's continuation pages."""
     from pypdf import PdfReader, PdfWriter
 
     footer_total = total_pages or main_count
 
     reader = PdfReader(io.BytesIO(pdf_bytes))
     n = len(reader.pages)
+    group_of = _badge_group_by_physical(n, dept_badges, start_of) if dept_badges and start_of else {}
 
     # (rounded width, rounded height) -> [(physical index, page_num), ...],
     # preserving the true (unrounded) w_pt/h_pt seen for that dimension so
@@ -676,11 +574,13 @@ def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report
         w_pt, h_pt = dims[dim_key]
         margin_side = "15mm" if round(w_pt) < round(h_pt) else "10mm"
         w_mm, h_mm = w_pt * 25.4 / 72, h_pt * 25.4 / 72
-        blocks = [
-            _main_header_footer_overlay_block_html(font_family, report_month, page_num, footer_total,
-                                                    margin_side, w_mm, h_mm)
-            for _k, page_num in entries
-        ]
+        blocks = []
+        for k, page_num in entries:
+            group = group_of.get(k)
+            badge_html = (_dept_badge_html("right" if page_num % 2 == 1 else "left", group, font_family)
+                          if group is not None else "")
+            blocks.append(_main_header_footer_overlay_block_html(
+                font_family, report_month, page_num, footer_total, margin_side, w_mm, h_mm, badge_html))
         op = browser.new_page()
         op.set_content(_wrap_stamp_batch_html(blocks), wait_until="domcontentloaded")
         batch_pdf = op.pdf(
@@ -707,7 +607,7 @@ def _stamp_main_page_numbers(pdf_bytes: bytes, browser, font_family: str, report
 
 
 def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DEFAULT_FONT, report_month: str = "",
-                 dept_badges: dict = None, cover_html: str = "", main_header_footer: bool = True,
+                 cover_html: str = "", main_header_footer: bool = True,
                  total_pages_override: int = None, phase_prefix: str = "render") -> bytes:
     """Render one PDF using an already-launched Chromium `browser`. Callers
     (the page3-overflow measurement pass and the final render, see
@@ -840,9 +740,6 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
                 margin=margin,
             )
             page.close()
-        if dept_badges:
-            with _time_phase(f"{phase_prefix}: dept badges overlay"):
-                main_bytes = _apply_dept_badges(main_bytes, dept_badges, browser, font_family)
         for p in PdfReader(io.BytesIO(main_bytes)).pages:
             writer.add_page(p)
 
@@ -1119,7 +1016,7 @@ def _correct_dynamic_index_pagination(pdf_bytes: bytes, browser, front_pages: li
 
     Must run on a `pdf_bytes` whose main-content footer band is still
     BLANK (main_header_footer=False on whatever _render_pdf call produced
-    it) — the caller's own _stamp_main_page_numbers call, using this
+    it) — the caller's own _stamp_main_overlays call, using this
     function's returned total, is the only thing that ever draws footer
     text onto these pages. Stamping before this ran, or stamping twice,
     would double-print overlapping "Page N of TOTAL" text — see the
@@ -1344,7 +1241,7 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     # main.py's page-list assembly), render it separately at true A4-
     # landscape dimensions, splice it into the merged document at its
     # original position, then re-stamp every main-content page's
-    # header/footer from scratch (_stamp_main_page_numbers) — Chromium's
+    # header/footer from scratch (_stamp_main_overlays) — Chromium's
     # own pageNumber/totalPages counters are per-call and reset to 1/1
     # for the spliced-in pages, so nothing downstream of them would show
     # a correct "Page N of TOTAL" without this.
@@ -1386,14 +1283,14 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         # _pick_trend_margins re-enabled, the trend section's real page
         # count (and therefore the correct "of TOTAL") isn't known until
         # AFTER this render — see _correct_dynamic_index_pagination and the
-        # _stamp_main_page_numbers call below, the same blank-then-stamp
+        # _stamp_main_overlays call below, the same blank-then-stamp
         # pattern the landscape branch already used. Stamping the footer
         # inline here and then overlaying a second, corrected one on top
-        # would double-print overlapping text — _stamp_main_page_numbers
+        # would double-print overlapping text — _stamp_main_overlays
         # only ever draws over a page whose footer band is genuinely blank.
         with _time_phase("main content — TOTAL"):
             pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month,
-                                     dept_badges=dept_badges, cover_html=cover_html,
+                                     cover_html=cover_html,
                                      main_header_footer=False, phase_prefix="main content")
         with _time_phase("dynamic index pagination check"):
             pdf_bytes, footer_total_override = _correct_dynamic_index_pagination(
@@ -1403,10 +1300,11 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         _main_start = _marker_page_index(_main_texts, main_pages[0].get("page")) if main_pages else 0
         if _main_start is None:
             _main_start = 0
-        with _time_phase("re-stamp page numbers"):
-            pdf_bytes = _stamp_main_page_numbers(pdf_bytes, browser, font_family, report_month,
-                                                  _main_start, len(_main_texts) - _main_start,
-                                                  total_pages=footer_total_override)
+        with _time_phase("header/footer + dept badge overlay"):
+            pdf_bytes = _stamp_main_overlays(pdf_bytes, browser, font_family, report_month,
+                                             _main_start, len(_main_texts) - _main_start,
+                                             total_pages=footer_total_override,
+                                             dept_badges=dept_badges, start_of=_page_markers(_main_texts))
     else:
         from pypdf import PdfReader, PdfWriter
 
@@ -1440,7 +1338,7 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         main_html_rest = template.render(pages=_rest_pages, **render_kwargs) if _rest_pages else ""
         with _time_phase("main content (portrait pages) — TOTAL"):
             base_bytes = _render_pdf(browser, front_html, main_html_rest, font_family, report_month,
-                                      dept_badges=None, cover_html=cover_html, main_header_footer=False,
+                                      cover_html=cover_html, main_header_footer=False,
                                       phase_prefix="main content (portrait pages)")
 
         base_reader = PdfReader(io.BytesIO(base_bytes))
@@ -1487,28 +1385,14 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
 
         # Every report page's physical index in the about-to-be-assembled
         # spliced_bytes, derived arithmetically from the same assembly loop
-        # that builds it below, instead of _apply_dept_badges re-extracting
-        # text from spliced_bytes afterward — a report page's content is
-        # entirely within base_reader OR entirely within one run, never
-        # split across both, so base/run markers never collide.
+        # that builds it below, instead of re-extracting text from
+        # spliced_bytes afterward — a report page's content is entirely
+        # within base_reader OR entirely within one run, never split across
+        # both, so base/run markers never collide.
         dept_start_of = None
         if dept_badges:
-            import re
-            marker_re = re.compile(r"@@PGSTART_(\d+(?:\.\d+)?)@@")
-
-            def _all_markers(texts):
-                found = {}
-                for k, text in enumerate(texts):
-                    for m in marker_re.finditer(text):
-                        rp = float(m.group(1))
-                        if rp == int(rp):
-                            rp = int(rp)
-                        if rp not in found:
-                            found[rp] = k
-                return found
-
-            base_markers = _all_markers(base_page_texts)
-            run_markers = [_all_markers(texts) for texts in run_page_texts]
+            base_markers = _page_markers(base_page_texts)
+            run_markers = [_page_markers(texts) for texts in run_page_texts]
             spliced_index_of_base = {}
             spliced_index_of_run = {}  # run_idx -> {run_relative_idx: spliced_idx}
 
@@ -1549,14 +1433,11 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
             spliced_bytes, footer_total_override = _correct_dynamic_index_pagination(
                 spliced_bytes, browser, front_pages, main_pages, template, render_kwargs,
                 font_family, report_month, footer_total_override)
-        with _time_phase("re-stamp page numbers (post-splice)"):
-            spliced_bytes = _stamp_main_page_numbers(spliced_bytes, browser, font_family, report_month,
-                                                      main_start, main_count,
-                                                      total_pages=footer_total_override)
-        if dept_badges:
-            with _time_phase("dept badges overlay (post-splice)"):
-                spliced_bytes = _apply_dept_badges(spliced_bytes, dept_badges, browser, font_family,
-                                                    start_of=dept_start_of)
+        with _time_phase("header/footer + dept badge overlay (post-splice)"):
+            spliced_bytes = _stamp_main_overlays(spliced_bytes, browser, font_family, report_month,
+                                                 main_start, main_count,
+                                                 total_pages=footer_total_override,
+                                                 dept_badges=dept_badges, start_of=dept_start_of)
         pdf_bytes = spliced_bytes
 
     _print_timing_summary(_time.perf_counter() - _render_t0)
@@ -1656,7 +1537,7 @@ async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, p
                     last_pg = tp.get("page", last_pg)
                     i += 1
                 # Only "group" is ever read back out of this — see
-                # _apply_dept_badges below, which recomputes "side" itself
+                # _stamp_main_overlays below, which recomputes "side" itself
                 # from each physical PDF page's own position (this merged
                 # block can expand into more physical pages than the
                 # logical page count here, so any "side" computed at this

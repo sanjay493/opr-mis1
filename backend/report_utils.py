@@ -164,9 +164,9 @@ def assign_dept_badges(pages: list) -> None:
     _DEPT_BADGE_SIDE above), never from position within `pages` itself.
 
     Side follows book-binding convention (recto/verso). This mirrors
-    pdf.py's _apply_dept_badges, which independently recomputes each
-    PHYSICAL PDF page's side the same way (right if (k+1) is odd) from the
-    rendered page's own true position — this function exists so the live
+    pdf.py's _stamp_main_overlays, which independently recomputes each
+    PHYSICAL PDF page's side from its own footer page number (right when
+    odd) in the rendered document — this function exists so the live
     web preview (which has no equivalent post-render pass) shows the same
     alternation the exported PDF does.
     """
