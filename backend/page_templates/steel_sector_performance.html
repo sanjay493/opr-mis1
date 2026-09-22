@@ -79,6 +79,7 @@
     else ['Production', 'Report Month', 'CPLY Month', 'YoY %', 'Apr-Report Month', 'CPLY Apr-Report Month', 'CPLY %'] %}
 <div class="ssp-section-heading">1. Steel Production &amp; Prices</div>
 <div class="ssp-table-heading">1a Production Overview (in Mt)</div>
+<div class="ssp-table-1a">
 <table class="ssp-table">
     <thead><tr><th>{{ cols_1a[0] }}</th><th></th>{% for h in cols_1a[1:] %}<th>{{ h }}</th>{% endfor %}</tr></thead>
     <tbody>
@@ -107,6 +108,7 @@
         {% endfor %}
     </tbody>
 </table>
+</div>
 <div class="ssp-note">Bracketed value under each SAIL figure: SAIL's % share of India.</div>
 <div class="ssp-table-1b">{{ generic_table(page.tables.get('1b')) }}</div>
 <div class="ssp-table-1c">{{ generic_table(page.tables.get('1c')) }}</div>

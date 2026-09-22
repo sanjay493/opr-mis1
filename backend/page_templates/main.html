@@ -536,6 +536,39 @@
            which wrap normally if their header text doesn't fit. Scoped to
            this table only via .ssp-table-1b so 1a/1c/2/3a/4a/5 keep their
            auto-layout even-width columns. */
+        /* Table 1a (Production Overview) on page 2.1: table-layout:auto's
+           column-width computation was observed to depend on how much
+           OTHER content sits in the same Chromium print batch — verified
+           2026-09-22, same HTML/CSS/data, "Apr-Aug 2026"/"Apr-Aug 2025"
+           (columns 6/7) wrapped onto 2 lines when this page printed
+           alongside ~20 others but stayed on 1 line printed nearly alone,
+           shifting every row below it down with no data difference.
+           table-layout:fixed removes that dependency by giving those two
+           columns (the longest headers) a guaranteed, fixed share of the
+           table instead of letting auto-layout guess — same technique as
+           .ssp-table-1b just below, for a different table/reason. Column 1
+           (the item label — "Crude Steel"/"Hot Metal"/"Finished Steel")
+           also gets an explicit width: giving 6/7 a fixed share alone
+           first narrowed column 1's auto-share enough to wrap "Crude
+           Steel" onto 2 lines, a regression this fix must not trade in.
+           table-layout:fixed sizes a whole column from its header row
+           alone, so only the header th's need a width — the body
+           <td class="ssp-label"> cells (columns 1 AND 2 share that class)
+           are sized by their own column's header regardless. Remaining
+           space (100% minus these 3) splits evenly across the other 5
+           columns (India/SAIL sub-label, Report Month, CPLY Month, YoY %,
+           CPLY %), all short enough to not need it. */
+        .ssp-table-1a .ssp-table {
+            table-layout: fixed;
+        }
+        .ssp-table-1a .ssp-table thead th:first-child {
+            width: 13%;
+        }
+        .ssp-table-1a .ssp-table thead th:nth-child(6),
+        .ssp-table-1a .ssp-table thead th:nth-child(7) {
+            width: 15%;
+            white-space: nowrap;
+        }
         .ssp-table-1b .ssp-table {
             table-layout: fixed;
             width: 100%;
