@@ -5,23 +5,30 @@
    banner (dark background, white bold text); the rest alternate
    white/light-gray rows. Bullet text may contain embedded newlines
    (multi-line bullets, e.g. a comma-list of products) — rendered as extra
-   left-aligned lines within the same row, not separate rows. #}
+   left-aligned lines within the same row, not separate rows.
+
+   Class prefix is "sls-", NOT "ssp-": every page shares one document in the
+   PDF render, and "ssp-*" belongs to Steel Sector Performance (main.html).
+   Sharing .ssp-table made this block's table-layout:fixed leak onto the
+   Steel Sector tables whenever this page was in the export (the "batch-
+   dependent" header wrap on table 1a), and main.html's .ssp-table td rules
+   leak onto this page in turn. #}
 <style>
-    .ssp-wrap { padding: 2px 6px; font-family: 'IBM Plex Sans', sans-serif; }
-    .ssp-page-title { text-align: center; font-weight: 700; font-size: 15pt; text-decoration: underline; color: rgb(0,0,255); margin-bottom: 6px; }
-    .ssp-section { margin-bottom: 4px; }
-    .ssp-heading { text-align: left; font-weight: 700; font-size: 11pt; text-decoration: underline; color: rgb(0,0,255); margin-bottom: 3px; }
-    .ssp-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .ssp-row td { padding: 4px 8px; text-align: left; font-weight: 700; font-size: 9.5pt; line-height: 1.2; border-bottom: 0.5pt solid {{ colors.border|default('#cbd5e1') }}; word-wrap: break-word; }
-    .ssp-row.ssp-emphasis td { background: {{ colors.text_accent_navy|default('#060177') }}; color: {{ colors.text_white|default('#ffffff') }}; }
-    .ssp-row.ssp-odd td { background: {{ colors.text_white|default('#ffffff') }}; color: {{ colors.text_heading_dark|default('#1e293b') }}; }
-    .ssp-row.ssp-even td { background: {{ colors.misc_highlights_box_bg|default('#f8fafc') }}; color: {{ colors.text_heading_dark|default('#1e293b') }}; }
-    .ssp-row .ssp-line + .ssp-line { margin-top: 1px; }
-    .ssp-empty { text-align: left; font-style: italic; font-size: 9pt; color: {{ colors.text_secondary|default('#5f6368') }}; padding: 6px; }
+    .sls-wrap { padding: 2px 6px; font-family: 'IBM Plex Sans', sans-serif; }
+    .sls-page-title { text-align: center; font-weight: 700; font-size: 15pt; text-decoration: underline; color: rgb(0,0,255); margin-bottom: 6px; }
+    .sls-section { margin-bottom: 4px; }
+    .sls-heading { text-align: left; font-weight: 700; font-size: 11pt; text-decoration: underline; color: rgb(0,0,255); margin-bottom: 3px; }
+    .sls-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .sls-row td { padding: 4px 8px; text-align: left; font-weight: 700; font-size: 9.5pt; line-height: 1.2; border-bottom: 0.5pt solid {{ colors.border|default('#cbd5e1') }}; word-wrap: break-word; }
+    .sls-row.sls-emphasis td { background: {{ colors.text_accent_navy|default('#060177') }}; color: {{ colors.text_white|default('#ffffff') }}; }
+    .sls-row.sls-odd td { background: {{ colors.text_white|default('#ffffff') }}; color: {{ colors.text_heading_dark|default('#1e293b') }}; }
+    .sls-row.sls-even td { background: {{ colors.misc_highlights_box_bg|default('#f8fafc') }}; color: {{ colors.text_heading_dark|default('#1e293b') }}; }
+    .sls-row .sls-line + .sls-line { margin-top: 1px; }
+    .sls-empty { text-align: left; font-style: italic; font-size: 9pt; color: {{ colors.text_secondary|default('#5f6368') }}; padding: 6px; }
 </style>
 
-<div class="ssp-wrap">
-    <div class="ssp-page-title">{{ page.title }}</div>
+<div class="sls-wrap">
+    <div class="sls-page-title">{{ page.title }}</div>
     {# Key "bullets" (not "items") — a dict with a plain "items" key hits the
        same dict.items()-shadows-item-lookup Jinja gotcha documented
        elsewhere in this codebase (see e.g. page_special_steel_donut.py's
@@ -30,20 +37,20 @@
         {"heading": page.month_heading, "bullets": page.month_items},
         {"heading": page.ytd_heading, "bullets": page.ytd_items},
     ] %}
-    <div class="ssp-section">
-        <div class="ssp-heading">{{ section.heading }}</div>
+    <div class="sls-section">
+        <div class="sls-heading">{{ section.heading }}</div>
         {% if section.bullets %}
-        <table class="ssp-table">
+        <table class="sls-table">
             {% for item in section.bullets %}
-            <tr class="ssp-row {% if loop.first %}ssp-emphasis{% elif loop.index0 % 2 == 1 %}ssp-even{% else %}ssp-odd{% endif %}">
+            <tr class="sls-row {% if loop.first %}sls-emphasis{% elif loop.index0 % 2 == 1 %}sls-even{% else %}sls-odd{% endif %}">
                 <td>
-                    {% for line in item.split('\n') %}<div class="ssp-line">{{ line }}</div>{% endfor %}
+                    {% for line in item.split('\n') %}<div class="sls-line">{{ line }}</div>{% endfor %}
                 </td>
             </tr>
             {% endfor %}
         </table>
         {% else %}
-        <div class="ssp-empty">No highlights entered for this period yet.</div>
+        <div class="sls-empty">No highlights entered for this period yet.</div>
         {% endif %}
     </div>
     {% endfor %}

@@ -36,6 +36,7 @@ xlrd==2.0.2
 pandas==3.0.5
 pdfplumber==0.11.10
 pypdf==6.18.1
+pypdfium2==5.13.0  # pdf.py _page_texts: fast marker-text extraction (already a pdfplumber dependency; pinned since pdf.py now imports it directly)
 requests==2.34.2
 beautifulsoup4==4.15.0  # steel-sector-performance URL extraction (html_extractor_steel_sector_performance.py)
 schedule==1.2.2

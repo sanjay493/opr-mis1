@@ -37,6 +37,11 @@
     font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
     text-align: right; border: 0.3pt solid {{ colors.border_light }};
 }
+/* One <tbody> per plant/SAIL group (see trend_section.html): never split a
+   group across a page break — Chromium moves the whole group to the next
+   page instead and repeats the <thead> there. Only a group taller than a
+   full page could still break (none are, at ~12 rows max). */
+.page7-13-yearly-table tbody.plant-group { break-inside: avoid; page-break-inside: avoid; }
 
 /* ---- Plant-label cell (the rowspan'd column stacking each plant's
    letters top-to-bottom) — three font-size tiers depending on how many
@@ -158,7 +163,9 @@
 }
 
 /* ---- Legend + the item-heading row above each table ---- */
-.page7-13-legend { font-size: 7.5pt; color: {{ colors.text_secondary }}; margin-top: 4px; }
+/* break-before:avoid keeps the legend with its table's last group rather
+   than letting it land alone at the top of the next page. */
+.page7-13-legend { font-size: 7.5pt; color: {{ colors.text_secondary }}; margin-top: 4px; break-before: avoid; page-break-before: avoid; }
 .page7-13-legend .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: middle; }
 .page7-13-yearly-table thead tr.item-heading-row th {
     background: {{ colors.table_header_bg }}; border-bottom: 2px solid {{ colors.text_primary }}; border-top: none;

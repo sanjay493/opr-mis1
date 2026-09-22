@@ -46,16 +46,23 @@
                         <th class="tot-hdr">Total</th>
                     </tr>
                 </thead>
-                <tbody>
+                {# One <tbody> per plant/SAIL group, each carrying
+                   break-inside:avoid (css/production_trend.css) — Chromium
+                   itself keeps a whole group on one physical page and moves
+                   it to the next page when it doesn't fit, repeating the
+                   <thead> there. This replaced pdf.py's old probe-print/
+                   correct/re-probe loop (forced break_before rows + split
+                   rowspans), which printed the whole report ~15-20 extra
+                   times and could leave stale forced breaks behind. A group
+                   is always contiguous rows of the same plant, so it opens
+                   on is_first_in_plant and closes before the next one. #}
                     {% for row in item.rows %}
                     {% set v = row['values'] %}
                     {% set cf = row['cell_flags'] or ([''] * 19) %}
                     {% set plant = row['plant'] %}
                     {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
-                    {# break_before: forced page break so a split plant group never
-                       leaves fewer than 3 rows on either page — set by pdf.py's
-                       _enforce_trend_min_segments from the probe print. #}
-                    <tr class="{{ row_cls }}"{% if row.get('break_before') %} style="break-before:page;page-break-before:always;"{% endif %}>
+                    {% if loop.first or row['is_first_in_plant'] %}<tbody class="plant-group">{% endif %}
+                    <tr class="{{ row_cls }}">
                         {% if row['rowspan_start'] %}
                         {% set plant_chars = plant|replace(' ', '') %}
                         {% set n_rows = row['plant_row_count'] %}
@@ -91,8 +98,8 @@
                         <td class="hh-cell {{ 'best-ever' if cf[17] == 'best_ever' else ('best-month' if cf[17] == 'best_month' else '') }}">{{ v[17] }}</td>
                         <td class="total-cell {{ 'best-ever' if cf[18] == 'best_ever' else '' }}">{{ v[18] }}</td>
                     </tr>
+                    {% if loop.last or loop.nextitem['is_first_in_plant'] %}</tbody>{% endif %}
                     {% endfor %}
-                </tbody>
             </table>
             {# Skipped after the LAST item only: this legend is identical
                every time (already shown once per earlier item, so nothing

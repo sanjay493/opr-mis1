@@ -709,11 +709,16 @@
             font-size: 0.85em;
         }
 
+        /* No break-inside:avoid here: every .page already starts on a fresh
+           physical page (break-after below), so it only ever mattered for a
+           page too tall to fit — and there it made every break point inside
+           equally "bad", so Chromium broke at the last line that fit (mid-
+           table, heading stranded at the bottom) instead of honouring the
+           content's own break-inside/break-after preferences. */
         .page {
             position: relative;
             page-break-after: always;
             break-after: page;
-            page-break-inside: avoid;
             padding: 3mm 0;
         }
 

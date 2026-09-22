@@ -265,26 +265,17 @@ _INDEX_SECTIONS = [
     # Trend pages (6 items: Oven Pushing/Sinter/Hot Metal/Crude Steel/
     # Pig Iron & Finished Steel/Saleable Steel) flow as one continuous
     # section rather than one physical page each (see pdf.py's trend_section
-    # merge + _make_trend_split_hook) — some items spill onto a 2nd
-    # physical page, and (_pick_trend_margins re-enabled 2026-09-22, now
-    # also minimizing total page count, not just orphan count — see that
-    # function's own docstring) the exact count now genuinely varies by
-    # month's data, not just by a rare content change. This "11" is only a
-    # NOMINAL fallback, not a live count: the live web preview (which never
-    # runs a real Chromium print) has no other number to show, and it's
-    # this function's own starting point for the real per-render
-    # measurement pdf.py's _correct_dynamic_trend_pagination does — see
-    # that function's docstring. It corrects the actual exported PDF's
-    # Index (page 2) and footer total straight from a real post-render
-    # measurement every time, so this number no longer needs hand-updating
-    # to keep the PDF itself correct — only the live preview's Index
-    # display can still lag if it ever drifts far from reality. Last
-    # measured 2026-09-22 against a real full-report render for month
-    # 2025-11, with _pick_trend_margins active (was 14 measured minutes
-    # earlier the same day with margin-picking still disabled, and 12 as
-    # of 2026-07 before that — this number moves with both the underlying
-    # data AND the pagination algorithm itself, not just the former).
-    ("10 Years Month Wise Production (Main Item Plant Wise)", 11),
+    # merge; plant groups are kept whole by CSS break-inside:avoid, see
+    # trend_section.html, and _pick_trend_margins may tighten margins when
+    # that saves a page) — so the exact count varies with the month's data.
+    # This number is only a NOMINAL fallback, not a live count: the live
+    # web preview (which never runs a real Chromium print) has no other
+    # number to show. The exported PDF's Index (page 2) and footer total
+    # are corrected from a real post-render measurement every time (pdf.py's
+    # _correct_dynamic_index_pagination), so this never needs hand-updating
+    # for the PDF itself. Last measured 2026-09-23 against a full-report
+    # render for month 2026-08, after the switch to CSS-based group keeping.
+    ("10 Years Month Wise Production (Main Item Plant Wise)", 14),
     ("Crude Steel Production Details - Concast & Process Type", 2),
     # Category-wise (3 plant-group pages: BSP / DSP&RSP / BSL&ISP) +
     # Segment Wise Production (1 page) - one Index entry covering all 4.
