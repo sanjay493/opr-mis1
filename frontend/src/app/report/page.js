@@ -77,34 +77,29 @@ const PAGE_LABELS = {
   1040: 'Rakes Detention – Commodity Wise – ISP',
   1028: 'Rakes Detention – Improvement Summary',
   1029: 'Rakes Detention – Average Detention Trend',
-  // 3 pages per plant (process flow / unit-wise capacity / product mix —
-  // split from one combined page per plant, 2026-09-20). Ids 1041-1064,
-  // clear of Rake Detention's own 1026-1029/1038-1040 — see
+  // A blank Annexure separator page, then 2 pages per plant (process flow /
+  // unit-wise capacity + product mix consolidated onto one page — was 3
+  // separate pages per plant with no separator until 2026-09-21). Ids
+  // 1041-1058, clear of Rake Detention's own 1026-1029/1038-1040 — see
   // backend/page_ready_reckoner.py.
-  1041: 'Ready Reckoner – Bhilai Steel Plant – Process Flow',
-  1042: 'Ready Reckoner – Bhilai Steel Plant – Unit-wise Capacity',
-  1043: 'Ready Reckoner – Bhilai Steel Plant – Product Mix',
+  1041: 'Annexure-1 : 5 ISPs Ready Reckoner',
+  1042: 'Ready Reckoner – Bhilai Steel Plant – Process Flow',
+  1043: 'Ready Reckoner – Bhilai Steel Plant – Unit-wise Capacity & Product Mix',
   1044: 'Ready Reckoner – Durgapur Steel Plant – Process Flow',
-  1045: 'Ready Reckoner – Durgapur Steel Plant – Unit-wise Capacity',
-  1046: 'Ready Reckoner – Durgapur Steel Plant – Product Mix',
-  1047: 'Ready Reckoner – Rourkela Steel Plant – Process Flow',
-  1048: 'Ready Reckoner – Rourkela Steel Plant – Unit-wise Capacity',
-  1049: 'Ready Reckoner – Rourkela Steel Plant – Product Mix',
-  1050: 'Ready Reckoner – Bokaro Steel Plant – Process Flow',
-  1051: 'Ready Reckoner – Bokaro Steel Plant – Unit-wise Capacity',
-  1052: 'Ready Reckoner – Bokaro Steel Plant – Product Mix',
-  1053: 'Ready Reckoner – IISCO Steel Plant – Process Flow',
-  1054: 'Ready Reckoner – IISCO Steel Plant – Unit-wise Capacity',
-  1055: 'Ready Reckoner – IISCO Steel Plant – Product Mix',
-  1056: 'Ready Reckoner – Alloy Steels Plant – Process Flow',
-  1057: 'Ready Reckoner – Alloy Steels Plant – Unit-wise Capacity',
-  1058: 'Ready Reckoner – Alloy Steels Plant – Product Mix',
-  1059: 'Ready Reckoner – Salem Steel Plant – Process Flow',
-  1060: 'Ready Reckoner – Salem Steel Plant – Unit-wise Capacity',
-  1061: 'Ready Reckoner – Salem Steel Plant – Product Mix',
-  1062: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Process Flow',
-  1063: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Unit-wise Capacity',
-  1064: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Product Mix',
+  1045: 'Ready Reckoner – Durgapur Steel Plant – Unit-wise Capacity & Product Mix',
+  1046: 'Ready Reckoner – Rourkela Steel Plant – Process Flow',
+  1047: 'Ready Reckoner – Rourkela Steel Plant – Unit-wise Capacity & Product Mix',
+  1048: 'Ready Reckoner – Bokaro Steel Plant – Process Flow',
+  1049: 'Ready Reckoner – Bokaro Steel Plant – Unit-wise Capacity & Product Mix',
+  1050: 'Ready Reckoner – IISCO Steel Plant – Process Flow',
+  1051: 'Ready Reckoner – IISCO Steel Plant – Unit-wise Capacity & Product Mix',
+  1052: 'Annexure-2 : 3 SSPs Ready Reckoner',
+  1053: 'Ready Reckoner – Alloy Steels Plant – Process Flow',
+  1054: 'Ready Reckoner – Alloy Steels Plant – Unit-wise Capacity & Product Mix',
+  1055: 'Ready Reckoner – Salem Steel Plant – Process Flow',
+  1056: 'Ready Reckoner – Salem Steel Plant – Unit-wise Capacity & Product Mix',
+  1057: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Process Flow',
+  1058: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Unit-wise Capacity & Product Mix',
 };
 
 // Page list/count is fixed regardless of report month, so the page selector

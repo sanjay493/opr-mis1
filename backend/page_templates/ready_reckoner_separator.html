@@ -1,0 +1,33 @@
+<style>
+    /* Blank Annexure separator/title page, printed right before a Ready
+       Reckoner group's first plant page (ISP or SSP) — per direct
+       instruction, 2026-09-21. Pushed down with a fixed padding-top rather
+       than flex/height:100% centering: this .page div's own box has no
+       resolvable page-height in the merged single-document render (see
+       main.html's .key-parameters-page comment — @page {margin}/height
+       rules don't apply there), so a percentage/vh-based center has
+       nothing reliable to center against. 105mm comfortably clears the
+       header band and leaves the two short title lines roughly centered
+       in the ~267mm default content area (297mm A4 minus ~15mm top/bottom
+       margins) without ever risking overflow onto a second page. */
+    .rr-separator-wrap {
+        text-align: center;
+        padding-top: 105mm;
+    }
+    .rr-separator-annexure {
+        font-weight: 700;
+        font-size: 26pt;
+        color: {{ colors.text_black|default('#000000') }};
+    }
+    .rr-separator-group {
+        font-weight: 700;
+        font-size: 18pt;
+        color: {{ colors.text_rust_brown|default('#B7410E') }};
+        margin-top: 10px;
+    }
+</style>
+
+<div class="rr-separator-wrap">
+    <div class="rr-separator-annexure">{{ page.annexure_label }}</div>
+    <div class="rr-separator-group">{{ page.group_label }}</div>
+</div>

@@ -345,7 +345,7 @@ _BADGE_COLORS = {
     8: ("#e34948", "#0b0b0b"),  # red     — Mill Techno (31-35)
     9: ("#0a9698", "#0b0b0b"),  # teal    — Capital Repair (36-40)
     10: ("#8b5e34", "#ffffff"), # brown   — Rakes Detention (1026,1027,1038-1040,1028,1029)
-    11: ("#701a75", "#ffffff"), # dark purple — Ready Reckoner (1041-1064)
+    11: ("#701a75", "#ffffff"), # dark purple — Ready Reckoner (1041-1058, +1059-1066 overflow)
 }
 
 
@@ -903,6 +903,80 @@ def _measure_page3_overflow(browser, main_pages: list, template, render_kwargs: 
     return (next_physical - p3_physical) > 1
 
 
+def _ready_reckoner_details_fits(browser, page_data: dict, template, render_kwargs: dict,
+                                  font_family: str, report_month: str) -> bool:
+    """True if `page_data` (a ready_reckoner 'details' page — Unit-wise
+    Capacity + Product Mix combined at its configured 12pt font, per direct
+    instruction 2026-09-22) prints on a single physical page. Measured by a
+    real isolated render+print, never guessed from row counts: table cells
+    wrap unpredictably (see _make_trend_split_hook's own docstring for how
+    an earlier arithmetic-estimate approach was demonstrably wrong for
+    similarly wrapped content), so only an actual Chromium print can answer
+    this reliably.
+
+    Unlike page 3 (_measure_page3_overflow, which explicitly rejects
+    isolating that page because its break position depends on what's
+    rendered around it), a ready-reckoner content page has no such
+    dependency: it's its own `.page` div with a forced page-break-after,
+    self-contained regardless of neighbors, and _render_pdf's margin is a
+    fixed constant rather than derived from surrounding content — so
+    printing it alone in its own tiny document reproduces the exact same
+    break it would get at its real spot in the full report."""
+    import io as _io
+    from pypdf import PdfReader
+
+    html = template.render(pages=[page_data], **render_kwargs)
+    with _time_phase(f"ready-reckoner fit probe: {page_data.get('plant_code')}"):
+        pdf_bytes = _render_pdf(browser, "", html, font_family, report_month,
+                                 phase_prefix="ready-reckoner fit probe")
+    return len(PdfReader(_io.BytesIO(pdf_bytes)).pages) <= 1
+
+
+def _split_ready_reckoner_overflow(main_pages: list, browser, template, render_kwargs: dict,
+                                    font_family: str, report_month: str) -> None:
+    """Mutates `main_pages` in place: for every ready_reckoner 'details'
+    page (Unit-wise Capacity + Product Mix combined) that
+    _ready_reckoner_details_fits measures as NOT fitting one physical page,
+    re-labels it 'capacity' (Unit-wise Capacity alone) and inserts a new
+    'product_mix' page (Product Mix alone) right after it, using that
+    plant's reserved id from PRODUCT_MIX_OVERFLOW_PAGE_ID — see
+    page_ready_reckoner.py's module docstring. Per direct instruction,
+    2026-09-22: merge onto one page only when there's room at the
+    configured 12pt content font, never by shrinking it. Live preview is
+    untouched (it always shows the merged 'details' page — see
+    ReadyReckonerTemplate.js's own comment) since this only ever runs on
+    main_pages built for a PDF export.
+
+    This DOES fire against the real ready_reckoner_pages data (measured
+    2026-09-22: BSP, RSP and BSL don't fit their combined table at 12pt;
+    DSP, ISP, and all 3 SSPs do) — so the footer's "Page N of TOTAL" and the
+    Index's own declared Annexure-1/2 page range must both account for
+    however many plants split. NOT auto-corrected here (that was tried and
+    then deliberately removed, 2026-09-22, in favor of hand-maintaining
+    both in main.py's _INDEX_SECTIONS — update those two counts whenever a
+    Ready Reckoner data-entry edit changes which plants split)."""
+    from page_ready_reckoner import generate_ready_reckoner_page, PRODUCT_MIX_OVERFLOW_PAGE_ID
+    from report_utils import assign_dept_badges
+
+    i = 0
+    while i < len(main_pages):
+        p = main_pages[i]
+        if p.get("type") == "ready_reckoner" and p.get("subtype") == "details":
+            if not _ready_reckoner_details_fits(browser, p, template, render_kwargs, font_family, report_month):
+                plant_code = p.get("plant_code")
+                overflow_id = PRODUCT_MIX_OVERFLOW_PAGE_ID.get(plant_code)
+                if overflow_id is not None:
+                    p["subtype"] = "capacity"
+                    p["subtype_label"] = "Unit-wise Capacity"
+                    p["title"] = f"Ready Reckoner – {p.get('plant_name')} – Unit-wise Capacity"
+                    pm_page = generate_ready_reckoner_page(plant_code, "product_mix")
+                    pm_page["page"] = overflow_id
+                    assign_dept_badges([pm_page])
+                    main_pages.insert(i + 1, pm_page)
+                    i += 1
+        i += 1
+
+
 # Cap on _make_trend_split_hook's probe/correct/re-probe loop — each pass is
 # one extra full page.pdf() call, so this bounds worst-case cost; real-world
 # corrections have been observed to stabilize in 2-3 passes (see that
@@ -1035,12 +1109,39 @@ def _pick_trend_margins(page, template, pages_list: list, render_kwargs: dict, m
     _TREND_MIN_BOTTOM_MARGIN_MM and keeps whichever (top, bottom)
     combination scores best — first by fewest orphaned split segments (a
     continuation shorter than _TREND_MIN_SPLIT_SEGMENT_ROWS rows, see
-    _trend_orphan_penalty), then by fewest split plant groups overall (ties
-    go to the combination with the larger margins, tried first). Mutates
+    _trend_orphan_penalty), then by fewest split plant groups overall, then
+    by fewest total physical pages the whole section uses (ties go to the
+    combination with the larger margins, tried first). Mutates
     render_kwargs["page_layouts"] in place; _make_trend_split_hook runs its
     own probe/correct loop against whatever this picks. Only top/bottom are
     tuned (per direct request) — left/right stay at their configured
     values.
+
+    Re-enabled 2026-09-22 (was disabled 2026-09-18 — see
+    _make_trend_split_hook's own comment at its call site for that
+    history): the reason it got disabled was the section's real physical
+    page count varying by month, drifting out of sync with main.py's
+    hardcoded _INDEX_SECTIONS count. That's no longer a problem now that
+    the Index/footer total are corrected dynamically per-render, from a
+    real post-render measurement — see _generate_pdf_sync's call to
+    _correct_dynamic_trend_pagination — rather than assumed from a static
+    constant.
+
+    The 3rd (page-count) tiebreaker (added 2026-09-22) exists because of a
+    gap the first two don't cover: when a plant/SAIL group can't leave
+    _TREND_MIN_SPLIT_SEGMENT_ROWS rows on both sides of a page break,
+    _enforce_trend_min_segments defers the WHOLE group to the next page
+    rather than split it — correct (orphans of 1-2 rows are worse), but it
+    can leave a page mostly blank if the deferred group is large, with
+    nothing to backfill that space (verified against a real report,
+    2026-09-22: SSP+VISL's 5 rows alone on one page, SAIL's 11 deferred
+    whole to the next). split_extra_pages and orphan_penalty are both
+    blind to this — a group that fits entirely on one fresh page scores 0
+    on both regardless of how much blank space it left behind. Total
+    physical page count is the one number that actually reflects wasted
+    space, so a margin candidate that happens to free up just enough room
+    to avoid a deferral wins over one that doesn't, without ever loosening
+    the row-count guarantee itself.
 
     This does NOT touch any row's rowspan_start/plant_row_count — it only
     measures, via _trend_group_page_spans/_trend_group_segment_sizes, how
@@ -1078,17 +1179,21 @@ def _pick_trend_margins(page, template, pages_list: list, render_kwargs: dict, m
         spans = _trend_group_page_spans(trend_pages, page_texts)
         split_extra_pages = sum(count - 1 for _, _, count in spans if count > 1)
         orphan_penalty = _trend_orphan_penalty(_trend_group_segment_sizes(trend_pages, page_texts))
-        return (orphan_penalty, split_extra_pages)
+        return (orphan_penalty, split_extra_pages, len(page_texts))
 
     best_margins = (default_top, default_bottom)
     best_severity = _severity(*best_margins)
-    if best_severity == (0, 0):
-        return  # nothing splits at the default margins -- page already reflects them
-
+    # NOT an early return on a clean (0, 0, *) score: a wholesale-deferred
+    # group (see this function's docstring) reads as (0, 0, *) too — it
+    # isn't split at all, so the first two components are clean even
+    # though it wasted a page's worth of space getting there. Only the 3rd
+    # (page-count) component can ever catch that, so every candidate
+    # always gets tried; the extra cost is a few more page.pdf() calls,
+    # negligible next to the probe/correct loop this feeds into.
     top_floor = min(default_top, _TREND_MIN_TOP_MARGIN_MM)
     bottom_floor = min(default_bottom, _TREND_MIN_BOTTOM_MARGIN_MM)
     for candidate in ((default_top, bottom_floor), (top_floor, default_bottom), (top_floor, bottom_floor)):
-        if candidate == best_margins or best_severity == (0, 0):
+        if candidate == best_margins:
             continue
         severity = _severity(*candidate)
         if severity < best_severity:
@@ -1270,22 +1375,23 @@ def _make_trend_split_hook(pages_list: list, template, render_kwargs: dict, marg
             return result
 
         # _pick_trend_margins (tightens top/bottom margins when the default
-        # ones leave an orphaned split — a plant's row-group stranded alone
-        # at a page break) is disabled per direct instruction, 2026-09-18:
-        # it made the trend section's own physical page count vary by
-        # month's data (e.g. 12 pages for 2026-07's content but 8 for
-        # 2026-08's, root-caused to a Chromium print-pagination difference
-        # between rendering these pages alone vs. embedded in the full
-        # report — never fully explained, see _pick_trend_margins' own
-        # docstring), which drifted out of sync with _INDEX_SECTIONS'
-        # hardcoded page-2 (Index) row count for this section, throwing off
-        # every later Index row's page number. Keeping the default margins
-        # unconditionally trades away this function's orphan-avoidance for
-        # a stable, Index-matching page count instead. If re-enabling this,
-        # _INDEX_SECTIONS' trend-section count needs to become a real
-        # per-request measurement rather than a hardcoded constant, or this
-        # same drift comes back.
-        # _pick_trend_margins(page, template, pages_list, render_kwargs, margin, trend_pages)
+        # ones leave an orphaned split, or waste a page's worth of space on
+        # a wholesale-deferred group — see its own docstring) was disabled
+        # 2026-09-18 through 2026-09-22: it made the trend section's real
+        # physical page count vary by month's data, which drifted out of
+        # sync with main.py's hardcoded _INDEX_SECTIONS count for this
+        # section, throwing off every later Index row's page number and the
+        # footer's "Page N of TOTAL". Re-enabled 2026-09-22 now that the
+        # Index/footer are corrected dynamically, from a real post-render
+        # measurement of this section's true page count, instead of
+        # assuming the static count still holds — see
+        # _correct_dynamic_trend_pagination, called from
+        # _generate_pdf_sync after the render. main.py's _INDEX_SECTIONS
+        # entry for this row is now only ever a *nominal* fallback (used
+        # for the live preview, which never runs a real Chromium print, and
+        # as this function's own default/starting margins) — it no longer
+        # needs to be hand-kept in sync with reality for the exported PDF.
+        _pick_trend_margins(page, template, pages_list, render_kwargs, margin, trend_pages)
 
         html = None
         prev_snapshot = _trend_split_snapshot(trend_pages)
@@ -1631,6 +1737,124 @@ def _fix_orphaned_small_groups(trend_page: dict, page_of: dict) -> None:
             i = j
 
 
+def _marker_page_index(page_texts: list, page_id) -> int:
+    """Physical index (0-based) of the first entry in `page_texts` (each
+    one a physical page's own extract_text() output) carrying page_id's
+    own @@PGSTART_N@@ marker, or None if not found. Shared by every
+    marker-based measurement/splice in this file — see main.html's
+    .pg-badge-marker comment for why this text-marker technique exists at
+    all, and _measure_page3_overflow for the pattern this generalizes."""
+    marker = f"@@PGSTART_{page_id}@@"
+    return next((i for i, t in enumerate(page_texts) if marker in t), None)
+
+
+def _correct_dynamic_trend_pagination(pdf_bytes: bytes, browser, front_pages: list, main_pages: list,
+                                       template, render_kwargs: dict, font_family: str, report_month: str,
+                                       nominal_total) -> tuple:
+    """Post-render fix-up for _pick_trend_margins (re-enabled 2026-09-22,
+    see its own docstring): now that the trend section's real physical
+    page count can differ from main.py's static _INDEX_SECTIONS entry (a
+    nominal fallback only — see that constant's own comment), this
+    measures the section's TRUE count straight from the just-rendered
+    `pdf_bytes` (the @@PGSTART_N@@ marker technique _measure_page3_
+    overflow uses) and, if it differs, re-renders just the Index (page 2)
+    with corrected page ranges and splices it in, in place of the stale
+    one built with the nominal count.
+
+    Must run on a `pdf_bytes` whose main-content footer band is still
+    BLANK (main_header_footer=False on whatever _render_pdf call produced
+    it) — the caller's own _stamp_main_page_numbers call, using this
+    function's returned total, is the only thing that ever draws footer
+    text onto these pages. Stamping before this ran, or stamping twice,
+    would double-print overlapping "Page N of TOTAL" text — see the
+    "main content — TOTAL" call sites in _generate_pdf_sync for why both
+    branches now defer all footer stamping until after this runs.
+
+    Returns (pdf_bytes, total_pages): pdf_bytes is returned unchanged and
+    total_pages == nominal_total in the common case (this month's trend
+    section already matches the nominal count, or there's no trend section
+    /no Index in this render at all — e.g. a partial export)."""
+    from pypdf import PdfReader, PdfWriter
+    from main import _INDEX_SECTIONS
+
+    _TREND_TITLE = "10 Years Month Wise Production"
+
+    trend_idx = next((i for i, p in enumerate(main_pages) if p.get("type") == "trend_section"), None)
+    if trend_idx is None:
+        return pdf_bytes, nominal_total
+
+    nominal_trend_count = next((count for title, count in _INDEX_SECTIONS if _TREND_TITLE in title), None)
+    if nominal_trend_count is None:
+        return pdf_bytes, nominal_total
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    page_texts = [(p.extract_text() or "") for p in reader.pages]
+
+    start_i = _marker_page_index(page_texts, main_pages[trend_idx].get("page"))
+    if start_i is None:
+        return pdf_bytes, nominal_total  # can't determine -- don't guess, leave as-is
+
+    if trend_idx + 1 < len(main_pages):
+        end_i = _marker_page_index(page_texts, main_pages[trend_idx + 1].get("page"))
+        if end_i is None:
+            return pdf_bytes, nominal_total
+        real_trend_count = end_i - start_i
+    else:
+        real_trend_count = len(page_texts) - start_i
+
+    if real_trend_count == nominal_trend_count:
+        return pdf_bytes, nominal_total  # matches the nominal count -- nothing to correct
+
+    index_i = _marker_page_index(page_texts, 2)
+    if index_i is None:
+        return pdf_bytes, nominal_total  # no Index in this render (e.g. a partial export)
+
+    # Rebuild the Index's declared rows exactly as main._index_rows() does,
+    # substituting the real trend count for the nominal one -- every row
+    # AFTER it shifts too, since trend isn't the report's last section
+    # (unlike Ready Reckoner's own Index correction, deliberately NOT
+    # auto-corrected per direct instruction 2026-09-22 — see
+    # _split_ready_reckoner_overflow's docstring).
+    rows = []
+    cursor = 1
+    for i, (title, count) in enumerate(_INDEX_SECTIONS, start=1):
+        c = real_trend_count if _TREND_TITLE in title else count
+        page_range = str(cursor) if c == 1 else f"{cursor}-{cursor + c - 1}"
+        rows.append({"sno": str(i), "title": title, "page_range": page_range})
+        cursor += c
+    new_total = cursor - 1
+
+    index_page = next((dict(p) for p in front_pages if p.get("page") == 2), None)
+    if index_page is None:
+        return pdf_bytes, nominal_total
+    index_page["rows"] = rows
+
+    new_index_html = template.render(pages=[index_page], **render_kwargs)
+    op = browser.new_page()
+    try:
+        op.set_content(new_index_html, wait_until="domcontentloaded")
+        op.evaluate("document.fonts.ready")
+        new_index_bytes = op.pdf(
+            format="A4", print_background=True, display_header_footer=False, margin=_FRONT_MARGIN,
+        )
+    finally:
+        op.close()
+    new_index_reader = PdfReader(io.BytesIO(new_index_bytes))
+    if len(new_index_reader.pages) != 1:
+        # The corrected Index somehow spilled onto a 2nd physical page --
+        # every downstream physical position this function assumed would
+        # now be wrong. Don't guess at a fix; leave the nominal Index/
+        # total in place rather than risk corrupting the document.
+        return pdf_bytes, nominal_total
+
+    writer = PdfWriter()
+    for k, p in enumerate(reader.pages):
+        writer.add_page(new_index_reader.pages[0] if k == index_i else p)
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue(), new_total
+
+
 _PW_STATE = {"pw": None, "browser": None}
 
 
@@ -1734,6 +1958,18 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
                 from page_techno import generate_summary_chart_html
                 _p3["_chart_html"] = generate_summary_chart_html(_p3["chart_data"], vh=130)
 
+    # Ready Reckoner: split a plant's combined Unit-wise Capacity + Product
+    # Mix page across 2 physical pages instead of the usual 1, but only for
+    # a plant whose content actually measures as not fitting at the
+    # configured 12pt font — see _split_ready_reckoner_overflow. The footer
+    # total and the Index's own declared Annexure-1/2 range are NOT
+    # auto-corrected for this (per direct instruction, 2026-09-22 — was
+    # auto-corrected until now): both are hand-maintained in main.py's
+    # _INDEX_SECTIONS instead, so update that whenever a Ready Reckoner
+    # data-entry edit changes which plants split.
+    if any(p.get("type") == "ready_reckoner" and p.get("subtype") == "details" for p in main_pages):
+        _split_ready_reckoner_overflow(main_pages, browser, template, render_kwargs, font_family, report_month)
+
     # Page 1 (Cover) is rendered as its own document with a zero page
     # margin (see _render_pdf's docstring — page.pdf()'s margin option
     # always wins over the @page CSS the template already declares for
@@ -1786,15 +2022,39 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         page-type-wide rule)."""
         return p.get("type") in _LANDSCAPE_TYPES or bool(p.get("pdf_landscape"))
 
+    from pypdf import PdfReader
+
     _landscape_pages = [p for p in main_pages if _is_landscape_page(p)]
     if not _landscape_pages:
         main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
         _trend_hook = _make_trend_split_hook(main_pages, template, render_kwargs, _MAIN_MARGIN)
+        # main_header_footer=False (was True — baking Chromium's own inline
+        # footer straight into this one print call) since 2026-09-22: with
+        # _pick_trend_margins re-enabled, the trend section's real page
+        # count (and therefore the correct "of TOTAL") isn't known until
+        # AFTER this render — see _correct_dynamic_trend_pagination and the
+        # _stamp_main_page_numbers call below, the same blank-then-stamp
+        # pattern the landscape branch already used. Stamping the footer
+        # inline here and then overlaying a second, corrected one on top
+        # would double-print overlapping text — _stamp_main_page_numbers
+        # only ever draws over a page whose footer band is genuinely blank.
         with _time_phase("main content — TOTAL"):
             pdf_bytes = _render_pdf(browser, front_html, main_html, font_family, report_month,
                                      dept_badges=dept_badges, cover_html=cover_html,
-                                     main_pre_pdf_hook=_trend_hook,
-                                     total_pages_override=footer_total_override, phase_prefix="main content")
+                                     main_header_footer=False,
+                                     main_pre_pdf_hook=_trend_hook, phase_prefix="main content")
+        with _time_phase("dynamic trend pagination check"):
+            pdf_bytes, footer_total_override = _correct_dynamic_trend_pagination(
+                pdf_bytes, browser, front_pages, main_pages, template, render_kwargs,
+                font_family, report_month, footer_total_override)
+        _main_texts = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(pdf_bytes)).pages]
+        _main_start = _marker_page_index(_main_texts, main_pages[0].get("page")) if main_pages else 0
+        if _main_start is None:
+            _main_start = 0
+        with _time_phase("re-stamp page numbers"):
+            pdf_bytes = _stamp_main_page_numbers(pdf_bytes, browser, font_family, report_month,
+                                                  _main_start, len(_main_texts) - _main_start,
+                                                  total_pages=footer_total_override)
     else:
         from pypdf import PdfReader, PdfWriter
 
@@ -1935,6 +2195,10 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
 
         _total_landscape = sum(len(rr.pages) for rr in run_readers)
         main_count = len(base_reader.pages) + _total_landscape - main_start
+        with _time_phase("dynamic trend pagination check"):
+            spliced_bytes, footer_total_override = _correct_dynamic_trend_pagination(
+                spliced_bytes, browser, front_pages, main_pages, template, render_kwargs,
+                font_family, report_month, footer_total_override)
         with _time_phase("re-stamp page numbers (post-splice)"):
             spliced_bytes = _stamp_main_page_numbers(spliced_bytes, browser, font_family, report_month,
                                                       main_start, main_count,

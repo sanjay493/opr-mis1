@@ -5,14 +5,29 @@ ISP) and Annexure-2 (3 Special Steel Plants: ASP/SSP/VISL), right after
 Source: Report_format/"Ready Reckoner (Plant wise Details).pdf" and
 "Ready Reckoner Special Steel Plant.docx".
 
-THREE pages per plant (per direct instruction, 2026-09-20 — was one page
-combining all three): 1) the process-flow diagram, 2) the "Major
-Facilities"/Unit-wise Capacity table, 3) the "Mill-wise Product Profile"/
-Product Mix table. Unlike every other page in this report, this content is
-static reference material, not month-scoped — the same regardless of which
-report month is open — so it's read/written straight from
-ready_reckoner_pages (see db.py's own comment), never through the generic
-per-month page_configs flow.
+TWO pages per plant in the common case (per direct instruction, 2026-09-21
+— was three: the "Major Facilities"/Unit-wise Capacity table and the
+"Mill-wise Product Profile"/Product Mix table are small enough to
+consolidate onto one page together, while the process-flow diagram keeps
+its own dedicated page since it needs the full page to stay legible): 1)
+the process-flow diagram, 2) the combined Unit-wise Capacity + Product Mix
+tables ("details"). PDF generation only (never the live preview, which
+always shows the merged "details" page — see ReadyReckonerTemplate.js's
+own comment) falls back to 3 pages for a plant whose combined table content
+doesn't actually fit one physical page at its configured 12pt font: the
+"details" page id gets re-rendered as "capacity" alone, and the reserved
+overflow id from PRODUCT_MIX_OVERFLOW_PAGES (never used by default) carries
+"product_mix" alone right after it — per direct instruction, 2026-09-22:
+merge only when there's room, never by shrinking the font. Decided by a
+real isolated print-and-measure per plant, not guessed from row counts —
+see pdf.py's _ready_reckoner_details_fits. Each group (ISP/SSP) also gets
+its own blank separator/title page right before its first plant — see
+ISP_SEPARATOR_PAGE_ID/SSP_SEPARATOR_PAGE_ID and
+generate_ready_reckoner_separator below. Unlike every other page in this
+report, the plant content is static reference material, not month-scoped —
+the same regardless of which report month is open — so it's read/written
+straight from ready_reckoner_pages (see db.py's own comment), never through
+the generic per-month page_configs flow.
 
 Editing happens in the dedicated /data-entry/ready-reckoner form
 (editor/admin only), which POSTs straight to this table via /api/ready-
@@ -40,19 +55,22 @@ import db
 ISP_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 SSP_PLANTS = ["ASP", "SSP", "VISL"]
 
-_SUBTYPES = ["process_flow", "capacity", "product_mix"]
+_SUBTYPES = ["process_flow", "details"]
 _SUBTYPE_LABELS = {
     "process_flow": "Process Flow",
+    "details": "Unit-wise Capacity & Product Mix",
+    # Only ever used for the PDF-only overflow fallback (see module
+    # docstring) — "details" splits into these two when it doesn't fit.
     "capacity": "Unit-wise Capacity",
     "product_mix": "Product Mix",
 }
 
 
 def _paginate(plants: list, first_id: int) -> dict:
-    """page_id -> (plant_code, subtype), 3 consecutive ids per plant
-    (process_flow, capacity, product_mix in that order — the actual
-    print order, since main.py's pages_config/​_pages_list append loops
-    just walk this dict's keys in insertion order), starting at first_id."""
+    """page_id -> (plant_code, subtype), 2 consecutive ids per plant
+    (process_flow, details in that order — the actual print order, since
+    main.py's pages_config/​_pages_list append loops just walk this dict's
+    keys in insertion order), starting at first_id."""
     out = {}
     pg = first_id
     for plant in plants:
@@ -63,11 +81,28 @@ def _paginate(plants: list, first_id: int) -> dict:
 
 
 # Sentinel page id -> (plant code, subtype). Mirrors CR_PAGES's shape
-# (page_capital_repair.py) — 3 pages per plant, inserted right after the
-# Rake Detention pages. Ids 1041-1064 (24 total: 15 ISP + 9 SSP) — chosen
-# to sit clear of Rake Detention's own sentinels (1026-1029, 1038-1040).
-ISP_PAGES = _paginate(ISP_PLANTS, 1041)   # 1041-1055
-SSP_PAGES = _paginate(SSP_PLANTS, 1056)   # 1056-1064
+# (page_capital_repair.py) — 2 pages per plant, inserted right after the
+# Rake Detention pages, each group preceded by its own blank separator page
+# (ISP_SEPARATOR_PAGE_ID/SSP_SEPARATOR_PAGE_ID). Ids 1041-1058 (18 total: a
+# separator + 10 ISP + a separator + 6 SSP) — chosen to sit clear of Rake
+# Detention's own sentinels (1026-1029, 1038-1040). Was 1041-1064 (3 pages/
+# plant, no separators) until 2026-09-21 — see module docstring.
+ISP_SEPARATOR_PAGE_ID = 1041
+ISP_PAGES = _paginate(ISP_PLANTS, 1042)   # 1042-1051
+SSP_SEPARATOR_PAGE_ID = 1052
+SSP_PAGES = _paginate(SSP_PLANTS, 1053)   # 1053-1058
+
+# One reserved id per plant (8 total, 1059-1066 — right after SSP_PAGES,
+# still clear of every other sentinel range) for the PDF-only "product_mix"
+# overflow fallback described in the module docstring. Never included in
+# pages_config by default (see main.py) — pdf.py inserts one of these only
+# for a plant whose combined "details" content actually measures as not
+# fitting one physical page. A flat plant -> id map, not a paginated dict
+# like ISP_PAGES/SSP_PAGES, since there's exactly one reserved id per plant
+# regardless of group.
+PRODUCT_MIX_OVERFLOW_PAGE_ID = {
+    plant: 1059 + i for i, plant in enumerate(ISP_PLANTS + SSP_PLANTS)
+}
 
 _PLANT_NAMES = {
     "BSP": "Bhilai Steel Plant", "DSP": "Durgapur Steel Plant",
@@ -75,13 +110,15 @@ _PLANT_NAMES = {
     "ASP": "Alloy Steels Plant", "SSP": "Salem Steel Plant", "VISL": "Visvesvaraya Iron and Steel Plant",
 }
 
-# These 4 plants' process-flow pages always print in landscape (per direct
-# instruction, 2026-09-20), regardless of the uploaded diagram's own aspect
-# ratio — unlike every other plant, which falls back to the width>height
-# auto-detection in generate_ready_reckoner_page below. Pinned explicitly so
-# the layout doesn't flip back to portrait if an editor later replaces one
-# of these plants' diagrams with a taller image.
-_FORCE_LANDSCAPE_PLANTS = {"BSL", "DSP", "ISP", "RSP"}
+# These 5 plants' process-flow pages always print in landscape (BSL/DSP/
+# ISP/RSP per direct instruction 2026-09-20; BSP added 2026-09-22, switched
+# from portrait to landscape once its diagram was replaced with a wide one),
+# regardless of the uploaded diagram's own aspect ratio — unlike every other
+# plant, which falls back to the width>height auto-detection in
+# generate_ready_reckoner_page below. Pinned explicitly so the layout
+# doesn't flip back to portrait if an editor later replaces one of these
+# plants' diagrams with a taller image.
+_FORCE_LANDSCAPE_PLANTS = {"BSL", "BSP", "DSP", "ISP", "RSP"}
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static", "ready_reckoner")
 os.makedirs(_STATIC_DIR, exist_ok=True)
@@ -97,13 +134,36 @@ def image_path_for(plant_code: str, filename: str) -> str:
     return os.path.join(_STATIC_DIR, f"{plant_code}{ext}")
 
 
+_SEPARATOR_LABELS = {
+    "ISP": ("Annexure-1", "5 ISPs Ready Reckoner"),
+    "SSP": ("Annexure-2", "3 SSPs Ready Reckoner"),
+}
+
+
+def generate_ready_reckoner_separator(group: str) -> dict:
+    """group: "ISP" or "SSP" — see ISP_SEPARATOR_PAGE_ID/SSP_SEPARATOR_PAGE_ID.
+    A blank page (no header content beyond a centered title) printed right
+    before that group's first plant page, per direct instruction,
+    2026-09-21: "Annexure-1"/"Annexure-2" in black, "5 ISPs Ready
+    Reckoner"/"3 SSPs Ready Reckoner" in rust brown on the next line, both
+    centered on an otherwise blank page — see ready_reckoner_separator.html."""
+    annexure_label, group_label = _SEPARATOR_LABELS[group]
+    return {
+        "type": "ready_reckoner_separator",
+        "title": f"{annexure_label} : {group_label}",
+        "annexure_label": annexure_label,
+        "group_label": group_label,
+    }
+
+
 def generate_ready_reckoner_page(plant_code: str, subtype: str) -> dict:
-    """subtype: one of "process_flow" / "capacity" / "product_mix" — see
-    ISP_PAGES/SSP_PAGES. Always reads the full row (cheap — one small
-    row) but only the requested subtype's own content actually gets
-    rendered (see ready_reckoner_plant.html); the other fields are still
-    included so a template branch never has to special-case a missing
-    key."""
+    """subtype: one of "process_flow" / "details" (see ISP_PAGES/SSP_PAGES)
+    or "capacity" / "product_mix" (the PDF-only overflow fallback — see
+    module docstring and PRODUCT_MIX_OVERFLOW_PAGE_ID). Always reads the
+    full row (cheap — one small row) but only the requested subtype's own
+    content actually gets rendered (see ready_reckoner_plant.html); the
+    other fields are still included so a template branch never has to
+    special-case a missing key."""
     row = db.get_ready_reckoner_page(plant_code) or {}
     image_uri = ""
     image_landscape = False

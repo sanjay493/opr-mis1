@@ -65,10 +65,18 @@ _DEPT_BADGE_GROUPS = [
 #     aren't contiguous: 1038-1040 were added later, once 1026/1027 (the
 #     original 3-plant/2-plant page split) got broken out to one plant per
 #     page for legibility, and by then 1028-1037 were already claimed.
-#   1041-1055, 1056-1064 — "Ready Reckoner" (5 ISPs then 3 SSPs, 3 pages
-#     each — process-flow diagram, Unit-wise Capacity, Product Mix, split
-#     from one combined page per plant, 2026-09-20), right after Rake
-#     Detention, now the true end of the report — its own group (11).
+#   1041, 1042-1051, 1052, 1053-1058 — "Ready Reckoner": a blank separator
+#     page (Annexure-1 title), then 5 ISPs x 2 pages each (process-flow
+#     diagram, then Unit-wise Capacity + Product Mix consolidated onto one
+#     page), then a second separator page (Annexure-2 title), then 3 SSPs x
+#     2 pages each — right after Rake Detention, now the true end of the
+#     report — its own group (11). Was 1041-1064 (3 pages/plant, no
+#     separators) until 2026-09-21. 1059-1066 (8 ids, one per plant) are
+#     reserved right after but only ever appear in a rendered PDF for a
+#     plant whose combined Unit-wise Capacity + Product Mix content doesn't
+#     actually fit one page at 12pt — see page_ready_reckoner.py's
+#     PRODUCT_MIX_OVERFLOW_PAGE_ID / pdf.py's _ready_reckoner_details_fits,
+#     2026-09-22. Same group (11) as the rest of the section either way.
 _DEPT_BADGE_EXPLICIT_GROUP = {
     2.1: 1, 2.2: 1, 2.3: 1, 2.41: 1, 2.42: 1,
     2.5: 1, 3: 1, 3.05: 1, 3.2: 1, 3.3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1,
@@ -77,7 +85,7 @@ _DEPT_BADGE_EXPLICIT_GROUP = {
     29.5: 7,
     35.4: 8, 35.5: 8, 35.6: 8, 35.7: 8,
     1026: 10, 1027: 10, 1038: 10, 1039: 10, 1040: 10, 1028: 10, 1029: 10,
-    **{pg: 11 for pg in range(1041, 1065)},
+    **{pg: 11 for pg in range(1041, 1067)},
 }
 
 
@@ -137,7 +145,7 @@ _CANONICAL_PAGE_ORDER = [
     31, 32, 33, 34, 35, 35.4, 35.5, 35.6, 35.7,
     *range(36, 41),
     1026, 1027, 1038, 1039, 1040, 1028, 1029,
-    *range(1041, 1065),
+    *range(1041, 1067),
 ]
 
 _DEPT_BADGE_SIDE = {}

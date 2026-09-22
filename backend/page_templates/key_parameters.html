@@ -34,8 +34,9 @@
                 {% endif %}
                 <td style="padding:2px 6px;border:1px solid {{ colors.border_black }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ row.unit }}</td>
                 {% for p in page.plants %}
-                {% set cell_bg = (colors.highlight_actual_bg if row.max_plants and p in row.max_plants else (colors.highlight_target_band_bg if row.min_plants and p in row.min_plants else '')) %}
-                <td style="padding:2px 6px;border:1px solid {{ colors.border_black }};text-align:center;{% if cell_bg %}background:{{ cell_bg }};font-weight:700;{% endif %}">{{ row.plant_values[p] if row.plant_values[p] is not none else '—' }}</td>
+                {% set is_least_cost = row.least_cost_plants and p in row.least_cost_plants %}
+                {% set cell_bg = (colors.highlight_achieved_band_bg if is_least_cost else (colors.highlight_actual_bg if row.max_plants and p in row.max_plants else (colors.highlight_target_band_bg if row.min_plants and p in row.min_plants else ''))) %}
+                <td style="padding:2px 6px;border:1px solid {{ colors.border_black }};text-align:center;{% if cell_bg %}background:{{ cell_bg }};font-weight:700;{% endif %}">{% if is_least_cost %}🏆 {% endif %}{{ row.plant_values[p] if row.plant_values[p] is not none else '—' }}</td>
                 {% endfor %}
               </tr>
               {% endif %}

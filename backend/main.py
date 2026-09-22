@@ -64,9 +64,11 @@ from page_rake_detention import (
 )
 import page_ready_reckoner
 from page_ready_reckoner import (
+    ISP_SEPARATOR_PAGE_ID as READY_RECKONER_ISP_SEPARATOR_PAGE_ID,
     ISP_PAGES as READY_RECKONER_ISP_PAGES,
+    SSP_SEPARATOR_PAGE_ID as READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
     SSP_PAGES as READY_RECKONER_SSP_PAGES,
-    generate_ready_reckoner_page,
+    generate_ready_reckoner_page, generate_ready_reckoner_separator,
 )
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
@@ -242,7 +244,14 @@ _INDEX_SECTIONS = [
     ("Production Highlights - Best-Ever Records", 1),
     ("Production Highlights - Best Calendar Month", 1),
     ("Inter Plant Performance Comparison", 1),
-    ("SAIL Large BFs - Performance Snapshot", 1),
+    # Was declared 1 page; re-measured 2026-09-22 against a real full-report
+    # render (see pdf.py's bf_large_annexure landscape splice) — the BF
+    # table now actually spills onto a 2nd physical page. This and the 3
+    # other counts marked "re-measured 2026-09-22" below were the root
+    # cause of every section from here to the end of the report printing a
+    # footer page number that didn't match its own Index-declared position
+    # (reported against IPT specifically, but the drift starts here).
+    ("SAIL Large BFs - Performance Snapshot", 2),
     # Cost Trend (Hot Metal / Crude Steel / Saleable Steel) — 3 separate
     # physical pages (COST_TREND_HM/CS/SS_PAGE_ID = 3.61/3.62/3.63), always
     # inserted right after Large BFs — see the "Cost Trend" comment above
@@ -257,12 +266,25 @@ _INDEX_SECTIONS = [
     # Pig Iron & Finished Steel/Saleable Steel) flow as one continuous
     # section rather than one physical page each (see pdf.py's trend_section
     # merge + _make_trend_split_hook) — some items spill onto a 2nd
-    # physical page. Currently 12 physical pages (measured 2026-07 against a
-    # real generated PDF — @@PGSTART_7@@ on the section's 1st page,
-    # @@PGSTART_13@@ 12 pages later). Not a structural guarantee — recheck
-    # (regenerate and read off where the Concast marker lands) if
-    # page7_13.py's plant list / item count or _MAIN_MARGIN changes.
-    ("10 Years Month Wise Production (Main Item Plant Wise)", 12),
+    # physical page, and (_pick_trend_margins re-enabled 2026-09-22, now
+    # also minimizing total page count, not just orphan count — see that
+    # function's own docstring) the exact count now genuinely varies by
+    # month's data, not just by a rare content change. This "11" is only a
+    # NOMINAL fallback, not a live count: the live web preview (which never
+    # runs a real Chromium print) has no other number to show, and it's
+    # this function's own starting point for the real per-render
+    # measurement pdf.py's _correct_dynamic_trend_pagination does — see
+    # that function's docstring. It corrects the actual exported PDF's
+    # Index (page 2) and footer total straight from a real post-render
+    # measurement every time, so this number no longer needs hand-updating
+    # to keep the PDF itself correct — only the live preview's Index
+    # display can still lag if it ever drifts far from reality. Last
+    # measured 2026-09-22 against a real full-report render for month
+    # 2025-11, with _pick_trend_margins active (was 14 measured minutes
+    # earlier the same day with margin-picking still disabled, and 12 as
+    # of 2026-07 before that — this number moves with both the underlying
+    # data AND the pagination algorithm itself, not just the former).
+    ("10 Years Month Wise Production (Main Item Plant Wise)", 11),
     ("Crude Steel Production Details - Concast & Process Type", 2),
     # Category-wise (3 plant-group pages: BSP / DSP&RSP / BSL&ISP) +
     # Segment Wise Production (1 page) - one Index entry covering all 4.
@@ -276,8 +298,12 @@ _INDEX_SECTIONS = [
     # PRODUCTION-denominated page followed by a page-break into a 2nd,
     # despatch-denominated page); per direct instruction the production
     # page was dropped and despatch is now the sentinel's only page, so
-    # this row's count dropped from 7 to 6.
-    ("Plant Wise Special Steel Production & SAIL Trend", 6),
+    # this row's count dropped from 7 to 6 — then back up to 7 (re-measured
+    # 2026-09-22 against a real full-report render): the 5 special-steel
+    # plant pages + SAIL's own page already account for 6 on their own, and
+    # the TREND_PAGE_ID sentinel (1024) prints as its own 7th physical page,
+    # not folded into one of those 6 as this comment previously assumed.
+    ("Plant Wise Special Steel Production & SAIL Trend", 7),
     # "Rail Production & Dispatch from BSP" — a single page (RAIL_REPORT_
     # PAGE_ID = 18.5, sentinel-float treatment as SAIL Mines above) — per
     # direct instruction, 2026-09-17, moved here (right after the Trend
@@ -298,7 +324,11 @@ _INDEX_SECTIONS = [
     # Month-wise (Coke & Coal Chemicals/Sinter, Iron Making, Iron Making
     # contd., SMS Shop — 4 pages, one of which is IRON_MAKING_PAGE_2_ID's
     # own overflow page) + Mill-wise (BSP/DSP/RSP/BSL/ISP — 5 pages).
-    ("Plant Wise Area Wise TEPs", 9),
+    # Re-measured 2026-09-22 against a real full-report render: Iron Making
+    # (Contd.) (page 29.5, IRON_MAKING_PAGE_2_ID) is itself now spilling
+    # onto a 2nd physical page, one beyond the "4 pages" above — 10 total,
+    # not 9.
+    ("Plant Wise Area Wise TEPs", 10),
     ("Major Environmental Performance Indicators (EPIs) - Plant Wise", 1),
     ("Details of Coking Coal Consumption, Blend and Stocks", 2),
     ("Plant Wise Power Data", 1),
@@ -310,13 +340,24 @@ _INDEX_SECTIONS = [
     # "Improvement" summary and multi-year trend pages. See
     # page_rake_detention.py.
     ("Details of Rakes Detention Plant Wise", 7),
-    # "Ready Reckoner" — 3 pages per plant (process-flow diagram, Unit-wise
-    # Capacity, Product Mix — split from one combined page per plant,
-    # 2026-09-20), right after Rake Detention, at the very end. See
-    # READY_RECKONER_ISP_PAGES/READY_RECKONER_SSP_PAGES above and
-    # page_ready_reckoner.py.
-    ("Annexure-1 : 5 ISPs Ready Reckoner", 15),
-    ("Annexure-2 : 3 SSPs Ready Reckoner", 9),
+    # "Ready Reckoner" — a blank Annexure separator page, then 2 pages per
+    # plant (process-flow diagram, then Unit-wise Capacity + Product Mix
+    # consolidated onto one page — 2026-09-21; was 3 separate pages per
+    # plant with no separator until then), right after Rake Detention, at
+    # the very end. See READY_RECKONER_ISP_SEPARATOR_PAGE_ID/READY_
+    # RECKONER_ISP_PAGES/READY_RECKONER_SSP_SEPARATOR_PAGE_ID/READY_
+    # RECKONER_SSP_PAGES above and page_ready_reckoner.py.
+    #
+    # A plant whose combined Unit-wise Capacity + Product Mix table doesn't
+    # fit one physical page at the configured 12pt font prints as 2 pages
+    # instead of 1 (capacity alone, then product_mix alone — see pdf.py's
+    # _split_ready_reckoner_overflow/PRODUCT_MIX_OVERFLOW_PAGE_ID), so these
+    # two counts are hand-maintained here, not auto-derived — update them
+    # whenever a Ready Reckoner data-entry edit changes which plants split.
+    # Currently (2026-09-22): BSP, RSP, and BSL split (3 extra pages); DSP,
+    # ISP, and all 3 SSPs (ASP/SSP/VISL) stay merged.
+    ("Annexure-1 : 5 ISPs Ready Reckoner", 14),
+    ("Annexure-2 : 3 SSPs Ready Reckoner", 7),
 ]
 
 
@@ -601,13 +642,16 @@ POWER_DATA_PAGE_ID = 35.7
 # "Ready Reckoner" — Annexure-1 (5 ISPs) / Annexure-2 (3 SSPs), inserted
 # right after the Rake Detention pages, at the very end of the report
 # (nothing follows it — the Annexures were reference-only Index rows until
-# now). 3 sentinel pages per plant, portrait — process-flow diagram,
-# Unit-wise Capacity, Product Mix (split from one combined page per plant,
-# 2026-09-20) — each edited inline in the /report live preview (not
-# month-scoped — see ready_reckoner_pages' own comment in db.py).
-# READY_RECKONER_ISP_PAGES/READY_RECKONER_SSP_PAGES are imported above,
-# aliased from page_ready_reckoner's own ISP_PAGES/SSP_PAGES. See
-# page_ready_reckoner.py.
+# now). Each group opens with a blank separator/title sentinel page
+# (READY_RECKONER_ISP_SEPARATOR_PAGE_ID/READY_RECKONER_SSP_SEPARATOR_PAGE_ID
+# — "Annexure-1"/"Annexure-2" + group title, centered, per direct
+# instruction 2026-09-21), then 2 sentinel pages per plant, portrait —
+# process-flow diagram, then Unit-wise Capacity + Product Mix consolidated
+# onto one page (was 3 separate pages per plant until 2026-09-21) — each
+# edited inline in the /report live preview (not month-scoped — see
+# ready_reckoner_pages' own comment in db.py). READY_RECKONER_ISP_PAGES/
+# READY_RECKONER_SSP_PAGES are imported above, aliased from page_ready_
+# reckoner's own ISP_PAGES/SSP_PAGES. See page_ready_reckoner.py.
 
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
@@ -841,7 +885,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                 SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
                                 MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
-                                POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID) \
+                                POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
+                                READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID) \
                     or page_number in STEEL_SECTOR_PAGES or page_number in RAKE_DETENTION_DETAIL_PAGES \
                     or page_number in READY_RECKONER_ISP_PAGES or page_number in READY_RECKONER_SSP_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
@@ -982,7 +1027,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                                       SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
                                                       MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
-                                                      POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID)
+                                                      POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
+                                                      READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
                             and p.get("page") not in RAKE_DETENTION_DETAIL_PAGES
                             and p.get("page") not in READY_RECKONER_ISP_PAGES
@@ -1065,9 +1111,12 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config.append({"page": RAKE_DETENTION_SUMMARY_PAGE_ID})
             pages_config.append({"page": RAKE_DETENTION_TREND_PAGE_ID})
             # "Ready Reckoner" — appended right after Rake Detention, now
-            # the true end of the report (nothing follows it).
+            # the true end of the report (nothing follows it). Each group
+            # opens with its own blank separator/title page.
+            pages_config.append({"page": READY_RECKONER_ISP_SEPARATOR_PAGE_ID})
             for _pg in READY_RECKONER_ISP_PAGES:
                 pages_config.append({"page": _pg})
+            pages_config.append({"page": READY_RECKONER_SSP_SEPARATOR_PAGE_ID})
             for _pg in READY_RECKONER_SSP_PAGES:
                 pages_config.append({"page": _pg})
         for page in pages_config:
@@ -1147,6 +1196,10 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page.update(generate_rake_detention_summary(month))
             if pg == RAKE_DETENTION_TREND_PAGE_ID:
                 page.update(generate_rake_detention_trend(month))
+            if pg == READY_RECKONER_ISP_SEPARATOR_PAGE_ID:
+                page.update(generate_ready_reckoner_separator("ISP"))
+            if pg == READY_RECKONER_SSP_SEPARATOR_PAGE_ID:
+                page.update(generate_ready_reckoner_separator("SSP"))
             if pg in READY_RECKONER_ISP_PAGES:
                 page.update(generate_ready_reckoner_page(*READY_RECKONER_ISP_PAGES[pg]))
             if pg in READY_RECKONER_SSP_PAGES:
@@ -1419,10 +1472,14 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _pages_list.append({"page": RAKE_DETENTION_TREND_PAGE_ID})
     # "Ready Reckoner" sentinel pages: appended right after Rake Detention,
     # now the true end of the report — same unconditional-insert-if-missing
-    # pattern as above.
+    # pattern as above. Each group opens with its own blank separator page.
+    if _is_full_export and not any(p.get("page") == READY_RECKONER_ISP_SEPARATOR_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": READY_RECKONER_ISP_SEPARATOR_PAGE_ID})
     if _is_full_export and not any(p.get("page") in READY_RECKONER_ISP_PAGES for p in _pages_list):
         for _pg in READY_RECKONER_ISP_PAGES:
             _pages_list.append({"page": _pg})
+    if _is_full_export and not any(p.get("page") == READY_RECKONER_SSP_SEPARATOR_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": READY_RECKONER_SSP_SEPARATOR_PAGE_ID})
     if _is_full_export and not any(p.get("page") in READY_RECKONER_SSP_PAGES for p in _pages_list):
         for _pg in READY_RECKONER_SSP_PAGES:
             _pages_list.append({"page": _pg})
@@ -1536,6 +1593,10 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
             p.update(generate_rake_detention_summary(request.month))
         if pg == RAKE_DETENTION_TREND_PAGE_ID:
             p.update(generate_rake_detention_trend(request.month))
+        if pg == READY_RECKONER_ISP_SEPARATOR_PAGE_ID:
+            p.update(generate_ready_reckoner_separator("ISP"))
+        if pg == READY_RECKONER_SSP_SEPARATOR_PAGE_ID:
+            p.update(generate_ready_reckoner_separator("SSP"))
         if pg in READY_RECKONER_ISP_PAGES:
             p.update(generate_ready_reckoner_page(*READY_RECKONER_ISP_PAGES[pg]))
         if pg in READY_RECKONER_SSP_PAGES:

@@ -23,6 +23,11 @@ const C = {
   // used the same way on the PDF side.
   maxBg: '#dbeafe',
   minBg: '#fef9c3',
+  // Cost of Production section (see page_key_parameters.py's
+  // `least_cost_plants`) — every row there is unambiguously lower-is-
+  // better, so only the least-cost plant(s) get a distinct "winner" green
+  // band plus a trophy icon, not the neutral max/min scheme above.
+  leastCostBg: '#dcfce7',
 };
 
 export default function KeyParametersTemplate({ data }) {
@@ -75,12 +80,14 @@ export default function KeyParametersTemplate({ data }) {
                 )}
                 <td style={{ ...cellStyle, fontStyle: 'italic', color: C.textSecondary }}>{row.unit}</td>
                 {plants.map((p) => {
+                  const isLeastCost = row.least_cost_plants && row.least_cost_plants.includes(p);
                   const isMax = row.max_plants && row.max_plants.includes(p);
                   const isMin = row.min_plants && row.min_plants.includes(p);
-                  const bg = isMax ? C.maxBg : (isMin ? C.minBg : undefined);
+                  const bg = isLeastCost ? C.leastCostBg : (isMax ? C.maxBg : (isMin ? C.minBg : undefined));
+                  const val = row.plant_values && row.plant_values[p] !== null && row.plant_values[p] !== undefined ? row.plant_values[p] : '—';
                   return (
                     <td key={p} style={{ ...cellStyle, background: bg, fontWeight: bg ? 700 : undefined }}>
-                      {row.plant_values && row.plant_values[p] !== null && row.plant_values[p] !== undefined ? row.plant_values[p] : '—'}
+                      {isLeastCost ? `🏆 ${val}` : val}
                     </td>
                   );
                 })}

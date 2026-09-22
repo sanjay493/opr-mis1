@@ -38,7 +38,12 @@
         text-align: center; font-style: italic; padding: 60px 0;
         color: {{ colors.text_secondary|default('#5f6368') }};
     }
-    .rr-content-block { font-size: 9pt; }
+    /* 12pt per direct instruction, 2026-09-22 — content must stay
+       readable-sized; a plant whose combined table content doesn't fit at
+       this size gets split across 2 physical pages instead of shrunk (see
+       page_ready_reckoner.py's module docstring / pdf.py's
+       _ready_reckoner_details_fits), never the other way around. */
+    .rr-content-block { font-size: 12pt; }
     .rr-content-block table { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
     .rr-content-block table td, .rr-content-block table th {
         border: 0.5pt solid {{ colors.border_dark|default('#5f6368') }}; padding: 3px 5px;
@@ -67,12 +72,21 @@
     {% else %}
     <div class="rr-diagram-missing">No process-flow diagram uploaded yet.</div>
     {% endif %}
-{% elif page.subtype == 'capacity' %}
-    {# page.capacity_rows: [{item, details, capacity, is_total}, ...] — plain
-       data (db.py's own comment above _READY_RECKONER_COLS), never HTML;
+{% elif page.subtype in ('details', 'capacity') %}
+    {# Unit-wise Capacity, and (subtype == 'details' only) Product Mix right
+       under it on the same page — merged whenever both tables fit one
+       physical page (per direct instruction, 2026-09-21). subtype ==
+       'capacity' is the PDF-only overflow fallback (per direct
+       instruction, 2026-09-22, see page_ready_reckoner.py's module
+       docstring): capacity alone here, product_mix alone on the very next
+       page, when the combined content measures as not fitting at 12pt.
+       page.capacity_rows: [{item, details, capacity, is_total}, ...];
+       page.product_mix_headers/rows: this plant's own column layout (see
+       the schema-design note in db.py) — both plain data, never HTML;
        |rr_cell (registered in pdf.py) escapes it and turns a "\n" line
        break into <br>. #}
     <div class="rr-content-block rr-capacity-block">
+        <div class="rr-caption">Unit-wise Capacity</div>
         <table>
             <thead><tr><th>Facility</th><th>Details</th><th>Capacity</th></tr></thead>
             <tbody>
@@ -86,11 +100,26 @@
             </tbody>
         </table>
     </div>
-{% elif page.subtype == 'product_mix' %}
-    {# page.product_mix_headers/rows: this plant's own column layout (see
-       the schema-design note in db.py) — plain data, same |rr_cell rule. #}
+    {% if page.subtype == 'details' %}
     <div class="rr-content-block">
-        {% if page.product_mix_caption %}<div class="rr-caption">{{ page.product_mix_caption|rr_cell }}</div>{% endif %}
+        <div class="rr-caption">Product Mix{% if page.product_mix_caption %} — {{ page.product_mix_caption|rr_cell }}{% endif %}</div>
+        <table>
+            <thead><tr>{% for h in page.product_mix_headers %}<th>{{ h|rr_cell }}</th>{% endfor %}</tr></thead>
+            <tbody>
+            {% for row in page.product_mix_rows %}
+                <tr{% if row.is_total %} class="rr-total"{% endif %}>
+                {% for cell in row.cells %}<td>{{ cell|rr_cell }}</td>{% endfor %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+{% elif page.subtype == 'product_mix' %}
+    {# PDF-only overflow fallback's 2nd page — see the 'capacity' branch
+       above. #}
+    <div class="rr-content-block">
+        <div class="rr-caption">Product Mix{% if page.product_mix_caption %} — {{ page.product_mix_caption|rr_cell }}{% endif %}</div>
         <table>
             <thead><tr>{% for h in page.product_mix_headers %}<th>{{ h|rr_cell }}</th>{% endfor %}</tr></thead>
             <tbody>

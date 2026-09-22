@@ -36,7 +36,14 @@ Sinter Rs/T all come from cost_trend_monthly (FIXED + VARIABLE till_month —
 see _fetch_cop). HM/CS/SS carry a real Variable/Fixed split; BF Coke and
 Sinter currently carry the lump comparative figure under VARIABLE (the
 comparative sheet gives no split), entered via the Cost Trend Entry page or
-its Excel extractor. Special Steel in Finished Steel is live-computed (see
+its Excel extractor. Per direct instruction, 2026-09-21: unlike the
+Efficiency Parameters section's max/min highlight (where higher isn't
+consistently better or worse), every Cost of Production row is unambiguously
+lower-is-better, so only the least-cost plant(s) per row get highlighted —
+a distinct green band plus a trophy icon, not the blue/yellow max/min
+scheme — see the in_cop_section block in generate_key_parameters and
+key_parameters.html's/KeyParametersTemplate.js's `least_cost_plants`
+handling. Special Steel in Finished Steel is live-computed (see
 _ss_in_fs_qty_and_pct) as a qty+% row pair — Special Finished Steel
 Despatch (T), then that qty as a % of Finished Steel Despatch — both
 despatch-side, mirroring page_special_steel_donut's own Spl. FS "% of FS"
@@ -434,6 +441,7 @@ def _fetch_cop(report_month: str) -> dict:
 #                       row above (part of a label_rowspan group), so it
 #                       renders no parameter cell of its own
 _EFFICIENCY_SECTION = "Efficiency Parameters"
+_COP_SECTION = "Cost of Production"
 
 _ROWS = [
     ("Production of Main Items", "", _SECTION, None, 0, {}),
@@ -513,7 +521,7 @@ _ROWS = [
     (None,                      "Rs/TCS",   "demurrage_per_tcs", None, 2, {"continuation": True}),
     ("CAPEX",                  "Rs Cr",    "general", "capex", 0, {}),
 
-    ("Cost of Production", "", _SECTION, None, 0, {}),
+    (_COP_SECTION, "", _SECTION, None, 0, {}),
     ("BF Coke",        "Rs/T", "cop", "COKE", 0, {}),
     ("Sinter",         "Rs/T", "cop", "SINTER", 0, {}),
     ("Hot Metal",      "Rs/T", "cop", "HM", 0, {}),
@@ -560,6 +568,10 @@ def generate_key_parameters(report_month: str) -> dict:
     # per direct instruction. Toggled on entering that section, off again
     # at the next section/spacer row.
     in_bf_section = False
+    # Rows in the "Cost of Production" section (always the last section —
+    # no spacer/section header ever follows it) get only their least-cost
+    # plant(s) highlighted, trophy icon included — see module docstring.
+    in_cop_section = False
 
     rows = []
     for label, unit, kind, spec, dp, flags in _ROWS:
@@ -567,10 +579,12 @@ def generate_key_parameters(report_month: str) -> dict:
             label = _DEMURRAGE_LABEL.format(period=dem_period)
         if kind == _SECTION:
             in_bf_section = (label == _EFFICIENCY_SECTION)
+            in_cop_section = (label == _COP_SECTION)
             rows.append({"type": "section", "label": label})
             continue
         if kind == _SPACER:
             in_bf_section = False
+            in_cop_section = False
             rows.append({"type": "spacer"})
             continue
 
@@ -723,6 +737,21 @@ def generate_key_parameters(report_month: str) -> dict:
                 vmax, vmin = max(distinct), min(distinct)
                 row["max_plants"] = [p for p, v in numeric.items() if v == vmax]
                 row["min_plants"] = [p for p, v in numeric.items() if v == vmin]
+        # Cost of Production: least-cost plant(s) only (lower Rs/T is
+        # always better here, unlike the mixed BF section above) — see
+        # module docstring. Ties (equal least-cost figures) all get
+        # highlighted; a row with fewer than 2 distinct values gets none.
+        if in_cop_section and kind == "cop":
+            numeric = {}
+            for plant, v in values.items():
+                try:
+                    numeric[plant] = float(v)
+                except (TypeError, ValueError):
+                    pass
+            distinct = set(numeric.values())
+            if len(distinct) > 1:
+                vmin = min(distinct)
+                row["least_cost_plants"] = [p for p, v in numeric.items() if v == vmin]
         if flags.get("label_rowspan"):
             row["label_rowspan"] = flags["label_rowspan"]
         if flags.get("continuation"):

@@ -3,10 +3,11 @@
 import React, { useRef, useState } from 'react';
 import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
 
-// Mirrors backend/page_templates/ready_reckoner_plant.html. 3 pages per
-// plant (process flow / unit-wise capacity / product mix), distinguished
-// by `data.subtype`. Unlike every other page in this report, this content
-// is static reference material (not month-scoped).
+// Mirrors backend/page_templates/ready_reckoner_plant.html. 2 pages per
+// plant (process flow / unit-wise capacity + product mix consolidated onto
+// one page, per direct instruction 2026-09-21 — was 3 separate pages until
+// then), distinguished by `data.subtype`. Unlike every other page in this
+// report, this content is static reference material (not month-scoped).
 //
 // Capacity/Product Mix are read-only here (per direct instruction,
 // 2026-09-21 — no HTML/formatting entry in table rows/columns): editing
@@ -24,7 +25,7 @@ function CapacityTable({ rows }) {
   const th = { border: '0.5pt solid #5f6368', padding: '3px 5px', fontWeight: 700 };
   const td = { border: '0.5pt solid #5f6368', padding: '3px 5px', whiteSpace: 'pre-line' };
   return (
-    <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '9pt' }}>
+    <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12pt' }}>
       <thead>
         <tr><th style={th}>Facility</th><th style={th}>Details</th><th style={th}>Capacity</th></tr>
       </thead>
@@ -49,8 +50,8 @@ function ProductMixTable({ headers, rows, caption }) {
   const td = { border: '0.5pt solid #5f6368', padding: '3px 5px', whiteSpace: 'pre-line' };
   return (
     <>
-      {caption && <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '9pt' }}>{caption}</div>}
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '9pt' }}>
+      {caption && <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '12pt' }}>{caption}</div>}
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12pt' }}>
         <thead>
           <tr>{headers.map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
         </thead>
@@ -144,20 +145,14 @@ export default function ReadyReckonerTemplate({ data }) {
         </>
       )}
 
-      {subtype === 'capacity' && (
+      {subtype === 'details' && (
         <>
+          <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '12pt' }}>Unit-wise Capacity</div>
           <CapacityTable rows={capacityRows} />
-          {isEditor && (
-            <div style={{ textAlign: 'center', marginTop: 8, fontSize: '8pt', color: '#5f6368' }}>
-              Read-only here — edit at <a href="/data-entry/ready-reckoner">Data Entry &rarr; Ready Reckoner</a>.
-            </div>
-          )}
-        </>
-      )}
-
-      {subtype === 'product_mix' && (
-        <>
-          <ProductMixTable headers={productMixHeaders} rows={productMixRows} caption={productMixCaption} />
+          <div style={{ fontWeight: 700, margin: '10px 0 4px', fontSize: '12pt' }}>
+            Product Mix{productMixCaption ? ` — ${productMixCaption}` : ''}
+          </div>
+          <ProductMixTable headers={productMixHeaders} rows={productMixRows} />
           {isEditor && (
             <div style={{ textAlign: 'center', marginTop: 8, fontSize: '8pt', color: '#5f6368' }}>
               Read-only here — edit at <a href="/data-entry/ready-reckoner">Data Entry &rarr; Ready Reckoner</a>.
