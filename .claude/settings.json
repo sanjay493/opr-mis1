@@ -1,4 +1,18 @@
 {
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/backend/venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/backend/layout_guard.py\" --hook 2>/dev/null || true",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(python -c ' *)",

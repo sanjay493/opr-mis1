@@ -1,0 +1,11 @@
+#!/bin/sh
+# PDF layout guard: WARNS (never blocks) when a commit touches files that
+# control the PDF report layout, and flags CSS class clashes between page
+# templates. What those files control and how to recover:
+# backend/docs/PDF_LAYOUT_GUARDRAILS.md
+# Enabled per clone by: git config core.hooksPath .githooks
+# (start-development.bat / start-production.bat set this automatically).
+PY=backend/venv/Scripts/python.exe
+[ -f "$PY" ] || PY=python
+"$PY" backend/layout_guard.py --staged || true
+exit 0

@@ -13,6 +13,12 @@ rem Rebuild the frontend after any code change with:  cd frontend && npm run bui
 
 cd /d "%~dp0"
 
+rem Enable the versioned git hooks (.githooks\pre-commit warns when a commit
+rem touches files that control the PDF layout - see
+rem backend\docs\PDF_LAYOUT_GUARDRAILS.md). Git doesn't copy this setting
+rem between clones, so it's (re)applied here on every start; harmless if set.
+git config core.hooksPath .githooks >nul 2>&1
+
 echo Stopping any process already using ports 8082 and 80...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8082" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":80 " ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1

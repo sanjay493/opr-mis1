@@ -123,6 +123,21 @@ def _page_texts(pdf_bytes: bytes) -> list:
 # and why" directly from the terminal instead of guessing.
 _TIMING_LOG = []
 
+# Layout problems detected during the current render — each is printed as a
+# "[pdf] LAYOUT WARNING" line in the backend console as it's found, and
+# again in the end-of-render summary. Reset per render, like _TIMING_LOG.
+# What each warning means and how to recover: backend/docs/
+# PDF_LAYOUT_GUARDRAILS.md. layout_guard.py --render reads this list too.
+_LAYOUT_WARNINGS = []
+
+# Below this per-page fit zoom a page is noticeably harder to read.
+_MIN_LEGIBLE_ZOOM = 0.85
+
+
+def _layout_warn(msg: str) -> None:
+    _LAYOUT_WARNINGS.append(msg)
+    print(f"[pdf] LAYOUT WARNING: {msg}  -> see backend/docs/PDF_LAYOUT_GUARDRAILS.md")
+
 
 @contextmanager
 def _time_phase(label: str):
@@ -195,7 +210,7 @@ _FIT_PAGES_JS = """([W, H, maxOver]) => {
       const r = el.getBoundingClientRect();
       if (r.width && r.right - r0.left > right) right = r.right - r0.left;
     }
-    let z = right > W + 0.5 ? W / right : 1;
+    let z = right > W + 0.5 ? (W * 0.99) / right : 1;   // 1% margin: rounding can land a px over
     if (z < 1) pg.style.zoom = z;
     if (pg.dataset.vfit !== 'off') {
       const h = pg.getBoundingClientRect().height;
@@ -206,7 +221,15 @@ _FIT_PAGES_JS = """([W, H, maxOver]) => {
       fitted.push([m.replace(/@|PGSTART_/g, ''), +z.toFixed(3)]);
     }
   }
-  return fitted;
+  // Rightmost element box after fitting (boxes, not scrollWidth: text
+  // spilling a few px past its own table cell doesn't trigger Chromium's
+  // whole-job shrink, a box past the printable width does).
+  let right = 0;
+  for (const el of document.body.getElementsByTagName('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width && r.right > right) right = r.right;
+  }
+  return {fitted, overflow: right - W};
 }"""
 
 
@@ -236,9 +259,18 @@ def _fit_pages_for_print(page, printable_mm: tuple) -> list:
 
     Everything else prints at 100%. Returns [(page id, zoom), ...]."""
     w_mm, h_mm = printable_mm
-    fitted = page.evaluate(_FIT_PAGES_JS, [w_mm * _PX_PER_MM, h_mm * _PX_PER_MM, _VFIT_MAX_OVERFLOW])
+    res = page.evaluate(_FIT_PAGES_JS, [w_mm * _PX_PER_MM, h_mm * _PX_PER_MM, _VFIT_MAX_OVERFLOW])
+    fitted = res["fitted"]
     if fitted:
         print("[pdf] fit-to-page: " + ", ".join(f"{pid} @ {z:.0%}" for pid, z in fitted))
+    for pid, z in fitted:
+        if z < _MIN_LEGIBLE_ZOOM:
+            _layout_warn(f"page {pid} had to be shrunk to {z:.0%} to fit - its content has outgrown "
+                         f"the page (tighten that page's layout rather than rely on shrinking)")
+    if res["overflow"] > 2:   # tolerate sub-pixel rounding
+        _layout_warn(f"content is still {res['overflow']:.0f}px wider than the printable area after "
+                     f"per-page fitting - Chromium will shrink EVERY page in this print job "
+                     f"(the whole-report shrink). Likely an element outside any .page block.")
     return fitted
 
 
@@ -1027,6 +1059,27 @@ def _set_trend_blocks(rows: list, start: int, bounds: list, label_hidden: bool) 
             rows[k]["label_hidden"] = label_hidden
 
 
+def _check_trend_pieces(items: list, page_of: list) -> None:
+    """Layout warnings for the final trend plan, from its last probe:
+    a piece of a split group shorter than _TREND_MIN_SPLIT_ROWS, or one
+    unbreakable block whose rows still landed on more than one page."""
+    for it, pages in zip(items, page_of):
+        rows = it.get("rows", [])
+        name = it.get("item_display", "?")
+        for a, b in _trend_groups(rows):
+            starts = [k for k in range(a, b) if rows[k].get("tbody_start")] or [a]
+            edges = starts + [b]
+            pieces = list(zip(edges, edges[1:]))
+            plant = rows[a]["plant"]
+            for s, e in pieces:
+                if len({pages[k] for k in range(s, e)}) > 1:
+                    _layout_warn(f"trend section: {name} / {plant} rows {s - a + 1}-{e - a} span a page "
+                                 f"break inside one block (block taller than a page?)")
+                if len(pieces) > 1 and e - s < _TREND_MIN_SPLIT_ROWS:
+                    _layout_warn(f"trend section: {name} / {plant} split leaves only {e - s} row(s) on "
+                                 f"one page (minimum {_TREND_MIN_SPLIT_ROWS})")
+
+
 def _plan_trend_layout(browser, trend_pages: list, template, render_kwargs: dict) -> None:
     """Decides where plant/SAIL groups in the trend section (pages 7-13) may
     split across a page, and picks the section's top/bottom margins. Mutates
@@ -1157,6 +1210,10 @@ def _plan_trend_layout(browser, trend_pages: list, template, render_kwargs: dict
                         _set_trend_blocks(rows, a, [tuple(p) for p in kept], label_hidden=False)
             if not merged:
                 break
+        else:
+            _layout_warn("trend section: page-split planning did not settle within "
+                         f"{_TREND_MAX_VERIFY_PASSES} checks - a plant label may repeat on one page")
+        _check_trend_pieces(items, page_of)
     finally:
         page.close()
 
@@ -1383,6 +1440,13 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     below picks up the page-3 adjustment automatically.
     """
     _TIMING_LOG.clear()
+    _LAYOUT_WARNINGS.clear()
+    try:
+        import layout_guard
+        for msg in layout_guard.changed_file_warnings():
+            _layout_warn(msg)
+    except Exception as e:  # the guard must never break a render
+        print(f"[pdf] layout_guard check skipped: {type(e).__name__}: {e}")
     _render_t0 = _time.perf_counter()
 
     # Footer "Page N of TOTAL": TOTAL is the Index's declared last page (it
@@ -1666,6 +1730,10 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         pdf_bytes = spliced_bytes
 
     _print_timing_summary(_time.perf_counter() - _render_t0)
+    if _LAYOUT_WARNINGS:
+        print(f"[pdf] {len(_LAYOUT_WARNINGS)} LAYOUT WARNING(S) in this render:")
+        for msg in _LAYOUT_WARNINGS:
+            print(f"[pdf]   - {msg}")
     return pdf_bytes
 
 
