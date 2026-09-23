@@ -113,6 +113,8 @@ _UNIT_REGISTRY = {
         {"label": "Saleable Steel loading","item_names": ["Saleable Steel Despatch"], "unit": _T},
     ],
     "BSP": [
+        # BF#1, BF#1-7, SMS-I and the 4 Cast Steel semis rows (SMS-2 Blooms/
+        # Slabs, SMS-3 Billets/Blooms) removed per direct instruction, 2026-09-23.
         {"label": "COB-11 (Pushings/day)",      "item_names": ["COB#11"], "unit": _RATE},
         {"label": "Eq. Oven Pushing",           "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
         {"label": "SP-II",                      "item_names": ["SP-2"], "unit": _T},
@@ -120,22 +122,15 @@ _UNIT_REGISTRY = {
         {"label": "SP-III M/c-2",               "item_names": ["SP-3 M/C-2"], "unit": _T},
         {"label": "SP-III",                     "item_names": ["SP-3"], "unit": _T},
         {"label": "Total Sinter",               "item_names": ["Total Sinter"], "unit": _T},
-        {"label": "BF#1",                       "item_names": ["BF#1"], "unit": _T},
         {"label": "BF#4",                       "item_names": ["BF#4"], "unit": _T},
         {"label": "BF#5",                       "item_names": ["BF#5"], "unit": _T},
         {"label": "BF#6",                       "item_names": ["BF#6"], "unit": _T},
         {"label": "BF#7",                       "item_names": ["BF#7"], "unit": _T},
-        {"label": "BF#1-7",                     "item_names": ["BF#1-7"], "unit": _T},
         {"label": "BF#8",                       "item_names": ["BF#8"], "unit": _T},
         {"label": "Total Hot Metal",            "item_names": ["Hot Metal"], "unit": _T},
-        {"label": "SMS-I",                      "item_names": [], "unit": _T},  # phased out, per source remark
         {"label": "SMS-II",                     "item_names": ["SMS-2"], "unit": _T},
         {"label": "SMS-III",                    "item_names": ["SMS-3"], "unit": _T},
         {"label": "Total Crude Steel",          "item_names": ["Total Crude Steel"], "unit": _T},
-        {"label": "Cast Steel (SMS-2) Blooms",  "item_names": ["SEMIS BLOOM"], "unit": _T},
-        {"label": "Slabs",                      "item_names": ["SEMIS SLABS"], "unit": _T},
-        {"label": "Cast Steel (SMS-3) Billets", "item_names": ["SEMIS BilletS"], "unit": _T},
-        {"label": "Blooms",                     "item_names": [], "unit": _T},  # no separate SMS-3 blooms item in DB
         {"label": "Finished Rails: RSM",        "item_names": ["RSM_RAIL"], "unit": _T},
         {"label": "Finished Rails: URM",        "item_names": ["URM_RAIL"], "unit": _T},
         {"label": "Total Finished Rails",       "item_names": ["RSM_RAIL", "URM_RAIL"], "unit": _T},
