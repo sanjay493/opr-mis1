@@ -36,6 +36,7 @@ export default function GlobalNavbar() {
             { label: 'Key Highlights & Variances', link: '/data-entry/key-highlights', icon: '📝' },
             { label: 'Steel Sales Performance (Page 3.05)', link: '/data-entry/steel-sales-highlights', icon: '🛒' },
             { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
+            { label: 'Production Data Correction (Month Range)', link: '/data-entry/production-range', icon: '📈' },
             { label: 'Large BF Benchmarking Entry', link: '/data-entry/bf-benchmark', icon: '🏗️' },
             { label: 'SAIL Mines Entry (Page 4.5)', link: '/data-entry/sail-mines', icon: '⛏️' },
             { label: 'Rail Production & Dispatch Entry (Page 18.5)', link: '/data-entry/rail-report', icon: '🚆' },
