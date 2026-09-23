@@ -1065,7 +1065,15 @@
         }
 
         /* ─── Page 2 – Index ────────────────────────────────── */
+        /* No top padding / heading top margin: with pdf.py's _FRONT_MARGIN
+           top that's all the space above "Index", keeping every row on
+           one page. */
+        .pg-2 {
+            padding-top: 0;
+        }
+
         .page2-heading {
+            margin-top: 0;
             font-size: 16pt;
             font-weight: bold;
             color: rgb(0,0,255);

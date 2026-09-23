@@ -59,11 +59,27 @@
        their existing bold/neutral styling. */
     .rr-capacity-block table tbody td:nth-child(1) { color: #8b4513; }
     .rr-capacity-block table tbody td:nth-child(2) { color: #1a56db; }
+    /* Facility column: wider, and a "[...]" part of a facility's text
+       goes on a 2nd line in black (see pdf.py's _rr_facility), with the
+       name before it kept on a single line. 22% is the widest that keeps
+       Bhilai's Capacity + Product Mix on one page (2026-08 data); 23%+
+       splits it onto 2 pages (+1 report page, shifting the Index's hand-
+       maintained Annexure page numbers). */
+    .rr-capacity-block table th:nth-child(1) { width: 22%; }
+    .rr-capacity-block .rr-facility-name { white-space: nowrap; }
+    .rr-capacity-block .rr-facility-bracket { color: #000; }
+    /* Product Mix table: BSL's grade-by-product grid gets equal-width
+       columns; the other ISPs (BSP/DSP/RSP/ISP) get a wider 1st (Mill)
+       column than auto layout gave it (7-13%). SSPs keep auto layout. */
+    .rr-pm-equal table { table-layout: fixed; }
+    .rr-pm-equal td { overflow-wrap: anywhere; }  /* long codes like "Mixed/Defective/PUP" would spill into the next cell */
+    .rr-pm-wide-first table th:nth-child(1) { width: 15%; }
 </style>
 
 <div class="rr-plant-title{% if page.pdf_landscape %} rr-title-landscape{% endif %}">{{ page.plant_name }}</div>
 <div class="rr-subtitle{% if page.pdf_landscape %} rr-subtitle-landscape{% endif %}">{{ page.subtype_label }}</div>
 
+{% set _pm_class = ' rr-pm-equal' if page.plant_code == 'BSL' else (' rr-pm-wide-first' if page.plant_code in ('BSP', 'DSP', 'RSP', 'ISP') else '') %}
 {% if page.subtype == 'process_flow' %}
     {% if page.image_data_uri %}
     <div class="rr-diagram-wrap{% if page.pdf_landscape %} rr-diagram-wrap-landscape{% endif %}">
@@ -92,7 +108,7 @@
             <tbody>
             {% for row in page.capacity_rows %}
                 <tr{% if row.is_total %} class="rr-total"{% endif %}>
-                    <td>{{ row.item|rr_cell }}</td>
+                    <td>{{ row.item|rr_facility }}</td>
                     <td>{{ row.details|rr_cell }}</td>
                     <td>{{ row.capacity|rr_cell }}</td>
                 </tr>
@@ -101,7 +117,7 @@
         </table>
     </div>
     {% if page.subtype == 'details' %}
-    <div class="rr-content-block">
+    <div class="rr-content-block{{ _pm_class }}">
         <div class="rr-caption">Product Mix{% if page.product_mix_caption %} — {{ page.product_mix_caption|rr_cell }}{% endif %}</div>
         <table>
             <thead><tr>{% for h in page.product_mix_headers %}<th>{{ h|rr_cell }}</th>{% endfor %}</tr></thead>
@@ -118,7 +134,7 @@
 {% elif page.subtype == 'product_mix' %}
     {# PDF-only overflow fallback's 2nd page — see the 'capacity' branch
        above. #}
-    <div class="rr-content-block">
+    <div class="rr-content-block{{ _pm_class }}">
         <div class="rr-caption">Product Mix{% if page.product_mix_caption %} — {{ page.product_mix_caption|rr_cell }}{% endif %}</div>
         <table>
             <thead><tr>{% for h in page.product_mix_headers %}<th>{{ h|rr_cell }}</th>{% endfor %}</tr></thead>

@@ -40,6 +40,28 @@ def _rr_cell(value):
 _jinja_env.filters['rr_cell'] = _rr_cell
 
 
+def _rr_facility(value):
+    """Jinja filter for the Unit-wise Capacity table's Facility column: like
+    |rr_cell, but a "[...]" part (e.g. "Blast Furnaces [BF-1, BF-4, BF-5]")
+    moves to its own 2nd line and is shown in black, brackets included,
+    while the facility name before it stays on one unwrapped line. Text
+    with no "[" renders exactly as |rr_cell does."""
+    import html as _html_mod
+    if value is None:
+        return ""
+    text = str(value)
+    cut = text.find("[")
+    if cut <= 0:
+        return _rr_cell(text)
+    name = _html_mod.escape(text[:cut].strip()).replace("\n", "<br>")
+    rest = _html_mod.escape(text[cut:].strip()).replace("\n", "<br>")
+    return (f'<span class="rr-facility-name">{name}</span><br>'
+            f'<span class="rr-facility-bracket">{rest}</span>')
+
+
+_jinja_env.filters['rr_facility'] = _rr_facility
+
+
 # Runs in a child process — see _page_texts_many. argv: PDF file paths;
 # prints one JSON list per file (that file's per-page texts). Every pdfium
 # object is closed explicitly, in order.
@@ -188,8 +210,10 @@ _jinja_env.filters['split_label'] = _split_label
 _MAIN_MARGIN = {"top": "10mm", "right": "15mm", "bottom": "9mm", "left": "15mm"}
 # The Index (page 2) is rendered without a Chromium header/footer, so it
 # doesn't need the ~9-10mm the main pages reserve for those bars — a tighter
-# top/bottom keeps the (now longer) contents list on one page.
-_FRONT_MARGIN = {"top": "8mm", "right": "13mm", "bottom": "8mm", "left": "13mm"}
+# top/bottom keeps the (now longer) contents list on one page. Top is the
+# tightest (see .pg-2 / .page2-heading in main.html) so the 32-row list,
+# Annexure-III included, stays on a single sheet.
+_FRONT_MARGIN = {"top": "4mm", "right": "13mm", "bottom": "8mm", "left": "13mm"}
 
 # Printable area (width, height in mm) inside _MAIN_MARGIN for portrait A4,
 # and inside _render_landscape_page_pdf's margin for landscape A4.
