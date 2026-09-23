@@ -7,13 +7,20 @@
            Wise run (pages 15-18), per direct instruction. #}
         <div style="text-align:center;font-weight:700;font-size:12pt;color:rgb(0,0,255);text-transform:none;margin-bottom:4px;">{{ page.title }}</div>
         <table class="segwise-table">
+            {# Widths sum to 86% (the table stretches them to 100%). The two
+               "% Gr over" columns (6.2%) and Group (5.4%) are wider than the
+               other short columns: their headers ("Aug'25", "Apr-Aug'25",
+               "Group") ran 1-6px past the cell border at 5%. The space came
+               from Plant and the Plan/Actual value columns, which still have
+               spare room for their widest figure; the two "...'25 Actual"
+               columns keep 5.9% ("Apr-Aug'25" is their widest header word). #}
             <colgroup>
-                <col style="width:5%"><col style="width:5%"><col style="width:13%">
-                <col style="width:7%">
-                <col style="width:6%"><col style="width:6%"><col style="width:5%">
-                <col style="width:6%"><col style="width:5%">
-                <col style="width:6%"><col style="width:6%"><col style="width:5%">
-                <col style="width:6%"><col style="width:5%">
+                <col style="width:5.4%"><col style="width:4.6%"><col style="width:13%">
+                <col style="width:6.4%">
+                <col style="width:5.6%"><col style="width:5.6%"><col style="width:5%">
+                <col style="width:5.9%"><col style="width:6.2%">
+                <col style="width:5.6%"><col style="width:5.6%"><col style="width:5%">
+                <col style="width:5.9%"><col style="width:6.2%">
             </colgroup>
             <thead>
                 <tr>

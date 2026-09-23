@@ -222,29 +222,43 @@ def _render(month: str) -> dict:
     spans = {pg: (order[j + 1][1] if j + 1 < len(order) else len(texts)) - s for j, (pg, s) in enumerate(order)}
     footers = [int(m.group(1)) for t in texts if (m := _re.search(r"Page (\d+) of \d+", t))]
     record = {"month": month, "total_pages": len(texts), "section_pages": spans}
+    # Layout problems (runtime warnings, broken footers) are always wrong;
+    # page-count differences from the reference are expected after an
+    # intended change, so they're reported separately.
     problems = list(pdf._LAYOUT_WARNINGS)
     if footers != list(range(1, len(footers) + 1)):
         problems.append("footer page numbers are not sequential")
+    ref_diffs = []
     ref = _load_baseline().get("reference_render")
     if ref and ref.get("month") == month:
         if ref["total_pages"] != record["total_pages"]:
-            problems.append(f"total pages {record['total_pages']} vs reference {ref['total_pages']}")
+            ref_diffs.append(f"total pages {record['total_pages']} vs reference {ref['total_pages']}")
         for pg in sorted(set(ref["section_pages"]) | set(spans), key=float):
             a, b = ref["section_pages"].get(pg), spans.get(pg)
             if a != b:
-                problems.append(f"report page {pg}: {b} physical page(s) vs reference {a}")
+                ref_diffs.append(f"report page {pg}: {b} physical page(s) vs reference {a}")
     elif ref:
         print(f"layout_guard: reference render is for {ref.get('month')}; page counts not compared for {month}.")
     print("-" * 78)
-    if problems:
-        print(f"layout_guard --render {month}: {len(problems)} problem(s):")
+    if problems or ref_diffs:
+        print(f"layout_guard --render {month}: {len(problems)} layout problem(s), "
+              f"{len(ref_diffs)} difference(s) from the reference render:")
         for p in problems:
             print(f"  * {p}")
+        for p in ref_diffs:
+            print(f"  * (vs reference) {p}")
     else:
         print(f"layout_guard --render {month}: OK - {record['total_pages']} pages, no layout warnings"
               + (", matches the reference render." if ref and ref.get("month") == month else "."))
     record["_problems"] = problems
+    record["_ref_diffs"] = ref_diffs
     return record
+
+
+def _write_baseline(base: dict) -> None:
+    with open(BASELINE_PATH, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(base, f, indent=1, sort_keys=True)
+        f.write("\n")
 
 
 def main_cli(argv: list) -> int:
@@ -252,22 +266,28 @@ def main_cli(argv: list) -> int:
         return _hook()
     render_month = argv[argv.index("--render") + 1] if "--render" in argv else None
     if "--accept" in argv:
-        base = _load_baseline()
+        previous = _load_baseline()
+        base = dict(previous)
         base["files"] = {rel: _digest(rel) for rel in _layout_files() if _digest(rel)}
+        # Saved BEFORE rendering, so the render's own changed-file check sees
+        # the files being accepted as unchanged; put back if refused.
+        _write_baseline(base)
         if render_month:
             rec = _render(render_month)
+            rec.pop("_ref_diffs")   # expected when accepting an intended change
             if rec.pop("_problems"):
-                print("layout_guard: NOT accepted - fix the problems above first.")
+                _write_baseline(previous)
+                print("layout_guard: NOT accepted - fix the layout problems above first "
+                      "(previous baseline kept).")
                 return 1
             base["reference_render"] = rec
-        with open(BASELINE_PATH, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(base, f, indent=1, sort_keys=True)
-            f.write("\n")
+            _write_baseline(base)
         print(f"layout_guard: baseline recorded for {len(base['files'])} files"
               + (f" + reference render of {render_month}" if render_month else "") + f" -> {BASELINE_PATH}")
         return 0
     if render_month:
-        return 1 if _render(render_month)["_problems"] and "--strict" in argv else 0
+        rec = _render(render_month)
+        return 1 if (rec["_problems"] or rec["_ref_diffs"]) and "--strict" in argv else 0
     changed = _staged_layout_files() if "--staged" in argv else changed_files()
     clashes = css_class_clashes()
     _print_report(changed, clashes)
