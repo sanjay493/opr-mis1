@@ -46,22 +46,23 @@
                         <th class="tot-hdr">Total</th>
                     </tr>
                 </thead>
-                {# One <tbody> per plant/SAIL group, each carrying
-                   break-inside:avoid (css/production_trend.css) — Chromium
-                   itself keeps a whole group on one physical page and moves
-                   it to the next page when it doesn't fit, repeating the
-                   <thead> there. This replaced pdf.py's old probe-print/
-                   correct/re-probe loop (forced break_before rows + split
-                   rowspans), which printed the whole report ~15-20 extra
-                   times and could leave stale forced breaks behind. A group
-                   is always contiguous rows of the same plant, so it opens
-                   on is_first_in_plant and closes before the next one. #}
+                {# Rows are grouped into <tbody class="plant-group"> blocks, each
+                   break-inside:avoid (css/production_trend.css), so Chromium
+                   only ever breaks a page BETWEEN blocks and repeats the
+                   <thead> on the next page. A block opens on a row with
+                   tbody_start (set by pdf.py's _plan_trend_layout: one block
+                   per page-segment of a plant group, never fewer than
+                   _TREND_MIN_SPLIT_ROWS rows on either side of a split);
+                   without it, one block per whole plant group. Each block has
+                   its own rowspan'd plant label, so a split group shows its
+                   label on both pages. label_hidden blanks the letters during
+                   pdf.py's chunked probe print only. #}
                     {% for row in item.rows %}
                     {% set v = row['values'] %}
                     {% set cf = row['cell_flags'] or ([''] * 19) %}
                     {% set plant = row['plant'] %}
                     {% set row_cls %}{{ 'plan-row' if row['is_plan'] else '' }}{{ ' sail-row' if plant == 'SAIL' else '' }}{{ ' fp-row' if plant == '5 Plants' else '' }}{{ ' plant-first' if row['is_first_in_plant'] else '' }}{% endset %}
-                    {% if loop.first or row['is_first_in_plant'] %}<tbody class="plant-group">{% endif %}
+                    {% if loop.first or row.get('tbody_start', row['is_first_in_plant']) %}<tbody class="plant-group">{% endif %}
                     <tr class="{{ row_cls }}">
                         {% if row['rowspan_start'] %}
                         {% set plant_chars = plant|replace(' ', '') %}
@@ -75,7 +76,7 @@
                            like "5 Plants"; only a segment actually left too short by a page
                            break (few rows vs. many letters) drops to compact/tight. #}
                         {% set pcls %}plant-cell{{ ' compact' if (n_chars > n_rows and n_chars <= n_rows + 2) else '' }}{{ ' tight' if n_chars > n_rows + 2 else '' }}{{ ' agg-sail' if plant == 'SAIL' else '' }}{{ ' agg-5p' if plant == '5 Plants' else '' }}{{ (' ' ~ _color_cls) if _color_cls else '' }}{% endset %}
-                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{% for ch in plant_chars %}{{ ch }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                        <td class="{{ pcls }}" rowspan="{{ row['plant_row_count'] }}">{% if not row.get('label_hidden') %}{% for ch in plant_chars %}{{ ch }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% endif %}</td>
                         {% endif %}
                         <td class="year-cell" style="{{ 'font-weight:700;' if row['is_plan'] else '' }}"><span class="pg-badge-marker">@@TROW_{{ item_idx }}_{{ loop.index0 }}@@</span>{{ row['year_label'] }}</td>
                         {% for i in range(0, 3) %}
@@ -98,7 +99,7 @@
                         <td class="hh-cell {{ 'best-ever' if cf[17] == 'best_ever' else ('best-month' if cf[17] == 'best_month' else '') }}">{{ v[17] }}</td>
                         <td class="total-cell {{ 'best-ever' if cf[18] == 'best_ever' else '' }}">{{ v[18] }}</td>
                     </tr>
-                    {% if loop.last or loop.nextitem['is_first_in_plant'] %}</tbody>{% endif %}
+                    {% if loop.last or loop.nextitem.get('tbody_start', loop.nextitem['is_first_in_plant']) %}</tbody>{% endif %}
                     {% endfor %}
             </table>
             {# Skipped after the LAST item only: this legend is identical

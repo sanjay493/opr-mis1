@@ -265,8 +265,8 @@ _INDEX_SECTIONS = [
     # Trend pages (6 items: Oven Pushing/Sinter/Hot Metal/Crude Steel/
     # Pig Iron & Finished Steel/Saleable Steel) flow as one continuous
     # section rather than one physical page each (see pdf.py's trend_section
-    # merge; plant groups are kept whole by CSS break-inside:avoid, see
-    # trend_section.html, and _pick_trend_margins may tighten margins when
+    # merge; pdf.py's _plan_trend_layout lets a plant group split across a
+    # page only with >= 3 rows on each side, and may tighten margins when
     # that saves a page) — so the exact count varies with the month's data.
     # This number is only a NOMINAL fallback, not a live count: the live
     # web preview (which never runs a real Chromium print) has no other
@@ -274,8 +274,8 @@ _INDEX_SECTIONS = [
     # are corrected from a real post-render measurement every time (pdf.py's
     # _correct_dynamic_index_pagination), so this never needs hand-updating
     # for the PDF itself. Last measured 2026-09-23 against a full-report
-    # render for month 2026-08, after the switch to CSS-based group keeping.
-    ("10 Years Month Wise Production (Main Item Plant Wise)", 14),
+    # render for month 2026-08, with bounded splits (min 3 rows per side).
+    ("10 Years Month Wise Production (Main Item Plant Wise)", 12),
     ("Crude Steel Production Details - Concast & Process Type", 2),
     # Category-wise (3 plant-group pages: BSP / DSP&RSP / BSL&ISP) +
     # Segment Wise Production (1 page) - one Index entry covering all 4.

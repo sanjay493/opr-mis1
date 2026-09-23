@@ -115,13 +115,78 @@ _jinja_env.filters['split_label'] = _split_label
 
 # The print margin main_html (pages 3+) is always rendered with — a single
 # source of truth shared by every page.pdf() call for it, including
-# _pick_trend_margins' probe prints, which must use this exact same margin
+# _plan_trend_layout's probe prints, which must use this exact same margin
 # so their measured page counts match what the final print produces.
 _MAIN_MARGIN = {"top": "10mm", "right": "15mm", "bottom": "9mm", "left": "15mm"}
 # The Index (page 2) is rendered without a Chromium header/footer, so it
 # doesn't need the ~9-10mm the main pages reserve for those bars — a tighter
 # top/bottom keeps the (now longer) contents list on one page.
 _FRONT_MARGIN = {"top": "8mm", "right": "13mm", "bottom": "8mm", "left": "13mm"}
+
+# Printable area (width, height in mm) inside _MAIN_MARGIN for portrait A4,
+# and inside _render_landscape_page_pdf's margin for landscape A4.
+_PRINTABLE_PORTRAIT_MM = (210 - 15 - 15, 297 - 10 - 9)
+_PRINTABLE_LANDSCAPE_MM = (297 - 10 - 10, 210 - 12 - 10)
+_PX_PER_MM = 96 / 25.4
+
+# A single .page up to this much taller than one sheet is scaled down to fit
+# that sheet; anything taller is genuinely multi-page content, left alone.
+_VFIT_MAX_OVERFLOW = 1.10
+
+_FIT_PAGES_JS = """([W, H, maxOver]) => {
+  const fitted = [];
+  for (const pg of document.querySelectorAll('.page')) {
+    const r0 = pg.getBoundingClientRect();
+    let right = r0.width;
+    for (const el of pg.getElementsByTagName('*')) {
+      const r = el.getBoundingClientRect();
+      if (r.width && r.right - r0.left > right) right = r.right - r0.left;
+    }
+    let z = right > W + 0.5 ? W / right : 1;
+    if (z < 1) pg.style.zoom = z;
+    if (pg.dataset.vfit !== 'off') {
+      const h = pg.getBoundingClientRect().height;
+      if (h > H && h <= H * maxOver) { z = z * (H * 0.985) / h; pg.style.zoom = z; }
+    }
+    if (z < 1) {
+      const m = (pg.querySelector('.pg-badge-marker') || {}).textContent || '';
+      fitted.push([m.replace(/@|PGSTART_/g, ''), +z.toFixed(3)]);
+    }
+  }
+  return fitted;
+}"""
+
+
+def _load_for_print(page, html: str, printable_mm: tuple) -> None:
+    """set_content + wait for web fonts, then _fit_pages_for_print. Every
+    print of report pages goes through this, so probes and final prints see
+    the same per-page scaling."""
+    w_mm, h_mm = printable_mm
+    page.set_viewport_size({"width": round(w_mm * _PX_PER_MM), "height": round(h_mm * _PX_PER_MM)})
+    page.emulate_media(media="print")
+    page.set_content(html, wait_until="domcontentloaded")
+    page.evaluate("document.fonts.ready")
+    _fit_pages_for_print(page, printable_mm)
+
+
+def _fit_pages_for_print(page, printable_mm: tuple) -> list:
+    """Scales individual .page blocks (CSS zoom) that don't fit the sheet,
+    laid out at the real printable width in print media:
+
+    - wider than the printable width -> scaled to fit the width. Without
+      this, Chromium's print shrink-to-fit scales the WHOLE print job to the
+      widest page: one overflowing table (page 24's .ssd-table, a Ready
+      Reckoner product-mix table) was printing all ~90 portrait pages at
+      ~94.7%, leaving every page with a band of empty space at the bottom.
+    - up to _VFIT_MAX_OVERFLOW taller than one sheet -> scaled to fit it,
+      unless the page opts out with data-vfit="off" (see main.html).
+
+    Everything else prints at 100%. Returns [(page id, zoom), ...]."""
+    w_mm, h_mm = printable_mm
+    fitted = page.evaluate(_FIT_PAGES_JS, [w_mm * _PX_PER_MM, h_mm * _PX_PER_MM, _VFIT_MAX_OVERFLOW])
+    if fitted:
+        print("[pdf] fit-to-page: " + ", ".join(f"{pid} @ {z:.0%}" for pid, z in fitted))
+    return fitted
 
 
 def _pgclass(page_num) -> str:
@@ -438,8 +503,7 @@ def _render_landscape_page_pdf(browser, html: str, font_family: str) -> bytes:
     call and can't be offset to match its true position once spliced into
     the middle of the full document."""
     page = browser.new_page()
-    page.set_content(html, wait_until="domcontentloaded")
-    page.evaluate("document.fonts.ready")
+    _load_for_print(page, html, _PRINTABLE_LANDSCAPE_MM)
     pdf_bytes = page.pdf(
         format="A4",
         landscape=True,
@@ -671,10 +735,7 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
     if main_html:
         page = browser.new_page()
         with _time_phase(f"{phase_prefix}: main content — initial layout"):
-            page.set_content(main_html, wait_until="domcontentloaded")
-            # Web fonts load asynchronously; print only once they're ready so
-            # text metrics (and therefore page breaks) are the final ones.
-            page.evaluate("document.fonts.ready")
+            _load_for_print(page, main_html, _PRINTABLE_PORTRAIT_MM)
         # "of N": the Index's declared last page when the caller supplies it
         # (it counts the external annexures the report appends as-is — see
         # _index_declared_total_pages), else Chromium's own page total.
@@ -867,39 +928,79 @@ def _split_ready_reckoner_overflow(main_pages: list, browser, template, render_k
         i += 1
 
 
-# Tightest top/bottom margins (mm) _pick_trend_margins may shrink the trend
+# Tightest top/bottom margins (mm) _plan_trend_layout may shrink the trend
 # section's configured ones (layout_config.json's marginTop/marginBottom for
 # its first page, currently 7mm/5mm) down to — any tighter risks crowding
 # the printed header/footer.
 _TREND_MIN_TOP_MARGIN_MM = 4
 _TREND_MIN_BOTTOM_MARGIN_MM = 2
 
-# content hash of the trend section's HTML -> the (top, bottom) margins
-# _pick_trend_margins measured for it, so a repeat export of unchanged data
-# skips even its two small probe prints. Capped; each entry is a tuple.
-_TREND_MARGIN_CACHE: dict = {}
-_TREND_MARGIN_CACHE_MAX_ENTRIES = 200
+# A plant/SAIL group may split across a page break only if at least this
+# many of its rows land on EACH side of the break; otherwise the whole group
+# moves to the next page.
+_TREND_MIN_SPLIT_ROWS = 3
+
+# Checks after applying the planned segments (see _plan_trend_layout).
+_TREND_MAX_VERIFY_PASSES = 3
+
+# content hash of the trend section's HTML -> the plan _plan_trend_layout
+# measured for it (margins + every row's segment fields), so a repeat export
+# of unchanged data skips its probe prints. Capped.
+_TREND_PLAN_CACHE: dict = {}
+_TREND_PLAN_CACHE_MAX_ENTRIES = 200
+
+_TREND_ROW_FIELDS = ("tbody_start", "rowspan_start", "plant_row_count", "label_hidden")
 
 
-def _pick_trend_margins(browser, trend_pages: list, template, render_kwargs: dict) -> None:
-    """Uses the tighter _TREND_MIN_* top/bottom margins for the trend section
-    only when that actually saves a physical page; mutates
-    render_kwargs["page_layouts"] in place. Must run before main_html is
+def _trend_groups(rows: list) -> list:
+    """(start, end) of every run of consecutive rows sharing a plant."""
+    groups, i = [], 0
+    while i < len(rows):
+        j = i
+        while j < len(rows) and rows[j]["plant"] == rows[i]["plant"]:
+            j += 1
+        groups.append((i, j))
+        i = j
+    return groups
+
+
+def _set_trend_blocks(rows: list, start: int, bounds: list, label_hidden: bool) -> None:
+    """Makes each [a, b) in bounds its own <tbody> block with its own
+    rowspan'd plant label (see trend_section.html)."""
+    for a, b in bounds:
+        for k in range(a, b):
+            rows[k]["tbody_start"] = rows[k]["rowspan_start"] = (k == a)
+            rows[k]["plant_row_count"] = b - a
+            rows[k]["label_hidden"] = label_hidden
+
+
+def _plan_trend_layout(browser, trend_pages: list, template, render_kwargs: dict) -> None:
+    """Decides where plant/SAIL groups in the trend section (pages 7-13) may
+    split across a page, and picks the section's top/bottom margins. Mutates
+    each row's block fields (_TREND_ROW_FIELDS) and
+    render_kwargs["page_layouts"] in place; must run before main_html is
     rendered.
 
-    Plant/SAIL groups are kept whole by CSS alone (one <tbody
-    class="plant-group"> per group with break-inside:avoid — see
-    trend_section.html), so page count is the only thing that can differ
-    between the two candidates. That replaced an older probe/correct/relax
-    loop here that printed the WHOLE report 15-20+ times (measured 1237s of
-    a 1463s render) to hand-place forced breaks and split rowspans.
+    Rule: a group splits only when at least _TREND_MIN_SPLIT_ROWS of its rows
+    land on each side of the break, else it moves to the next page whole;
+    each piece gets its own plant label.
 
-    The trend section is printed in isolation for this: it always starts on
-    a fresh page (break-before:page) with its own padding, and uses the same
-    page.pdf() options as the final print, so its page count doesn't depend
-    on anything rendered before it."""
+    Chromium chooses the break points itself: the probe print cuts each
+    group into unbreakable <tbody> blocks — its first MIN rows, each middle
+    row alone, its last MIN rows — so the only places Chromium CAN break a
+    group leave >= MIN rows on both sides (a group shorter than 2*MIN is one
+    block). The probe shows where each group actually broke; each group is
+    then rebuilt as one block per page-piece, labelled, and re-printed to
+    verify. A piece can grow slightly once its label is filled in, and
+    could then be pushed whole onto the next page; if two pieces of a group
+    end up on the same page they're merged back and it's re-checked.
+
+    The trend section always starts on a fresh page with the same print
+    options as the final render, so it's probed in isolation: each print is
+    ~14 pages, not the whole report. The tighter _TREND_MIN_* margins are
+    kept only if they save a page."""
     import hashlib
-    from pypdf import PdfReader
+    import pypdfium2 as pdfium
 
     if not trend_pages:
         return
@@ -908,8 +1009,9 @@ def _pick_trend_margins(browser, trend_pages: list, template, render_kwargs: dic
     base = page_layouts.get(keys[0], {})
     default = (base.get("marginTop", 7), base.get("marginBottom", 5))
     floor = (min(default[0], _TREND_MIN_TOP_MARGIN_MM), min(default[1], _TREND_MIN_BOTTOM_MARGIN_MM))
+    items = [it for tp in trend_pages for it in tp.get("items", [])]
 
-    def _apply(margins):
+    def _apply_margins(margins):
         for key in keys:
             entry = dict(page_layouts.get(key, {}))
             entry["marginTop"], entry["marginBottom"] = margins
@@ -919,28 +1021,99 @@ def _pick_trend_margins(browser, trend_pages: list, template, render_kwargs: dic
         return template.render(pages=trend_pages, **render_kwargs)
 
     cache_key = hashlib.sha256(_render().encode("utf-8")).hexdigest()
-    chosen = _TREND_MARGIN_CACHE.get(cache_key)
-    if chosen is None:
-        chosen = default
+    cached = _TREND_PLAN_CACHE.get(cache_key)
+    if cached is not None:
+        _apply_margins(cached["margins"])
+        for it, saved_rows in zip(items, cached["rows"]):
+            for row, saved in zip(it.get("rows", []), saved_rows):
+                row.update(saved)
+        return
+
+    page = browser.new_page()
+
+    def _probe():
+        """Prints the trend section alone; returns (page count,
+        [[physical page of each row] per item])."""
+        _load_for_print(page, _render(), _PRINTABLE_PORTRAIT_MM)
+        pdf_bytes = page.pdf(format="A4", prefer_css_page_size=True, print_background=True,
+                             display_header_footer=False, margin=_MAIN_MARGIN)
+        texts = _page_texts(pdf_bytes)
+        found = {}
+        for pno, text in enumerate(texts):
+            for ii, k in re.findall(r"@@TROW_(\d+)_(\d+)@@", text):
+                found.setdefault((int(ii), int(k)), pno)
+        return len(texts), [[found.get((ii, k)) for k in range(len(it.get("rows", [])))]
+                            for ii, it in enumerate(items)]
+
+    def _chunk_all():
+        m = _TREND_MIN_SPLIT_ROWS
+        for it in items:
+            rows = it.get("rows", [])
+            for a, b in _trend_groups(rows):
+                if b - a < 2 * m:
+                    bounds = [(a, b)]
+                else:
+                    bounds = [(a, a + m)] + [(k, k + 1) for k in range(a + m, b - m)] + [(b - m, b)]
+                _set_trend_blocks(rows, a, bounds, label_hidden=True)
+
+    try:
+        # 1. Chunked probe at each candidate margin; keep the tighter margins
+        #    only if they save a page.
+        _chunk_all()
+        _apply_margins(default)
+        chosen, (n_pages, page_of) = default, _probe()
         if floor != default:
-            page_counts = {}
-            page = browser.new_page()
-            try:
-                for margins in (default, floor):
-                    _apply(margins)
-                    page.set_content(_render(), wait_until="domcontentloaded")
-                    page.evaluate("document.fonts.ready")
-                    probe = page.pdf(format="A4", prefer_css_page_size=True, print_background=True,
-                                     display_header_footer=False, margin=_MAIN_MARGIN)
-                    page_counts[margins] = len(PdfReader(io.BytesIO(probe)).pages)
-            finally:
-                page.close()
-            if page_counts[floor] < page_counts[default]:
-                chosen = floor
-        if len(_TREND_MARGIN_CACHE) >= _TREND_MARGIN_CACHE_MAX_ENTRIES:
-            _TREND_MARGIN_CACHE.pop(next(iter(_TREND_MARGIN_CACHE)))
-        _TREND_MARGIN_CACHE[cache_key] = chosen
-    _apply(chosen)
+            _apply_margins(floor)
+            n_floor, page_of_floor = _probe()
+            if n_floor < n_pages:
+                chosen, n_pages, page_of = floor, n_floor, page_of_floor
+        _apply_margins(chosen)
+
+        # 2. One labelled block per page-piece of each group, where the
+        #    chunked probe put its breaks.
+        for it, pages in zip(items, page_of):
+            rows = it.get("rows", [])
+            for a, b in _trend_groups(rows):
+                if any(p is None for p in pages[a:b]):
+                    bounds = [(a, b)]  # marker not found: don't split blind
+                else:
+                    cuts = [k for k in range(a + 1, b) if pages[k] != pages[k - 1]]
+                    edges = [a] + cuts + [b]
+                    bounds = list(zip(edges, edges[1:]))
+                _set_trend_blocks(rows, a, bounds, label_hidden=False)
+
+        # 3. Verify; merge pieces of a group that landed on the same page.
+        for _ in range(_TREND_MAX_VERIFY_PASSES):
+            _n, page_of = _probe()
+            merged = False
+            for it, pages in zip(items, page_of):
+                rows = it.get("rows", [])
+                for a, b in _trend_groups(rows):
+                    starts = [k for k in range(a, b) if rows[k]["tbody_start"]]
+                    if len(starts) < 2:
+                        continue
+                    edges = starts + [b]
+                    bounds = [list(p) for p in zip(edges, edges[1:])]
+                    kept = [bounds[0]]
+                    for s, e in bounds[1:]:
+                        if pages[s] is not None and pages[s] == pages[kept[-1][0]]:
+                            kept[-1][1] = e
+                            merged = True
+                        else:
+                            kept.append([s, e])
+                    if len(kept) != len(bounds):
+                        _set_trend_blocks(rows, a, [tuple(p) for p in kept], label_hidden=False)
+            if not merged:
+                break
+    finally:
+        page.close()
+
+    if len(_TREND_PLAN_CACHE) >= _TREND_PLAN_CACHE_MAX_ENTRIES:
+        _TREND_PLAN_CACHE.pop(next(iter(_TREND_PLAN_CACHE)))
+    _TREND_PLAN_CACHE[cache_key] = {
+        "margins": chosen,
+        "rows": [[{f: row.get(f) for f in _TREND_ROW_FIELDS} for row in it.get("rows", [])] for it in items],
+    }
 
 
 def _marker_page_index(page_texts: list, page_id) -> int:
@@ -988,9 +1161,8 @@ def _correct_dynamic_index_pagination(pdf_bytes: bytes, browser, front_pages: li
     Every row's nominal count in _INDEX_SECTIONS is a hand-maintained
     number that drifts the moment that row's real content grows or shrinks
     enough to gain or lose a physical page — the trend row was simply the
-    first place this got a proper per-render fix (_pick_trend_margins,
-    re-enabled 2026-09-22, made its count genuinely data-dependent instead
-    of a rare content change, so it needed this fix first).
+    first place this got a proper per-render fix (its page count depends
+    on the month's data — see _plan_trend_layout).
 
     Fixed the same way for every row now: every page dict in `main_pages`
     still carries its own @@PGSTART_{{page.page}}@@ marker (see main.html's
@@ -1149,9 +1321,8 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     purely an execution-plumbing change (same HTML, same measurements,
     same output); it does not affect layout, fonts, or page counts.
 
-    Trend-table pagination needs no measurement pass: plant groups are
-    kept whole by CSS (see trend_section.html); only _pick_trend_margins
-    runs beforehand, on the trend section alone.
+    Trend-table pagination is planned beforehand by _plan_trend_layout,
+    on the trend section alone (see its docstring).
 
     Mutates main_pages/merged_page_layouts in place exactly as the previous
     per-pass functions did (trend row is_first_in_plant/plant_row_count, and
@@ -1214,12 +1385,13 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     if any(p.get("type") == "ready_reckoner" and p.get("subtype") == "details" for p in main_pages):
         _split_ready_reckoner_overflow(main_pages, browser, template, render_kwargs, font_family, report_month)
 
-    # Trend section: must run before main_html is rendered below — it may
-    # change the section's margins in render_kwargs["page_layouts"].
+    # Trend section: must run before main_html is rendered below — it sets
+    # the rows' page-split blocks and may change the section's margins in
+    # render_kwargs["page_layouts"].
     _trend_pages = [p for p in main_pages if p.get("type") == "trend_section"]
     if _trend_pages:
-        with _time_phase("trend margin pick"):
-            _pick_trend_margins(browser, _trend_pages, template, render_kwargs)
+        with _time_phase("trend layout plan"):
+            _plan_trend_layout(browser, _trend_pages, template, render_kwargs)
 
     # Page 1 (Cover) is rendered as its own document with a zero page
     # margin (see _render_pdf's docstring — page.pdf()'s margin option
@@ -1280,7 +1452,7 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
         main_html = template.render(pages=main_pages, **render_kwargs) if main_pages else ""
         # main_header_footer=False (was True — baking Chromium's own inline
         # footer straight into this one print call) since 2026-09-22: with
-        # _pick_trend_margins re-enabled, the trend section's real page
+        # the trend section's page count depending on its data, its real page
         # count (and therefore the correct "of TOTAL") isn't known until
         # AFTER this render — see _correct_dynamic_index_pagination and the
         # _stamp_main_overlays call below, the same blank-then-stamp

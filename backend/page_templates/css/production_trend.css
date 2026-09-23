@@ -37,10 +37,10 @@
     font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
     text-align: right; border: 0.3pt solid {{ colors.border_light }};
 }
-/* One <tbody> per plant/SAIL group (see trend_section.html): never split a
-   group across a page break — Chromium moves the whole group to the next
-   page instead and repeats the <thead> there. Only a group taller than a
-   full page could still break (none are, at ~12 rows max). */
+/* Each <tbody class="plant-group"> is one unbreakable block (see
+   trend_section.html): a whole plant group, or one page-piece of a group
+   that pdf.py's _plan_trend_layout split with >= 3 rows on each side.
+   Chromium breaks pages only between blocks and repeats the <thead>. */
 .page7-13-yearly-table tbody.plant-group { break-inside: avoid; page-break-inside: avoid; }
 
 /* ---- Plant-label cell (the rowspan'd column stacking each plant's
