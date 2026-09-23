@@ -15,6 +15,7 @@ import datetime as _dt
 import re as _re
 
 import db
+from chart_utils import axis_break_svg, own_scale
 from report_utils import compute_item_row
 from page_techno import generate_at_a_glance_te_table
 from page_special_steel import generate_special_steel_sail
@@ -385,14 +386,25 @@ def _bar_path(x: float, y: float, w: float, h: float, r: float) -> str:
             f'L{x + w:.1f},{y + h:.1f} Z')
 
 
+# Each item's bars are drawn on that item's OWN value scale, not from zero:
+# year-to-year changes here are only ~2-12% of the totals, invisible on a
+# shared zero-based axis. The item's lowest value lands at _YTD_BAR_LO of
+# the plot height and its highest at _YTD_BAR_HI (the lowest stays tall
+# enough to hold its in-bar value label). A zig-zag break mark across each
+# group's base and a legend note flag the cut axis; values stay printed on
+# every bar.
+_YTD_BAR_LO, _YTD_BAR_HI = 0.55, 0.90
+# Value Added combo chart's % bars (see _value_added_combo_svg): capped lower
+# so they stay under the qty line's band above them.
+_VA_BAR_LO, _VA_BAR_HI = 0.38, 0.70
+
+
 def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
                         vw: int = 980, vh: int = 250) -> str:
     ml, mr, mt, mb = 34, 10, 14, 40
     cw, ch = vw - ml - mr, vh - mt - mb
 
-    all_vals = [v for item in items for (_, v) in data[item] if v is not None]
-    yhi = max(all_vals) * 1.25 if all_vals else 10.0
-    yhi = max(yhi, 5.0)
+    scales = {item: own_scale([v for (_, v) in data[item]], _YTD_BAR_LO, _YTD_BAR_HI) for item in items}
 
     n_groups = len(items)
     n_bars = len(fy_labels)
@@ -428,6 +440,8 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
         lines.append(f'<text x="{lx + 21}" y="{ly}" font-size="{fs:.1f}" font-family="Arial,sans-serif" '
                      f'fill="#334155">{label}</text>')
         lx += 21 + len(label) * 13.6 + 18
+    lines.append(f'<text x="{vw - mr}" y="{ly}" text-anchor="end" font-size="{fs:.1f}" '
+                 f'font-family="Arial,sans-serif" fill="#64748b">≈ each item on its own scale, not from 0</text>')
 
     lines.append(f'<line x1="{ml}" y1="{mt + ch:.1f}" x2="{vw - mr}" y2="{mt + ch:.1f}" '
                  f'stroke="#374151" stroke-width="0.7"/>')
@@ -435,6 +449,7 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
     gx = ml
     for item in items:
         bx = gx + cluster_pad
+        floor, span = scales[item]
         for j, (_, v) in enumerate(data[item]):
             color = _YTD_BAR_COLORS[j]
             x = bx + j * (bar_w + bar_gap)
@@ -446,22 +461,27 @@ def _ytd_bar_chart_svg(items: list, data: dict, fy_labels: list, growth: dict,
                 lines.append(f'<text x="{cx:.1f}" y="{by - 3:.1f}" text-anchor="middle" '
                              f'font-size="5.6" font-family="Arial,sans-serif" fill="#94a3b8">N/A</text>')
             else:
-                bh = max(2.0, ch * v / yhi)
+                bh = max(2.0, ch * (v - floor) / span)
                 by = mt + ch - bh
                 lines.append(f'<path d="{_bar_path(x, by, bar_w, bh, bar_w / 2)}" fill="{color}"/>')
                 val_str = f"{v:,.0f}"
-                # Centered inside the bar when it's tall enough for the label
-                # to fully fit; short bars fall back to just above (dark ink,
-                # since that sits on the page background, not the fill).
-                fits_inside = bh >= data_fs * len(val_str) * 0.62 + 10
+                # Centered inside the bar's part ABOVE the axis-break band
+                # (see chart_utils.axis_break_svg, ~18px at the bar's base) when it's
+                # tall enough for the label to fully fit; short bars fall
+                # back to just above (dark ink, since that sits on the page
+                # background, not the fill).
+                usable = bh - 18
+                fits_inside = usable >= data_fs * len(val_str) * 0.62 + 10
                 if fits_inside:
-                    ty, tfill = by + bh / 2, _contrast_text(color)
+                    ty, tfill = by + usable / 2, _contrast_text(color)
                 else:
                     ty, tfill = by - 8, "#1e293b"
                 lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" dominant-baseline="middle" '
                              f'transform="rotate(-90 {cx:.1f} {ty:.1f})" '
                              f'font-size="{data_fs:.1f}" font-weight="bold" font-family="Arial,sans-serif" '
                              f'fill="{tfill}">{val_str}</text>')
+        if any(v is not None for (_, v) in data[item]):
+            lines.append(axis_break_svg(bx - 4, bx + cluster_w + 4, mt + ch - 9))
         lxc = gx + group_w / 2
         lyc = mt + ch + 26
         g = growth.get(item, {})
@@ -780,16 +800,24 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
     cw, ch = vw - ml - mr, vh - mt - mb
     sub_fs = round(label_fs * 7.5 / 11, 1)  # keep the (YTD rate)-style sub-annotation's size proportional to label_fs, same ratio as the original 7.5-vs-11 pair
 
-    pct_present = [v for v in pct_vals if v is not None]
-    pct_yhi = max(5.0, (max(pct_present) if pct_present else 10.0) * 1.4)
+    # % bars on their own non-zero scale (same approach as _ytd_bar_chart_svg:
+    # the % values sit within a few points of each other, invisible from
+    # zero). Lowest bar at _VA_BAR_LO of the plot height, highest at
+    # _VA_BAR_HI — kept below the qty line's band (line_top/line_bot) so
+    # the stems still join each bar to its point. A zig-zag break mark on
+    # every bar flags the cut axis (note next to the section heading in
+    # at_a_glance.html / AtAGlanceTemplate.js).
+    pct_floor, pct_span = own_scale(pct_vals, _VA_BAR_LO, _VA_BAR_HI)
 
+    # Qty line: its lowest and highest points span the whole band (a dot/line
+    # reads by position, not length, so a non-zero scale needs no break mark).
     qty_present = [v for v in qty_vals if v is not None]
-    qty_lo = min(qty_present) * 0.85 if qty_present else 0.0
-    qty_hi = max(qty_present) * 1.08 if qty_present else 1.0
-    if qty_hi <= qty_lo:
-        qty_hi = qty_lo + 1.0
+    qty_lo = min(qty_present) if qty_present else 0.0
+    qty_hi = max(qty_present) if qty_present else 1.0
+    if qty_hi <= qty_lo:   # flat or single point: sit mid-band
+        qty_lo, qty_hi = qty_lo - 1.0, qty_hi + 1.0
 
-    line_top, line_bot = mt + ch * 0.09, mt + ch * 0.24
+    line_top, line_bot = mt + ch * 0.05, mt + ch * 0.24
 
     def line_y(v):
         return line_bot - (line_bot - line_top) * (v - qty_lo) / (qty_hi - qty_lo)
@@ -836,12 +864,14 @@ def _value_added_combo_svg(categories: list, pct_vals: list, qty_vals: list,
             lines.append(f'<rect x="{cx - bar_w / 2:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="3" '
                          f'fill="none" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2,1.5"/>')
         else:
-            bh = max(2.0, ch * pv / pct_yhi)
+            bh = max(2.0, ch * (pv - pct_floor) / pct_span)
             by = mt + ch - bh
             lines.append(f'<path d="{_bar_path(cx - bar_w / 2, by, bar_w, bh, bar_radius)}" fill="{color}"/>')
+            lines.append(axis_break_svg(cx - bar_w / 2 - 3, cx + bar_w / 2 + 3, mt + ch - 9))
             val_str = f"{pv:.1f}%"
-            if bh >= 16:
-                lines.append(f'<text x="{cx:.1f}" y="{by + bh / 2:.1f}" text-anchor="middle" dominant-baseline="middle" '
+            usable = bh - 18   # label sits above the break band
+            if usable >= 16:
+                lines.append(f'<text x="{cx:.1f}" y="{by + usable / 2:.1f}" text-anchor="middle" dominant-baseline="middle" '
                              f'font-size="{label_fs}" font-weight="bold" font-family="Arial,sans-serif" '
                              f'fill="{_contrast_text(color)}">{val_str}</text>')
             else:

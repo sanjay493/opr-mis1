@@ -352,8 +352,17 @@ def _special_fin_semis_split(cur, months: list, entity: str):
     return fin, semis
 
 
+def _is_zero(v) -> bool:
+    return v is not None and round(v) == 0
+
+
 def _fmt_int(v):
-    return f"{v:,.0f}" if v is not None else "N/A"
+    """"N/A" for missing data; blank for a zero figure (e.g. RSP, which has
+    no Semis at all) rather than printing "0" — per direct instruction,
+    2026-09-23: no cell in this table shows a zero value."""
+    if v is None:
+        return "N/A"
+    return "" if _is_zero(v) else f"{v:,.0f}"
 
 
 def _pct(v, total):
@@ -361,10 +370,14 @@ def _pct(v, total):
 
 
 def _amt_pct(v, total, unit="SS"):
+    if _is_zero(v):
+        return ""
     return f"{_fmt_int(v)} ({_pct(v, total)} of {unit})"
 
 
 def _amt_dual_pct(v, total_a, unit_a, total_b, unit_b):
+    if _is_zero(v):
+        return ""
     return f"{_fmt_int(v)} ({_pct(v, total_a)} of {unit_a} || {_pct(v, total_b)} of {unit_b})"
 
 
@@ -467,7 +480,7 @@ def _entity_metrics(cur, entity: str, fy_months: list, month: str, ytd_months: l
         prod_defs.append(("Semis", lambda d: [_amt_pct(d["semis"], d["total"])] if d["semis"] is not None else []))
     prod_rows = _block_rows(
         periods, prod_defs, "SS",
-        lambda d: [f"{_fmt_int(d['total']) if d['total'] else 'N/A'}"],
+        lambda d: [_fmt_int(d['total'])],
         special=False,
     )
 
@@ -615,7 +628,12 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 750) -> str:
     # off the right edge of the viewBox and got clipped — per direct
     # instruction, fixed by widening pad_r past r_max with a small margin
     # rather than by touching x_max/the 100% axis meaning itself.
-    pad_l, pad_r, pad_t, pad_b = 115, 90, 45, 95
+    pad_l, pad_r, pad_t, pad_b = 125, 90, 45, 95
+    # Axis tick labels and axis titles: true ~11pt on the printed page. The
+    # chart prints ~0.48pt per viewBox unit (measured 2026-09-23: 1000 units
+    # -> ~170mm, after page 24's own fit-to-page zoom), so 11pt = ~23
+    # units. Re-measure if vw or .ssd-bubble-chart's CSS width changes.
+    axis_fs = 23.0
     plot_w = vw - pad_l - pad_r
     plot_h = vh - pad_t - pad_b
 
@@ -664,7 +682,7 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 750) -> str:
     for xv in (0, 20, 40, 60, 80, 100):
         tx = xp(xv)
         lines.append(f'<line x1="{tx:.1f}" y1="{axis_y:.1f}" x2="{tx:.1f}" y2="{axis_y + 7:.1f}" stroke="#000000" stroke-width="1.5"/>')
-        lines.append(f'<text x="{tx:.1f}" y="{axis_y + 21:.1f}" font-size="14" font-family="Arial, sans-serif" '
+        lines.append(f'<text x="{tx:.1f}" y="{axis_y + 7 + axis_fs * 0.95:.1f}" font-size="{axis_fs}" font-family="Arial, sans-serif" '
                      f'fill="#374151" text-anchor="middle">{xv}%</text>')
 
     y_step = y_max / 5
@@ -672,7 +690,7 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 750) -> str:
         yv = y_step * i
         ty = yp(yv)
         lines.append(f'<line x1="{pad_l - 7:.1f}" y1="{ty:.1f}" x2="{pad_l:.1f}" y2="{ty:.1f}" stroke="#000000" stroke-width="1.5"/>')
-        lines.append(f'<text x="{pad_l - 12:.1f}" y="{ty + 4:.1f}" font-size="14" font-family="Arial, sans-serif" '
+        lines.append(f'<text x="{pad_l - 12:.1f}" y="{ty + axis_fs * 0.35:.1f}" font-size="{axis_fs}" font-family="Arial, sans-serif" '
                      f'fill="#374151" text-anchor="end">{yv:.0f}%</text>')
 
     # Dashed quadrant dividers at the plotted set's own mean, not a fixed 50%.
@@ -691,7 +709,7 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 750) -> str:
     # for X, pad_l-12 for Y), not just off the plot edge, so they never
     # overlap the new tick text at this shrunk vh/pad.
     xt = pad_l + plot_w / 2
-    lines.append(f'<text x="{xt:.1f}" y="{vh - 12:.1f}" font-size="12" font-family="Arial, sans-serif" '
+    lines.append(f'<text x="{xt:.1f}" y="{vh - 14:.1f}" font-size="{axis_fs}" font-family="Arial, sans-serif" '
                  f'fill="#111827" text-anchor="middle">Finished Steel Share of Saleable Steel Despatch (%)</text>')
     yt = pad_t + plot_h / 2
     # Shorter, abbreviated wording (matching the table's own "FS"/"SS")
@@ -699,8 +717,8 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 750) -> str:
     # runs vertically along plot_h, which is far shorter than plot_w, and
     # appending "Despatch" to the old, already-long spelled-out label
     # pushed it past the chart's own top/bottom bounds.
-    lines.append(f'<text x="20" y="{yt:.1f}" font-size="12" font-family="Arial, sans-serif" fill="#111827" '
-                 f'text-anchor="middle" transform="rotate(-90 20 {yt:.1f})">Special FS Share of Saleable Steel Despatch (%)</text>')
+    lines.append(f'<text x="24" y="{yt:.1f}" font-size="{axis_fs}" font-family="Arial, sans-serif" fill="#111827" '
+                 f'text-anchor="middle" transform="rotate(-90 24 {yt:.1f})">Special FS Share of Saleable Steel Despatch (%)</text>')
 
     # Bubbles, sqrt-scaled by Saleable Steel production, label centered.
     for p in points:

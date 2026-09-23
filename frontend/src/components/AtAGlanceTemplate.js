@@ -125,6 +125,9 @@ function ValueAddedSteelPanel({ specialSteel }) {
     <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 4, padding: '5px 8px' }}>
       <div style={{ fontSize: '11pt', fontWeight: 700, color: C.textHeadingDark, textTransform: 'capitalize', marginBottom: 4 }}>
         Value Added Steel Performance (SAIL)
+        <span style={{ fontSize: '8pt', fontWeight: 500, color: C.textSecondary, textTransform: 'none', marginLeft: 6 }}>
+          ≈ % bars on a cut axis, not from 0
+        </span>
       </div>
       <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
         <div style={{ flex: 1.5 }} dangerouslySetInnerHTML={{ __html: specialSteel.five_year_svg || '' }} />

@@ -18,6 +18,7 @@ this module only reads what's already been saved there.
 """
 import json
 import db
+from chart_utils import axis_break_svg, own_scale
 from page_special_steel_trend import (
     _last_n_fys, _fy_months, _rounded_bar_path, _contrast_text,
 )
@@ -160,8 +161,12 @@ def _import_pct_bar_svg(bars: list, title: str, vw: int = 220, vh: int = 150) ->
     text_color instead of relying on contrast-from-fill."""
     ml, mr, mt, mb = 8, 6, 16, 20
     cw, ch = vw - ml - mr, vh - mt - mb
-    vals = [b[1] for b in bars if b[1] is not None]
-    yhi = max((max(vals) * 1.3 if vals else 10.0), 10.0)
+    # Each plant's bars on that plant's OWN % scale, not from zero (see
+    # chart_utils): its FY/target/month/YTD figures usually sit within a few
+    # points of each other. Lowest bar at 35% of the plot height, highest at
+    # 88%; a half-size zig-zag break mark on every bar flags the cut axis
+    # (note in coal_consumption.html's section (C) heading).
+    floor, span = own_scale([b[1] for b in bars], 0.35, 0.88)
 
     n = len(bars)
     slot_w = cw / n
@@ -186,12 +191,13 @@ def _import_pct_bar_svg(bars: list, title: str, vw: int = 220, vh: int = 150) ->
             lines.append(f'<text x="{cx:.1f}" y="{by - 4:.1f}" text-anchor="middle" '
                          f'font-size="6" font-family="Arial,sans-serif" fill="#94a3b8">N/A</text>')
         else:
-            bh = max(2.0, ch * val / yhi)
+            bh = max(2.0, ch * (val - floor) / span)
             by = mt + ch - bh
             path = _rounded_bar_path(cx - bar_w / 2, by, bar_w, bh, bar_w / 2)
             lines.append(f'<path d="{path}" fill="{color}"/>')
+            lines.append(axis_break_svg(cx - bar_w / 2 - 2, cx + bar_w / 2 + 2, mt + ch - 5, k=0.5))
             fill = text_color or _contrast_text(color)
-            ty = by + bh / 2 + 3.4
+            ty = by + (bh - 9) / 2 + 3.4   # centered above the break band
             lines.append(f'<text x="{cx:.1f}" y="{ty:.1f}" text-anchor="middle" font-size="9.5" '
                          f'font-weight="bold" font-family="Arial,sans-serif" fill="{fill}">{val:.1f}</text>')
         lines.append(f'<text x="{cx:.1f}" y="{mt + ch + 12:.1f}" text-anchor="middle" font-size="7.5" '
