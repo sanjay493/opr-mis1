@@ -65,8 +65,13 @@ function ProductionRangeEntryInner() {
     let cancelled = false;
     fetch(`${API_BASE_URL}/api/item-mapping-suggestions?plant=${encodeURIComponent(plant)}`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d) => { if (!cancelled) setKnownItems(d.items ?? []); })
-      .catch(() => { if (!cancelled) setKnownItems([]); });
+      .then((d) => {
+        if (cancelled) return;
+        const items = d.items ?? [];
+        setKnownItems(items);
+        setItem((cur) => (items.includes(cur) ? cur : (items[0] ?? '')));
+      })
+      .catch(() => { if (!cancelled) { setKnownItems([]); setItem(''); } });
     return () => { cancelled = true; };
   }, [plant]);
 
@@ -78,7 +83,7 @@ function ProductionRangeEntryInner() {
   const handleLoad = useCallback(async () => {
     const trimmedItem = item.trim();
     if (!trimmedItem) {
-      setStatus({ type: 'error', text: 'Enter an item (unit) name first.' });
+      setStatus({ type: 'error', text: 'Select a unit first.' });
       return;
     }
     if (monthsWanted.length === 0) {
@@ -168,14 +173,16 @@ function ProductionRangeEntryInner() {
           </div>
           <div>
             <label style={label}>Unit / Item</label>
-            <input
-              type="text" list="known-item-names" value={item}
+            {/* Units are this plant's own item names in production_table
+                (via /api/item-mapping-suggestions), in process order. */}
+            <select
+              value={item}
               onChange={(e) => { setItem(e.target.value); setLoaded(false); setRows([]); }}
-              placeholder="e.g. Hot Metal" style={input}
-            />
-            <datalist id="known-item-names">
-              {knownItems.map((n) => <option key={n} value={n} />)}
-            </datalist>
+              disabled={knownItems.length === 0} style={input}
+            >
+              {knownItems.length === 0 && <option value="">No units in production_table</option>}
+              {knownItems.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
           <div>
             <label style={label}>From</label>
