@@ -40,25 +40,78 @@ def _rr_cell(value):
 _jinja_env.filters['rr_cell'] = _rr_cell
 
 
-def _page_texts(pdf_bytes: bytes) -> list:
-    """Every physical page's text layer, in order — used only to find the
-    invisible @@PGSTART_N@@ / @@TROW_..@@ markers. pypdfium2 (already
-    installed as a pdfplumber dependency) rather than pypdf's extract_text():
-    same markers found, ~12x faster (measured 0.6s vs 7.5s on a 15-page
-    trend section; pypdf re-parses the big embedded web fonts' ToUnicode
-    maps on every page), which made each full-report text sweep cost
-    40s+."""
-    import pypdfium2 as pdfium
-    doc = pdfium.PdfDocument(pdf_bytes)
+# Runs in a child process — see _page_texts_many. argv: PDF file paths;
+# prints one JSON list per file (that file's per-page texts). Every pdfium
+# object is closed explicitly, in order.
+_PDFIUM_TEXTS_SCRIPT = r"""
+import json, sys
+import pypdfium2 as pdfium
+out = []
+for path in sys.argv[1:]:
+    doc = pdfium.PdfDocument(path)
+    texts = []
     try:
-        texts = []
         for i in range(len(doc)):
-            textpage = doc[i].get_textpage()
-            texts.append(textpage.get_text_range() or "")
-            textpage.close()
-        return texts
+            page = doc[i]
+            textpage = page.get_textpage()
+            try:
+                texts.append(textpage.get_text_range() or "")
+            finally:
+                textpage.close()
+                page.close()
     finally:
         doc.close()
+    out.append(texts)
+sys.stdout.write(json.dumps(out))
+"""
+
+
+def _page_texts_many(pdfs: list) -> list:
+    """Every physical page's text layer, in order, for each PDF in `pdfs` —
+    used only to find the invisible @@PGSTART_N@@ / @@TROW_..@@ markers.
+
+    pypdfium2 (installed as a pdfplumber dependency) is ~12x faster than
+    pypdf's extract_text() here (0.6s vs 7.5s on a 15-page trend section;
+    pypdf re-parses the big embedded web fonts on every page). But pdfium
+    is not thread-safe, and inside the server it crashed the whole worker
+    process twice (2026-09-23, pdfium.dll 0x80000003 / 0xc0000409 — no
+    Python exception, the job just never finished). So it runs in a short-
+    lived child process instead: nothing else in that process can touch
+    pdfium, and a crash there can't take the server down. One child per
+    call, so batch small PDFs together. If the child fails for any reason,
+    falls back to pypdf in-process (slow but safe) and logs it."""
+    import json
+    import subprocess
+    import sys
+    import tempfile
+
+    if not pdfs:
+        return []
+    with tempfile.TemporaryDirectory(prefix="pdf-texts-") as tmp:
+        paths = []
+        for i, data in enumerate(pdfs):
+            path = os.path.join(tmp, f"{i}.pdf")
+            with open(path, "wb") as f:
+                f.write(data)
+            paths.append(path)
+        try:
+            proc = subprocess.run([sys.executable, "-c", _PDFIUM_TEXTS_SCRIPT, *paths],
+                                  capture_output=True, timeout=300)
+            if proc.returncode == 0:
+                texts = json.loads(proc.stdout.decode("utf-8"))
+                if len(texts) == len(pdfs):
+                    return texts
+            detail = proc.stderr.decode("utf-8", "replace").strip()[-500:] or f"exit code {proc.returncode:#x}"
+        except Exception as e:
+            detail = f"{type(e).__name__}: {e}"
+    print(f"[pdf] pdfium text extraction failed ({detail}); falling back to pypdf")
+    from pypdf import PdfReader
+    return [[(p.extract_text() or "") for p in PdfReader(io.BytesIO(data)).pages] for data in pdfs]
+
+
+def _page_texts(pdf_bytes: bytes) -> list:
+    """_page_texts_many for a single PDF."""
+    return _page_texts_many([pdf_bytes])[0]
 
 # ── PDF generation timing (backend terminal diagnostics) ───────────────────
 # Module-level, not per-request: safe because _PDF_EXECUTOR above is a
@@ -1000,7 +1053,6 @@ def _plan_trend_layout(browser, trend_pages: list, template, render_kwargs: dict
     ~14 pages, not the whole report. The tighter _TREND_MIN_* margins are
     kept only if they save a page."""
     import hashlib
-    import pypdfium2 as pdfium
 
     if not trend_pages:
         return
@@ -1515,18 +1567,19 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
 
         base_reader = PdfReader(io.BytesIO(base_bytes))
         run_readers = []
-        run_page_texts = []
+        run_bytes = []
         for _r in _runs:
             _run_pages_desc = ", ".join(f"{p.get('page')}({p.get('type')})" for p in _r["pages"])
             with _time_phase(f"landscape run: {_run_pages_desc}"):
                 _run_bytes = _render_landscape_page_pdf(
                     browser, template.render(pages=_r["pages"], **render_kwargs), font_family)
             run_readers.append(PdfReader(io.BytesIO(_run_bytes)))
-            run_page_texts.append(_page_texts(_run_bytes))
+            run_bytes.append(_run_bytes)
 
-        # Extracted once and reused for every marker lookup below (splice
-        # positioning AND, if dept_badges is set, its physical-page map).
-        base_page_texts = _page_texts(base_bytes)
+        # Extracted once, in one batch, and reused for every marker lookup
+        # below (splice positioning AND, if dept_badges is set, its
+        # physical-page map).
+        base_page_texts, *run_page_texts = _page_texts_many([base_bytes, *run_bytes])
 
         def _marker_index(texts, page_id):
             marker = f"@@PGSTART_{page_id}@@"
