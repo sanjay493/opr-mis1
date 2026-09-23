@@ -26,6 +26,11 @@ if errorlevel 1 (
   echo MySQL already running.
 )
 
+rem Every venv tool runs as "venv\Scripts\python.exe -m <tool>", never through its
+rem pip-generated launcher (uvicorn.exe, pip.exe, playwright.exe): those launchers
+rem are unsigned and this machines Device Guard policy blocks them, while
+rem python.exe itself is signed by the Python Software Foundation.
+rem
 rem Keeps this machine's venv/Chromium build in sync with whatever's
 rem committed (backend\requirements.txt is pinned to exact versions) -
 rem unpinned/drifted versions across machines is what used to cause the
@@ -35,21 +40,21 @@ rem (pip/playwright both skip anything already satisfied), so safe to run
 rem on every startup rather than relying on remembering to do it by hand
 rem after a `git pull`.
 echo Syncing backend Python dependencies to the pinned versions...
-call "%~dp0backend\venv\Scripts\pip.exe" install -r "%~dp0backend\requirements.txt"
+call "%~dp0backend\venv\Scripts\python.exe" -m pip install -r "%~dp0backend\requirements.txt"
 if errorlevel 1 (
   echo WARNING: pip install failed - continuing with whatever is already installed.
-  echo   Run manually:  backend\venv\Scripts\pip install -r backend\requirements.txt
+  echo   Run manually:  backend\venv\Scripts\python -m pip install -r backend\requirements.txt
 )
 
 echo Syncing Playwright's Chromium build to match...
-call "%~dp0backend\venv\Scripts\playwright.exe" install chromium
+call "%~dp0backend\venv\Scripts\python.exe" -m playwright install chromium
 if errorlevel 1 (
   echo WARNING: playwright install failed - continuing with whatever Chromium build is already cached.
-  echo   Run manually:  backend\venv\Scripts\playwright install chromium
+  echo   Run manually:  backend\venv\Scripts\python -m playwright install chromium
 )
 
 echo Starting FastAPI backend on port 8082 (--reload)...
-start "MIS Backend (8082, dev)" cmd /k "cd /d %~dp0backend && venv\Scripts\uvicorn.exe main:app --host 127.0.0.1 --port 8082 --reload"
+start "MIS Backend (8082, dev)" cmd /k "cd /d %~dp0backend && venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8082 --reload"
 
 echo Starting Next.js dev server on port 3000...
 start "MIS Frontend (3000, dev)" cmd /k "cd /d %~dp0frontend && npm run dev"

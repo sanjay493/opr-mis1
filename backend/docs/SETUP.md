@@ -231,7 +231,7 @@ a Windows notification balloon.
 ```powershell
 # Backend (port 8082, loopback only - correct; LAN goes via the Next proxy)
 cd C:\opr-mis1\backend
-venv\Scripts\uvicorn main:app --host 127.0.0.1 --port 8082
+venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8082
 
 # Frontend - development
 cd C:\opr-mis1\frontend
