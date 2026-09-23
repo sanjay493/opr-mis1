@@ -1,0 +1,68 @@
+<style>
+    .mur-title {
+        text-align: center; font-weight: 700; font-size: 15pt;
+        color: {{ colors.text_accent_navy|default('#1e3a8a') }};
+        text-decoration: underline; margin-bottom: 2px;
+    }
+    .mur-subtitle {
+        text-align: center; font-weight: 600; font-size: 10.5pt;
+        color: {{ colors.text_secondary|default('#5f6368') }};
+        margin-bottom: 10px;
+    }
+    .mur-table { font-size: 11pt; border-collapse: collapse; width: 100%; line-height: 1.2; }
+    .mur-table th, .mur-table td {
+        border: 0.5pt solid {{ colors.border_dark|default('#5f6368') }};
+        padding: 2.5px 6px;
+    }
+    .mur-table th { font-weight: 700; text-align: center; }
+    .mur-table td.mur-unit { text-align: left; }
+    .mur-table td.mur-value { text-align: center; white-space: nowrap; }
+
+    /* Row call-outs — see page_major_unit_records.py's _row_class. Kept
+       subtle (tint + left rule, not a loud fill) so they read at a glance
+       without fighting the grid lines. */
+    .mur-table tr.mur-row-pushing td { background: #fff7e0; }
+    .mur-table tr.mur-row-pushing td.mur-unit {
+        border-left: 3px solid {{ colors.text_rust_brown|default('#B7410E') }};
+        font-weight: 600;
+    }
+    .mur-table tr.mur-row-total td { background: #eaf2fb; }
+    .mur-table tr.mur-row-total td.mur-unit {
+        border-left: 3px solid {{ colors.text_accent_navy|default('#1e3a8a') }};
+        font-weight: 700;
+    }
+    .mur-table tr.mur-row-total td.mur-value { font-weight: 700; }
+
+    /* The FY/month/date sitting beside a record value — a 3rd, distinct
+       color (teal) so it never gets mistaken for the rust-brown/navy row
+       call-outs above, on either a highlighted or a plain row. */
+    .mur-table .mur-period {
+        color: {{ colors.text_teal|default('#0f766e') }};
+        font-weight: 600;
+        font-size: 0.93em;
+    }
+</style>
+
+<div class="mur-title">{{ page.plant_name }}</div>
+<div class="mur-subtitle">Major Units — Best Achieved (Annual / Monthly '000 T, Daily T; Oven Pushing in Nos/day)</div>
+
+<table class="mur-table">
+    <thead>
+        <tr>
+            <th>Unit</th>
+            <th>Annual Best</th>
+            <th>Monthly Best</th>
+            <th>Daily Best</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in page.rows %}
+        <tr class="{{ row.row_class }}">
+            <td class="mur-unit">{{ row.label }}</td>
+            <td class="mur-value">{{ row.annual_display }}</td>
+            <td class="mur-value">{{ row.monthly_display }}</td>
+            <td class="mur-value">{{ row.daily_display }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>

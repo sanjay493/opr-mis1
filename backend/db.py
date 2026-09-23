@@ -1076,6 +1076,32 @@ def init_db():
         )
     """)
 
+    # "Annexure-III : 5 ISPs Major Units Records" — per-plant, per-major-unit
+    # Daily best-ever production record. Static reference content, same
+    # rationale as ready_reckoner_pages just above: not scoped to any report
+    # month. Annual/Monthly bests are NEVER stored here — they're computed
+    # live from production_table (see page_major_unit_records.py's
+    # best_for_unit) since that's the single source of truth for monthly
+    # actuals; only Daily has no other DB home (production_table is monthly
+    # grain). Seeded from Report_format/Plants Best/{plant}.xlsx via
+    # scripts/backfill_major_unit_daily_records.py; editable going forward
+    # via /data-entry/major-unit-daily (see main.py's /api/major-unit-daily
+    # endpoints).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS major_unit_daily_record (
+            plant_code      TEXT NOT NULL,
+            unit_label      TEXT NOT NULL,
+            unit_of_measure TEXT,
+            value           REAL,
+            record_date     TEXT,
+            remarks         TEXT,
+            sort_order      INTEGER NOT NULL DEFAULT 0,
+            updated_by      TEXT,
+            updated_at      TEXT,
+            PRIMARY KEY (plant_code, unit_label)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -2728,6 +2754,28 @@ def get_production_actual_value(plant: str, item_name: str, report_month: str) -
     row = cursor.fetchone()
     conn.close()
     return row[0] if row and row[0] is not None else None
+
+
+def get_production_actual_for_months(plant: str, item_name: str, months: List[str]) -> Dict[str, float]:
+    """-> {report_month: month_actual} for one plant/item across an explicit
+    list of report_months (only months with a saved row come back) — used
+    by the /data-entry/production-range bulk editor (see main.py's
+    /api/production-item-range) to pre-fill a whole month range in one
+    query rather than one lookup per month."""
+    if not months:
+        return {}
+    init_db()
+    conn = connect()
+    cursor = conn.cursor()
+    placeholders = ",".join("?" * len(months))
+    cursor.execute(
+        f"SELECT report_month, month_actual FROM production_table "
+        f"WHERE plant_name = ? AND item_name = ? AND report_month IN ({placeholders})",
+        [plant, item_name] + months,
+    )
+    out = {rm: v for rm, v in cursor.fetchall() if v is not None}
+    conn.close()
+    return out
 
 
 def enrich_rows_with_db_production(rows: List[Dict[str, Any]], plant: str, report_month: str) -> List[Dict[str, Any]]:
@@ -4460,5 +4508,72 @@ def save_ready_reckoner_image(plant_code: str, image_path: str, updated_by: str)
         SET process_flow_image_path = ?, updated_by = ?, updated_at = ?
         WHERE plant_code = ?
     """, (image_path, updated_by, _dt.datetime.now().isoformat(timespec="seconds"), plant_code))
+    conn.commit()
+    conn.close()
+
+
+# ── Annexure-III : 5 ISPs Major Units Records — Daily best (see
+# major_unit_daily_record's own comment above and page_major_unit_records.py) ──
+
+_MAJOR_UNIT_DAILY_COLS = (
+    "plant_code", "unit_label", "unit_of_measure", "value",
+    "record_date", "remarks", "sort_order", "updated_by", "updated_at",
+)
+
+
+def get_major_unit_daily_records(plant_code: str) -> List[dict]:
+    """-> every unit row for one plant, in display order."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT {','.join(_MAJOR_UNIT_DAILY_COLS)} FROM major_unit_daily_record "
+        f"WHERE plant_code = ? ORDER BY sort_order",
+        (plant_code,),
+    )
+    rows = [dict(zip(_MAJOR_UNIT_DAILY_COLS, r)) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_major_unit_daily_records_all() -> Dict[str, Dict[str, dict]]:
+    """-> {plant_code: {unit_label: row_dict}} for every plant — used by
+    page_major_unit_records.generate_major_unit_page to look up one plant's
+    Daily figures alongside its live-computed Annual/Monthly bests."""
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute(f"SELECT {','.join(_MAJOR_UNIT_DAILY_COLS)} FROM major_unit_daily_record")
+    out: Dict[str, Dict[str, dict]] = {}
+    for r in cur.fetchall():
+        d = dict(zip(_MAJOR_UNIT_DAILY_COLS, r))
+        out.setdefault(d["plant_code"], {})[d["unit_label"]] = d
+    conn.close()
+    return out
+
+
+def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Optional[float],
+                                  unit_of_measure: Optional[str], record_date: Optional[str],
+                                  remarks: Optional[str], sort_order: int, updated_by: str = "") -> None:
+    """Upsert one unit's Daily best — used by both the one-time backfill
+    (scripts/backfill_major_unit_daily_records.py) and the
+    /data-entry/major-unit-daily editor (see main.py's
+    /api/major-unit-daily/{plant_code} POST)."""
+    import datetime as _dt
+    init_db()
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO major_unit_daily_record
+            (plant_code, unit_label, unit_of_measure, value, record_date,
+             remarks, sort_order, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(plant_code, unit_label) DO UPDATE SET
+            unit_of_measure = excluded.unit_of_measure, value = excluded.value,
+            record_date = excluded.record_date, remarks = excluded.remarks,
+            sort_order = excluded.sort_order, updated_by = excluded.updated_by,
+            updated_at = excluded.updated_at
+    """, (plant_code, unit_label, unit_of_measure, value, record_date, remarks,
+          sort_order, updated_by, _dt.datetime.now().isoformat(timespec="seconds")))
     conn.commit()
     conn.close()

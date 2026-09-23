@@ -766,3 +766,22 @@ CREATE TABLE IF NOT EXISTS ready_reckoner_pages (
     updated_by               VARCHAR(128),
     updated_at               DATETIME
 ) ENGINE=InnoDB;
+
+-- "Annexure-III : 5 ISPs Major Units Records" — per-plant, per-major-unit
+-- Daily best-ever production record. Static reference content, same
+-- rationale as ready_reckoner_pages just above. Annual/Monthly bests are
+-- computed live from production_table, never stored. See
+-- backend/scripts/migrate_add_major_unit_daily_record.sql and
+-- backend/page_major_unit_records.py.
+CREATE TABLE IF NOT EXISTS major_unit_daily_record (
+    plant_code      VARCHAR(8)  NOT NULL,
+    unit_label      VARCHAR(64) NOT NULL,
+    unit_of_measure VARCHAR(16),
+    value           DOUBLE,
+    record_date     VARCHAR(10),
+    remarks         TEXT,
+    sort_order      INT NOT NULL DEFAULT 0,
+    updated_by      VARCHAR(128),
+    updated_at      VARCHAR(32),
+    PRIMARY KEY (plant_code, unit_label)
+) ENGINE=InnoDB;

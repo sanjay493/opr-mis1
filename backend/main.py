@@ -17,7 +17,7 @@ from pathlib import Path
 import db
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
-from models import PDFRequest, ProductionEntry, ProductionEntryRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
+from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
 from report_utils import compute_item_row, build_production_narrative, assign_dept_badges, blank_out_page_data
 from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
@@ -69,6 +69,11 @@ from page_ready_reckoner import (
     SSP_SEPARATOR_PAGE_ID as READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
     SSP_PAGES as READY_RECKONER_SSP_PAGES,
     generate_ready_reckoner_page, generate_ready_reckoner_separator,
+)
+import page_major_unit_records
+from page_major_unit_records import (
+    MAJOR_UNIT_SEPARATOR_PAGE_ID, MAJOR_UNIT_PAGES, MAJOR_UNIT_ACTIVE_PAGES,
+    generate_major_unit_page, generate_major_unit_separator,
 )
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
@@ -349,6 +354,15 @@ _INDEX_SECTIONS = [
     # ISP, and all 3 SSPs (ASP/SSP/VISL) stay merged.
     ("Annexure-1 : 5 ISPs Ready Reckoner", 14),
     ("Annexure-2 : 3 SSPs Ready Reckoner", 7),
+    # "Annexure-III : 5 ISPs Major Units Records" — a blank Annexure
+    # separator page, then one page per plant with a filled-in registry
+    # (all 5 ISPs, incl. DSP — see page_major_unit_records.py's module
+    # docstring). Right after the Ready Reckoner Annexures, now the true
+    # end of the report.
+    # Count is 1 + len(MAJOR_UNIT_ACTIVE_PAGES), hand-maintained here like
+    # every other section (re-measure if a plant's table ever overflows
+    # onto a 2nd physical page).
+    ("Annexure-III : 5 ISPs Major Units Records", 1 + len(MAJOR_UNIT_ACTIVE_PAGES)),
 ]
 
 
@@ -690,6 +704,7 @@ _INDEX_SECTION_ANCHORS = [
     min(RAKE_DETENTION_DETAIL_PAGES),  # Details of Rakes Detention Plant Wise
     READY_RECKONER_ISP_SEPARATOR_PAGE_ID,  # Annexure-1 : 5 ISPs Ready Reckoner
     READY_RECKONER_SSP_SEPARATOR_PAGE_ID,  # Annexure-2 : 3 SSPs Ready Reckoner
+    MAJOR_UNIT_SEPARATOR_PAGE_ID,          # Annexure-III : 5 ISPs Major Units Records
 ]
 assert len(_INDEX_SECTION_ANCHORS) == len(_INDEX_SECTIONS), \
     "_INDEX_SECTION_ANCHORS must have one entry per _INDEX_SECTIONS row, same order"
@@ -927,9 +942,11 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                 MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                 POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
-                                READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID) \
+                                READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
+                                MAJOR_UNIT_SEPARATOR_PAGE_ID) \
                     or page_number in STEEL_SECTOR_PAGES or page_number in RAKE_DETENTION_DETAIL_PAGES \
-                    or page_number in READY_RECKONER_ISP_PAGES or page_number in READY_RECKONER_SSP_PAGES:
+                    or page_number in READY_RECKONER_ISP_PAGES or page_number in READY_RECKONER_SSP_PAGES \
+                    or page_number in MAJOR_UNIT_ACTIVE_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
                 # glance" sentinel page, the "key parameters" sentinel
                 # page, the "Iron Making (contd.)" sentinel page, and the
@@ -1069,11 +1086,13 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                                       MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
-                                                      READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID)
+                                                      READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
+                                                      MAJOR_UNIT_SEPARATOR_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
                             and p.get("page") not in RAKE_DETENTION_DETAIL_PAGES
                             and p.get("page") not in READY_RECKONER_ISP_PAGES
                             and p.get("page") not in READY_RECKONER_SSP_PAGES
+                            and p.get("page") not in MAJOR_UNIT_ACTIVE_PAGES
                             and p.get("page") != 2.4]  # retired 4th steel-sector page (folded into 2.2) —
                             # explicit literal so a pre-existing cached pages_config with this id
                             # still gets cleaned out even though 2.4 is no longer a STEEL_SECTOR_PAGES key
@@ -1160,6 +1179,14 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config.append({"page": READY_RECKONER_SSP_SEPARATOR_PAGE_ID})
             for _pg in READY_RECKONER_SSP_PAGES:
                 pages_config.append({"page": _pg})
+            # "Annexure-III : 5 ISPs Major Units Records" — appended right
+            # after the Ready Reckoner Annexures, now the true end of the
+            # report. Only plants with a filled-in registry get a physical
+            # page (see MAJOR_UNIT_ACTIVE_PAGES's own comment — currently
+            # all 5 ISPs).
+            pages_config.append({"page": MAJOR_UNIT_SEPARATOR_PAGE_ID})
+            for _pg in MAJOR_UNIT_ACTIVE_PAGES:
+                pages_config.append({"page": _pg})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -1245,6 +1272,10 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page.update(generate_ready_reckoner_page(*READY_RECKONER_ISP_PAGES[pg]))
             if pg in READY_RECKONER_SSP_PAGES:
                 page.update(generate_ready_reckoner_page(*READY_RECKONER_SSP_PAGES[pg]))
+            if pg == MAJOR_UNIT_SEPARATOR_PAGE_ID:
+                page.update(generate_major_unit_separator())
+            if pg in MAJOR_UNIT_ACTIVE_PAGES:
+                page.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg]))
             if pg == MARKET_PRICES_PAGE_ID:
                 page.update(generate_market_prices(month))
                 page["orientation"] = "landscape"
@@ -1524,6 +1555,15 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     if _is_full_export and not any(p.get("page") in READY_RECKONER_SSP_PAGES for p in _pages_list):
         for _pg in READY_RECKONER_SSP_PAGES:
             _pages_list.append({"page": _pg})
+    # "Annexure-III : 5 ISPs Major Units Records" sentinel pages: appended
+    # right after the Ready Reckoner Annexures, now the true end of the
+    # report — same pattern. Only plants with a filled-in registry (see
+    # MAJOR_UNIT_ACTIVE_PAGES's own comment).
+    if _is_full_export and not any(p.get("page") == MAJOR_UNIT_SEPARATOR_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": MAJOR_UNIT_SEPARATOR_PAGE_ID})
+    if _is_full_export and not any(p.get("page") in MAJOR_UNIT_ACTIVE_PAGES for p in _pages_list):
+        for _pg in MAJOR_UNIT_ACTIVE_PAGES:
+            _pages_list.append({"page": _pg})
     # Corner badge (group + side) is a pure function of _pages_list's own
     # (already-final) physical order — recomputed fresh rather than trusted
     # from the submitted payload, since PageData doesn't declare this field
@@ -1642,6 +1682,10 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
             p.update(generate_ready_reckoner_page(*READY_RECKONER_ISP_PAGES[pg]))
         if pg in READY_RECKONER_SSP_PAGES:
             p.update(generate_ready_reckoner_page(*READY_RECKONER_SSP_PAGES[pg]))
+        if pg == MAJOR_UNIT_SEPARATOR_PAGE_ID:
+            p.update(generate_major_unit_separator())
+        if pg in MAJOR_UNIT_ACTIVE_PAGES:
+            p.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg]))
         if pg == MARKET_PRICES_PAGE_ID:
             p.update(generate_market_prices(request.month))
             p["orientation"] = "landscape"
@@ -3970,6 +4014,39 @@ async def save_production_entry(request: ProductionEntryRequest):
     return {"status": "success", "saved": saved, "count": len(saved)}
 
 
+# ---------------------------------------------------------------------------
+# Manual production_table entry for one plant/item across a whole range of
+# months in one grid (vs. /api/production-items above, which is one month's
+# worth of every item for a plant) — for bulk-filling/correcting a single
+# unit's history, e.g. backfilling several years of one item at once. Same
+# table, same db.save_production_actual as production-entry; this is just a
+# different slice/shape of the same data. See
+# frontend/src/app/data-entry/production-range/page.js.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/production-item-range")
+async def get_production_item_range(plant: str, item: str, months: str = Query(...)):
+    """months: comma-separated report_months (e.g. '2024-04,2024-05,...'),
+    in the order the caller wants them back. Returns the existing
+    production_table value for each, null where nothing is saved yet."""
+    month_list = [m.strip() for m in months.split(",") if m.strip()]
+    saved = db.get_production_actual_for_months(plant, item, month_list)
+    return {
+        "plant": plant,
+        "item": item,
+        "rows": [{"report_month": m, "value": saved.get(m)} for m in month_list],
+    }
+
+
+@app.post("/api/production-item-range")
+async def save_production_item_range(request: ProductionRangeSaveRequest):
+    saved = 0
+    for entry in request.entries:
+        db.save_production_actual(entry.report_month, request.plant, request.item, entry.value)
+        saved += 1
+    return {"status": "success", "count": saved}
+
+
 @app.get("/api/conversion-data")
 async def get_conversion_data(fy_start: str = Query(...)):
     """Return Conversion (SAIL) actuals for all 12 months of a financial year."""
@@ -6099,6 +6176,59 @@ async def api_ready_reckoner_image(
     with open(dest, "wb") as f:
         f.write(contents)
     db.save_ready_reckoner_image(plant_code, dest, user.get("email") or "")
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# "Annexure-III : 5 ISPs Major Units Records" — Daily best-ever production
+# record, editable going forward via /data-entry/major-unit-daily. Same
+# "deliberately NOT month-scoped" shape as Ready Reckoner just above:
+# reads/writes go straight to major_unit_daily_record regardless of
+# request.month. Annual/Monthly are never editable here — they're always
+# computed live from production_table (see page_major_unit_records.py).
+# See db.py's own comment above major_unit_daily_record and
+# scripts/migrate_add_major_unit_daily_record.sql.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/major-unit-daily/{plant_code}")
+def api_major_unit_daily_get(plant_code: str):
+    """This plant's registry (label/unit_of_measure, in display order) each
+    merged with its current Daily record, if any — the /data-entry form's
+    row list. A registry unit with no saved row yet comes back with
+    value/record_date/remarks all null."""
+    saved = {r["unit_label"]: r for r in db.get_major_unit_daily_records(plant_code)}
+    rows = []
+    for i, unit in enumerate(page_major_unit_records.registry_for(plant_code)):
+        row = saved.get(unit["label"])
+        rows.append({
+            "unit_label": unit["label"],
+            "unit_of_measure": unit["unit"],
+            "value": row["value"] if row else None,
+            "record_date": row["record_date"] if row else None,
+            "remarks": row["remarks"] if row else None,
+            "sort_order": i,
+        })
+    return {"plant_code": plant_code, "rows": rows}
+
+
+@app.post("/api/major-unit-daily/{plant_code}")
+def api_major_unit_daily_save(plant_code: str, payload: dict, user: dict = Depends(_auth.require_editor_or_admin)):
+    """payload: {rows: [{unit_label, value, record_date, remarks}, ...]} —
+    one row per registry unit (unit_label must match page_major_unit_
+    records.registry_for(plant_code) exactly); sort_order is taken from
+    each row's position in the registry, same as the backfill script."""
+    registry_order = {u["label"]: i for i, u in enumerate(page_major_unit_records.registry_for(plant_code))}
+    for row in payload.get("rows", []):
+        label = row.get("unit_label")
+        if label not in registry_order:
+            continue
+        unit = next(u for u in page_major_unit_records.registry_for(plant_code) if u["label"] == label)
+        db.save_major_unit_daily_record(
+            plant_code=plant_code, unit_label=label, value=row.get("value"),
+            unit_of_measure=unit["unit"], record_date=row.get("record_date"),
+            remarks=row.get("remarks"), sort_order=registry_order[label],
+            updated_by=user.get("email") or "",
+        )
     return {"status": "ok"}
 
 

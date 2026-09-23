@@ -17,6 +17,14 @@ function DataEntryPageInner() {
       bgColor: 'rgba(2, 132, 199, 0.1)'
     },
     {
+      title: 'Production Data Entry — Month Range',
+      description: 'Enter or correct one plant/unit\'s actual production across several months at once, straight into production_table.',
+      icon: '📈',
+      link: '/data-entry/production-range',
+      color: '#1a73e8',
+      bgColor: 'rgba(26, 115, 232, 0.1)'
+    },
+    {
       title: 'Opening Stock',
       description: 'Manage opening stock values for all items and plants at the beginning of each month.',
       icon: '📦',
@@ -87,6 +95,14 @@ function DataEntryPageInner() {
       link: '/data-entry/ready-reckoner',
       color: '#0f766e',
       bgColor: 'rgba(15, 118, 110, 0.1)'
+    },
+    {
+      title: '5 ISPs Major Units Daily Records',
+      description: 'Log a new best-ever daily production figure (with its date) for a major unit, shown in Annexure-III of the report.',
+      icon: '🏆',
+      link: '/data-entry/major-unit-daily',
+      color: '#9333ea',
+      bgColor: 'rgba(147, 51, 234, 0.1)'
     },
   ];
 

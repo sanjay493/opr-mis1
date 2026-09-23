@@ -91,6 +91,17 @@ class ProductionEntryRequest(BaseModel):
     entries: List[ProductionEntry]
 
 
+class ProductionRangeEntry(BaseModel):
+    report_month: str
+    value: Optional[float] = None
+
+
+class ProductionRangeSaveRequest(BaseModel):
+    plant: str
+    item: str
+    entries: List[ProductionRangeEntry]
+
+
 class SpecialSteelRow(BaseModel):
     product: str
     quality_grade: str = "TOTAL"
