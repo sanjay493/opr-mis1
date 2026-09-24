@@ -105,9 +105,13 @@ def _item_sankey_svg(item, routes_for_item, cum_map):
     # Taller than the width alone would suggest — a route list with 3+
     # senders/receivers on one side needs real vertical room for the
     # 2-line, 12pt side labels to stay legibly spaced without crowding the
-    # canvas edges.
+    # canvas edges. value_font_size=11.5 (per direct instruction,
+    # 2026-09-24) only resizes the value/quantity text (e.g. "1,234 T") —
+    # the plant-name label stays at the 12pt default, and no geometry
+    # (margins/offsets, all keyed to label_font_size) shifts because of it.
     return _sankey_svg(nodes, links, vw=560, vh=260, side_labels=True,
-                        value_fmt=lambda v: f'{v:,.0f} {unit_disp}')
+                        value_fmt=lambda v: f'{v:,.0f} {unit_disp}',
+                        value_font_size=11.5)
 
 
 def _month_label(ym):

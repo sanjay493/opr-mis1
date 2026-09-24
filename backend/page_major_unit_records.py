@@ -54,6 +54,7 @@ Daily best (from major_unit_daily_record, entered from the source xlsx /
 the data-entry page) is shown.
 """
 import html
+import re
 
 import db
 
@@ -107,8 +108,8 @@ _UNIT_REGISTRY = {
         {"label": "SMS-I",                "item_names": ["SMS-1 Ingot", "SMS-1 CCM-1"], "unit": _T},
         {"label": "SMS-II",               "item_names": ["SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"], "unit": _T},
         {"label": "Total Crude Steel",    "item_names": ["Total Crude Steel"], "unit": _T},
-        {"label": "HR Coils prod. HSM-2", "item_names": ["HSM-2 Total HR Coil"], "unit": _T},
-        {"label": "PM Plates prod.",      "item_names": ["OPM Plate"], "unit": _T},
+        {"label": "HSM-2",                "item_names": ["HSM-2 Total HR Coil"], "unit": _T},
+        {"label": "PM",                   "item_names": ["OPM Plate"], "unit": _T},
         {"label": "New Plate Mill",       "item_names": ["NPM Plate"], "unit": _T},
         {"label": "Saleable Steel",       "item_names": ["Saleable Steel"], "unit": _T},
         {"label": "Saleable Steel Despatch", "item_names": ["Saleable Steel Despatch"], "unit": _T},
@@ -318,11 +319,23 @@ def _fmt_pair(pair) -> str:
     return f"{_fmt_num(pair['value'])} {_fmt_period(pair['period'])}"
 
 
+_ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+
+
+def _fmt_date_ddmmyyyy(date_str: str) -> str:
+    """'YYYY-MM-DD' -> 'DD-MM-YYYY' for display on the printed record page
+    (major_unit_daily_record.record_date is stored ISO — see db.py).
+    Anything not a clean ISO date (shouldn't happen going through the
+    /data-entry form, but defensive) is shown as-is rather than mangled."""
+    m = _ISO_DATE_RE.match(date_str)
+    return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else date_str
+
+
 def _fmt_daily(daily) -> str:
     if not daily:
         return "—"
     if daily.get("value") is not None:
-        date_part = f" {_fmt_period(daily['date'])}" if daily.get("date") else ""
+        date_part = f" {_fmt_period(_fmt_date_ddmmyyyy(daily['date']))}" if daily.get("date") else ""
         return f"{_fmt_num(daily['value'])}{date_part}"
     remarks = daily.get("remarks")
     # Unlike value/period, remarks is free text an editor typed into
@@ -348,6 +361,35 @@ _HIGHLIGHT_ITEM_NAMES = {
 }
 
 
+# (plant, label) -> {"value","period"} Annual Best floor for a unit whose
+# true best-ever predates production_table's monthly history, so
+# best_for_unit (which needs a complete 12-month FY in production_table)
+# can never surface it live — per instruction 2026-09-24: DSP's SM
+# (208.999 '000 T, FY1964-65), W&F (32.516 '000 T, FY1964-65), and BSP's
+# BF#7 (1404.346 '000 T, FY2007-08). Applied as a floor (max against
+# whatever best_for_unit computes) rather than a flat override, so a
+# future year's genuine higher record — once its monthly figures exist in
+# production_table — takes over on its own and this entry becomes dead
+# code to remove, not a value to keep updating.
+_ANNUAL_RECORD_FLOOR = {
+    ("DSP", "SM"): {"value": 208.999, "period": "1964-65"},
+    ("DSP", "W&F"): {"value": 32.516, "period": "1964-65"},
+    ("BSP", "BF#7"): {"value": 1404.346, "period": "2007-08"},
+     ("RSP", "Oven Pushing : Old"): {"value": 361, "period": "2012-13"},
+      ("RSP", "BF#4"): {"value": 834, "period": "2012-13"},
+       ("BSL", "CRM-1,2"): {"value": 1118.828, "period": "2000-01"},
+}
+
+
+def _apply_annual_floor(plant_code: str, label: str, fy_best):
+    floor = _ANNUAL_RECORD_FLOOR.get((plant_code, label))
+    if not floor:
+        return fy_best
+    if not fy_best or fy_best.get("value") is None or floor["value"] > fy_best["value"]:
+        return floor
+    return fy_best
+
+
 def _row_class(item_names: list) -> str:
     return "mur-row-highlight" if tuple(item_names) in _HIGHLIGHT_ITEM_NAMES else ""
 
@@ -367,6 +409,7 @@ def generate_major_unit_page(plant_code: str) -> dict:
         rows = []
         for unit in registry_for(plant_code):
             live = best_for_unit(cur, plant_code, unit["item_names"], unit["unit"] == _RATE)
+            fy_best = _apply_annual_floor(plant_code, unit["label"], live["fy_best"])
             daily_row = daily_by_unit.get(unit["label"])
             daily = ({"value": daily_row["value"], "date": daily_row["record_date"],
                       "remarks": daily_row["remarks"]}
@@ -376,7 +419,7 @@ def generate_major_unit_page(plant_code: str) -> dict:
                 "label": unit["label"],
                 "unit": unit["unit"],
                 "row_class": _row_class(unit["item_names"]),
-                "annual_display": _fmt_pair(live["fy_best"]),
+                "annual_display": _fmt_pair(fy_best),
                 "monthly_display": _fmt_pair(live["month_best"]),
                 "daily_display": _fmt_daily(daily),
             })

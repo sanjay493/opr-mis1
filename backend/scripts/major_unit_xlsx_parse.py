@@ -175,6 +175,8 @@ ALIASES = {
     ("RSP", "Total Sinter"): "Sinter - Total",
     ("RSP", "Total Hot Metal"): "Hot Metal",
     ("RSP", "Total Crude Steel"): "Crude Steel - Total",
+    ("RSP", "HSM-2"): "HR Coils prod. HSM-2",
+    ("RSP", "PM"): "PM Plates prod.",
     ("BSP", "COB-11 (Pushings/day)"): "COB-11 (No. of Pushings/day)",
     ("BSP", "Equiv. Oven Pushing"): "Eq. Oven Pushing (Nos./day)",
     ("BSP", "Finished Steel"): "Total Finished Steel",

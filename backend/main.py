@@ -1813,12 +1813,23 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
                 # Page 30 (SMS Shop) gets its own smaller cap too - the 1.5
                 # ceiling let its Caster Yield section spill 6 rows onto an
                 # otherwise-blank 2nd page for July 2026 (verified against a
-                # real render); page 28 keeps the original 1.5 ceiling,
-                # which still fits comfortably.
+                # real render). Page 28's ceiling nudged 1.5->1.6 / 0.15->0.16
+                # per direct instruction, 2026-09-24 (roomy months were
+                # leaving visible unused space at the bottom) - bisected
+                # against real renders of 2026-06 (n_months=3: highest font +
+                # fullest ceiling multiplier, so the largest row height this
+                # page ever produces, and in fact the binding constraint, not
+                # March): 1.7 already spilled June onto a 2nd physical page,
+                # 1.6 did not (07/08/03 all stayed 1 page too at 1.6). This
+                # page turned out to have far less real headroom than 27/30's
+                # own numbers might suggest - the gain is modest by design,
+                # not an oversight.
                 if pg == 27:
                     _pad_ceiling, _lh_ceiling = 0.15, 0.005
                 elif pg == 30:
                     _pad_ceiling, _lh_ceiling = 0.5, 0.05
+                elif pg == 28:
+                    _pad_ceiling, _lh_ceiling = 1.6, 0.16
                 else:
                     _pad_ceiling, _lh_ceiling = 1.5, 0.15
                 entry = _pg_entry if _pg_entry is not None else copy.deepcopy(_static_pages_cfg.get(str(pg), {}))

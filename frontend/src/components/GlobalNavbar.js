@@ -43,6 +43,7 @@ export default function GlobalNavbar() {
             { label: 'Iron Ore Mines Production & Despatch', link: '/data-entry/mines-production-despatch', icon: '🚂' },
             { label: 'Market Intelligence Entry (Pages 2.41/2.42)', link: '/data-entry/market-intel', icon: '📈' },
             { label: 'Ready Reckoner (Capacity & Product Mix)', link: '/data-entry/ready-reckoner', icon: '📋' },
+            { label: '5 ISPs Major Units Daily Records', link: '/data-entry/major-unit-daily', icon: '🏆' },
           ]
         },
         {

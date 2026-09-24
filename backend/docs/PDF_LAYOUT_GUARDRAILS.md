@@ -138,7 +138,7 @@ fixed 2026-09-23 by renaming Steel Sales to `sls-*`).
 ### Per-page margins & fonts (layout_config.json)
 
 Global: IBM Plex Sans, title 13pt, heading 12pt, table th 11 / td 11.5pt.
-Per-page margins (mm, top/bottom/sides): 3: 7/5/12 · 4: 5/3/7 · 5–6: 7/5/7 ·
+Per-page margins (mm, top/bottom/sides): 3: 7/5/7 · 4: 5/3/7 · 5–6: 7/5/7 ·
 7–13 (trend): 7/5/0.18 · 17: 0/0/3 fit · 27: 3/1.5/4 fit · 28–30: 4/3/4 fit ·
 31–35: 4/3/6 fit · 18.5: 5/3/6 fit · 2.41: 6/4/8 fit · 2.42: 6/4/8.
 

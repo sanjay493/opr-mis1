@@ -1,7 +1,7 @@
 {
  "files": {
   "chart_utils.py": "8f915d83ea4a5c10e798c70f291acd8fdb8bd102de5717c5dfc833dff55ca498",
-  "layout_config.json": "0a819b60e5860fe8c4e48a26c88d94c3c77a4f93935de0c9ea4cf4acf3764b3c",
+  "layout_config.json": "92ed218cbd06f4efe9731ad0a9d778f504c2993288fd0994027c307047125da8",
   "page_at_a_glance.py": "88e107d39e9173307c633897d221dd937c5dd23e07efe6e132800290eb869c19",
   "page_coal_consumption.py": "ce75a36ec5618841c21c637a2fb4cc8ad1d0c1a98bc1bf398983897021ad7612",
   "page_special_steel_donut.py": "e30ae949195132b6ba65bdde5dc05bdda0ee9d4b9cd6b8ed61fb1ef288054f0c",

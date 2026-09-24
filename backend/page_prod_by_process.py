@@ -298,7 +298,8 @@ def _node_totals(nodes: list, links: list) -> tuple:
 
 
 def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
-                 value_fmt=None, side_labels: bool = False, label_font_size: float = 12.0) -> str:
+                 value_fmt=None, side_labels: bool = False, label_font_size: float = 12.0,
+                 value_font_size: float = None) -> str:
     """Hand-rolled layered Sankey: nodes carry a fixed 'column' (left-to-right
     stage), links only ever join adjacent columns. A node's height defaults to
     max(incoming, outgoing) so a node whose in/out differ (a process-yield
@@ -324,13 +325,22 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
     entirely since there's nothing to declutter — each label just sits
     beside the one node it belongs to.
 
-    label_font_size: every text element's font-size — defaults to 12 (the
-    original, only ever value before this parameter existed, so every
+    label_font_size: every node-NAME text element's font-size, and (when
+    value_font_size is left None) the value text's too — defaults to 12
+    (the original, only ever value before this parameter existed, so every
     existing caller/appearance is unchanged). Every other text-related
     geometry constant below (margins, chip sizing, label offsets, the
     declutter block height) scales proportionally with it via `fs_scale`,
     so a caller asking for bigger text gets consistently bigger clearance
-    around it too, not overlapping labels sized for the old default."""
+    around it too, not overlapping labels sized for the old default —
+    layout/geometry always follows label_font_size only, never
+    value_font_size, so bumping just the value size doesn't reflow anything.
+
+    value_font_size: the value/quantity text's own font-size (e.g. "1,234
+    T"), independent of the node-name label beside/above it — defaults to
+    label_font_size (i.e. unset means "same as before")."""
+    vfs = value_font_size if value_font_size is not None else label_font_size
+
     def _esc(s):
         return html.escape(str(s), quote=False)
 
@@ -469,7 +479,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
                         f'fill="#ffffff" fill-opacity="0.88"/>')
             svg.append(f'<text x="{cx:.1f}" y="{cy - 3 * fs_scale:.1f}" text-anchor="middle" font-size="{label_font_size:g}" '
                         f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_esc(n["label"])}</text>')
-            svg.append(f'<text x="{cx:.1f}" y="{cy + 13 * fs_scale:.1f}" text-anchor="middle" font-size="{label_font_size:g}" '
+            svg.append(f'<text x="{cx:.1f}" y="{cy + 13 * fs_scale:.1f}" text-anchor="middle" font-size="{vfs:g}" '
                         f'font-family="Arial,sans-serif" fill="#475569">{_esc(val_str)}</text>')
         elif side_labels or n.get("label_side"):
             # Sender (first column) labels sit to the left of their node,
@@ -492,7 +502,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
                 tx, anchor = g["x"] - 6 * fs_scale, "end"
             svg.append(f'<text x="{tx:.1f}" y="{cy - 3 * fs_scale:.1f}" text-anchor="{anchor}" font-size="{label_font_size:g}" '
                         f'font-weight="bold" font-family="Arial,sans-serif" fill="#1e293b">{_esc(n["label"])}</text>')
-            svg.append(f'<text x="{tx:.1f}" y="{cy + 11 * fs_scale:.1f}" text-anchor="{anchor}" font-size="{label_font_size:g}" '
+            svg.append(f'<text x="{tx:.1f}" y="{cy + 11 * fs_scale:.1f}" text-anchor="{anchor}" font-size="{vfs:g}" '
                         f'font-family="Arial,sans-serif" fill="#475569">{_esc(val_str)}</text>')
         else:
             ly = label_y.get(nid, g["y"])
@@ -516,10 +526,10 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
             anchor_g = geo.get(anchor_id) if anchor_id else None
             if anchor_g:
                 svg.append(f'<text x="{anchor_g["x"] - 4 * fs_scale:.1f}" y="{anchor_g["y"] - 6 * fs_scale:.1f}" '
-                            f'text-anchor="end" font-size="{label_font_size:g}" '
+                            f'text-anchor="end" font-size="{vfs:g}" '
                             f'font-family="Arial,sans-serif" fill="{color}">{_esc(val_str)}</text>')
             else:
-                svg.append(f'<text x="{cx:.1f}" y="{ly - 14 * fs_scale:.1f}" text-anchor="middle" font-size="{label_font_size:g}" '
+                svg.append(f'<text x="{cx:.1f}" y="{ly - 14 * fs_scale:.1f}" text-anchor="middle" font-size="{vfs:g}" '
                             f'font-family="Arial,sans-serif" fill="#475569">{_esc(val_str)}</text>')
 
     svg.append("</svg>")
