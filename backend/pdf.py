@@ -236,10 +236,55 @@ _FIT_PAGES_JS = """([W, H, maxOver]) => {
     }
     let z = right > W + 0.5 ? (W * 0.99) / right : 1;   // 1% margin: rounding can land a px over
     if (z < 1) pg.style.zoom = z;
+    // Vertical fill: a page whose table opts in (data-vgrow - the techno
+    // parameter pages 27-30) and already fits gets its body-cell padding
+    // grown until the page, at the zoom just applied, fills the sheet -
+    // instead of leaving a band of empty space at the bottom. Bisected
+    // against the real layout, so it adapts to month/row count without
+    // per-page tuned constants.
+    // data-vgrow-mm / data-vgrow-wmm are that page's real usable height and
+    // width on paper (its own @page margins differ from the generic
+    // printable area W x H this whole pass is laid out at). While filling,
+    // the page is laid out at its real print width - at the narrower
+    // generic width labels wrap onto more lines, so a fill measured there
+    // printed shorter than measured and still left a gap at the bottom.
+    // The too-tall check below uses the same width/height, then the width
+    // is restored so the whole-job overflow check further down is unchanged.
+    const vtbl = pg.querySelector('table[data-vgrow]');
+    const mm = 96 / 25.4;
+    const Hp = vtbl && vtbl.dataset.vgrowMm ? +vtbl.dataset.vgrowMm * mm : H;
+    const Wp = vtbl && vtbl.dataset.vgrowWmm ? +vtbl.dataset.vgrowWmm * mm : 0;
+    if (Wp) pg.style.width = (Wp / z) + 'px';   // zoom scales it back to Wp on screen
+    if (vtbl && pg.dataset.vfit !== 'off') {
+      const target = Hp * 0.985;
+      const zh = () => pg.getBoundingClientRect().height;   // already zoomed
+      if (zh() < target) {
+        // Row-spanning section labels are left alone - growing them too made
+        // Chromium's print layout spread the extra height unevenly (first
+        // rows of a section tighter than the rest).
+        const cells = Array.from(vtbl.querySelectorAll('tbody td:not([rowspan])'));
+        const base = cells.map((c) => {
+          const cs = getComputedStyle(c);
+          return [parseFloat(cs.paddingTop) || 0, parseFloat(cs.paddingBottom) || 0];
+        });
+        const apply = (x) => cells.forEach((c, i) => {
+          c.style.setProperty('padding-top', (base[i][0] + x) + 'px', 'important');
+          c.style.setProperty('padding-bottom', (base[i][1] + x) + 'px', 'important');
+        });
+        let lo = 0, hi = 12;
+        for (let it = 0; it < 12; it++) {
+          const mid = (lo + hi) / 2;
+          apply(mid);
+          if (zh() <= target) lo = mid; else hi = mid;
+        }
+        apply(lo);
+      }
+    }
     if (pg.dataset.vfit !== 'off') {
       const h = pg.getBoundingClientRect().height;
-      if (h > H && h <= H * maxOver) { z = z * (H * 0.985) / h; pg.style.zoom = z; }
+      if (h > Hp && h <= Hp * maxOver) { z = z * (Hp * 0.985) / h; pg.style.zoom = z; }
     }
+    if (Wp) pg.style.width = '';
     if (z < 1) {
       const m = (pg.querySelector('.pg-badge-marker') || {}).textContent || '';
       fitted.push([m.replace(/@|PGSTART_/g, ''), +z.toFixed(3)]);

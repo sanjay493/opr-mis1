@@ -337,6 +337,9 @@ def _augment_production_overview(items: list, report_month: str) -> list:
     return out
 
 
+_DEFAULT_TITLE = "Indian Steel Sector Performance"
+
+
 def generate_steel_sector_performance(report_month: str, section: str = "all") -> dict:
     """section selects which physical page's slice of content to return
     (see main.py's STEEL_SECTOR_PAGES) — 'all' returns everything, for
@@ -344,6 +347,10 @@ def generate_steel_sector_performance(report_month: str, section: str = "all") -
     data_month, data, source_file = _load_row(report_month)
     page = {
         "type": "steel_sector_performance",
+        # Always present — PageData.title is required, so a month with no
+        # archived release (data is None below) would otherwise fail the
+        # whole PDF export with a 422.
+        "title": _DEFAULT_TITLE,
         "section": section,
         "report_month": report_month,
         "data_month": data_month,
@@ -353,7 +360,7 @@ def generate_steel_sector_performance(report_month: str, section: str = "all") -
         return page
 
     page.update({
-        "title": data.get("title"),
+        "title": data.get("title") or _DEFAULT_TITLE,
         "posted_on": data.get("posted_on"),
         "tables": data.get("tables", {}),
         "text_sections": data.get("text_sections", {}),

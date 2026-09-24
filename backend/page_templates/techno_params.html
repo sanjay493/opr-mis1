@@ -16,15 +16,11 @@
            is unchanged. #}
         {% set _td_pad = '1.5px 1.5px' if _is_mill else '0.5px 1px' %}
         {% set _th_pad = '1.5px 1.5px' if _is_mill else '0.5px 1px' %}
-        {# IBM Plex Sans Condensed (fits more per column) is for pages whose
-           layout actually has to accommodate a growing number of YTD-month
-           columns (28/29/29.5/30's auto-layout table, and the mill pages'
-           own auto-layout) - that pressure is exactly why those pages also
-           get the month-count font-shrink in main.py. Page 27 (MAJOR) was
-           never part of that shrink logic and isn't affected by it either
-           way - it keeps the regular (non-condensed) IBM Plex Sans cut
-           regardless of table layout. #}
-        {% set _font_family = "'IBM Plex Sans',sans-serif" if _major27 else "'IBM Plex Sans Condensed','IBM Plex Sans',sans-serif" %}
+        {# IBM Plex Sans Condensed (fits more per column) for every techno
+           page - pages 27-30/29.5 all carry a growing number of YTD-month
+           columns. Page 27 used the regular cut until 2026-09-24, when its
+           21-column March table needed shrinking to ~76% to fit the width. #}
+        {% set _font_family = "'IBM Plex Sans Condensed','IBM Plex Sans',sans-serif" %}
         <div style="padding:4px;font-family:{{ _font_family }};font-size:{{ _tsz }};">
           {% if page.group == 'IRON_MAKING' and page.subtitle %}
           {# Iron Making (29 + its 29.5 continuation) only - single line
@@ -56,19 +52,32 @@
              "RSP-Old") that forced pages 28-30 onto auto layout in the
              first place (see the word-wrap note below) - so there's no
              risk of the same 2nd-page overflow recurring here. #}
-          <table style="width:100%;border-collapse:collapse;border:1px solid {{ colors.border_black }};table-layout:auto;font-size:{{ _tsz }};margin-top:2px;">
+          {# data-vgrow: pdf.py grows row padding until the page fills its sheet,
+             measured at the real paper size: 200 x 286mm = A4 minus
+             techno-layout's 5mm @page margins, less ~1mm (+1.5% slack) above
+             the stamped footer. #}
+          <table{% if _is_major %} data-vgrow="1" data-vgrow-mm="286" data-vgrow-wmm="200"{% endif %} style="width:100%;border-collapse:collapse;border:1px solid {{ colors.border_black }};table-layout:auto;font-size:{{ _tsz }};margin-top:2px;">
+            {# Parameters column width is a range, not a fixed hint: widest
+               early in the FY (few month columns), narrowing linearly to its
+               minimum by March (12 month columns) to release width for the
+               data columns. Labels just wrap onto more lines as it narrows
+               (auto layout never goes below the longest word anyway). #}
+            {% set _n_mon = page.month_labels | length %}
+            {% set _mon_frac = [[(_n_mon - 3) / 9, 0] | max, 1] | min %}
+            {% set _pw_max, _pw_min = (10, 7) if _major27 else (14, 9) %}
+            {% set _param_w = (_pw_max - (_pw_max - _pw_min) * _mon_frac) | round(1) %}
             <colgroup>
               {% if _major27 %}
-              {# Parameters keeps its existing 10% hint (unchanged from
-                 before this page joined auto layout); Plants is content-fit. #}
-              <col style="width:10%"/><col/>
+              {# Parameters: 10%->7% range (see _param_w above); Plants is
+                 content-fit. #}
+              <col style="width:{{ _param_w }}%"/><col/>
               {% elif _is_major %}
-              {# Pages 28-30: constrain the rowspan'd Parameters column so a
-                 long label (e.g. "Sp. Heat Consmn./t DC (1000 Kcal/Kg DC)")
-                 wraps onto 2-3 lines instead of forcing the column to ~35%
-                 of the table width on one line - see the matching
-                 word-wrap on its <td> below. Plants/data columns stay auto. #}
-              <col style="width:14%"/><col/>
+              {# Pages 28-30: constrain the rowspan'd Parameters column
+                 (14%->9% range, see _param_w above) so a long label (e.g.
+                 "Sp. Heat Consmn./t DC (1000 Kcal/Kg DC)") wraps onto 2-3
+                 lines instead of forcing the column to ~35% of the table
+                 width on one line. Plants/data columns stay auto. #}
+              <col style="width:{{ _param_w }}%"/><col/>
               {% else %}
               <col/><col/>
               {% endif %}
@@ -83,10 +92,21 @@
                 <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};text-align:left;">Parameters</th>
                 {% endif %}
                 <th colspan="3" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
+                {% if _is_major %}
+                {# Pages 27-30: Target always on 2 lines ("Target" / FY), and a
+                   single "Actual" band spanning every month, the CPLY month
+                   and both cumulative columns - the CPLY month no longer
+                   carries its own "Actual" line, which was forcing that
+                   header row to 2 lines' height for one column. #}
+                {% set _tgt_fy = page.target_label | replace('Target', '') | replace(' ', '') %}
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};background:{{ colors.highlight_target_band_bg }};white-space:nowrap;">Target<br/>{{ _tgt_fy }}</th>
+                <th colspan="{{ (page.month_labels | length) + 3 }}" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
+                {% else %}
                 <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};background:{{ colors.highlight_target_band_bg }};">{{ page.target_label }}</th>
                 <th colspan="{{ page.month_labels | length }}" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
                 <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cply_label }}<br/>Actual</th>
                 <th colspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
+                {% endif %}
               </tr>
               <tr>
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.fy3_label }}</th>
@@ -95,8 +115,18 @@
                 {% for m in page.month_labels %}
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ m }}</th>
                 {% endfor %}
+                {% if _is_major %}
+                {# "Apr-Mar'27" -> "A-Mar'27" (and the CPLY one alike), kept
+                   on one line so both cumulative headers read the same. #}
+                {% set _cum = ('A-' ~ page.cum_label.split('-', 1)[1]) if '-' in page.cum_label else page.cum_label %}
+                {% set _cum_cply = ('A-' ~ page.cum_cply_label.split('-', 1)[1]) if '-' in page.cum_cply_label else page.cum_cply_label %}
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};white-space:nowrap;">{{ page.cply_label }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};white-space:nowrap;">{{ _cum }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};white-space:nowrap;">{{ _cum_cply }}</th>
+                {% else %}
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cum_label }}</th>
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cum_cply_label }}</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody>
@@ -146,7 +176,13 @@
                    column carries the longer combined-shop labels ("BSP
                    SMS-2", "RSP SMS-1", ...) that do need to wrap onto 2
                    lines rather than force the column wide. #}
-                <td style="padding:{{ _td_pad }};{{ _td }}text-align:left;{% if _major27 %}white-space:nowrap;{% else %}word-wrap:break-word;overflow-wrap:break-word;{% endif %}">{{ _row_label }}</td>
+                {# Short combined-shop labels ("BSP SMS-2", "RSP-Old", "ISP SP") stay on
+                   one line - letting them break at the hyphen doubled the
+                   row height of every such row and pushed page 30 onto a
+                   2nd sheet. Only genuinely long labels ("DSP Billet
+                   Caster") still wrap, and only between words. #}
+                {% set _nowrap_lbl = _major27 or (_is_major and (_row_label | string).count(' ') <= 1) %}
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:left;{% if _nowrap_lbl %}white-space:nowrap;{% else %}word-break:keep-all;{% endif %}">{{ _row_label }}</td>
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy3 }}</td>
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy2 }}</td>
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy1 }}</td>

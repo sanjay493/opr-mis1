@@ -159,7 +159,12 @@ const PDF_POLL_INTERVAL_MS = 4000;
 
 async function throwForErrorResponse(response) {
   const errBody = await response.json().catch(() => ({}));
-  throw new Error(errBody.error || errBody.detail || `HTTP ${response.status}`);
+  // FastAPI 422s carry detail as an array of {loc, msg} objects — format
+  // them instead of letting them stringify to "[object Object]".
+  const detail = Array.isArray(errBody.detail)
+    ? errBody.detail.map((d) => `${(d.loc || []).join('.')}: ${d.msg}`).join('; ')
+    : errBody.detail;
+  throw new Error(errBody.error || detail || `HTTP ${response.status}`);
 }
 
 export function useGeneratePDF() {
