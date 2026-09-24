@@ -112,8 +112,11 @@
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.fy3_label }}</th>
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.fy2_label }}</th>
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.fy1_label }}</th>
+                {# Report month (last YTD month) and its A-<month> cumulative
+                   column share one tint so the current period stands out. #}
+                {% set _rep_bg = 'background:' ~ colors.highlight_total_col_bg ~ ';' %}
                 {% for m in page.month_labels %}
-                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ m }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};{% if loop.last %}{{ _rep_bg }}{% endif %}">{{ m }}</th>
                 {% endfor %}
                 {% if _is_major %}
                 {# "Apr-Mar'27" -> "A-Mar'27" (and the CPLY one alike), kept
@@ -121,10 +124,10 @@
                 {% set _cum = ('A-' ~ page.cum_label.split('-', 1)[1]) if '-' in page.cum_label else page.cum_label %}
                 {% set _cum_cply = ('A-' ~ page.cum_cply_label.split('-', 1)[1]) if '-' in page.cum_cply_label else page.cum_cply_label %}
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};white-space:nowrap;">{{ page.cply_label }}</th>
-                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};white-space:nowrap;">{{ _cum }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};white-space:nowrap;{{ _rep_bg }}">{{ _cum }}</th>
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};white-space:nowrap;">{{ _cum_cply }}</th>
                 {% else %}
-                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cum_label }}</th>
+                <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};{{ _rep_bg }}">{{ page.cum_label }}</th>
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cum_cply_label }}</th>
                 {% endif %}
               </tr>
@@ -187,11 +190,12 @@
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy2 }}</td>
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy1 }}</td>
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;background:{{ colors.highlight_target_band_bg }};">{{ row.target }}</td>
+                {% set _rep_bg = 'background:' ~ colors.highlight_total_col_bg ~ ';' %}
                 {% for v in row.months %}
-                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ v }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;{% if loop.last %}{{ _rep_bg }}{% endif %}">{{ v }}</td>
                 {% endfor %}
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.cply }}</td>
-                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.cum }}</td>
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;{{ _rep_bg }}">{{ row.cum }}</td>
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.cum_cply }}</td>
               </tr>
               {% endfor %}
