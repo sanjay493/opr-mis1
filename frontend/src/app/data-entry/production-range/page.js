@@ -152,9 +152,11 @@ function ProductionRangeEntryInner() {
   const input = { padding: '9px 12px', fontSize: 13.5, width: '100%', borderRadius: 4, border: '1px solid #dadce0', boxSizing: 'border-box' };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+    // Fixed-height shell with its own scrolling body: globals.css sets
+    // html/body overflow:hidden, so the page itself never scrolls.
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
       <GlobalNavbar />
-      <div style={{ flex: 1, maxWidth: 900, margin: '0 auto', padding: '32px 24px', width: '100%', boxSizing: 'border-box' }}>
+      <div style={{ flex: 1, overflow: 'auto', maxWidth: 900, margin: '0 auto', padding: '32px 24px', width: '100%', boxSizing: 'border-box' }}>
         <h1 style={{ fontSize: '1.7rem', fontWeight: 800, color: '#202124', margin: '0 0 4px' }}>
           📈 Production Data Entry — Month Range
         </h1>
