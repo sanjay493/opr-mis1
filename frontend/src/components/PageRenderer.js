@@ -34,6 +34,8 @@ import MarketPricesTemplate from './MarketPricesTemplate';
 import MacroIndicatorsTemplate from './MacroIndicatorsTemplate';
 import ReadyReckonerTemplate from './ReadyReckonerTemplate';
 import ReadyReckonerSeparatorTemplate from './ReadyReckonerSeparatorTemplate';
+import MajorUnitRecordsTemplate from './MajorUnitRecordsTemplate';
+import MajorUnitRecordsSeparatorTemplate from './MajorUnitRecordsSeparatorTemplate';
 
 function IndexTemplate({ data, onCellChange }) {
   const { rows = [] } = data || {};
@@ -190,6 +192,10 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <ReadyReckonerTemplate data={pageData} />;
       case 'ready_reckoner_separator':
         return <ReadyReckonerSeparatorTemplate data={pageData} />;
+      case 'major_unit_records':
+        return <MajorUnitRecordsTemplate data={pageData} />;
+      case 'major_unit_records_separator':
+        return <MajorUnitRecordsSeparatorTemplate data={pageData} />;
       default:
         return (
           <div style={{ padding: '20px', fontSize: '10pt', color: '#64748b' }}>
@@ -239,7 +245,7 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
 
       {/* Main Body */}
       <div className="report-body">
-        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'at_a_glance' && pageData.type !== 'summary' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && pageData.type !== 'special_steel' && pageData.type !== 'opening_stock' && pageData.type !== 'ipt_status' && pageData.type !== 'techno_params' && pageData.type !== 'capital_repair' && pageData.type !== 'key_highlights' && pageData.type !== 'key_parameters' && pageData.type !== 'bf_large_annexure' && pageData.type !== 'coal_consumption' && pageData.type !== 'coal_receipt_stock' && pageData.type !== 'power_data' && pageData.type !== 'epi' && pageData.type !== 'steel_sector_performance' && pageData.type !== 'sail_mines' && pageData.type !== 'special_steel_physical' && pageData.type !== 'best_ever_highlights' && pageData.type !== 'best_calendar_month' && pageData.type !== 'cost_trend' && pageData.type !== 'ready_reckoner' && pageData.type !== 'ready_reckoner_separator' && (
+        {pageData.type !== 'cover' && pageData.type !== 'index' && pageData.type !== 'at_a_glance' && pageData.type !== 'summary' && pageData.type !== 'page4_table' && pageData.type !== 'performance_summary_table' && pageData.type !== 'trend_yearly' && pageData.type !== 'trend_combined' && pageData.type !== 'concast_performance' && pageData.type !== 'prod_by_process' && pageData.type !== 'catwise_saleable' && pageData.type !== 'segment_wise' && pageData.type !== 'special_steel' && pageData.type !== 'opening_stock' && pageData.type !== 'ipt_status' && pageData.type !== 'techno_params' && pageData.type !== 'capital_repair' && pageData.type !== 'key_highlights' && pageData.type !== 'key_parameters' && pageData.type !== 'bf_large_annexure' && pageData.type !== 'coal_consumption' && pageData.type !== 'coal_receipt_stock' && pageData.type !== 'power_data' && pageData.type !== 'epi' && pageData.type !== 'steel_sector_performance' && pageData.type !== 'sail_mines' && pageData.type !== 'special_steel_physical' && pageData.type !== 'best_ever_highlights' && pageData.type !== 'best_calendar_month' && pageData.type !== 'cost_trend' && pageData.type !== 'ready_reckoner' && pageData.type !== 'ready_reckoner_separator' && pageData.type !== 'major_unit_records' && pageData.type !== 'major_unit_records_separator' && (
           <div className="report-title-section">
             <h2>{pageData.title}</h2>
             {pageData.subtitle && <h3>{pageData.subtitle}</h3>}
