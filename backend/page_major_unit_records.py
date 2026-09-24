@@ -141,7 +141,7 @@ _UNIT_REGISTRY = {
         # WIRERODS is BSP's WRM total (= OTHERS(WRM) + TMT COILS(WRM), which only
         # exist from 2025-04) and carries the full history back to 2010.
         {"label": "WRM",                        "item_names": ["WIRERODS"], "unit": _T},
-        {"label": "BRM",                        "item_names": [], "unit": _T},
+        {"label": "BRM",                        "item_names": ["BARS&RODMILL"], "unit": _T},
         {"label": "Plate Mill",                 "item_names": ["PLATEMILL"], "unit": _T},
         {"label": "Total Finished Steel",       "item_names": ["Finished Steel"], "unit": _T},
         {"label": "Total Saleable Steel",       "item_names": ["Saleable Steel"], "unit": _T},
