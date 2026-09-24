@@ -18,20 +18,17 @@
     .mur-table td.mur-unit { text-align: left; }
     .mur-table td.mur-value { text-align: center; white-space: nowrap; }
 
-    /* Row call-outs — see page_major_unit_records.py's _row_class. Kept
-       subtle (tint + left rule, not a loud fill) so they read at a glance
-       without fighting the grid lines. */
-    .mur-table tr.mur-row-pushing td { background: #fff7e0; }
-    .mur-table tr.mur-row-pushing td.mur-unit {
-        border-left: 3px solid {{ colors.text_rust_brown|default('#B7410E') }};
+    /* Row call-out — see page_major_unit_records.py's _row_class /
+       _HIGHLIGHT_ITEM_NAMES. The 7 rows every plant labels identically
+       (Equiv. Oven Pushing, Total Sinter, Total Hot Metal, Total Crude
+       Steel, Finished Steel, Saleable Steel, Saleable Steel Despatch) get
+       the same rust-brown-on-light-yellow treatment in every plant. */
+    .mur-table tr.mur-row-highlight td {
+        background: #fff7e0;
+        color: {{ colors.text_rust_brown|default('#B7410E') }};
         font-weight: 600;
     }
-    .mur-table tr.mur-row-total td { background: #eaf2fb; }
-    .mur-table tr.mur-row-total td.mur-unit {
-        border-left: 3px solid {{ colors.text_accent_navy|default('#1e3a8a') }};
-        font-weight: 700;
-    }
-    .mur-table tr.mur-row-total td.mur-value { font-weight: 700; }
+    .mur-table tr.mur-row-highlight td.mur-value { font-weight: 700; }
 
     /* The FY/month/date sitting beside a record value — a 3rd, distinct
        color (teal) so it never gets mistaken for the rust-brown/navy row

@@ -159,11 +159,26 @@ PARSERS = {"BSL": parse_bsl, "RSP": parse_rsp, "ISP": parse_isp, "BSP": parse_bs
 # sub-item needs disambiguating (see parse_bsp's docstring / callers'
 # document-order list consumption) — (plant, registry_label) -> raw_label.
 ALIASES = {
-    ("BSL", "Oven Pushing"): "Oven Pushing (Nos./day)",
+    ("BSL", "Equiv. Oven Pushing"): "Oven Pushing (Nos./day)",
     ("BSL", "Saleable Steel"): "Sal. Steel",
-    ("ISP", "Oven Pushing"): "Oven Pushing (Nos/Day)",
+    ("ISP", "Equiv. Oven Pushing"): "Oven Pushing (Nos/Day)",
+    # Registry labels below were made uniform across plants on 2026-09-24
+    # (see page_major_unit_records.py's module docstring); each plant's
+    # source workbook still has its own original wording, so those now
+    # need an alias where they didn't before.
+    ("ISP", "Total Sinter"): "Sinter",
+    ("ISP", "Total Hot Metal"): "Hot Metal",
+    ("ISP", "Total Crude Steel"): "Crude Steel",
+    ("ISP", "Finished Steel"): "FIN. STEEL",
+    ("ISP", "Saleable Steel Despatch"): "Saleable Steel loading",
+    ("RSP", "Equiv. Oven Pushing"): "Eqvt. Oven Pushing",
+    ("RSP", "Total Sinter"): "Sinter - Total",
+    ("RSP", "Total Hot Metal"): "Hot Metal",
+    ("RSP", "Total Crude Steel"): "Crude Steel - Total",
     ("BSP", "COB-11 (Pushings/day)"): "COB-11 (No. of Pushings/day)",
-    ("BSP", "Eq. Oven Pushing"): "Eq. Oven Pushing (Nos./day)",
+    ("BSP", "Equiv. Oven Pushing"): "Eq. Oven Pushing (Nos./day)",
+    ("BSP", "Finished Steel"): "Total Finished Steel",
+    ("BSP", "Saleable Steel"): "Total Saleable Steel",
     ("BSP", "Finished Rails: URM"): "URM",
     ("BSP", "Prime Rails: URM"): "URM",
 }

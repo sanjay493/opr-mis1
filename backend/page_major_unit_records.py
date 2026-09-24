@@ -16,12 +16,25 @@ pages_config until filled in — see MAJOR_UNIT_ACTIVE_PAGES.
 
 "Saleable Steel Despatch" (item_names=["Saleable Steel Despatch"]) was added
 to every plant's registry per instruction (2026-09-23) — ISP/DSP already had
-it (ISP's under the pre-existing label "Saleable Steel loading", kept as-is
-since it already carries backfilled Daily data under that key); BSP/BSL/RSP
-did not, and none of their source workbooks list it either, so like DSP it
-has no Annual/Monthly xlsx cross-check and starts with no Daily figure
-(filled in going forward via /data-entry/major-unit-daily). It will show as
-NOT_IN_WORKBOOK for BSP/BSL/RSP in verify_major_unit_best_records.py — expected.
+it (ISP's originally under the label "Saleable Steel loading", renamed to
+"Saleable Steel Despatch" per the 2026-09-24 label-uniformity pass — its
+backfilled Daily data was migrated to the new unit_label at the same time,
+see scripts/rename_major_unit_labels.py); BSP/BSL/RSP did not, and none of
+their source workbooks list it either, so like DSP it has no Annual/Monthly
+xlsx cross-check and starts with no Daily figure (filled in going forward
+via /data-entry/major-unit-daily). It will show as NOT_IN_WORKBOOK for
+BSP/BSL/RSP in verify_major_unit_best_records.py — expected.
+
+Row labels for 7 recurring concepts (Equiv. Oven Pushing / Total Sinter /
+Total Hot Metal / Total Crude Steel / Finished Steel / Saleable Steel /
+Saleable Steel Despatch) were made uniform across all 5 plants on
+2026-09-24 (previously each plant used its own wording, e.g. "Hot Metal -
+Total" / "Hot Metal" / "Total Hot Metal" for the same thing) and are
+highlighted on the printed page (rust-brown text on light-yellow, see
+_HIGHLIGHT_ITEM_NAMES / major_unit_records_plant.html). Renaming a label
+that already had Daily records required migrating major_unit_daily_record's
+unit_label (its primary key) to match — see
+scripts/rename_major_unit_labels.py for the one-off migration that was run.
 
 Annual/Monthly bests are NEVER stored — they're computed live from
 production_table (see best_for_unit below), the same "single source of
@@ -62,7 +75,7 @@ _RATE = "Nos/day"
 # same order as that plant's source xlsx.
 _UNIT_REGISTRY = {
     "BSL": [
-        {"label": "Oven Pushing",        "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
+        {"label": "Equiv. Oven Pushing", "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
         {"label": "Total Sinter",        "item_names": ["Total Sinter"],           "unit": _T},
         {"label": "Blast Furnace-1",     "item_names": ["BF#1"],                   "unit": _T},
         {"label": "Blast Furnace-2",     "item_names": ["BF#2"],                   "unit": _T},
@@ -82,18 +95,18 @@ _UNIT_REGISTRY = {
     "RSP": [
         {"label": "Oven Pushing : Old",   "item_names": ["COB#1-5"], "unit": _RATE},
         {"label": "COB#6",                "item_names": ["COB#6"], "unit": _RATE},
-        {"label": "Eqvt. Oven Pushing",   "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
+        {"label": "Equiv. Oven Pushing",  "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
         {"label": "Sinter : SP-I",        "item_names": ["SP-1"], "unit": _T},
         {"label": "Sinter : SP-II",       "item_names": ["SP-2"], "unit": _T},
         {"label": "Sinter : SP-III",      "item_names": ["SP-3"], "unit": _T},
-        {"label": "Sinter - Total",       "item_names": ["Total Sinter"], "unit": _T},
+        {"label": "Total Sinter",         "item_names": ["Total Sinter"], "unit": _T},
         {"label": "BF#1",                 "item_names": ["BF#1"], "unit": _T},
         {"label": "BF#4",                 "item_names": ["BF#4"], "unit": _T},
         {"label": "BF#5",                 "item_names": ["BF#5"], "unit": _T},
-        {"label": "Hot Metal",            "item_names": ["Hot Metal"], "unit": _T},
+        {"label": "Total Hot Metal",      "item_names": ["Hot Metal"], "unit": _T},
         {"label": "SMS-I",                "item_names": ["SMS-1 Ingot", "SMS-1 CCM-1"], "unit": _T},
         {"label": "SMS-II",               "item_names": ["SMS-2 CCM-1&2", "SMS-2 CCM-3", "SMS-2 CCM-4"], "unit": _T},
-        {"label": "Crude Steel - Total",  "item_names": ["Total Crude Steel"], "unit": _T},
+        {"label": "Total Crude Steel",    "item_names": ["Total Crude Steel"], "unit": _T},
         {"label": "HR Coils prod. HSM-2", "item_names": ["HSM-2 Total HR Coil"], "unit": _T},
         {"label": "PM Plates prod.",      "item_names": ["OPM Plate"], "unit": _T},
         {"label": "New Plate Mill",       "item_names": ["NPM Plate"], "unit": _T},
@@ -101,22 +114,24 @@ _UNIT_REGISTRY = {
         {"label": "Saleable Steel Despatch", "item_names": ["Saleable Steel Despatch"], "unit": _T},
     ],
     "ISP": [
-        {"label": "Oven Pushing",         "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
-        {"label": "Sinter",               "item_names": ["Total Sinter"], "unit": _T},
-        {"label": "Hot Metal",            "item_names": ["Hot Metal"], "unit": _T},
-        {"label": "Crude Steel",          "item_names": ["Total Crude Steel"], "unit": _T},
+        {"label": "COB#10",               "item_names": ["COB#10"], "unit": _RATE},
+        {"label": "COB#11",               "item_names": ["COB#11"], "unit": _RATE},
+        {"label": "Equiv. Oven Pushing",  "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
+        {"label": "Total Sinter",         "item_names": ["Total Sinter"], "unit": _T},
+        {"label": "Total Hot Metal",      "item_names": ["Hot Metal"], "unit": _T},
+        {"label": "Total Crude Steel",    "item_names": ["Total Crude Steel"], "unit": _T},
         {"label": "WRM",                  "item_names": ["WRMILL"], "unit": _T},
         {"label": "Bar Mill",             "item_names": ["BARMILL"], "unit": _T},
         {"label": "USM",                  "item_names": ["USMILL"], "unit": _T},
-        {"label": "FIN. STEEL",           "item_names": ["Finished Steel"], "unit": _T},
+        {"label": "Finished Steel",       "item_names": ["Finished Steel"], "unit": _T},
         {"label": "Saleable Steel",       "item_names": ["Saleable Steel"], "unit": _T},
-        {"label": "Saleable Steel loading","item_names": ["Saleable Steel Despatch"], "unit": _T},
+        {"label": "Saleable Steel Despatch","item_names": ["Saleable Steel Despatch"], "unit": _T},
     ],
     "BSP": [
         # BF#1, BF#1-7, SMS-I and the 4 Cast Steel semis rows (SMS-2 Blooms/
         # Slabs, SMS-3 Billets/Blooms) removed per direct instruction, 2026-09-23.
         {"label": "COB-11 (Pushings/day)",      "item_names": ["COB#11"], "unit": _RATE},
-        {"label": "Eq. Oven Pushing",           "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
+        {"label": "Equiv. Oven Pushing",        "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
         {"label": "SP-II",                      "item_names": ["SP-2"], "unit": _T},
         {"label": "SP-III M/c-1",               "item_names": ["SP-3 M/C-1"], "unit": _T},
         {"label": "SP-III M/c-2",               "item_names": ["SP-3 M/C-2"], "unit": _T},
@@ -143,8 +158,8 @@ _UNIT_REGISTRY = {
         {"label": "WRM",                        "item_names": ["WIRERODS"], "unit": _T},
         {"label": "BRM",                        "item_names": ["BARS&RODMILL"], "unit": _T},
         {"label": "Plate Mill",                 "item_names": ["PLATEMILL"], "unit": _T},
-        {"label": "Total Finished Steel",       "item_names": ["Finished Steel"], "unit": _T},
-        {"label": "Total Saleable Steel",       "item_names": ["Saleable Steel"], "unit": _T},
+        {"label": "Finished Steel",             "item_names": ["Finished Steel"], "unit": _T},
+        {"label": "Saleable Steel",             "item_names": ["Saleable Steel"], "unit": _T},
         {"label": "Saleable Steel Despatch",    "item_names": ["Saleable Steel Despatch"], "unit": _T},
     ],
     # Unit list + production_table mapping per direct instruction, 2026-09-23
@@ -157,15 +172,15 @@ _UNIT_REGISTRY = {
     # start empty and are filled in via /data-entry/major-unit-daily going
     # forward (see that page's own note about DSP).
     "DSP": [
-        {"label": "Oven Pushing",            "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
+        {"label": "Equiv. Oven Pushing",     "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
         {"label": "SP-1",                    "item_names": ["SP-1"], "unit": _T},
         {"label": "SP-2",                    "item_names": ["SP-2"], "unit": _T},
-        {"label": "Sinter - Total",          "item_names": ["Total Sinter"], "unit": _T},
+        {"label": "Total Sinter",            "item_names": ["Total Sinter"], "unit": _T},
         {"label": "BF-2",                    "item_names": ["BF#2"], "unit": _T},
         {"label": "BF-3",                    "item_names": ["BF#3"], "unit": _T},
         {"label": "BF-4",                    "item_names": ["BF#4"], "unit": _T},
-        {"label": "Hot Metal - Total",       "item_names": ["Hot Metal"], "unit": _T},
-        {"label": "Crude Steel - Total",     "item_names": ["Total Crude Steel"], "unit": _T},
+        {"label": "Total Hot Metal",         "item_names": ["Hot Metal"], "unit": _T},
+        {"label": "Total Crude Steel",       "item_names": ["Total Crude Steel"], "unit": _T},
         {"label": "Billet Casters (M/c-1 & M/c-2)", "item_names": ["Billet Caster"], "unit": _T},
         {"label": "Bloom Caster (M/c-3)",    "item_names": ["Bloom Caster"], "unit": _T},
         {"label": "BRC (M/c-4)",             "item_names": ["BRC"], "unit": _T},
@@ -316,28 +331,25 @@ def _fmt_daily(daily) -> str:
     return html.escape(remarks) if remarks else "—"
 
 
-# Rows worth calling out visually on the printed page (see
-# major_unit_records_plant.html's CSS) — driven by the same semantic keys
-# used everywhere else in this module (item_names / rate-vs-tonnage) rather
-# than by matching each plant's own wording for a label, since that varies
-# a lot (e.g. "Total Hot Metal" / "Hot Metal - Total" / bare "Hot Metal" all
-# mean the same thing). A plant missing one of these simply never gets
-# that class — nothing to highlight there.
-_HIGHLIGHT_TOTAL_ITEM_NAMES = {
-    ("Hot Metal",), ("Total Crude Steel",), ("Finished Steel",),
-    ("Saleable Steel",), ("Saleable Steel Despatch",),
+# The 7 rows every plant labels identically (see the registry's own
+# "Equiv. Oven Pushing"/"Total Sinter"/"Total Hot Metal"/"Total Crude
+# Steel"/"Finished Steel"/"Saleable Steel"/"Saleable Steel Despatch"
+# entries) and calls out visually on the printed page (see
+# major_unit_records_plant.html's CSS) — matched by item_names rather than
+# by label so this can't drift from the registry. A plant missing one of
+# these (e.g. RSP/BSL have no "Finished Steel" row) simply never gets that
+# class — nothing to highlight there. Plant-specific rate rows (individual
+# COB/battery pushing rows) are deliberately excluded — only the blended
+# "Oven Pushing (nos/day)" row counts as "Equiv. Oven Pushing".
+_HIGHLIGHT_ITEM_NAMES = {
+    ("Oven Pushing (nos/day)",), ("Total Sinter",), ("Hot Metal",),
+    ("Total Crude Steel",), ("Finished Steel",), ("Saleable Steel",),
+    ("Saleable Steel Despatch",),
 }
 
 
-def _row_class(item_names: list, is_rate: bool) -> str:
-    if is_rate:
-        # Every Nos/day row is a single oven/COB pushing rate (Oven
-        # Pushing, Eq./Eqvt. Oven Pushing, COB#6, COB#11, ...), mapped or
-        # not, so this only needs the unit, not item_names.
-        return "mur-row-pushing"
-    if tuple(item_names) in _HIGHLIGHT_TOTAL_ITEM_NAMES:
-        return "mur-row-total"
-    return ""
+def _row_class(item_names: list) -> str:
+    return "mur-row-highlight" if tuple(item_names) in _HIGHLIGHT_ITEM_NAMES else ""
 
 
 def generate_major_unit_page(plant_code: str) -> dict:
@@ -363,7 +375,7 @@ def generate_major_unit_page(plant_code: str) -> dict:
             rows.append({
                 "label": unit["label"],
                 "unit": unit["unit"],
-                "row_class": _row_class(unit["item_names"], unit["unit"] == _RATE),
+                "row_class": _row_class(unit["item_names"]),
                 "annual_display": _fmt_pair(live["fy_best"]),
                 "monthly_display": _fmt_pair(live["month_best"]),
                 "daily_display": _fmt_daily(daily),

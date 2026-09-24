@@ -22,11 +22,11 @@ function unescapeHtml(s) {
     .replace(/&amp;/g, '&');
 }
 
-function DisplayCell({ display, bold, bg }) {
+function DisplayCell({ display, bold, bg, color }) {
   const text = display ?? '—';
   const m = PERIOD_RE.exec(text);
   return (
-    <td style={{ border: BORDER, padding: '2.5px 6px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: bold ? 700 : undefined, background: bg }}>
+    <td style={{ border: BORDER, padding: '2.5px 6px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: bold ? 700 : undefined, background: bg, color }}>
       {m ? (
         <>
           {m[1]}{' '}
@@ -59,21 +59,20 @@ export default function MajorUnitRecordsTemplate({ data }) {
         </thead>
         <tbody>
           {rows.map((row, i) => {
-            const pushing = row.row_class === 'mur-row-pushing';
-            const total = row.row_class === 'mur-row-total';
-            const bg = pushing ? '#fff7e0' : total ? '#eaf2fb' : undefined;
+            const highlight = row.row_class === 'mur-row-highlight';
+            const bg = highlight ? '#fff7e0' : undefined;
+            const color = highlight ? RUST : undefined;
             return (
               <tr key={`${row.label}-${i}`}>
                 <td style={{
-                  border: BORDER, padding: '2.5px 6px', textAlign: 'left', background: bg,
-                  borderLeft: pushing ? `3px solid ${RUST}` : total ? `3px solid ${NAVY}` : BORDER,
-                  fontWeight: pushing ? 600 : total ? 700 : undefined,
+                  border: BORDER, padding: '2.5px 6px', textAlign: 'left', background: bg, color,
+                  fontWeight: highlight ? 600 : undefined,
                 }}>
                   {row.label}
                 </td>
-                <DisplayCell display={row.annual_display} bold={total} bg={bg} />
-                <DisplayCell display={row.monthly_display} bold={total} bg={bg} />
-                <DisplayCell display={row.daily_display} bold={total} bg={bg} />
+                <DisplayCell display={row.annual_display} bold={highlight} bg={bg} color={color} />
+                <DisplayCell display={row.monthly_display} bold={highlight} bg={bg} color={color} />
+                <DisplayCell display={row.daily_display} bold={highlight} bg={bg} color={color} />
               </tr>
             );
           })}
