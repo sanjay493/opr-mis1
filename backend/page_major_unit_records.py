@@ -80,7 +80,7 @@ _UNIT_REGISTRY = {
         {"label": "Saleable Steel Despatch", "item_names": ["Saleable Steel Despatch"], "unit": _T},
     ],
     "RSP": [
-        {"label": "Oven Pushing : Old",   "item_names": [], "unit": _RATE},
+        {"label": "Oven Pushing : Old",   "item_names": ["COB#1-5"], "unit": _RATE},
         {"label": "COB#6",                "item_names": ["COB#6"], "unit": _RATE},
         {"label": "Eqvt. Oven Pushing",   "item_names": ["Oven Pushing (nos/day)"], "unit": _RATE},
         {"label": "Sinter : SP-I",        "item_names": ["SP-1"], "unit": _T},
@@ -97,6 +97,7 @@ _UNIT_REGISTRY = {
         {"label": "HR Coils prod. HSM-2", "item_names": ["HSM-2 Total HR Coil"], "unit": _T},
         {"label": "PM Plates prod.",      "item_names": ["OPM Plate"], "unit": _T},
         {"label": "New Plate Mill",       "item_names": ["NPM Plate"], "unit": _T},
+        {"label": "Saleable Steel",       "item_names": ["Saleable Steel"], "unit": _T},
         {"label": "Saleable Steel Despatch", "item_names": ["Saleable Steel Despatch"], "unit": _T},
     ],
     "ISP": [
@@ -107,7 +108,6 @@ _UNIT_REGISTRY = {
         {"label": "WRM",                  "item_names": ["WRMILL"], "unit": _T},
         {"label": "Bar Mill",             "item_names": ["BARMILL"], "unit": _T},
         {"label": "USM",                  "item_names": ["USMILL"], "unit": _T},
-        {"label": "SEMIS",                "item_names": ["Saleable Semis"], "unit": _T},
         {"label": "FIN. STEEL",           "item_names": ["Finished Steel"], "unit": _T},
         {"label": "Saleable Steel",       "item_names": ["Saleable Steel"], "unit": _T},
         {"label": "Saleable Steel loading","item_names": ["Saleable Steel Despatch"], "unit": _T},
@@ -321,9 +321,8 @@ def _fmt_daily(daily) -> str:
 # used everywhere else in this module (item_names / rate-vs-tonnage) rather
 # than by matching each plant's own wording for a label, since that varies
 # a lot (e.g. "Total Hot Metal" / "Hot Metal - Total" / bare "Hot Metal" all
-# mean the same thing). A plant missing one of these (e.g. RSP has no
-# "Saleable Steel" row at all) simply never gets that class — nothing to
-# highlight there.
+# mean the same thing). A plant missing one of these simply never gets
+# that class — nothing to highlight there.
 _HIGHLIGHT_TOTAL_ITEM_NAMES = {
     ("Hot Metal",), ("Total Crude Steel",), ("Finished Steel",),
     ("Saleable Steel",), ("Saleable Steel Despatch",),
@@ -333,9 +332,8 @@ _HIGHLIGHT_TOTAL_ITEM_NAMES = {
 def _row_class(item_names: list, is_rate: bool) -> str:
     if is_rate:
         # Every Nos/day row is a single oven/COB pushing rate (Oven
-        # Pushing, Eq./Eqvt. Oven Pushing, COB#6, COB#11, ...) — mapped or
-        # not (RSP's "Oven Pushing : Old" is unmapped but still a pushing
-        # row), so this only needs the unit, not item_names.
+        # Pushing, Eq./Eqvt. Oven Pushing, COB#6, COB#11, ...), mapped or
+        # not, so this only needs the unit, not item_names.
         return "mur-row-pushing"
     if tuple(item_names) in _HIGHLIGHT_TOTAL_ITEM_NAMES:
         return "mur-row-total"
