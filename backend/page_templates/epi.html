@@ -1,5 +1,9 @@
             <div class="coal-title">{{ page.title }}</div>
 
+            {# Report month (last YTD month) and its Apr-<month> cumulative
+               column share one tint so the current period stands out -
+               same highlight as the techno pages (techno_params.html). #}
+            {% set _rep_bg = 'background:' ~ colors.highlight_total_col_bg ~ ';' %}
             <table class="coal-table epi-table">
                 <thead>
                     <tr>
@@ -14,8 +18,8 @@
                     <tr>
                         <th>{{ page.fy2_label }}</th>
                         <th>{{ page.fy1_label }}</th>
-                        {% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}
-                        <th>{{ page.cum_label }}</th>
+                        {% for m in page.month_labels %}<th{% if loop.last %} style="{{ _rep_bg }}"{% endif %}>{{ m }}</th>{% endfor %}
+                        <th style="{{ _rep_bg }}">{{ page.cum_label }}</th>
                         <th>{{ page.cum_cply_label }}</th>
                     </tr>
                 </thead>
@@ -28,9 +32,9 @@
                         <td class="coal-num">{{ row.fy2 or '—' }}</td>
                         <td class="coal-num">{{ row.fy1 or '—' }}</td>
                         <td class="coal-num">{{ row.target or '—' }}</td>
-                        {% for v in row.months %}<td class="coal-num">{{ v or '—' }}</td>{% endfor %}
+                        {% for v in row.months %}<td class="coal-num"{% if loop.last %} style="{{ _rep_bg }}"{% endif %}>{{ v or '—' }}</td>{% endfor %}
                         <td class="coal-num">{{ row.cply or '—' }}</td>
-                        <td class="coal-num">{{ row.cum or '—' }}</td>
+                        <td class="coal-num" style="{{ _rep_bg }}">{{ row.cum or '—' }}</td>
                         <td class="coal-num">{{ row.cum_cply or '—' }}</td>
                     </tr>
                     {% endfor %}

@@ -7,7 +7,12 @@
                 ('last_year', 'LAST YEAR (MW)', [('own_cpp','Own'),('jv_cpp','JV'),('drawal_pp3','D.PP3'),('total_gen','T.Gen'),('total_power_consump','TPC')]),
             ] %}
 
-            <table class="pwr-table">
+            {# data-vgrow: pdf.py grows row padding until the page fills its
+               sheet, measured at the real paper size: 200 x 285mm = A4 minus
+               power-data-layout's 5mm/4mm @page margins, less ~4mm clearance
+               above the stamped footer. Padding grows in 0.5px steps so every
+               row stays a whole number of px (see .pwr-table in main.html). #}
+            <table class="pwr-table" data-vgrow="1" data-vgrow-mm="285" data-vgrow-wmm="200" data-vgrow-step="0.5">
                 <colgroup>
                     <col class="pwr-plant-col">
                     <col class="pwr-mon-col">
@@ -34,7 +39,7 @@
                 <tbody>
                     {% for plant in page.plants %}
                     {% for row in plant.rows %}
-                    <tr>
+                    <tr{% if row.is_report %} class="pwr-report-row"{% endif %}>
                         {% if loop.first %}
                         <td class="pwr-plant-cell" rowspan="13">{{ plant.name }}</td>
                         {% endif %}

@@ -430,11 +430,20 @@
             border-collapse: collapse;
             border: 1px solid {{ colors.border_dark }};
         }
+        /* Condensed cut: 24 data columns leave no room to widen, so the
+           narrower glyphs are what let the font grow from 5.5pt to 6pt
+           in the same widths; 117 rows make height the real limit, hence
+           the tight line-height (figures have no descenders). It is a whole
+           8px, not a ratio: Chromium's print snaps each text baseline to a
+           whole px, so a fractional row height (8.26px) printed as a
+           visibly uneven 8/9px rhythm. Row height is then grown to fill the sheet
+           by pdf.py's vertical fill (data-vgrow on the table). */
         .pwr-table th, .pwr-table td {
             border-left: 1px solid {{ colors.border_dark }};
             padding: 0px 1px;
-            font-size: 5.5pt;
-            line-height: 1.15;
+            font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
+            font-size: 6pt;
+            line-height: 8px;
         }
         .pwr-table th {
             text-align: center;
@@ -448,7 +457,7 @@
             width: 14px;
         }
         .pwr-mon-col {
-            width: 22px;
+            width: 18px;
         }
         .pwr-data-col {
             width: 19px;
@@ -457,7 +466,7 @@
             text-align: center;
             vertical-align: middle;
             font-weight: 700;
-            font-size: 6.5pt;
+            font-size: 7.5pt;
             background: #e2e8f0;
             writing-mode: vertical-rl;
             transform: rotate(180deg);
@@ -692,9 +701,17 @@
             text-align: right;
             font-variant-numeric: tabular-nums;
         }
+        /* Report month and each plant's Cum. row share the report's
+           current-period tint (as on the techno/EPI pages). */
+        /* 600, not 700: bold 4-digit figures ("1354.51") no longer fit the
+           data columns at this font size and ran into the next column. */
+        .pwr-report-row td {
+            font-weight: 600;
+            background: {{ colors.highlight_total_col_bg }};
+        }
         .pwr-cum-row td {
-            font-weight: 700;
-            background: #e2e8f0;
+            font-weight: 600;
+            background: {{ colors.highlight_total_col_bg }};
             border-bottom: 1px solid {{ colors.border_dark }};
         }
         .pwr-grp-plan, .pwr-sub-plan     { background: #eef2ff; }

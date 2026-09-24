@@ -121,6 +121,7 @@ def generate_power_data(report_month: str) -> dict:
                 "grid": _row_dict(vals, _GRID_ITEMS),
                 "last_year": _row_dict(vals, _LAST_YEAR_ITEMS, "last_year_"),
                 "has_data": bool(vals),
+                "is_report": rm == report_month,
             })
         cvals = cum_vals.get(plant, {})
         cum_row = {

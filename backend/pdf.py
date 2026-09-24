@@ -277,7 +277,11 @@ _FIT_PAGES_JS = """([W, H, maxOver]) => {
           apply(mid);
           if (zh() <= target) lo = mid; else hi = mid;
         }
-        apply(lo);
+        // data-vgrow-step: snap the growth down to a multiple of it, e.g.
+        // 0.5px on a table whose rows are a whole number of px, so they stay
+        // whole (fractional rows print with an uneven baseline rhythm).
+        const step = +(vtbl.dataset.vgrowStep || 0);
+        apply(step ? Math.floor(lo / step) * step : lo);
       }
     }
     if (pg.dataset.vfit !== 'off') {
