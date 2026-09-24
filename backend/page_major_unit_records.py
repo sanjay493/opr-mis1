@@ -138,7 +138,9 @@ _UNIT_REGISTRY = {
         {"label": "Prime Rails: URM",           "item_names": ["URMPRIME"], "unit": _T},
         {"label": "Total Prime Rails",          "item_names": ["RSMPRIME", "URMPRIME"], "unit": _T},
         {"label": "Merchant Mill",              "item_names": ["MM"], "unit": _T},
-        {"label": "WRM",                        "item_names": ["OTHERS(WRM)", "TMT COILS(WRM)"], "unit": _T},
+        # WIRERODS is BSP's WRM total (= OTHERS(WRM) + TMT COILS(WRM), which only
+        # exist from 2025-04) and carries the full history back to 2010.
+        {"label": "WRM",                        "item_names": ["WIRERODS"], "unit": _T},
         {"label": "BRM",                        "item_names": [], "unit": _T},
         {"label": "Plate Mill",                 "item_names": ["PLATEMILL"], "unit": _T},
         {"label": "Total Finished Steel",       "item_names": ["Finished Steel"], "unit": _T},
