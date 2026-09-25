@@ -5,6 +5,24 @@ import GlobalNavbar from '@/components/GlobalNavbar';
 import RequireAdmin from '@/components/RequireAdmin';
 import { API_BASE_URL } from '@/providers/AuthProvider';
 
+// Activity timestamps are stored as UTC ISO strings (auth.py's
+// log_activity: datetime.now(timezone.utc).isoformat()); show them in
+// Indian Standard Time regardless of the viewer's own timezone. A value
+// without an offset is treated as UTC too.
+const IST_FORMAT = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+  hour12: false,
+});
+
+function formatIST(ts) {
+  if (!ts) return '';
+  const iso = /[zZ]|[+-]\d{2}:?\d{2}$/.test(ts) ? ts : `${ts}Z`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? ts : IST_FORMAT.format(d);
+}
+
 function ActivityLogInner() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +116,7 @@ function ActivityLogInner() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
-                <th style={{ padding: '8px' }}>When</th>
+                <th style={{ padding: '8px' }}>When (IST)</th>
                 <th style={{ padding: '8px' }}>User</th>
                 <th style={{ padding: '8px' }}>Action</th>
                 <th style={{ padding: '8px' }}>Where</th>
@@ -108,7 +126,7 @@ function ActivityLogInner() {
             <tbody>
               {entries.map((entry) => (
                 <tr key={entry.id} style={{ borderBottom: '1px solid #e8eaed' }}>
-                  <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{entry.timestamp?.replace('T', ' ').slice(0, 19)}</td>
+                  <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{formatIST(entry.timestamp)}</td>
                   <td style={{ padding: '8px' }}>{entry.user_name || entry.user_email || '—'}</td>
                   <td style={{ padding: '8px' }}>{entry.action}</td>
                   <td style={{ padding: '8px' }}>{entry.entity}</td>

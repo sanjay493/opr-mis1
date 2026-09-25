@@ -102,16 +102,15 @@ def _item_sankey_svg(item, routes_for_item, cum_map):
                       "color": _SANKEY_NODE_COLORS[(i + len(froms)) % len(_SANKEY_NODE_COLORS)]})
 
     unit_disp = "Rake" if (unit_label or "").strip().lower() == "rake" else "T"
-    # Taller than the width alone would suggest — a route list with 3+
-    # senders/receivers on one side needs real vertical room for the
-    # 2-line, 12pt side labels to stay legibly spaced without crowding the
-    # canvas edges. value_font_size=11.5 (per direct instruction,
-    # 2026-09-24) only resizes the value/quantity text (e.g. "1,234 T") —
-    # the plant-name label stays at the 12pt default, and no geometry
-    # (margins/offsets, all keyed to label_font_size) shifts because of it.
-    return _sankey_svg(nodes, links, vw=560, vh=260, side_labels=True,
+    # Drawn at ~its printed width (the card renders ~313px wide in the
+    # 2-column grid), so SVG units ~= px and the side labels (plant name +
+    # value, e.g. "BSL" / "400 T") print at 11.5pt (15.33px / 0.978 scale
+    # ~= 15.7 units), per direct instruction 2026-09-25. _sankey_svg sizes
+    # side-label margins from the label text itself, so the ribbons keep
+    # most of the width; vh gives each node's 2-line label room.
+    return _sankey_svg(nodes, links, vw=320, vh=160, side_labels=True,
                         value_fmt=lambda v: f'{v:,.0f} {unit_disp}',
-                        value_font_size=11.5)
+                        label_font_size=15.7, value_font_size=15.7)
 
 
 def _month_label(ym):

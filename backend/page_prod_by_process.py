@@ -346,7 +346,6 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
 
     fs_scale = label_font_size / 12.0
     ml, mr, mt, mb = 92 * fs_scale, 92 * fs_scale, 46 * fs_scale, 10 * fs_scale
-    cw, ch = vw - ml - mr, vh - mt - mb
 
     incoming, outgoing = _node_totals(nodes, links)
     sizes = {n["id"]: n["value"] if n.get("value") is not None
@@ -355,7 +354,29 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
     columns = sorted({n["column"] for n in nodes})
     by_col = {c: [n for n in nodes if n["column"] == c] for c in columns}
 
-    node_gap = 40.0 * fs_scale
+    fmt = value_fmt or (lambda v: f'{v * 1000:,.0f} T')
+
+    if side_labels:
+        # Side labels only need room for their own text, not the fixed
+        # 92-per-12pt margin sized for the stacked above-node style: size
+        # each side to its widest label (bold Arial ~0.62em/char for the
+        # name, ~0.55em for the value), so large text doesn't squeeze the
+        # ribbons. Top/bottom only need to clear the 2-line label centered
+        # on the outermost nodes.
+        def _side_w(col):
+            w = 0.0
+            for n in by_col.get(col, []):
+                val = n.get("value_prefix", "") + fmt(n.get("display_value", sizes[n["id"]]))
+                w = max(w, len(str(n["label"])) * 0.62 * label_font_size, len(val) * 0.55 * vfs)
+            return w + 8 * fs_scale
+        ml, mr = _side_w(columns[0]), _side_w(columns[-1])
+        mt = 3 * fs_scale + 0.8 * label_font_size
+        mb = 11 * fs_scale + 0.3 * vfs + 2
+    cw, ch = vw - ml - mr, vh - mt - mb
+
+    # Side labels: adjacent nodes' 2-line labels (name + value, ~2.2em
+    # tall, centered on each node) just need to clear each other.
+    node_gap = 2.3 * label_font_size if side_labels else 40.0 * fs_scale
     scale = None
     for ns in by_col.values():
         total = sum(sizes[n["id"]] for n in ns)
@@ -394,7 +415,6 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
             geo[n["id"]] = {"x": x, "y": y, "w": node_w, "h": h, "node": n}
             y += h + node_gap
 
-    fmt = value_fmt or (lambda v: f'{v * 1000:,.0f} T')
     out_used = {nid: 0.0 for nid in geo}
     in_used = {nid: 0.0 for nid in geo}
 
