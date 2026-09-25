@@ -133,11 +133,25 @@ def get_trend_data(basis: str, group: str) -> dict:
             return direct
         return direct if direct is not None else live
 
+    def year_incomplete(item, months):
+        # A multi-plant group with no stored-SAIL fallback (SAIL 5 Plants)
+        # can only live-sum its plants' own rows. If any plant is missing
+        # any month of the year, that sum is silently partial (e.g. Finished
+        # Steel 2016-17..2020-21: RSP/BSL/ISP have no plant-level figures,
+        # so the "5 plants" total was just BSP+DSP) - show the year blank
+        # instead, per direct instruction 2026-09-25.
+        if use_sail_direct or len(plants) < 2:
+            return False
+        return any(data[item].get(p, {}).get(m) is None for p in plants for m in months)
+
     rows = []
     for yk in sorted(years.keys(), reverse=True):
         months = years[yk]["months"]
         row = {"year_key": yk, "year_label": years[yk]["label"]}
         for item, key in TREND_ITEMS:
+            if year_incomplete(item, months):
+                row[key] = None
+                continue
             vals = [month_value(item, m) for m in months]
             nz = [v for v in vals if v is not None]
             row[key] = round(sum(nz), 3) if nz else None
