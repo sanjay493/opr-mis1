@@ -75,6 +75,10 @@ from page_major_unit_records import (
     MAJOR_UNIT_SEPARATOR_PAGE_ID, MAJOR_UNIT_PAGES, MAJOR_UNIT_ACTIVE_PAGES,
     generate_major_unit_page, generate_major_unit_separator,
 )
+from page_sail8_trend_annexure import (
+    SAIL8_TREND_SEPARATOR_PAGE_ID, SAIL8_TREND_PAGE_ID,
+    generate_sail8_trend_separator, generate_sail8_trend_annexure,
+)
 from page_techno import (TECHNO_PAGES, generate_summary_te_table,
                           generate_summary_chart_data, compute_sail_targets,
                           generate_major_techno_from_db, generate_techno_from_db,
@@ -89,6 +93,7 @@ from page_finished_steel_report import (
 )
 from page_do_letter import build_do_letter_docx_bytes, build_do_annexure_xlsx_bytes
 import page_production_fy_export
+import page_production_trend
 import page_special_steel_fy_export
 import page_production_query_export
 from page_one_page_report import build_one_page_report_bytes
@@ -354,7 +359,7 @@ _INDEX_SECTIONS = [
     # ISP, and all 3 SSPs (ASP/SSP/VISL) stay merged.
     ("Annexure-1 : 5 ISPs Ready Reckoner", 14),
     ("Annexure-2 : 3 SSPs Ready Reckoner", 7),
-    # "Annexure-III : 5 ISPs Major Units Records" — a blank Annexure
+    # "Annexure-3 : 5 ISPs Major Units Records" — a blank Annexure
     # separator page, then one page per plant with a filled-in registry
     # (all 5 ISPs, incl. DSP — see page_major_unit_records.py's module
     # docstring). Right after the Ready Reckoner Annexures, now the true
@@ -362,7 +367,14 @@ _INDEX_SECTIONS = [
     # Count is 1 + len(MAJOR_UNIT_ACTIVE_PAGES), hand-maintained here like
     # every other section (re-measure if a plant's table ever overflows
     # onto a 2nd physical page).
-    ("Annexure-III : 5 ISPs Major Units Records", 1 + len(MAJOR_UNIT_ACTIVE_PAGES)),
+    ("Annexure-3 : 5 ISPs Major Units Records", 1 + len(MAJOR_UNIT_ACTIVE_PAGES)),
+    # "Annexure-4 : SAIL (8 Plants) Production Trend" -- a blank Annexure
+    # separator page, then one content page with two stacked FY-wise tables
+    # (Hot Metal / Crude Steel / Pig Iron / Saleable Steel, plus its Semi
+    # Finished Steel / Finished Steel components, FY2007-08 onward).
+    # Appended right after Annexure-3, now the true end of the report.
+    # See page_sail8_trend_annexure.py.
+    ("Annexure-4 : SAIL (8 Plants) Production Trend", 2),
 ]
 
 
@@ -704,7 +716,8 @@ _INDEX_SECTION_ANCHORS = [
     min(RAKE_DETENTION_DETAIL_PAGES),  # Details of Rakes Detention Plant Wise
     READY_RECKONER_ISP_SEPARATOR_PAGE_ID,  # Annexure-1 : 5 ISPs Ready Reckoner
     READY_RECKONER_SSP_SEPARATOR_PAGE_ID,  # Annexure-2 : 3 SSPs Ready Reckoner
-    MAJOR_UNIT_SEPARATOR_PAGE_ID,          # Annexure-III : 5 ISPs Major Units Records
+    MAJOR_UNIT_SEPARATOR_PAGE_ID,          # Annexure-3 : 5 ISPs Major Units Records
+    SAIL8_TREND_SEPARATOR_PAGE_ID,         # Annexure-4 : SAIL (8 Plants) Production Trend
 ]
 assert len(_INDEX_SECTION_ANCHORS) == len(_INDEX_SECTIONS), \
     "_INDEX_SECTION_ANCHORS must have one entry per _INDEX_SECTIONS row, same order"
@@ -943,7 +956,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                 POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
                                 READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
-                                MAJOR_UNIT_SEPARATOR_PAGE_ID) \
+                                MAJOR_UNIT_SEPARATOR_PAGE_ID,
+                                SAIL8_TREND_SEPARATOR_PAGE_ID, SAIL8_TREND_PAGE_ID) \
                     or page_number in STEEL_SECTOR_PAGES or page_number in RAKE_DETENTION_DETAIL_PAGES \
                     or page_number in READY_RECKONER_ISP_PAGES or page_number in READY_RECKONER_SSP_PAGES \
                     or page_number in MAJOR_UNIT_ACTIVE_PAGES:
@@ -1087,7 +1101,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
                                                       READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
-                                                      MAJOR_UNIT_SEPARATOR_PAGE_ID)
+                                                      MAJOR_UNIT_SEPARATOR_PAGE_ID,
+                                                      SAIL8_TREND_SEPARATOR_PAGE_ID, SAIL8_TREND_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
                             and p.get("page") not in RAKE_DETENTION_DETAIL_PAGES
                             and p.get("page") not in READY_RECKONER_ISP_PAGES
@@ -1179,7 +1194,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config.append({"page": READY_RECKONER_SSP_SEPARATOR_PAGE_ID})
             for _pg in READY_RECKONER_SSP_PAGES:
                 pages_config.append({"page": _pg})
-            # "Annexure-III : 5 ISPs Major Units Records" — appended right
+            # "Annexure-3 : 5 ISPs Major Units Records" — appended right
             # after the Ready Reckoner Annexures, now the true end of the
             # report. Only plants with a filled-in registry get a physical
             # page (see MAJOR_UNIT_ACTIVE_PAGES's own comment — currently
@@ -1187,6 +1202,10 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             pages_config.append({"page": MAJOR_UNIT_SEPARATOR_PAGE_ID})
             for _pg in MAJOR_UNIT_ACTIVE_PAGES:
                 pages_config.append({"page": _pg})
+            # "Annexure-4 : SAIL (8 Plants) Production Trend" — appended
+            # right after Annexure-3, now the true end of the report.
+            pages_config.append({"page": SAIL8_TREND_SEPARATOR_PAGE_ID})
+            pages_config.append({"page": SAIL8_TREND_PAGE_ID})
         for page in pages_config:
             pg = page.get("page")
             if pg in _SPECIAL_PLANTS:
@@ -1276,6 +1295,11 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 page.update(generate_major_unit_separator())
             if pg in MAJOR_UNIT_ACTIVE_PAGES:
                 page.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg]))
+            if pg == SAIL8_TREND_SEPARATOR_PAGE_ID:
+                page.update(generate_sail8_trend_separator())
+            if pg == SAIL8_TREND_PAGE_ID:
+                page.update(generate_sail8_trend_annexure(month))
+                page["orientation"] = "landscape"
             if pg == MARKET_PRICES_PAGE_ID:
                 page.update(generate_market_prices(month))
                 page["orientation"] = "landscape"
@@ -1555,7 +1579,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     if _is_full_export and not any(p.get("page") in READY_RECKONER_SSP_PAGES for p in _pages_list):
         for _pg in READY_RECKONER_SSP_PAGES:
             _pages_list.append({"page": _pg})
-    # "Annexure-III : 5 ISPs Major Units Records" sentinel pages: appended
+    # "Annexure-3 : 5 ISPs Major Units Records" sentinel pages: appended
     # right after the Ready Reckoner Annexures, now the true end of the
     # report — same pattern. Only plants with a filled-in registry (see
     # MAJOR_UNIT_ACTIVE_PAGES's own comment).
@@ -1564,6 +1588,13 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     if _is_full_export and not any(p.get("page") in MAJOR_UNIT_ACTIVE_PAGES for p in _pages_list):
         for _pg in MAJOR_UNIT_ACTIVE_PAGES:
             _pages_list.append({"page": _pg})
+    # "Annexure-4 : SAIL (8 Plants) Production Trend" sentinel pages:
+    # appended right after Annexure-3, now the true end of the report —
+    # same pattern.
+    if _is_full_export and not any(p.get("page") == SAIL8_TREND_SEPARATOR_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": SAIL8_TREND_SEPARATOR_PAGE_ID})
+    if _is_full_export and not any(p.get("page") == SAIL8_TREND_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": SAIL8_TREND_PAGE_ID})
     # Corner badge (group + side) is a pure function of _pages_list's own
     # (already-final) physical order — recomputed fresh rather than trusted
     # from the submitted payload, since PageData doesn't declare this field
@@ -1686,6 +1717,11 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
             p.update(generate_major_unit_separator())
         if pg in MAJOR_UNIT_ACTIVE_PAGES:
             p.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg]))
+        if pg == SAIL8_TREND_SEPARATOR_PAGE_ID:
+            p.update(generate_sail8_trend_separator())
+        if pg == SAIL8_TREND_PAGE_ID:
+            p.update(generate_sail8_trend_annexure(request.month))
+            p["orientation"] = "landscape"
         if pg == MARKET_PRICES_PAGE_ID:
             p.update(generate_market_prices(request.month))
             p["orientation"] = "landscape"
@@ -4457,6 +4493,27 @@ async def production_fy_pdf(fy_start: int = Query(...), mode: str = Query("actua
 
 
 # ---------------------------------------------------------------------------
+# Hot Metal / Crude Steel / Finished Steel / Saleable Steel -- FY-wise or
+# calendar-year-wise trend, selectable by plant group (frontend:
+# /reports/production-trend)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/production-trend/groups")
+async def get_production_trend_groups():
+    return {"groups": page_production_trend.list_groups()}
+
+
+@app.get("/api/production-trend")
+async def get_production_trend(basis: str = Query("fy"), group: str = Query("sail5")):
+    if basis not in ("fy", "cy"):
+        raise HTTPException(status_code=400, detail="basis must be 'fy' or 'cy'")
+    try:
+        return page_production_trend.get_trend_data(basis, group)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
 # Special Steel — month-wise, plant-wise Order vs Actual Despatch (FY report)
 # ---------------------------------------------------------------------------
 
@@ -6191,7 +6248,7 @@ async def api_ready_reckoner_image(
 
 
 # ---------------------------------------------------------------------------
-# "Annexure-III : 5 ISPs Major Units Records" — Daily best-ever production
+# "Annexure-3 : 5 ISPs Major Units Records" — Daily best-ever production
 # record, editable going forward via /data-entry/major-unit-daily. Same
 # "deliberately NOT month-scoped" shape as Ready Reckoner just above:
 # reads/writes go straight to major_unit_daily_record regardless of

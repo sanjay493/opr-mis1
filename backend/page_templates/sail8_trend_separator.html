@@ -1,0 +1,26 @@
+<style>
+    /* Blank Annexure separator/title page, printed right before the content
+       page -- same shape/positioning as major_unit_records_separator.html /
+       ready_reckoner_separator.html (see that template's own comment for why
+       105mm padding-top, not vh/flex centering). */
+    .s8ts-wrap {
+        text-align: center;
+        padding-top: 105mm;
+    }
+    .s8ts-annexure {
+        font-weight: 700;
+        font-size: 26pt;
+        color: {{ colors.text_black|default('#000000') }};
+    }
+    .s8ts-group {
+        font-weight: 700;
+        font-size: 18pt;
+        color: {{ colors.text_rust_brown|default('#B7410E') }};
+        margin-top: 10px;
+    }
+</style>
+
+<div class="s8ts-wrap">
+    <div class="s8ts-annexure">{{ page.annexure_label }}</div>
+    <div class="s8ts-group">{{ page.group_label }}</div>
+</div>

@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-// Mirrors backend/page_templates/major_unit_records_plant.html (Annexure-III,
+// Mirrors backend/page_templates/major_unit_records_plant.html (Annexure-3,
 // one page per ISP). The backend's *_display strings are built for that
 // Jinja template: a number followed by `<span class="mur-period">(...)</span>`,
 // or "—", or an HTML-escaped free-text remark (see page_major_unit_records.py's

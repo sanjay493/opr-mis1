@@ -1,5 +1,5 @@
 """
-Shared source-workbook parsing for Annexure-III (5 ISPs Major Units
+Shared source-workbook parsing for Annexure-3 (5 ISPs Major Units
 Records) — used by both verify_major_unit_best_records.py (Annual/Monthly
 cross-check, no DB writes) and backfill_major_unit_daily_records.py (Daily
 best, writes major_unit_daily_record). Kept in one place so a source

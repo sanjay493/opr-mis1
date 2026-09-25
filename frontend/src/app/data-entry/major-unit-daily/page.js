@@ -105,7 +105,7 @@ function MajorUnitDailyEntryInner() {
         </h2>
         <span style={{ fontSize: 13, color: '#5f6368' }}>
           Best-ever single-day production figure per major unit, with the date it was achieved — feeds
-          Annexure-III of the report. Annual/Monthly bests aren&apos;t entered here; they&apos;re computed
+          Annexure-3 of the report. Annual/Monthly bests aren&apos;t entered here; they&apos;re computed
           automatically from the plant&apos;s monthly production data.
         </span>
 

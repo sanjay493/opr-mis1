@@ -98,6 +98,7 @@ export default function GlobalNavbar() {
       submenu: [
         { label: 'OMI Generate', link: '/report', icon: '📈' },
         { label: 'Month-wise Production', link: '/reports/production-fy', icon: '📅' },
+        { label: 'HM/CS/FS/Saleable Steel Trend', link: '/reports/production-trend', icon: '📈' },
         { label: 'Unit-wise Production Query', link: '/reports/production-query', icon: '🔍' },
         { label: 'Production Items (Month & Unit-wise)', link: '/reports/production-items', icon: '📦' },
         { label: 'Iron Ore Mines (Month-wise)', link: '/reports/iron-ore-mines', icon: '⛏️' },

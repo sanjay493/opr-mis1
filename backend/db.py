@@ -1076,7 +1076,7 @@ def init_db():
         )
     """)
 
-    # "Annexure-III : 5 ISPs Major Units Records" — per-plant, per-major-unit
+    # "Annexure-3 : 5 ISPs Major Units Records" — per-plant, per-major-unit
     # Daily best-ever production record. Static reference content, same
     # rationale as ready_reckoner_pages just above: not scoped to any report
     # month. Annual/Monthly bests are NEVER stored here — they're computed
@@ -4512,7 +4512,7 @@ def save_ready_reckoner_image(plant_code: str, image_path: str, updated_by: str)
     conn.close()
 
 
-# ── Annexure-III : 5 ISPs Major Units Records — Daily best (see
+# ── Annexure-3 : 5 ISPs Major Units Records — Daily best (see
 # major_unit_daily_record's own comment above and page_major_unit_records.py) ──
 
 _MAJOR_UNIT_DAILY_COLS = (

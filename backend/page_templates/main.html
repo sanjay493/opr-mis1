@@ -1111,7 +1111,7 @@
         }
 
         .page2-table {
-            line-height: 1.3;
+            line-height: 1.15;
             background-color: {{ colors.misc_white }};
         }
 
@@ -1120,8 +1120,8 @@
             border: 1px solid {{ colors.border_black }};
             color: {{ colors.text_dark_gray }};
             text-transform: none;
-            font-size: 10pt;
-            padding: 5px 9px;
+            font-size: 9.5pt;
+            padding: 3px 9px;
             font-weight: bold;
             text-align: center;
             vertical-align: middle;
@@ -1129,8 +1129,8 @@
 
         .page2-table td {
             border: 1px solid {{ colors.border_black }};
-            font-size: 10pt;
-            padding: 5px 9px;
+            font-size: 9.5pt;
+            padding: 3px 9px;
             font-family: inherit;
             text-align: left;
             vertical-align: top;
@@ -1874,7 +1874,7 @@
        many OTHER named @page rules declaring "size: A4 portrait" overrides a
        bare landscape=True render call unless the actually-printed content's own
        @page assignment explicitly says otherwise. #}
-    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('special_steel', 'special_steel_donut') %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type == 'ready_reckoner' and page.pdf_landscape %} coal-landscape-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines', 'steel_sales_performance', 'rake_detention_summary', 'rake_detention_trend', 'rake_detention_detail', 'ready_reckoner', 'ready_reckoner_separator', 'major_unit_records', 'major_unit_records_separator') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical', 'rail_report', 'market_prices', 'macro_indicators') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if page.type == 'ready_reckoner' or page.page == 3 %} data-vfit="off"{% endif %}{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
+    <div class="page pg-{{ page.page|pgclass }}{% if page.type == 'page4_table' %} page4-page{% elif page.type == 'performance_summary_table' %} page5-6-page{% elif page.type == 'at_a_glance' %} at-a-glance-page{% elif page.type == 'techno_params' %}{% if page.page >= 31 %} techno-mill-page{% elif page.page == 28 %} techno-tight-page{% else %} techno-page{% endif %}{% elif page.type in ('special_steel', 'special_steel_donut') %} special-steel-page{% elif page.type == 'key_parameters' %} content-page key-parameters-page{% elif page.type == 'ready_reckoner' and page.pdf_landscape %} coal-landscape-page{% elif page.type in ('concast_performance', 'prod_by_process', 'catwise_saleable', 'segment_wise', 'opening_stock', 'ipt_status', 'special_steel_trend', 'capital_repair', 'steel_sector_performance', 'sail_mines', 'steel_sales_performance', 'rake_detention_summary', 'rake_detention_trend', 'rake_detention_detail', 'ready_reckoner', 'ready_reckoner_separator', 'major_unit_records', 'major_unit_records_separator', 'sail8_trend_separator') %} content-page{% elif page.type in ('epi', 'key_highlights', 'bf_large_annexure', 'cost_trend', 'special_steel_physical', 'rail_report', 'market_prices', 'macro_indicators', 'sail8_trend_annexure') %} coal-landscape-page{% elif page.type in ('best_ever_highlights', 'best_calendar_month') %} highlights-page{% elif page.type == 'power_data' %} power-data-page{% elif page.type == 'coal_consumption' %} coal-consumption-page{% elif page.type == 'cover' %} cover-page{% endif %}"{% if page.type == 'ready_reckoner' or page.page == 3 %} data-vfit="off"{% endif %}{% if _pl %} style="padding: {{ _pl.get('marginTop', 15) }}mm {{ _pl.get('marginLR', 15) }}mm {{ _pl.get('marginBottom', 15) }}mm {{ _pl.get('marginLR', 15) }}mm;"{% endif %}>
         <span class="pg-badge-marker">@@PGSTART_{{ page.page }}@@</span>
 
         {% if page.type == 'cover' %}{% include 'cover.html' %}
@@ -1919,6 +1919,8 @@
         {% elif page.type == 'ready_reckoner_separator' %}{% include 'ready_reckoner_separator.html' %}
         {% elif page.type == 'major_unit_records' %}{% include 'major_unit_records_plant.html' %}
         {% elif page.type == 'major_unit_records_separator' %}{% include 'major_unit_records_separator.html' %}
+        {% elif page.type == 'sail8_trend_annexure' %}{% include 'sail8_trend_annexure.html' %}
+        {% elif page.type == 'sail8_trend_separator' %}{% include 'sail8_trend_separator.html' %}
         {% else %}
             <div class="report-title-section">
                 <h2>{{ page.title }}</h2>

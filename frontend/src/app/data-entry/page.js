@@ -98,7 +98,7 @@ function DataEntryPageInner() {
     },
     {
       title: '5 ISPs Major Units Daily Records',
-      description: 'Log a new best-ever daily production figure (with its date) for a major unit, shown in Annexure-III of the report.',
+      description: 'Log a new best-ever daily production figure (with its date) for a major unit, shown in Annexure-3 of the report.',
       icon: '🏆',
       link: '/data-entry/major-unit-daily',
       color: '#9333ea',

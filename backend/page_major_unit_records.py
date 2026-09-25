@@ -1,5 +1,5 @@
 """
-"Annexure-III : 5 ISPs Major Units Records" — per-plant, per-major-unit
+"Annexure-3 : 5 ISPs Major Units Records" — per-plant, per-major-unit
 best-ever production records (Annual/Monthly/Daily), appended at the very
 end of the PDF report, right after the Ready Reckoner Annexures. Mirrors
 page_ready_reckoner.py's separator + per-plant page shape.
@@ -291,8 +291,8 @@ def generate_major_unit_separator() -> dict:
     separator."""
     return {
         "type": "major_unit_records_separator",
-        "title": "Annexure-III : 5 ISPs Major Units Records",
-        "annexure_label": "Annexure-III",
+        "title": "Annexure-3 : 5 ISPs Major Units Records",
+        "annexure_label": "Annexure-3",
         "group_label": "5 ISPs Major Units Records",
     }
 
@@ -395,7 +395,7 @@ def _row_class(item_names: list) -> str:
 
 
 def generate_major_unit_page(plant_code: str) -> dict:
-    """One plant's Annexure-III page: Unit / Annual Best / Monthly Best /
+    """One plant's Annexure-3 page: Unit / Annual Best / Monthly Best /
     Daily Best. Annual/Monthly are computed live from production_table
     (best_for_unit); Daily is read from major_unit_daily_record. Each row
     carries both the raw figures (annual/monthly/daily) and pre-formatted

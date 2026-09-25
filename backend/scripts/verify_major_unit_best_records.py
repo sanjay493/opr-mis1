@@ -1,5 +1,5 @@
 """
-Read-only verification for Annexure-III (5 ISPs Major Units Records) — see
+Read-only verification for Annexure-3 (5 ISPs Major Units Records) — see
 page_major_unit_records.py's module docstring and the approved plan.
 
 For every registry unit at BSP/BSL/RSP/ISP, computes the live Annual/Monthly

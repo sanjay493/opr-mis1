@@ -1,0 +1,60 @@
+<style>
+    .s8t-title {
+        text-align: center; font-weight: 700; font-size: 15pt;
+        color: {{ colors.text_accent_navy|default('#1e3a8a') }};
+        text-decoration: underline; margin-bottom: 2px;
+    }
+    .s8t-subtitle {
+        text-align: center; font-weight: 600; font-size: 10.5pt;
+        color: {{ colors.text_secondary|default('#5f6368') }};
+        margin-bottom: 14px;
+    }
+    .s8t-caption {
+        font-weight: 700; font-size: 10.5pt;
+        color: {{ colors.text_accent_navy|default('#1e3a8a') }};
+        margin: 10px 0 4px 0;
+    }
+    .s8t-table { font-size: 9.5pt; border-collapse: collapse; width: 100%; line-height: 1.2; }
+    .s8t-table th, .s8t-table td {
+        border: 0.5pt solid {{ colors.border_dark|default('#5f6368') }};
+        padding: 3px 5px;
+    }
+    .s8t-table th { font-weight: 700; text-align: center; }
+    .s8t-table td.s8t-label { text-align: left; font-weight: 600; }
+    /* Components of Saleable Steel (Semi Finished / Finished Steel) --
+       slight right indent + dash prefix, lighter weight, sets them apart as
+       a breakdown of the Saleable Steel row directly above. */
+    .s8t-table td.s8t-label.s8t-indent {
+        padding-left: 16px;
+        font-weight: 400;
+        color: {{ colors.text_secondary|default('#5f6368') }};
+    }
+    .s8t-table td.s8t-value {
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+</style>
+
+<div class="s8t-title">SAIL (8 Plants) — Production Trend</div>
+<div class="s8t-subtitle">Hot Metal / Crude Steel / Pig Iron / Saleable Steel (of which: Semi Finished &amp; Finished Steel) — FY-wise, {{ page.unit }}</div>
+
+{% for tbl in [page.top_table, page.bottom_table] %}
+<div class="s8t-caption">FY {{ tbl.years[0] }} to {{ tbl.years[-1] }}</div>
+<table class="s8t-table">
+    <thead>
+        <tr>
+            <th>Item</th>
+            {% for y in tbl.years %}<th>{{ y }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in tbl.rows %}
+        <tr>
+            <td class="s8t-label{{ ' s8t-indent' if row.indent else '' }}">{{ '- ' if row.indent else '' }}{{ row.label }}</td>
+            {% for v in row['values'] %}<td class="s8t-value">{{ v }}</td>{% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endfor %}

@@ -24,9 +24,9 @@
   "page_templates/key_highlights.html": "1b6c33c6e34ee58b35a9388f07f9e3aed6d740064459ee4cbb562bdc4d79dc95",
   "page_templates/key_parameters.html": "f824e1303169841c3832e0e6677a4dc1be1914660fb6d61f83931f60a93a99a3",
   "page_templates/macro_indicators.html": "998a7b1793ec49028c28c95eb36525747bae6534b982132ca66b9302ce8f31ca",
-  "page_templates/main.html": "6d5e0588bec800516c06e3c28c5159d0b774b96f6dd05ed4729fad85db76eb08",
+  "page_templates/main.html": "7be7694038c9440483604d8fde119e8ff1e449af565ea07219614f5429d8ced8",
   "page_templates/major_unit_records_plant.html": "6b49bed68148ed3345a527288fe28c7de0d23cd28a0f3b73120fb19beee225cd",
-  "page_templates/major_unit_records_separator.html": "ff1bb38c72494e5ee10fa98cc6d4a3575e3d49cfb61f07a878b47fc2a3ef8a09",
+  "page_templates/major_unit_records_separator.html": "4db377b8e3eee801a001f36680654547b457fde357afc197b5b2b26110ea429b",
   "page_templates/market_prices.html": "c04c059254fbb0667ed701c0b940dd292d4585192bc878711faf204046646539",
   "page_templates/opening_stock.html": "59433a55ffeda2f3a23880787a21c8d94af9af387e55c4f0dfcf4b87310871b7",
   "page_templates/page4_table.html": "3658bc7130e7626bb5506e780532cfde19ef683eb17050aaff606f5a10ccfa12",
@@ -39,6 +39,8 @@
   "page_templates/rake_detention_trend.html": "5b3a2822fef615244f4f5a672ef3f5e0d0b3f7f36b05a7ff54329bb2d606a37d",
   "page_templates/ready_reckoner_plant.html": "898f56ca4d839589904e3b119d2be9663662674cd71f35437f5b6724d13d0559",
   "page_templates/ready_reckoner_separator.html": "ad3077cdd5d256e359708ea4c50ad6434a80692b0ca37ccc91c62364261e375f",
+  "page_templates/sail8_trend_annexure.html": "a3150439b978b16e458db31bb93e1789a2a4ee132a573ac48edb37dbfa4bf6c4",
+  "page_templates/sail8_trend_separator.html": "8f260ca6d25afd1fe3626484705a298ea859dfe0b5bd2da297e5d499f35fd403",
   "page_templates/sail_mines.html": "5ee0db758a3b5b9b5762188694b9a9b69493ce965a4f03acd9f91af211732289",
   "page_templates/segment_wise.html": "dac084885814583ec3cf4aad6cafdb45503fe76b6835d3248bdebf17e38dd048",
   "page_templates/special_steel.html": "f3c0c65e915d67ddb9c2ce8ac5582e68c4ffe94c04a35d184dd251d35926cb3d",
@@ -50,7 +52,7 @@
   "page_templates/summary.html": "f8132417718b9702c26e5b6df6fe2b5c47fbc5c5e8949d51507ea75814d35350",
   "page_templates/techno_params.html": "03eb951a79ce1d844facf77dc5408fa05ef527b5be8fb71926b478bdaa9b6501",
   "page_templates/trend_section.html": "d2bc90a92888823a7eeb43dc36b6549928fca0a0d49eaeb5a041b28798450bad",
-  "pdf.py": "12f543041093d8dff29f2cfef41a2bd369da413f69bf198615e932568043d482"
+  "pdf.py": "0dbf4820a7e93da75a97b17c4b2e331a84c2a48d524592f3a425b364ea61ff49"
  },
  "reference_render": {
   "month": "2026-08",

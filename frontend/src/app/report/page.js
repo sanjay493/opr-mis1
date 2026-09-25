@@ -100,16 +100,23 @@ const PAGE_LABELS = {
   1056: 'Ready Reckoner – Salem Steel Plant – Unit-wise Capacity & Product Mix',
   1057: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Process Flow',
   1058: 'Ready Reckoner – Visvesvaraya Iron and Steel Plant – Unit-wise Capacity & Product Mix',
-  // "Annexure-III : 5 ISPs Major Units Records" — a blank separator, then
+  // "Annexure-3 : 5 ISPs Major Units Records" — a blank separator, then
   // one page per plant with a filled-in registry, right after the Ready
   // Reckoner Annexures. Ids 1068-1072 in plant order (BSP/DSP/RSP/BSL/ISP —
   // see backend/page_major_unit_records.py's MAJOR_UNIT_PAGES).
-  1067: 'Annexure-III : 5 ISPs Major Units Records',
+  1067: 'Annexure-3 : 5 ISPs Major Units Records',
   1068: 'Major Units Records – Bhilai Steel Plant',
   1069: 'Major Units Records – Durgapur Steel Plant',
   1070: 'Major Units Records – Rourkela Steel Plant',
   1071: 'Major Units Records – Bokaro Steel Plant',
   1072: 'Major Units Records – IISCO Steel Plant',
+  // "Annexure-4 : SAIL (8 Plants) Production Trend" — a blank separator,
+  // then one content page with two stacked FY-wise tables (Hot Metal /
+  // Crude Steel / Pig Iron / Saleable Steel, plus Semi Finished / Finished
+  // Steel components), FY2007-08 onward — right after Annexure-3, now
+  // the true end of the report. See backend/page_sail8_trend_annexure.py.
+  1073: 'Annexure-4 : SAIL (8 Plants) Production Trend',
+  1074: 'SAIL (8 Plants) Production Trend – Hot Metal/Crude Steel/Pig Iron/Saleable Steel',
 };
 
 // Page list/count is fixed regardless of report month, so the page selector

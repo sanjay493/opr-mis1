@@ -2,10 +2,10 @@
 
 import React from 'react';
 
-// Mirrors backend/page_templates/major_unit_records_separator.html — the
-// blank "Annexure-3" title page before the Major Units Records plant
-// pages; same shape as ReadyReckonerSeparatorTemplate.
-export default function MajorUnitRecordsSeparatorTemplate({ data }) {
+// Mirrors backend/page_templates/sail8_trend_separator.html — the blank
+// "Annexure-4" title page before the SAIL (8 Plants) Production Trend
+// content page; same shape as MajorUnitRecordsSeparatorTemplate.
+export default function Sail8TrendSeparatorTemplate({ data }) {
   const { annexure_label: annexureLabel, group_label: groupLabel } = data || {};
 
   return (

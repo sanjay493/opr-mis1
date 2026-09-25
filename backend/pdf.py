@@ -216,8 +216,10 @@ _MAIN_MARGIN = {"top": "10mm", "right": "15mm", "bottom": "9mm", "left": "15mm"}
 # The Index (page 2) is rendered without a Chromium header/footer, so it
 # doesn't need the ~9-10mm the main pages reserve for those bars — a tighter
 # top/bottom keeps the (now longer) contents list on one page. Top is the
-# tightest (see .pg-2 / .page2-heading in main.html) so the 32-row list,
-# Annexure-III included, stays on a single sheet.
+# tightest (see .pg-2 / .page2-heading in main.html) so the 33-row list,
+# Annexure-4 included, stays on a single sheet (.page2-table's own
+# font-size/padding were tightened further, 2026-09-25, when Annexure-4
+# pushed the list from 32 to 33 rows).
 _FRONT_MARGIN = {"top": "4mm", "right": "13mm", "bottom": "8mm", "left": "13mm"}
 
 # Printable area (width, height in mm) inside _MAIN_MARGIN for portrait A4,
@@ -1648,7 +1650,7 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     # is re-stamped from scratch (Chromium's own pageNumber/totalPages
     # counters are per-call).
     _LANDSCAPE_TYPES = ("bf_large_annexure", "cost_trend", "special_steel_physical", "epi", "rail_report",
-                        "market_prices", "macro_indicators")
+                        "market_prices", "macro_indicators", "sail8_trend_annexure")
 
     def _is_landscape_page(p: dict) -> bool:
         """True for a fixed landscape page type, OR a page that opted into
