@@ -59,15 +59,18 @@
        their existing bold/neutral styling. */
     .rr-capacity-block table tbody td:nth-child(1) { color: #8b4513; }
     .rr-capacity-block table tbody td:nth-child(2) { color: #1a56db; }
-    /* Facility column: wider, and a "[...]" part of a facility's text
-       goes on a 2nd line in black (see pdf.py's _rr_facility), with the
-       name before it kept on a single line. 22% is the widest that keeps
+    /* Facility column: wider, and a bracketed "(...)"/"[...]" part of a
+       facility's text (unit count or short form) goes on a 2nd line in a
+       smaller slate (see pdf.py's _rr_facility). The name itself wraps
+       normally - forcing it onto one line ("Ore Bedding and Blending
+       Plant") widened the column and cost RSP its page. pdf.py falls back
+       to the one-line text for a page that would otherwise need an extra
+       sheet (rr_facility_inline). 22% is the widest that keeps
        Bhilai's Capacity + Product Mix on one page (2026-08 data); 23%+
        splits it onto 2 pages (+1 report page, shifting the Index's hand-
        maintained Annexure page numbers). */
     .rr-capacity-block table th:nth-child(1) { width: 22%; }
-    .rr-capacity-block .rr-facility-name { white-space: nowrap; }
-    .rr-capacity-block .rr-facility-bracket { color: #000; }
+    .rr-capacity-block .rr-facility-bracket { display: block; color: {{ colors.text_secondary|default('#475569') }}; font-size: 0.8em; line-height: 1.05; }
     /* Product Mix table: BSL's grade-by-product grid gets equal-width
        columns; the other ISPs (BSP/DSP/RSP/ISP) get a wider 1st (Mill)
        column than auto layout gave it (7-13%). SSPs keep auto layout. */
@@ -108,7 +111,7 @@
             <tbody>
             {% for row in page.capacity_rows %}
                 <tr{% if row.is_total %} class="rr-total"{% endif %}>
-                    <td>{{ row.item|rr_facility }}</td>
+                    <td>{% if page.rr_facility_inline %}{{ row.item|rr_cell }}{% else %}{{ row.item|rr_facility }}{% endif %}</td>
                     <td>{{ row.details|rr_cell }}</td>
                     <td>{{ row.capacity|rr_cell }}</td>
                 </tr>

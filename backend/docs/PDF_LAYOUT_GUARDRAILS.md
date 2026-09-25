@@ -5,7 +5,7 @@ changes have broken it before, in ways that only show up in a **full**
 export. This document lists what controls the layout, what goes wrong, how
 it's detected, and how to put it back.
 
-**Known-good layout:** git tag `pdf-layout-baseline-2026-09-25`
+**Known-good layout:** git tag `pdf-layout-baseline-2026-09-25b`
 (full report for Aug 2026: 103 pages incl. Annexure-III, sequential
 footers, trend section 12 pages, no layout warnings).
 
@@ -23,10 +23,10 @@ rem 1. What changed since the known-good layout?
 venv\Scripts\python.exe layout_guard.py
 
 rem 2. Restore one file to the known-good version (repeat per file listed)
-git checkout pdf-layout-baseline-2026-09-25 -- backend/page_templates/main.html
+git checkout pdf-layout-baseline-2026-09-25b -- backend/page_templates/main.html
 
 rem 3. ...or restore EVERY layout file at once
-git checkout pdf-layout-baseline-2026-09-25 -- backend/pdf.py backend/layout_config.json backend/chart_utils.py backend/page_at_a_glance.py backend/page_special_steel_donut.py backend/page_coal_consumption.py backend/page_templates
+git checkout pdf-layout-baseline-2026-09-25b -- backend/pdf.py backend/layout_config.json backend/chart_utils.py backend/page_at_a_glance.py backend/page_special_steel_donut.py backend/page_coal_consumption.py backend/page_templates
 
 rem 4. Verify with a real render (about 1-2 minutes)
 venv\Scripts\python.exe layout_guard.py --render 2026-08
@@ -99,7 +99,13 @@ sheet (unless the page has `data-vfit="off"`). Everything else prints at
 paper) gets its body-cell padding bisected up until the page fills its
 sheet, laid out at that real width while measuring. `data-vgrow-step`
 snaps the growth to a multiple (Power Data: 0.5px, so its whole-px rows stay
-whole - fractional rows print with an uneven baseline rhythm). Page 27 can still need
+whole - fractional rows print with an uneven baseline rhythm).
+`data-vgrow-cells` limits growth to given cells (Power Data: the spacer rows
+between plant blocks, so data rows keep their height).
+
+**Ready Reckoner facility brackets**: a facility's "(...)" part prints on a
+2nd line, except on a page that would then need an extra sheet - there
+`_split_ready_reckoner_overflow` sets `rr_facility_inline` (one-line text). Page 27 can still need
 width-shrinking late in the FY (March: ~83%, 21 columns).
 
 ### Global CSS (main.html)

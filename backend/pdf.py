@@ -42,19 +42,24 @@ _jinja_env.filters['rr_cell'] = _rr_cell
 
 def _rr_facility(value):
     """Jinja filter for the Unit-wise Capacity table's Facility column: like
-    |rr_cell, but a "[...]" part (e.g. "Blast Furnaces [BF-1, BF-4, BF-5]")
-    moves to its own 2nd line and is shown in black, brackets included,
-    while the facility name before it stays on one unwrapped line. Text
-    with no "[" renders exactly as |rr_cell does."""
+    |rr_cell, but a bracketed part - "(...)" or "[...]", e.g. "Coke Ovens
+    (11 Nos.)", "Bar & Rod Mill (BRM)" - moves to its own 2nd line in its
+    own color (rr-facility-bracket), brackets included, while the facility
+    name before it stays on one unwrapped line. Text with no bracket
+    renders exactly as |rr_cell does."""
     import html as _html_mod
+    import re as _re
     if value is None:
         return ""
     text = str(value)
-    cut = text.find("[")
-    if cut <= 0:
+    m = _re.search(r"[(\[]", text)
+    if not m or m.start() == 0:
         return _rr_cell(text)
+    cut = m.start()
     name = _html_mod.escape(text[:cut].strip()).replace("\n", "<br>")
-    rest = _html_mod.escape(text[cut:].strip()).replace("\n", "<br>")
+    # "( SMS-I & SMS II)" -> "(SMS-I & SMS II)"
+    rest = _re.sub(r"([(\[])\s+", r"\1", text[cut:].strip())
+    rest = _html_mod.escape(rest).replace("\n", "<br>")
     return (f'<span class="rr-facility-name">{name}</span><br>'
             f'<span class="rr-facility-bracket">{rest}</span>')
 
@@ -262,7 +267,9 @@ _FIT_PAGES_JS = """([W, H, maxOver]) => {
         // Row-spanning section labels are left alone - growing them too made
         // Chromium's print layout spread the extra height unevenly (first
         // rows of a section tighter than the rest).
-        const cells = Array.from(vtbl.querySelectorAll('tbody td:not([rowspan])'));
+        // data-vgrow-cells: grow only these cells instead (e.g. spacer rows
+        // between blocks, leaving the data rows' height alone).
+        const cells = Array.from(vtbl.querySelectorAll(vtbl.dataset.vgrowCells || 'tbody td:not([rowspan])'));
         const base = cells.map((c) => {
           const cs = getComputedStyle(c);
           return [parseFloat(cs.paddingTop) || 0, parseFloat(cs.paddingBottom) || 0];
@@ -1067,17 +1074,34 @@ def _split_ready_reckoner_overflow(main_pages: list, browser, template, render_k
     from page_ready_reckoner import generate_ready_reckoner_page, PRODUCT_MIX_OVERFLOW_PAGE_ID
     from report_utils import assign_dept_badges
 
+    def _fits(p):
+        return _ready_reckoner_details_fits(browser, p, template, render_kwargs, font_family, report_month)
+
+    def _fits_or_inline(p):
+        # The Facility column's bracket moves to a 2nd line (|rr_facility)
+        # only where the page still fits with it; otherwise fall back to
+        # the one-line text (rr_facility_inline) rather than cost a page.
+        if _fits(p):
+            return True
+        p["rr_facility_inline"] = True
+        if _fits(p):
+            return True
+        p.pop("rr_facility_inline")
+        return False
+
     i = 0
     while i < len(main_pages):
         p = main_pages[i]
         if p.get("type") == "ready_reckoner" and p.get("subtype") == "details":
-            if not _ready_reckoner_details_fits(browser, p, template, render_kwargs, font_family, report_month):
+            if not _fits_or_inline(p):
                 plant_code = p.get("plant_code")
                 overflow_id = PRODUCT_MIX_OVERFLOW_PAGE_ID.get(plant_code)
                 if overflow_id is not None:
                     p["subtype"] = "capacity"
                     p["subtype_label"] = "Unit-wise Capacity"
                     p["title"] = f"Ready Reckoner – {p.get('plant_name')} – Unit-wise Capacity"
+                    if not _fits(p):
+                        p["rr_facility_inline"] = True
                     pm_page = generate_ready_reckoner_page(plant_code, "product_mix")
                     pm_page["page"] = overflow_id
                     assign_dept_badges([pm_page])

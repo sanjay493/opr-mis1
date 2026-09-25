@@ -709,6 +709,16 @@
             font-weight: 600;
             background: {{ colors.highlight_total_col_bg }};
         }
+        /* Spacer between plant blocks - starts empty, pdf.py's vertical
+           fill grows its padding to spend the page's spare height here. */
+        .pwr-table .pwr-gap td {
+            padding: 0;
+            height: 0;
+            line-height: 0;
+            font-size: 0;
+            border-left: none;
+            background: none;
+        }
         .pwr-cum-row td {
             font-weight: 600;
             background: {{ colors.highlight_total_col_bg }};

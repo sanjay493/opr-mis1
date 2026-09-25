@@ -7,12 +7,13 @@
                 ('last_year', 'LAST YEAR (MW)', [('own_cpp','Own'),('jv_cpp','JV'),('drawal_pp3','D.PP3'),('total_gen','T.Gen'),('total_power_consump','TPC')]),
             ] %}
 
-            {# data-vgrow: pdf.py grows row padding until the page fills its
-               sheet, measured at the real paper size: 200 x 285mm = A4 minus
-               power-data-layout's 5mm/4mm @page margins, less ~4mm clearance
-               above the stamped footer. Padding grows in 0.5px steps so every
-               row stays a whole number of px (see .pwr-table in main.html). #}
-            <table class="pwr-table" data-vgrow="1" data-vgrow-mm="285" data-vgrow-wmm="200" data-vgrow-step="0.5">
+            {# data-vgrow: pdf.py grows the spacer rows between plant blocks
+               (data-vgrow-cells) until the page fills its sheet, in 0.5px
+               steps, so data rows stay a whole 8px each (see .pwr-table in
+               main.html). 200 x 290mm is the paper area measured against -
+               print lands ~3mm shorter than measured, so the table still
+               ends ~5mm above the stamped footer rule. #}
+            <table class="pwr-table" data-vgrow="1" data-vgrow-mm="290" data-vgrow-wmm="200" data-vgrow-cells=".pwr-gap td" data-vgrow-step="0.5">
                 <colgroup>
                     <col class="pwr-plant-col">
                     <col class="pwr-mon-col">
@@ -59,6 +60,9 @@
                             {% endfor %}
                         {% endfor %}
                     </tr>
+                    {% if not loop.last %}
+                    <tr class="pwr-gap"><td colspan="{{ 2 + groups | map(attribute=2) | map('length') | sum }}"></td></tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
