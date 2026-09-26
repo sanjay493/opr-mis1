@@ -105,11 +105,8 @@ export default function GlobalNavbar() {
         { label: 'Special Steel (Order vs Actual, FY)', link: '/reports/special-steel-fy', icon: '🔩' },
         { label: 'Special Steel Plants Physical Performance', link: '/reports/special-steel-physical', icon: '🏭' },
         { label: 'IPT (Plan vs Actual, FY)', link: '/reports/ipt-fy', icon: '🚆' },
-        { label: 'Plant-wise Techno', link: '/reports/techno-monthly', icon: '⚙️' },
-        { label: 'Techno Dashboard', link: '/reports/techno-dashboard', icon: '🔬' },
-        { label: 'Techno Verification', link: '/reports/techno-verification', icon: '✅' },
+        { label: 'Techno Reports', link: '/reports/techno', icon: '⚙️' },
         { label: 'Large BF Benchmarking', link: '/reports/bf-benchmark', icon: '📐' },
-        { label: 'Blast Furnace Techno Report', link: '/reports/techno-bf-furnace', icon: '🌋' },
         { label: 'Production Loss Analysis', link: '/reports/production-loss-analysis', icon: '📉' },
         { label: 'Breakdown Analysis', link: '/reports/breakdown-analysis', icon: '⚠️' }
       ]
@@ -133,7 +130,7 @@ export default function GlobalNavbar() {
         { label: 'JPC Monthly Report', link: '/reports/jpc-report', icon: '📋' },
         { label: '1-Page Report', link: '/reports/one-page-report', icon: '📃' },
         { label: 'Pmix Report (Year-wise)', link: '/reports/pmix-fy', icon: '📈' },
-        { label: 'Techno Custom Report', link: '/reports/techno-custom', icon: '⚙️' },
+        { label: 'Techno Custom Report', link: '/reports/techno?tab=custom', icon: '⚙️' },
         { label: 'SEFI Report', link: '/reports/sefi', icon: '📮' },
         { label: 'Inputs for Steel Bulletin', link: '/reports/steel-bulletin', icon: '📰' },
       ]

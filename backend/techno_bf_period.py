@@ -102,7 +102,13 @@ def fy_march_month(fy_end_year: int) -> str:
     return f"{fy_end_year}-03"
 
 
-def _furnace_range_values(plant: str, unit: str, param_keys: List[str], months: List[str]) -> Dict[str, Dict]:
+def _fy_start_year(ym: str) -> int:
+    y, m = int(ym[:4]), int(ym[5:7])
+    return y if m >= 4 else y - 1
+
+
+def _furnace_range_values(plant: str, unit: str, param_keys: List[str], months: List[str],
+                          month_cache: Optional[Dict[tuple, Dict]] = None) -> Dict[str, Dict]:
     """{param_key: {month: value}} for one furnace over `months` — one
     _sail_period_values call per month (it already returns every
     DYNAMIC_PARAM_KEYS figure for that month in one DB round-trip, plus the
@@ -110,12 +116,43 @@ def _furnace_range_values(plant: str, unit: str, param_keys: List[str], months: 
     round-trips total regardless of how many params are requested."""
     by_param: Dict[str, Dict[str, float]] = {k: {} for k in param_keys}
     for m in months:
-        month_vals = _sail_period_values(plant, unit, m, "month")
+        if month_cache is None:
+            month_vals = _sail_period_values(plant, unit, m, "month")
+        else:
+            ck = (plant, unit, m)
+            if ck not in month_cache:
+                month_cache[ck] = _sail_period_values(plant, unit, m, "month")
+            month_vals = month_cache[ck]
         for k in param_keys:
             v = month_vals.get(k)
             if v is not None:
                 by_param[k][m] = v
     return by_param
+
+
+def _range_cell(plant: str, unit: str, key: str, months: List[str],
+                weight_cache: Dict[tuple, Dict[str, float]],
+                month_cache: Optional[Dict[tuple, Dict]] = None) -> Dict:
+    """One furnace/parameter combined over `months` — the cell dict
+    (value/display/method_used/warnings) build_range_report shows."""
+    method, basis = _tc.get_rule(key)
+    monthly = _furnace_range_values(plant, unit, [key], months, month_cache)[key]
+    if not monthly:
+        return {"value": None, "display": "", "warnings": ["No data in this period."]}
+    weights: Dict[str, float] = {}
+    if basis:
+        wkey = (plant, unit)
+        if wkey not in weight_cache:
+            weight_cache[wkey] = _tc._unit_production(plant, unit, months)
+        weights = weight_cache[wkey]
+    items = [(v, weights.get(m)) for m, v in monthly.items()]
+    value, method_used = _weighted_combine(method, items)
+    warnings = []
+    if method_used != method and method in ("weighted", "harmonic"):
+        warnings.append(
+            "Production weight missing for one or more months — used simple average instead.")
+    return {"value": value, "display": _fmt_bf_value(value, key), "method_used": method_used,
+            "warnings": warnings}
 
 
 def build_range_report(furnaces: List[Dict], params: List[Dict], months: List[str]) -> Dict:
@@ -127,35 +164,14 @@ def build_range_report(furnaces: List[Dict], params: List[Dict], months: List[st
     every other cumulative calc in this app)."""
     label = f"{_month_label(months[0])} - {_month_label(months[-1])}" if len(months) > 1 else _month_label(months[0])
     weight_cache: Dict[tuple, Dict[str, float]] = {}
+    month_cache: Dict[tuple, Dict] = {}
     sections = []
     for pdef in params:
         key = pdef["key"]
-        method, basis = _tc.get_rule(key)
-        rows = []
-        for f in furnaces:
-            plant, unit = f["plant"], f["unit"]
-            monthly = _furnace_range_values(plant, unit, [key], months)[key]
-            if not monthly:
-                rows.append({"furnace": f["label"], "values": {
-                    label: {"value": None, "display": "", "warnings": ["No data in this period."]}
-                }})
-                continue
-            weights: Dict[str, float] = {}
-            if basis:
-                wkey = (plant, unit)
-                if wkey not in weight_cache:
-                    weight_cache[wkey] = _tc._unit_production(plant, unit, months)
-                weights = weight_cache[wkey]
-            items = [(v, weights.get(m)) for m, v in monthly.items()]
-            value, method_used = _weighted_combine(method, items)
-            warnings = []
-            if method_used != method and method in ("weighted", "harmonic"):
-                warnings.append(
-                    "Production weight missing for one or more months — used simple average instead.")
-            rows.append({"furnace": f["label"], "values": {
-                label: {"value": value, "display": _fmt_bf_value(value, key), "method_used": method_used,
-                        "warnings": warnings}
-            }})
+        rows = [
+            {"furnace": f["label"], "values": {label: _range_cell(f["plant"], f["unit"], key, months, weight_cache, month_cache)}}
+            for f in furnaces
+        ]
         sections.append({"parameter": pdef["label"], "unit": pdef["unit"], "rows": rows})
     return {"periods": [label], "furnaces": [f["label"] for f in furnaces], "sections": sections}
 
@@ -167,8 +183,9 @@ def build_direct_report(furnaces: List[Dict], params: List[Dict], periods: List[
 
     periods: [{"label": str, "report_month": "YYYY-MM", "period": "month"|"till_month"}, ...]
     """
-    param_keys = [p["key"] for p in params]
     cache: Dict[tuple, Dict[str, Optional[float]]] = {}
+    weight_cache: Dict[tuple, Dict[str, float]] = {}
+    month_cache: Dict[tuple, Dict] = {}
 
     def _values(plant, unit, report_month, period):
         ck = (plant, unit, report_month, period)
@@ -184,6 +201,18 @@ def build_direct_report(furnaces: List[Dict], params: List[Dict], periods: List[
             values = {}
             for p in periods:
                 v = _values(f["plant"], f["unit"], p["report_month"], p["period"]).get(key)
+                if v is None and p["period"] == "till_month":
+                    # No stored Apr->month cumulative for this furnace/param
+                    # (e.g. the plant's upload only carried month figures) —
+                    # compute it from the monthly values the same way
+                    # "range" mode does, instead of showing a blank.
+                    ytd = months_in_range(f"{_fy_start_year(p['report_month'])}-04", p["report_month"])
+                    cellv = _range_cell(f["plant"], f["unit"], key, ytd, weight_cache, month_cache)
+                    if cellv["value"] is not None:
+                        cellv["warnings"] = cellv["warnings"] + [
+                            "No stored cumulative — computed from the monthly values."]
+                        values[p["label"]] = cellv
+                        continue
                 values[p["label"]] = {"value": v, "display": _fmt_bf_value(v, key), "warnings": []}
             rows.append({"furnace": f["label"], "values": values})
         sections.append({"parameter": pdef["label"], "unit": pdef["unit"], "rows": rows})

@@ -6644,6 +6644,9 @@ _PARAM_ACRONYMS = {
 # reported as missing.
 _PARAM_KEY_ALIASES = {
     "cdi": ["cdi", "cdi_rate", "CDI Rate"],
+    # The dashboard's "CDI Rate" display name normalizes to cdi_rate, but
+    # plants store it as cdi.
+    "cdi_rate": ["cdi_rate", "cdi", "CDI Rate"],
     "coke_rate": ["coke_rate", "Coke Rate"],
     "fuel_rate": ["fuel_rate", "Fuel Rate"],
     "bf_productivity": ["bf_productivity", "BF Productivity"],
@@ -6741,7 +6744,7 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         # Get techno data for selected plants from new techno_data table
         placeholders = ','.join('?' * len(plant_list))
         cursor.execute(f"""
-            SELECT plant, report_month, techno_json
+            SELECT plant, report_month, unit, techno_json
             FROM techno_data
             WHERE plant IN ({placeholders})
             ORDER BY plant, report_month
@@ -6749,11 +6752,26 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
 
         rows = cursor.fetchall()
 
+        # A plant has one techno_data row per unit (BF_Shop, BF-4, SMS-2, ...)
+        # and the same key (e.g. coke_rate) can sit in both the shop row and
+        # each furnace row. The plant figure must come from the shop-level
+        # unit, so rank units and never let a lower-ranked unit's value
+        # overwrite a higher-ranked one (ISP has no BF_Shop: its single
+        # furnace BF-5 is its shop figure).
+        def _unit_rank(plant, unit):
+            if unit in ("BF_Shop", "Shop", "General"):
+                return 0
+            if plant == "ISP" and unit == "BF-5":
+                return 1
+            return 2
+
         # Format data by plant and parameter
         data = {}
+        chosen_rank = {}  # (plant, param_name, month) -> rank of unit used
         for row in rows:
             plant = row['plant']
             month = row['report_month']
+            rank = _unit_rank(plant, row['unit'])
             try:
                 techno_json = json.loads(row['techno_json'])
                 month_data = techno_json.get('month', {})
@@ -6765,9 +6783,11 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
                 for param_name, param_key in zip(param_list, param_keys):
                     value = _extract_param_value(month_data, param_key)
                     if value is not None:
-                        if param_name not in data[plant]:
-                            data[plant][param_name] = {}
-                        data[plant][param_name][month] = value
+                        ck = (plant, param_name, month)
+                        if ck in chosen_rank and chosen_rank[ck] <= rank:
+                            continue
+                        chosen_rank[ck] = rank
+                        data[plant].setdefault(param_name, {})[month] = value
             except (json.JSONDecodeError, TypeError):
                 pass
 

@@ -542,7 +542,10 @@ def calculate_sail_actuals_strict(report_month: str) -> dict:
     try:
         plant_data = {}
         for plant in _BF_PLANTS:
-            for _unit in ("BF_Shop", "General"):
+            # ISP has a single furnace (BF-5) and no BF_Shop row — its BF-5
+            # figures ARE its shop-wide figures (same rule as BF_UNITS below).
+            units = ("BF_Shop", "BF-5", "General") if plant == "ISP" else ("BF_Shop", "General")
+            for _unit in units:
                 cur.execute(
                     "SELECT techno_json FROM techno_data WHERE plant=? AND unit=? AND report_month=?",
                     (plant, _unit, report_month),
