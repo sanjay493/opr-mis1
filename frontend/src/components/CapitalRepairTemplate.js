@@ -56,8 +56,19 @@ export default function CapitalRepairTemplate({ data }) {
                     {sec.shop}
                   </td>
                 )}
-                <td style={CTR}>{row.equipment}</td>
-                <td style={LBL}>{row.activity}</td>
+                {/* A unit with two CRs in the FY is two rows with its common
+                    Equipment/Activity cells merged - spans come from
+                    page_capital_repair._add_merge_spans (0 = covered). */}
+                {row.equipment_span !== 0 && (
+                  <td rowSpan={row.equipment_span || 1} style={{ ...CTR, verticalAlign: 'middle' }}>
+                    {row.equipment}
+                  </td>
+                )}
+                {row.activity_span !== 0 && (
+                  <td rowSpan={row.activity_span || 1} style={{ ...LBL, verticalAlign: 'middle' }}>
+                    {row.activity}
+                  </td>
+                )}
                 <td style={CTR}>{row.schedule_days}</td>
                 <td style={CTR}>{row.period}</td>
                 <td style={CTR}>{row.actual}</td>

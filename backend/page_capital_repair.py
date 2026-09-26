@@ -5,10 +5,11 @@ Mill-wise Techno pages (31-35). Source: Report_format/CR.pdf.
 Data source: capital_repair_table
   (plant, fy, shop, equipment, activity, schedule_days, period, actual, sort_order)
 
-All fields except `actual` are the fixed yearly-repair-plan text as supplied
-by the plants (kept as free text — schedules are things like "7 days/20 days"
-or "1+10+2*", not clean numbers). `actual` is the only field ever edited after
-seeding, via the data-entry page, as repairs are actually carried out.
+Plan fields are the yearly-repair-plan text as supplied by the plants (kept
+as free text — schedules are things like "7 days/20 days" or "1+10+2*", not
+clean numbers). The data-entry page edits them, adds/deletes rows (e.g. a
+second CR of the same unit in the FY, as its own row) and reorders them
+(sort_order); `actual` is updated as repairs are actually carried out.
 
 BSL's Sinter Plant is modelled as ONE shop ("Sinter Plant") with three
 equipment rows (BAND-1/2/3), matching how BSP has two separate shops
@@ -60,6 +61,31 @@ def format_cr_actual(actual_start: str | None, actual_end: str | None, actual_on
     return f"{_d_m_yy(actual_start)}-{_d_m_yy(actual_end)}"
 
 
+def _add_merge_spans(rows: list) -> None:
+    """Within one shop section, merge consecutive rows' common cells - a
+    unit with two Capital Repairs planned in the FY is entered as two rows,
+    printed with its Equipment (and Activity, when also the same) cell
+    spanning both. Hierarchical: Activity only merges within an Equipment
+    run. Sets row["equipment_span"] / row["activity_span"]: n = print the
+    cell with rowspan n, 0 = covered by a cell above (skip it)."""
+    i = 0
+    while i < len(rows):
+        j = i
+        while j + 1 < len(rows) and rows[j + 1]["equipment"] == rows[i]["equipment"]:
+            j += 1
+        for k in range(i, j + 1):
+            rows[k]["equipment_span"] = (j - i + 1) if k == i else 0
+        a = i
+        while a <= j:
+            b = a
+            while b + 1 <= j and rows[b + 1]["activity"] == rows[a]["activity"]:
+                b += 1
+            for k in range(a, b + 1):
+                rows[k]["activity_span"] = (b - a + 1) if k == a else 0
+            a = b + 1
+        i = j + 1
+
+
 def generate_capital_repair(plant: str, fy: str = "2026-27") -> dict:
     conn = db.connect()
     cur = conn.cursor()
@@ -72,7 +98,11 @@ def generate_capital_repair(plant: str, fy: str = "2026-27") -> dict:
         """, (plant, fy))
         rows = cur.fetchall()
 
-        sections, by_shop = [], {}
+        # Sections are runs of CONSECUTIVE rows sharing a shop, in the
+        # user's saved order (the data-entry page can reorder rows by drag
+        # and drop) - a shop that reappears later starts a new section
+        # rather than pulling its rows back up out of order.
+        sections = []
         for rid, shop, equipment, activity, schedule_days, period, actual in rows:
             row = {
                 "id": rid,
@@ -82,10 +112,11 @@ def generate_capital_repair(plant: str, fy: str = "2026-27") -> dict:
                 "period": period or "",
                 "actual": actual or "",
             }
-            if shop not in by_shop:
-                by_shop[shop] = {"shop": shop, "rows": []}
-                sections.append(by_shop[shop])
-            by_shop[shop]["rows"].append(row)
+            if not sections or sections[-1]["shop"] != shop:
+                sections.append({"shop": shop, "rows": []})
+            sections[-1]["rows"].append(row)
+        for sec in sections:
+            _add_merge_spans(sec["rows"])
 
         return {
             "title": f"Major Repair / Capital Repair Plan of SAIL {fy}",

@@ -6501,24 +6501,126 @@ async def save_capital_repair_entry(payload: dict):
 
     actual = format_cr_actual(actual_start, actual_end, actual_ongoing)
 
+    # Plan columns are editable too (rows can now be added, e.g. a unit's
+    # second CR in the FY) - only the ones actually sent are updated.
+    plan_updates = {f: (payload.get(f) or "").strip() for f in _CR_PLAN_FIELDS if f in payload}
+
     old = db._row_dict(conn,
-        "SELECT unit_type, unit_name, sms_subtag, actual_start, actual_end, actual_ongoing, planned_days, actual "
-        "FROM capital_repair_table WHERE id=?", (row_id,))
-    cur.execute("""
+        "SELECT unit_type, unit_name, sms_subtag, actual_start, actual_end, actual_ongoing, planned_days, actual, "
+        + ", ".join(_CR_PLAN_FIELDS) + " FROM capital_repair_table WHERE id=?", (row_id,))
+    plan_sql = "".join(f", {f}=?" for f in plan_updates)
+    cur.execute(f"""
         UPDATE capital_repair_table
         SET unit_type=?, unit_name=?, sms_subtag=?, actual_start=?, actual_end=?,
-            actual_ongoing=?, planned_days=?, actual=?
+            actual_ongoing=?, planned_days=?, actual=?{plan_sql}
         WHERE id=?
     """, (unit_type, unit_name, sms_subtag, actual_start, actual_end,
-          int(actual_ongoing), planned_days, actual, row_id))
+          int(actual_ongoing), planned_days, actual, *plan_updates.values(), row_id))
     conn.commit()
     conn.close()
     _activity_context.record(f"capital_repair_table/{plant}/{row_id}", old, {
         "unit_type": unit_type, "unit_name": unit_name, "sms_subtag": sms_subtag,
         "actual_start": actual_start, "actual_end": actual_end,
         "actual_ongoing": actual_ongoing, "planned_days": planned_days, "actual": actual,
+        **plan_updates,
     })
     return {"status": "ok", "message": "Saved.", "actual": actual}
+
+
+_CR_PLAN_FIELDS = ("shop", "equipment", "activity", "schedule_days", "period")
+
+
+def _cr_renumber(cur, plant: str, fy: str, ids: list) -> None:
+    for i, rid in enumerate(ids):
+        cur.execute("UPDATE capital_repair_table SET sort_order=? WHERE id=? AND plant=? AND fy=?",
+                    (i, rid, plant, fy))
+
+
+def _cr_ordered_ids(cur, plant: str, fy: str) -> list:
+    cur.execute("SELECT id FROM capital_repair_table WHERE plant=? AND fy=? ORDER BY sort_order ASC, id ASC",
+                (plant, fy))
+    return [r[0] for r in cur.fetchall()]
+
+
+@app.post("/api/capital-repair-row")
+async def add_capital_repair_row(payload: dict):
+    """Add a Capital Repair row. payload: {plant, fy, copy_from_id?}. With
+    copy_from_id the new row copies that row's shop/equipment/activity and
+    unit classification (a second CR of the same unit in the FY) and is
+    placed right below it; otherwise it's blank and goes last."""
+    plant = (payload.get("plant") or "").strip()
+    fy = (payload.get("fy") or "").strip()
+    if not plant or not re.fullmatch(r"\d{4}-\d{2}", fy):
+        raise HTTPException(status_code=400, detail="plant and fy ('2026-27') are required")
+    copy_from = payload.get("copy_from_id")
+
+    conn = db.connect()
+    cur = conn.cursor()
+    src = {}
+    if copy_from is not None:
+        src = db._row_dict(conn,
+            "SELECT shop, equipment, activity, unit_type, unit_name, sms_subtag "
+            "FROM capital_repair_table WHERE id=? AND plant=? AND fy=?", (copy_from, plant, fy))
+        if not src:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Row to copy not found")
+    new = {"plant": plant, "fy": fy,
+           "shop": src.get("shop") or "", "equipment": src.get("equipment") or "",
+           "activity": src.get("activity") or "", "schedule_days": "", "period": "", "actual": "",
+           "unit_type": src.get("unit_type"), "unit_name": src.get("unit_name"),
+           "sms_subtag": src.get("sms_subtag")}
+    cur.execute("""
+        INSERT INTO capital_repair_table
+            (plant, fy, shop, equipment, activity, schedule_days, period, actual,
+             unit_type, unit_name, sms_subtag, actual_ongoing, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+    """, tuple(new.values()))
+    new_id = cur.lastrowid
+    ids = [i for i in _cr_ordered_ids(cur, plant, fy) if i != new_id]
+    pos = ids.index(copy_from) + 1 if copy_from in ids else len(ids)
+    ids.insert(pos, new_id)
+    _cr_renumber(cur, plant, fy, ids)
+    conn.commit()
+    conn.close()
+    _activity_context.record(f"capital_repair_table/{plant}/{new_id}", None, new)
+    return {"status": "ok", "row": {**new, "id": new_id, "actual_start": None, "actual_end": None,
+                                    "actual_ongoing": False, "planned_days": None}}
+
+
+@app.delete("/api/capital-repair-row/{row_id}")
+async def delete_capital_repair_row(row_id: int):
+    conn = db.connect()
+    cur = conn.cursor()
+    old = db._row_dict(conn, "SELECT * FROM capital_repair_table WHERE id=?", (row_id,))
+    if not old:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Capital repair row not found")
+    cur.execute("DELETE FROM capital_repair_table WHERE id=?", (row_id,))
+    _cr_renumber(cur, old["plant"], old["fy"], _cr_ordered_ids(cur, old["plant"], old["fy"]))
+    conn.commit()
+    conn.close()
+    _activity_context.record(f"capital_repair_table/{old['plant']}/{row_id}", old, None)
+    return {"status": "ok"}
+
+
+@app.post("/api/capital-repair-reorder")
+async def reorder_capital_repair_rows(payload: dict):
+    """payload: {plant, fy, ids: [row ids in the desired order]} - must be
+    exactly that plant/FY's rows."""
+    plant = (payload.get("plant") or "").strip()
+    fy = (payload.get("fy") or "").strip()
+    ids = payload.get("ids") or []
+    conn = db.connect()
+    cur = conn.cursor()
+    current = _cr_ordered_ids(cur, plant, fy)
+    if sorted(current) != sorted(ids):
+        conn.close()
+        raise HTTPException(status_code=409, detail="Row list is out of date - reload and try again")
+    _cr_renumber(cur, plant, fy, ids)
+    conn.commit()
+    conn.close()
+    _activity_context.record(f"capital_repair_table/{plant}/{fy}/order", {"ids": current}, {"ids": ids})
+    return {"status": "ok"}
 
 
 # Acronym casing for parameter display names derived from techno_json keys.

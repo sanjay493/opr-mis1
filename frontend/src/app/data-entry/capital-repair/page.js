@@ -31,6 +31,10 @@ const S = {
   TD: { padding: '7px 8px', borderBottom: '1px solid #f0f4f8', fontSize: 14, verticalAlign: 'middle' },
   SEL: { padding: '5px 6px', fontSize: 12.5, border: '1px solid #dadce0', borderRadius: 4, width: '100%' },
   DATE: { padding: '5px 6px', fontSize: 12.5, border: '1px solid #dadce0', borderRadius: 4, width: 122 },
+  TXT: { padding: '5px 6px', fontSize: 13, border: '1px solid #dadce0', borderRadius: 4, width: '100%',
+         boxSizing: 'border-box' },
+  ICON: { padding: '3px 8px', fontSize: 14, border: '1px solid #dadce0', borderRadius: 4,
+          background: '#fff', cursor: 'pointer', lineHeight: 1.2 },
 };
 
 function Notice({ type, text }) {
@@ -56,7 +60,12 @@ function suggestPlannedDays(scheduleDays) {
   return m ? m[1] : '';
 }
 
-function EntryRow({ row, plant, units, onSaved }) {
+function EntryRow({ row, units, onSaved, onAddBelow, onDelete, drag }) {
+  const [shop, setShop]                 = useState(row.shop || '');
+  const [equipment, setEquipment]       = useState(row.equipment || '');
+  const [activity, setActivity]         = useState(row.activity || '');
+  const [scheduleDays, setScheduleDays] = useState(row.schedule_days || '');
+  const [period, setPeriod]             = useState(row.period || '');
   const [unitType, setUnitType]   = useState(row.unit_type || '');
   const [unitName, setUnitName]   = useState(row.unit_name || '');
   const [smsSubtag, setSmsSubtag] = useState(row.sms_subtag || '');
@@ -98,6 +107,7 @@ function EntryRow({ row, plant, units, onSaved }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: row.id,
+          shop, equipment, activity, schedule_days: scheduleDays, period,
           unit_type: unitType || null,
           unit_name: unitName || null,
           sms_subtag: unitType === 'SMS' ? (smsSubtag || null) : null,
@@ -112,7 +122,7 @@ function EntryRow({ row, plant, units, onSaved }) {
       setActualPreview(data.actual || '');
       setMsg('saved');
       onSaved({
-        ...row, unit_type: unitType, unit_name: unitName, sms_subtag: unitType === 'SMS' ? smsSubtag : null,
+        ...row, shop, equipment, activity, schedule_days: scheduleDays, period, unit_type: unitType, unit_name: unitName, sms_subtag: unitType === 'SMS' ? smsSubtag : null,
         actual_start: actualStart, actual_end: ongoing ? null : actualEnd, actual_ongoing: ongoing,
         planned_days: plannedDays === '' ? null : Number(plannedDays), actual: data.actual,
       });
@@ -124,15 +134,33 @@ function EntryRow({ row, plant, units, onSaved }) {
     }
   };
 
-  const rowBg = msg === 'saved' ? '#f0fdf4' : msg?.startsWith('err') ? '#fef2f2' : '#fff';
+  const rowBg = msg === 'saved' ? '#f0fdf4' : msg?.startsWith('err') ? '#fef2f2'
+    : drag.isOver ? '#e8f0fe' : '#fff';
 
   return (
-    <tr style={{ backgroundColor: rowBg }}>
-      <td style={{ ...S.TD, fontWeight: 600 }}>{row.shop}</td>
-      <td style={{ ...S.TD, textAlign: 'center' }}>{row.equipment}</td>
-      <td style={S.TD}>{row.activity}</td>
-      <td style={{ ...S.TD, textAlign: 'center' }}>{row.schedule_days}</td>
-      <td style={{ ...S.TD, textAlign: 'center' }}>{row.period}</td>
+    <tr style={{ backgroundColor: rowBg, opacity: drag.isDragging ? 0.4 : 1,
+                 borderTop: drag.isOver ? '2px solid #1a73e8' : undefined }}
+        onDragOver={drag.onDragOver} onDrop={drag.onDrop}>
+      <td style={{ ...S.TD, cursor: 'grab', color: '#9aa0a6', fontSize: 18, textAlign: 'center', userSelect: 'none' }}
+          draggable onDragStart={drag.onDragStart} onDragEnd={drag.onDragEnd} title="Drag to reorder">
+        ⠿
+      </td>
+      <td style={{ ...S.TD, minWidth: 110 }}>
+        <input style={{ ...S.TXT, fontWeight: 600 }} value={shop} onChange={e => setShop(e.target.value)} />
+      </td>
+      <td style={{ ...S.TD, minWidth: 90 }}>
+        <input style={{ ...S.TXT, textAlign: 'center' }} value={equipment} onChange={e => setEquipment(e.target.value)} />
+      </td>
+      <td style={{ ...S.TD, minWidth: 200 }}>
+        <textarea rows={2} style={{ ...S.TXT, resize: 'vertical', fontFamily: 'inherit' }}
+          value={activity} onChange={e => setActivity(e.target.value)} />
+      </td>
+      <td style={{ ...S.TD, minWidth: 80 }}>
+        <input style={{ ...S.TXT, textAlign: 'center' }} value={scheduleDays} onChange={e => setScheduleDays(e.target.value)} />
+      </td>
+      <td style={{ ...S.TD, minWidth: 110 }}>
+        <input style={{ ...S.TXT, textAlign: 'center' }} value={period} onChange={e => setPeriod(e.target.value)} />
+      </td>
 
       <td style={{ ...S.TD, minWidth: 190 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -195,6 +223,12 @@ function EntryRow({ row, plant, units, onSaved }) {
           </button>
         )}
       </td>
+
+      <td style={{ ...S.TD, textAlign: 'center', whiteSpace: 'nowrap' }}>
+        <button style={S.ICON} onClick={onAddBelow}
+          title="Add a row below with the same Shop / Equipment / Activity (e.g. this unit's 2nd CR in the FY)">＋</button>{' '}
+        <button style={{ ...S.ICON, color: '#dc2626' }} onClick={onDelete} title="Delete this row">🗑</button>
+      </td>
     </tr>
   );
 }
@@ -232,7 +266,82 @@ function CapitalRepairDataEntryPageInner() {
     }
   }, [plant, fy]);
 
-  const handleRowSaved = (idx, updated) => setRows(prev => prev.map((r, i) => i === idx ? updated : r));
+  const handleRowSaved = (id, updated) => setRows(prev => prev.map(r => r.id === id ? updated : r));
+
+  const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
+
+  const addRow = async (copyFromId) => {
+    setStatus(null);
+    try {
+      const res = await fetch(`${API}/api/capital-repair-row`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plant, fy, copy_from_id: copyFromId ?? null }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { row } = await res.json();
+      setRows(prev => {
+        const i = copyFromId != null ? prev.findIndex(r => r.id === copyFromId) : -1;
+        const next = [...prev];
+        next.splice(i >= 0 ? i + 1 : next.length, 0, row);
+        return next;
+      });
+    } catch (err) {
+      setStatus({ type: 'error', text: `Add row failed: ${err.message}` });
+    }
+  };
+
+  const deleteRow = async (row) => {
+    const what = [row.shop, row.equipment, row.activity].filter(Boolean).join(' / ') || 'this blank row';
+    if (!window.confirm(`Delete ${what}${row.period ? ` (${row.period})` : ''}?`)) return;
+    setStatus(null);
+    try {
+      const res = await fetch(`${API}/api/capital-repair-row/${row.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      setRows(prev => prev.filter(r => r.id !== row.id));
+    } catch (err) {
+      setStatus({ type: 'error', text: `Delete failed: ${err.message}` });
+    }
+  };
+
+  // Drop the dragged row just above the row it's dropped on (or at the end);
+  // the new order is saved immediately and reverted if the save fails.
+  const dropOn = async (targetId) => {
+    const fromId = dragId;
+    setDragId(null);
+    setOverId(null);
+    if (fromId == null || fromId === targetId) return;
+    const prev = rows;
+    const moving = prev.find(r => r.id === fromId);
+    const rest = prev.filter(r => r.id !== fromId);
+    const at = targetId == null ? rest.length : rest.findIndex(r => r.id === targetId);
+    const next = [...rest.slice(0, at), moving, ...rest.slice(at)];
+    setRows(next);
+    try {
+      const res = await fetch(`${API}/api/capital-repair-reorder`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plant, fy, ids: next.map(r => r.id) }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (err) {
+      setRows(prev);
+      setStatus({ type: 'error', text: `Reorder failed: ${err.message}` });
+    }
+  };
+
+  const dragProps = (id) => ({
+    isDragging: dragId === id,
+    isOver: overId === id && dragId !== id,
+    onDragStart: (e) => {
+      setDragId(id);
+      e.dataTransfer.effectAllowed = 'move';
+      const tr = e.currentTarget.closest('tr');
+      if (tr) e.dataTransfer.setDragImage(tr, 20, 20);
+    },
+    onDragEnd: () => { setDragId(null); setOverId(null); },
+    onDragOver: (e) => { if (dragId == null) return; e.preventDefault(); if (overId !== id) setOverId(id); },
+    onDrop: (e) => { e.preventDefault(); dropOn(id); },
+  });
 
   const plantLabel = PLANTS.find(p => p.code === plant)?.label || plant;
 
@@ -248,8 +357,9 @@ function CapitalRepairDataEntryPageInner() {
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
             Update Unit, Planned Days and Actual dates as Capital Repair jobs execute — these feed the
-            Production Loss Analysis report. Shop, Equipment, Activity, Schedule and Period are the fixed
-            yearly plan and are not editable here.
+            Production Loss Analysis report. A unit with two CRs planned in the FY goes on two rows: use ＋ on
+            its row to add the second one below it (the PDF merges their common Shop / Equipment / Activity
+            cells). Drag ⠿ to reorder rows.
           </span>
         </div>
 
@@ -319,6 +429,7 @@ function CapitalRepairDataEntryPageInner() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                 <thead>
                   <tr style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                    <th style={{ ...S.H, width: 30 }}></th>
                     <th style={{ ...S.H, textAlign: 'left', width: 130 }}>Shop</th>
                     <th style={S.H}>Equipment</th>
                     <th style={{ ...S.H, textAlign: 'left' }}>Activity</th>
@@ -328,32 +439,49 @@ function CapitalRepairDataEntryPageInner() {
                     <th style={S.H}>Planned Days</th>
                     <th style={S.H}>Actual (Start – End)</th>
                     <th style={S.H}>Save</th>
+                    <th style={S.H}>Rows</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#5f6368', fontSize: 14 }}>
+                      <td colSpan={11} style={{ padding: 24, textAlign: 'center', color: '#5f6368', fontSize: 14 }}>
                         No Capital Repair rows for {plantLabel}, FY {fy}.
                       </td>
                     </tr>
                   )}
-                  {rows.map((row, idx) => (
+                  {rows.map(row => (
                     <EntryRow
                       key={row.id}
                       row={row}
-                      plant={plant}
                       units={units}
-                      onSaved={updated => handleRowSaved(idx, updated)}
+                      onSaved={updated => handleRowSaved(row.id, updated)}
+                      onAddBelow={() => addRow(row.id)}
+                      onDelete={() => deleteRow(row)}
+                      drag={dragProps(row.id)}
                     />
                   ))}
+                  {dragId != null && (
+                    <tr onDragOver={e => { e.preventDefault(); setOverId('end'); }}
+                        onDrop={e => { e.preventDefault(); dropOn(null); }}>
+                      <td colSpan={11} style={{ padding: 10, textAlign: 'center', fontSize: 12, color: '#5f6368',
+                        background: overId === 'end' ? '#e8f0fe' : '#fafafa' }}>
+                        Drop here to move to the end
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
 
             <div style={{
               padding: '12px 18px', backgroundColor: '#f8f9fa', borderTop: '1px solid #dadce0',
+              display: 'flex', gap: 16, alignItems: 'center',
             }}>
+              <button onClick={() => addRow(null)} style={{
+                padding: '6px 14px', fontSize: 13, fontWeight: 600, background: '#fff', color: '#1a73e8',
+                border: '1px solid #1a73e8', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>＋ Add row</button>
               <span style={{ fontSize: 13, color: '#5f6368' }}>
                 Save each row individually. Unit/Planned Days only need to be set once per row (they persist);
                 update the Actual dates and Ongoing checkbox as the repair progresses.

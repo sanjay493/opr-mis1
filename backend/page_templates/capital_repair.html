@@ -24,8 +24,15 @@
                 {% if loop.first %}
                 <td rowspan="{{ sec.rows | length }}" style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;vertical-align:middle;">{{ sec.shop }}</td>
                 {% endif %}
-                <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.equipment }}</td>
-                <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:left;">{{ row.activity }}</td>
+                {# A unit with two CRs in the FY is two rows: its common
+                   Equipment/Activity cells are merged (spans computed in
+                   page_capital_repair._add_merge_spans; 0 = covered). #}
+                {% if row.equipment_span != 0 %}
+                <td{% if row.equipment_span and row.equipment_span > 1 %} rowspan="{{ row.equipment_span }}"{% endif %} style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;vertical-align:middle;">{{ row.equipment }}</td>
+                {% endif %}
+                {% if row.activity_span != 0 %}
+                <td{% if row.activity_span and row.activity_span > 1 %} rowspan="{{ row.activity_span }}"{% endif %} style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:left;vertical-align:middle;">{{ row.activity }}</td>
+                {% endif %}
                 <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.schedule_days }}</td>
                 <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.period }}</td>
                 <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.actual }}</td>

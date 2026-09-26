@@ -9,7 +9,7 @@
   "page_templates/best_calendar_month.html": "b333fa34f615dfd39dc7e0ab8e73b6097980ab1d63f9dcffbcb3b7648fb41dd2",
   "page_templates/best_ever_highlights.html": "8a97e17c656e053dff0e9196eb258a709eb7847545f30b7a20d8d162cf45cd50",
   "page_templates/bf_large_annexure.html": "b7d8d9ca7a15db8c2ec68d5d7d65a56da864895adcc37890be18a038f9a0d3f9",
-  "page_templates/capital_repair.html": "7db0ad474f8797924bff5eb41788c1177b75df7a8bb00a65c888edd39418ebdd",
+  "page_templates/capital_repair.html": "a24a92e47cb329764a682ed52f1679e8ced313da996f135653f51fdefecf00d9",
   "page_templates/catwise_saleable.html": "55a8e5ef909e6280983bace8b863af206f1f2cf998b53577ec050ab38d7abf6b",
   "page_templates/coal_consumption.html": "b5c5ca99886fe3d9b0a4474605a03a3460d5bbdeb856d00887d640d0153b18c9",
   "page_templates/coal_receipt_stock.html": "29c253e2a898a11b87c1dcc072bec813fbbea3ce0f66428da4422aef5059e3af",
@@ -93,6 +93,8 @@
    "1070": 1,
    "1071": 1,
    "1072": 1,
+   "1073": 1,
+   "1074": 1,
    "13": 1,
    "14": 1,
    "15": 1,
@@ -149,6 +151,6 @@
    "6": 1,
    "7": 12
   },
-  "total_pages": 103
+  "total_pages": 105
  }
 }
