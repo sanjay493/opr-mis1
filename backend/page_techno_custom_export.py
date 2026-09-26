@@ -193,7 +193,7 @@ def build_period_excel_bytes(data: dict) -> bytes:
     ws.title = "Techno Custom Period"[:31]
 
     ws.cell(row=1, column=1, value="Techno Custom Report — Custom Period").font = Font(bold=True, size=13)
-    ws.cell(row=2, column=1, value="* = production-weight data incomplete for this period; simple average shown").font = Font(italic=True, size=9)
+    ws.cell(row=2, column=1, value="R = reported till-month cumulative (as in Major report, page 27), used for periods running from April; others calculated.  * = production-weight data incomplete for this period; simple average shown").font = Font(italic=True, size=9)
 
     total_cols = 2 + len(periods)
     row = 4
@@ -229,6 +229,8 @@ def build_period_excel_bytes(data: dict) -> bytes:
                 disp = cell_data.get("display", "")
                 if cell_data.get("method_used") in ("average",) and cell_data.get("warnings"):
                     disp = f"{disp}*" if disp else disp
+                if cell_data.get("method_used") == "reported_cum" and disp:
+                    disp = f"{disp} R"
                 vc = ws.cell(row=row, column=c, value=disp)
                 vc.font = font
                 vc.border = _BORDER
@@ -263,6 +265,8 @@ def build_period_pdf_html(data: dict) -> str:
                 disp = cell_data.get("display", "") or "—"
                 if cell_data.get("method_used") == "average" and cell_data.get("warnings"):
                     disp = f"{disp}*"
+                if cell_data.get("method_used") == "reported_cum":
+                    disp = f"{disp}<sup>R</sup>"
                 cells.append(f"<td>{disp}</td>")
             body_rows.append(f'<tr class="{"sail-row" if is_sail else ""}">{"".join(cells)}</tr>')
         title = f'{sec.get("parameter","")} ({sec.get("unit","")})' if sec.get("unit") else sec.get("parameter", "")
@@ -294,6 +298,6 @@ def build_period_pdf_html(data: dict) -> str:
 </head>
 <body>
   <h1>Techno Custom Report — Custom Period</h1>
-  <p class="subtitle">* = production-weight data incomplete for this period; simple average shown</p>
+  <p class="subtitle">R = reported till-month cumulative (as in Major report, page 27), used for periods running from April; others calculated. &nbsp; * = production-weight data incomplete for this period; simple average shown</p>
   {''.join(sections_html)}
 </body></html>"""

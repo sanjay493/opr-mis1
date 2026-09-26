@@ -205,8 +205,9 @@ export default function TechnoCustomView() {
     <div>
       <TabIntro>
         The 12 major techno-economic parameters (page 27) for chosen plants &amp; SAIL — Standard
-        (last 3 FYs, target, YTD months, CPLY) or a custom quarter / half-year / month range computed
-        fresh (weighted average, harmonic mean, or plain average — whichever the parameter uses — with
+        (last 3 FYs, target, YTD months, CPLY) or a custom quarter / half-year / month range. A period
+        running month-by-month from April shows the reported till-month cumulative (as in the Major
+        report); any other period is computed fresh (weighted average, harmonic mean, or plain average — whichever the parameter uses — with
         Hot Metal or Crude Steel production during that exact period as the weight).
       </TabIntro>
 
@@ -490,18 +491,21 @@ export default function TechnoCustomView() {
                           <tr key={r.plant} style={{ backgroundColor: isSail ? '#f9ab00' : zebra }}>
                             <td style={{ ...cell, fontWeight: isSail ? 800 : 600, color: isSail ? '#202124' : undefined }}>
                               {r.plant}
-                              {isSail && <span style={{ fontSize: '8.5pt', fontWeight: 400, color: '#3c2f00', marginLeft: 6 }}>(computed fresh)</span>}
                             </td>
                             {periodDataCurrent.periods.map((label) => {
                               const cd = r.values?.[label] || {};
                               const fellBack = cd.method_used === 'average' && (cd.warnings || []).length > 0;
+                              const reported = cd.method_used === 'reported_cum';
                               return (
                                 <td key={label} style={{
                                   ...cell, textAlign: 'right',
                                   color: isSail ? '#202124' : undefined,
                                   fontWeight: 700,
-                                }} title={fellBack ? cd.warnings.join(' ') : undefined}>
+                                }} title={reported ? cd.note : (fellBack ? cd.warnings.join(' ') : 'Calculated for this period')}>
                                   {cd.display || '—'}{fellBack ? '*' : ''}
+                                  {reported && (
+                                    <sup style={{ fontSize: '7.5pt', fontWeight: 700, color: isSail ? '#3c2f00' : '#188038', marginLeft: 2 }}>R</sup>
+                                  )}
                                 </td>
                               );
                             })}
@@ -513,7 +517,8 @@ export default function TechnoCustomView() {
                 </tbody>
               </table>
               <div style={{ padding: '8px 12px', fontSize: '9pt', color: '#5f6368', borderTop: '1px solid #e8eaed' }}>
-                * production-weight data was incomplete for one or more months in that period — a simple average is shown instead of the weighted/harmonic figure (hover the cell for detail).
+                <sup style={{ fontWeight: 700, color: '#188038' }}>R</sup> reported till-month cumulative, exactly as in the Major report (page 27) — used whenever a period runs month-by-month from April (Q1, H1, full FY, Apr–any month). For HM / Scrap consumption and TMI at two-shop plants (BSP, RSP, BSL) the shops' reported cumulatives are combined, weighted by each shop's crude steel — the same rule page 27 uses for SAIL (hover a cell to see the shop figures). Other periods are calculated fresh.
+                <br />* production-weight data was incomplete for one or more months in that period — a simple average is shown instead of the weighted/harmonic figure (hover the cell for detail).
               </div>
             </div>
           )}

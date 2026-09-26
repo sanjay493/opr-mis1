@@ -168,11 +168,11 @@ def _plant_month_values(plant: str, param_key: str, src_units: List[str],
 
 
 def _sms_month_value(plant: str, shop: str, month: str, param_name: str,
-                      _dcache: Optional[dict] = None) -> Optional[float]:
+                      _dcache: Optional[dict] = None, period: str = "month") -> Optional[float]:
     """One SMS-shop's value for `param_name` in a single month — handles
     TMI's HM+Scrap fallback and DSP's alternate key spellings, mirroring
     page_techno.py's sms_section/_tmi helpers."""
-    ud = _get_month_data(_dcache, plant, month).get(shop, {}).get("month", {})
+    ud = _get_month_data(_dcache, plant, month).get(shop, {}).get(period, {})
 
     def pick(aliases):
         for k in aliases:
@@ -329,7 +329,8 @@ def sail_period_value(param_def: Dict, months: List[str],
     "published" SAIL figure for an arbitrary custom period to prefer."""
     key = param_def["key"]
     method, basis = _tc.get_rule(key)
-    item = _tc.PLANT_WEIGHT_ITEMS[basis]
+    # basis is None for plain-average params (e.g. Sp. CO2 Emission).
+    item = _tc.PLANT_WEIGHT_ITEMS.get(basis) if basis else None
 
     zero_fill = param_def.get("zero_fill_plants") or set()
     items = []
@@ -345,7 +346,7 @@ def sail_period_value(param_def: Dict, months: List[str],
             # as a real zero so its production still weighs down the SAIL
             # average, matching page_techno._bf_sail's zero_fill_plants.
             val = 0.0
-        w = sum(_tc._plant_production(plant, item, months).values())
+        w = sum(_tc._plant_production(plant, item, months).values()) if item else 0
         items.append((val, w if w > 0 else None))
 
     if not items:
@@ -360,6 +361,123 @@ def sail_period_value(param_def: Dict, months: List[str],
             "simple average across plants instead.")
     return {"value": value, "display": _pt._fmt_param(value, param_def["name"]),
             "method_used": method_used, "warnings": warnings}
+
+
+def fy_to_date_end(months: List[str]) -> Optional[str]:
+    """If `months` is exactly April..X of one FY with no gap (Q1, H1, a
+    full FY, Apr-Aug, ...), return X — else None. Such a period is exactly
+    what page 27's till-month cumulative covers, so the report shows that
+    reported figure instead of recomputing it (a recomputed weighted
+    average can differ in the last digit from the plants' reported
+    cumulative, e.g. SAIL CDI FY 2025-26: 112 calculated vs 113 reported)."""
+    ms = sorted(set(months))
+    if not ms or ms[0][5:7] != "04" or len(ms) > 12:
+        return None
+    y, m = int(ms[0][:4]), 4
+    for ym in ms:
+        if ym != f"{y}-{m:02d}":
+            return None
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+    return ms[-1]
+
+
+def _reported_cum_rows(report_month: str, cache: dict) -> Dict[str, Dict[str, str]]:
+    """{param display name: {row label: till-month cum display string}} from
+    page 27 (generate_major_techno_from_db) for `report_month`."""
+    if report_month not in cache:
+        data = _pt.generate_major_techno_from_db(report_month)
+        cache[report_month] = {
+            _DISPLAY_RENAME.get(sec.get("label"), sec.get("label")): {
+                r.get("label"): r.get("cum") for r in sec.get("rows", [])
+            }
+            for sec in data.get("sections", [])
+        }
+    return cache[report_month]
+
+
+def _shops_reported_cum_cell(pdef: Dict, plant: str, months: List[str],
+                             dcache: dict) -> Optional[Dict]:
+    """Plant figure for an SMS parameter (HM / Scrap / TMI) at a plant with
+    more than one shop, for an April-start period: each shop's REPORTED
+    till-month cumulative (as stored at the period's last month), weighted
+    by that shop's own Crude Steel over the same months — falling back to
+    plant Crude Steel / shop-count when the shop item is absent. This is
+    the rule page 27 uses to build SAIL from the shop cumulatives
+    (page_techno._shop_weight / _sms_sail), applied within one plant."""
+    report_month = months[-1]
+    shops = _pt.SMS_UNIT_MAP.get(plant, [])
+    n = _pt.SMS_N_SHOPS.get(plant, 1)
+    plant_cs = sum(_tc._plant_production(plant, _tc.PLANT_WEIGHT_ITEMS["crude_steel"], months).values())
+    num = den = 0.0
+    parts = []
+    for shop in shops:
+        v = _sms_month_value(plant, shop, report_month, pdef["name"], _dcache=dcache, period="till_month")
+        if v is None:
+            return None  # a shop without a reported cumulative — calculate instead
+        own = sum(_shop_period_own_cs(plant, shop, months).values())
+        w = own if own > 0 else (plant_cs / n if plant_cs > 0 else 0)
+        if w <= 0:
+            return None
+        num += float(v) * w
+        den += w
+        parts.append(f"{shop} {_pt._fmt_param(float(v), pdef['name'])} × CS {w:,.1f}")
+    value = num / den
+    return {"value": value, "display": _pt._fmt_param(value, pdef["name"]),
+            "method_used": "reported_cum", "warnings": [],
+            "note": (f"Shops' reported till-month cumulatives as of {report_month}, weighted by "
+                     f"each shop's crude steel: " + "; ".join(parts) + ".")}
+
+
+def _shop_period_own_cs(plant: str, shop: str, months: List[str]) -> Dict[str, float]:
+    """{month: this shop's OWN Crude Steel} — no plant/n_shops fallback
+    (the caller applies page 27's whole-period fallback rule instead)."""
+    items = _pt._VERIFY_SMS_PRODUCTION_ITEMS.get((plant, shop))
+    if not items:
+        return {}
+    conn = _db.connect()
+    try:
+        cur = conn.cursor()
+        ph_m = ",".join("?" * len(months))
+        ph_i = ",".join("?" * len(items))
+        cur.execute(
+            f"SELECT report_month, month_actual FROM production_table "
+            f"WHERE plant_name=? AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
+            [plant, *items, *months])
+        out: Dict[str, float] = {}
+        for rm, v in cur.fetchall():
+            if v is not None:
+                out[rm] = out.get(rm, 0.0) + float(v)
+        return out
+    finally:
+        conn.close()
+
+
+def _reported_cum_cell(pdef: Dict, plant: str, months: List[str], cache: dict,
+                       dcache: Optional[dict] = None) -> Optional[Dict]:
+    """Page 27's reported till-month cumulative for this plant/SAIL over an
+    April-start `months` period, as a report cell — or None when there is no
+    reported figure (then the caller calculates). For an SMS parameter at a
+    multi-shop plant page 27 has only per-shop rows, so the shops' reported
+    cumulatives are combined (see _shops_reported_cum_cell)."""
+    report_month = months[-1]
+    rows = _reported_cum_rows(report_month, cache).get(pdef["display_name"], {})
+    disp = rows.get(plant)
+    if disp in (None, "") and pdef["kind"] == "sms" and plant != "SAIL":
+        shop_rows = [lbl for lbl in rows if lbl.startswith(f"{plant} ")]
+        if len(shop_rows) == 1:
+            disp = rows[shop_rows[0]]
+        elif len(_pt.SMS_UNIT_MAP.get(plant, [])) > 1:
+            return _shops_reported_cum_cell(pdef, plant, sorted(months), dcache if dcache is not None else {})
+    if disp in (None, ""):
+        return None
+    try:
+        value = float(str(disp).replace(",", ""))
+    except ValueError:
+        return None
+    return {"value": value, "display": str(disp), "method_used": "reported_cum",
+            "warnings": [], "note": f"Reported till-month cumulative as of {report_month} (page 27)."}
 
 
 def build_period_report(plants: List[str], params: Optional[List[str]],
@@ -384,6 +502,8 @@ def build_period_report(plants: List[str], params: Optional[List[str]],
     # param/plant/period in this one request so Q1..Q4 and the H1/H2 that
     # duplicate their months never re-query the same row. See _get_month_data.
     dcache: dict = {}
+    # page 27 output per report month, for periods that run April..X.
+    cum_cache: dict = {}
     sections = []
     for pdef in MAJOR_TECHNO_PARAMS:
         if wanted is not None and pdef["display_name"] not in wanted:
@@ -393,6 +513,12 @@ def build_period_report(plants: List[str], params: Optional[List[str]],
             values = {}
             for period in periods:
                 months = period["months"]
+                fytd_end = fy_to_date_end(months)
+                if fytd_end:
+                    cellv = _reported_cum_cell(pdef, plant, months, cum_cache, dcache)
+                    if cellv is not None:
+                        values[period["label"]] = cellv
+                        continue
                 if plant == "SAIL":
                     values[period["label"]] = sail_period_value(pdef, months, _cache=cache, _dcache=dcache)
                 else:
