@@ -71,7 +71,10 @@ export default function CapitalRepairTemplate({ data }) {
                 )}
                 <td style={CTR}>{row.schedule_days}</td>
                 <td style={CTR}>{row.period}</td>
-                <td style={CTR}>{row.actual}</td>
+                <td style={{ ...CTR, ...(row.actual_status === 'scheduled' ? { fontStyle: 'italic', color: '#475569' }
+                  : row.actual_status === 'deferred' ? { fontStyle: 'italic', fontWeight: 600, color: '#b91c1c' } : {}) }}>
+                  {row.actual}
+                </td>
               </tr>
             ))
           )}

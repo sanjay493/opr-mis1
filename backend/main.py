@@ -1332,7 +1332,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg in STEEL_SECTOR_PAGES:
                 page.update(generate_steel_sector_performance(month, STEEL_SECTOR_PAGES[pg]))
             if pg in CR_PAGES:
-                page.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(month)))
+                page.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(month), month))
                 page["type"] = "capital_repair"
                 page["orientation"] = "portrait"
 
@@ -1889,7 +1889,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg in STEEL_SECTOR_PAGES:
             p.update(generate_steel_sector_performance(request.month, STEEL_SECTOR_PAGES[pg]))
         if pg in CR_PAGES:
-            p.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(request.month)))
+            p.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(request.month), request.month))
             p["type"] = "capital_repair"
             p["orientation"] = "portrait"
         _page_times.append((pg, p.get("type"), time.perf_counter() - _page_t0))
@@ -6500,6 +6500,14 @@ async def save_capital_repair_entry(payload: dict):
         raise HTTPException(status_code=400, detail="actual_end must not be before actual_start")
 
     actual = format_cr_actual(actual_start, actual_end, actual_ongoing)
+    if not actual_start:
+        # A row whose Actual exists only as older free text (no structured
+        # dates behind it) must not be wiped just because the row was saved
+        # for another field - that lost 5 BSP actuals on 2026-09-26.
+        cur.execute("SELECT actual, actual_start FROM capital_repair_table WHERE id=?", (row_id,))
+        prev_actual, prev_start = cur.fetchone()
+        if not prev_start and (prev_actual or "").strip():
+            actual = prev_actual
 
     # Plan columns are editable too (rows can now be added, e.g. a unit's
     # second CR in the FY) - only the ones actually sent are updated.

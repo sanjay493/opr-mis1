@@ -15,6 +15,8 @@ BSL's Sinter Plant is modelled as ONE shop ("Sinter Plant") with three
 equipment rows (BAND-1/2/3), matching how BSP has two separate shops
 (SP-2, SP-3) but BSL has a single sinter plant with three machines.
 """
+import re
+
 import db
 
 CR_PAGES = {
@@ -86,12 +88,93 @@ def _add_merge_spans(rows: list) -> None:
         i = j + 1
 
 
-def generate_capital_repair(plant: str, fy: str = "2026-27") -> dict:
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+_PERIOD_TOKEN = re.compile(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(?:'\s*(\d{2}))?",
+                           re.IGNORECASE)
+_ACTUAL_TEXT = re.compile(r"^\s*(\d{1,2})\.(\d{1,2})\.(\d{2})\s*-\s*(?:(\d{1,2})\.(\d{1,2})\.(\d{2})|cont)",
+                          re.IGNORECASE)
+
+
+def _period_months(period: str):
+    """Free-text Period -> (first, last) 'YYYY-MM', or None when it names
+    no month ("Aligned with BF Capital Repair."). Handles "Jun'26",
+    "May-Jun'26", "Apr+May'26", "Nov'26-Mar'27", "July'26/Nov'26",
+    "26th April to 5th May'26": a month without its own year takes the
+    year of the next month after it, one year earlier if it's a later
+    calendar month (a range across the year end)."""
+    toks = [(_MONTHS[m.group(1).lower()], m.group(2)) for m in _PERIOD_TOKEN.finditer(period or "")]
+    if not toks:
+        return None
+    out, next_y, next_m = [], None, None
+    for mon, yy in reversed(toks):
+        if yy:
+            y = 2000 + int(yy)
+        elif next_y is not None:
+            y = next_y - 1 if mon > next_m else next_y
+        else:
+            return None                      # no year anywhere to anchor it
+        out.append(f"{y}-{mon:02d}")
+        next_y, next_m = y, mon
+    return min(out), max(out)
+
+
+def _actual_dates(actual_start, actual_end, actual_ongoing, actual_text):
+    """(start, end) ISO dates, end None = ongoing - from the structured
+    columns, else parsed from older free-text rows ("15.4.26-14.5.26",
+    "29.6.26-contd."). None when there's nothing parseable."""
+    if actual_start:
+        return actual_start, (None if actual_ongoing else actual_end)
+    m = _ACTUAL_TEXT.match(actual_text or "")
+    if not m:
+        return None
+    d, mo, y = m.group(1, 2, 3)
+    start = f"20{y}-{int(mo):02d}-{int(d):02d}"
+    end = f"20{m.group(6)}-{int(m.group(5)):02d}-{int(m.group(4)):02d}" if m.group(4) else None
+    return start, end
+
+
+def _actual_cell(report_month, period, actual_start, actual_end, actual_ongoing, actual_text):
+    """The Actual cell as of report_month ('YYYY-MM'): (text, status).
+
+    Only work that had started by the end of the report month is shown -
+    if it runs past that month (or is still ongoing) it prints as
+    "d.m.yy-cont..". Otherwise, relative to the Period: starting after the
+    report month -> "Scheduled"; started by the report month (including a
+    Period still running, e.g. "Aug-Sep'26" on the August report) but not
+    executed -> "Deferred", per direct instruction 2026-09-26; no month in
+    the Period -> blank."""
+    if not report_month:
+        return actual_text or "", ("actual" if actual_text else "")
+    dates = _actual_dates(actual_start, actual_end, actual_ongoing, actual_text)
+    if dates:
+        start, end = dates
+        if start[:7] <= report_month:
+            if end is None or end[:7] > report_month:
+                return f"{_d_m_yy(start)}-cont..", "actual"
+            return f"{_d_m_yy(start)}-{_d_m_yy(end)}", "actual"
+        # started after the report month: not yet an actual as of this report
+    elif (actual_text or "").strip():
+        return actual_text, "actual"         # unparseable free text - show as entered
+    span = _period_months(period)
+    if span:
+        first, _last = span
+        if report_month < first:
+            return "Scheduled", "scheduled"
+        return "Deferred", "deferred"
+    return "", ""
+
+
+def generate_capital_repair(plant: str, fy: str = "2026-27", report_month: str | None = None) -> dict:
+    """report_month ('YYYY-MM'): the report being generated - the Actual
+    column is shown as of that month (see _actual_cell). Without it the
+    stored Actual text is shown as-is."""
     conn = db.connect()
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT id, shop, equipment, activity, schedule_days, period, actual
+            SELECT id, shop, equipment, activity, schedule_days, period, actual,
+                   actual_start, actual_end, actual_ongoing
             FROM capital_repair_table
             WHERE plant=? AND fy=?
             ORDER BY sort_order ASC, id ASC
@@ -103,14 +186,17 @@ def generate_capital_repair(plant: str, fy: str = "2026-27") -> dict:
         # and drop) - a shop that reappears later starts a new section
         # rather than pulling its rows back up out of order.
         sections = []
-        for rid, shop, equipment, activity, schedule_days, period, actual in rows:
+        for (rid, shop, equipment, activity, schedule_days, period, actual,
+             a_start, a_end, a_ongoing) in rows:
+            text, status = _actual_cell(report_month, period, a_start, a_end, a_ongoing, actual)
             row = {
                 "id": rid,
                 "equipment": equipment or "",
                 "activity": activity or "",
                 "schedule_days": schedule_days or "",
                 "period": period or "",
-                "actual": actual or "",
+                "actual": text,
+                "actual_status": status,
             }
             if not sections or sections[-1]["shop"] != shop:
                 sections.append({"shop": shop, "rows": []})

@@ -5,7 +5,7 @@ changes have broken it before, in ways that only show up in a **full**
 export. This document lists what controls the layout, what goes wrong, how
 it's detected, and how to put it back.
 
-**Known-good layout:** git tag `pdf-layout-baseline-2026-09-26`
+**Known-good layout:** git tag `pdf-layout-baseline-2026-09-26b`
 (full report for Aug 2026: 103 pages incl. Annexure-III, sequential
 footers, trend section 12 pages, no layout warnings).
 
@@ -23,10 +23,10 @@ rem 1. What changed since the known-good layout?
 venv\Scripts\python.exe layout_guard.py
 
 rem 2. Restore one file to the known-good version (repeat per file listed)
-git checkout pdf-layout-baseline-2026-09-26 -- backend/page_templates/main.html
+git checkout pdf-layout-baseline-2026-09-26b -- backend/page_templates/main.html
 
 rem 3. ...or restore EVERY layout file at once
-git checkout pdf-layout-baseline-2026-09-26 -- backend/pdf.py backend/layout_config.json backend/chart_utils.py backend/page_at_a_glance.py backend/page_special_steel_donut.py backend/page_coal_consumption.py backend/page_templates
+git checkout pdf-layout-baseline-2026-09-26b -- backend/pdf.py backend/layout_config.json backend/chart_utils.py backend/page_at_a_glance.py backend/page_special_steel_donut.py backend/page_coal_consumption.py backend/page_templates
 
 rem 4. Verify with a real render (about 1-2 minutes)
 venv\Scripts\python.exe layout_guard.py --render 2026-08

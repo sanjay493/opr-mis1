@@ -35,7 +35,10 @@
                 {% endif %}
                 <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.schedule_days }}</td>
                 <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.period }}</td>
-                <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;">{{ row.actual }}</td>
+                {# "Scheduled"/"Deferred" are statuses as of the report month
+                   (page_capital_repair._actual_cell), styled apart from dates. #}
+                {% set _st = row.actual_status %}
+                <td style="padding:4px 7px;border:1px solid {{ colors.border_medium }};text-align:center;{% if _st == 'scheduled' %}font-style:italic;color:#475569;{% elif _st == 'deferred' %}font-style:italic;font-weight:600;color:#b91c1c;{% endif %}">{{ row.actual }}</td>
               </tr>
               {% endfor %}
             {% endfor %}
