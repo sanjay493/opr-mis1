@@ -245,7 +245,7 @@ export default function TechnoDashboardView() {
       (BSP, DSP, RSP, BSL, ISP) have reported both the parameter and its production weight
       (Hot Metal, or Crude Steel for Specific Energy Consumption) for that month — never a
       partial-plant average. SAIL is computed only for Coke Rate, CDI Rate, Fuel Rate,
-      BF Productivity and Specific Energy Consumption. Currently incomplete for the shown range:
+      BF Productivity, O2 Enrichment and Specific Energy Consumption. Currently incomplete for the shown range:
       <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
         {sailMissingSummary.map(s => (
           <li key={s.param}>

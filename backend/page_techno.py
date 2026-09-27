@@ -516,6 +516,9 @@ _SAIL_DASHBOARD_PARAM_MAP = {
     "Fuel Rate": "fuel_rate",
     "BF Productivity": "bf_productivity",
     "Specific Energy Consumption": "specific_energy_consumption",
+    # Hot-Metal-weighted, per techno_cumulative's o2_enrichment rule; every
+    # plant stores a shop figure (BF_Shop, or ISP's single BF-5).
+    "O2 Enrichment": "o2_enrichment",
 }
 _SAIL_DASHBOARD_SEC_PARAM = "Specific Energy Consumption"
 
