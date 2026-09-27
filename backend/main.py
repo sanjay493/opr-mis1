@@ -4316,6 +4316,64 @@ async def techno_custom_period_pdf(payload: dict):
     )
 
 
+def _techno_table_payload(payload: dict) -> dict:
+    """Validate/normalize the on-screen table the Plant-wise Monthly tab
+    posts for export (see page_techno_custom_export.build_table_*)."""
+    columns = payload.get("columns")
+    sections = payload.get("sections")
+    if not isinstance(columns, list) or not columns or not isinstance(sections, list):
+        raise HTTPException(status_code=400, detail="columns and sections are required")
+    sections = [s for s in sections if isinstance(s, dict)]
+    if len(columns) > 60 or sum(len(s.get("rows") or []) for s in sections) > 5000:
+        raise HTTPException(status_code=400, detail="Table too large to export")
+    return {
+        "title": str(payload.get("title", "Techno Report"))[:200],
+        "subtitle": str(payload.get("subtitle", ""))[:500],
+        "sheet": str(payload.get("sheet", "Techno"))[:31],
+        "columns": [str(c)[:100] for c in columns],
+        "text_cols": max(1, min(int(payload.get("text_cols") or 1), len(columns))),
+        "sections": [
+            {"title": str(s.get("title", ""))[:200],
+             "rows": [{"cells": ["" if c is None else str(c)[:200] for c in (r.get("cells") or [])],
+                       "highlight": bool(r.get("highlight"))}
+                      for r in (s.get("rows") or []) if isinstance(r, dict)]}
+            for s in sections
+        ],
+    }
+
+
+@app.post("/api/techno-table-export/excel")
+async def techno_table_export_excel(payload: dict):
+    table = _techno_table_payload(payload)
+    try:
+        content = page_techno_custom_export.build_table_excel_bytes(table)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno table Excel export failed: {type(e).__name__}: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="Techno_Plant_wise.xlsx"'},
+    )
+
+
+@app.post("/api/techno-table-export/pdf")
+async def techno_table_export_pdf(payload: dict):
+    import asyncio, concurrent.futures
+    table = _techno_table_payload(payload)
+    try:
+        html = page_techno_custom_export.build_table_pdf_html(table)
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            content = await loop.run_in_executor(pool, page_techno_custom_export.render_pdf_bytes, html)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Techno table PDF export failed: {type(e).__name__}: {e}")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="Techno_Plant_wise.pdf"'},
+    )
+
+
 def _techno_custom_standard_payload(payload: dict):
     month = str(payload.get("month", "")).strip()
     if not re.fullmatch(r"\d{4}-\d{2}", month):

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   API_BASE, FY_MONTHS, MONTH_NUM, YEARS, getDefaultPeriod, monthLabel, fmtNum,
-  cell, selStyle, th, SegmentedToggle, ErrorBox, TabIntro,
+  cell, selStyle, th, SegmentedToggle, ErrorBox, TabIntro, ExportButtons, downloadFile,
 } from './shared';
 
 const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
@@ -59,6 +59,7 @@ export default function TechnoMonthlyView() {
   const [periodDb, setPeriodDb] = useState([]);       // parallel to periodMonths
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [downloading, setDownloading] = useState(null);
 
   const reportMonth = `${year}-${MONTH_NUM[monthName]}`;
   const fromReportMonth = `${fromYear}-${MONTH_NUM[fromMonthName]}`;
@@ -143,6 +144,113 @@ export default function TechnoMonthlyView() {
     ? ['month', 'cply', 'till_month']
     : ['month', 'till_month']; // the DB view's own data has no CPLY figure
 
+  // ── Export: the exact table currently on screen, as
+  // {title, subtitle, columns, sections: [{title, rows: [{cells, highlight}]}]}
+  // for /api/techno-table-export/{excel|pdf}. null when nothing is shown. ──
+  const periodLabel = periodMonths.length
+    ? `${monthLabel(periodMonths[0])} – ${monthLabel(periodMonths[periodMonths.length - 1])}`
+    : '';
+  const buildExportTable = () => {
+    if (error || loading) return null;
+    const base = { title: 'Plant-wise Techno Parameters', sheet: 'Plant-wise Techno' };
+    if (mode === 'single' && view === 'major') {
+      if (!major?.sections?.length) return null;
+      return {
+        ...base,
+        subtitle: `Major parameters (page 27) — ${major.month_label || reportMonth}`,
+        text_cols: 2,
+        columns: ['Parameter / Plant', 'Unit', major.target_label || 'Target', `${major.month_label} (Month)`,
+          major.cum_label || 'Till Month', `${major.cply_label} (CPLY)`, `${major.cum_cply_label} (CPLY YTD)`],
+        sections: major.sections.map((sec) => ({
+          title: sec.parameter,
+          rows: sec.rows.map((r) => ({
+            highlight: r.plant === 'SAIL',
+            cells: [r.plant, r.unit, fmtNum(r.target), fmtNum(r.month), fmtNum(r.till_month), fmtNum(r.cply), fmtNum(r.cum_cply)],
+          })),
+        })),
+      };
+    }
+    if (mode === 'single' && view === 'db') {
+      if (!dbUnitNames.length) return null;
+      return {
+        ...base,
+        subtitle: `All parameters (DB) — ${plant}, ${reportMonth}`,
+        columns: ['Unit › Parameter', 'Month', 'Till Month'],
+        sections: dbUnitNames.map((u) => {
+          const mo = dbUnits[u]?.month || {};
+          const tm = dbUnits[u]?.till_month || {};
+          const keys = Array.from(new Set([...Object.keys(mo), ...Object.keys(tm)])).sort();
+          return {
+            title: `${plant} › ${u}`,
+            rows: keys.map((k) => ({ cells: [prettyKey(k), fmtNum(mo[k]), fmtNum(tm[k])] })),
+          };
+        }),
+      };
+    }
+    if (mode === 'period' && view === 'major') {
+      if (!periodMajorSections.length) return null;
+      return {
+        ...base,
+        subtitle: `Major parameters (page 27) — ${METRIC_LABEL[metric]}, ${periodLabel}`,
+        text_cols: 2,
+        columns: ['Parameter / Plant', 'Unit', ...periodMonths.map(monthLabel)],
+        sections: periodMajorSections.map((sec) => ({
+          title: sec.parameter,
+          rows: sec.rows.map((r) => ({
+            highlight: r.plant === 'SAIL',
+            cells: [r.plant, r.unit, ...periodMonths.map((m, mi) => {
+              const monthRow = periodMajor[mi]?.sections
+                ?.find((s) => s.parameter === sec.parameter)?.rows
+                ?.find((row) => row.plant === r.plant);
+              return fmtNum(monthRow?.[metric]);
+            })],
+          })),
+        })),
+      };
+    }
+    if (mode === 'period' && view === 'db') {
+      if (!periodDbUnitNames.length) return null;
+      return {
+        ...base,
+        subtitle: `All parameters (DB) — ${plant}, ${METRIC_LABEL[metric]}, ${periodLabel}`,
+        columns: ['Unit › Parameter', ...periodMonths.map(monthLabel)],
+        sections: periodDbUnitNames.map((u) => {
+          const firstUnit = firstDb.units[u] || {};
+          const keys = Array.from(new Set([
+            ...Object.keys(firstUnit.month || {}),
+            ...Object.keys(firstUnit.till_month || {}),
+          ])).sort();
+          return {
+            title: `${plant} › ${u}`,
+            rows: keys.map((k) => ({
+              cells: [prettyKey(k), ...periodMonths.map((m, mi) => fmtNum(periodDb[mi]?.units?.[u]?.[metric]?.[k]))],
+            })),
+          };
+        }),
+      };
+    }
+    return null;
+  };
+  const exportTable = buildExportTable();
+
+  const handleDownload = async (kind) => {
+    if (!exportTable) return;
+    setDownloading(kind);
+    const stem = view === 'major' ? 'Techno_Plant_wise_Major' : `Techno_Plant_wise_${plant}`;
+    const span = mode === 'single' ? reportMonth : `${fromReportMonth}_to_${toReportMonth}`;
+    try {
+      await downloadFile(
+        `${API_BASE}/api/techno-table-export/${kind}`,
+        exportTable,
+        `${stem}_${span}.${kind === 'excel' ? 'xlsx' : 'pdf'}`
+      );
+    } catch (e) {
+      setError(`Download failed: ${e.message}`);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   return (
     <div>
       <TabIntro>
@@ -218,8 +326,9 @@ export default function TechnoMonthlyView() {
 
         {loading && <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>Loading…</span>}
         <span style={{ marginLeft: 'auto', fontSize: '10.5pt', color: '#5f6368' }}>
-          {mode === 'single' ? reportMonth : (periodMonths.length ? `${monthLabel(periodMonths[0])} – ${monthLabel(periodMonths[periodMonths.length - 1])}` : '')}
+          {mode === 'single' ? reportMonth : periodLabel}
         </span>
+        <ExportButtons onDownload={handleDownload} downloading={downloading} disabled={!exportTable} />
       </div>
 
       <ErrorBox>{error}</ErrorBox>

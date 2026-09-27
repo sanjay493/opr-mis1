@@ -14,7 +14,9 @@ with the rest of the app; `render_pdf_bytes` is imported from that module
 directly rather than duplicated, since it has zero business logic (pure
 HTML-string-in, PDF-bytes-out).
 """
+import html
 import io
+import re
 
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -300,4 +302,145 @@ def build_period_pdf_html(data: dict) -> str:
   <h1>Techno Custom Report — Custom Period</h1>
   <p class="subtitle">R = reported till-month cumulative (as in Major report, page 27), used for periods running from April; others calculated. &nbsp; * = production-weight data incomplete for this period; simple average shown</p>
   {''.join(sections_html)}
+</body></html>"""
+
+
+# ── Generic on-screen table (Plant-wise Monthly tab) ───────────────────────
+#
+# The Plant-wise Monthly tab has four views (single month / period ×
+# page-27 major / all DB parameters) whose tables are assembled client-side
+# from existing endpoints. Rather than re-deriving each view here, the
+# frontend posts exactly the table it shows:
+#   {"title", "subtitle", "sheet", "columns": [str, ...], "text_cols": int,
+#    "sections": [{"title", "rows": [{"cells": [str, ...], "highlight": bool}]}]}
+# The first `text_cols` columns (default 1: the row label) are left-aligned
+# text; the rest are right-aligned figures.
+
+_NUM_RE = re.compile(r"^-?[\d,]*\.?\d+$")
+
+
+def _as_number(s):
+    """Display string -> float for Excel ("1,23,456.7" -> 123456.7), else None."""
+    t = str(s).strip()
+    if not t or not _NUM_RE.match(t):
+        return None
+    try:
+        return float(t.replace(",", ""))
+    except ValueError:
+        return None
+
+
+def build_table_excel_bytes(table: dict) -> bytes:
+    columns = table.get("columns", [])
+    ncols = max(1, len(columns))
+    text_cols = table.get("text_cols", 1)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = (table.get("sheet") or "Techno")[:31]
+
+    ws.cell(row=1, column=1, value=table.get("title", "")).font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value=table.get("subtitle", "")).font = Font(italic=True, size=9)
+
+    header_row = 4
+    for c, h in enumerate(columns, start=1):
+        hc = ws.cell(row=header_row, column=c, value=h)
+        hc.font = _SUBHDR_FONT
+        hc.fill = _SUBHDR_FILL
+        hc.alignment = Alignment(horizontal="left" if c <= text_cols else "center", wrap_text=True)
+        hc.border = _BORDER
+    row = header_row + 1
+
+    for sec in table.get("sections", []):
+        if sec.get("title"):
+            sc = ws.cell(row=row, column=1, value=sec["title"])
+            sc.font = _SECTION_FONT
+            for c in range(1, ncols + 1):
+                ws.cell(row=row, column=c).fill = _SECTION_FILL
+            if ncols > 1:
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+            row += 1
+        for idx, r in enumerate(sec.get("rows", [])):
+            hl = bool(r.get("highlight"))
+            fill = _SAIL_FILL if hl else (_ZEBRA_FILL if idx % 2 == 1 else None)
+            font = _SAIL_FONT if hl else Font(size=9)
+            for c, v in enumerate(r.get("cells", [])[:ncols], start=1):
+                num = _as_number(v) if c > text_cols else None
+                if num is not None:
+                    cell = ws.cell(row=row, column=c, value=num)
+                    decimals = len(str(v).split(".")[1]) if "." in str(v) else 0
+                    cell.number_format = "#,##0" + ("." + "0" * decimals if decimals else "")
+                else:
+                    cell = ws.cell(row=row, column=c, value="" if v in (None, "—") else str(v))
+                cell.font = font
+                cell.border = _BORDER
+                cell.alignment = Alignment(horizontal="left" if c <= text_cols else "right")
+                if fill:
+                    cell.fill = fill
+            row += 1
+
+    ws.column_dimensions["A"].width = 38
+    for i in range(2, ncols + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 14
+    # A coordinate string, not ws.cell(): the first body row is often a
+    # merged section title, whose cells are MergedCell objects.
+    ws.freeze_panes = f"B{header_row + 1}"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def build_table_pdf_html(table: dict) -> str:
+    def esc(s):
+        return html.escape("" if s is None else str(s))
+
+    columns = table.get("columns", [])
+    ncols = max(1, len(columns))
+    text_cols = table.get("text_cols", 1)
+    header_html = "".join(
+        f'<th class="lbl">{esc(h)}</th>' if i < text_cols else f"<th>{esc(h)}</th>"
+        for i, h in enumerate(columns))
+    body = []
+    for sec in table.get("sections", []):
+        if sec.get("title"):
+            body.append(f'<tr class="sec"><td colspan="{ncols}">{esc(sec["title"])}</td></tr>')
+        for idx, r in enumerate(sec.get("rows", [])):
+            cls = "hl" if r.get("highlight") else ("z" if idx % 2 == 1 else "")
+            cells = []
+            for i, v in enumerate(r.get("cells", [])[:ncols]):
+                text = esc(v) if v not in (None, "") else "—"
+                if i == 0:
+                    cells.append(f'<td class="lbl">{text}</td>')
+                elif i < text_cols:
+                    cells.append(f'<td class="txt">{text}</td>')
+                else:
+                    cells.append(f"<td>{text}</td>")
+            body.append(f'<tr class="{cls}">{"".join(cells)}</tr>')
+    orientation = "landscape" if ncols > 6 else "portrait"
+    font = "6.8pt" if ncols > 12 else ("8pt" if ncols > 7 else "9pt")
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  @page {{ size: A4 {orientation}; margin: 10mm 8mm; }}
+  * {{ box-sizing: border-box; }}
+  body {{ font-family: Arial, sans-serif; color: #202124; margin: 0; }}
+  h1 {{ font-size: 14pt; margin: 0 0 2px 0; }}
+  .subtitle {{ font-size: 9pt; color: #5f6368; margin: 0 0 8px 0; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: {font}; }}
+  thead {{ display: table-header-group; }}
+  tr {{ page-break-inside: avoid; }}
+  th, td {{ border: 1px solid #dadce0; padding: 2px 5px; text-align: right; white-space: nowrap; }}
+  th {{ background: #e8f0fe; color: #174ea6; font-weight: 700; }}
+  .lbl {{ text-align: left; }}
+  td.lbl {{ font-weight: 600; white-space: normal; }}
+  td.txt {{ text-align: left; color: #5f6368; }}
+  tr.sec td {{ background: #1a73e8; color: #fff; font-weight: 700; text-align: left; page-break-after: avoid; }}
+  tr.z td {{ background: #f8f9fa; }}
+  tr.hl td {{ background: #f9ab00; color: #3c2f00; font-weight: 700; }}
+</style>
+</head>
+<body>
+  <h1>{esc(table.get("title", ""))}</h1>
+  <p class="subtitle">{esc(table.get("subtitle", ""))}</p>
+  <table><thead><tr>{header_html}</tr></thead><tbody>{"".join(body)}</tbody></table>
 </body></html>"""
