@@ -10,7 +10,7 @@ export const AREA_ORDER = ['Blast Furnace', 'SMS', 'Rolling Mills', 'Coke Ovens'
 export const BF_UNITS   = new Set(['BF_Shop','BF-1','BF-2','BF-3','BF-4','BF-5','BF-6','BF-7','BF-8']);
 export const SMS_UNITS  = new Set(['SMS','SMS-1','SMS-2','SMS-3','SMS-I','SMS-II']);
 export const MILL_UNITS = new Set([
-  'PM','RSM','MM','URM','WRM','BRM','HSM-2','NPM','CRM 1&2','CRM 3',
+  'PM','RSM','MM','URM','WRM','BRM','HSM','HSM-1','HSM-2','NPM','CRM','CRM 1&2','CRM 3',
   'ERW','SSM','SWP','BM','USM','MSM','Merchant Mill','Wheel Plant','Axle Plant',
 ]);
 export const COKE_UNITS = new Set(['COB','COB-old','COB-new','Coke Ovens']);
@@ -98,7 +98,10 @@ export const PARAM_TEMPLATES = {
     // too instead of needing a separate divergent entry here.
     'machine_availability','machine_utilisation','return_fines',
   ],
-  'Rolling Mills': ['rolling_yield','production'],
+  // Fallback only, for a mill not listed in MILL_TEMPLATES below — every
+  // known mill has its own list there, since plants name the same concept
+  // differently (yield / yield_total, heat_consumption / specific_heat ...).
+  'Rolling Mills': ['yield','availability','utilisation','rolling_rate'],
   'General': [
     'specific_energy_consumption','sp_power_consumption',
     'bof_slag_utilisation','coke_screen_loss',
@@ -117,8 +120,49 @@ export const PLANT_PARAM_EXTRAS = {
   DSP: { 'Sinter Plant': ['dsp_sp_1','dsp_sp_2'] },
 };
 
-export function templateFor(area, plant) {
-  const base   = PARAM_TEMPLATES[area] || [];
+// Rolling-mill parameters per plant and mill, in report order. These are the
+// exact keys the mill report pages read — backend page_techno.py
+// _TECHNO_DB_SCHEMA pages 31 (BSP), 32 (DSP), 33 (RSP), 34 (BSL), 35 (ISP) —
+// so a value entered here lands where the report looks for it. Keep the two
+// in sync. RSP HSM-1 / CRM aren't on page 33; their lists are the keys their
+// stored data uses.
+const _BSP_MILL = ['yield','availability','utilisation','rolling_rate','heat_consumption','power_consumption'];
+const _DSP_MILL = ['yield','mill_availability','mill_utilisation','rolling_rate','on_ich','specific_heat','specific_power'];
+const _RSP_PLATE = ['yield_prime','yield_total','average_slab_weight','availability','utilisation','rolling_rate','specific_heat_consumption','specific_power_consumption'];
+const _RSP_HSM = ['yield_total','average_slab_weight','availability','utilisation','rolling_rate','average_furnace_availability','specific_heat_consumption','specific_power_consumption'];
+const _RSP_BASIC = ['yield','availability','utilisation','rolling_rate'];
+const _ISP_MILL = ['yield_total','availability','utilisation','rolling_rate','specific_power_consumption','specific_heat_consumption','total_gas_consumption','cbm_gas_consumption'];
+export const MILL_TEMPLATES = {
+  BSP: {
+    PM: _BSP_MILL, RSM: _BSP_MILL, MM: _BSP_MILL, URM: _BSP_MILL, WRM: _BSP_MILL,
+    BRM: ['yield','availability','utilisation','rolling_rate'],
+  },
+  DSP: {
+    'Merchant Mill': _DSP_MILL, MSM: _DSP_MILL,
+    'Wheel Plant': ['finished_wheel_over_ingot_round','forging_availability','forging_utilisation','rolling_rate','on_ich','specific_heat','specific_power'],
+    'Axle Plant': ['yield_over_good_bloom','forging_availability','forging_utilisation','forging_rate','on_ich','specific_heat','specific_power'],
+  },
+  RSP: {
+    PM: _RSP_PLATE, NPM: _RSP_PLATE,
+    'HSM-1': _RSP_HSM, 'HSM-2': _RSP_HSM,
+    SSM: ['yield','acid_consumption','availability','utilisation','rolling_rate'],
+    SWP: _RSP_BASIC, ERW: _RSP_BASIC,
+    CRM: ['pickled_coils_yield','galvanised_sheet_yield','acid_consumption','zinc_cons_incl_dross','zinc_cons_excl_dross','specific_energy_consumption'],
+  },
+  BSL: {
+    HSM: _BSP_MILL,
+    'CRM 1&2': ['yield_of_hr_coil','tm_1_utilisation','tm_2_utilisation'],
+    'CRM 3': ['yield_of_hr_coil','pltcm_yield','pltcm_availability','pltcm_utilisation','spm_yield_of_cr_coil','spm_availability','spm_utilisation','specific_power_consumption'],
+  },
+  ISP: { BM: _ISP_MILL, USM: _ISP_MILL, WRM: _ISP_MILL },
+};
+
+// Parameters to offer for one unit. `unit` is optional — only Rolling Mills
+// vary by unit (see MILL_TEMPLATES); every other area is per-area (+ any
+// PLANT_PARAM_EXTRAS).
+export function templateFor(area, plant, unit) {
+  const millList = area === 'Rolling Mills' && unit ? MILL_TEMPLATES[plant]?.[unit] : null;
+  const base   = millList || PARAM_TEMPLATES[area] || [];
   const extras = (PLANT_PARAM_EXTRAS[plant] || {})[area] || [];
   return [...base, ...extras];
 }
@@ -129,7 +173,8 @@ export const KNOWN_UNITS = [
   'SMS','SMS-1','SMS-2','SMS-3','SMS-I','SMS-II',
   'COB','COB-old','COB-new','Coke Ovens',
   'SP','SP-1','SP-2','SP-3','Sinter',
-  'General','PM','RSM','MM','URM','WRM','BRM','CRM 1&2','CRM 3','MSM',
+  'General','PM','RSM','MM','URM','WRM','BRM','HSM','HSM-1','HSM-2','NPM',
+  'CRM','CRM 1&2','CRM 3','ERW','SSM','SWP','BM','USM','MSM',
   'Merchant Mill','Wheel Plant','Axle Plant',
 ];
 
@@ -156,7 +201,47 @@ export const _LABEL_MAP = {
   pellet_fe:                             'Pellet Fe (%)',
   lump_ore_fe:                           'Lump Ore Fe (%)',
   furnace_availability:                 'Furnace Availability (%)',
-  utilisation:                          'Fce Utilisation (%)',
+  // Shared by BF furnaces and rolling mills, so no "Fce" prefix.
+  utilisation:                          'Utilisation (%)',
+  // Rolling mills — names as on report pages 31-35. Heat/power units are
+  // left off: plants report them in different units (kcal/t vs M.Cal/T).
+  yield:                                'Yield (%)',
+  yield_total:                          'Yield Total (%)',
+  yield_prime:                          'Yield Prime (%)',
+  availability:                         'Availability (%)',
+  rolling_rate:                         'Rolling Rate',
+  heat_consumption:                     'Sp. Heat Consumption',
+  power_consumption:                    'Sp. Power Consumption (kWh/t)',
+  specific_heat:                        'Sp. Heat Consumption',
+  specific_power:                       'Sp. Power Consumption (kWh/t)',
+  specific_heat_consumption:            'Sp. Heat Consumption',
+  specific_power_consumption:           'Sp. Power Consumption (kWh/t)',
+  average_slab_weight:                  'Avg Slab Weight (t)',
+  average_furnace_availability:         'RH Furnace Availability (Nos/day)',
+  mill_availability:                    'Availability (%)',
+  mill_utilisation:                     'Utilisation (%)',
+  on_ich:                               'On ICH (%)',
+  forging_availability:                 'Forging Availability (%)',
+  forging_utilisation:                  'Forging Utilisation (%)',
+  forging_rate:                         'Forging Rate (Nos/hr)',
+  finished_wheel_over_ingot_round:      'Yield — Finished Wheel / Ingot Round (%)',
+  yield_over_good_bloom:                'Yield — over Good Bloom (%)',
+  total_gas_consumption:                'Gas Consumption (Nm³/t)',
+  cbm_gas_consumption:                  'CBM Gas Consumption (Nm³/t)',
+  acid_consumption:                     'Acid Consumption (kg/t)',
+  yield_of_hr_coil:                     'Yield of HR Coil (%)',
+  tm_1_utilisation:                     'TM-1 Utilisation (%)',
+  tm_2_utilisation:                     'TM-2 Utilisation (%)',
+  pltcm_yield:                          'PLTCM Yield (%)',
+  pltcm_availability:                   'PLTCM Availability (%)',
+  pltcm_utilisation:                    'PLTCM Utilisation (%)',
+  spm_yield_of_cr_coil:                 'SPM Yield of CR Coil (%)',
+  spm_availability:                     'SPM Availability (%)',
+  spm_utilisation:                      'SPM Utilisation (%)',
+  pickled_coils_yield:                  'Pickled Coils Yield (%)',
+  galvanised_sheet_yield:               'Galvanised Sheet Yield (%)',
+  zinc_cons_incl_dross:                 'Zinc Consumption incl. Dross',
+  zinc_cons_excl_dross:                 'Zinc Consumption excl. Dross',
   slag_mgo:                             'Slag MgO (%)',
   slag_al2o3:                           'Slag Al2O3 (%)',
   slag_b2:                              'Slag B2 (Ratio)',

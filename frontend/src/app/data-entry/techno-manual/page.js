@@ -140,7 +140,7 @@ function NumInput({ value, onChange, disabled, changed }) {
 // ── Parameter table for one unit ──────────────────────────────────────────────
 function UnitForm({ unit, plant, data, initialData, onChange, busy, selParam, onSelectParam }) {
   const area        = unitArea(unit);
-  const templateKeys = templateFor(area, plant);
+  const templateKeys = templateFor(area, plant, unit);
 
   const dbKeys = Array.from(new Set([
     ...Object.keys(data?.month      || {}),
@@ -627,7 +627,7 @@ function TechnoManualPageInner() {
   // ── Add unit (with template params) ────────────────────────────────────────
   function handleAddUnit(unitName) {
     const a      = unitArea(unitName);
-    const tmpl   = templateFor(a, plant);
+    const tmpl   = templateFor(a, plant, unitName);
     const empty  = Object.fromEntries(tmpl.map(k => [k, null]));
     setUnitData(prev => ({
       ...prev,

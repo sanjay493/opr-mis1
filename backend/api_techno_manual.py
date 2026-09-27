@@ -398,6 +398,27 @@ async def list_months(
     return {"months": months, "count": len(months)}
 
 
+@router.get("/units")
+async def list_units(
+    plant: str = Query(..., description="Plant code: RSP, BSP, ISP, DSP, BSL, SAIL"),
+):
+    """Units that actually have techno data stored for this plant — feeds the
+    Techno Data Correction page's Unit dropdown so it offers only this
+    plant's real units (e.g. ISP: BF-5 only) instead of every known unit."""
+    _db.init_db()
+    conn = _db.connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT unit FROM techno_data WHERE plant=? AND unit IS NOT NULL AND unit != ''",
+            (plant.upper(),),
+        )
+        units = sorted(r[0] for r in cur.fetchall())
+    finally:
+        conn.close()
+    return {"plant": plant.upper(), "units": units}
+
+
 @router.get("/param-history")
 async def param_history(
     plant: str = Query(..., description="Plant code: RSP, BSP, ISP, DSP, BSL, SAIL"),

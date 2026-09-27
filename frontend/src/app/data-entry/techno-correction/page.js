@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import {
   PLANTS, AREA_ORDER, templateFor, KNOWN_UNITS, unitArea, sortUnitsInArea, labelOf,
@@ -129,29 +129,68 @@ function TechnoCorrectionInner() {
   const [loading, setLoading]   = useState(false);
   const [saving, setSaving]     = useState(false);
   const [notice, setNotice]     = useState(null);
+  // The plant/unit/param the grid was loaded for. Save always writes there,
+  // never to whatever the filters say now.
+  const [loadedFor, setLoadedFor] = useState(null);
 
-  const areaUnits = sortUnitsInArea(area, KNOWN_UNITS.filter(u => unitArea(u) === area));
-  const paramKeys = templateFor(area, plant);
+  // Units this plant actually has data for (from techno_data), keyed by
+  // plant; falls back to the generic KNOWN_UNITS list until it loads or if
+  // the request fails.
+  const [unitsByPlant, setUnitsByPlant] = useState({});
+  useEffect(() => {
+    if (unitsByPlant[plant]) return;
+    let cancelled = false;
+    fetch(`${API}/api/techno/manual/units?plant=${encodeURIComponent(plant)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d?.units) setUnitsByPlant(prev => ({ ...prev, [plant]: d.units })); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [plant, unitsByPlant]);
+
+  const unitsFor = (p, a) => {
+    const all = unitsByPlant[p] || KNOWN_UNITS;
+    return sortUnitsInArea(a, all.filter(u => unitArea(u) === a));
+  };
+  const areaUnits = unitsFor(plant, area);
+  // The chosen unit may not exist at a newly picked plant (e.g. BF-8 at
+  // ISP); fall back to that plant's first unit in the area.
+  const effectiveUnit = areaUnits.includes(unit) ? unit : (areaUnits[0] || '');
+  const paramKeys = templateFor(area, plant, effectiveUnit);
+  const effectiveParamKey = paramKeys.includes(paramKey) ? paramKey : (paramKeys[0] || '');
+
+  // Any filter change invalidates the loaded grid, so edits can never be
+  // saved against a different plant/unit/parameter than they were made for.
+  function resetGrid() {
+    setRows(null); setInitialRows(null); setLoadedFor(null); setNotice(null);
+  }
+
+  function handlePlantChange(newPlant) {
+    setPlant(newPlant);
+    resetGrid();
+  }
 
   function handleAreaChange(newArea) {
     setArea(newArea);
-    const units = sortUnitsInArea(newArea, KNOWN_UNITS.filter(u => unitArea(u) === newArea));
+    const units = unitsFor(plant, newArea);
     setUnit(units[0] || newArea);
-    const params = templateFor(newArea, plant);
+    const params = templateFor(newArea, plant, units[0]);
     setParamKey(params[0] || '');
+    resetGrid();
   }
 
   async function loadData() {
-    setLoading(true); setNotice(null); setRows(null);
+    setLoading(true); setNotice(null); setRows(null); setLoadedFor(null);
     try {
       const fromMonth = formatMonth(fromYear, fromMonthName);
       const toMonth   = formatMonth(toYear, toMonthName);
-      const qs = new URLSearchParams({ plant, unit, param_key: paramKey, from_month: fromMonth, to_month: toMonth });
+      const target = { plant, unit: effectiveUnit, paramKey: effectiveParamKey };
+      const qs = new URLSearchParams({ plant, unit: effectiveUnit, param_key: effectiveParamKey, from_month: fromMonth, to_month: toMonth });
       const r = await fetch(`${API}/api/techno/manual/param-history?${qs}`);
       const d = await r.json();
       if (!r.ok) throw new Error(errText(d.detail, 'Failed to load data'));
       setRows(d.rows);
       setInitialRows(d.rows.map(x => ({ ...x })));
+      setLoadedFor(target);
     } catch (e) {
       setNotice({ type:'error', text: e.message });
     } finally {
@@ -171,19 +210,21 @@ function TechnoCorrectionInner() {
     : [];
 
   async function saveChanges() {
+    if (!loadedFor) return;
+    const { plant: savePlant, unit: saveUnit, paramKey: saveKey } = loadedFor;
     setSaving(true); setNotice(null);
     try {
       for (const r of changedMonths) {
         const init = initialRows.find(x => x.report_month === r.report_month);
         const month_data = {};
         const till_month_data = {};
-        if (r.month_value !== init.month_value && r.month_value !== null) month_data[paramKey] = r.month_value;
-        if (r.till_month_value !== init.till_month_value && r.till_month_value !== null) till_month_data[paramKey] = r.till_month_value;
+        if (r.month_value !== init.month_value && r.month_value !== null) month_data[saveKey] = r.month_value;
+        if (r.till_month_value !== init.till_month_value && r.till_month_value !== null) till_month_data[saveKey] = r.till_month_value;
         if (Object.keys(month_data).length === 0 && Object.keys(till_month_data).length === 0) continue;
 
         const resp = await fetch(`${API}/api/techno/manual/save`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plant, report_month: r.report_month, unit, month_data, till_month_data }),
+          body: JSON.stringify({ plant: savePlant, report_month: r.report_month, unit: saveUnit, month_data, till_month_data }),
         });
         const d = await resp.json();
         if (!resp.ok) throw new Error(errText(d.detail, `Save failed for ${r.report_month}`));
@@ -219,7 +260,7 @@ function TechnoCorrectionInner() {
           borderRadius:8, padding:'14px 18px',
         }}>
           <label style={LABEL_STYLE}>Plant</label>
-          <select value={plant} onChange={e => setPlant(e.target.value)} style={SELECT_STYLE}>
+          <select value={plant} onChange={e => handlePlantChange(e.target.value)} style={SELECT_STYLE}>
             {PLANTS.map(p => <option key={p}>{p}</option>)}
           </select>
 
@@ -229,12 +270,13 @@ function TechnoCorrectionInner() {
           </select>
 
           <label style={LABEL_STYLE}>Unit</label>
-          <select value={unit} onChange={e => setUnit(e.target.value)} style={SELECT_STYLE}>
+          <select value={effectiveUnit} onChange={e => { setUnit(e.target.value); resetGrid(); }} style={SELECT_STYLE}>
+            {areaUnits.length === 0 && <option value="">— no {area} units for {plant} —</option>}
             {areaUnits.map(u => <option key={u}>{u}</option>)}
           </select>
 
           <label style={LABEL_STYLE}>Parameter</label>
-          <select value={paramKey} onChange={e => setParamKey(e.target.value)} style={{ ...SELECT_STYLE, minWidth:220 }}>
+          <select value={effectiveParamKey} onChange={e => { setParamKey(e.target.value); resetGrid(); }} style={{ ...SELECT_STYLE, minWidth:220 }}>
             {paramKeys.map(k => <option key={k} value={k}>{labelOf(k)}</option>)}
           </select>
         </div>
