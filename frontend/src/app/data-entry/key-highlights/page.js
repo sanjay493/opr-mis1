@@ -126,6 +126,8 @@ function KeyHighlightsManualInner() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
+      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
       <GlobalNavbar />
       <div style={{ maxWidth: '820px', margin: '0 auto', padding: '32px' }}>
         <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>

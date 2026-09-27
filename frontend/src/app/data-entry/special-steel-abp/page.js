@@ -101,6 +101,8 @@ function SpecialSteelAbpPageInner() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
+      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
       <GlobalNavbar />
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '22px 20px' }}>

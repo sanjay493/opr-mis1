@@ -143,6 +143,8 @@ function SpecialSteelIptEntryInner() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
+      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
       <GlobalNavbar />
       <div style={{ flex: 1, maxWidth: 1000, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
         <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>

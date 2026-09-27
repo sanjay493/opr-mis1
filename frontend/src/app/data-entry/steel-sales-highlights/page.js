@@ -124,8 +124,11 @@ function SteelSalesHighlightsInner() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+    // html/body are overflow:hidden app-wide (globals.css), so the page
+    // scrolls inside its own content area below the navbar.
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
+      <div style={{ flex: 1, overflowY: 'auto' }}>
       <div style={{ maxWidth: '820px', margin: '0 auto', padding: '32px' }}>
         <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
           Steel Sales Performance — Manual Entry
@@ -203,6 +206,7 @@ function SteelSalesHighlightsInner() {
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
+      </div>
       </div>
     </div>
   );

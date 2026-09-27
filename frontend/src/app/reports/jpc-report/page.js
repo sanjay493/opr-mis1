@@ -90,6 +90,8 @@ export default function JpcReportPage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
+      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
       <GlobalNavbar />
 
       <main style={{
