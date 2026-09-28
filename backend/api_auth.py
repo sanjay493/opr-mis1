@@ -115,16 +115,97 @@ def register_verify(body: RegisterVerify, response: Response):
 
 # ── login / logout ────────────────────────────────────────────────────────────
 
+def _mask_email(email: str) -> str:
+    local, _, domain = email.partition("@")
+    return f"{local[:2]}{'•' * max(1, len(local) - 2)}@{domain}"
+
+
+def _send_login_code(email: str) -> None:
+    code = auth.generate_and_store_otp(email, "login")
+    try:
+        auth.send_otp_email(email, code, "login")
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="Couldn't send the sign-in code email — the mail server is unreachable or misconfigured. Contact an administrator.",
+        )
+
+
+def _start_session(user: dict, response: Response) -> dict:
+    token = auth.create_session_token(user["id"], user["email"], user.get("role"))
+    response.set_cookie(auth.COOKIE_NAME, token, **_COOKIE_KW)
+    return {"status": "ok", "user": _public_user(user)}
+
+
 @router.post("/login")
 def login(body: LoginRequest, response: Response):
+    """Step 1: password. With two-step login on, no session is issued here —
+    a code is emailed and a short-lived challenge is returned for step 2."""
     user = auth.get_user_by_email(body.email.lower())
     if not user or not auth.verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
     if auth._is_barred(user["email"]):
         raise HTTPException(status_code=403, detail="Your account has been barred by an administrator.")
-    token = auth.create_session_token(user["id"], user["email"], user.get("role"))
-    response.set_cookie(auth.COOKIE_NAME, token, **_COOKIE_KW)
-    return {"status": "ok", "user": _public_user(user)}
+    if not auth.LOGIN_2FA_ENABLED:
+        return _start_session(user, response)
+
+    # Reuse a code sent moments ago (e.g. double-submit) instead of spamming mail.
+    if auth.otp_resend_wait_seconds(user["email"], "login") == 0:
+        _send_login_code(user["email"])
+    return {
+        "status": "code_required",
+        "challenge": auth.create_login_challenge(user["id"], user["email"]),
+        "sent_to": _mask_email(user["email"]),
+        "expires_in_minutes": auth.OTP_EXPIRE_MINUTES,
+        "resend_after_seconds": auth.otp_resend_wait_seconds(user["email"], "login"),
+    }
+
+
+class LoginVerify(BaseModel):
+    challenge: str
+    code: str
+
+
+class LoginResend(BaseModel):
+    challenge: str
+
+
+def _user_from_challenge(challenge: str) -> dict:
+    payload = auth.decode_login_challenge(challenge)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Your sign-in attempt expired — please enter your password again.")
+    user = auth.get_user_by_id(int(payload["sub"]))
+    if not user or user["email"] != payload.get("email"):
+        raise HTTPException(status_code=401, detail="Your sign-in attempt expired — please enter your password again.")
+    if auth._is_barred(user["email"]):
+        raise HTTPException(status_code=403, detail="Your account has been barred by an administrator.")
+    return user
+
+
+@router.post("/login/verify")
+def login_verify(body: LoginVerify, response: Response):
+    """Step 2: the emailed code. Issues the session cookie on success."""
+    user = _user_from_challenge(body.challenge)
+    if not auth.verify_otp(user["email"], "login", body.code):
+        raise HTTPException(
+            status_code=400,
+            detail=f"That code is wrong or has expired. After {auth.OTP_MAX_ATTEMPTS} wrong tries a code stops working — request a new one.",
+        )
+    return _start_session(user, response)
+
+
+@router.post("/login/resend")
+def login_resend(body: LoginResend):
+    user = _user_from_challenge(body.challenge)
+    wait = auth.otp_resend_wait_seconds(user["email"], "login")
+    if wait > 0:
+        raise HTTPException(status_code=429, detail=f"Please wait {wait} seconds before requesting another code.")
+    _send_login_code(user["email"])
+    return {
+        "status": "sent",
+        "sent_to": _mask_email(user["email"]),
+        "resend_after_seconds": auth.otp_resend_wait_seconds(user["email"], "login"),
+    }
 
 
 @router.post("/logout")

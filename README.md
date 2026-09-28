@@ -139,6 +139,7 @@ copy .env.example .env      # then fill in secrets and DB settings
 - Always invoke tools as `venv\Scripts\python.exe -m <tool>` (`pip`, `uvicorn`, `playwright`, `pytest`). The pip-generated `.exe` launchers are blocked by Device Guard on the deployment machine.
 - `requirements.txt` is pinned to exact versions (full set in `requirements-lock.txt`). After any `pip install -r requirements.txt` on an existing machine, also run `venv\Scripts\python.exe -m playwright install --force chromium` — pip never updates the Chromium binary, and a stale one changes PDF pagination.
 - CORS: set `FRONTEND_ORIGIN` if the frontend is served from a non-default origin.
+- Two-step login is on by default: after the password, a 6-digit code is emailed (SMTP settings in `.env`) and must be entered before a session starts. Codes expire in 10 minutes, stop working after 5 wrong tries, and can be resent once a minute. Set `LOGIN_2FA=off` in `backend/.env` to fall back to password-only login if outbound mail is unavailable.
 
 ---
 

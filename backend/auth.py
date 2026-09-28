@@ -10,11 +10,11 @@ completed by emailing a one-time passcode — there is no "change password with
 just your old password" path, per spec.
 """
 import os
-import random
 import secrets
 import smtplib
 import sqlite3
 import ssl
+import threading
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Optional
@@ -34,7 +34,19 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "")
 JWT_ALGO = "HS256"
 JWT_EXPIRE_HOURS = 24 * 7  # 1 week
 OTP_EXPIRE_MINUTES = 10
+OTP_MAX_ATTEMPTS = 5         # wrong guesses before a code is burned
+OTP_RESEND_SECONDS = 60      # minimum gap between emailed codes per email+purpose
 COOKIE_NAME = "mis_session"
+
+# Two-step login: after the password check, a 6-digit code is emailed and must
+# be entered before a session cookie is issued. Set LOGIN_2FA=off in
+# backend/.env to fall back to password-only login (e.g. if outbound mail is
+# down and nobody could otherwise sign in).
+LOGIN_2FA_ENABLED = os.environ.get("LOGIN_2FA", "on").strip().lower() not in ("off", "0", "false", "no")
+
+# The login challenge token is signed with a key derived from JWT_SECRET but
+# distinct from it, so a challenge can never be replayed as a session cookie.
+_CHALLENGE_SECRET = f"{JWT_SECRET}|login-challenge"
 
 
 # ── password hashing ─────────────────────────────────────────────────────────
@@ -67,6 +79,26 @@ def decode_session_token(token: str) -> Optional[dict]:
         return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
     except jwt.PyJWTError:
         return None
+
+
+def create_login_challenge(user_id: int, email: str) -> str:
+    """Short-lived token proving the password step passed; required, together
+    with the emailed code, to finish a two-step login."""
+    payload = {
+        "sub": str(user_id),
+        "email": email,
+        "typ": "login_challenge",
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, _CHALLENGE_SECRET, algorithm=JWT_ALGO)
+
+
+def decode_login_challenge(token: str) -> Optional[dict]:
+    try:
+        payload = jwt.decode(token, _CHALLENGE_SECRET, algorithms=[JWT_ALGO])
+    except jwt.PyJWTError:
+        return None
+    return payload if payload.get("typ") == "login_challenge" else None
 
 
 # ── DB user lookups ──────────────────────────────────────────────────────────
@@ -153,6 +185,13 @@ require_admin = require_role("admin")
 
 # ── OTP passcodes ─────────────────────────────────────────────────────────────
 
+# Wrong-guess counts per otp_codes.id. Kept in memory (the backend runs as a
+# single process); a restart resets counts, which only ever lets a code get a
+# few extra tries before it expires anyway.
+_otp_failures: dict = {}
+_otp_failures_lock = threading.Lock()
+
+
 def _hash_code(code: str) -> str:
     return bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -161,7 +200,7 @@ def generate_and_store_otp(email: str, purpose: str) -> str:
     """Creates a fresh 6-digit code, invalidates any earlier unused codes for
     the same email+purpose, stores the new one (hashed), and returns the
     plaintext code to be emailed."""
-    code = f"{random.randint(0, 999999):06d}"
+    code = f"{secrets.randbelow(1_000_000):06d}"
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=OTP_EXPIRE_MINUTES)
 
@@ -181,9 +220,31 @@ def generate_and_store_otp(email: str, purpose: str) -> str:
     return code
 
 
+def otp_resend_wait_seconds(email: str, purpose: str) -> int:
+    """Seconds until another code may be emailed for email+purpose (0 = now)."""
+    conn = db.connect()
+    cur = conn.cursor()
+    cur.execute(
+        """SELECT created_at FROM otp_codes WHERE email=? AND purpose=?
+           ORDER BY id DESC LIMIT 1""",
+        (email, purpose),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return 0
+    try:
+        elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(row[0])).total_seconds()
+    except (TypeError, ValueError):
+        return 0
+    return max(0, int(OTP_RESEND_SECONDS - elapsed))
+
+
 def verify_otp(email: str, purpose: str, code: str) -> bool:
     """Checks the code against the latest unused, unexpired OTP for
-    email+purpose. Marks it used on success so it can't be replayed."""
+    email+purpose. Marks it used on success so it can't be replayed, and
+    after OTP_MAX_ATTEMPTS wrong guesses so a 6-digit code can't be
+    brute-forced within its lifetime."""
     conn = db.connect()
     cur = conn.cursor()
     cur.execute(
@@ -204,10 +265,20 @@ def verify_otp(email: str, purpose: str, code: str) -> bool:
     if expired:
         conn.close()
         return False
-    ok = bcrypt.checkpw(code.encode("utf-8"), code_hash.encode("utf-8"))
+    ok = bcrypt.checkpw((code or "").strip().encode("utf-8"), code_hash.encode("utf-8"))
     if ok:
+        _otp_failures.pop(otp_id, None)
         cur.execute("UPDATE otp_codes SET used=1 WHERE id=?", (otp_id,))
         conn.commit()
+    else:
+        with _otp_failures_lock:
+            _otp_failures[otp_id] = _otp_failures.get(otp_id, 0) + 1
+            burned = _otp_failures[otp_id] >= OTP_MAX_ATTEMPTS
+            if burned:
+                _otp_failures.pop(otp_id, None)
+        if burned:
+            cur.execute("UPDATE otp_codes SET used=1 WHERE id=?", (otp_id,))
+            conn.commit()
     conn.close()
     return ok
 
@@ -231,13 +302,19 @@ def send_otp_email(to_email: str, code: str, purpose: str) -> None:
     if purpose == "register":
         subject = "SAIL MIS Portal — Your registration passcode"
         action = "complete your registration"
+    elif purpose == "login":
+        subject = "SAIL MIS Portal — Your sign-in code"
+        action = "finish signing in"
     else:
         subject = "SAIL MIS Portal — Your password reset passcode"
         action = "reset your password"
     body = (
         f"Your one-time passcode is: {code}\n\n"
         f"Enter this code to {action}. It expires in {OTP_EXPIRE_MINUTES} minutes.\n\n"
-        f"If you did not request this, you can ignore this email."
+        + ("If you did not just try to sign in, someone may know your password — "
+           "change it now from the portal's Forgot password page.\n"
+           if purpose == "login" else
+           "If you did not request this, you can ignore this email.")
     )
     send_email(to_email, subject, body)
 
