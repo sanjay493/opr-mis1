@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
+import ui from '@/styles/ui.module.css';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -69,77 +70,85 @@ export default function RegisterPage() {
   return (
     <>
       <GlobalNavbar />
-      <main style={{ maxWidth: '420px', margin: '80px auto', padding: '0 20px' }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Register</h1>
-        <p style={{ color: '#5f6368', marginBottom: '24px' }}>
-          Your email must be pre-approved by an administrator. A new account starts
-          with view-only access until an administrator assigns you a role.
-        </p>
+      <main className={ui.authShell}>
+        <div className={ui.authCard}>
+          <div className={ui.pageHeader}>
+            <h1 className={ui.pageTitle}>Register</h1>
+            <p className={ui.pageLead}>
+              Your email must be pre-approved by an administrator. A new account starts
+              with view-only access until an administrator assigns you a role.
+            </p>
+          </div>
 
-        {step === 'email' ? (
-          <form onSubmit={requestOtp}>
-            <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email" className="form-control" required
-                value={email} onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            {error && <p style={{ color: '#d93025', fontSize: '10pt', marginBottom: '12px' }}>{error}</p>}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={submitting}>
-              {submitting ? 'Sending…' : 'Send Passcode'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={completeRegistration}>
-            {info && <p style={{ color: '#188038', fontSize: '10pt', marginBottom: '14px' }}>{info}</p>}
-            <div className="form-group">
-              <label>Passcode</label>
-              <input
-                type="text" inputMode="numeric" maxLength={6} className="form-control" required
-                value={otp} onChange={(e) => setOtp(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>Your name</label>
-              <input
-                type="text" className="form-control"
-                value={name} onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>Password</label>
-              <input
-                type="password" className="form-control" required minLength={8}
-                value={password} onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="form-group">
-              <label>Confirm password</label>
-              <input
-                type="password" className="form-control" required minLength={8}
-                value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
-            {error && <p style={{ color: '#d93025', fontSize: '10pt', marginBottom: '12px' }}>{error}</p>}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={submitting}>
-              {submitting ? 'Creating account…' : 'Create Account'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ width: '100%', marginTop: '8px' }}
-              onClick={() => setStep('email')}
-            >
-              Back
-            </button>
-          </form>
-        )}
+          {step === 'email' ? (
+            <form onSubmit={requestOtp}>
+              <div className={ui.field}>
+                <label htmlFor="register-email" className={ui.label}>Email</label>
+                <input
+                  id="register-email" type="email" className="form-control" required
+                  value={email} onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                />
+              </div>
+              {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
+              <button type="submit" className={`${ui.btn} ${ui.btnPrimary} ${ui.btnBlock}`}
+                      disabled={submitting} aria-busy={submitting}>
+                {submitting ? 'Sending…' : 'Send Passcode'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={completeRegistration}>
+              {info && <p role="status" className={`${ui.alert} ${ui.alertSuccess}`}>{info}</p>}
+              <div className={ui.field}>
+                <label htmlFor="register-otp" className={ui.label}>Passcode</label>
+                <input
+                  id="register-otp" type="text" inputMode="numeric" maxLength={6} className="form-control" required
+                  value={otp} onChange={(e) => setOtp(e.target.value)}
+                  autoComplete="one-time-code"
+                />
+              </div>
+              <div className={ui.field}>
+                <label htmlFor="register-name" className={ui.label}>Your name</label>
+                <input
+                  id="register-name" type="text" className="form-control"
+                  value={name} onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                />
+              </div>
+              <div className={ui.field}>
+                <label htmlFor="register-password" className={ui.label}>Password</label>
+                <input
+                  id="register-password" type="password" className="form-control" required minLength={8}
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password" aria-describedby="register-password-hint"
+                />
+                <p id="register-password-hint" className={ui.hint}>At least 8 characters.</p>
+              </div>
+              <div className={ui.field}>
+                <label htmlFor="register-confirm" className={ui.label}>Confirm password</label>
+                <input
+                  id="register-confirm" type="password" className="form-control" required minLength={8}
+                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+              {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
+              <div className={ui.actions} style={{ flexDirection: 'column' }}>
+                <button type="submit" className={`${ui.btn} ${ui.btnPrimary} ${ui.btnBlock}`}
+                        disabled={submitting} aria-busy={submitting}>
+                  {submitting ? 'Creating account…' : 'Create Account'}
+                </button>
+                <button type="button" className={`${ui.btn} ${ui.btnSecondary} ${ui.btnBlock}`}
+                        onClick={() => setStep('email')}>
+                  Back
+                </button>
+              </div>
+            </form>
+          )}
 
-        <div style={{ marginTop: '20px', fontSize: '10.5pt' }}>
-          <Link href="/login">Already have an account? Log in</Link>
+          <div className={ui.cardFooter}>
+            <Link href="/login">Already have an account? Log in</Link>
+          </div>
         </div>
       </main>
     </>

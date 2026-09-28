@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import { API_BASE_URL } from '@/providers/AuthProvider';
+import ui from '@/styles/ui.module.css';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -65,69 +66,76 @@ export default function ForgotPasswordPage() {
   return (
     <>
       <GlobalNavbar />
-      <main style={{ maxWidth: '420px', margin: '80px auto', padding: '0 20px' }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Reset Password</h1>
-        <p style={{ color: '#5f6368', marginBottom: '24px' }}>
-          Every password change is verified by a passcode emailed to your account.
-        </p>
+      <main className={ui.authShell}>
+        <div className={ui.authCard}>
+          <div className={ui.pageHeader}>
+            <h1 className={ui.pageTitle}>Reset Password</h1>
+            <p className={ui.pageLead}>
+              Every password change is verified by a passcode emailed to your account.
+            </p>
+          </div>
 
-        {step === 'email' ? (
-          <form onSubmit={requestOtp}>
-            <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email" className="form-control" required
-                value={email} onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            {error && <p style={{ color: '#d93025', fontSize: '10pt', marginBottom: '12px' }}>{error}</p>}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={submitting}>
-              {submitting ? 'Sending…' : 'Send Passcode'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={resetPassword}>
-            {info && <p style={{ color: '#188038', fontSize: '10pt', marginBottom: '14px' }}>{info}</p>}
-            <div className="form-group">
-              <label>Passcode</label>
-              <input
-                type="text" inputMode="numeric" maxLength={6} className="form-control" required
-                value={otp} onChange={(e) => setOtp(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>New password</label>
-              <input
-                type="password" className="form-control" required minLength={8}
-                value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="form-group">
-              <label>Confirm new password</label>
-              <input
-                type="password" className="form-control" required minLength={8}
-                value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
-            {error && <p style={{ color: '#d93025', fontSize: '10pt', marginBottom: '12px' }}>{error}</p>}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={submitting}>
-              {submitting ? 'Resetting…' : 'Reset Password'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ width: '100%', marginTop: '8px' }}
-              onClick={() => setStep('email')}
-            >
-              Back
-            </button>
-          </form>
-        )}
+          {step === 'email' ? (
+            <form onSubmit={requestOtp}>
+              <div className={ui.field}>
+                <label htmlFor="reset-email" className={ui.label}>Email</label>
+                <input
+                  id="reset-email" type="email" className="form-control" required
+                  value={email} onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                />
+              </div>
+              {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
+              <button type="submit" className={`${ui.btn} ${ui.btnPrimary} ${ui.btnBlock}`}
+                      disabled={submitting} aria-busy={submitting}>
+                {submitting ? 'Sending…' : 'Send Passcode'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={resetPassword}>
+              {info && <p role="status" className={`${ui.alert} ${ui.alertSuccess}`}>{info}</p>}
+              <div className={ui.field}>
+                <label htmlFor="reset-otp" className={ui.label}>Passcode</label>
+                <input
+                  id="reset-otp" type="text" inputMode="numeric" maxLength={6} className="form-control" required
+                  value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                  autoComplete="one-time-code"
+                />
+              </div>
+              <div className={ui.field}>
+                <label htmlFor="reset-password" className={ui.label}>New password</label>
+                <input
+                  id="reset-password" type="password" className="form-control" required minLength={8}
+                  value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password" aria-describedby="reset-password-hint"
+                />
+                <p id="reset-password-hint" className={ui.hint}>At least 8 characters.</p>
+              </div>
+              <div className={ui.field}>
+                <label htmlFor="reset-confirm" className={ui.label}>Confirm new password</label>
+                <input
+                  id="reset-confirm" type="password" className="form-control" required minLength={8}
+                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+              {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
+              <div className={ui.actions} style={{ flexDirection: 'column' }}>
+                <button type="submit" className={`${ui.btn} ${ui.btnPrimary} ${ui.btnBlock}`}
+                        disabled={submitting} aria-busy={submitting}>
+                  {submitting ? 'Resetting…' : 'Reset Password'}
+                </button>
+                <button type="button" className={`${ui.btn} ${ui.btnSecondary} ${ui.btnBlock}`}
+                        onClick={() => setStep('email')}>
+                  Back
+                </button>
+              </div>
+            </form>
+          )}
 
-        <div style={{ marginTop: '20px', fontSize: '10.5pt' }}>
-          <Link href="/login">Back to login</Link>
+          <div className={ui.cardFooter}>
+            <Link href="/login">Back to login</Link>
+          </div>
         </div>
       </main>
     </>

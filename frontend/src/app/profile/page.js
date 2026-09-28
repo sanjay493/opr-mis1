@@ -5,6 +5,7 @@ import Link from 'next/link';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import RequireAuth from '@/components/RequireAuth';
 import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
+import ui from '@/styles/ui.module.css';
 
 function ProfilePageInner() {
   const { user, refresh } = useAuth();
@@ -45,56 +46,61 @@ function ProfilePageInner() {
   return (
     <>
       <GlobalNavbar />
-      <main style={{ maxWidth: '480px', margin: '60px auto', padding: '0 20px' }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>My Profile</h1>
-        <p style={{ color: '#5f6368', marginBottom: '24px' }}>{user?.email}</p>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-          <div style={{
-            width: '72px', height: '72px', borderRadius: '50%', overflow: 'hidden',
-            background: '#f1f3f4', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '24pt', color: '#5f6368', flexShrink: 0,
-          }}>
-            {picUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={picUrl} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (user?.name || user?.email || '?')[0].toUpperCase()}
+      <main className={ui.authShell}>
+        <div className={`${ui.authCard} ${ui.authCardWide}`}>
+          <div className={ui.pageHeader}>
+            <h1 className={ui.pageTitle}>My Profile</h1>
+            <p className={ui.pageLead}>{user?.email}</p>
           </div>
-          <div>
-            <div style={{ fontWeight: 700 }}>{user?.name || '(no name set)'}</div>
-            <div style={{ fontSize: '10pt', color: '#5f6368', textTransform: 'capitalize' }}>
-              Role: {user?.role || 'view only (not yet assigned)'}
+
+          <div className={ui.identity}>
+            <div className={ui.avatar} aria-hidden={!picUrl}>
+              {picUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={picUrl} alt="Your profile picture" />
+              ) : (user?.name || user?.email || '?')[0].toUpperCase()}
+            </div>
+            <div>
+              <div className={ui.identityName}>{user?.name || '(no name set)'}</div>
+              <div style={{ marginTop: 4 }}>
+                <span className={`${ui.badge} ${user?.role ? ui.badgeSuccess : ui.badgeNeutral}`}
+                      style={{ textTransform: 'capitalize' }}>
+                  {user?.role || 'View only (not yet assigned)'}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <form onSubmit={handleSave}>
-          <div className="form-group">
-            <label>Name</label>
-            <input
-              type="text" className="form-control"
-              value={name} onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label>Profile picture</label>
-            <input
-              type="file" accept="image/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-          </div>
-          {error && <p style={{ color: '#d93025', fontSize: '10pt', marginBottom: '12px' }}>{error}</p>}
-          {message && <p style={{ color: '#188038', fontSize: '10pt', marginBottom: '12px' }}>{message}</p>}
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-        </form>
+          <form onSubmit={handleSave}>
+            <div className={ui.field}>
+              <label htmlFor="profile-name" className={ui.label}>Name</label>
+              <input
+                id="profile-name" type="text" className="form-control"
+                value={name} onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+              />
+            </div>
+            <div className={ui.field}>
+              <label htmlFor="profile-picture" className={ui.label}>Profile picture</label>
+              <input
+                id="profile-picture" type="file" accept="image/*" className="form-control"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            </div>
+            {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
+            {message && <p role="status" className={`${ui.alert} ${ui.alertSuccess}`}>{message}</p>}
+            <button type="submit" className={`${ui.btn} ${ui.btnPrimary}`}
+                    disabled={saving} aria-busy={saving}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </form>
 
-        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #e8eaed' }}>
-          <Link href="/forgot-password" className="btn btn-secondary">Change Password</Link>
-          <p style={{ fontSize: '9.5pt', color: '#5f6368', marginTop: '8px' }}>
-            Password changes are always verified by a passcode emailed to you.
-          </p>
+          <div className={ui.cardFooter}>
+            <Link href="/forgot-password" className={`${ui.btn} ${ui.btnSecondary}`}>Change Password</Link>
+            <p className={ui.hint}>
+              Password changes are always verified by a passcode emailed to you.
+            </p>
+          </div>
         </div>
       </main>
     </>

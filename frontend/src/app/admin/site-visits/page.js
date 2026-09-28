@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import RequireAdmin from '@/components/RequireAdmin';
 import { API_BASE_URL } from '@/providers/AuthProvider';
+import ui from '@/styles/ui.module.css';
 
 const DAYS_OPTIONS = [
   { value: 1, label: 'Today' },
@@ -54,15 +55,17 @@ function SiteVisitsInner() {
   return (
     <>
       <GlobalNavbar />
-      <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px', height: 'calc(100vh - 72px)', overflowY: 'auto' }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Site Visits</h1>
-        <p style={{ color: '#5f6368', marginBottom: '20px' }}>
-          Every visitor — logged-in users by name/email, anonymous viewers by IP address — and the pages they've visited.
-        </p>
+      <main className={`${ui.page} ${ui.pageWide}`}>
+        <div className={ui.pageHeader}>
+          <h1 className={ui.pageTitle}>Site Visits</h1>
+          <p className={ui.pageLead}>
+            Every visitor — logged-in users by name/email, anonymous viewers by IP address — and the pages they&apos;ve visited.
+          </p>
+        </div>
 
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '12px' }}>
-          <div>
-            <label htmlFor="visits-days-filter" style={{ display: 'block', fontSize: '9pt', fontWeight: 600, color: '#5f6368', marginBottom: '4px' }}>
+        <div className={ui.filterBar}>
+          <div className={ui.field}>
+            <label htmlFor="visits-days-filter" className={ui.label}>
               Window
             </label>
             <select
@@ -73,8 +76,8 @@ function SiteVisitsInner() {
               {DAYS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <div>
-            <label htmlFor="visits-search" style={{ display: 'block', fontSize: '9pt', fontWeight: 600, color: '#5f6368', marginBottom: '4px' }}>
+          <div className={ui.field}>
+            <label htmlFor="visits-search" className={ui.label}>
               Search
             </label>
             <input
@@ -85,49 +88,44 @@ function SiteVisitsInner() {
             />
           </div>
         </div>
-        <p style={{ color: '#5f6368', fontSize: '9pt', marginBottom: '20px' }}>
+        <p className={ui.meta} aria-live="polite">
           {loading ? 'Loading…' : `Showing ${filtered.length} visitor${filtered.length === 1 ? '' : 's'}${search ? ' matching your search' : ''}.`}
         </p>
 
-        {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
+        {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
 
-        {loading ? (
-          <p>Loading…</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
+        {!loading && (
+          <div className={ui.tableWrap}>
+          <table className={ui.table}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
-                <th style={{ padding: '8px' }}>Visitor</th>
-                <th style={{ padding: '8px' }}>IP Address</th>
-                <th style={{ padding: '8px' }}>Status</th>
-                <th style={{ padding: '8px' }}>First seen</th>
-                <th style={{ padding: '8px' }}>Last seen</th>
-                <th style={{ padding: '8px' }}>Visits</th>
-                <th style={{ padding: '8px' }}>Pages visited</th>
+              <tr>
+                <th scope="col">Visitor</th>
+                <th scope="col">IP Address</th>
+                <th scope="col">Status</th>
+                <th scope="col">First seen</th>
+                <th scope="col">Last seen</th>
+                <th scope="col" className={ui.numeric}>Visits</th>
+                <th scope="col">Pages visited</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((v) => (
-                <tr key={v.key} style={{ borderBottom: '1px solid #e8eaed' }}>
-                  <td style={{ padding: '8px' }}>{v.user_name || v.user_email || 'Anonymous'}</td>
-                  <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{v.ip_address || '—'}</td>
-                  <td style={{ padding: '8px' }}>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: '10px', fontSize: '8pt', fontWeight: 600,
-                      backgroundColor: v.is_logged_in ? '#e6f4ea' : '#fce8e6',
-                      color: v.is_logged_in ? '#188038' : '#c5221f',
-                    }}>
+                <tr key={v.key}>
+                  <td>{v.user_name || v.user_email || 'Anonymous'}</td>
+                  <td className={`${ui.nowrap} ${ui.mono}`}>{v.ip_address || '—'}</td>
+                  <td>
+                    <span className={`${ui.badge} ${v.is_logged_in ? ui.badgeSuccess : ui.badgeNeutral}`}>
                       {v.is_logged_in ? 'Logged in' : 'Anonymous'}
                     </span>
                   </td>
-                  <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{fmt(v.first_seen)}</td>
-                  <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{fmt(v.last_seen)}</td>
-                  <td style={{ padding: '8px', textAlign: 'right' }}>{v.visit_count}</td>
-                  <td style={{ padding: '8px', maxWidth: '340px' }}>
+                  <td className={ui.nowrap}>{fmt(v.first_seen)}</td>
+                  <td className={ui.nowrap}>{fmt(v.last_seen)}</td>
+                  <td className={ui.numeric}>{v.visit_count}</td>
+                  <td style={{ maxWidth: '340px' }}>
                     <div style={{ maxHeight: '110px', overflowY: 'auto' }}>
                       {v.pages.map((p) => (
-                        <div key={p.path} style={{ whiteSpace: 'nowrap', color: '#3c4043' }}>
-                          {p.path} <span style={{ color: '#5f6368' }}>×{p.count}</span>
+                        <div key={p.path} className={ui.nowrap}>
+                          {p.path} <span className={ui.muted}>×{p.count}</span>
                         </div>
                       ))}
                     </div>
@@ -135,10 +133,11 @@ function SiteVisitsInner() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: '#5f6368' }}>No visits recorded in this window.</td></tr>
+                <tr><td colSpan={7} className={ui.emptyCell}>No visits recorded in this window.</td></tr>
               )}
             </tbody>
           </table>
+          </div>
         )}
       </main>
     </>

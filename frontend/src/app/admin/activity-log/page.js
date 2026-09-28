@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import RequireAdmin from '@/components/RequireAdmin';
 import { API_BASE_URL } from '@/providers/AuthProvider';
+import ui from '@/styles/ui.module.css';
 
 // Activity timestamps are stored as UTC ISO strings (auth.py's
 // log_activity: datetime.now(timezone.utc).isoformat()); show them in
@@ -65,15 +66,17 @@ function ActivityLogInner() {
   return (
     <>
       <GlobalNavbar />
-      <main style={{ maxWidth: '1000px', margin: '0 auto', padding: '40px 20px', height: 'calc(100vh - 72px)', overflowY: 'auto' }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Activity Log</h1>
-        <p style={{ color: '#5f6368', marginBottom: '20px' }}>
-          Every insert, update, or delete performed through a data-entry or admin action.
-        </p>
+      <main className={`${ui.page} ${ui.pageWide}`}>
+        <div className={ui.pageHeader}>
+          <h1 className={ui.pageTitle}>Activity Log</h1>
+          <p className={ui.pageLead}>
+            Every insert, update, or delete performed through a data-entry or admin action.
+          </p>
+        </div>
 
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '12px' }}>
-          <div>
-            <label htmlFor="activity-user-filter" style={{ display: 'block', fontSize: '9pt', fontWeight: 600, color: '#5f6368', marginBottom: '4px' }}>
+        <div className={ui.filterBar}>
+          <div className={ui.field}>
+            <label htmlFor="activity-user-filter" className={ui.label}>
               User
             </label>
             <select
@@ -85,8 +88,8 @@ function ActivityLogInner() {
               {users.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
-          <div>
-            <label htmlFor="activity-action-filter" style={{ display: 'block', fontSize: '9pt', fontWeight: 600, color: '#5f6368', marginBottom: '4px' }}>
+          <div className={ui.field}>
+            <label htmlFor="activity-action-filter" className={ui.label}>
               Action
             </label>
             <select
@@ -99,45 +102,45 @@ function ActivityLogInner() {
             </select>
           </div>
           {hasFilter && (
-            <button type="button" className="btn btn-secondary" onClick={clearFilters} style={{ margin: 0 }}>
+            <button type="button" className={`${ui.btn} ${ui.btnSecondary}`} onClick={clearFilters}>
               Clear filters
             </button>
           )}
         </div>
-        <p style={{ color: '#5f6368', fontSize: '9pt', marginBottom: '20px' }}>
+        <p className={ui.meta} aria-live="polite">
           {loading ? 'Loading…' : `Showing ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}${hasFilter ? ' matching the filters above' : ''}.`}
         </p>
 
-        {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
+        {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
 
-        {loading ? (
-          <p>Loading…</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
+        {!loading && (
+          <div className={ui.tableWrap}>
+          <table className={ui.table}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
-                <th style={{ padding: '8px' }}>When (IST)</th>
-                <th style={{ padding: '8px' }}>User</th>
-                <th style={{ padding: '8px' }}>Action</th>
-                <th style={{ padding: '8px' }}>Where</th>
-                <th style={{ padding: '8px' }}>Details</th>
+              <tr>
+                <th scope="col">When (IST)</th>
+                <th scope="col">User</th>
+                <th scope="col">Action</th>
+                <th scope="col">Where</th>
+                <th scope="col">Details</th>
               </tr>
             </thead>
             <tbody>
               {entries.map((entry) => (
-                <tr key={entry.id} style={{ borderBottom: '1px solid #e8eaed' }}>
-                  <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{formatIST(entry.timestamp)}</td>
-                  <td style={{ padding: '8px' }}>{entry.user_name || entry.user_email || '—'}</td>
-                  <td style={{ padding: '8px' }}>{entry.action}</td>
-                  <td style={{ padding: '8px' }}>{entry.entity}</td>
-                  <td style={{ padding: '8px', color: '#5f6368' }}>{entry.details}</td>
+                <tr key={entry.id}>
+                  <td className={ui.nowrap}>{formatIST(entry.timestamp)}</td>
+                  <td>{entry.user_name || entry.user_email || '—'}</td>
+                  <td>{entry.action}</td>
+                  <td>{entry.entity}</td>
+                  <td className={ui.muted}>{entry.details}</td>
                 </tr>
               ))}
               {entries.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#5f6368' }}>No activity recorded yet.</td></tr>
+                <tr><td colSpan={5} className={ui.emptyCell}>No activity recorded yet.</td></tr>
               )}
             </tbody>
           </table>
+          </div>
         )}
       </main>
     </>

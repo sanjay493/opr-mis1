@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import RequireAdmin from '@/components/RequireAdmin';
 import { API_BASE_URL } from '@/providers/AuthProvider';
+import ui from '@/styles/ui.module.css';
 
 function ManageUsersInner() {
   const [users, setUsers] = useState([]);
@@ -125,69 +126,75 @@ function ManageUsersInner() {
   return (
     <>
       <GlobalNavbar />
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px', height: 'calc(100vh - 72px)', overflowY: 'auto' }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Manage Users</h1>
-        <p style={{ color: '#5f6368', marginBottom: '24px' }}>
-          Assign Editor or Administrator access, or remove an account. A blank role means view-only access.
-        </p>
+      <main className={ui.page}>
+        <div className={ui.pageHeader}>
+          <h1 className={ui.pageTitle}>Manage Users</h1>
+          <p className={ui.pageLead}>
+            Assign Editor or Administrator access, or remove an account. A blank role means view-only access.
+          </p>
+        </div>
 
-        {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
+        {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
         {loading ? (
-          <p>Loading…</p>
+          <p className={ui.meta} aria-live="polite">Loading…</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className={ui.tableWrap}>
+          <table className={ui.table}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
-                <th style={{ padding: '8px' }}>Name</th>
-                <th style={{ padding: '8px' }}>Email</th>
-                <th style={{ padding: '8px' }}>Role</th>
-                <th style={{ padding: '8px' }}>Permissions</th>
-                <th style={{ padding: '8px' }}>Registered</th>
-                <th style={{ padding: '8px' }}></th>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Role</th>
+                <th scope="col">Permissions</th>
+                <th scope="col">Registered</th>
+                <th scope="col"><span className={ui.srOnly}>Actions</span></th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
                 <Fragment key={u.id}>
-                  <tr style={{ borderBottom: '1px solid #e8eaed' }}>
-                    <td style={{ padding: '8px' }}>{u.name || '—'}</td>
-                    <td style={{ padding: '8px' }}>{u.email}</td>
-                    <td style={{ padding: '8px' }}>
+                  <tr>
+                    <td>{u.name || '—'}</td>
+                    <td>{u.email}</td>
+                    <td>
                       <select
                         className="form-control"
                         value={u.role || ''}
                         onChange={(e) => setRole(u.id, e.target.value)}
-                        style={{ padding: '4px 8px' }}
+                        aria-label={`Role for ${u.email}`}
+                        style={{ padding: '4px 8px', minWidth: 170 }}
                       >
                         <option value="">(none — view only)</option>
                         <option value="editor">Editor</option>
                         <option value="admin">Administrator</option>
                       </select>
                     </td>
-                    <td style={{ padding: '8px', fontSize: '9.5pt', color: '#5f6368' }}>
+                    <td className={ui.muted}>
                       {u.role === 'editor' ? (
-                        <>
-                          {permissionsSummary(u)}
-                          {' '}
+                        <div className={ui.actions} style={{ alignItems: 'center' }}>
+                          <span>{permissionsSummary(u)}</span>
                           <button
-                            className="btn btn-secondary"
-                            style={{ padding: '2px 8px', fontSize: '9.5pt' }}
-                            onClick={() => openEdit(u)}
+                            type="button"
+                            className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm}`}
+                            aria-expanded={editingId === u.id}
+                            aria-label={`Edit permissions for ${u.email}`}
+                            onClick={() => (editingId === u.id ? cancelEdit() : openEdit(u))}
                           >
                             Edit
                           </button>
-                        </>
+                        </div>
                       ) : (
                         permissionsSummary(u)
                       )}
                     </td>
-                    <td style={{ padding: '8px', fontSize: '9.5pt', color: '#5f6368' }}>
+                    <td className={`${ui.muted} ${ui.nowrap}`}>
                       {u.created_at ? u.created_at.slice(0, 10) : ''}
                     </td>
-                    <td style={{ padding: '8px' }}>
+                    <td>
                       <button
-                        className="btn btn-secondary"
-                        style={{ color: '#c5221f', borderColor: '#c5221f' }}
+                        type="button"
+                        className={`${ui.btn} ${ui.btnDanger} ${ui.btnSm}`}
+                        aria-label={`Delete account ${u.email}`}
                         onClick={() => deleteUser(u.id, u.email)}
                       >
                         Delete
@@ -195,59 +202,65 @@ function ManageUsersInner() {
                     </td>
                   </tr>
                   {editingId === u.id && (
-                    <tr style={{ borderBottom: '1px solid #e8eaed', background: '#f8f9fa' }}>
-                      <td colSpan={6} style={{ padding: '16px' }}>
-                        <div style={{ maxWidth: '420px' }}>
-                          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+                    <tr className={ui.expandRow}>
+                      <td colSpan={6} style={{ padding: '16px 20px' }}>
+                        <fieldset style={{ border: 'none', margin: 0, padding: 0, maxWidth: '420px' }}>
+                          <legend className={ui.label}>Permissions for {u.email}</legend>
+                          <label className={ui.checkRow} style={{ fontWeight: 600 }}>
                             <input
                               type="checkbox"
                               checked={editForm.allPages}
                               onChange={(e) => setEditForm((f) => ({ ...f, allPages: e.target.checked }))}
                             />
-                            {' '}All pages
+                            All pages
                           </label>
                           {!editForm.allPages && (
-                            <div style={{ marginLeft: '22px', marginBottom: '12px' }}>
+                            <div style={{ marginLeft: '24px', marginBottom: '8px' }}>
                               {pageModules.map((m) => (
-                                <label key={m.key} style={{ display: 'block', marginBottom: '4px' }}>
+                                <label key={m.key} className={ui.checkRow}>
                                   <input
                                     type="checkbox"
                                     checked={editForm.selectedPages.includes(m.key)}
                                     onChange={() => toggleModule(m.key)}
                                   />
-                                  {' '}{m.label}
+                                  {m.label}
                                 </label>
                               ))}
                             </div>
                           )}
-                          <label style={{ display: 'block', marginBottom: '16px' }}>
+                          <label className={ui.checkRow} style={{ marginBottom: '16px' }}>
                             <input
                               type="checkbox"
                               checked={editForm.canDelete}
                               onChange={(e) => setEditForm((f) => ({ ...f, canDelete: e.target.checked }))}
                             />
-                            {' '}Can delete
+                            Can delete
                           </label>
-                          <button
-                            className="btn btn-primary"
-                            style={{ marginRight: '8px' }}
-                            disabled={saving}
-                            onClick={() => savePermissions(u.id)}
-                          >
-                            {saving ? 'Saving…' : 'Save'}
-                          </button>
-                          <button className="btn btn-secondary" onClick={cancelEdit}>Cancel</button>
-                        </div>
+                          <div className={ui.actions}>
+                            <button
+                              type="button"
+                              className={`${ui.btn} ${ui.btnPrimary}`}
+                              disabled={saving} aria-busy={saving}
+                              onClick={() => savePermissions(u.id)}
+                            >
+                              {saving ? 'Saving…' : 'Save'}
+                            </button>
+                            <button type="button" className={`${ui.btn} ${ui.btnSecondary}`} onClick={cancelEdit}>
+                              Cancel
+                            </button>
+                          </div>
+                        </fieldset>
                       </td>
                     </tr>
                   )}
                 </Fragment>
               ))}
               {users.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: '#5f6368' }}>No registered users yet.</td></tr>
+                <tr><td colSpan={6} className={ui.emptyCell}>No registered users yet.</td></tr>
               )}
             </tbody>
           </table>
+          </div>
         )}
       </main>
     </>

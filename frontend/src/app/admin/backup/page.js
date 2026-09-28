@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import RequireAdmin from '@/components/RequireAdmin';
 import { API_BASE_URL } from '@/providers/AuthProvider';
+import ui from '@/styles/ui.module.css';
 
 function formatBytes(n) {
   if (n < 1024) return `${n} B`;
@@ -133,51 +134,58 @@ function BackupRestoreInner() {
   return (
     <>
       <GlobalNavbar />
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px', height: 'calc(100vh - 72px)', overflowY: 'auto' }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Database Backup & Restore</h1>
-        <p style={{ color: '#5f6368', marginBottom: '24px' }}>
-          Runs via the app&apos;s own database user (mis_app) — same tool the daily scheduled backup uses.
-          Restoring always saves a snapshot of the current data first.
-        </p>
+      <main className={ui.page}>
+        <div className={ui.pageHeader}>
+          <h1 className={ui.pageTitle}>Database Backup &amp; Restore</h1>
+          <p className={ui.pageLead}>
+            Runs via the app&apos;s own database user (mis_app) — same tool the daily scheduled backup uses.
+            Restoring always saves a snapshot of the current data first.
+          </p>
+        </div>
 
-        <button className="btn btn-primary" onClick={backupNow} disabled={busy} style={{ marginBottom: '20px' }}>
-          {backingUp ? `Backing up… (${elapsed}s)` : 'Backup Now'}
-        </button>
+        <div style={{ marginBottom: 20 }}>
+          <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} onClick={backupNow}
+                  disabled={busy} aria-busy={backingUp}>
+            {backingUp ? `Backing up… (${elapsed}s)` : 'Backup Now'}
+          </button>
+        </div>
 
         {busy && (
-          <p style={{ color: '#5f6368', marginBottom: '12px' }}>
+          <p role="status" className={`${ui.alert} ${ui.alertWarning}`}>
             This can take a couple of minutes — please don&apos;t close or refresh this page.
           </p>
         )}
-        {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
-        {notice && <p style={{ color: '#188038', marginBottom: '12px' }}>{notice}</p>}
+        {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
+        {notice && <p role="status" className={`${ui.alert} ${ui.alertSuccess}`}>{notice}</p>}
 
         {loading ? (
-          <p>Loading…</p>
+          <p className={ui.meta} aria-live="polite">Loading…</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className={ui.tableWrap}>
+          <table className={ui.table}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
-                <th style={{ padding: '8px' }}>Filename</th>
-                <th style={{ padding: '8px' }}>Size</th>
-                <th style={{ padding: '8px' }}>Modified (IST)</th>
-                <th style={{ padding: '8px' }}></th>
+              <tr>
+                <th scope="col">Filename</th>
+                <th scope="col" className={ui.numeric}>Size</th>
+                <th scope="col">Modified (IST)</th>
+                <th scope="col"><span className={ui.srOnly}>Actions</span></th>
               </tr>
             </thead>
             <tbody>
               {backups.map((b) => (
-                <tr key={b.filename} style={{ borderBottom: '1px solid #e8eaed' }}>
-                  <td style={{ padding: '8px', fontFamily: 'monospace', fontSize: '9.5pt' }}>{b.filename}</td>
-                  <td style={{ padding: '8px' }}>{formatBytes(b.size_bytes)}</td>
-                  <td style={{ padding: '8px', fontSize: '9.5pt', color: '#5f6368' }}>
+                <tr key={b.filename}>
+                  <td className={ui.mono}>{b.filename}</td>
+                  <td className={`${ui.numeric} ${ui.nowrap}`}>{formatBytes(b.size_bytes)}</td>
+                  <td className={`${ui.muted} ${ui.nowrap}`}>
                     {b.modified_at?.replace('T', ' ').slice(0, 19)}
                   </td>
-                  <td style={{ padding: '8px' }}>
+                  <td>
                     <button
-                      className="btn btn-secondary"
-                      style={{ color: '#c5221f', borderColor: '#c5221f' }}
+                      type="button"
+                      className={`${ui.btn} ${ui.btnDanger} ${ui.btnSm}`}
+                      aria-label={`Restore ${b.filename}`}
                       onClick={() => restore(b.filename)}
-                      disabled={busy}
+                      disabled={busy} aria-busy={restoringFile === b.filename}
                     >
                       {restoringFile === b.filename ? `Restoring… (${elapsed}s)` : 'Restore'}
                     </button>
@@ -185,10 +193,11 @@ function BackupRestoreInner() {
                 </tr>
               ))}
               {backups.length === 0 && (
-                <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#5f6368' }}>No backups found.</td></tr>
+                <tr><td colSpan={4} className={ui.emptyCell}>No backups found.</td></tr>
               )}
             </tbody>
           </table>
+          </div>
         )}
       </main>
     </>
