@@ -1,0 +1,79 @@
+/* Data Entry Hub. Page chrome comes from styles/ui.module.css. */
+
+.group { margin-bottom: 28px; }
+
+.groupTitle {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-secondary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  gap: 14px;
+  height: 100%;
+  padding: 16px 18px;
+  text-decoration: none;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.card:hover {
+  border-color: var(--ui-primary);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
+}
+
+.icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: var(--ui-bg-subtle);
+  border-radius: var(--ui-radius-sm);
+}
+
+.body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.title { margin: 0; font-size: 15px; font-weight: 600; color: var(--ui-text); }
+.card:hover .title { color: var(--ui-primary); }
+
+.desc { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ui-text-secondary); }
+
+.tip {
+  margin-top: 8px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ui-text);
+  background: var(--ui-primary-subtle);
+  border-radius: var(--ui-radius);
+}
+
+.tip strong { color: var(--ui-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; }
+}
