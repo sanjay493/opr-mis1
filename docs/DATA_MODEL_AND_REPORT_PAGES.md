@@ -152,7 +152,7 @@ are named `get_*` (read) and `save_* / upsert_* / merge_upsert_*` (write).
     `pdf_extractor_asp.py`, `pdf_extractor_ssp.py`, `pdf_extractor_visl.py`,
     `pdf_extractor_bsp_flash.py`.
   - `/upload` → *Preview & Insert* → `POST /api/extract-preview` → `POST /api/confirm-extraction`.
-  - `frontend/src/app/data-entry/production/page.js` → `POST /api/production-entry`.
+  - `frontend/src/components/entry/production/Form.js` → `POST /api/production-entry`.
   - `frontend/src/app/data-entry/conversion/page.js`.
   - Backfill scripts: `scripts/backfill_asp_ingot.py`, `backfill_ssp_production.py`,
     `backfill_rspbsl_ingot.py`, `backfill_asp_legacy_fl_excel.py`,
@@ -200,9 +200,9 @@ Sinter, <mill units>, General`. `till_month` = April→report_month cumulative,
   - Techno APIs: `api_bsp_techno.py`, `api_dsp_techno.py`, `api_isp_techno.py`,
     `api_rsp_techno.py`, `api_mcr_techno.py`, `api_coal_co2_techno.py`,
     `api_coal_omi_techno.py`, `api_unified_techno.py`.
-  - Manual: `data-entry/techno-manual/page.js`, `data-entry/techno-correction/page.js`,
-    `data-entry/key-parameters-manual/page.js`, `data-entry/co2-water-pm-manual/page.js`,
-    `data-entry/bf-large-snapshot/page.js`
+  - Manual: `frontend/src/components/entry/techno-manual/Form.js`, `frontend/src/components/entry/techno-correction/Form.js`,
+    `frontend/src/components/entry/key-parameters-manual/Form.js`, `frontend/src/components/entry/co2-water-pm-manual/Form.js`,
+    `frontend/src/components/entry/bf-large-snapshot/Form.js`
     → `POST /api/techno/manual/save` (`api_techno_manual.py`) → `db.merge_upsert_techno_data`.
   - SAIL BF aggregate computed from the 5 plants: `POST /api/techno/manual/sail/calculate`.
   - Cumulative rules for the manual form's auto-YTD: `techno_cumulative.py:CUMULATIVE_RULES`.
@@ -232,13 +232,13 @@ row on the extraction preview. Read by every extractor's label→item mapping.
 
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
-| `special_steel_orders` | `(report_month, plant_name, product, quality_grade, section)` → `order_qty`, `actual_despatch`, `sort_order` | Preview→Insert (`BSP_Spstl-*.xlsx`, DSP OMI PDF, `image_extractor_isp_special_steel.py`, `pdf_extractor_ssp/visl`); `data-entry/special-steel/page.js` → `/api/special-steel-manual/save`; `scripts/backfill_special_steel_2022_23.py` | `page_special_steel.py` (19–24), `page_special_steel_trend.py`, `page_special_steel_fy_export.py` |
+| `special_steel_orders` | `(report_month, plant_name, product, quality_grade, section)` → `order_qty`, `actual_despatch`, `sort_order` | Preview→Insert (`BSP_Spstl-*.xlsx`, DSP OMI PDF, `image_extractor_isp_special_steel.py`, `pdf_extractor_ssp/visl`); `frontend/src/components/entry/special-steel/Form.js` → `/api/special-steel-manual/save`; `scripts/backfill_special_steel_2022_23.py` | `page_special_steel.py` (19–24), `page_special_steel_trend.py`, `page_special_steel_fy_export.py` |
 | `special_steel_abp_table` | `(report_month, plant_name)` → `abp_qty` (12 months at once) | `data-entry/special-steel-abp/page.js` → `/api/special-steel-abp` | `page_special_steel.py` (ABP column) |
-| `special_steel_grade_clubs` | `(plant_name, product, quality_grade)` → `club_label` | `data-entry/special-steel-grade-clubs/page.js` → `/api/special-steel/grade-clubs` (`api_special_steel_clubs.py`) | `page_special_steel.py:_resolve_clubs` |
-| `special_steel_phys_perf` | `(financial_year, plant, series, metric)` → `value_kt` (history) | `data-entry/special-steel-physical/page.js`; `scripts/backfill_special_steel_physical.py` | `page_special_steel_physical.py` |
+| `special_steel_grade_clubs` | `(plant_name, product, quality_grade)` → `club_label` | `frontend/src/components/entry/special-steel-grade-clubs/Form.js` → `/api/special-steel/grade-clubs` (`api_special_steel_clubs.py`) | `page_special_steel.py:_resolve_clubs` |
+| `special_steel_phys_perf` | `(financial_year, plant, series, metric)` → `value_kt` (history) | `frontend/src/components/entry/special-steel-physical/Form.js`; `scripts/backfill_special_steel_physical.py` | `page_special_steel_physical.py` |
 | `special_steel_phys_meta` | `(plant, series)` → `capacity_kt`, `best_actual_kt`, `best_year`, `remark`, `sort_order` | same data-entry page | `page_special_steel_physical.py` |
 | `special_steel_phys_note` | `(financial_year, sort_order)` → `note_text` | same data-entry page | `page_special_steel_physical.py` |
-| `special_steel_ipt_requirement` | `(financial_year, item, from_plant, to_plant)` → `plan_kt` | `data-entry/special-steel-ipt/page.js` | `page_special_steel_physical.py` (IPT block) |
+| `special_steel_ipt_requirement` | `(financial_year, item, from_plant, to_plant)` → `plan_kt` | `frontend/src/components/entry/special-steel-ipt/Form.js` | `page_special_steel_physical.py` (IPT block) |
 
 ### 4.6 Cost trend
 
@@ -255,12 +255,12 @@ and `frontend/.../cost-trend/page.js:PRODUCTS` list all five.
 
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
-| `sail_mines_monthly` | `(report_month, section, item)` → `month_actual`, `month_plan`. Sections/items registry in `page_sail_mines.py:SAIL_MINES_SECTIONS` (Coal, Washery, Coal Despatch, Flux). Derived rows (Total, Yield) computed at read time. | `data-entry/sail-mines/page.js` → `/api/sail-mines/monthly` | `page_sail_mines.py` |
+| `sail_mines_monthly` | `(report_month, section, item)` → `month_actual`, `month_plan`. Sections/items registry in `page_sail_mines.py:SAIL_MINES_SECTIONS` (Coal, Washery, Coal Despatch, Flux). Derived rows (Total, Yield) computed at read time. | `frontend/src/components/entry/sail-mines/Form.js` → `/api/sail-mines/monthly` | `page_sail_mines.py` |
 | `mine_groups_master`, `mines_master`, `mine_materials_master`, `mine_end_uses_master` | Reference data (11 mines under JGoM/OGoM/CGoM, materials, end-uses) | Seeded in `db.init_db()`; editable as data | `page_sail_mines.py` (labels/grouping) |
-| `mines_production_monthly` | `(report_month, mine_code, material_code)` → `qty_actual`, `qty_plan` (Lump/Fines) | `data-entry/mines-production-despatch/page.js`; `scripts/backfill_iron_ore_mines_production.py` | `page_sail_mines.py` (mine-level → group rollup) |
+| `mines_production_monthly` | `(report_month, mine_code, material_code)` → `qty_actual`, `qty_plan` (Lump/Fines) | `frontend/src/components/entry/mines-production-despatch/Form.js`; `scripts/backfill_iron_ore_mines_production.py` | `page_sail_mines.py` (mine-level → group rollup) |
 | `mines_despatch_actual_monthly` | `(report_month, mine_code, material_code, transport_mode, end_use_code)` → `qty_actual` | same data-entry page | `page_sail_mines.py` |
 | `mines_despatch_plan_monthly` | `(report_month, mine_code, material_code, end_use_code)` → `qty_plan` (no transport split) | same; `scripts/backfill_iron_ore_mines_despatch_plan.py` | `page_sail_mines.py` |
-| `mines_booked_qty_actual_monthly` / `mines_booked_qty_plan_monthly` | mine-level "Booked Quantity" (sales to 3rd party), SALES end-use only | `data-entry/mines-production-despatch/page.js` | `page_sail_mines.py` |
+| `mines_booked_qty_actual_monthly` / `mines_booked_qty_plan_monthly` | mine-level "Booked Quantity" (sales to 3rd party), SALES end-use only | `frontend/src/components/entry/mines-production-despatch/Form.js` | `page_sail_mines.py` |
 
 > **Current caveat:** the Iron Ore Production/Despatch and Sales group tables on the
 > SAIL Mines page are **hard-coded** in `hardcoded_config.json` (`sail_mines →
@@ -304,14 +304,14 @@ mid-FY change history (`db.get_effective_capacity` = latest row ≤ month).
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
 | `page3_narrative` | `(report_month)` → `production_narrative`, `highlights` | `/api/page3-narrative` (inline edit on `/report` page 3) | `page3_highlights.py` / page 3 assembly |
-| `key_highlights_narrative` | `(report_month)` → `achievements`, `shortfalls`, `focus_areas` (JSON) | `data-entry/key-highlights/page.js` (`api_key_highlights.py`) | `page_key_highlights.py` (built, not currently in the report) |
+| `key_highlights_narrative` | `(report_month)` → `achievements`, `shortfalls`, `focus_areas` (JSON) | `frontend/src/components/entry/key-highlights/Form.js` (`api_key_highlights.py`) | `page_key_highlights.py` (built, not currently in the report) |
 
 ### 4.13 BF benchmarking
 
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
-| `bf_benchmark_sail_meta` | `(plant, unit)` → `working_volume_m3` (SAIL's 3 large BFs) | `data-entry/bf-benchmark/page.js` → `PATCH /api/bf-benchmark/sail-meta` | `api_bf_benchmark.py`, `page_bf_large_annexure.py` |
-| `bf_benchmark_external_bf` | non-SAIL BF registry (`name`, `company`, `location`, `working_volume_m3`, `active`) | `data-entry/bf-benchmark/page.js` → `POST/PATCH /api/bf-benchmark/external-bfs` | `api_bf_benchmark.py`, `reports/bf-benchmark` |
+| `bf_benchmark_sail_meta` | `(plant, unit)` → `working_volume_m3` (SAIL's 3 large BFs) | `frontend/src/components/entry/bf-benchmark/Form.js` → `PATCH /api/bf-benchmark/sail-meta` | `api_bf_benchmark.py`, `page_bf_large_annexure.py` |
+| `bf_benchmark_external_bf` | non-SAIL BF registry (`name`, `company`, `location`, `working_volume_m3`, `active`) | `frontend/src/components/entry/bf-benchmark/Form.js` → `POST/PATCH /api/bf-benchmark/external-bfs` | `api_bf_benchmark.py`, `reports/bf-benchmark` |
 | `bf_benchmark_external_data` | `(external_bf_id, report_month)` → `param_json` (`report_month` holds an **FY label** here, e.g. `2025-26`) | same page → `POST /api/bf-benchmark/external-bfs/{id}/entry` | `api_bf_benchmark.py` |
 
 Benchmark param registry: `backend/bf_benchmark_registry.py` (`BF_BENCHMARK_PARAMS`,

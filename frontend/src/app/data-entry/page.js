@@ -2,122 +2,135 @@
 
 import RequireEditor from '@/components/RequireEditor';
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import GlobalNavbar from '@/components/GlobalNavbar';
+import { ENTRY_GROUPS } from '@/components/entry/entryGroups';
 import ui from '@/styles/ui.module.css';
 import h from './hub.module.css';
 
+// Every data-entry destination in GlobalNavbar's "Data Entry" menu, grouped.
+// The Manual Entry cards come from components/entry/entryGroups.js (one card
+// per tabbed page, listing its tabs); the rest follow each page's own
+// heading/subtitle. Keep in sync with the navbar when a page is added or
+// removed.
 const GROUPS = [
   {
-    title: 'Production & Stock',
+    title: 'Manual Entry',
+    sections: ENTRY_GROUPS.map((g) => ({
+      title: g.title,
+      icon: g.icon,
+      link: g.route,
+      description: `${g.tabs.length} tabs: ${g.tabs.map((t) => t.label).join(' · ')}`,
+    })),
+  },
+  {
+    title: 'Uploads & Extraction',
     sections: [
-      {
-        title: 'Production Data Entry',
-        description: 'Enter actual production values for each item. Plan values come from the uploaded ABP and can also be edited.',
-        icon: '📊',
-        link: '/data-entry/production',
-      },
-      {
-        title: 'Production Data Entry — Month Range',
-        description: 'Enter or correct one plant/unit\'s actual production across several months at once, straight into production_table.',
-        icon: '📈',
-        link: '/data-entry/production-range',
-      },
-      {
-        title: 'Opening Stock',
-        description: 'Manage opening stock values for all items and plants at the beginning of each month.',
-        icon: '📦',
-        link: '/data-entry/opening-stock',
-      },
-      {
-        title: 'Inter-Plant Transfer (IPT)',
-        description: 'Track inter-plant transfers and movements between facilities.',
-        icon: '🚚',
-        link: '/data-entry/ipt',
-      },
-      {
-        title: 'Conversion',
-        description: 'Enter monthly conversion data for SAIL consolidated.',
-        icon: '🔄',
-        link: '/data-entry/conversion',
-      },
+      { title: 'Production, Stock & Special Steel Upload', icon: '📤', link: '/upload',
+        description: 'Upload plant Excel/PDF files, review the extracted production, techno and special steel data, then insert it. Also ABP plan upload.' },
+      { title: 'Techno Upload', icon: '🔧', link: '/data-entry/techno',
+        description: 'Upload each plant\'s techno files (Technopara, Flash PDF, OISCO, MCR, Morning Report…), preview and save; browse saved techno data.' },
+      { title: 'Coal / CO2 / Power Uploads', icon: '🛢️', link: '/data-entry/uploads',
+        description: 'All-5-plants-at-once report uploads: coal consumption, CO2/Water/PM EPI, and power.' },
+      { title: 'Cost Trend Excel Extractor', icon: '📊', link: '/data-entry/cost-trend-extract',
+        description: 'Upload an elementwise cost workbook to pull Variable and Fixed cost (Rs/T) for the Month or Till Month column.' },
+      { title: 'Indian Steel Sector Performance (PIB)', icon: '🏗️', link: '/data-entry/steel-sector-performance',
+        description: 'Paste the URL of the monthly PIB (Ministry of Steel) press release, or upload its PDF, to extract the sector figures.' },
     ],
   },
   {
-    title: 'Techno-Economic',
+    title: 'Stock & Operations',
     sections: [
-      {
-        title: 'Techno-Economic (TE) Targets',
-        description: 'Set annual techno-economic parameter targets by plant, shown as the Target column on techno reports.',
-        icon: '🎯',
-        link: '/data-entry/targets',
-      },
-      {
-        title: 'Techno Manual Entry',
-        description: 'Enter techno-economic parameters manually for each plant.',
-        icon: '⚙️',
-        link: '/data-entry/techno-manual',
-      },
-      {
-        title: 'SAIL Large BFs — Performance Snapshot',
-        description: 'Month and Till Month figures for BSP BF-8, RSP BF-5 and ISP BF-5 in report order. Saves into the same techno data as Techno Manual Entry.',
-        icon: '🏗️',
-        link: '/data-entry/bf-large-snapshot',
-      },
-      {
-        title: 'Techno Data Correction',
-        description: 'Find one techno-economic parameter across a plant + month range and correct it inline.',
-        icon: '🩹',
-        link: '/data-entry/techno-correction',
-      },
+      { title: 'Opening Stock', icon: '📦', link: '/data-entry/opening-stock',
+        description: 'Manage opening stock values for all items and plants at the beginning of each month.' },
+      { title: 'Inter-Plant Transfer (IPT)', icon: '🚚', link: '/data-entry/ipt',
+        description: 'Track inter-plant transfers and movements between facilities.' },
+      { title: 'Conversion', icon: '🔄', link: '/data-entry/conversion',
+        description: 'Enter monthly conversion data for SAIL consolidated.' },
+      { title: 'Capital Repair', icon: '🛠️', link: '/data-entry/capital-repair',
+        description: 'Update unit, planned days and actual dates as Capital Repair jobs execute — feeds the Production Loss Analysis report.' },
+      { title: 'Breakdown Entry', icon: '⚠️', link: '/data-entry/breakdown',
+        description: 'Log unplanned equipment downtime, plant-wise and unit-wise. Every breakdown counts fully toward the Production Loss Analysis report.' },
+      { title: 'Rakes Detention (Pages 1026-1040)', icon: '🚃', link: '/data-entry/rake-detention',
+        description: 'Plant-wise rake detention from the SAIL Rail Movement Cell\'s Average Plant Detention Report — every figure entered directly.' },
     ],
   },
   {
-    title: 'Reference & Records',
+    title: 'Annual Targets & Cost',
     sections: [
-      {
-        title: 'Iron Ore Mines Production & Despatch',
-        description: 'Enter mine-level fresh production (Lump/Fines) and despatch (all materials, incl. legacy Dump Fines/Pellets/Tailings) by Rail/Road to Captive, Sales, or Pellet Conversion.',
-        icon: '⛏️',
-        link: '/data-entry/mines-production-despatch',
-      },
-      {
-        title: 'Special Steel Grade Clubbing',
-        description: 'Combine near-duplicate quality grades into one report row for BSP/DSP/RSP/BSL.',
-        icon: '🔗',
-        link: '/data-entry/special-steel-grade-clubs',
-      },
-      {
-        title: 'Ready Reckoner',
-        description: 'Edit each plant\'s Unit-wise Capacity and Product Mix reference tables shown at the end of the report.',
-        icon: '📋',
-        link: '/data-entry/ready-reckoner',
-      },
-      {
-        title: '5 ISPs Major Units Daily Records',
-        description: 'Log a new best-ever daily production figure (with its date) for a major unit, shown in Annexure-3 of the report.',
-        icon: '🏆',
-        link: '/data-entry/major-unit-daily',
-      },
+      { title: 'Techno-Economic (TE) Targets', icon: '🎯', link: '/data-entry/targets',
+        description: 'Set annual techno-economic parameter targets by plant, shown as the Target column on techno reports.' },
+      { title: 'TE Targets (Pages 30-38)', icon: '🎯', link: '/data-entry/annual-target',
+        description: 'Entered once a year per FY; shown as the Target / Norm column on the month-wise techno pages.' },
+      { title: 'Special Steel ABP (Page 24)', icon: '🎯', link: '/data-entry/special-steel-abp',
+        description: 'Annual Business Plan target per plant for all 12 months of the FY — feeds the ABP columns on the SAIL Special Steel summary.' },
+      { title: 'Cost Trend (Pages 3.61-3.63)', icon: '💰', link: '/data-entry/cost-trend',
+        description: 'Variable / Fixed cost of Hot Metal, Crude Steel and Saleable Steel per plant, including SAIL 5 ISPs — history, month and till-month.' },
+      { title: 'Annual Capacity', icon: '🏭', link: '/data-entry/annual-capacity',
+        description: 'Rated annual capacity (\'000 T/yr) per plant/item, used for the Capacity and CU% columns on Plant Wise Performance.' },
+    ],
+  },
+  {
+    title: 'Dashboards',
+    sections: [
+      { title: 'Techno Summary', icon: '📈', link: '/data-entry/techno-summary',
+        description: 'Techno performance summary for a financial year, comparing BF and SMS parameters across the 5 plants.' },
+      { title: 'Coal Consumption', icon: '⛏️', link: '/data-entry/coal-consumption',
+        description: 'Indigenous and imported coal consumption across all 5 plants, plus SAIL receipt / consumption / stock.' },
+      { title: 'CO2 / Water / PM', icon: '🌫️', link: '/data-entry/co2-water-pm',
+        description: 'Specific CO2 emission, water consumption and PM emission across all 5 plants.' },
     ],
   },
 ];
 
+const TOTAL = GROUPS.reduce((n, g) => n + g.sections.length, 0);
+
 function DataEntryPageInner() {
+  const [query, setQuery] = useState('');
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return GROUPS;
+    return GROUPS
+      .map((g) => ({
+        ...g,
+        sections: g.sections.filter((s) =>
+          `${s.title} ${s.description}`.toLowerCase().includes(q)),
+      }))
+      .filter((g) => g.sections.length > 0);
+  }, [query]);
+  const shown = visible.reduce((n, g) => n + g.sections.length, 0);
+
   return (
     <>
       <GlobalNavbar />
 
       <main className={ui.page} style={{ maxWidth: 1400 }}>
-        <div className={ui.pageHeader} style={{ marginBottom: 28 }}>
+        <div className={ui.pageHeader}>
           <h1 className={ui.pageTitle}>Data Entry Hub</h1>
           <p className={ui.pageLead}>
-            Access all data entry tools for production, inventory, transfers, and techno-economic parameters.
+            All data entry tools — production, stock, uploads, techno-economic parameters, special steel, report
+            commentary and reference data.
           </p>
         </div>
 
-        {GROUPS.map((group) => (
+        <div className={h.search}>
+          <label htmlFor="hub-search" className={ui.srOnly}>Find a data entry page</label>
+          <input
+            id="hub-search"
+            type="search"
+            className="form-control"
+            placeholder={`Filter ${TOTAL} pages — e.g. "coal", "targets", "special steel"`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <span className={ui.meta} style={{ margin: 0 }} aria-live="polite">
+            {query ? `${shown} of ${TOTAL} pages` : `${TOTAL} pages`}
+          </span>
+        </div>
+
+        {visible.map((group) => (
           <section key={group.title} className={h.group} aria-labelledby={`hub-${group.title}`}>
             <h2 id={`hub-${group.title}`} className={h.groupTitle}>{group.title}</h2>
             <ul className={h.grid}>
@@ -135,6 +148,10 @@ function DataEntryPageInner() {
             </ul>
           </section>
         ))}
+
+        {shown === 0 && (
+          <p className={ui.meta}>No page matches &quot;{query}&quot;.</p>
+        )}
 
         <p className={h.tip}>
           <strong>Tip:</strong> Data entered in these sections is cached automatically for faster access. Use the Report

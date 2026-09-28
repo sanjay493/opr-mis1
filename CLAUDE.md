@@ -26,6 +26,7 @@ Monthly MIS report for SAIL: a FastAPI backend that ingests plant Excel/PDF file
 - `backend/page_*.py` + `backend/page_templates/` — one module per report page; `pdf.py` — assembles and renders the PDF.
 - `backend/excel_extractors/` — per-plant Excel/PDF extractors. See `backend/docs/TECHNO_EXTRACTION_GUIDE.md`.
 - `backend/techno_*.py` — techno-economic parameter registry, periods, cumulatives, aggregates.
+- Manual-entry forms live in `frontend/src/components/entry/<slug>/Form.js` and are shown as tabs of five grouped pages (`/data-entry/production-techno`, `mines`, `special-steel-entry`, `commentary`, `reference`) — groups/tabs in `components/entry/entryGroups.js`, shell in `EntryTabs.js`. The old `/data-entry/<slug>` routes are redirects to `?tab=<slug>`. Add a new form by creating its folder there, adding it to `entryGroups.js` and the `FORMS` map in `EntryTabs.js`.
 - `frontend/src/app/` — Next.js app router pages (`report`, `data-entry`, `upload`, `admin`, …). Read `frontend/AGENTS.md` before frontend work: Next 16 differs from older versions; check `frontend/node_modules/next/dist/docs/`.
 - Files named `_*`, `__*`, `debug_*`, `test_*.py` in `backend/` root are ad-hoc scratch scripts, not part of the app.
 

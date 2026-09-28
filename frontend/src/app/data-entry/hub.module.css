@@ -1,5 +1,15 @@
 /* Data Entry Hub. Page chrome comes from styles/ui.module.css. */
 
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.search input { flex: 0 1 460px; min-width: 0; }
+
 .group { margin-bottom: 28px; }
 
 .groupTitle {

@@ -4068,7 +4068,7 @@ async def save_production_entry(request: ProductionEntryRequest):
 # unit's history, e.g. backfilling several years of one item at once. Same
 # table, same db.save_production_actual as production-entry; this is just a
 # different slice/shape of the same data. See
-# frontend/src/app/data-entry/production-range/page.js.
+# frontend/src/components/entry/production-range/Form.js.
 # ---------------------------------------------------------------------------
 
 @app.get("/api/production-item-range")

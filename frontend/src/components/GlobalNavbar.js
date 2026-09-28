@@ -4,12 +4,15 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
+import { useEmbedded } from '@/components/entry/EmbeddedContext';
 
 export default function GlobalNavbar() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [expandedGroup, setExpandedGroup] = useState(null);
   const { user, logout } = useAuth();
   const router = useRouter();
+  // Inside a grouped entry page's tab the page already has a navbar.
+  const embedded = useEmbedded();
 
   const handleLogout = async () => {
     await logout();
@@ -25,26 +28,13 @@ export default function GlobalNavbar() {
         {
           groupLabel: 'Manual Entry',
           children: [
-            { label: 'Production Data Entry', link: '/data-entry/production', icon: '📊' },
-            { label: 'Special Steel Manual Entry (ISP)', link: '/data-entry/special-steel', icon: '🔩' },
-            { label: 'Special Steel Grade Clubbing', link: '/data-entry/special-steel-grade-clubs', icon: '🔗' },
-            { label: 'Special Steel Physical Performance', link: '/data-entry/special-steel-physical', icon: '🏭' },
-            { label: 'Special Steel IPT Requirement', link: '/data-entry/special-steel-ipt', icon: '↔️' },
-            { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
-            { label: 'SAIL Large BFs — Performance Snapshot', link: '/data-entry/bf-large-snapshot', icon: '🔥' },
-            { label: 'CO2 / Water / PM Manual Entry', link: '/data-entry/co2-water-pm-manual', icon: '🌫️' },
-            { label: 'Key Parameters Manual Entry', link: '/data-entry/key-parameters-manual', icon: '🔑' },
-            { label: 'Key Highlights & Variances', link: '/data-entry/key-highlights', icon: '📝' },
-            { label: 'Steel Sales Performance (Page 3.05)', link: '/data-entry/steel-sales-highlights', icon: '🛒' },
-            { label: 'Techno Data Correction', link: '/data-entry/techno-correction', icon: '🩹' },
-            { label: 'Production Data Correction (Month Range)', link: '/data-entry/production-range', icon: '📈' },
-            { label: 'Large BF Benchmarking Entry', link: '/data-entry/bf-benchmark', icon: '🏗️' },
-            { label: 'SAIL Mines Entry (Page 4.5)', link: '/data-entry/sail-mines', icon: '⛏️' },
-            { label: 'Rail Production & Dispatch Entry (Page 18.5)', link: '/data-entry/rail-report', icon: '🚆' },
-            { label: 'Iron Ore Mines Production & Despatch', link: '/data-entry/mines-production-despatch', icon: '🚂' },
-            { label: 'Market Intelligence Entry (Pages 2.41/2.42)', link: '/data-entry/market-intel', icon: '📈' },
-            { label: 'Ready Reckoner (Capacity & Product Mix)', link: '/data-entry/ready-reckoner', icon: '📋' },
-            { label: '5 ISPs Major Units Daily Records', link: '/data-entry/major-unit-daily', icon: '🏆' },
+            // Each is a tabbed page grouping several entry forms — see
+            // components/entry/entryGroups.js for the tabs of each.
+            { label: 'Production & Techno Entry', link: '/data-entry/production-techno', icon: '📊' },
+            { label: 'Mines Entry', link: '/data-entry/mines', icon: '⛏️' },
+            { label: 'Special Steel Entry', link: '/data-entry/special-steel-entry', icon: '🔩' },
+            { label: 'Report Commentary & Market', link: '/data-entry/commentary', icon: '📝' },
+            { label: 'Reference & Records', link: '/data-entry/reference', icon: '📋' },
           ]
         },
         {
@@ -146,6 +136,8 @@ export default function GlobalNavbar() {
       ]
     }
   ];
+
+  if (embedded) return null;
 
   return (
     <nav style={{

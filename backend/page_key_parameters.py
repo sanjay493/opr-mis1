@@ -17,7 +17,7 @@ Efficiency Parameters / Cost of Production — matching
 Report_format/"Plant wise Comparative for Apr-Jul'26.pdf" (the sample's own
 Recovery of Process Gases COG/BFG/LDG band was dropped — those three keys
 were never wired to a real data source; see
-frontend/src/app/data-entry/key-parameters-manual/page.js for the fields
+frontend/src/components/entry/key-parameters-manual/Form.js for the fields
 that still have no file-upload source). CAPEX, Labour Productivity, Avg
 Rake Detention Time, Demurrage, RLTIFR and HM Sent to PCM/Sand Pit/Dry Pit
 read a `techno_data` "General"-unit key with no extractor behind it — filled in
