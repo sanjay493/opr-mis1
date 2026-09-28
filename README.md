@@ -1,6 +1,8 @@
 # SAIL MIS Report Generator & Ingestion Portal
 
-Operation Monthly Informatics (OMI) Management Information System for Steel Authority of India Limited (SAIL). A **Python FastAPI backend** handles database storage and WeasyPrint PDF generation; a **Next.js frontend** provides report preview, inline editing, and Excel/PDF data ingestion.
+Operation Monthly Informatics (OMI) Management Information System for Steel Authority of India Limited (SAIL). A **Python FastAPI backend** handles data ingestion, storage and PDF generation (Playwright + headless Chromium); a **Next.js frontend** provides report preview, inline editing, and Excel/PDF data ingestion.
+
+> **Setting up a new machine?** Follow [`backend/docs/SETUP.md`](backend/docs/SETUP.md) — Python, Node, MySQL, restoring data from backup, and `.env` settings.
 
 ---
 
@@ -8,13 +10,19 @@ Operation Monthly Informatics (OMI) Management Information System for Steel Auth
 
 | Layer | Technology | Role |
 |---|---|---|
-| Frontend | Next.js 14 (`/frontend`) | Report preview, inline editing, data upload UI |
-| Backend | FastAPI + Python 3.11 (`/backend`) | REST API, SQLite queries, WeasyPrint PDF generation |
-| Database | SQLite (`mis_reports.db`) | Production actuals/plan, techno-economic params, page configs |
+| Frontend | Next.js 16 + React 19 (`/frontend`) | Report preview, inline editing, data upload UI |
+| Backend | FastAPI + Python 3.11 (`/backend`) | REST API, extraction, Playwright/Chromium PDF generation |
+| Database | MySQL (default on this deployment) or SQLite fallback | Production actuals/plan, techno-economic params, page configs |
+
+The database engine is chosen by `DB_ENGINE` in `backend/.env` (`mysql` or `sqlite`). Backend code writes SQLite-style SQL; `backend/dbengine.py` translates it for MySQL. The MySQL schema lives in `backend/scripts/mysql_schema.sql` plus `backend/scripts/migrate_*.sql`.
+
+Related docs: [`docs/DATA_MODEL_AND_REPORT_PAGES.md`](docs/DATA_MODEL_AND_REPORT_PAGES.md) (which table feeds which page), [`backend/docs/TECHNO_EXTRACTION_GUIDE.md`](backend/docs/TECHNO_EXTRACTION_GUIDE.md), [`backend/docs/PDF_LAYOUT_GUARDRAILS.md`](backend/docs/PDF_LAYOUT_GUARDRAILS.md).
 
 ---
 
 ## Report Coverage (Pages 1–35+)
+
+Core monthly report pages are listed below. The backend also generates many additional pages and exports (key highlights, records, SAIL mines, coal, power, special steel trends, D.O. letter, etc.) — see `backend/page_*.py` and `docs/DATA_MODEL_AND_REPORT_PAGES.md`.
 
 | Pages | Content |
 |---|---|
@@ -103,82 +111,55 @@ Populates `production_plan_table` for all 12 months in a single upload.
 
 ## System Requirements
 
-- **Node.js**: v18.x or v20.x (LTS)
-- **Python**: 3.11.x (3.9–3.12 supported)
-- **pip**: Python package manager
+| Tool | Version |
+|---|---|
+| Python | **3.11** (venv at `backend/venv`) |
+| Node.js | v20.9+ |
+| MySQL | 8.0.19+ (9.x in use), unless running with `DB_ENGINE=sqlite` |
+| Tesseract OCR | optional — only for ISP Special Steel image extraction |
+
+No GTK/WeasyPrint system libraries are needed — PDFs are rendered by Playwright's headless Chromium.
+
+Full step-by-step install (including MySQL and data restore): [`backend/docs/SETUP.md`](backend/docs/SETUP.md).
 
 ---
 
-## 1. System-Specific Dependencies (WeasyPrint)
+## 1. Backend Setup
 
-WeasyPrint requires Cairo, Pango, and GObject system libraries.
-
-### Windows
-1. Download and install the GTK3 runtime from [GTK-for-Windows-installer](https://github.com/tschoonj/GTK-for-Windows-installer/releases).
-2. Add the GTK `bin` folder (e.g. `C:\Program Files\GTK3-Runtime\bin`) to `Path`.
-
-### Linux (Ubuntu / Debian)
-```bash
-sudo apt-get install -y libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
-```
-
-### macOS
-```bash
-brew install pango cairo gdk-pixbuf libffi
-```
-
----
-
-## 2. Backend Setup
-
-```bash
-cd backend
-
-# Create and activate virtual environment
-python -m venv venv
-# Linux/macOS:  source venv/bin/activate
-# Windows CMD:  venv\Scripts\activate
-# Windows PS:   .\venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-```
-
-> `mis_reports.db` is created automatically on first run.
-
-### Start the Backend
-
-```bash
-# Development (auto-reload)
-uvicorn main:app --host 127.0.0.1 --port 8082 --reload
-
-# Windows PowerShell
-$env:PORT="8082"; uvicorn main:app --host 127.0.0.1 --port 8082 --reload
-```
-
-Set `FRONTEND_PORT` or `FRONTEND_ORIGIN` env vars to configure CORS for non-default frontend ports:
 ```powershell
-$env:PORT="8082"; $env:FRONTEND_PORT="3001"; uvicorn main:app --host 127.0.0.1 --port 8082 --reload
+cd backend
+py -3.11 -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m playwright install chromium
+copy .env.example .env      # then fill in secrets and DB settings
 ```
+
+- Always invoke tools as `venv\Scripts\python.exe -m <tool>` (`pip`, `uvicorn`, `playwright`, `pytest`). The pip-generated `.exe` launchers are blocked by Device Guard on the deployment machine.
+- `requirements.txt` is pinned to exact versions (full set in `requirements-lock.txt`). After any `pip install -r requirements.txt` on an existing machine, also run `venv\Scripts\python.exe -m playwright install --force chromium` — pip never updates the Chromium binary, and a stale one changes PDF pagination.
+- CORS: set `FRONTEND_ORIGIN` if the frontend is served from a non-default origin.
 
 ---
 
-## 3. Frontend Setup
+## 2. Frontend Setup
 
-```bash
+```powershell
 cd frontend
 npm install
+copy .env.example .env.local
 ```
 
-Create `frontend/.env.local` pointing to the backend:
-```env
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8082
-```
+`NEXT_PUBLIC_API_URL` in `.env.local` is the base URL the **browser** uses; it is baked in at build time. The frontend runs through `frontend/server.js`, which proxies `/api/*` to the backend on port 8082.
 
-```bash
-npm run dev        # development server on port 3000
-npm run build      # production build
-npm run start      # serve production build
-```
+---
+
+## 3. Running
+
+| Mode | Command | URLs |
+|---|---|---|
+| Development | `start-development.bat` | frontend `http://localhost:3000`, backend `http://127.0.0.1:8082` (both auto-reload) |
+| Production (LAN) | `start-production.bat` | frontend on port 80; rebuild first with `cd frontend && npm run build` |
+
+Both scripts free the ports, start MySQL if needed, sync pinned Python dependencies and Chromium, enable the git hooks in `.githooks/`, and launch backend and frontend in separate windows.
 
 ---
 
@@ -225,6 +206,8 @@ file format is introduced.
 ---
 
 ## 7. Report PDF Notes
+
+The PDF layout is tuned to the millimetre. Read [`backend/docs/PDF_LAYOUT_GUARDRAILS.md`](backend/docs/PDF_LAYOUT_GUARDRAILS.md) before changing templates, CSS, `pdf.py` or `layout_config.json`. `backend/layout_guard.py` runs from the git pre-commit hook; check a real render with `venv\Scripts\python.exe layout_guard.py --render YYYY-MM` (from `backend/`).
 
 - Pages 1–6: A4 Portrait with tight margins (10mm sides) for maximum table width.
 - Pages 7–26: A4 Portrait, standard margins.

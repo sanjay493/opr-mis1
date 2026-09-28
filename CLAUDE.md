@@ -2,8 +2,6 @@
 
 Monthly MIS report for SAIL: a FastAPI backend that ingests plant Excel/PDF files and renders the report PDF, and a Next.js frontend for preview, data entry and uploads.
 
-> `README.md` is partly stale: PDFs are rendered with **Playwright/Chromium** (not WeasyPrint) and the frontend is **Next 16** (not 14).
-
 ## Running
 
 - Dev: `start-development.bat` — backend `http://127.0.0.1:8082` (uvicorn `--reload`), frontend `http://localhost:3000` (via `frontend/server.js`, proxies `/api/*` to 8082). Both auto-reload; no restart needed after edits.
