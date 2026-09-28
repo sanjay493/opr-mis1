@@ -64,7 +64,7 @@ _STOCK_HISTORY_MONTH_NAMES = ["Apr", "May", "Jun", "Jul", "Aug", "Sep",
                               "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
 
 
-def _stock_history_fy_starts(report_month: str, n: int = 4) -> list:
+def _stock_history_fy_starts(report_month: str, n: int = 1) -> list:
     """N FY start years ending with report_month's own FY, oldest first —
     default 4 (report_month's FY + the 3 before it), per direct instruction
     ("last 3 years" i.e. FY2023-24 through FY2026-27 for a report_month
