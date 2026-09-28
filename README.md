@@ -52,6 +52,8 @@ Core monthly report pages are listed below. The backend also generates many addi
 
 ### Production Actuals (`/api/upload-excel`)
 
+> API only — the `/upload` page no longer calls this endpoint directly; these files are uploaded through **Preview & Insert** below.
+
 | Plant | File Type | Sheet / Detection |
 |---|---|---|
 | RSP | `.xlsx` Final Monthly | Sheets `page-9` + `page 1-8` — set month manually |
@@ -168,7 +170,7 @@ Both scripts free the ports, start MySQL if needed, sync pinned Python dependenc
 | URL | Description |
 |---|---|
 | `http://localhost:3000` | Dashboard — month selector, report preview navigation |
-| `http://localhost:3000/upload` | Data ingestion — upload actuals, techno files, or ABP plan |
+| `http://localhost:3000/upload` | Data ingestion — preview & insert actuals / techno / special steel, or ABP plan |
 | `http://localhost:3000/report` | Full report viewer — multi-page A4 preview + PDF download |
 | `http://localhost:8082/docs` | FastAPI Swagger UI for API exploration |
 
@@ -176,11 +178,10 @@ Both scripts free the ports, start MySQL if needed, sync pinned Python dependenc
 
 ## 5. Upload Page — Data Upload Modes
 
-The `/upload` page has a single **Data Upload** section with three modes selectable via tab:
+The `/upload` page has a single **Data Upload** section with two modes selectable via tab. Every upload is previewed before it is written to the database; the old "direct extraction (no preview)" form has been removed from the UI. The "Guidelines for Ingestion" card is collapsed by default — click it to expand.
 
 | Mode | Purpose | Endpoint |
 |---|---|---|
-| **Actuals** | Quick extract from production Excel — no preview, direct DB insert | `POST /api/upload-excel` |
 | **Preview & Insert** | Extract production + techno + special steel, review before inserting | `POST /api/extract-preview` → `POST /api/confirm-extraction` |
 | **ABP Plan** | Extract annual plan targets for all 12 months | `POST /api/upload-excel-plan` |
 

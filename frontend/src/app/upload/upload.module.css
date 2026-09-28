@@ -1,0 +1,210 @@
+/* Sidebar "Data Upload" panel on /upload. Uses the --ui-* tokens from
+   globals.css so the panel matches the rest of the portal. */
+
+.modeTabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.modeTab {
+  flex: 1;
+  min-height: 32px;
+  padding: 6px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--ui-text-secondary);
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition: background-color 150ms, border-color 150ms, color 150ms;
+}
+
+.modeTab:hover {
+  background: var(--ui-bg-subtle);
+}
+
+.modeTab[aria-selected='true'] {
+  font-weight: 600;
+  color: var(--ui-primary);
+  background: var(--ui-primary-subtle);
+  border-color: var(--ui-primary);
+}
+
+.helpText {
+  margin-top: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-secondary);
+  background: var(--ui-bg-subtle);
+  border-left: 3px solid var(--ui-border);
+  border-radius: 0 var(--ui-radius-sm) var(--ui-radius-sm) 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.stepHint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-secondary);
+  margin-bottom: 6px;
+}
+
+.divider {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.actionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Primary action: the main "extract" step for the selected plant. */
+.btnPrimary,
+.btnSecondary {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition: background-color 150ms, border-color 150ms;
+}
+
+.btnPrimary {
+  color: #fff;
+  background: var(--ui-primary);
+  border: 1px solid var(--ui-primary);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--ui-primary-hover);
+  border-color: var(--ui-primary-hover);
+}
+
+/* Secondary action: optional bulk / follow-up extractions. */
+.btnSecondary {
+  color: var(--ui-primary);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-primary);
+}
+
+.btnSecondary:hover:not(:disabled) {
+  background: var(--ui-primary-subtle);
+}
+
+.btnPrimary:disabled,
+.btnSecondary:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.modeTab:focus-visible,
+.btnPrimary:focus-visible,
+.btnSecondary:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
+}
+
+.warning {
+  margin-top: 16px;
+  padding: 12px 14px;
+  color: var(--ui-warning);
+  background: var(--ui-warning-bg);
+  border: 1px solid var(--ui-warning);
+  border-radius: var(--ui-radius);
+}
+
+.warningTitle {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.warningBody {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  margin-bottom: 10px;
+}
+
+.warningActions {
+  display: flex;
+  gap: 8px;
+}
+
+.warningActions > button {
+  width: auto;
+  flex: 1;
+}
+
+/* "Guidelines for Ingestion" card — a native <details>, collapsed on load. */
+.guideCard {
+  padding: 0 20px;
+  background: var(--ui-bg-subtle);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.guideCard[open] {
+  padding-bottom: 20px;
+}
+
+.guideSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--ui-text-secondary);
+}
+
+.guideSummary::-webkit-details-marker {
+  display: none;
+}
+
+.guideSummary h3 {
+  margin: 0;
+  font-size: 11pt;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.guideCard[open] > .guideSummary {
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.guideSummary:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
+  border-radius: var(--ui-radius-sm);
+}
+
+.chevron {
+  flex-shrink: 0;
+  transition: transform 150ms;
+}
+
+.guideCard[open] .chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .modeTab,
+  .btnPrimary,
+  .btnSecondary {
+    transition: none;
+  }
+}
