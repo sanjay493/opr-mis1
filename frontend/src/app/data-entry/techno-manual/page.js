@@ -8,6 +8,8 @@ import {
   PLANTS, AREA_ORDER, PARAM_TEMPLATES, PLANT_PARAM_EXTRAS, templateFor,
   KNOWN_UNITS, unitArea, BF_ORDER, sortUnitsInArea, _LABEL_MAP, labelOf,
 } from '@/lib/technoParamRegistry';
+import ui from '@/styles/ui.module.css';
+import m from './manual.module.css';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -61,10 +63,6 @@ function getDefaultPeriod() {
   return { monthName: names[d.getMonth()], year: String(d.getFullYear()) };
 }
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
-const TH = { padding:'9px 12px', border:'1px solid #dadce0', fontWeight:700, fontSize:14 };
-const TD = { padding:'7px 10px', border:'1px solid #dadce0', verticalAlign:'middle', fontSize:14 };
-
 // ── Change counter ────────────────────────────────────────────────────────────
 function countChanges(current, initial) {
   let n = 0;
@@ -94,46 +92,56 @@ function clearedKeys(current, initial, period) {
 }
 
 // ── Tiny shared components ────────────────────────────────────────────────────
+const NOTICE_CLASS = { success: ui.alertSuccess, error: ui.alertError, info: ui.alertWarning };
+
 function Notice({ type, text, onClose }) {
   if (!text) return null;
-  const ok   = type === 'success';
-  const info = type === 'info';
   return (
-    <div style={{
-      padding:'10px 16px', borderRadius:6, marginBottom:14, fontSize:14,
-      display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
-      background: ok ? '#f0fdf4' : info ? '#eff6ff' : '#fef2f2',
-      color:      ok ? '#166534' : info ? '#1e40af' : '#991b1b',
-      border:`1px solid ${ok ? '#86efac' : info ? '#bfdbfe' : '#fca5a5'}`,
-    }}>
+    <div role={type === 'error' ? 'alert' : 'status'}
+         className={`${ui.alert} ${NOTICE_CLASS[type] || ui.alertWarning}`}
+         style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
       <span>{text}</span>
       {onClose && (
-        <button onClick={onClose} style={{
-          background:'none', border:'none', cursor:'pointer', fontSize:18,
-          color:'inherit', opacity:0.5, padding:'0 2px', lineHeight:1,
-        }}>×</button>
+        <button type="button" onClick={onClose} aria-label="Dismiss message"
+                className={`${ui.btn} ${ui.btnSm}`}
+                style={{ background:'none', border:'none', color:'inherit', padding:'0 6px', fontSize:18 }}>
+          ×
+        </button>
       )}
     </div>
   );
 }
 
 // ── Number input cell ─────────────────────────────────────────────────────────
-function NumInput({ value, onChange, disabled, changed }) {
+function NumInput({ value, onChange, disabled, changed, label }) {
   return (
     <input
       type="number"
       step="any"
+      inputMode="decimal"
       value={value ?? ''}
       disabled={disabled}
+      aria-label={label}
       onChange={e => onChange(e.target.value === '' ? null : parseFloat(e.target.value))}
-      style={{
-        width:'100%', padding:'6px 10px', fontSize:14,
-        border:`1px solid ${changed ? '#f59e0b' : '#d1d5db'}`,
-        borderRadius:4,
-        background: disabled ? '#f9fafb' : changed ? '#fffbeb' : '#fff',
-        textAlign:'right',
-      }}
+      className={`${m.cell} ${changed ? m.cellChanged : ''}`}
     />
+  );
+}
+
+// Modal shell: Escape or a click on the backdrop closes it.
+function Modal({ titleId, wide, onClose, children }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className={m.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId}
+           className={`${m.modal} ${wide ? m.modalWide : ''}`}>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -155,70 +163,57 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy, selParam, on
 
   if (!allKeys.length)
     return (
-      <p style={{ color:'#6b7280', fontSize:14, margin:'16px 0' }}>
-        No parameters. Use "Add Param" below to add custom keys.
+      <p className={m.emptyHint} style={{ margin:'16px 0' }}>
+        No parameters. Use &quot;Add parameter&quot; below to add custom keys.
       </p>
     );
 
   return (
-    <div style={{
-      border:'1px solid #dadce0', borderRadius:6, overflow:'hidden',
-      maxHeight:'calc(100vh - 380px)', display:'flex', flexDirection:'column',
-    }}>
-      <div style={{ overflowY:'auto', overflowX:'auto', flex:1 }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
-          <thead>
-            <tr style={{ background:'#f8f9fa', position:'sticky', top:0, zIndex:1 }}>
-              <th style={{ ...TH, textAlign:'left', width:'44%' }}>Parameter (click to select)</th>
-              <th style={{ ...TH, width:'28%' }}>Month Value</th>
-              <th style={{ ...TH, width:'28%' }}>YTD (Cumulative)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allKeys.map((key, i) => {
-              const mv      = data?.month?.[key]      ?? null;
-              const tv      = data?.till_month?.[key] ?? null;
-              const initM   = initialData?.month?.[key]      ?? null;
-              const initT   = initialData?.till_month?.[key] ?? null;
-              const mChg    = mv !== initM;
-              const tChg    = tv !== initT;
-              const isTempl = templateKeys.includes(key);
-              const isSel   = key === selParam;
-              return (
-                <tr key={key} style={{ background: isSel ? '#e8f0fe' : i % 2 === 0 ? '#fff' : '#f8f9fa' }}>
-                  <td
-                    onClick={() => onSelectParam(isSel ? null : key)}
-                    title="Click to select this field for Calculate Cumulative"
-                    style={{
-                      ...TD, cursor:'pointer',
-                      fontWeight: isTempl ? 500 : 400,
-                      color: isSel ? '#174ea6' : isTempl ? '#202124' : '#5f6368',
-                      borderLeft: isSel ? '4px solid #1a73e8' : '4px solid transparent',
-                    }}
-                  >
-                    <span style={{
-                      display:'inline-block', width:12, height:12, borderRadius:'50%',
-                      border:`2px solid ${isSel ? '#1a73e8' : '#9ca3af'}`,
-                      background: isSel ? '#1a73e8' : '#fff',
-                      marginRight:8, verticalAlign:'middle',
-                    }} />
-                    {labelOf(key)}
-                    <br /><span style={{ fontSize:11, color:'#5f6368', marginLeft:22 }}>{key}</span>
-                  </td>
-                  <td style={TD}>
-                    <NumInput value={mv} disabled={busy} changed={mChg}
-                      onChange={v => onChange('month', key, v)} />
-                  </td>
-                  <td style={TD}>
-                    <NumInput value={tv} disabled={busy} changed={tChg}
-                      onChange={v => onChange('till_month', key, v)} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+    <div className={m.gridWrap}>
+      <table className={m.grid}>
+        <thead>
+          <tr>
+            <th scope="col" style={{ width:'44%' }}>Parameter (select for Calculate Cumulative)</th>
+            <th scope="col" style={{ width:'28%' }}>Month Value</th>
+            <th scope="col" style={{ width:'28%' }}>YTD (Cumulative)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {allKeys.map((key) => {
+            const mv      = data?.month?.[key]      ?? null;
+            const tv      = data?.till_month?.[key] ?? null;
+            const initM   = initialData?.month?.[key]      ?? null;
+            const initT   = initialData?.till_month?.[key] ?? null;
+            const isTempl = templateKeys.includes(key);
+            const isSel   = key === selParam;
+            const label   = labelOf(key);
+            return (
+              <tr key={key} className={isSel ? m.rowSelected : undefined}>
+                <td>
+                  <button type="button" aria-pressed={isSel}
+                          className={`${m.paramBtn} ${isTempl ? '' : m.paramExtra}`}
+                          onClick={() => onSelectParam(isSel ? null : key)}
+                          title="Select this field for Calculate Cumulative">
+                    <span className={m.radio} aria-hidden="true" />
+                    <span>
+                      <span className={m.paramName}>{label}</span>
+                      <span className={m.paramKey}>{key}</span>
+                    </span>
+                  </button>
+                </td>
+                <td>
+                  <NumInput value={mv} disabled={busy} changed={mv !== initM} label={`${label}, month value`}
+                    onChange={v => onChange('month', key, v)} />
+                </td>
+                <td>
+                  <NumInput value={tv} disabled={busy} changed={tv !== initT} label={`${label}, YTD cumulative`}
+                    onChange={v => onChange('till_month', key, v)} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -227,22 +222,20 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy, selParam, on
 function AddParam({ onAdd, disabled }) {
   const [key, setKey] = useState('');
   return (
-    <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:12 }}>
+    <form className={m.addParam}
+          onSubmit={e => { e.preventDefault(); if (key) { onAdd(key); setKey(''); } }}>
+      <label htmlFor="tm-add-param" className={ui.srOnly}>Custom parameter key</label>
       <input
+        id="tm-add-param"
+        className="form-control"
         placeholder="Custom param key (e.g. hot_blast_temp)"
         value={key}
         onChange={e => setKey(e.target.value.trim().toLowerCase().replace(/\s+/g,'_'))}
-        style={{ flex:1, padding:'7px 10px', fontSize:14, border:'1px solid #d1d5db', borderRadius:4 }}
       />
-      <button
-        disabled={disabled || !key}
-        onClick={() => { if (key) { onAdd(key); setKey(''); } }}
-        style={{
-          padding:'7px 16px', fontSize:14, background:'#3b82f6', color:'#fff',
-          border:'none', borderRadius:4, cursor: disabled || !key ? 'not-allowed' : 'pointer',
-        }}
-      >+ Param</button>
-    </div>
+      <button type="submit" className={`${ui.btn} ${ui.btnSecondary}`} disabled={disabled || !key}>
+        + Add parameter
+      </button>
+    </form>
   );
 }
 
@@ -261,60 +254,52 @@ function AddUnitModal({ existingUnits, onAdd, onClose }) {
   }
 
   return (
-    <div style={{
-      position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:200,
-      display:'flex', alignItems:'center', justifyContent:'center',
-    }}>
-      <div style={{
-        background:'#fff', borderRadius:10, padding:28, width:440,
-        boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
-      }}>
-        <h3 style={{ margin:'0 0 16px', fontSize:18, color:'#202124' }}>Add Unit</h3>
+    <Modal titleId="tm-add-unit-title" onClose={onClose}>
+      <form onSubmit={e => { e.preventDefault(); submit(); }}>
+        <h3 id="tm-add-unit-title" className={m.modalTitle} style={{ marginBottom:16 }}>Add Unit</h3>
 
-        <label style={{ fontSize:13, fontWeight:600, color:'#374151', display:'block', marginBottom:6 }}>
-          Select from known units
-        </label>
-        <select
-          value={custom ? '__custom__' : unitName}
-          onChange={e => {
-            if (e.target.value === '__custom__') { setCustom(true); setUnitName(''); }
-            else { setCustom(false); setUnitName(e.target.value); }
-          }}
-          style={{ width:'100%', padding:'8px 10px', fontSize:14, border:'1px solid #d1d5db', borderRadius:4, marginBottom:12 }}
-        >
-          <option value="">— Select unit —</option>
-          {available.map(u => <option key={u} value={u}>{u}</option>)}
-          <option value="__custom__">Custom (type below)…</option>
-        </select>
+        <div className={ui.field}>
+          <label htmlFor="tm-unit-select" className={ui.label}>Select from known units</label>
+          <select
+            id="tm-unit-select"
+            className="form-control"
+            autoFocus
+            value={custom ? '__custom__' : unitName}
+            onChange={e => {
+              if (e.target.value === '__custom__') { setCustom(true); setUnitName(''); }
+              else { setCustom(false); setUnitName(e.target.value); }
+            }}
+          >
+            <option value="">— Select unit —</option>
+            {available.map(u => <option key={u} value={u}>{u}</option>)}
+            <option value="__custom__">Custom (type below)…</option>
+          </select>
+        </div>
 
         {custom && (
-          <input
-            autoFocus
-            placeholder="Unit name (e.g. BF-9)"
-            value={unitName}
-            onChange={e => setUnitName(e.target.value)}
-            style={{ width:'100%', padding:'8px 10px', fontSize:14, border:'1px solid #d1d5db', borderRadius:4, marginBottom:12, boxSizing:'border-box' }}
-          />
+          <div className={ui.field}>
+            <label htmlFor="tm-unit-custom" className={ui.label}>Unit name</label>
+            <input
+              id="tm-unit-custom"
+              className="form-control"
+              autoFocus
+              placeholder="e.g. BF-9"
+              value={unitName}
+              onChange={e => setUnitName(e.target.value)}
+            />
+          </div>
         )}
 
-        <p style={{ fontSize:12, color:'#6b7280', margin:'0 0 18px' }}>
+        <p className={ui.hint}>
           Standard template parameters for this unit type will appear as blank rows ready for input.
         </p>
 
-        <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-          <button onClick={onClose} style={{
-            padding:'7px 18px', fontSize:14, background:'#f8f9fa',
-            border:'1px solid #dadce0', borderRadius:4, cursor:'pointer',
-          }}>Cancel</button>
-          <button onClick={submit} disabled={!unitName.trim()} style={{
-            padding:'7px 18px', fontSize:14, fontWeight:600,
-            background: unitName.trim() ? '#1a73e8' : '#5f6368',
-            color:'#fff', border:'none', borderRadius:4,
-            cursor: unitName.trim() ? 'pointer' : 'not-allowed',
-          }}>Add Unit</button>
+        <div className={m.modalActions}>
+          <button type="button" className={`${ui.btn} ${ui.btnSecondary}`} onClick={onClose}>Cancel</button>
+          <button type="submit" className={`${ui.btn} ${ui.btnPrimary}`} disabled={!unitName.trim()}>Add Unit</button>
         </div>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -352,39 +337,33 @@ function CopyFromPanel({ currentMonth, plant, onCopy }) {
   }
 
   if (!open) return (
-    <button onClick={() => setOpen(true)} style={{
-      width:'100%', padding:'7px 10px', fontSize:12, fontWeight:600,
-      background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:4,
-      color:'#1e40af', cursor:'pointer', marginBottom:10,
-    }}>
+    <button type="button" onClick={() => setOpen(true)} aria-expanded={false}
+            className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm} ${ui.btnBlock}`}>
       Copy from Month…
     </button>
   );
 
   return (
-    <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'12px', marginBottom:10 }}>
-      <div style={{ fontSize:12, fontWeight:700, color:'#1e40af', marginBottom:8 }}>
-        Copy values from:
-      </div>
-      <select value={monthName} onChange={e => setMonthName(e.target.value)}
-              style={{ width:'100%', fontSize:12, padding:'5px 8px', marginBottom:6, border:'1px solid #bfdbfe', borderRadius:3 }}>
-        {MONTHS.map(m => <option key={m}>{m}</option>)}
+    <div className={m.copyPanel}>
+      <div className={ui.label}>Copy values from</div>
+      <label htmlFor="tm-copy-month" className={ui.srOnly}>Source month</label>
+      <select id="tm-copy-month" className="form-control" value={monthName} onChange={e => setMonthName(e.target.value)}>
+        {MONTHS.map(mo => <option key={mo}>{mo}</option>)}
       </select>
-      <select value={year} onChange={e => setYear(e.target.value)}
-              style={{ width:'100%', fontSize:12, padding:'5px 8px', marginBottom:8, border:'1px solid #bfdbfe', borderRadius:3 }}>
+      <label htmlFor="tm-copy-year" className={ui.srOnly}>Source year</label>
+      <select id="tm-copy-year" className="form-control" value={year} onChange={e => setYear(e.target.value)}>
         {YEARS.map(y => <option key={y}>{y}</option>)}
       </select>
       {status && <Notice type={status.type} text={status.text} />}
-      <div style={{ display:'flex', gap:6 }}>
-        <button onClick={doCopy} disabled={loading} style={{
-          flex:1, padding:'6px 0', fontSize:12, fontWeight:600,
-          background: loading ? '#5f6368' : '#1e40af', color:'#fff',
-          border:'none', borderRadius:3, cursor: loading ? 'not-allowed' : 'pointer',
-        }}>{loading ? 'Loading…' : `Copy from ${srcMonth}`}</button>
-        <button onClick={() => { setOpen(false); setStatus(null); }} style={{
-          padding:'6px 10px', fontSize:12, background:'#f8f9fa',
-          border:'1px solid #dadce0', borderRadius:3, cursor:'pointer',
-        }}>×</button>
+      <div className={ui.actions} style={{ flexWrap:'nowrap' }}>
+        <button type="button" onClick={doCopy} disabled={loading} aria-busy={loading}
+                className={`${ui.btn} ${ui.btnPrimary} ${ui.btnSm}`} style={{ flex:1 }}>
+          {loading ? 'Loading…' : `Copy from ${srcMonth}`}
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setStatus(null); }} aria-label="Close copy panel"
+                className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm}`}>
+          ×
+        </button>
       </div>
     </div>
   );
@@ -402,88 +381,71 @@ function CumulativeModal({ preview, onApply, onClose }) {
   }[preview.method] || preview.method;
 
   return (
-    <div style={{
-      position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:200,
-      display:'flex', alignItems:'center', justifyContent:'center',
-    }}>
-      <div style={{
-        background:'#fff', borderRadius:10, padding:26, width:620, maxWidth:'92vw',
-        maxHeight:'86vh', overflowY:'auto', boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
-      }}>
-        <h3 style={{ margin:'0 0 4px', fontSize:18, color:'#202124' }}>
-          Cumulative Calculation — {labelOf(preview.param_key)}
-        </h3>
-        <div style={{ fontSize:13, color:'#5f6368', marginBottom:14 }}>
-          {preview.plant} › {preview.unit} · April → {preview.report_month} · {methodLabel}
-          {hasWeights && preview.weight_item && (
-            <><br />Weights: {preview.weight_item}</>
-          )}
-        </div>
+    <Modal titleId="tm-cum-title" wide onClose={onClose}>
+      <h3 id="tm-cum-title" className={m.modalTitle}>
+        Cumulative Calculation — {labelOf(preview.param_key)}
+      </h3>
+      <p className={ui.meta}>
+        {preview.plant} › {preview.unit} · April → {preview.report_month} · {methodLabel}
+        {hasWeights && preview.weight_item && (
+          <><br />Weights: {preview.weight_item}</>
+        )}
+      </p>
 
-        {(preview.warnings || []).map((w, i) => (
-          <Notice key={i} type="info" text={w} />
-        ))}
+      {(preview.warnings || []).map((w, i) => (
+        <Notice key={i} type="info" text={w} />
+      ))}
 
-        {/* Month-by-month table */}
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, marginBottom:14 }}>
+      {/* Month-by-month table */}
+      <div className={ui.tableWrap}>
+        <table className={ui.table}>
           <thead>
-            <tr style={{ background:'#e8f0fe' }}>
-              <th style={{ ...TH, textAlign:'left' }}>Month</th>
-              <th style={TH}>Monthly Value</th>
-              {hasWeights && <th style={TH}>Production (weight)</th>}
+            <tr>
+              <th scope="col">Month</th>
+              <th scope="col" className={ui.numeric}>Monthly Value</th>
+              {hasWeights && <th scope="col" className={ui.numeric}>Production (weight)</th>}
               {hasWeights && (
-                <th style={TH}>
+                <th scope="col" className={ui.numeric}>
                   {preview.method === 'harmonic_mean' ? 'Production ÷ Value' : 'Value × Production'}
                 </th>
               )}
             </tr>
           </thead>
           <tbody>
-            {(preview.rows || []).map((r, i) => (
-              <tr key={r.month} style={{ background: i % 2 === 0 ? '#fff' : '#f8f9fa' }}>
-                <td style={TD}>{r.month}</td>
-                <td style={{ ...TD, textAlign:'right' }}>{r.value ?? '—'}</td>
+            {(preview.rows || []).map((r) => (
+              <tr key={r.month}>
+                <td className={ui.nowrap}>{r.month}</td>
+                <td className={ui.numeric}>{r.value ?? '—'}</td>
                 {hasWeights && (
-                  <td style={{ ...TD, textAlign:'right', color: r.weight == null ? '#dc2626' : '#202124' }}>
+                  <td className={`${ui.numeric} ${r.weight == null ? m.missing : ''}`}>
                     {r.weight ?? 'missing'}
                   </td>
                 )}
-                {hasWeights && <td style={{ ...TD, textAlign:'right' }}>{r.product ?? '—'}</td>}
+                {hasWeights && <td className={ui.numeric}>{r.product ?? '—'}</td>}
               </tr>
             ))}
           </tbody>
         </table>
-
-        {/* Step-by-step working */}
-        <div style={{ background:'#f8f9fa', border:'1px solid #dadce0', borderRadius:6, padding:'12px 14px', marginBottom:14 }}>
-          <div style={{ fontSize:12, fontWeight:700, color:'#5f6368', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>
-            Calculation steps
-          </div>
-          {(preview.steps || []).map((s, i) => (
-            <div key={i} style={{ fontSize:13, color:'#202124', fontFamily:'Consolas, monospace', padding:'2px 0' }}>
-              {i + 1}. {s}
-            </div>
-          ))}
-        </div>
-
-        {/* Result + actions */}
-        <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-          <div style={{ fontSize:15, fontWeight:700, color:'#166534' }}>
-            Cumulative = {preview.result}
-          </div>
-          <div style={{ marginLeft:'auto', display:'flex', gap:10 }}>
-            <button onClick={onClose} style={{
-              padding:'7px 18px', fontSize:14, background:'#f8f9fa',
-              border:'1px solid #dadce0', borderRadius:4, cursor:'pointer',
-            }}>Close</button>
-            <button onClick={() => onApply(preview.param_key, preview.result)} style={{
-              padding:'7px 18px', fontSize:14, fontWeight:700,
-              background:'#166534', color:'#fff', border:'none', borderRadius:4, cursor:'pointer',
-            }}>Apply to YTD box</button>
-          </div>
-        </div>
       </div>
-    </div>
+
+      {/* Step-by-step working */}
+      <div className={m.steps}>
+        <div className={m.stepsTitle}>Calculation steps</div>
+        {(preview.steps || []).map((s, i) => (
+          <div key={i} className={m.step}>{i + 1}. {s}</div>
+        ))}
+      </div>
+
+      {/* Result + actions */}
+      <div className={m.modalActions}>
+        <div className={m.result}>Cumulative = {preview.result}</div>
+        <button type="button" className={`${ui.btn} ${ui.btnSecondary}`} onClick={onClose}>Close</button>
+        <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} autoFocus
+                onClick={() => onApply(preview.param_key, preview.result)}>
+          Apply to YTD box
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -763,7 +725,7 @@ function TechnoManualPageInner() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ height:'100vh', display:'flex', flexDirection:'column', background:'#ffffff', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <>
       <GlobalNavbar />
 
       {showAddUnit && (
@@ -782,61 +744,50 @@ function TechnoManualPageInner() {
         />
       )}
 
-      <div style={{ flex: 1, overflow: 'auto', maxWidth:1500, margin:'0 auto', padding:'22px 20px', width: '100%', boxSizing: 'border-box' }}>
+      <main className={ui.page} style={{ maxWidth:1500 }}>
 
         {/* ── Page title ── */}
-        <div style={{ display:'flex', alignItems:'baseline', gap:14, marginBottom:18 }}>
-          <h2 style={{ fontSize:'1.6rem', fontWeight:700, color:'#202124', margin:0 }}>
-            Techno Parameters — Universal Entry
-          </h2>
-          <span style={{ fontSize:13, color:'#5f6368' }}>
-            Insert legacy data · revise uploaded values · manual corrections
-          </span>
+        <div className={ui.pageHeader}>
+          <h1 className={ui.pageTitle}>Techno Parameters — Universal Entry</h1>
+          <p className={ui.pageLead}>Insert legacy data · revise uploaded values · manual corrections</p>
         </div>
 
         {/* ── Controls bar ── */}
-        <div style={{
-          display:'flex', gap:10, alignItems:'center', flexWrap:'wrap',
-          marginBottom:18, background:'#fff', border:'1px solid #dadce0',
-          borderRadius:8, padding:'14px 18px',
-        }}>
-          <label style={{ fontSize:13, fontWeight:600, color:'#374151' }}>Plant</label>
-          <select value={plant} onChange={e => setPlant(e.target.value)}
-                  style={{ padding:'7px 10px', fontSize:14, border:'1px solid #d1d5db', borderRadius:4 }}>
-            {PLANTS.map(p => <option key={p}>{p}</option>)}
-          </select>
+        <div className={m.toolbar}>
+          <div className={ui.field} style={{ marginBottom:0 }}>
+            <label htmlFor="tm-plant" className={ui.label}>Plant</label>
+            <select id="tm-plant" className="form-control" value={plant} onChange={e => setPlant(e.target.value)}>
+              {PLANTS.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className={ui.field} style={{ marginBottom:0 }}>
+            <label htmlFor="tm-month" className={ui.label}>Month</label>
+            <select id="tm-month" className="form-control" value={monthName} onChange={e => setMonthName(e.target.value)}>
+              {MONTHS.map(mo => <option key={mo}>{mo}</option>)}
+            </select>
+          </div>
+          <div className={ui.field} style={{ marginBottom:0 }}>
+            <label htmlFor="tm-year" className={ui.label}>Year</label>
+            <select id="tm-year" className="form-control" value={year} onChange={e => setYear(e.target.value)}>
+              {YEARS.map(y => <option key={y}>{y}</option>)}
+            </select>
+          </div>
 
-          <label style={{ fontSize:13, fontWeight:600, color:'#374151', marginLeft:10 }}>Month</label>
-          <select value={monthName} onChange={e => setMonthName(e.target.value)}
-                  style={{ padding:'7px 10px', fontSize:14, border:'1px solid #d1d5db', borderRadius:4 }}>
-            {MONTHS.map(m => <option key={m}>{m}</option>)}
-          </select>
-          <select value={year} onChange={e => setYear(e.target.value)}
-                  style={{ padding:'7px 10px', fontSize:14, border:'1px solid #d1d5db', borderRadius:4 }}>
-            {YEARS.map(y => <option key={y}>{y}</option>)}
-          </select>
-
-          <button onClick={loadData} disabled={loading} style={{
-            padding:'7px 20px', fontSize:14, fontWeight:600,
-            background:'#1a73e8', color:'#fff', border:'none', borderRadius:4,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}>
-            {loading ? 'Loading…' : 'Load'}
+          <button type="button" onClick={loadData} disabled={loading} aria-busy={loading}
+                  className={`${ui.btn} ${ui.btnSecondary}`}>
+            {loading ? 'Loading…' : 'Reload'}
           </button>
 
+          <span className={m.spacer} />
+          <span className={m.monthTag} aria-live="polite">
+            {reportMonth}{totalChanges > 0 ? ` · ${totalChanges} unsaved change${totalChanges === 1 ? '' : 's'}` : ''}
+          </span>
           {totalChanges > 0 && (
-            <button onClick={saveAll} disabled={saving} style={{
-              padding:'7px 20px', fontSize:14, fontWeight:700,
-              background: saving ? '#5f6368' : '#166534', color:'#fff',
-              border:'none', borderRadius:4, cursor: saving ? 'not-allowed' : 'pointer',
-            }}>
-              {saving ? 'Saving…' : `Save All (${totalChanges} changes)`}
+            <button type="button" onClick={saveAll} disabled={saving} aria-busy={saving}
+                    className={`${ui.btn} ${ui.btnPrimary}`}>
+              {saving ? 'Saving…' : `Save All (${totalChanges})`}
             </button>
           )}
-
-          <span style={{ marginLeft:'auto', fontSize:13, color:'#5f6368' }}>
-            {reportMonth}{loading && ' ⟳'}
-          </span>
         </div>
 
         {/* ── Notice ── */}
@@ -844,22 +795,17 @@ function TechnoManualPageInner() {
 
         {/* ── SAIL BF calculator (SAIL plant, BF area only) ── */}
         {isSail && area === 'Blast Furnace' && (
-          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'16px 20px', marginBottom:18 }}>
-            <div style={{ fontWeight:700, fontSize:15, color:'#1e40af', marginBottom:8 }}>
-              SAIL BF Aggregate Calculator
-            </div>
-            <p style={{ fontSize:13, color:'#374151', margin:'0 0 12px' }}>
+          <section className={m.sailBox} aria-labelledby="tm-sail-title">
+            <h2 id="tm-sail-title" className={m.sailTitle}>SAIL BF Aggregate Calculator</h2>
+            <p className={ui.meta}>
               Computes SAIL BF_Shop as HM-weighted averages across all plants. BF Productivity uses harmonic mean.
             </p>
-            <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
-              <button onClick={previewSail} disabled={sailBusy} style={{
-                padding:'7px 18px', fontSize:13, fontWeight:600,
-                background:'#3b82f6', color:'#fff', border:'none',
-                borderRadius:4, cursor: sailBusy ? 'not-allowed' : 'pointer',
-              }}>
+            <div className={ui.actions} style={{ alignItems:'center' }}>
+              <button type="button" onClick={previewSail} disabled={sailBusy} aria-busy={sailBusy}
+                      className={`${ui.btn} ${ui.btnSecondary}`}>
                 {sailBusy ? 'Working…' : 'Preview SAIL Calculation'}
               </button>
-              <label style={{ fontSize:13, display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
+              <label className={ui.checkRow}>
                 <input type="checkbox" checked={overwriteMan}
                        onChange={e => setOverwriteMan(e.target.checked)} />
                 Overwrite manually-entered SAIL values
@@ -868,178 +814,137 @@ function TechnoManualPageInner() {
 
             {sailPreview && (
               <div style={{ marginTop:14 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:'#1e40af', marginBottom:8 }}>
+                <p className={ui.meta}>
                   HM weights: {Object.entries(sailPreview.hm_weights || {})
                     .map(([p, v]) => `${p}=${v?.toFixed(0) ?? '?'}`).join(' | ')} (kt)
+                </p>
+                <div className={ui.tableWrap}>
+                  <table className={ui.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Parameter</th>
+                        <th scope="col" className={ui.numeric}>Calculated (Month)</th>
+                        <th scope="col" className={ui.numeric}>Existing SAIL</th>
+                        <th scope="col" className={ui.numeric}>Will Save</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(sailPreview.calculated?.month || {}).map((k) => {
+                        const calc     = sailPreview.calculated?.month?.[k];
+                        const exist    = sailPreview.existing_sail?.month?.[k];
+                        const willSave = overwriteMan ? calc : (exist ?? calc);
+                        return (
+                          <tr key={k}>
+                            <td>{labelOf(k)}</td>
+                            <td className={ui.numeric}>{calc?.toFixed(3) ?? '—'}</td>
+                            <td className={`${ui.numeric} ${exist != null ? '' : ui.muted}`}>{exist?.toFixed(3) ?? '—'}</td>
+                            <td className={ui.numeric} style={{ fontWeight:600 }}>{willSave?.toFixed(3) ?? '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                  <thead>
-                    <tr style={{ background:'#dbeafe' }}>
-                      <th style={TH}>Parameter</th>
-                      <th style={TH}>Calculated (Month)</th>
-                      <th style={TH}>Existing SAIL</th>
-                      <th style={TH}>Will Save</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.keys(sailPreview.calculated?.month || {}).map((k, i) => {
-                      const calc     = sailPreview.calculated?.month?.[k];
-                      const exist    = sailPreview.existing_sail?.month?.[k];
-                      const willSave = overwriteMan ? calc : (exist ?? calc);
-                      return (
-                        <tr key={k} style={{ background: i % 2 === 0 ? '#fff' : '#f0f9ff' }}>
-                          <td style={TD}>{labelOf(k)}</td>
-                          <td style={{ ...TD, textAlign:'right' }}>{calc?.toFixed(3) ?? '—'}</td>
-                          <td style={{ ...TD, textAlign:'right', color: exist != null ? '#166534' : '#9ca3af' }}>
-                            {exist?.toFixed(3) ?? '—'}
-                          </td>
-                          <td style={{ ...TD, textAlign:'right', fontWeight:600, color:'#1e40af' }}>
-                            {willSave?.toFixed(3) ?? '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <button onClick={applySail} disabled={sailBusy} style={{
-                  marginTop:10, padding:'7px 20px', fontSize:13, fontWeight:700,
-                  background:'#166534', color:'#fff', border:'none',
-                  borderRadius:4, cursor: sailBusy ? 'not-allowed' : 'pointer',
-                }}>
-                  {sailBusy ? 'Saving…' : 'Apply & Save SAIL BF_Shop'}
-                </button>
+                <div style={{ marginTop:12 }}>
+                  <button type="button" onClick={applySail} disabled={sailBusy} aria-busy={sailBusy}
+                          className={`${ui.btn} ${ui.btnPrimary}`}>
+                    {sailBusy ? 'Saving…' : 'Apply & Save SAIL BF_Shop'}
+                  </button>
+                </div>
               </div>
             )}
-          </div>
+          </section>
         )}
 
         {/* ── Area tabs ── */}
-        <div style={{ display:'flex', gap:0, borderBottom:'2px solid #dadce0', marginBottom:18 }}>
+        <div className={m.tabs} role="tablist" aria-label="Shop area">
           {AREA_ORDER.map(a => (
-            <button key={a} onClick={() => setArea(a)} style={{
-              padding:'8px 18px', fontSize:14, fontWeight: a === area ? 700 : 400,
-              border:'none', borderBottom: a === area ? '3px solid #1a73e8' : '3px solid transparent',
-              background:'transparent', color: a === area ? '#1a73e8' : '#6b7280',
-              cursor:'pointer', marginBottom:-2,
-            }}>
+            <button key={a} type="button" role="tab" aria-selected={a === area}
+                    className={m.tab} onClick={() => setArea(a)}>
               {a}
               {areaUnits[a]?.length > 0 && (
-                <span style={{ marginLeft:6, fontSize:11, background:'#dadce0', padding:'2px 7px', borderRadius:9 }}>
-                  {areaUnits[a].length}
-                </span>
+                <span className={m.count} aria-label={`${areaUnits[a].length} units`}>{areaUnits[a].length}</span>
               )}
             </button>
           ))}
         </div>
 
         {/* ── Two-column layout ── */}
-        <div style={{ display:'flex', gap:18 }}>
+        <div className={m.layout}>
 
           {/* ── Unit sidebar ── */}
-          <div style={{ width:190, flexShrink:0, display:'flex', flexDirection:'column', maxHeight:'calc(100vh - 260px)' }}>
-            <div style={{ fontSize:12, fontWeight:600, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>
-              Units
-            </div>
+          <nav className={m.sidebar} aria-label={`${area} units`}>
+            <div className={m.sideLabel}>Units</div>
 
-            {/* Add unit */}
-            <button onClick={() => setShowAddUnit(true)} style={{
-              width:'100%', padding:'7px 10px', fontSize:12, fontWeight:600,
-              background:'#f0fdf4', border:'1px solid #86efac', borderRadius:4,
-              color:'#166534', cursor:'pointer', marginBottom:10,
-            }}>
+            <button type="button" onClick={() => setShowAddUnit(true)}
+                    className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm} ${ui.btnBlock}`}>
               + Add Unit
             </button>
 
-            {/* Copy from month */}
             <CopyFromPanel currentMonth={reportMonth} plant={plant} onCopy={handleCopyFrom} />
 
-            {/* Unit list */}
-            <div style={{ overflowY:'auto', flex:1 }}>
+            <div className={m.unitList}>
               {visibleUnits.length === 0 ? (
-                <div style={{ fontSize:13, color:'#9ca3af', fontStyle:'italic', lineHeight:1.5 }}>
+                <div className={m.emptyHint}>
                   No {area} units.
-                  <br />Click "+ Add Unit" to start.
+                  <br />Click &quot;+ Add Unit&quot; to start.
                 </div>
               ) : (
                 visibleUnits.map(u => {
                   const chg     = countChanges(unitData[u], initData[u]);
                   const isSaved = savedUnits.has(u) && chg === 0;
                   return (
-                    <button key={u} onClick={() => setSelUnit(u)} style={{
-                      display:'block', width:'100%', textAlign:'left',
-                      padding:'8px 12px', marginBottom:4, fontSize:13,
-                      fontWeight: u === selUnit ? 700 : 400,
-                      background: u === selUnit ? '#e8f0fe' : '#fff',
-                      color: u === selUnit ? '#174ea6' : '#374151',
-                      border:`1px solid ${chg > 0 ? '#f59e0b' : '#dadce0'}`,
-                      borderRadius:5, cursor:'pointer',
-                    }}>
-                      {u}
-                      {chg > 0 && (
-                        <span style={{
-                          float:'right', fontSize:11, background:'#f59e0b',
-                          color:'#fff', padding:'1px 5px', borderRadius:8,
-                        }}>{chg}</span>
-                      )}
-                      {isSaved && (
-                        <span style={{ float:'right', fontSize:12, color:'#16a34a' }}>✓</span>
-                      )}
+                    <button key={u} type="button" onClick={() => setSelUnit(u)}
+                            aria-current={u === selUnit ? 'true' : undefined}
+                            className={`${m.unitBtn} ${chg > 0 ? m.unitBtnDirty : ''}`}>
+                      <span>{u}</span>
+                      {chg > 0 && <span className={m.dirtyBadge} aria-label={`${chg} unsaved`}>{chg}</span>}
+                      {isSaved && <span className={m.savedMark} aria-label="saved">✓</span>}
                     </button>
                   );
                 })
               )}
             </div>
-          </div>
+          </nav>
 
           {/* ── Param form ── */}
-          <div style={{ flex:1, minWidth:0 }}>
+          <div className={m.main}>
             {!selUnit ? (
-              <div style={{
-                color:'#9ca3af', fontSize:14, padding:'50px 0',
-                textAlign:'center', border:'2px dashed #dadce0', borderRadius:8,
-              }}>
+              <div className={m.emptyState}>
                 {visibleUnits.length === 0
                   ? `No ${area} units for ${plant} ${reportMonth}. Click "+ Add Unit" to begin.`
                   : 'Select a unit from the left to view or edit its parameters.'}
               </div>
             ) : (
-              <div style={{ background:'#fff', border:'1px solid #dadce0', borderRadius:8, padding:'18px' }}>
+              <section className={m.panel} aria-labelledby="tm-unit-title">
                 {/* Unit header */}
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10 }}>
+                <div className={m.panelHead}>
                   <div>
-                    <span style={{ fontWeight:700, fontSize:17, color:'#202124' }}>
+                    <h2 id="tm-unit-title" className={m.panelTitle} style={{ display:'inline', margin:0 }}>
                       {plant} › {selUnit}
-                    </span>
-                    <span style={{ fontSize:13, color:'#5f6368', marginLeft:12 }}>{reportMonth}</span>
+                    </h2>
+                    <span className={m.panelSub}>{reportMonth}</span>
                   </div>
-                  <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+                  <div className={ui.actions} style={{ alignItems:'center' }}>
                     {countChanges(unitData[selUnit], initData[selUnit]) > 0 && (
-                      <span style={{
-                        fontSize:12, color:'#b45309', background:'#fffbeb',
-                        border:'1px solid #f59e0b', padding:'3px 10px', borderRadius:9,
-                      }}>
+                      <span className={m.dirtyBadge}>
                         {countChanges(unitData[selUnit], initData[selUnit])} unsaved
                       </span>
                     )}
                     <button
+                      type="button"
                       onClick={() => calculateCumulative(selUnit)}
                       disabled={saving || cumBusy || !selParam}
-                      title={selParam ? `Calculate YTD for ${labelOf(selParam)}` : 'Click a parameter row to select the field first'}
-                      style={{
-                        padding:'7px 18px', fontSize:14, fontWeight:600,
-                        background: selParam ? '#3b82f6' : '#9ca3af', color:'#fff', border:'none',
-                        borderRadius:5, cursor: (saving || cumBusy || !selParam) ? 'not-allowed' : 'pointer',
-                      }}
+                      aria-busy={cumBusy}
+                      title={selParam ? `Calculate YTD for ${labelOf(selParam)}` : 'Select a parameter row first'}
+                      className={`${ui.btn} ${ui.btnSecondary}`}
                     >
                       {cumBusy ? 'Calculating…'
                         : selParam ? `Calculate Cumulative — ${labelOf(selParam)}`
                         : 'Calculate Cumulative (select a field)'}
                     </button>
-                    <button onClick={() => saveUnit(selUnit)} disabled={saving} style={{
-                      padding:'7px 22px', fontSize:14, fontWeight:700,
-                      background: saving ? '#5f6368' : '#166534', color:'#fff',
-                      border:'none', borderRadius:5, cursor: saving ? 'not-allowed' : 'pointer',
-                    }}>
+                    <button type="button" onClick={() => saveUnit(selUnit)} disabled={saving} aria-busy={saving}
+                            className={`${ui.btn} ${ui.btnPrimary}`}>
                       {saving ? 'Saving…' : `Save ${selUnit}`}
                     </button>
                   </div>
@@ -1059,18 +964,18 @@ function TechnoManualPageInner() {
 
                 {/* Add custom param */}
                 <AddParam disabled={saving} onAdd={key => handleAddParam(selUnit, key)} />
-              </div>
+              </section>
             )}
           </div>
         </div>
 
         {/* ── Footer note ── */}
-        <div style={{ marginTop:18, fontSize:12, color:'#9ca3af', display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:6 }}>
-          <span>Amber cells = unsaved changes vs last-loaded DB values. Click a parameter name to select it, then “Calculate Cumulative” computes that field's YTD from Apr→current monthly values — BF rates are HM-production weighted (BF productivity: harmonic mean), per-TCS params are crude-steel weighted; shop units (BF_Shop/SMS) weight by plant production, other units by their own monthly production. Every step is shown before you apply; applied values stay editable.</span>
-          <span>Null values are not overwritten on save. File-uploaded and manual data coexist — last write wins per parameter.</span>
+        <div className={m.footer}>
+          <span>Amber cells = unsaved changes vs last-loaded values. Select a parameter, then &quot;Calculate Cumulative&quot; computes that field&apos;s YTD from Apr→current monthly values — BF rates are HM-production weighted (BF productivity: harmonic mean), per-TCS params are crude-steel weighted; shop units (BF_Shop/SMS) weight by plant production, other units by their own monthly production. Every step is shown before you apply; applied values stay editable.</span>
+          <span>Clearing a box and saving removes that value. File-uploaded and manual data coexist — last write wins per parameter.</span>
         </div>
-      </div>
-    </div>
+      </main>
+    </>
   );
 }
 
