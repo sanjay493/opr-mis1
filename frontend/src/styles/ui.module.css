@@ -246,6 +246,19 @@
 }
 
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.table th.numeric { text-align: right; }
+
+/* A row header (<th scope="row">) reads as a normal first cell, not as a
+   column heading. */
+.table tbody th {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ui-text);
+  background: transparent;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
 .muted { color: var(--ui-text-secondary); }
 .nowrap { white-space: nowrap; }
 .mono { font-family: var(--font-mono); font-size: 13px; }

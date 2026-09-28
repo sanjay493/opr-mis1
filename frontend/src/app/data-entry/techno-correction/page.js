@@ -7,6 +7,8 @@ import GlobalNavbar from '@/components/GlobalNavbar';
 import {
   PLANTS, AREA_ORDER, templateFor, KNOWN_UNITS, unitArea, sortUnitsInArea, labelOf,
 } from '@/lib/technoParamRegistry';
+import ui from '@/styles/ui.module.css';
+import c from './correction.module.css';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -71,46 +73,49 @@ function Notice({ type, text, onClose }) {
   if (!text) return null;
   const ok = type === 'success';
   return (
-    <div style={{
-      padding:'10px 16px', borderRadius:6, marginBottom:14, fontSize:14,
-      display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
-      background: ok ? '#f0fdf4' : '#fef2f2',
-      color:      ok ? '#166534' : '#991b1b',
-      border:`1px solid ${ok ? '#86efac' : '#fca5a5'}`,
-    }}>
+    <div role={ok ? 'status' : 'alert'} className={`${ui.alert} ${ok ? ui.alertSuccess : ui.alertError}`}
+         style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
       <span>{text}</span>
       {onClose && (
-        <button onClick={onClose} style={{
-          background:'none', border:'none', cursor:'pointer', fontSize:18,
-          color:'inherit', opacity:0.5, padding:'0 2px', lineHeight:1,
-        }}>×</button>
+        <button type="button" onClick={onClose} aria-label="Dismiss message"
+                className={`${ui.btn} ${ui.btnSm}`}
+                style={{ background:'none', border:'none', color:'inherit', padding:'0 6px', fontSize:18 }}>
+          ×
+        </button>
       )}
     </div>
   );
 }
 
-function NumInput({ value, onChange, changed }) {
+// Display only: at most 2 decimals (trailing zeros dropped), or the key's own
+// DISPLAY_DP — same rule as techno-manual and bf-large-snapshot. The stored
+// value keeps full precision and is only re-saved if the user edits the cell.
+const DISPLAY_DP = { sulphur_in_hm: 3 };
+function fmtDisplay(v, dp = 2) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return v ?? '';
+  return String(Math.round(v * 10 ** dp) / 10 ** dp);
+}
+
+function NumInput({ value, onChange, changed, label, dp }) {
+  // Text typed in this box, shown as-is while editing; blur returns to the
+  // rounded view.
+  const [draft, setDraft] = useState(null);
   return (
     <input
       type="number"
       step="any"
-      value={value ?? ''}
-      onChange={e => onChange(e.target.value === '' ? null : parseFloat(e.target.value))}
-      style={{
-        width:'100%', padding:'6px 10px', fontSize:14,
-        border:`1px solid ${changed ? '#f59e0b' : '#d1d5db'}`,
-        borderRadius:4,
-        background: changed ? '#fffbeb' : '#fff',
-        textAlign:'right',
+      inputMode="decimal"
+      aria-label={label}
+      value={draft ?? fmtDisplay(value, dp)}
+      onChange={e => {
+        setDraft(e.target.value);
+        onChange(e.target.value === '' ? null : parseFloat(e.target.value));
       }}
+      onBlur={() => setDraft(null)}
+      className={`${c.cell} ${changed ? c.cellChanged : ''}`}
     />
   );
 }
-
-const TH = { padding:'9px 12px', border:'1px solid #dadce0', fontWeight:700, fontSize:14, textAlign:'left' };
-const TD = { padding:'7px 10px', border:'1px solid #dadce0', verticalAlign:'middle', fontSize:14 };
-const SELECT_STYLE = { padding:'7px 10px', fontSize:14, border:'1px solid #d1d5db', borderRadius:4 };
-const LABEL_STYLE = { fontSize:13, fontWeight:600, color:'#374151' };
 
 function TechnoCorrectionInner() {
   const [plant, setPlant]   = useState('BSP');
@@ -218,13 +223,27 @@ function TechnoCorrectionInner() {
         const init = initialRows.find(x => x.report_month === r.report_month);
         const month_data = {};
         const till_month_data = {};
-        if (r.month_value !== init.month_value && r.month_value !== null) month_data[saveKey] = r.month_value;
-        if (r.till_month_value !== init.till_month_value && r.till_month_value !== null) till_month_data[saveKey] = r.till_month_value;
-        if (Object.keys(month_data).length === 0 && Object.keys(till_month_data).length === 0) continue;
+        // A box cleared to empty is sent as an explicit delete — the save
+        // endpoint otherwise treats a missing/null value as "untouched", so
+        // the old figure would silently come back on the next load (same
+        // fix as techno-manual's clearedKeys).
+        const clear_month_keys = [];
+        const clear_till_keys = [];
+        if (r.month_value !== init.month_value) {
+          if (r.month_value === null) clear_month_keys.push(saveKey);
+          else month_data[saveKey] = r.month_value;
+        }
+        if (r.till_month_value !== init.till_month_value) {
+          if (r.till_month_value === null) clear_till_keys.push(saveKey);
+          else till_month_data[saveKey] = r.till_month_value;
+        }
 
         const resp = await fetch(`${API}/api/techno/manual/save`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plant: savePlant, report_month: r.report_month, unit: saveUnit, month_data, till_month_data }),
+          body: JSON.stringify({
+            plant: savePlant, report_month: r.report_month, unit: saveUnit,
+            month_data, till_month_data, clear_month_keys, clear_till_keys,
+          }),
         });
         const d = await resp.json();
         if (!resp.ok) throw new Error(errText(d.detail, `Save failed for ${r.report_month}`));
@@ -239,83 +258,79 @@ function TechnoCorrectionInner() {
   }
 
   return (
-    <div style={{ height:'100vh', display:'flex', flexDirection:'column', background:'#ffffff', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <>
       <GlobalNavbar />
 
-      <div style={{ flex: 1, overflow: 'auto', maxWidth:1100, margin:'0 auto', padding:'22px 20px', width: '100%', boxSizing: 'border-box' }}>
+      <main className={ui.page} style={{ maxWidth:1100 }}>
 
-        <div style={{ display:'flex', alignItems:'baseline', gap:14, marginBottom:18 }}>
-          <h2 style={{ fontSize:'1.6rem', fontWeight:700, color:'#202124', margin:0 }}>
-            Techno Data Correction
-          </h2>
-          <span style={{ fontSize:13, color:'#5f6368' }}>
-            Find one parameter across a month range and correct it inline
-          </span>
+        <div className={ui.pageHeader}>
+          <h1 className={ui.pageTitle}>Techno Data Correction</h1>
+          <p className={ui.pageLead}>Find one parameter across a month range and correct it inline.</p>
         </div>
 
-        {/* ── Filters ── */}
-        <div style={{
-          display:'flex', gap:10, alignItems:'center', flexWrap:'wrap',
-          marginBottom:18, background:'#fff', border:'1px solid #dadce0',
-          borderRadius:8, padding:'14px 18px',
-        }}>
-          <label style={LABEL_STYLE}>Plant</label>
-          <select value={plant} onChange={e => handlePlantChange(e.target.value)} style={SELECT_STYLE}>
-            {PLANTS.map(p => <option key={p}>{p}</option>)}
-          </select>
-
-          <label style={LABEL_STYLE}>Area</label>
-          <select value={area} onChange={e => handleAreaChange(e.target.value)} style={SELECT_STYLE}>
-            {AREA_ORDER.map(a => <option key={a}>{a}</option>)}
-          </select>
-
-          <label style={LABEL_STYLE}>Unit</label>
-          <select value={effectiveUnit} onChange={e => { setUnit(e.target.value); resetGrid(); }} style={SELECT_STYLE}>
-            {areaUnits.length === 0 && <option value="">— no {area} units for {plant} —</option>}
-            {areaUnits.map(u => <option key={u}>{u}</option>)}
-          </select>
-
-          <label style={LABEL_STYLE}>Parameter</label>
-          <select value={effectiveParamKey} onChange={e => { setParamKey(e.target.value); resetGrid(); }} style={{ ...SELECT_STYLE, minWidth:220 }}>
-            {paramKeys.map(k => <option key={k} value={k}>{labelOf(k)}</option>)}
-          </select>
+        {/* ── What to correct ── */}
+        <div className={c.filters}>
+          <div className={ui.field} style={{ marginBottom:0 }}>
+            <label htmlFor="tc-plant" className={ui.label}>Plant</label>
+            <select id="tc-plant" className="form-control" value={plant} onChange={e => handlePlantChange(e.target.value)}>
+              {PLANTS.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className={ui.field} style={{ marginBottom:0 }}>
+            <label htmlFor="tc-area" className={ui.label}>Area</label>
+            <select id="tc-area" className="form-control" value={area} onChange={e => handleAreaChange(e.target.value)}>
+              {AREA_ORDER.map(a => <option key={a}>{a}</option>)}
+            </select>
+          </div>
+          <div className={ui.field} style={{ marginBottom:0 }}>
+            <label htmlFor="tc-unit" className={ui.label}>Unit</label>
+            <select id="tc-unit" className="form-control" value={effectiveUnit} onChange={e => { setUnit(e.target.value); resetGrid(); }}>
+              {areaUnits.length === 0 && <option value="">— no {area} units for {plant} —</option>}
+              {areaUnits.map(u => <option key={u}>{u}</option>)}
+            </select>
+          </div>
+          <div className={ui.field} style={{ marginBottom:0, flex:'1 1 240px' }}>
+            <label htmlFor="tc-param" className={ui.label}>Parameter</label>
+            <select id="tc-param" className="form-control" value={effectiveParamKey} onChange={e => { setParamKey(e.target.value); resetGrid(); }}>
+              {paramKeys.map(k => <option key={k} value={k}>{labelOf(k)}</option>)}
+            </select>
+          </div>
         </div>
 
-        <div style={{
-          display:'flex', gap:10, alignItems:'center', flexWrap:'wrap',
-          marginBottom:18, background:'#fff', border:'1px solid #dadce0',
-          borderRadius:8, padding:'14px 18px',
-        }}>
-          <label style={LABEL_STYLE}>From</label>
-          <select value={fromMonthName} onChange={e => setFromMonthName(e.target.value)} style={SELECT_STYLE}>
-            {MONTHS.map(m => <option key={m}>{m}</option>)}
-          </select>
-          <select value={fromYear} onChange={e => setFromYear(e.target.value)} style={SELECT_STYLE}>
-            {YEARS.map(y => <option key={y}>{y}</option>)}
-          </select>
+        {/* ── Month range + actions ── */}
+        <div className={c.filters}>
+          <fieldset className={c.group} style={{ border:'none', margin:0, padding:0 }}>
+            <legend className={ui.label}>From</legend>
+            <label htmlFor="tc-from-month" className={ui.srOnly}>From month</label>
+            <select id="tc-from-month" className="form-control" value={fromMonthName} onChange={e => setFromMonthName(e.target.value)}>
+              {MONTHS.map(mo => <option key={mo}>{mo}</option>)}
+            </select>
+            <label htmlFor="tc-from-year" className={ui.srOnly}>From year</label>
+            <select id="tc-from-year" className="form-control" value={fromYear} onChange={e => setFromYear(e.target.value)}>
+              {YEARS.map(y => <option key={y}>{y}</option>)}
+            </select>
+          </fieldset>
+          <fieldset className={c.group} style={{ border:'none', margin:0, padding:0 }}>
+            <legend className={ui.label}>To</legend>
+            <label htmlFor="tc-to-month" className={ui.srOnly}>To month</label>
+            <select id="tc-to-month" className="form-control" value={toMonthName} onChange={e => setToMonthName(e.target.value)}>
+              {MONTHS.map(mo => <option key={mo}>{mo}</option>)}
+            </select>
+            <label htmlFor="tc-to-year" className={ui.srOnly}>To year</label>
+            <select id="tc-to-year" className="form-control" value={toYear} onChange={e => setToYear(e.target.value)}>
+              {YEARS.map(y => <option key={y}>{y}</option>)}
+            </select>
+          </fieldset>
 
-          <label style={{ ...LABEL_STYLE, marginLeft:10 }}>To</label>
-          <select value={toMonthName} onChange={e => setToMonthName(e.target.value)} style={SELECT_STYLE}>
-            {MONTHS.map(m => <option key={m}>{m}</option>)}
-          </select>
-          <select value={toYear} onChange={e => setToYear(e.target.value)} style={SELECT_STYLE}>
-            {YEARS.map(y => <option key={y}>{y}</option>)}
-          </select>
-
-          <button onClick={loadData} disabled={loading} style={{
-            padding:'7px 20px', fontSize:14, fontWeight:600,
-            background:'#1a73e8', color:'#fff', border:'none', borderRadius:4,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}>
+          <button type="button" onClick={loadData} disabled={loading} aria-busy={loading}
+                  className={`${ui.btn} ${ui.btnSecondary}`}>
             {loading ? 'Loading…' : 'Load'}
           </button>
 
+          <span className={c.spacer} />
           {changedMonths.length > 0 && (
-            <button onClick={saveChanges} disabled={saving} style={{
-              padding:'7px 20px', fontSize:14, fontWeight:700,
-              background: saving ? '#5f6368' : '#166534', color:'#fff',
-              border:'none', borderRadius:4, cursor: saving ? 'not-allowed' : 'pointer',
-            }}>
+            <button type="button" onClick={saveChanges} disabled={saving} aria-busy={saving}
+                    className={`${ui.btn} ${ui.btnPrimary}`}>
               {saving ? 'Saving…' : `Save Changes (${changedMonths.length})`}
             </button>
           )}
@@ -323,47 +338,67 @@ function TechnoCorrectionInner() {
 
         {notice && <Notice type={notice.type} text={notice.text} onClose={() => setNotice(null)} />}
 
-        {rows && (
-          <table style={{ width:'100%', borderCollapse:'collapse', background:'#fff' }}>
-            <thead>
-              <tr>
-                <th style={TH}>Report Month</th>
-                <th style={{ ...TH, textAlign:'right' }}>Month Value</th>
-                <th style={{ ...TH, textAlign:'right' }}>Till Month Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const init = initialRows[i];
-                return (
-                  <tr key={r.report_month}>
-                    <td style={TD}>{monthLabel(r.report_month)}</td>
-                    <td style={TD}>
-                      <NumInput
-                        value={r.month_value}
-                        changed={r.month_value !== init.month_value}
-                        onChange={v => updateCell(r.report_month, 'month_value', v)}
-                      />
-                    </td>
-                    <td style={TD}>
-                      <NumInput
-                        value={r.till_month_value}
-                        changed={r.till_month_value !== init.till_month_value}
-                        onChange={v => updateCell(r.report_month, 'till_month_value', v)}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {rows && loadedFor && (
+          <p className={c.target} aria-live="polite">
+            <strong>{loadedFor.plant} › {loadedFor.unit} › {labelOf(loadedFor.paramKey)}</strong>
+            {' '}· {rows.length} month{rows.length === 1 ? '' : 's'}
+            {changedMonths.length > 0 && ` · ${changedMonths.length} unsaved`}
+          </p>
+        )}
+
+        {rows && rows.length > 0 && (
+          <div className={ui.tableWrap}>
+            <table className={ui.table}>
+              <thead>
+                <tr>
+                  <th scope="col">Report Month</th>
+                  <th scope="col" className={ui.numeric}>Month Value</th>
+                  <th scope="col" className={ui.numeric}>Till Month Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => {
+                  const init = initialRows[i];
+                  const mLabel = monthLabel(r.report_month);
+                  const dp = DISPLAY_DP[loadedFor?.paramKey];
+                  return (
+                    <tr key={r.report_month}>
+                      <th scope="row" className={c.monthCell}>{mLabel}</th>
+                      <td>
+                        <NumInput
+                          value={r.month_value}
+                          dp={dp}
+                          label={`${mLabel}, month value`}
+                          changed={r.month_value !== init.month_value}
+                          onChange={v => updateCell(r.report_month, 'month_value', v)}
+                        />
+                      </td>
+                      <td>
+                        <NumInput
+                          value={r.till_month_value}
+                          dp={dp}
+                          label={`${mLabel}, till month value`}
+                          changed={r.till_month_value !== init.till_month_value}
+                          onChange={v => updateCell(r.report_month, 'till_month_value', v)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {rows && rows.length === 0 && (
-          <p style={{ color:'#5f6368', fontSize:14 }}>No months in the selected range.</p>
+          <p className={ui.meta}>No months in the selected range.</p>
         )}
-      </div>
-    </div>
+
+        <p className={ui.hint} style={{ marginTop:14 }}>
+          Changed boxes are highlighted until saved. Clearing a box and saving removes that value.
+        </p>
+      </main>
+    </>
   );
 }
 

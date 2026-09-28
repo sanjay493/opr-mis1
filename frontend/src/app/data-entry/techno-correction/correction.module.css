@@ -1,0 +1,57 @@
+/* Techno Data Correction. Page chrome (title, buttons, alerts, table) comes
+   from styles/ui.module.css; this file covers the filter bar and inputs. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius);
+}
+
+.group {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.divider {
+  align-self: stretch;
+  width: 1px;
+  background: var(--ui-border-subtle);
+}
+
+.spacer { flex: 1; }
+
+.target {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--ui-text-secondary);
+}
+
+.target strong { color: var(--ui-text); }
+
+.monthCell { white-space: nowrap; font-weight: 500; }
+
+.cell {
+  width: 100%;
+  max-width: 220px;
+  margin-left: auto;
+  display: block;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.cell:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 0; border-color: var(--ui-primary); }
+.cellChanged { border-color: var(--ui-warning); background: var(--ui-warning-bg); }
