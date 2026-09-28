@@ -724,7 +724,7 @@ assert len(_INDEX_SECTION_ANCHORS) == len(_INDEX_SECTIONS), \
 
 app = FastAPI(
     title="SAIL OMI MIS Report Generator Backend",
-    description="Python API backend to compile and export SAIL MIS reports using WeasyPrint.",
+    description="Python API backend to compile and export SAIL MIS reports using Playwright (headless Chromium).",
 )
 
 allowed_origins = [

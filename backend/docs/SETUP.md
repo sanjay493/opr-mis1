@@ -54,8 +54,7 @@ venv\Scripts\pip install -r requirements.txt
 venv\Scripts\pip install pymysql          # not yet in requirements.txt
 
 # PDF export (page_*_export.py, pdf.py) uses Playwright + headless Chromium,
-# NOT WeasyPrint — the "WeasyPrint" string in main.py's API description is
-# stale and can be ignored; no GTK3 runtime is needed.
+# NOT WeasyPrint — no GTK3 runtime is needed.
 venv\Scripts\playwright install chromium
 
 # Frontend (Node 20.9+, required by Next.js 16)
