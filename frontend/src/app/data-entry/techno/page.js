@@ -5,6 +5,8 @@ import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import BSLBFTechnoExtractor from '@/components/BSLBFTechnoExtractor';
+import ui from '@/styles/ui.module.css';
+import t from './techno.module.css';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -66,18 +68,14 @@ async function parseJsonResponse(res) {
 }
 
 // ── Shared styled status message ──────────────────────────────────────────────
+const STATUS_CLASS = { success: ui.alertSuccess, info: ui.alertWarning, error: ui.alertError };
+
 function StatusMsg({ status }) {
   if (!status) return null;
-  const palette = {
-    success: { bg: '#f0fdf4', fg: '#166534', border: '#86efac' },
-    info:    { bg: '#eff6ff', fg: '#174ea6', border: '#bfdbfe' },
-    error:   { bg: '#fef2f2', fg: '#991b1b', border: '#fca5a5' },
-  }[status.type] || { bg: '#fef2f2', fg: '#991b1b', border: '#fca5a5' };
   return (
-    <div style={{
-      padding: '8px 14px', borderRadius: 6, marginBottom: 14, fontSize: 13,
-      background: palette.bg, color: palette.fg, border: `1px solid ${palette.border}`,
-    }}>
+    <div role={status.type === 'error' ? 'alert' : 'status'}
+         className={`${ui.alert} ${STATUS_CLASS[status.type] || ui.alertError}`}
+         style={{ marginTop: 8 }}>
       {status.text}
     </div>
   );
@@ -88,6 +86,13 @@ function StatusMsg({ status }) {
 // for every parameter of every unit BEFORE anything is written to the DB. ────
 function BulkCumulativeModal({ preview, onConfirm, onClose, busy, confirmLabel, noteText }) {
   const [expanded, setExpanded] = React.useState(null);
+  // Escape closes (unless a save is in flight), same as the other modals.
+  React.useEffect(() => {
+    if (!preview) return;
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [preview, busy, onClose]);
   if (!preview) return null;
 
   const methodLabel = {
@@ -103,141 +108,116 @@ function BulkCumulativeModal({ preview, onConfirm, onClose, busy, confirmLabel, 
   for (const d of preview.details) (byUnit[d.unit] = byUnit[d.unit] || []).push(d);
   const units = Object.keys(byUnit);
 
-  const th = { padding: '5px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, fontSize: 12, borderBottom: '1px solid #dadce0' };
-  const thR = { ...th, textAlign: 'right' };
-
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 10, padding: 24, width: 780, maxWidth: '94vw',
-        maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-      }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 18, color: '#202124' }}>
-          Cumulative Calculation — {preview.plant} · April → {preview.report_month}
-        </h3>
-        <div style={{ fontSize: 13, color: '#5f6368', marginBottom: 14 }}>
-          {preview.details.length} parameter{preview.details.length === 1 ? '' : 's'} across {units.length} unit{units.length === 1 ? '' : 's'}.
-          Furnace-wise and BF_Shop production, and SMS-wise crude steel, are read from production_table for the weighting shown below.
-          {' '}{noteText || 'Nothing is saved yet — review each calculation, then confirm.'}
-        </div>
+    <div className={t.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="tu-cum-title" className={t.modal}>
+        <div className={t.modalScroll}>
+          <h3 id="tu-cum-title" className={t.modalTitle}>
+            Cumulative Calculation — {preview.plant} · April → {preview.report_month}
+          </h3>
+          <p className={ui.meta}>
+            {preview.details.length} parameter{preview.details.length === 1 ? '' : 's'} across {units.length} unit{units.length === 1 ? '' : 's'}.
+            Furnace-wise and BF_Shop production, and SMS-wise crude steel, are read from production_table for the weighting shown below.
+            {' '}{noteText || 'Nothing is saved yet — review each calculation, then confirm.'}
+          </p>
 
-        {(preview.warnings || []).map((w, i) => (
-          <div key={i} style={{ fontSize: 12.5, color: '#991b1b', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 5, padding: '5px 10px', marginBottom: 6 }}>
-            {w}
-          </div>
-        ))}
+          {(preview.warnings || []).map((w, i) => (
+            <div key={i} className={`${ui.alert} ${ui.alertError}`} style={{ marginBottom: 6, fontSize: 13 }}>{w}</div>
+          ))}
 
-        {units.map(u => (
-          <div key={u} style={{ marginBottom: 14, border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
-            <div style={{ padding: '8px 12px', background: '#f8f9fa', fontWeight: 700, fontSize: 13, color: '#174ea6', borderBottom: '1px solid #dadce0' }}>
-              {u}
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-              <thead>
-                <tr>
-                  <th style={th}>Parameter</th>
-                  <th style={th}>Method</th>
-                  <th style={thR}>Previous Cumulative</th>
-                  <th style={thR}>New Cumulative</th>
-                  <th style={th}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {byUnit[u].map(d => {
-                  const key = `${d.unit}::${d.param_key}`;
-                  const isOpen = expanded === key;
-                  const isChanged = changed(d.previous_till_month, d.result);
-                  return (
-                    <React.Fragment key={key}>
-                      <tr style={{ borderTop: '1px solid #f1f3f4' }}>
-                        <td style={{ padding: '5px 10px', color: '#202124' }}>
-                          {d.param_key}
-                          {d.warnings.length > 0 && (
-                            <span title={d.warnings.join(' ')} style={{ color: '#b45309', marginLeft: 5, cursor: 'help' }}>⚠</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '5px 10px', color: '#5f6368' }}>{methodLabel[d.method] || d.method}</td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(d.previous_till_month)}</td>
-                        <td style={{
-                          padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace',
-                          fontWeight: isChanged ? 700 : 400, color: isChanged ? '#b06000' : '#166534',
-                        }}>
-                          {fmt(d.result)}
-                        </td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right' }}>
-                          <button onClick={() => setExpanded(isOpen ? null : key)} style={{
-                            fontSize: 11, padding: '2px 9px', border: '1px solid #dadce0',
-                            borderRadius: 4, background: '#fff', cursor: 'pointer', color: '#5f6368',
-                          }}>
-                            {isOpen ? 'Hide' : 'Steps'}
-                          </button>
-                        </td>
-                      </tr>
-                      {isOpen && (
+          {units.map(u => (
+            <div key={u} className={t.unitCard}>
+              <div className={t.unitCardHead}>{u}</div>
+              <table className={t.mini}>
+                <thead>
+                  <tr>
+                    <th scope="col">Parameter</th>
+                    <th scope="col">Method</th>
+                    <th scope="col" className={t.num}>Previous Cumulative</th>
+                    <th scope="col" className={t.num}>New Cumulative</th>
+                    <th scope="col"><span className={ui.srOnly}>Working</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byUnit[u].map(d => {
+                    const key = `${d.unit}::${d.param_key}`;
+                    const isOpen = expanded === key;
+                    const isChanged = changed(d.previous_till_month, d.result);
+                    return (
+                      <React.Fragment key={key}>
                         <tr>
-                          <td colSpan={5} style={{ padding: '10px 14px', background: '#f8f9fa', borderTop: '1px solid #f1f3f4' }}>
-                            {d.weight_item && (
-                              <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 8 }}>Weights: {d.weight_item}</div>
+                          <td>
+                            {d.param_key}
+                            {d.warnings.length > 0 && (
+                              <span title={d.warnings.join(' ')} className={t.warnIcon} aria-label={`Warning: ${d.warnings.join(' ')}`}>⚠</span>
                             )}
-                            {d.rows.length > 0 && (
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 8, background: '#fff' }}>
-                                <thead>
-                                  <tr>
-                                    <th style={th}>Month</th>
-                                    <th style={thR}>Value</th>
-                                    <th style={thR}>Weight (production)</th>
-                                    <th style={thR}>Product</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {d.rows.map(r => (
-                                    <tr key={r.month}>
-                                      <td style={{ padding: '3px 10px' }}>{r.month}</td>
-                                      <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(r.value)}</td>
-                                      <td style={{
-                                        padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace',
-                                        color: r.weight == null ? (d.method === 'sum' ? '#5f6368' : '#dc2626') : '#202124',
-                                      }}>
-                                        {r.weight == null ? (d.method === 'sum' ? '—' : 'missing') : fmt(r.weight)}
-                                      </td>
-                                      <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{r.product != null ? fmt(r.product) : '—'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            )}
-                            <div style={{ fontFamily: 'Consolas, monospace', fontSize: 12, color: '#202124' }}>
-                              {d.steps.map((s, i) => <div key={i} style={{ padding: '1px 0' }}>{i + 1}. {s}</div>)}
-                            </div>
+                          </td>
+                          <td className={t.muted}>{methodLabel[d.method] || d.method}</td>
+                          <td className={`${t.num} ${t.muted}`}>{fmt(d.previous_till_month)}</td>
+                          <td className={`${t.num} ${isChanged ? t.diff : ''}`}>{fmt(d.result)}</td>
+                          <td className={t.num}>
+                            <button type="button" onClick={() => setExpanded(isOpen ? null : key)}
+                                    aria-expanded={isOpen}
+                                    className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm}`}>
+                              {isOpen ? 'Hide' : 'Steps'}
+                            </button>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ))}
+                        {isOpen && (
+                          <tr className={t.stepsCell}>
+                            <td colSpan={5}>
+                              {d.weight_item && (
+                                <p className={ui.meta} style={{ marginBottom: 8 }}>Weights: {d.weight_item}</p>
+                              )}
+                              {d.rows.length > 0 && (
+                                <table className={t.mini} style={{ marginBottom: 8, background: 'var(--ui-surface)' }}>
+                                  <thead>
+                                    <tr>
+                                      <th scope="col">Month</th>
+                                      <th scope="col" className={t.num}>Value</th>
+                                      <th scope="col" className={t.num}>Weight (production)</th>
+                                      <th scope="col" className={t.num}>Product</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {d.rows.map(r => (
+                                      <tr key={r.month}>
+                                        <td className={ui.nowrap}>{r.month}</td>
+                                        <td className={t.num}>{fmt(r.value)}</td>
+                                        <td className={`${t.num} ${r.weight == null && d.method !== 'sum' ? t.missing : ''}`}>
+                                          {r.weight == null ? (d.method === 'sum' ? '—' : 'missing') : fmt(r.weight)}
+                                        </td>
+                                        <td className={t.num}>{r.product != null ? fmt(r.product) : '—'}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                              <div className={t.steps}>
+                                {d.steps.map((s, i) => <div key={i}>{i + 1}. {s}</div>)}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
 
-        <div style={{
-          display: 'flex', gap: 10, marginTop: 8, position: 'sticky', bottom: -24,
-          background: '#fff', padding: '10px 0 0', borderTop: '1px solid #dadce0',
-        }}>
-          <button onClick={onClose} disabled={busy} style={{
-            padding: '8px 18px', fontSize: 14, background: '#f8f9fa',
-            border: '1px solid #dadce0', borderRadius: 5, cursor: busy ? 'not-allowed' : 'pointer',
-          }}>
+        <div className={t.modalFoot}>
+          {/* Initial focus: the confirm button only when it just fills the
+              preview (confirmLabel given); when it writes to the DB, focus
+              Cancel so a stray Enter can't save hundreds of values. */}
+          <button type="button" onClick={onClose} disabled={busy} autoFocus={!confirmLabel}
+                  className={`${ui.btn} ${ui.btnSecondary}`}>
             Cancel
           </button>
-          <button onClick={onConfirm} disabled={busy} style={{
-            marginLeft: 'auto', padding: '8px 18px', fontSize: 14, fontWeight: 700,
-            background: busy ? '#5f6368' : '#16a34a', color: '#fff', border: 'none',
-            borderRadius: 5, cursor: busy ? 'not-allowed' : 'pointer',
-          }}>
+          <button type="button" onClick={onConfirm} disabled={busy} aria-busy={busy} autoFocus={!!confirmLabel}
+                  className={`${ui.btn} ${ui.btnPrimary}`}>
             {busy ? 'Working…' : (confirmLabel || `Confirm & Save (${preview.details.length} parameters)`)}
           </button>
         </div>
@@ -317,66 +297,57 @@ function PreviewReview({ preview, paramChecked, autoProtected, onToggleParam }) 
   const changed = (a, b) => a != null && b != null && Number(a) !== Number(b);
 
   return (
-    <div style={{ marginTop: 8, border: '1px solid #bfdbfe', borderRadius: 7, background: '#eff6ff', overflow: 'hidden' }}>
-      <div style={{ padding: '8px 12px', fontSize: 12.5, fontWeight: 600, color: '#174ea6', borderBottom: '1px solid #bfdbfe' }}>
+    <div className={t.review}>
+      <div className={t.reviewHead}>
         Preview — {preview.units_extracted} unit{preview.units_extracted === 1 ? '' : 's'}, {preview.total_params} parameter{preview.total_params === 1 ? '' : 's'} for {preview.report_month}. Nothing saved yet.
       </div>
-      <div style={{ display: 'flex', maxHeight: 260 }}>
-        <div style={{ width: 140, flexShrink: 0, borderRight: '1px solid #bfdbfe', overflowY: 'auto', background: '#fff' }}>
+      <div className={t.reviewBody}>
+        <div className={t.unitTabs} role="tablist" aria-label="Extracted units" aria-orientation="vertical">
           {uniqueUnits.map(unit => (
-            <button key={unit} onClick={() => setActiveUnit(unit)}
-              style={{
-                display: 'block', width: '100%', padding: '6px 10px', textAlign: 'left',
-                background: activeUnit === unit ? '#e8f0fe' : 'transparent',
-                color: activeUnit === unit ? '#174ea6' : '#5f6368',
-                border: 'none', borderBottom: '1px solid #f8f9fa', fontSize: 12,
-                fontWeight: activeUnit === unit ? 700 : 400, cursor: 'pointer',
-              }}
-            >
+            <button key={unit} type="button" role="tab" aria-selected={activeUnit === unit}
+                    className={t.unitTab} onClick={() => setActiveUnit(unit)}>
               {unit}
             </button>
           ))}
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <div className={t.reviewTable}>
+          <table className={t.mini}>
             <thead>
-              <tr style={{ background: '#f8f9fa' }}>
-                <th rowSpan={2} style={{ padding: '5px 8px', textAlign: 'center', color: '#5f6368', borderBottom: '1px solid #dadce0', verticalAlign: 'bottom' }}>Insert</th>
-                <th rowSpan={2} style={{ padding: '5px 10px', textAlign: 'left', color: '#5f6368', borderBottom: '1px solid #dadce0', verticalAlign: 'bottom' }}>Parameter</th>
-                <th colSpan={2} style={{ padding: '4px 10px', textAlign: 'center', color: '#5f6368', borderBottom: '1px solid #f1f3f4', fontWeight: 600 }}>Month</th>
-                <th colSpan={2} style={{ padding: '4px 10px', textAlign: 'center', color: '#5f6368', borderBottom: '1px solid #f1f3f4', fontWeight: 600 }}>Cumulative</th>
+              <tr>
+                <th scope="col" rowSpan={2} className={t.center}>Insert</th>
+                <th scope="col" rowSpan={2}>Parameter</th>
+                <th scope="colgroup" colSpan={2} className={t.center}>Month</th>
+                <th scope="colgroup" colSpan={2} className={t.center}>Cumulative</th>
               </tr>
-              <tr style={{ background: '#f8f9fa' }}>
-                <th style={{ padding: '4px 10px', textAlign: 'right', color: '#5f6368', borderBottom: '1px solid #dadce0', fontWeight: 500 }}>In DB</th>
-                <th style={{ padding: '4px 10px', textAlign: 'right', color: '#1a73e8', borderBottom: '1px solid #dadce0', fontWeight: 600 }}>Extracted</th>
-                <th style={{ padding: '4px 10px', textAlign: 'right', color: '#5f6368', borderBottom: '1px solid #dadce0', fontWeight: 500 }}>In DB</th>
-                <th style={{ padding: '4px 10px', textAlign: 'right', color: '#1a73e8', borderBottom: '1px solid #dadce0', fontWeight: 600 }}>Extracted</th>
+              <tr>
+                <th scope="col" className={t.num}>In DB</th>
+                <th scope="col" className={t.num}>Extracted</th>
+                <th scope="col" className={t.num}>In DB</th>
+                <th scope="col" className={t.num}>Extracted</th>
               </tr>
             </thead>
             <tbody>
-              {allParams.map((param, idx) => {
+              {allParams.map((param) => {
                 const dbM = dbMonthParams[param], newM = monthParams[param];
                 const dbT = dbTillParams[param],  newT = tillParams[param];
                 const isChecked = unitChecked[param] !== false;
                 const isAutoProtected = !!unitAutoProtected[param];
                 return (
-                  <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f9fa', opacity: isChecked ? 1 : 0.6 }}>
-                    <td style={{ padding: '4px 8px', textAlign: 'center' }}>
-                      <input type="checkbox" checked={isChecked}
+                  <tr key={param} className={isChecked ? undefined : t.skipped}>
+                    <td className={t.center}>
+                      <input type="checkbox" checked={isChecked} className={t.check}
                              onChange={(e) => onToggleParam(activeUnit, param, e.target.checked)}
-                             title={isAutoProtected ? 'Extracted value was blank — unchecked to keep the existing DB value' : 'Include this parameter in the save'}
-                             style={{ accentColor: '#10b981', cursor: 'pointer' }} />
+                             aria-label={`Insert ${param}`}
+                             title={isAutoProtected ? 'Extracted value was blank — unchecked to keep the existing DB value' : 'Include this parameter in the save'} />
                     </td>
-                    <td style={{ padding: '4px 10px', color: '#202124' }}>
+                    <td>
                       {param}
-                      {isAutoProtected && (
-                        <div style={{ fontSize: 10, color: '#92400e', fontStyle: 'italic' }}>kept existing — extracted was blank</div>
-                      )}
+                      {isAutoProtected && <span className={t.protectNote}>kept existing — extracted was blank</span>}
                     </td>
-                    <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(dbM)}</td>
-                    <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: changed(dbM, newM) ? '#b06000' : '#1a73e8', fontWeight: changed(dbM, newM) ? 700 : 400 }}>{fmt(newM)}</td>
-                    <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#5f6368' }}>{fmt(dbT)}</td>
-                    <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'monospace', color: changed(dbT, newT) ? '#b06000' : '#1a73e8', fontWeight: changed(dbT, newT) ? 700 : 400 }}>{fmt(newT)}</td>
+                    <td className={`${t.num} ${t.muted}`}>{fmt(dbM)}</td>
+                    <td className={`${t.num} ${changed(dbM, newM) ? t.diff : t.extracted}`}>{fmt(newM)}</td>
+                    <td className={`${t.num} ${t.muted}`}>{fmt(dbT)}</td>
+                    <td className={`${t.num} ${changed(dbT, newT) ? t.diff : t.extracted}`}>{fmt(newT)}</td>
                   </tr>
                 );
               })}
@@ -384,10 +355,10 @@ function PreviewReview({ preview, paramChecked, autoProtected, onToggleParam }) 
           </table>
         </div>
       </div>
-      <div style={{ padding: '6px 12px', fontSize: 11, color: '#5f6368', borderTop: '1px solid #bfdbfe' }}>
-        <span style={{ color: '#b06000', fontWeight: 700 }}>Amber</span> = extracted value differs from what's currently in the DB.
+      <div className={t.reviewFoot}>
+        <span className={t.diff}>Amber</span> = extracted value differs from what&apos;s currently in the DB.
         Unchecked rows are skipped on save and keep their current DB value — rows where the
-        extraction came back blank are unchecked automatically so a bad file can't wipe out a good value; uncheck any other row yourself to keep the DB value instead.
+        extraction came back blank are unchecked automatically so a bad file can&apos;t wipe out a good value; uncheck any other row yourself to keep the DB value instead.
       </div>
     </div>
   );
@@ -401,7 +372,8 @@ function PreviewReview({ preview, paramChecked, autoProtected, onToggleParam }) 
 // column, so a later cumulative upload can refresh/backfill earlier months
 // whose figures were revised before the FY closed). Unchecked, this row
 // behaves exactly as before.
-function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint, reportMonth, apiBase, onSuccess, plant, accent = '#e8f0fe', accept = '.xlsx,.xls', bulkMonths = false }) {
+function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint, reportMonth, apiBase, onSuccess, plant, accept = '.xlsx,.xls', bulkMonths = false }) {
+  const rowId = React.useId();
   const [file, setFile] = React.useState(null);
   const [busy,  setBusy]  = React.useState(false);
   const [status, setStatus] = React.useState(null);
@@ -681,114 +653,71 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
   const busyLocked = !!(preview || bulkPreview);
 
   return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        padding: '10px 14px', background: '#f8f9fa', border: '1px solid #dadce0', borderRadius: 7,
-      }}>
-        <span style={{ fontSize: 13, color: '#5f6368', minWidth: 180, fontWeight: 600 }}>{label}</span>
-        <input ref={inputRef} type="file" accept={accept}
+    <div className={t.extract}>
+      <div className={t.row}>
+        <label htmlFor={`${rowId}-file`} className={t.rowLabel}>{label}</label>
+        <input id={`${rowId}-file`} ref={inputRef} type="file" accept={accept} className={t.file}
           onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); setBulkPreview(null); }}
-          style={{ fontSize: 13, flex: 1 }}
           suppressHydrationWarning
         />
         {bulkMonths && (
-          <label style={{ fontSize: 12.5, color: '#5f6368', display: 'flex', alignItems: 'center', gap: 5, cursor: busyLocked ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+          <label className={ui.checkRow} style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
             <input type="checkbox" checked={bulkMode} disabled={busyLocked}
-              onChange={e => setBulkMode(e.target.checked)}
-              style={{ accentColor: '#7c3aed', cursor: busyLocked ? 'default' : 'pointer' }} />
+              onChange={e => setBulkMode(e.target.checked)} />
             Backfill all months (Apr → {reportMonth})
           </label>
         )}
-        {!busyLocked && (
-          <button onClick={handlePreview} disabled={!file || busy}
-            style={{
-              padding: '7px 18px', background: busy ? '#5f6368' : accent,
-              color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
-              cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
-            }}
-          >
-            {busy ? (bulkMode ? 'Extracting all months…' : 'Extracting…') : 'Preview'}
-          </button>
-        )}
-        {preview && (
-          <>
-            {cumulativeEndpoint && (
-              <button onClick={handleCalcCumulative} disabled={busy}
-                style={{
-                  padding: '7px 14px', background: busy ? '#5f6368' : '#1a73e8',
-                  color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
-                  cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-                }}
-              >
-                {busy ? 'Working…' : 'Calc Cumulative'}
+        <div className={t.rowActions}>
+          {!busyLocked && (
+            <button type="button" onClick={handlePreview} disabled={!file || busy} aria-busy={busy}
+                    className={`${ui.btn} ${ui.btnPrimary} ${ui.btnSm}`}>
+              {busy ? (bulkMode ? 'Extracting all months…' : 'Extracting…') : 'Preview'}
+            </button>
+          )}
+          {preview && (
+            <>
+              {cumulativeEndpoint && (
+                <button type="button" onClick={handleCalcCumulative} disabled={busy}
+                        className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm}`}>
+                  {busy ? 'Working…' : 'Calc Cumulative'}
+                </button>
+              )}
+              <button type="button" onClick={handleConfirmSave} disabled={busy} aria-busy={busy}
+                      className={`${ui.btn} ${ui.btnPrimary} ${ui.btnSm}`}>
+                {busy ? 'Saving…' : 'Confirm & Save'}
               </button>
-            )}
-            <button onClick={handleConfirmSave} disabled={busy}
-              style={{
-                padding: '7px 18px', background: busy ? '#5f6368' : '#16a34a',
-                color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
-                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-              }}
-            >
-              {busy ? 'Saving…' : 'Confirm & Save'}
-            </button>
-            <button onClick={handleCancelPreview} disabled={busy}
-              style={{
-                padding: '7px 14px', background: '#fff', color: '#5f6368',
-                border: '1px solid #dadce0', borderRadius: 6, fontSize: 13,
-                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-              }}
-            >
-              Cancel
-            </button>
-          </>
-        )}
-        {bulkPreview && (
-          <>
-            <button onClick={handleBulkConfirmSave} disabled={busy}
-              style={{
-                padding: '7px 18px', background: busy ? '#5f6368' : '#16a34a',
-                color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
-                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-              }}
-            >
-              {bulkSaving ? 'Saving, please wait…' : `Confirm & Save all ${bulkPreview.months.length} months`}
-            </button>
-            <button onClick={handleBulkCancelPreview} disabled={busy}
-              style={{
-                padding: '7px 14px', background: '#fff', color: '#5f6368',
-                border: '1px solid #dadce0', borderRadius: 6, fontSize: 13,
-                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-              }}
-            >
-              Cancel
-            </button>
-          </>
-        )}
+              <button type="button" onClick={handleCancelPreview} disabled={busy}
+                      className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm}`}>
+                Cancel
+              </button>
+            </>
+          )}
+          {bulkPreview && (
+            <>
+              <button type="button" onClick={handleBulkConfirmSave} disabled={busy} aria-busy={bulkSaving}
+                      className={`${ui.btn} ${ui.btnPrimary} ${ui.btnSm}`}>
+                {bulkSaving ? 'Saving, please wait…' : `Confirm & Save all ${bulkPreview.months.length} months`}
+              </button>
+              <button type="button" onClick={handleBulkCancelPreview} disabled={busy}
+                      className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm}`}>
+                Cancel
+              </button>
+            </>
+          )}
+        </div>
       </div>
       {bulkSaving && (
-        <div style={{
-          marginTop: 8, padding: '12px 16px', borderRadius: 8, fontSize: 13.5,
-          background: '#eff6ff', color: '#174ea6', border: '2px solid #1a73e8',
-          display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600,
-        }}>
-          <span style={{
-            display: 'inline-block', width: 14, height: 14, borderRadius: '50%',
-            border: '2px solid #1a73e8', borderTopColor: 'transparent',
-            animation: 'spin 0.8s linear infinite',
-          }} />
-          Saving {bulkPreview?.months?.length} month{bulkPreview?.months?.length === 1 ? '' : 's'} — this
-          writes one database row per unit per month and can take up to a minute.
-          Please don&apos;t close or refresh this page; a green confirmation will appear here when it&apos;s done.
-          <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>
+        <div className={t.progress} role="status">
+          <span className={t.spinner} aria-hidden="true" />
+          <span>
+            Saving {bulkPreview?.months?.length} month{bulkPreview?.months?.length === 1 ? '' : 's'} — this
+            writes one database row per unit per month and can take up to a minute.
+            Please don&apos;t close or refresh this page; a green confirmation will appear here when it&apos;s done.
+          </span>
         </div>
       )}
       {preview && (preview.warnings || []).length > 0 && (
-        <div style={{
-          marginTop: 6, padding: '6px 12px', borderRadius: 6, fontSize: 12,
-          background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
-        }}>
+        <div className={t.note} role="status">
           {preview.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
         </div>
       )}
@@ -798,25 +727,17 @@ function ExtractRow({ label, previewEndpoint, insertEndpoint, cumulativeEndpoint
       )}
 
       {bulkPreview && (bulkPreview.skipped_months || []).length > 0 && (
-        <div style={{
-          marginTop: 6, padding: '6px 12px', borderRadius: 6, fontSize: 12,
-          background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
-        }}>
+        <div className={t.note} role="status">
           ⚠ This file has no column for: {bulkPreview.skipped_months.join(', ')} — skipped.
         </div>
       )}
       {bulkPreview && (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+        <div>
+          <div className={t.monthTabs} role="tablist" aria-label="Backfilled months">
             {bulkPreview.months.map(month => (
-              <button key={month} onClick={() => setActiveBulkMonth(month)}
-                style={{
-                  padding: '5px 12px', fontSize: 12.5, fontWeight: activeBulkMonth === month ? 700 : 500,
-                  background: activeBulkMonth === month ? '#5b21b6' : '#f3f4f6',
-                  color: activeBulkMonth === month ? '#fff' : '#374151',
-                  border: '1px solid #dadce0', borderRadius: 5, cursor: 'pointer',
-                }}
-              >
+              <button key={month} type="button" role="tab" aria-selected={activeBulkMonth === month}
+                      onClick={() => setActiveBulkMonth(month)}
+                      className={`${ui.btn} ${ui.btnSm} ${activeBulkMonth === month ? ui.btnPrimary : ui.btnSecondary}`}>
                 {month}
               </button>
             ))}
@@ -875,48 +796,43 @@ function TechnoSaveLog({ plant, reportMonth, apiBase, refreshKey }) {
   const latest = logs[0];
 
   return (
-    <div style={{
-      marginBottom: 16, border: '1px solid #dadce0', borderRadius: 8,
-      background: '#fafafa', fontSize: 13,
-    }}>
-      <button
-        onClick={() => setExpanded(e => !e)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-          padding: '10px 14px', background: 'transparent', border: 'none',
-          cursor: 'pointer', textAlign: 'left', color: '#374151',
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>{expanded ? '▾' : '▸'} Last saved:</span>
-        {loadingLog && <span style={{ color: '#9aa0a6' }}>checking…</span>}
+    <div className={t.log}>
+      <button type="button" className={t.logToggle} aria-expanded={expanded}
+              onClick={() => setExpanded(e => !e)}>
+        <svg className={t.chevron} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="9 6 15 12 9 18" />
+        </svg>
+        <strong>Last saved:</strong>
+        {loadingLog && <span>checking…</span>}
         {!loadingLog && latest && (
-          <span style={{ color: '#5f6368' }}>
+          <span>
             {latest.logged_at} — {latest.sheet_name} ({latest.report_month}) — {latest.items_extracted} params
             {latest.file_name && latest.file_name !== '(manual entry)' ? ` — ${latest.file_name}` : ' — manual entry'}
           </span>
         )}
-        {!loadingLog && !latest && <span style={{ color: '#9aa0a6' }}>no save history yet for {plant}</span>}
+        {!loadingLog && !latest && <span>no save history yet for {plant}</span>}
       </button>
       {expanded && logs.length > 0 && (
-        <div style={{ borderTop: '1px solid #e5e7eb', maxHeight: 220, overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <div className={t.logBody}>
+          <table className={t.mini}>
             <thead>
-              <tr style={{ background: '#f3f4f6' }}>
-                <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368' }}>When</th>
-                <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368' }}>Unit</th>
-                <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368' }}>Report month</th>
-                <th style={{ padding: '5px 12px', textAlign: 'left', color: '#5f6368' }}>Source</th>
-                <th style={{ padding: '5px 12px', textAlign: 'right', color: '#5f6368' }}>Params</th>
+              <tr>
+                <th scope="col">When</th>
+                <th scope="col">Unit</th>
+                <th scope="col">Report month</th>
+                <th scope="col">Source</th>
+                <th scope="col" className={t.num}>Params</th>
               </tr>
             </thead>
             <tbody>
               {logs.map(l => (
-                <tr key={l.id} style={{ borderTop: '1px solid #f0f0f0' }}>
-                  <td style={{ padding: '5px 12px', fontFamily: 'monospace' }}>{l.logged_at}</td>
-                  <td style={{ padding: '5px 12px' }}>{l.sheet_name}</td>
-                  <td style={{ padding: '5px 12px' }}>{l.report_month}</td>
-                  <td style={{ padding: '5px 12px', color: '#5f6368' }}>{l.file_name || 'manual entry'}</td>
-                  <td style={{ padding: '5px 12px', textAlign: 'right', fontFamily: 'monospace' }}>{l.items_extracted}</td>
+                <tr key={l.id}>
+                  <td className={ui.nowrap}>{l.logged_at}</td>
+                  <td>{l.sheet_name}</td>
+                  <td>{l.report_month}</td>
+                  <td className={t.muted}>{l.file_name || 'manual entry'}</td>
+                  <td className={t.num}>{l.items_extracted}</td>
                 </tr>
               ))}
             </tbody>
@@ -939,7 +855,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
-    setLogTick(t => t + 1);
+    setLogTick(n => n + 1);
     try {
       const res = await fetch(
         `${apiBase}/api/techno/data?plant=${plant}&report_month=${reportMonth}`
@@ -1041,13 +957,11 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
       <TechnoSaveLog plant={plant} reportMonth={reportMonth} apiBase={apiBase} refreshKey={logTick} />
       {/* RSP: Technopara Excel (final) + month-end Morning Report (tentative) */}
       {isRsp && (
-        <div style={{
-          marginBottom: 16, padding: '12px 14px',
-          background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#174ea6', marginBottom: 10 }}>
-            RSP Techno Upload — Technopara Excel (final), BF Department GLANCE workbook (final) and/or Month-End Morning Report (tentative) — all merged into the same table
-          </div>
+        <section className={t.section} aria-labelledby="tu-sec-title">
+          <h2 id="tu-sec-title" className={t.sectionTitle}>
+            RSP Techno Upload
+            <span className={t.sectionNote}>Technopara Excel (final), BF Department GLANCE workbook (final) and/or Month-End Morning Report (tentative) — all merged into the same table.</span>
+          </h2>
           <ExtractRow
             label="RSP Technopara Excel (page1-8 sheet)"
             previewEndpoint="/api/techno/preview"
@@ -1056,7 +970,6 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#1a73e8"
           />
           <ExtractRow
             label="RSP BF Department GLANCE workbook (DETAIL + per-month sheet)"
@@ -1066,7 +979,6 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#0f766e"
           />
           <ExtractRow
             label="RSP Morning Report — month-end (tentative)"
@@ -1077,20 +989,17 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#174ea6"
           />
-        </div>
+        </section>
       )}
 
       {/* BSP: two file extract bars (3-page-tech + OISCO) */}
       {isBsp && (
-        <div style={{
-          marginBottom: 16, padding: '12px 14px',
-          background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8,
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 10 }}>
-            BSP Techno Upload — all files contribute data for the same month (merged automatically). The month-end row accepts MIS-2 or PPC MIS (auto-detected, tentative data).
-          </div>
+        <section className={t.section} aria-labelledby="tu-sec-title">
+          <h2 id="tu-sec-title" className={t.sectionTitle}>
+            BSP Techno Upload
+            <span className={t.sectionNote}>All files contribute data for the same month (merged automatically). The month-end row accepts MIS-2 or PPC MIS (auto-detected, tentative data).</span>
+          </h2>
           <ExtractRow
             label="BSP Flash Monthly PDF (flash-<mon>YY.pdf)"
             previewEndpoint="/api/bsp-techno/preview/flash-pdf"
@@ -1099,7 +1008,6 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#7c2d12"
             accept=".pdf"
           />
           <ExtractRow
@@ -1110,7 +1018,6 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#92400e"
           />
           <ExtractRow
             label="OISCO Excel"
@@ -1120,7 +1027,6 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#b45309"
           />
           <ExtractRow
             label="Month-End Excel — MIS-2 or PPC MIS (tentative)"
@@ -1131,20 +1037,17 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#c2410c"
           />
-        </div>
+        </section>
       )}
 
       {/* ISP: Technopara Excel (final) + month-end Morning Report (tentative) */}
       {isIsp && (
-        <div style={{
-          marginBottom: 16, padding: '12px 14px',
-          background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8,
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#5b21b6', marginBottom: 10 }}>
-            ISP Techno Upload — Technopara Excel (final) and/or Month-End Morning Report (tentative, merged into the same table)
-          </div>
+        <section className={t.section} aria-labelledby="tu-sec-title">
+          <h2 id="tu-sec-title" className={t.sectionTitle}>
+            ISP Techno Upload
+            <span className={t.sectionNote}>Technopara Excel (final) and/or Month-End Morning Report (tentative, merged into the same table).</span>
+          </h2>
           <ExtractRow
             label="ISP Technopara Excel"
             previewEndpoint="/api/techno/preview"
@@ -1153,7 +1056,6 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#7c3aed"
             bulkMonths
           />
           <ExtractRow
@@ -1165,20 +1067,17 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#5b21b6"
           />
-        </div>
+        </section>
       )}
 
       {/* DSP: monthly PDF + month-end MCR techno page (both merged) */}
       {plant === 'DSP' && (
-        <div style={{
-          marginBottom: 16, padding: '12px 14px',
-          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#991b1b', marginBottom: 10 }}>
-            DSP Techno Upload — Monthly PDF (final) and/or Month-End MCR Excel (tentative, merged into the same table)
-          </div>
+        <section className={t.section} aria-labelledby="tu-sec-title">
+          <h2 id="tu-sec-title" className={t.sectionTitle}>
+            DSP Techno Upload
+            <span className={t.sectionNote}>Monthly PDF (final) and/or Month-End MCR Excel (tentative, merged into the same table).</span>
+          </h2>
           <ExtractRow
             label="DSP Monthly Report PDF"
             previewEndpoint="/api/techno/preview"
@@ -1187,7 +1086,6 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#dc2626"
             accept=".pdf"
           />
           <ExtractRow
@@ -1199,10 +1097,9 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
             reportMonth={reportMonth}
             apiBase={apiBase}
             onSuccess={loadData}
-            accent="#b91c1c"
             accept=".xlsx,.xls"
           />
-        </div>
+        </section>
       )}
 
       {/* BSL: upload bar + BF Performance extractor. Existing DB data is
@@ -1210,13 +1107,11 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           every other plant. */}
       {isBsl && (
         <div>
-          <div style={{
-            marginBottom: 16, padding: '12px 14px',
-            background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8,
-          }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#166534', marginBottom: 10 }}>
-              BSL Techno Upload — upload Techno Excel and/or BF Performance PDF (both merged automatically)
-            </div>
+          <section className={t.section} aria-labelledby="tu-sec-title">
+            <h2 id="tu-sec-title" className={t.sectionTitle}>
+              BSL Techno Upload
+              <span className={t.sectionNote}>Upload Techno Excel and/or BF Performance PDF (both merged automatically).</span>
+            </h2>
             <ExtractRow
               label="BSL Techno Excel (.xls/.xlsx)"
               previewEndpoint="/api/techno/preview"
@@ -1225,9 +1120,8 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
               reportMonth={reportMonth}
               apiBase={apiBase}
               onSuccess={loadData}
-              accent="#166534"
             />
-          </div>
+          </section>
 
           {/* Unified BSL BF Performance Extractor */}
           <BSLBFTechnoExtractor
@@ -1239,98 +1133,62 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
       )}
 
       {!loading && units.length > 0 && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-          marginBottom: 10, padding: '8px 12px',
-          background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7,
-        }}>
-          <button onClick={handleCumulativeAll} disabled={cumBusy}
-            style={{
-              padding: '7px 16px', background: cumBusy ? '#5f6368' : '#16a34a',
-              color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
-              cursor: cumBusy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-            }}
-          >
+        <div className={t.cumBar}>
+          <button type="button" onClick={handleCumulativeAll} disabled={cumBusy} aria-busy={cumBusy}
+                  className={`${ui.btn} ${ui.btnSecondary}`}>
             {cumBusy ? 'Calculating…' : 'Calculate Cumulative — all techno'}
           </button>
-          <span style={{ fontSize: 12, color: '#166534' }}>
+          <p>
             Computes the Cumulative (Apr→{reportMonth}) for every saved parameter of every {plant} unit and opens a
             step-by-step review window (method, production weights, month-by-month working) — nothing is saved
             until you confirm.
-          </span>
+          </p>
         </div>
       )}
       <StatusMsg status={cumStatusShown} />
 
       {loading && (
-        <div style={{ textAlign: 'center', padding: 40, color: '#5f6368', fontSize: 14 }}>
+        <p className={ui.meta} aria-live="polite" style={{ textAlign: 'center', padding: 40 }}>
           Loading {plant} data…
-        </div>
+        </p>
       )}
 
       {!loading && units.length === 0 && (
-        <div style={{
-          textAlign: 'center', padding: 60, color: '#5f6368', fontSize: 14,
-          border: '2px dashed #dadce0', borderRadius: 8,
-        }}>
+        <div className={t.empty}>
           No techno data for <strong>{plant}</strong> — <strong>{reportMonth}</strong>.
-          {hasExtraction && (
-            <span style={{ fontSize: 13, marginTop: 8, display: 'block' }}>
-              Upload the {isDsp ? 'PDF' : 'Excel'} file above to extract and save data.
-            </span>
-          )}
-          {!hasExtraction && (
-            <span style={{ fontSize: 13, marginTop: 8, display: 'block' }}>
-              {plant} extraction support coming soon.
-            </span>
-          )}
+          <br />
+          {hasExtraction
+            ? `Upload the ${isDsp ? 'PDF' : 'Excel'} file above to extract and save data.`
+            : `${plant} extraction support coming soon.`}
         </div>
       )}
 
       {!loading && units.length > 0 && (
-        <div style={{ display: 'flex', gap: 0, border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden', minHeight: 400 }}>
+        <section className={t.browser} aria-label={`Saved techno data for ${plant} ${reportMonth}`}>
           {/* Unit list (left) */}
-          <div style={{ width: 180, borderRight: '1px solid #dadce0', background: '#f8f9fa', flexShrink: 0 }}>
-            <div style={{ padding: '10px 14px', fontSize: 12, fontWeight: 700, color: '#5f6368', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #dadce0' }}>
-              Units ({units.length})
-            </div>
+          <div className={t.browserUnits}>
+            <div className={t.browserHead}>Units ({units.length})</div>
             {units.map(u => (
-              <button
-                key={u}
-                onClick={() => setActiveUnit(u)}
-                style={{
-                  display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left',
-                  background: activeUnit === u ? '#e8f0fe' : 'transparent',
-                  color: activeUnit === u ? '#174ea6' : '#5f6368',
-                  border: 'none', borderBottom: '1px solid #dadce0',
-                  fontSize: 13, fontWeight: activeUnit === u ? 700 : 400,
-                  cursor: 'pointer',
-                }}
-              >
+              <button key={u} type="button" aria-current={activeUnit === u ? 'true' : undefined}
+                      className={t.unitTab} onClick={() => setActiveUnit(u)}>
                 {u}
               </button>
             ))}
           </div>
 
           {/* Parameter table (right) */}
-          <div style={{ flex: 1, overflowX: 'auto' }}>
+          <div className={t.browserTable}>
             {unitData && (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <table className={t.mini} style={{ fontSize: 14 }}>
                 <thead>
-                  <tr style={{ background: '#f8f9fa' }}>
-                    <th style={{ padding: '7px 14px', textAlign: 'left', color: '#5f6368', fontWeight: 600, borderBottom: '2px solid #dadce0', minWidth: 200 }}>
-                      Parameter
-                    </th>
-                    <th style={{ padding: '7px 12px', textAlign: 'right', color: '#1a73e8', fontWeight: 600, borderBottom: '2px solid #dadce0', minWidth: 120 }}>
-                      Month
-                    </th>
-                    <th style={{ padding: '7px 12px', textAlign: 'right', color: '#5f6368', fontWeight: 600, borderBottom: '2px solid #dadce0', minWidth: 120 }}>
-                      Cumulative
-                    </th>
+                  <tr>
+                    <th scope="col" style={{ minWidth: 200 }}>Parameter</th>
+                    <th scope="col" className={t.num} style={{ minWidth: 120 }}>Month</th>
+                    <th scope="col" className={t.num} style={{ minWidth: 120 }}>Cumulative</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.keys(monthParams).map((param, idx) => {
+                  {Object.keys(monthParams).map((param) => {
                     const mv = monthParams[param];
                     const tv = tillParams[param];
                     const fmt = v => {
@@ -1339,14 +1197,10 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
                       return Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 });
                     };
                     return (
-                      <tr key={param} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f9fa', borderBottom: '1px solid #f8f9fa' }}>
-                        <td style={{ padding: '6px 14px', color: '#202124', fontWeight: 500 }}>{param}</td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', color: mv != null ? '#1a73e8' : '#9aa0a6' }}>
-                          {fmt(mv)}
-                        </td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', color: tv != null ? '#202124' : '#9aa0a6' }}>
-                          {fmt(tv)}
-                        </td>
+                      <tr key={param}>
+                        <td style={{ fontWeight: 500 }}>{param}</td>
+                        <td className={`${t.num} ${mv == null ? t.muted : ''}`}>{fmt(mv)}</td>
+                        <td className={`${t.num} ${tv == null ? t.muted : ''}`}>{fmt(tv)}</td>
                       </tr>
                     );
                   })}
@@ -1354,7 +1208,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
               </table>
             )}
           </div>
-        </div>
+        </section>
       )}
 
       <BulkCumulativeModal
@@ -1385,55 +1239,47 @@ function TechnoDataEntryInner() {
   }[plant] || `${plant} extraction coming soon.`;
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
+    <>
       <GlobalNavbar />
 
-      <div style={{ flex: 1, overflow: 'auto', maxWidth: 1400, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
+      <main className={ui.page} style={{ maxWidth: 1400 }}>
 
         {/* ── Page title ── */}
-        <div style={{ marginBottom: 18 }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
-            Techno Data — View &amp; Extract
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            {reportMonth} · data stored in <code style={{ fontSize: 12 }}>techno_data</code> table
-          </span>
-          <div style={{ fontSize: 12.5, color: '#5f6368', marginTop: 4 }}>
-            Looking for the Coal Consumption, CO2/Water/PM EPI or Power-OIS uploads (all 5 plants at once)?
-            They&apos;ve moved to <a href="/data-entry/uploads" style={{ color: '#1a73e8' }}>Uploads &amp; Extraction</a>.
-          </div>
+        <div className={ui.pageHeader}>
+          <h1 className={ui.pageTitle}>Techno Data — View &amp; Extract</h1>
+          <p className={ui.pageLead}>
+            {reportMonth} · data stored in the <code>techno_data</code>{' '}table. Looking for the Coal Consumption,
+            CO2/Water/PM EPI or Power-OIS uploads (all 5 plants at once)? They&apos;ve moved
+            to <a href="/data-entry/uploads" className={t.leadLink}>Uploads &amp; Extraction</a>.
+          </p>
         </div>
 
         {/* ── Controls bar ── */}
-        <div style={{
-          display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
-          marginBottom: 18, background: '#fff', border: '1px solid #dadce0',
-          borderRadius: 8, padding: '14px 18px',
-        }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Plant</label>
-          <select value={plant} onChange={e => setPlant(e.target.value)}
-                  style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
-            {PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginLeft: 10 }}>Month</label>
-          <select value={month} onChange={e => setMonth(e.target.value)}
-                  style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
-            {MONTHS.map(m => <option key={m}>{m}</option>)}
-          </select>
-          <select value={year} onChange={e => setYear(e.target.value)}
-                  style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
-            {YEARS.map(y => <option key={y}>{y}</option>)}
-          </select>
-
-          <span style={{ marginLeft: 'auto', fontSize: 13, color: '#5f6368', maxWidth: 420, textAlign: 'right' }}>
-            {plantHint}
-          </span>
+        <div className={t.toolbar}>
+          <div className={ui.field} style={{ marginBottom: 0 }}>
+            <label htmlFor="tu-plant" className={ui.label}>Plant</label>
+            <select id="tu-plant" className="form-control" value={plant} onChange={e => setPlant(e.target.value)}>
+              {PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className={ui.field} style={{ marginBottom: 0 }}>
+            <label htmlFor="tu-month" className={ui.label}>Month</label>
+            <select id="tu-month" className="form-control" value={month} onChange={e => setMonth(e.target.value)}>
+              {MONTHS.map(mo => <option key={mo}>{mo}</option>)}
+            </select>
+          </div>
+          <div className={ui.field} style={{ marginBottom: 0 }}>
+            <label htmlFor="tu-year" className={ui.label}>Year</label>
+            <select id="tu-year" className="form-control" value={year} onChange={e => setYear(e.target.value)}>
+              {YEARS.map(y => <option key={y}>{y}</option>)}
+            </select>
+          </div>
+          <p className={t.plantHint}>{plantHint}</p>
         </div>
 
         <TechnoDataPanel plant={plant} reportMonth={reportMonth} apiBase={API_BASE_URL} />
-      </div>
-    </div>
+      </main>
+    </>
   );
 }
 

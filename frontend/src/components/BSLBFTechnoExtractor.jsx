@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import ui from '@/styles/ui.module.css';
+import b from './BSLBFTechnoExtractor.module.css';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -130,7 +132,7 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
         throw new Error(json.detail || 'Save failed');
       }
 
-      setStatus({ type: 'success', text: `✓ Saved ${json.records_saved} records successfully` });
+      setStatus({ type: 'success', text: `Saved ${json.records_saved} records successfully.` });
       setData(null);
       setFile(null);
       if (inputRef.current) inputRef.current.value = '';
@@ -142,183 +144,38 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
     }
   };
 
-  // Styles - IMPROVED DESIGN
-  const styles = {
-    container: {
-      padding: '20px',
-      background: '#f0fdf4',
-      border: '2px solid #86efac',
-      borderRadius: '10px',
-      marginBottom: '20px',
-      display: 'flex',
-      flexDirection: 'column',
-    },
-    title: {
-      fontSize: '18px',
-      fontWeight: '700',
-      color: '#166534',
-      marginBottom: '16px',
-    },
-    uploadSection: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      flexWrap: 'wrap',
-      padding: '14px 16px',
-      background: '#fff',
-      border: '2px solid #dcfce7',
-      borderRadius: '8px',
-      marginBottom: '16px',
-    },
-    fileInput: {
-      fontSize: '13px',
-      flex: 1,
-      minWidth: '200px',
-    },
-    button: {
-      padding: '8px 18px',
-      background: '#166534',
-      color: '#fff',
-      border: 'none',
-      borderRadius: '7px',
-      fontSize: '13px',
-      cursor: 'pointer',
-      fontWeight: '600',
-      whiteSpace: 'nowrap',
-      transition: 'all 0.2s',
-    },
-    buttonDisabled: {
-      background: '#94a3b8',
-      cursor: 'not-allowed',
-      opacity: 0.6,
-    },
-    buttonSecondary: {
-      background: '#059669',
-    },
-    statusMsg: (type) => ({
-      padding: '12px 16px',
-      borderRadius: '7px',
-      marginBottom: '16px',
-      fontSize: '14px',
-      fontWeight: '500',
-      background: type === 'success' ? '#f0fdf4' : '#fef2f2',
-      color: type === 'success' ? '#166534' : '#991b1b',
-      border: `2px solid ${type === 'success' ? '#86efac' : '#fca5a5'}`,
-    }),
-    infoLabel: {
-      fontSize: '14px',
-      fontWeight: '600',
-      color: '#475569',
-      marginBottom: '12px',
-      marginTop: '4px',
-    },
-    helperText: {
-      fontSize: '13px',
-      color: '#64748b',
-      lineHeight: '1.5',
-      marginTop: '4px',
-    },
-    warningText: {
-      display: 'block',
-      marginTop: '8px',
-      color: '#d97706',
-      fontSize: '13px',
-      fontWeight: '500',
-    },
-    tableWrapper: {
-      overflowX: 'auto',
-      marginBottom: '16px',
-      borderRadius: '8px',
-      border: '1px solid #e2e8f0',
-    },
-    table: {
-      width: '100%',
-      borderCollapse: 'collapse',
-      fontSize: '13px',
-      background: '#fff',
-      minWidth: '1000px',
-    },
-    th: {
-      padding: '12px 14px',
-      textAlign: 'left',
-      background: '#f1f5f9',
-      borderBottom: '2px solid #cbd5e1',
-      fontWeight: '600',
-      color: '#334155',
-      fontSize: '13px',
-      whiteSpace: 'nowrap',
-    },
-    td: {
-      padding: '10px 14px',
-      borderBottom: '1px solid #e2e8f0',
-    },
-    input: {
-      width: '100%',
-      padding: '6px 8px',
-      border: '1.5px solid #cbd5e1',
-      borderRadius: '5px',
-      fontSize: '13px',
-      fontFamily: 'inherit',
-      boxSizing: 'border-box',
-    },
-    inputText: {
-      fontWeight: '600',
-      color: '#1e293b',
-    },
-    actionButton: {
-      padding: '5px 10px',
-      fontSize: '12px',
-      background: '#e11d48',
-      color: '#fff',
-      border: 'none',
-      borderRadius: '5px',
-      cursor: 'pointer',
-      fontWeight: '600',
-      transition: 'all 0.2s',
-    },
-    actionButtonHover: {
-      background: '#be185d',
-    },
-    saveButtonContainer: {
-      marginTop: '16px',
-      display: 'flex',
-      gap: '10px',
-      flexWrap: 'wrap',
-    },
-  };
+  const statusClass = { success: ui.alertSuccess, info: ui.alertWarning, error: ui.alertError };
+  const missingParams = data ? data.filter(r => !r.coke_rate && !r.cdi).length > 0 : false;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.title}>BSL BF Performance PDF Extraction</div>
+    <section className={b.box} aria-labelledby="bsl-bf-title">
+      <h2 id="bsl-bf-title" className={b.title}>BSL BF Performance PDF Extraction</h2>
 
       {/* File Upload Section */}
-      <div style={styles.uploadSection}>
+      <div className={b.upload}>
+        <label htmlFor="bsl-bf-file" className={ui.srOnly}>BSL BF Performance PDF</label>
         <input
+          id="bsl-bf-file"
           ref={inputRef}
           type="file"
           accept=".pdf"
           onChange={handleFileSelect}
-          style={styles.fileInput}
+          className={b.file}
         />
         <button
+          type="button"
           onClick={() => handleExtract(false)}
           disabled={!file || loading}
-          style={{
-            ...styles.button,
-            ...((!file || loading) && styles.buttonDisabled),
-          }}
+          aria-busy={loading}
+          className={`${ui.btn} ${ui.btnPrimary} ${ui.btnSm}`}
         >
           {loading ? 'Extracting…' : 'Extract & Preview'}
         </button>
         <button
+          type="button"
           onClick={() => handleExtract(true)}
           disabled={!file || loading}
-          style={{
-            ...styles.button,
-            background: '#64748b',
-            fontSize: '11px',
-            padding: '5px 12px',
-          }}
+          className={`${ui.btn} ${ui.btnSecondary} ${ui.btnSm}`}
           title="Debug: Show PDF content details"
         >
           Debug
@@ -327,50 +184,50 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
 
       {/* Status Message */}
       {status && (
-        <div style={styles.statusMsg(status.type)}>
+        <div role={status.type === 'error' ? 'alert' : 'status'}
+             className={`${ui.alert} ${statusClass[status.type] || ui.alertError}`}
+             style={{ marginTop: 10 }}>
           {status.text}
         </div>
       )}
 
       {/* Extracted & Editable Data Table - Single View */}
       {data && data.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {/* Header Section */}
-          <div style={{ marginBottom: '16px' }}>
-            <div style={styles.infoLabel}>
-              📊 For-the-Month Values (+ Fin.Yr YTD Production & Coke Rate) - Editable Data Table
-            </div>
-            <div style={styles.helperText}>
-              ✏️ Click any cell to edit values  |  ➕ Add rows for missing furnaces  |  ❌ Remove rows as needed
-              {data.filter(r => !r.coke_rate && !r.cdi).length > 0 && (
-                <span style={styles.warningText}>
-                  ⚠️ Some parameters missing - manually enter or edit as needed
-                </span>
-              )}
-            </div>
+        <div>
+          <div className={b.intro}>
+            <strong>For-the-Month Values (+ Fin.Yr YTD Production &amp; Coke Rate)</strong>
+            <p className={ui.hint}>
+              Edit any value directly · add rows for missing furnaces · remove rows as needed.
+              Amber boxes differ from what&apos;s currently in the DB.
+            </p>
+            {missingParams && (
+              <p className={`${ui.alert} ${ui.alertWarning}`} style={{ marginTop: 8 }}>
+                Some parameters are missing — enter or edit them manually as needed.
+              </p>
+            )}
           </div>
 
-          {/* Table Container with Scrolling */}
-          <div style={styles.tableWrapper}>
-            <table style={styles.table}>
+          <div className={b.gridWrap}>
+            <table className={b.grid}>
               <thead>
                 <tr>
-                  <th style={styles.th}>Furnace</th>
+                  <th scope="col">Furnace</th>
                   {parameters.map(param => (
-                    <th key={param.key} style={styles.th}>{param.label}</th>
+                    <th key={param.key} scope="col">{param.label}</th>
                   ))}
-                  <th style={{ ...styles.th, width: '80px' }}>Action</th>
+                  <th scope="col"><span className={ui.srOnly}>Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((row, idx) => (
-                  <tr key={row.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f9fdf7' }}>
-                    <td style={{ ...styles.td, ...styles.inputText, minWidth: '90px' }}>
+                  <tr key={row.id}>
+                    <td>
                       <input
                         type="text"
                         value={row.unit || ''}
                         onChange={(e) => handleCellChange(idx, 'unit', e.target.value)}
-                        style={{ ...styles.input, ...styles.inputText }}
+                        className={`${b.input} ${b.unitInput}`}
+                        aria-label={`Furnace name, row ${idx + 1}`}
                         placeholder="e.g., BF-1"
                       />
                     </td>
@@ -379,32 +236,28 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
                       const extracted = row[param.key];
                       const changedFromDb = dbVal != null && extracted != null && Number(dbVal) !== Number(extracted);
                       return (
-                        <td key={param.key} style={{ ...styles.td, minWidth: '120px' }}>
+                        <td key={param.key}>
                           <input
                             type={param.type}
                             step={param.step}
                             value={extracted ?? ''}
                             onChange={(e) => handleCellChange(idx, param.key, e.target.value)}
-                            style={{
-                              ...styles.input,
-                              borderColor: changedFromDb ? '#f59e0b' : '#cbd5e1',
-                              backgroundColor: changedFromDb ? '#fffbeb' : '#fff',
-                            }}
+                            className={`${b.input} ${changedFromDb ? b.changed : ''}`}
+                            aria-label={`${param.label}, ${row.unit || `row ${idx + 1}`}`}
                             placeholder="-"
                           />
-                          <div style={{ fontSize: '10.5px', color: changedFromDb ? '#b45309' : '#94a3b8', marginTop: '2px', fontWeight: changedFromDb ? 600 : 400 }}>
+                          <div className={`${b.dbNote} ${changedFromDb ? b.dbNoteChanged : ''}`}>
                             In DB{param.ytd ? ' (YTD)' : ''}: {dbVal != null ? Number(dbVal).toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—'}
                           </div>
                         </td>
                       );
                     })}
-                    <td style={{ ...styles.td, minWidth: '80px' }}>
+                    <td>
                       <button
+                        type="button"
                         onClick={() => handleRemoveRow(idx)}
-                        style={styles.actionButton}
-                        title="Remove this row"
-                        onMouseOver={(e) => e.target.style.background = '#be185d'}
-                        onMouseOut={(e) => e.target.style.background = '#e11d48'}
+                        className={`${ui.btn} ${ui.btnDanger} ${ui.btnSm}`}
+                        aria-label={`Remove ${row.unit || `row ${idx + 1}`}`}
                       >
                         Remove
                       </button>
@@ -416,33 +269,17 @@ export default function BSLBFTechnoExtractor({ reportMonth, apiBase = API_BASE_U
           </div>
 
           {/* Action Buttons */}
-          <div style={styles.saveButtonContainer}>
-            <button
-              onClick={handleAddRow}
-              style={{
-                ...styles.button,
-                ...styles.buttonSecondary,
-                padding: '10px 20px',
-                fontSize: '14px',
-              }}
-            >
-              ➕ Add Row
+          <div className={ui.actions}>
+            <button type="button" onClick={handleAddRow} className={`${ui.btn} ${ui.btnSecondary}`}>
+              + Add Row
             </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                ...styles.button,
-                padding: '10px 20px',
-                fontSize: '14px',
-                ...(saving && styles.buttonDisabled),
-              }}
-            >
-              {saving ? '⏳ Saving…' : '💾 Save All Data'}
+            <button type="button" onClick={handleSave} disabled={saving} aria-busy={saving}
+                    className={`${ui.btn} ${ui.btnPrimary}`}>
+              {saving ? 'Saving…' : 'Save All Data'}
             </button>
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

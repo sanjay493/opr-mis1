@@ -1,0 +1,90 @@
+/* BSL BF Performance PDF extractor (used on data-entry/techno). Buttons,
+   alerts and table chrome come from styles/ui.module.css. */
+
+.box {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius);
+}
+
+.title { margin: 0 0 12px; font-size: 15px; font-weight: 700; color: var(--ui-text); }
+
+.upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--ui-bg-subtle);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-sm);
+}
+
+.file {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.file::file-selector-button {
+  margin-right: 10px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+}
+
+.intro { margin: 14px 0 10px; }
+.intro strong { display: block; font-size: 14px; color: var(--ui-text); }
+
+.gridWrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-sm);
+}
+
+.grid { width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 13px; }
+
+.grid th {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--ui-text-secondary);
+  background: var(--ui-bg-subtle);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.grid td { padding: 6px 8px; vertical-align: top; border-bottom: 1px solid var(--ui-border-subtle); }
+.grid tbody tr:hover td { background: var(--ui-bg-subtle); }
+
+.input {
+  width: 100%;
+  min-width: 90px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.input:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 0; border-color: var(--ui-primary); }
+.unitInput { font-weight: 600; }
+.changed { border-color: var(--ui-warning); background: var(--ui-warning-bg); }
+
+.dbNote { margin-top: 2px; font-size: 11px; color: var(--ui-text-secondary); white-space: nowrap; }
+.dbNoteChanged { color: var(--ui-warning); font-weight: 600; }
