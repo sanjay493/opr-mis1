@@ -113,16 +113,32 @@ function Notice({ type, text, onClose }) {
 }
 
 // ── Number input cell ─────────────────────────────────────────────────────────
-function NumInput({ value, onChange, disabled, changed, label }) {
+// Display only: at most 2 decimals (trailing zeros dropped), or the key's own
+// DISPLAY_DP — same rule as data-entry/bf-large-snapshot. The stored value
+// keeps full precision and is only re-saved if the user edits the cell.
+const DISPLAY_DP = { sulphur_in_hm: 3 };
+function fmtDisplay(v, dp = 2) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return v ?? '';
+  return String(Math.round(v * 10 ** dp) / 10 ** dp);
+}
+
+function NumInput({ value, onChange, disabled, changed, label, dp }) {
+  // Text typed in this box, shown as-is while editing (null = not editing),
+  // so a keystroke is never reformatted; blur returns to the rounded view.
+  const [draft, setDraft] = useState(null);
   return (
     <input
       type="number"
       step="any"
       inputMode="decimal"
-      value={value ?? ''}
+      value={draft ?? fmtDisplay(value, dp)}
       disabled={disabled}
       aria-label={label}
-      onChange={e => onChange(e.target.value === '' ? null : parseFloat(e.target.value))}
+      onChange={e => {
+        setDraft(e.target.value);
+        onChange(e.target.value === '' ? null : parseFloat(e.target.value));
+      }}
+      onBlur={() => setDraft(null)}
       className={`${m.cell} ${changed ? m.cellChanged : ''}`}
     />
   );
@@ -202,11 +218,11 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy, selParam, on
                   </button>
                 </td>
                 <td>
-                  <NumInput value={mv} disabled={busy} changed={mv !== initM} label={`${label}, month value`}
+                  <NumInput value={mv} disabled={busy} changed={mv !== initM} label={`${label}, month value`} dp={DISPLAY_DP[key]}
                     onChange={v => onChange('month', key, v)} />
                 </td>
                 <td>
-                  <NumInput value={tv} disabled={busy} changed={tv !== initT} label={`${label}, YTD cumulative`}
+                  <NumInput value={tv} disabled={busy} changed={tv !== initT} label={`${label}, YTD cumulative`} dp={DISPLAY_DP[key]}
                     onChange={v => onChange('till_month', key, v)} />
                 </td>
               </tr>
