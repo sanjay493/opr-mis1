@@ -41,7 +41,7 @@ import page_bf_benchmark_export as _export
 from page_key_parameters import _COKE_UNITS
 import bf_benchmark_registry as _registry
 from bf_benchmark_registry import (
-    BF_BENCHMARK_PARAMS, DYNAMIC_PARAM_KEYS, PARAM_BY_KEY, SAIL_BFS, SAIL_BF_UNITS_BY_PLANT,
+    BF_BENCHMARK_PARAMS, DYNAMIC_PARAM_KEYS, KEY_ALIASES, PARAM_BY_KEY, SAIL_BFS, SAIL_BF_UNITS_BY_PLANT,
 )
 
 router = APIRouter(prefix="/api/bf-benchmark", tags=["bf-benchmark"])
@@ -158,7 +158,16 @@ async def get_params():
         for unit in units
     ]
     sail_bfs_all.sort(key=lambda b: (b["plant"], b["unit"]))
-    return {"params": BF_BENCHMARK_PARAMS, "sail_bfs": SAIL_BFS, "sail_bfs_all": sail_bfs_all}
+    # Row order of the "SAIL Large BFs — Performance Snapshot" report page and
+    # the key aliases it reads through, so the Large BF manual-entry form
+    # (data-entry/bf-large-snapshot) follows the report rather than keeping
+    # its own copy of either list. Imported lazily: the page module pulls in
+    # other report modules this router doesn't otherwise need.
+    from page_bf_large_annexure import _ROW_KEYS as LARGE_BF_ROW_KEYS
+    return {
+        "params": BF_BENCHMARK_PARAMS, "sail_bfs": SAIL_BFS, "sail_bfs_all": sail_bfs_all,
+        "large_bf_row_keys": LARGE_BF_ROW_KEYS, "key_aliases": KEY_ALIASES,
+    }
 
 
 # ── Non-SAIL BF registry ──────────────────────────────────────────────────────

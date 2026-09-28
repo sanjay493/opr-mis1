@@ -75,6 +75,13 @@ Data sources, per row:
     same values under slightly different key names is exactly what caused
     the Pellet Fe/Lump Ore Fe/Fce Availability divergence bugs fixed
     earlier (a value entered on one form not showing up on the other).
+    A dedicated entry page exists again — /data-entry/bf-large-snapshot —
+    but it is NOT a second store: it loads/saves the same techno_data rows
+    via Techno Manual Entry's own /api/techno/manual/{entry,save}, takes its
+    row order and key aliases from this module's _ROW_KEYS and
+    KEY_ALIASES (served by /api/bf-benchmark/params), writes new values
+    under PARAM_TEMPLATES['Blast Furnace']'s keys and edits existing ones
+    under whichever key they're stored in. Keep it that way.
   - Working Volume is a static engineering spec, unchanged from month to
     month — reused as-is from bf_benchmark_sail_meta.working_volume_m3 (the
     table the existing BF Benchmarking feature already maintains this in;

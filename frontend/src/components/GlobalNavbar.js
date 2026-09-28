@@ -31,6 +31,7 @@ export default function GlobalNavbar() {
             { label: 'Special Steel Physical Performance', link: '/data-entry/special-steel-physical', icon: '🏭' },
             { label: 'Special Steel IPT Requirement', link: '/data-entry/special-steel-ipt', icon: '↔️' },
             { label: 'Techno Manual Entry', link: '/data-entry/techno-manual', icon: '✏️' },
+            { label: 'SAIL Large BFs — Performance Snapshot', link: '/data-entry/bf-large-snapshot', icon: '🔥' },
             { label: 'CO2 / Water / PM Manual Entry', link: '/data-entry/co2-water-pm-manual', icon: '🌫️' },
             { label: 'Key Parameters Manual Entry', link: '/data-entry/key-parameters-manual', icon: '🔑' },
             { label: 'Key Highlights & Variances', link: '/data-entry/key-highlights', icon: '📝' },

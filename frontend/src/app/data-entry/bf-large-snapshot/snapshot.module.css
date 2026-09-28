@@ -1,0 +1,151 @@
+/* Large BF manual-entry grid. Page chrome (title, buttons, alerts) comes
+   from styles/ui.module.css; this file only covers the entry grid. */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.toolbar .spacer { flex: 1; }
+
+.gridWrap {
+  overflow: auto;
+  max-height: calc(100vh - 290px);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius);
+}
+
+.grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.grid th,
+.grid td {
+  border-bottom: 1px solid var(--ui-border-subtle);
+  border-right: 1px solid var(--ui-border-subtle);
+}
+
+.grid thead th {
+  position: sticky;
+  z-index: 2;
+  background: var(--ui-bg-subtle);
+  color: var(--ui-text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.grid thead tr:first-child th { top: 0; height: 58px; }
+.grid thead tr:nth-child(2) th { top: 58px; font-size: 12px; }
+
+.bfHead {
+  color: var(--ui-text) !important;
+  font-size: 13px;
+  border-bottom: 1px solid var(--ui-border) !important;
+}
+
+.bfHeadInner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.paramCol {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 190px;
+  background: var(--ui-surface);
+  text-align: left !important;
+}
+
+.grid thead .paramCol { z-index: 3; background: var(--ui-bg-subtle); }
+
+.unitCol {
+  width: 76px;
+  color: var(--ui-text-secondary);
+  white-space: nowrap;
+}
+
+.grid td { padding: 4px 6px; vertical-align: middle; }
+.grid td.paramCol { padding: 6px 10px; font-weight: 500; }
+.grid tbody tr:hover td { background: var(--ui-bg-subtle); }
+
+.cell {
+  width: 100%;
+  min-width: 92px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.cell:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 0;
+  border-color: var(--ui-primary);
+}
+
+.cellChanged {
+  border-color: var(--ui-warning);
+  background: var(--ui-warning-bg);
+}
+
+.computed {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-secondary);
+  padding-right: 14px !important;
+}
+
+.derivedRow td {
+  color: var(--ui-text-secondary);
+  background: var(--ui-bg-subtle);
+  font-style: italic;
+}
+
+.derivedRow td.paramCol { background: var(--ui-bg-subtle); font-weight: 400; }
+
+.aliasNote {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--ui-text-secondary);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ui-text-secondary);
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border-radius: 3px;
+  border: 1px solid var(--ui-warning);
+  background: var(--ui-warning-bg);
+}
+
+.swatchDerived { border-color: var(--ui-border); background: var(--ui-bg-subtle); }

@@ -201,7 +201,8 @@ Sinter, <mill units>, General`. `till_month` = April→report_month cumulative,
     `api_rsp_techno.py`, `api_mcr_techno.py`, `api_coal_co2_techno.py`,
     `api_coal_omi_techno.py`, `api_unified_techno.py`.
   - Manual: `data-entry/techno-manual/page.js`, `data-entry/techno-correction/page.js`,
-    `data-entry/key-parameters-manual/page.js`, `data-entry/co2-water-pm-manual/page.js`
+    `data-entry/key-parameters-manual/page.js`, `data-entry/co2-water-pm-manual/page.js`,
+    `data-entry/bf-large-snapshot/page.js`
     → `POST /api/techno/manual/save` (`api_techno_manual.py`) → `db.merge_upsert_techno_data`.
   - SAIL BF aggregate computed from the 5 plants: `POST /api/techno/manual/sail/calculate`.
   - Cumulative rules for the manual form's auto-YTD: `techno_cumulative.py:CUMULATIVE_RULES`.
@@ -586,6 +587,7 @@ export default function XPage() {
 | `annual-capacity` | Rated annual capacity per plant/item with mid-FY effective-dated changes | `/api/capacity`, `/api/capacity/{id}` (PATCH/DELETE) | `item_capacity_table` |
 | `techno` | Multi-plant techno **file** extraction: BSP flash-PDF / OISCO / 3-page-Tech, DSP MCR, generic techno preview + insert, 12-month backfill | `/api/bsp-techno/*`, `/api/mcr-techno/*`, `/api/techno/{preview,insert,preview-months,insert-months,data}`, `/api/extraction-log` | `techno_data` |
 | `techno-manual` | Full manual techno grid per plant/unit/month, auto YTD-cumulative preview, SAIL BF aggregate calculate/preview | `/api/techno/manual/{entry,save,cumulative-preview,sail/calculate,sail/preview}` | `techno_data` |
+| `bf-large-snapshot` | Month + Till Month grid for BSP BF-8 / RSP BF-5 / ISP BF-5 in "SAIL Large BFs — Performance Snapshot" (page 3.6) row order; same rows/keys as `techno-manual` (row list + aliases from `/api/bf-benchmark/params`) | `/api/bf-benchmark/params`, `/api/techno/manual/{entry,save,cumulative-preview}` | `techno_data` |
 | `techno-correction` | Find one param across a plant + month range, inline-edit | `/api/techno/manual/param-history`, `/api/techno/manual/save` | `techno_data` |
 | `key-parameters-manual` | The Inter-Plant-page fields with no extractor: CAPEX, Labour Productivity, Avg Rake Detention, Demurrage, HM-to-PCM, **RLTIFR**, Sinter Fe override | `/api/techno/manual/{entry,save}` | `techno_data` (`General` unit; RSP `SP-1/2/3` for Sinter Fe) |
 | `co2-water-pm` | Sp. CO₂ / Water / PM emission, 5 plants, month + till-month (wraps `TechnoExtractedParams`) | `/api/techno/data`, `/api/techno/manual/save` (via component) | `techno_data` (`General`) |

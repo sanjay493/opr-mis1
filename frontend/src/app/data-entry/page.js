@@ -65,6 +65,14 @@ function DataEntryPageInner() {
       bgColor: 'rgba(99, 102, 241, 0.1)'
     },
     {
+      title: 'SAIL Large BFs — Performance Snapshot',
+      description: 'Month and Till Month figures for BSP BF-8, RSP BF-5 and ISP BF-5 in report order. Saves into the same techno data as Techno Manual Entry.',
+      icon: '🏗️',
+      link: '/data-entry/bf-large-snapshot',
+      color: '#b45309',
+      bgColor: 'rgba(180, 83, 9, 0.1)'
+    },
+    {
       title: 'Techno Data Correction',
       description: 'Find one techno-economic parameter across a plant + month range and correct it inline.',
       icon: '🩹',
