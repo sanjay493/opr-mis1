@@ -93,6 +93,11 @@ function buildRows(meta) {
 
 const bfId = (bf) => `${bf.plant}:${bf.unit}`;
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+// Display only: at most 2 decimals (trailing zeros dropped), or the row's own
+// DISPLAY_DP. The stored value keeps its full precision and is only re-saved
+// if the user edits the cell.
+const DISPLAY_DP = { sulphur_in_hm: 3 };
+const fmt2 = (v, dp = 2) => (num(v) === null ? '' : String(Math.round(v * 10 ** dp) / 10 ** dp));
 
 function BfLargeSnapshotInner() {
   const def = defaultPeriod();
@@ -108,6 +113,9 @@ function BfLargeSnapshotInner() {
   const [saving, setSaving] = useState(false);
   const [ytdBusy, setYtdBusy] = useState('');
   const [notice, setNotice] = useState(null);
+  // Text of the cell being typed in ({"id|period|key": "12.3"}), so typing
+  // isn't reformatted mid-keystroke; cleared on blur to show fmt2 again.
+  const [drafts, setDrafts] = useState({});
 
   const rows = useMemo(() => (meta ? buildRows(meta) : []), [meta]);
   const bfs = meta?.sail_bfs || [];
@@ -159,6 +167,7 @@ function BfLargeSnapshotInner() {
         }
       }
       setValues(vals);
+      setDrafts({});
       setInitial(JSON.parse(JSON.stringify(vals)));
       setSrcKeys(srcs);
       if (!found) setNotice({ type: 'info', text: `Nothing entered yet for ${monthName} ${year} — values you save here also appear in Techno Manual Entry.` });
@@ -203,6 +212,7 @@ function BfLargeSnapshotInner() {
   };
 
   const setCell = (id, period, key, raw) => {
+    setDrafts((prev) => ({ ...prev, [`${id}|${period}|${key}`]: raw }));
     const v = raw === '' ? null : Number(raw);
     setValues((prev) => ({
       ...prev,
@@ -394,7 +404,7 @@ function BfLargeSnapshotInner() {
                         {row.showWv
                           ? bfs.map((bf) => (
                             <td key={bfId(bf)} colSpan={2} className={s.computed}>
-                              {wvById[bfId(bf)] ?? '—'}
+                              {fmt2(wvById[bfId(bf)]) || '—'}
                             </td>
                           ))
                           : <td colSpan={bfs.length * 2}>{row.source}</td>}
@@ -412,7 +422,7 @@ function BfLargeSnapshotInner() {
                         const id = bfId(bf);
                         if (row.kind === 'computed') {
                           const v = fuelRate(id, p.id);
-                          return <td key={`${id}-${p.id}`} className={s.computed}>{v ?? '—'}</td>;
+                          return <td key={`${id}-${p.id}`} className={s.computed}>{fmt2(v) || '—'}</td>;
                         }
                         const src = srcKeys[id]?.[p.id]?.[row.key];
                         const changed = isChanged(id, p.id, row.key);
@@ -421,8 +431,13 @@ function BfLargeSnapshotInner() {
                             <input
                               type="number" step="any" inputMode="decimal"
                               className={`${s.cell} ${changed ? s.cellChanged : ''}`}
-                              value={values[id]?.[p.id]?.[row.key] ?? ''}
+                              value={drafts[`${id}|${p.id}|${row.key}`] ?? fmt2(values[id]?.[p.id]?.[row.key], DISPLAY_DP[row.key])}
                               onChange={(e) => setCell(id, p.id, row.key, e.target.value)}
+                              onBlur={() => setDrafts((prev) => {
+                                const next = { ...prev };
+                                delete next[`${id}|${p.id}|${row.key}`];
+                                return next;
+                              })}
                               disabled={loading || saving}
                               aria-label={`${row.label}, ${bf.label}, ${p.label}`}
                               title={src && src !== row.storeKey ? `Stored as "${src}"` : undefined}
