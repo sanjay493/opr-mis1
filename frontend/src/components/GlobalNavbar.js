@@ -4,14 +4,14 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
-import { useEmbedded } from '@/components/entry/EmbeddedContext';
+import { useEmbedded } from '@/components/EmbeddedContext';
 
 export default function GlobalNavbar() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [expandedGroup, setExpandedGroup] = useState(null);
   const { user, logout } = useAuth();
   const router = useRouter();
-  // Inside a grouped entry page's tab the page already has a navbar.
+  // Inside a grouped page's tab the group page already has a navbar.
   const embedded = useEmbedded();
 
   const handleLogout = async () => {
@@ -88,43 +88,22 @@ export default function GlobalNavbar() {
       icon: '📄',
       submenu: [
         { label: 'OMI Generate', link: '/report', icon: '📈' },
-        { label: 'Month-wise Production', link: '/reports/production-fy', icon: '📅' },
-        { label: 'HM/CS/FS/Saleable Steel Trend', link: '/reports/production-trend', icon: '📈' },
-        { label: 'Unit-wise Production Query', link: '/reports/production-query', icon: '🔍' },
-        { label: 'Production Items (Month & Unit-wise)', link: '/reports/production-items', icon: '📦' },
-        { label: 'Iron Ore Mines (Month-wise)', link: '/reports/iron-ore-mines', icon: '⛏️' },
-        { label: 'Special Steel (Order vs Actual, FY)', link: '/reports/special-steel-fy', icon: '🔩' },
-        { label: 'Special Steel Plants Physical Performance', link: '/reports/special-steel-physical', icon: '🏭' },
-        { label: 'IPT (Plan vs Actual, FY)', link: '/reports/ipt-fy', icon: '🚆' },
+        { label: 'Production & Analysis Reports', link: '/reports/production-analysis', icon: '📊' },
         { label: 'Techno Reports', link: '/reports/techno', icon: '⚙️' },
-        { label: 'Large BF Benchmarking', link: '/reports/bf-benchmark', icon: '📐' },
-        { label: 'Production Loss Analysis', link: '/reports/production-loss-analysis', icon: '📉' },
-        { label: 'Breakdown Analysis', link: '/reports/breakdown-analysis', icon: '⚠️' }
       ]
     },
     {
       label: 'Highlights & Records',
       icon: '🏆',
       submenu: [
-        { label: 'Production Highlights', link: '/reports/highlights', icon: '✨' },
-        { label: 'Major Production (Month & Till Month)', link: '/reports/major-production', icon: '🏭' },
+        { label: 'Highlights & Records', link: '/reports/highlights-records', icon: '🏆' },
         { label: 'Production Records', link: '/records', icon: '📊' },
-        { label: 'Monthly Records Matrix', link: '/reports/records-matrix', icon: '🗓️' },
       ]
     },
     {
       label: 'External Reports',
       icon: '📮',
-      submenu: [
-        { label: 'New Facilities (Annexure-III)', link: '/reports/new-facilities', icon: '🆕' },
-        { label: 'Monthly DO Letter', link: '/reports/do-letter', icon: '✉️' },
-        { label: 'JPC Monthly Report', link: '/reports/jpc-report', icon: '📋' },
-        { label: '1-Page Report', link: '/reports/one-page-report', icon: '📃' },
-        { label: 'Pmix Report (Year-wise)', link: '/reports/pmix-fy', icon: '📈' },
-        { label: 'Techno Custom Report', link: '/reports/techno?tab=custom', icon: '⚙️' },
-        { label: 'SEFI Report', link: '/reports/sefi', icon: '📮' },
-        { label: 'Inputs for Steel Bulletin', link: '/reports/steel-bulletin', icon: '📰' },
-      ]
+      link: '/reports/external'
     },
     {
       label: 'To-Do',

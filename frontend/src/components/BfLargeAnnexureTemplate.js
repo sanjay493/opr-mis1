@@ -1,8 +1,8 @@
 'use client';
 
 // Mirrors backend/page_templates/bf_large_annexure.html — SAIL's 3 largest
-// BFs only (no non-SAIL comparison columns — see /reports/bf-benchmark for
-// that, a separate standalone tool). Columns come entirely from data.periods
+// BFs only (no non-SAIL comparison columns — see /reports/production-analysis
+// ?tab=bf-benchmark for that, a separate standalone tool). Columns come entirely from data.periods
 // (backend/page_bf_large_annexure.py's period_defs): Previous FY, ABP
 // Target, one column per YTD month so far, then YTD cumulative — dynamic in
 // count (a March report_month has 4 more month columns than an April one),

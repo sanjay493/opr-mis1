@@ -112,24 +112,37 @@ renderers. **The per-template `page.*` data contract is in §8.**
 | *36–40* | Capital Repair (per plant) | `capital_repair` | `page_capital_repair.py:generate_capital_repair` | `capital_repair.html` | `CapitalRepairTemplate.js` | `capital_repair_table` |
 | *(built, not wired)* | Key Highlights & Variances | `key_highlights` | `page_key_highlights.py:generate_key_highlights` | `key_highlights.html` | `KeyHighlightsTemplate.js` | `key_highlights_narrative`, `production_table`, `techno_data` |
 
-### Standalone report routes (`frontend/src/app/reports/<x>/page.js`, own endpoints — not part of `/api/data`)
+### Standalone report routes
 
-| Route | Backend | Tables |
-|---|---|---|
-| `reports/one-page-report` | `page_one_page_report.py` | `sail_sales_table`, `sail_sales_note_table`, `sail_stock_snapshot_table`, `production_table` |
-| `reports/do-letter` | `page_do_letter.py` (`/api/do-letter…`) | `production_table`, `production_plan_table`, `do_letter_remark_table` |
-| `reports/jpc-report` | `page_jpc_report.py` (`/api/jpc-report` → xlsx) | `production_table` |
-| `reports/production-items` | `page_finished_steel_report.py` (`/api/finished-steel-report…`; Oven Pushing / Sinter / Hot Metal / Crude Steel / Pig Iron / Finished Steel / Saleable Steel) | `production_table` |
-| `reports/records-matrix` | `page_records.py` (`/api/records`) | `production_table` |
-| `reports/pmix-fy` | `page_pmix_fy_report.py` | `production_table` |
-| `reports/production-fy`, `reports/production-query`, `reports/major-production` | `page_production_fy_export.py`, `page_production_query_export.py` | `production_table`, `production_plan_table` |
-| `reports/special-steel-fy` | `page_special_steel_fy_export.py` | `special_steel_orders` |
-| `reports/techno-custom`, `reports/techno-verification`, `reports/techno-monthly`, `reports/techno-dashboard` | `page_techno_custom_export.py`, `page_techno_verification_export.py`, `page_techno.py` | `techno_data`, `techno_plan_fy` |
-| `reports/bf-benchmark` | `api_bf_benchmark.py`, `page_bf_benchmark_export.py` | `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `techno_data` |
-| `reports/production-loss-analysis` | `production_loss_analysis.py`, `api_production_loss.py` | `production_table`, `production_plan_table`, `capital_repair_table`, `breakdown_table` |
-| `reports/breakdown-analysis` | frontend-only (recharts); client-side aggregation over `GET /api/breakdown` (`api_breakdown.py`) | `breakdown_table` |
-| `reports/ipt-fy` | `page_ipt.py` | `ipt_table` |
-| `reports/new-facilities` | (frontend-only / static) | — |
+21 of these are grouped into 3 tabbed pages (like the manual-entry pages, see
+§ above): body lives in `frontend/src/components/reports/<x>/View.js`, the old
+`frontend/src/app/reports/<x>/page.js` is now a redirect to
+`<group route>?tab=<x>` (`frontend/src/components/reports/reportGroups.js`
+lists the groups/tabs; `ReportTabs.js` renders them). Techno's 5 reports were
+already clubbed the same way into `/reports/techno` (its own tab pattern, see
+`components/techno/`). Own backend endpoints — not part of `/api/data`.
+
+| Tab (old route) | Group route | Backend | Tables |
+|---|---|---|---|
+| `one-page-report` | `/reports/external` | `page_one_page_report.py` | `sail_sales_table`, `sail_sales_note_table`, `sail_stock_snapshot_table`, `production_table` |
+| `do-letter` | `/reports/external` | `page_do_letter.py` (`/api/do-letter…`) | `production_table`, `production_plan_table`, `do_letter_remark_table` |
+| `jpc-report` | `/reports/external` | `page_jpc_report.py` (`/api/jpc-report` → xlsx) | `production_table` |
+| `production-items` | `/reports/production-analysis` | `page_finished_steel_report.py` (`/api/finished-steel-report…`; Oven Pushing / Sinter / Hot Metal / Crude Steel / Pig Iron / Finished Steel / Saleable Steel) | `production_table` |
+| `records-matrix` | `/reports/highlights-records` | `page_records.py` (`/api/records`) | `production_table` |
+| `pmix-fy` | `/reports/external` | `page_pmix_fy_report.py` | `production_table` |
+| `production-fy`, `production-query`; `major-production` (own tab) | `/reports/production-analysis`; `/reports/highlights-records` | `page_production_fy_export.py`, `page_production_query_export.py` | `production_table`, `production_plan_table` |
+| `special-steel-fy` | `/reports/production-analysis` | `page_special_steel_fy_export.py` | `special_steel_orders` |
+| `reports/techno-custom`, `reports/techno-verification`, `reports/techno-monthly`, `reports/techno-dashboard` | `/reports/techno` (clubbed separately, see above) | `page_techno_custom_export.py`, `page_techno_verification_export.py`, `page_techno.py` | `techno_data`, `techno_plan_fy` |
+| `bf-benchmark` | `/reports/production-analysis` | `api_bf_benchmark.py`, `page_bf_benchmark_export.py` | `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `techno_data` |
+| `production-loss-analysis` | `/reports/production-analysis` | `production_loss_analysis.py`, `api_production_loss.py` | `production_table`, `production_plan_table`, `capital_repair_table`, `breakdown_table` |
+| `capital-repair-calendar` | `/reports/production-analysis` | `page_capital_repair.py:generate_capital_repair_calendar` (`/api/capital-repair-calendar…`), `page_capital_repair_calendar_export.py` | `capital_repair_table` |
+| `breakdown-analysis` | `/reports/production-analysis` | frontend-only (recharts); client-side aggregation over `GET /api/breakdown` (`api_breakdown.py`) | `breakdown_table` |
+| `ipt-fy` | `/reports/production-analysis` | `page_ipt.py` | `ipt_table` |
+| `new-facilities` | `/reports/external` | (frontend-only / static) | — |
+| `highlights` | `/reports/highlights-records` | frontend-only | — |
+| `special-steel-physical` | `/reports/production-analysis` | `page_special_steel_physical.py` | `special_steel_phys_perf`, `special_steel_phys_meta`, `special_steel_phys_note` |
+| `iron-ore-mines` | `/reports/production-analysis` | `page_sail_mines.py` (mine-level) | `mines_production_monthly`, `mines_despatch_*`, `mines_booked_qty_*` |
+| `sefi`, `steel-bulletin` | `/reports/external` | frontend-only | `production_table` |
 
 ---
 
@@ -274,14 +287,14 @@ and `frontend/.../cost-trend/page.js:PRODUCTS` list all five.
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
 | `steel_sector_performance_table` | `(report_month)` → `data_json` (entire PIB release: tables 1a…5 + narrative 6/7/8) | `data-entry/steel-sector-performance/page.js` → `pdf_extractor_steel_sector_performance.py` | `page_steel_sector_performance.py` (2.1–2.3) |
-| `do_letter_remark_table` | `(report_month, item_name, plant_name)` → `remark`. `item_name` ∈ `Crude Steel`, `Finished Steel` | `POST /api/do-letter/remarks` (from `reports/do-letter` page) | `page_do_letter.py` |
+| `do_letter_remark_table` | `(report_month, item_name, plant_name)` → `remark`. `item_name` ∈ `Crude Steel`, `Finished Steel` | `POST /api/do-letter/remarks` (from `reports/external?tab=do-letter`) | `page_do_letter.py` |
 
 ### 4.9 Capital repair & breakdown
 
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
-| `capital_repair_table` | annual CR plan rows per plant/FY (`shop`, `equipment`, `activity`, `schedule_days`, `period`, `actual` free-text) + structured cols (`unit_type`, `unit_name`, `actual_start/end`, `planned_days`) | `data-entry/capital-repair/page.js` → `/api/capital-repair-entry`; plan pre-seeded from `Report_format/CR.pdf`; `actual` display string built by `main.py:format_cr_actual` | `page_capital_repair.py` (CR pages 36–40); `production_loss_analysis.py` |
-| `breakdown_table` | ad-hoc unplanned-downtime events (`plant`, `unit_type`, `unit_name`, `start_ts`, `end_ts`, `is_ongoing`, `cause`, `hours_lost_override`) | `data-entry/breakdown/page.js` → `/api/breakdown` (`api_breakdown.py`, full CRUD) | `production_loss_analysis.py` (explains HM/CS/FS shortfall vs ABP); `reports/breakdown-analysis/page.js` (read-only cross-plant filter/sort/charts, client-side over `GET /api/breakdown`) |
+| `capital_repair_table` | annual CR plan rows per plant/FY (`shop`, `equipment`, `activity`, `schedule_days`, `period`, `actual` free-text) + structured cols (`unit_type`, `unit_name`, `actual_start/end`, `planned_days`) | `data-entry/capital-repair/page.js` → `/api/capital-repair-entry`; plan pre-seeded from `Report_format/CR.pdf`; `actual` display string built by `main.py:format_cr_actual` | `page_capital_repair.py` (CR pages 36–40); `production_loss_analysis.py`; `page_capital_repair.py:generate_capital_repair_calendar` (`reports/production-analysis?tab=capital-repair-calendar`, Plan-vs-Actual Gantt calendar) |
+| `breakdown_table` | ad-hoc unplanned-downtime events (`plant`, `unit_type`, `unit_name`, `start_ts`, `end_ts`, `is_ongoing`, `cause`, `hours_lost_override`) | `data-entry/breakdown/page.js` → `/api/breakdown` (`api_breakdown.py`, full CRUD) | `production_loss_analysis.py` (explains HM/CS/FS shortfall vs ABP); `components/reports/breakdown-analysis/View.js` (read-only cross-plant filter/sort/charts, client-side over `GET /api/breakdown`) |
 
 ### 4.10 Annual capacity
 
@@ -297,7 +310,7 @@ mid-FY change history (`db.get_effective_capacity` = latest row ≤ month).
 `(report_month, item, from_plant, to_plant)` → `plan`, `actual`, `unit` (`Rake`/`T`),
 `plan_tonnage`, `actual_tonnage`, `sort_order`.
 - **Populated by:** `data-entry/ipt/page.js` → `/api/ipt-entry`, `/api/ipt-entries/bulk`, `/api/ipt-delete`.
-- **Read by:** `page_ipt.py` (page 26), `reports/ipt-fy`.
+- **Read by:** `page_ipt.py` (page 26), `reports/production-analysis?tab=ipt-fy`.
 
 ### 4.12 Narrative
 
@@ -311,7 +324,7 @@ mid-FY change history (`db.get_effective_capacity` = latest row ≤ month).
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
 | `bf_benchmark_sail_meta` | `(plant, unit)` → `working_volume_m3` (SAIL's 3 large BFs) | `frontend/src/components/entry/bf-benchmark/Form.js` → `PATCH /api/bf-benchmark/sail-meta` | `api_bf_benchmark.py`, `page_bf_large_annexure.py` |
-| `bf_benchmark_external_bf` | non-SAIL BF registry (`name`, `company`, `location`, `working_volume_m3`, `active`) | `frontend/src/components/entry/bf-benchmark/Form.js` → `POST/PATCH /api/bf-benchmark/external-bfs` | `api_bf_benchmark.py`, `reports/bf-benchmark` |
+| `bf_benchmark_external_bf` | non-SAIL BF registry (`name`, `company`, `location`, `working_volume_m3`, `active`) | `frontend/src/components/entry/bf-benchmark/Form.js` → `POST/PATCH /api/bf-benchmark/external-bfs` | `api_bf_benchmark.py`, `reports/production-analysis?tab=bf-benchmark` |
 | `bf_benchmark_external_data` | `(external_bf_id, report_month)` → `param_json` (`report_month` holds an **FY label** here, e.g. `2025-26`) | same page → `POST /api/bf-benchmark/external-bfs/{id}/entry` | `api_bf_benchmark.py` |
 
 Benchmark param registry: `backend/bf_benchmark_registry.py` (`BF_BENCHMARK_PARAMS`,
@@ -615,7 +628,7 @@ export default function XPage() {
 | Route | Purpose | Endpoint | Table |
 |---|---|---|---|
 | `/upload` (`frontend/src/app/upload/page.js`) | The primary production Excel/PDF ingestion: Actuals / Preview & Insert / ABP Plan tabs | `/api/upload-excel`, `/api/extract-preview` → `/api/confirm-extraction`, `/api/upload-excel-plan` | `production_table`, `production_plan_table`, `techno_data`, `special_steel_orders` |
-| `/reports/do-letter` | Also lets the user enter Annexure remarks | `/api/do-letter/remarks` | `do_letter_remark_table` |
+| `/reports/external?tab=do-letter` | Also lets the user enter Annexure remarks | `/api/do-letter/remarks` | `do_letter_remark_table` |
 | `/report` (page 3 inline edit) | Production narrative + highlights text | `/api/page3-narrative` | `page3_narrative` |
 | `/report` (any cell) | Inline override of a computed value | `/api/data` (POST) | `page_configs` |
 

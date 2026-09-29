@@ -213,3 +213,94 @@ def generate_capital_repair(plant: str, fy: str = "2026-27", report_month: str |
         }
     finally:
         conn.close()
+
+
+_FY_MONTH_ORDER = ["04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03"]
+_MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _fy_months(fy: str) -> list[str]:
+    """'2026-27' -> ['2026-04', ..., '2026-12', '2027-01', '2027-02', '2027-03']."""
+    start = int(fy[:4])
+    end = start + 1
+    return [f"{start}-{m}" for m in _FY_MONTH_ORDER[:9]] + [f"{end}-{m}" for m in _FY_MONTH_ORDER[9:]]
+
+
+def _month_label(ym: str) -> str:
+    y, m = ym.split("-")
+    return f"{_MONTH_ABBR[int(m) - 1]}'{y[2:]}"
+
+
+def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
+    """One row per unit (shop/equipment), one column per FY month (Apr-Mar):
+    which months it was Planned (from the free-text Period) vs actually
+    under repair (from the structured/parsed Actual dates), for a Gantt-
+    style plan-vs-actual calendar. A unit with more than one Capital Repair
+    row in the FY (e.g. two separate CRs) has its plan/actual spans merged
+    into that one row — a Gantt row can show more than one bar."""
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT shop, equipment, activity, period, actual,
+                   actual_start, actual_end, actual_ongoing
+            FROM capital_repair_table
+            WHERE plant=? AND fy=?
+            ORDER BY sort_order ASC, id ASC
+        """, (plant, fy))
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    months = _fy_months(fy)
+    fy_last = months[-1]
+
+    units = {}       # (shop, equipment) -> {"activities": set, "plan": set, "actual": set}
+    unit_order = []
+    shop_order = []
+    for shop, equipment, activity, period, actual, a_start, a_end, a_ongoing in rows:
+        shop = shop or ""
+        equipment = equipment or ""
+        key = (shop, equipment)
+        if key not in units:
+            units[key] = {"activities": [], "plan": set(), "actual": set()}
+            unit_order.append(key)
+            if shop not in shop_order:
+                shop_order.append(shop)
+        entry = units[key]
+        if activity and activity not in entry["activities"]:
+            entry["activities"].append(activity)
+
+        span = _period_months(period)
+        if span:
+            first, last = span
+            entry["plan"].update(m for m in months if first <= m <= last)
+
+        dates = _actual_dates(a_start, a_end, a_ongoing, actual)
+        if dates:
+            start, end = dates
+            start_m, end_m = start[:7], (end[:7] if end else fy_last)
+            entry["actual"].update(m for m in months if start_m <= m <= end_m)
+
+    sections = []
+    for shop in shop_order:
+        unit_rows = []
+        for key in unit_order:
+            s, equipment = key
+            if s != shop:
+                continue
+            entry = units[key]
+            unit_rows.append({
+                "unit": equipment,
+                "activity": " / ".join(entry["activities"]),
+                "months": [{"plan": m in entry["plan"], "actual": m in entry["actual"]} for m in months],
+            })
+        sections.append({"shop": shop, "rows": unit_rows})
+
+    return {
+        "plant": plant,
+        "plant_title": _PLANT_TITLE.get(plant, plant),
+        "fy": fy,
+        "month_labels": [_month_label(m) for m in months],
+        "sections": sections,
+    }

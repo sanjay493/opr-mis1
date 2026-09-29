@@ -55,7 +55,8 @@ from page_coal_consumption import generate_coal_consumption
 from page_epi import generate_epi
 from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt, _ITEM_ORDER as _IPT_ITEM_ORDER, _ITEM_RANK as _IPT_ITEM_RANK
-from page_capital_repair import CR_PAGES, generate_capital_repair, fy_from_month, format_cr_actual
+from page_capital_repair import CR_PAGES, generate_capital_repair, generate_capital_repair_calendar, fy_from_month, format_cr_actual
+import page_capital_repair_calendar_export
 from page_rake_detention import (
     DETAIL_PAGES as RAKE_DETENTION_DETAIL_PAGES,
     SUMMARY_PAGE_ID as RAKE_DETENTION_SUMMARY_PAGE_ID,
@@ -6504,6 +6505,45 @@ def get_capital_repair_entries(plant: str = Query(...), fy: str = Query(...)):
     ]
     conn.close()
     return {"plant": plant, "fy": fy, "rows": rows}
+
+
+@app.get("/api/capital-repair-calendar")
+def get_capital_repair_calendar(plant: str = Query(...), fy: str = Query(...)):
+    if plant not in CR_PAGES.values():
+        raise HTTPException(status_code=400, detail="Unknown plant")
+    return generate_capital_repair_calendar(plant, fy)
+
+
+@app.get("/api/capital-repair-calendar/excel")
+def capital_repair_calendar_excel(plant: str = Query(...), fy: str = Query(...)):
+    if plant not in CR_PAGES.values():
+        raise HTTPException(status_code=400, detail="Unknown plant")
+    data = generate_capital_repair_calendar(plant, fy)
+    content = page_capital_repair_calendar_export.build_excel_bytes(data)
+    fname = f"Capital_Repair_Calendar_{plant}_{fy}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.get("/api/capital-repair-calendar/pdf")
+async def capital_repair_calendar_pdf(plant: str = Query(...), fy: str = Query(...)):
+    if plant not in CR_PAGES.values():
+        raise HTTPException(status_code=400, detail="Unknown plant")
+    import asyncio, concurrent.futures
+    data = generate_capital_repair_calendar(plant, fy)
+    html = page_capital_repair_calendar_export.build_pdf_html(data)
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        content = await loop.run_in_executor(pool, page_capital_repair_calendar_export.render_pdf_bytes, html)
+    fname = f"Capital_Repair_Calendar_{plant}_{fy}.pdf"
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @app.post("/api/capital-repair-entry")

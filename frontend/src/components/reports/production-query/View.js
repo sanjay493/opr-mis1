@@ -1,0 +1,804 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import GlobalNavbar from '@/components/GlobalNavbar';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function monthLabel(ym) {
+  // "2026-04" -> "Apr'26"
+  const [y, m] = ym.split('-');
+  return `${MONTH_NAMES[parseInt(m, 10) - 1]}'${y.slice(2)}`;
+}
+
+// Item names come from the DB via backend's normalize_item_name (main.py) —
+// already fairly readable, but legacy uppercase/underscore names (e.g.
+// "BOTTOM_POURING_INGOT") slip through. Title-case long ALL-CAPS words as a
+// display-only safety net; short ones (<=4 chars, e.g. "BF", "TMT", "SMS")
+// and any word containing a digit or "#" (e.g. "BF#8", "SMS-2") are left
+// alone since they're codes/acronyms, not sentences.
+function humanizeLabel(raw) {
+  if (!raw) return raw;
+  return raw
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map((word) => {
+      if (/[0-9#]/.test(word)) return word;
+      if (word === word.toUpperCase() && word.length > 4) {
+        return word.charAt(0) + word.slice(1).toLowerCase();
+      }
+      return word;
+    })
+    .join(' ');
+}
+
+function fmt(v) {
+  if (v == null) return '—';
+  return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+}
+
+// Items expressed as a daily rate — a cumulative sum is meaningless, show average instead.
+// COB# battery items (e.g. "COB#1-8", "COB#6") are oven-pushing counts in nos/day.
+function isRateItem(name) {
+  return /\/day|\/d\)/i.test(name) || /^COB#/i.test(name);
+}
+
+function cumulative(itemName, values, months) {
+  const nums = months.map((m) => values[m]).filter((v) => v != null);
+  if (nums.length === 0) return null;
+  const sum = nums.reduce((a, b) => a + b, 0);
+  return isRateItem(itemName) ? sum / nums.length : sum;
+}
+
+// FY quarter convention used throughout the report: Q1=Apr-Jun, Q2=Jul-Sep,
+// Q3=Oct-Dec, Q4=Jan-Mar (Jan-Mar belongs to the FY that started the previous April).
+const QUARTER_OF_MONTH = { 4: 1, 5: 1, 6: 1, 7: 2, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3, 1: 4, 2: 4, 3: 4 };
+
+function fyStartOf(ym) {
+  const [y, m] = ym.split('-').map((n) => parseInt(n, 10));
+  return m >= 4 ? y : y - 1;
+}
+
+function quarterNumOf(ym) {
+  return QUARTER_OF_MONTH[parseInt(ym.split('-')[1], 10)];
+}
+
+function fyLabel(fyStart) {
+  return `${fyStart}-${String((fyStart + 1) % 100).padStart(2, '0')}`;
+}
+
+// Group a chronological list of "YYYY-MM" strings into display periods for
+// the given view. 'month': one bucket per month. 'quarter'/'year': grouped
+// by FY quarter / FY — mirrors backend's bucket_months() in
+// page_production_query_export.py so on-screen totals match the exports.
+function bucketMonths(months, view) {
+  if (view === 'month') {
+    return months.map((m) => ({ label: monthLabel(m), months: [m] }));
+  }
+  const keyOf = view === 'quarter'
+    ? (m) => `${fyStartOf(m)}-Q${quarterNumOf(m)}`
+    : (m) => String(fyStartOf(m));
+  const labelOf = view === 'quarter'
+    ? (m) => `Q${quarterNumOf(m)} ${fyLabel(fyStartOf(m))}`
+    : (m) => fyLabel(fyStartOf(m));
+  const buckets = [];
+  let curKey = null;
+  for (const m of months) {
+    const k = keyOf(m);
+    if (k !== curKey) {
+      buckets.push({ label: labelOf(m), months: [] });
+      curKey = k;
+    }
+    buckets[buckets.length - 1].months.push(m);
+  }
+  return buckets;
+}
+
+const cellBase = {
+  padding: '7px 10px',
+  fontSize: '10pt',
+  borderBottom: '1px solid #e8eaed',
+  whiteSpace: 'nowrap',
+};
+
+const headCell = {
+  ...cellBase,
+  position: 'sticky',
+  top: 0,
+  zIndex: 2,
+  backgroundColor: '#e8f0fe',
+  fontWeight: 700,
+  color: '#174ea6',
+};
+
+export default function ProductionQueryPage() {
+  const [meta, setMeta] = useState(null);            // { plants: [], months: [] (newest first) }
+  const [selectedPlants, setSelectedPlants] = useState([]);
+  const [itemsByPlant, setItemsByPlant] = useState({});   // { plant: [item, ...] }
+  const [selectedUnits, setSelectedUnits] = useState([]); // [{plant, item}] in click order
+  const [startMonth, setStartMonth] = useState('');
+  const [endMonth, setEndMonth] = useState('');
+  const [viewMode, setViewMode] = useState('month'); // 'month' | 'quarter' | 'year'
+  const [data, setData] = useState(null);            // { months, series }
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [downloading, setDownloading] = useState(null); // 'excel' | 'pdf' | null
+
+  // Load plants + available months
+  useEffect(() => {
+    fetch(`${API_BASE}/api/production-query-meta`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => {
+        setMeta(d);
+        const months = d.months || [];
+        if (months.length > 0) {
+          const latest = months[0];
+          setEndMonth(latest);
+          // Default start = April of the latest month's financial year
+          const [y, m] = [parseInt(latest.slice(0, 4), 10), parseInt(latest.slice(5, 7), 10)];
+          const fyStart = m >= 4 ? y : y - 1;
+          const aprilOfFy = `${fyStart}-04`;
+          setStartMonth(months.includes(aprilOfFy) ? aprilOfFy : months[months.length - 1]);
+        }
+      })
+      .catch((e) => setError(`Failed to load plants/months: ${e.message}`));
+  }, []);
+
+  // Load unit lists whenever the plant selection changes (cache is kept for
+  // deselected plants; rendering only reads entries for selected plants)
+  useEffect(() => {
+    if (selectedPlants.length === 0) return;
+    fetch(`${API_BASE}/api/production-query-items?plants=${encodeURIComponent(selectedPlants.join(','))}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => setItemsByPlant((prev) => ({ ...prev, ...(d.items || {}) })))
+      .catch((e) => setError(`Failed to load units: ${e.message}`));
+  }, [selectedPlants]);
+
+  const togglePlant = (plant) => {
+    setSelectedPlants((prev) => {
+      const next = prev.includes(plant) ? prev.filter((p) => p !== plant) : [...prev, plant];
+      if (prev.includes(plant)) {
+        // Drop units of a deselected plant
+        setSelectedUnits((units) => units.filter((u) => u.plant !== plant));
+      }
+      return next;
+    });
+  };
+
+  const toggleUnit = (plant, item) => {
+    setSelectedUnits((prev) => {
+      const exists = prev.some((u) => u.plant === plant && u.item === item);
+      return exists
+        ? prev.filter((u) => !(u.plant === plant && u.item === item))
+        : [...prev, { plant, item }];
+    });
+  };
+
+  const isUnitSelected = (plant, item) =>
+    selectedUnits.some((u) => u.plant === plant && u.item === item);
+
+  const selectAllUnits = (plant) => {
+    const items = itemsByPlant[plant] || [];
+    setSelectedUnits((prev) => {
+      const withoutPlant = prev.filter((u) => u.plant !== plant);
+      return [...withoutPlant, ...items.map((item) => ({ plant, item }))];
+    });
+  };
+
+  const deselectAllUnits = (plant) => {
+    setSelectedUnits((prev) => prev.filter((u) => u.plant !== plant));
+  };
+
+  const fetchData = () => {
+    if (selectedUnits.length === 0 || !startMonth || !endMonth) return;
+    setLoading(true);
+    setError(null);
+    fetch(`${API_BASE}/api/production-query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start: startMonth, end: endMonth, units: selectedUnits }),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => setData(d))
+      .catch((e) => setError(`Failed to load data: ${e.message}`))
+      .finally(() => setLoading(false));
+  };
+
+  const handleDownload = async (kind) => {
+    if (selectedUnits.length === 0 || !startMonth || !endMonth) return;
+    setDownloading(kind);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/production-query/${kind}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start: startMonth, end: endMonth, units: selectedUnits, view: viewMode }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Production_Query_${startMonth}_to_${endMonth}.${kind === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(`Download failed: ${e.message}`);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  // Month options, oldest → newest, for the range dropdowns
+  const monthOptions = [...(meta?.months || [])].sort();
+
+  // Quarter/Year range options, derived from the same available months —
+  // each option's `first`/`last` are the month bounds to feed startMonth/
+  // endMonth with when the user picks a quarter or FY instead of a month.
+  const quarterOptions = (() => {
+    const map = new Map();
+    for (const m of monthOptions) {
+      const key = `${fyStartOf(m)}-Q${quarterNumOf(m)}`;
+      if (!map.has(key)) {
+        map.set(key, { key, label: `Q${quarterNumOf(m)} ${fyLabel(fyStartOf(m))}`, first: m, last: m });
+      } else {
+        map.get(key).last = m;
+      }
+    }
+    return [...map.values()];
+  })();
+
+  const yearOptions = (() => {
+    const map = new Map();
+    for (const m of monthOptions) {
+      const fy = fyStartOf(m);
+      if (!map.has(fy)) {
+        map.set(fy, { key: String(fy), label: fyLabel(fy), first: m, last: m });
+      } else {
+        map.get(fy).last = m;
+      }
+    }
+    return [...map.values()];
+  })();
+
+  const startQuarterKey = startMonth ? `${fyStartOf(startMonth)}-Q${quarterNumOf(startMonth)}` : '';
+  const endQuarterKey = endMonth ? `${fyStartOf(endMonth)}-Q${quarterNumOf(endMonth)}` : '';
+  const startYearKey = startMonth ? String(fyStartOf(startMonth)) : '';
+  const endYearKey = endMonth ? String(fyStartOf(endMonth)) : '';
+
+  const months = data?.months || [];
+  const series = data?.series || [];
+  const periods = bucketMonths(months, viewMode);
+
+  const selectStyle = {
+    padding: '8px 12px',
+    fontSize: '11pt',
+    border: '1px solid #dadce0',
+    borderRadius: '6px',
+    backgroundColor: '#ffffff',
+    color: '#202124',
+    cursor: 'pointer',
+    minWidth: '110px',
+  };
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
+      <GlobalNavbar />
+
+      <main style={{
+        flex: 1,
+        overflow: 'auto',
+        maxWidth: '1600px',
+        margin: '0 auto',
+        padding: '32px',
+        width: '100%',
+        boxSizing: 'border-box',
+      }}>
+        {/* Header */}
+        <div style={{ marginBottom: '24px' }}>
+          <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
+            Unit-wise Production Query
+          </h1>
+          <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
+            Pick plants, units and a range — view month-wise, quarter-wise or year-wise APP &amp; Actual with cumulative, and download as Excel or PDF (&#39;000 T unless stated)
+          </p>
+        </div>
+
+        {/* Controls */}
+        <div style={{
+          padding: '16px 20px',
+          border: '1px solid #dadce0',
+          borderRadius: '8px',
+          backgroundColor: '#f8f9fa',
+          marginBottom: '24px',
+        }}>
+          {/* Plants */}
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ fontSize: '11pt', fontWeight: 600, color: '#202124', marginBottom: '8px' }}>Plants</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {(meta?.plants || []).map((plant) => {
+                const on = selectedPlants.includes(plant);
+                return (
+                  <button
+                    key={plant}
+                    onClick={() => togglePlant(plant)}
+                    style={{
+                      padding: '6px 16px',
+                      fontSize: '10.5pt',
+                      fontWeight: 600,
+                      border: on ? '1px solid #1a73e8' : '1px solid #dadce0',
+                      borderRadius: '16px',
+                      cursor: 'pointer',
+                      backgroundColor: on ? '#1a73e8' : '#ffffff',
+                      color: on ? '#ffffff' : '#5f6368',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {plant}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Units per selected plant */}
+          {selectedPlants.length > 0 && (
+            <div style={{ marginBottom: '14px' }}>
+              <div style={{ fontSize: '11pt', fontWeight: 600, color: '#202124', marginBottom: '8px' }}>Units</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {selectedPlants.map((plant) => {
+                  const plantItems = itemsByPlant[plant] || [];
+                  const allSelected = plantItems.length > 0 &&
+                    plantItems.every((item) => isUnitSelected(plant, item));
+                  return (
+                    <div key={plant} style={{
+                      border: '1px solid #dadce0',
+                      borderRadius: '8px',
+                      backgroundColor: '#ffffff',
+                      padding: '10px 14px',
+                    }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px',
+                      }}>
+                        <span style={{ fontSize: '10pt', fontWeight: 700, color: '#174ea6' }}>
+                          {plant}
+                        </span>
+                        {plantItems.length > 0 && (
+                          <span style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                              onClick={() => selectAllUnits(plant)}
+                              disabled={allSelected}
+                              style={{
+                                border: 'none', background: 'none', padding: 0,
+                                fontSize: '9pt', fontWeight: 600,
+                                color: allSelected ? '#bdc1c6' : '#1a73e8',
+                                cursor: allSelected ? 'default' : 'pointer',
+                                textDecoration: allSelected ? 'none' : 'underline',
+                              }}
+                            >
+                              Select All
+                            </button>
+                            <button
+                              onClick={() => deselectAllUnits(plant)}
+                              disabled={!plantItems.some((item) => isUnitSelected(plant, item))}
+                              style={{
+                                border: 'none', background: 'none', padding: 0,
+                                fontSize: '9pt', fontWeight: 600,
+                                color: plantItems.some((item) => isUnitSelected(plant, item)) ? '#1a73e8' : '#bdc1c6',
+                                cursor: plantItems.some((item) => isUnitSelected(plant, item)) ? 'pointer' : 'default',
+                                textDecoration: plantItems.some((item) => isUnitSelected(plant, item)) ? 'underline' : 'none',
+                              }}
+                            >
+                              Deselect All
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                        {plantItems.map((item) => (
+                          <label key={item} style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '10pt',
+                            color: '#202124',
+                            cursor: 'pointer',
+                            padding: '3px 0',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={isUnitSelected(plant, item)}
+                              onChange={() => toggleUnit(plant, item)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            {humanizeLabel(item)}
+                          </label>
+                        ))}
+                        {plantItems.length === 0 && (
+                          <span style={{ fontSize: '10pt', color: '#bdc1c6' }}>Loading units…</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* View mode */}
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ fontSize: '11pt', fontWeight: 600, color: '#202124', marginBottom: '8px' }}>View</div>
+            <div style={{
+              display: 'inline-flex',
+              border: '1px solid #dadce0',
+              borderRadius: '6px',
+              overflow: 'hidden',
+              backgroundColor: '#ffffff',
+            }}>
+              {[['month', 'Month-wise'], ['quarter', 'Quarter-wise'], ['year', 'Year-wise']].map(([v, lbl]) => (
+                <button
+                  key={v}
+                  onClick={() => setViewMode(v)}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '10.5pt',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: viewMode === v ? '#1a73e8' : 'transparent',
+                    color: viewMode === v ? '#ffffff' : '#5f6368',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Range + fetch */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+            {viewMode === 'month' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>From</label>
+                  <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} style={selectStyle}>
+                    {monthOptions.map((m) => (
+                      <option key={m} value={m}>{monthLabel(m)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>To</label>
+                  <select value={endMonth} onChange={(e) => setEndMonth(e.target.value)} style={selectStyle}>
+                    {monthOptions.map((m) => (
+                      <option key={m} value={m}>{monthLabel(m)}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            {viewMode === 'quarter' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>From</label>
+                  <select
+                    value={startQuarterKey}
+                    onChange={(e) => setStartMonth(quarterOptions.find((q) => q.key === e.target.value)?.first || startMonth)}
+                    style={selectStyle}
+                  >
+                    {quarterOptions.map((q) => (
+                      <option key={q.key} value={q.key}>{q.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>To</label>
+                  <select
+                    value={endQuarterKey}
+                    onChange={(e) => setEndMonth(quarterOptions.find((q) => q.key === e.target.value)?.last || endMonth)}
+                    style={selectStyle}
+                  >
+                    {quarterOptions.map((q) => (
+                      <option key={q.key} value={q.key}>{q.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            {viewMode === 'year' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>From</label>
+                  <select
+                    value={startYearKey}
+                    onChange={(e) => setStartMonth(yearOptions.find((y) => y.key === e.target.value)?.first || startMonth)}
+                    style={selectStyle}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={y.key} value={y.key}>FY {y.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>To</label>
+                  <select
+                    value={endYearKey}
+                    onChange={(e) => setEndMonth(yearOptions.find((y) => y.key === e.target.value)?.last || endMonth)}
+                    style={selectStyle}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={y.key} value={y.key}>FY {y.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            <button
+              onClick={fetchData}
+              disabled={selectedUnits.length === 0 || loading}
+              style={{
+                padding: '9px 28px',
+                fontSize: '11pt',
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: '6px',
+                cursor: selectedUnits.length === 0 || loading ? 'not-allowed' : 'pointer',
+                backgroundColor: selectedUnits.length === 0 || loading ? '#dadce0' : '#1a73e8',
+                color: '#ffffff',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {loading ? 'Loading…' : 'Get Data'}
+            </button>
+            {selectedUnits.length > 0 && (
+              <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>
+                {selectedUnits.length} unit{selectedUnits.length > 1 ? 's' : ''} selected
+              </span>
+            )}
+            {data && series.length > 0 && (
+              <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
+                <button
+                  onClick={() => handleDownload('excel')}
+                  disabled={downloading !== null}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '10.5pt',
+                    fontWeight: 700,
+                    border: '1px solid #1a73e8',
+                    borderRadius: '6px',
+                    cursor: downloading !== null ? 'not-allowed' : 'pointer',
+                    backgroundColor: '#ffffff',
+                    color: downloading !== null ? '#9aa0a6' : '#1a73e8',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {downloading === 'excel' ? 'Generating…' : '⬇ Excel'}
+                </button>
+                <button
+                  onClick={() => handleDownload('pdf')}
+                  disabled={downloading !== null}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '10.5pt',
+                    fontWeight: 700,
+                    border: '1px solid #1a73e8',
+                    borderRadius: '6px',
+                    cursor: downloading !== null ? 'not-allowed' : 'pointer',
+                    backgroundColor: '#ffffff',
+                    color: downloading !== null ? '#9aa0a6' : '#1a73e8',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {downloading === 'pdf' ? 'Generating…' : '⬇ PDF'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {error && (
+          <div style={{
+            padding: '14px 18px',
+            border: '1px solid #f28b82',
+            borderRadius: '8px',
+            backgroundColor: '#fce8e6',
+            color: '#c5221f',
+            fontSize: '11pt',
+            marginBottom: '24px',
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Result table: months as rows, one APP/Actual column pair per unit.
+            Bounded height + overflow:auto (not just overflowX) makes this div
+            the table's actual scrolling container in both directions, so its
+            sticky header sticks to it — leaving overflowY unset here would
+            silently compute to 'auto' too (CSS overflow spec), but the div
+            would never actually scroll internally (no height cap), so all
+            real scrolling would happen on the page instead and the sticky
+            header would just scroll away with everything else. */}
+        {data && series.length > 0 && (
+          <div style={{
+            border: '1px solid #dadce0',
+            borderRadius: '8px',
+            overflow: 'auto',
+            maxHeight: '65vh',
+          }}>
+            <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
+              <thead>
+                <tr>
+                  <th rowSpan={2} style={{
+                    ...headCell,
+                    left: 0,
+                    zIndex: 3,
+                    textAlign: 'left',
+                    minWidth: '110px',
+                    borderRight: '1px solid #dadce0',
+                    verticalAlign: 'bottom',
+                  }}>
+                    {viewMode === 'month' ? 'Month' : viewMode === 'quarter' ? 'Quarter' : 'Year'}
+                  </th>
+                  {series.map((s) => (
+                    <th key={`${s.plant}|${s.item}`} colSpan={2} style={{
+                      ...headCell,
+                      textAlign: 'center',
+                      borderLeft: '1px solid #dadce0',
+                    }}>
+                      {s.plant} · {humanizeLabel(s.item)}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {series.map((s) => (
+                    <React.Fragment key={`${s.plant}|${s.item}`}>
+                      <th style={{
+                        ...headCell,
+                        top: '33px',
+                        textAlign: 'right',
+                        minWidth: '85px',
+                        borderLeft: '1px solid #dadce0',
+                        fontWeight: 600,
+                      }}>
+                        APP
+                      </th>
+                      <th style={{
+                        ...headCell,
+                        top: '33px',
+                        textAlign: 'right',
+                        minWidth: '85px',
+                        fontWeight: 600,
+                      }}>
+                        Actual
+                      </th>
+                    </React.Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {periods.map((period, idx) => {
+                  const zebra = idx % 2 === 1 ? '#f8f9fa' : '#ffffff';
+                  return (
+                    <tr key={period.label}>
+                      <td style={{
+                        ...cellBase,
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 1,
+                        backgroundColor: zebra,
+                        fontWeight: 600,
+                        color: '#202124',
+                        borderRight: '1px solid #dadce0',
+                      }}>
+                        {period.label}
+                      </td>
+                      {series.map((s) => {
+                        const periodPlan = cumulative(s.item, s.plan, period.months);
+                        const periodActual = cumulative(s.item, s.actual, period.months);
+                        return (
+                          <React.Fragment key={`${s.plant}|${s.item}`}>
+                            <td style={{
+                              ...cellBase,
+                              textAlign: 'right',
+                              backgroundColor: zebra,
+                              color: periodPlan == null ? '#bdc1c6' : '#202124',
+                              fontVariantNumeric: 'tabular-nums',
+                              borderLeft: '1px solid #dadce0',
+                            }}>
+                              {fmt(periodPlan)}
+                            </td>
+                            <td style={{
+                              ...cellBase,
+                              textAlign: 'right',
+                              backgroundColor: zebra,
+                              color: periodActual == null ? '#bdc1c6' : '#202124',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}>
+                              {fmt(periodActual)}
+                            </td>
+                          </React.Fragment>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+                {/* Cumulative row */}
+                <tr>
+                  <td style={{
+                    ...cellBase,
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 1,
+                    backgroundColor: '#e8f0fe',
+                    fontWeight: 800,
+                    color: '#174ea6',
+                    borderRight: '1px solid #dadce0',
+                    borderTop: '2px solid #1a73e8',
+                  }}>
+                    Cumulative
+                  </td>
+                  {series.map((s) => {
+                    const cumPlan = cumulative(s.item, s.plan, months);
+                    const cumActual = cumulative(s.item, s.actual, months);
+                    const avgTag = isRateItem(s.item) ? ' (avg)' : '';
+                    return (
+                      <React.Fragment key={`${s.plant}|${s.item}`}>
+                        <td style={{
+                          ...cellBase,
+                          textAlign: 'right',
+                          backgroundColor: '#e8f0fe',
+                          fontWeight: 700,
+                          color: cumPlan == null ? '#bdc1c6' : '#174ea6',
+                          fontVariantNumeric: 'tabular-nums',
+                          borderLeft: '1px solid #dadce0',
+                          borderTop: '2px solid #1a73e8',
+                        }}>
+                          {fmt(cumPlan)}{cumPlan != null ? avgTag : ''}
+                        </td>
+                        <td style={{
+                          ...cellBase,
+                          textAlign: 'right',
+                          backgroundColor: '#e8f0fe',
+                          fontWeight: 700,
+                          color: cumActual == null ? '#bdc1c6' : '#174ea6',
+                          fontVariantNumeric: 'tabular-nums',
+                          borderTop: '2px solid #1a73e8',
+                        }}>
+                          {fmt(cumActual)}{cumActual != null ? avgTag : ''}
+                        </td>
+                      </React.Fragment>
+                    );
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {data && series.length === 0 && (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#5f6368', fontSize: '12pt' }}>
+            No units in the query — select at least one unit and click Get Data.
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import RequireEditor from '@/components/RequireEditor';
-import { EmbeddedContext } from './EmbeddedContext';
+import { EmbeddedContext } from '@/components/EmbeddedContext';
 import { groupById } from './entryGroups';
 import s from './EntryTabs.module.css';
 

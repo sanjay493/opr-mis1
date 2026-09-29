@@ -1,0 +1,91 @@
+/* Grouped report page: navbar + group header/tab strip + one panel per tab.
+   Each report was written as a full page (a 100vh wrapper, or a
+   calc(100vh - 72px) main) with its own scroll area; inside a panel that
+   wrapper is made to fill the panel instead, so the report keeps scrolling
+   exactly as before, just below the tab strip. */
+
+.shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.header {
+  flex-shrink: 0;
+  padding: 16px 24px 0;
+  background: #ffffff;
+  border-bottom: 1px solid #dadce0;
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  max-width: 1600px;
+  margin: 0 auto 10px;
+}
+
+.title { margin: 0; font-size: 20px; font-weight: 700; color: #202124; }
+.lead { margin: 0; font-size: 13px; color: #5f6368; }
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  max-width: 1600px;
+  margin: 0 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.tab {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 16px;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: #5f6368;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: color 150ms, border-color 150ms;
+}
+
+.tab:hover { color: #202124; }
+
+.tab[aria-selected='true'] {
+  font-weight: 600;
+  color: #1a73e8;
+  border-bottom-color: #1a73e8;
+}
+
+.tab:focus-visible { outline: 2px solid #1a73e8; outline-offset: -2px; border-radius: 4px; }
+
+.panels { flex: 1; min-height: 0; position: relative; }
+
+.panel { height: 100%; }
+.panel[hidden] { display: none; }
+
+/* The embedded report's own page wrapper(s): fill the panel, not the window. */
+.panel > div,
+.panel > main {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+.loading {
+  padding: 48px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: #5f6368;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab { transition: none; }
+}
