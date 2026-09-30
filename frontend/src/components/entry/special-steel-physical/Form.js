@@ -105,9 +105,9 @@ function SpecialSteelPhysicalEntryInner() {
   const TD = { padding: '3px 4px', borderRight: '1px solid #eef1f4', borderBottom: '1px solid #f1f3f4', textAlign: 'center' };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
       <GlobalNavbar />
-      <div style={{ flex: 1, maxWidth: 1700, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', maxWidth: 1700, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
         <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
           Special Steel Plants — Physical Performance Entry
         </h2>

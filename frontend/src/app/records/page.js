@@ -635,7 +635,9 @@ export default function RecordsPage() {
         backgroundColor: '#ffffff',
         padding: '40px 32px',
         width: '100%',
-        minHeight: 'calc(100vh - 70px)'
+        height: 'calc(100vh - 72px)',
+        overflowY: 'auto',
+        boxSizing: 'border-box'
       }}>
         {/* Header */}
         <div style={{ marginBottom: '32px' }}>
@@ -1013,10 +1015,6 @@ export default function RecordsPage() {
 
       {/* ── Global Styles ── */}
       <style>{`
-        html, body {
-          overflow-y: auto;
-          overflow-x: hidden;
-        }
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }

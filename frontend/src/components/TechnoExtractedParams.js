@@ -149,9 +149,9 @@ export default function TechnoExtractedParams({ title, description, paramRows, s
   });
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
       <GlobalNavbar />
-      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', maxWidth: '1100px', margin: '0 auto', padding: '32px', width: '100%', boxSizing: 'border-box' }}>
 
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>{title}</h1>
@@ -193,7 +193,7 @@ export default function TechnoExtractedParams({ title, description, paramRows, s
           hasAnyData ? (
             <div style={{
               border: '1px solid #dadce0', borderRadius: '8px',
-              overflowX: 'auto', maxHeight: 'calc(100vh - 320px)', overflowY: 'auto',
+              overflowX: 'auto',
             }}>
               <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
                 <thead>

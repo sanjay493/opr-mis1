@@ -86,7 +86,8 @@ export default function IptFYPage() {
       <main style={{
         flex: 1,
         minHeight: 0,
-        overflow: 'hidden',
+        overflowY: 'auto',
+        overflowX: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         maxWidth: '1800px',
@@ -167,9 +168,7 @@ export default function IptFYPage() {
           <div style={{
             border: '1px solid #dadce0',
             borderRadius: '8px',
-            overflow: 'auto',
-            flex: 1,
-            minHeight: 0,
+            overflowX: 'auto',
           }}>
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
               <thead>

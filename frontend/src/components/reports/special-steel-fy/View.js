@@ -108,7 +108,8 @@ export default function SpecialSteelFYPage() {
       <main style={{
         flex: 1,
         minHeight: 0,
-        overflow: 'hidden',
+        overflowY: 'auto',
+        overflowX: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         maxWidth: '1600px',
@@ -227,9 +228,7 @@ export default function SpecialSteelFYPage() {
           <div style={{
             border: '1px solid #dadce0',
             borderRadius: '8px',
-            overflow: 'auto',
-            flex: 1,
-            minHeight: 0,
+            overflowX: 'auto',
           }}>
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
               <thead>

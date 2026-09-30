@@ -38,7 +38,8 @@
 
 /* Centered card used by login / register / profile. */
 .authShell {
-  min-height: calc(100vh - 72px);
+  height: calc(100vh - 72px);
+  overflow-y: auto;
   display: flex;
   align-items: flex-start;
   justify-content: center;
