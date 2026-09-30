@@ -5432,6 +5432,19 @@ async def get_production_records():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/techno-records")
+def get_techno_records():
+    """Best / 2nd-best techno-economic parameter per calendar month, plant-wise
+    + SAIL: the Major 12 Parameters and BF-wise Iron Making parameters
+    (page_techno_records.py). Plain `def` - the first build runs page 27's
+    generator once per FY, so it belongs in the threadpool."""
+    import page_techno_records
+    try:
+        return page_techno_records.generate_techno_records()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/best-period-records")
 async def get_best_period_records(
     start_mon: int = Query(..., ge=1, le=12),

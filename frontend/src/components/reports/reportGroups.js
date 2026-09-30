@@ -60,12 +60,13 @@ export const REPORT_GROUPS = [
     id: 'highlights-records',
     route: '/reports/highlights-records',
     title: 'Highlights & Records',
-    description: 'Production highlights, major production summary and the monthly records matrix.',
+    description: 'Production highlights, major production summary, the monthly records matrix and best techno parameters.',
     icon: '🏆',
     tabs: [
       { id: 'highlights', label: 'Production Highlights', description: 'Best-ever and notable production highlights.' },
       { id: 'major-production', label: 'Major Production (Month & Till Month)', description: 'Major items, month and till-month figures.' },
       { id: 'records-matrix', label: 'Monthly Records Matrix', description: 'Month-wise best-ever record matrix across items.' },
+      { id: 'techno-records', label: 'Best Techno Matrix', description: 'Month-wise best-ever Major 12 and BF-wise Iron Making techno parameters (lower is best for consumption rates).' },
     ],
   },
   {

@@ -27,6 +27,7 @@ const VIEWS = {
   'highlights': dynamic(() => import('./highlights/View'), { loading }),
   'major-production': dynamic(() => import('./major-production/View'), { loading }),
   'records-matrix': dynamic(() => import('./records-matrix/View'), { loading }),
+  'techno-records': dynamic(() => import('./techno-records/View'), { loading }),
   'new-facilities': dynamic(() => import('./new-facilities/View'), { loading }),
   'do-letter': dynamic(() => import('./do-letter/View'), { loading }),
   'jpc-report': dynamic(() => import('./jpc-report/View'), { loading }),
