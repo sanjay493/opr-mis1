@@ -61,6 +61,8 @@
                   background:{{ colors.highlight_achieved_band_bg }};
               {% elif period.kind == 'ytd' %}
                   background:{{ colors.highlight_cumulative_bg }};
+              {% elif period.kind == 'agg' %}
+                  background:{{ colors.highlight_section_data_bg }};
               {% endif %}
           ">
             {{ period.label }}
@@ -87,6 +89,8 @@
                     background:{{ colors.highlight_achieved_band_bg }};
                 {% elif period.kind == 'ytd' %}
                     background:{{ colors.highlight_cumulative_bg }};
+                {% elif period.kind == 'agg' %}
+                    background:{{ colors.highlight_section_data_bg }};
                 {% elif bf.plant in _plant_bg %}
                     background:{{ _plant_bg[bf.plant] }};
                 {% endif %}
@@ -154,6 +158,8 @@
                       background:{{ colors.highlight_achieved_band_bg }}66;
                   {% elif period.kind == 'ytd' %}
                       background:{{ colors.highlight_cumulative_bg }}66;
+                  {% elif period.kind == 'agg' %}
+                      background:{{ colors.highlight_section_data_bg }};
                   {% elif bf.plant in _plant_bg %}
                       background:{{ _plant_bg[bf.plant] }}66;
                   {% else %}

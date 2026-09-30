@@ -16,6 +16,7 @@ const KIND_BG = {
   prev_fy: '#fef9c3',
   abp: '#dcfce7',
   ytd: '#d1fae5',
+  agg: '#eff6ff',
 };
 
 const CELL = { padding: '1.5px 4px', border: '1px solid #94a3b8', lineHeight: 1.1 };

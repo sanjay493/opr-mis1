@@ -101,6 +101,8 @@ from page_key_parameters import (
     _COKE_UNITS, _SP_UNIT_MAP, _first_present_val, _round, _days_in_month,
 )
 from page_special_steel_trend import _days_in_fy
+from techno_cumulative import get_rule
+from techno_period import _weighted_combine
 
 # Row order matches the source Excel exactly (rows 8-41 of "Large BFs (2)").
 # A plain string is a bf_benchmark_registry key (read from the BF's own
@@ -154,6 +156,46 @@ _PRODUCTION_ITEM = {"BSP": "BF#8", "RSP": "BF#5", "ISP": "Hot Metal"}
 # read as if it were a real (and missing) target.
 _NO_ABP_KEYS = {"working_volume_m3", "_avg_daily_rate", "_total_prepared_burden",
                 "_coke_ash", "_sinter_fe", "lump_ore_fe", "pellet_fe", "_avg_burden_fe"}
+
+
+# Quarter / half-year aggregate columns, as FY calendar-month numbers.
+_AGG_MONTHS = {
+    "Q1": [4, 5, 6],
+    "Q2": [7, 8, 9],
+    "H1": [4, 5, 6, 7, 8, 9],
+    "Q3": [10, 11, 12],
+}
+
+# Report calendar month -> the columns shown between ABP and the Apr-<month>
+# cumulative: an int is a single month, a string an _AGG_MONTHS period. Apr-Aug
+# (absent here) show every month of the FY so far. Keeps the table at no more
+# than 6 such columns in any month, per direct instruction.
+_COLUMN_PLAN = {
+    9:  ["Q1", 7, 8, 9, "Q2"],
+    10: ["Q1", "Q2", "H1", 10],
+    11: ["Q1", "Q2", "H1", 10, 11],
+    12: ["Q1", "Q2", "H1", 12, "Q3"],
+    1:  ["Q1", "Q2", "H1", "Q3", 1],
+    2:  ["H1", "Q3", 1, 2],
+    3:  ["H1", "Q3", 1, 2, 3],
+}
+
+
+def _column_plan(report_month: str, fy_months: list) -> list:
+    """[{"key", "kind": "month"|"agg", "months": [...]}] for report_month's
+    middle columns — see _COLUMN_PLAN."""
+    by_num = {int(m[5:7]): m for m in fy_months}
+    plan = _COLUMN_PLAN.get(int(report_month[5:7]))
+    if plan is None:
+        return [{"key": m, "kind": "month", "months": [m]}
+                for m in fy_months if m <= report_month]
+    out = []
+    for c in plan:
+        if isinstance(c, int):
+            out.append({"key": by_num[c], "kind": "month", "months": [by_num[c]]})
+        else:
+            out.append({"key": c, "kind": "agg", "months": [by_num[n] for n in _AGG_MONTHS[c]]})
+    return out
 
 
 def _production_table_tonnes(plant: str, months: list) -> dict:
@@ -265,7 +307,7 @@ def _period_value(key, period_dict):
     return None
 
 
-def _sail_bf_values(plant, unit, report_month):
+def _sail_bf_values(plant, unit, report_month, agg_periods=None):
     """{key: {"prev_fy": v, <ytd_month>: v, ..., "ytd": v}} for every
     non-special row, for one SAIL BF. "abp" is NOT included here — see
     _sail_bf_abp, a separate data source (techno_plan_fy, not techno_data)."""
@@ -331,6 +373,34 @@ def _sail_bf_values(plant, unit, report_month):
                 if vals["prev_fy"] is None:
                     vals["prev_fy"] = _period_value(key, shop_prev_fy_row.get("till_month", {}))
         out[key] = vals
+
+    # Quarter / half columns. An April-anchored period (Q1, H1) is exactly
+    # the plant's own stored Apr->end-month cumulative, so that is used
+    # first; otherwise (Q2, Q3, or no stored cumulative) the period's
+    # monthly figures are combined by the parameter's own cumulative rule
+    # (techno_cumulative.CUMULATIVE_RULES) weighted by this furnace's HM
+    # production — the same math as every other cumulative in the app.
+    for pkey, pmonths in (agg_periods or {}).items():
+        anchored = pmonths[0] == fy_months[0]
+        end_till = rows.get(pmonths[-1], {}).get("till_month", {})
+        shop_end_till = shop_rows.get(pmonths[-1], {}).get("till_month", {})
+        for key, vals in out.items():
+            if key in _ADDITIVE_KEYS:
+                got = [production_tonnes[m] for m in pmonths if production_tonnes.get(m) is not None]
+                vals[pkey] = sum(got) if got else None
+                continue
+            v = None
+            if anchored:
+                v = _period_value(key, end_till)
+                if v is None and key == "fuel_rate":
+                    v = compute_fuel_rate(end_till)
+                if v is None and key == "sulphur_in_hm":
+                    v = _period_value(key, shop_end_till)
+            if v is None:
+                method, basis = get_rule(key)
+                v, _ = _weighted_combine(
+                    method, [(vals.get(m), production_tonnes.get(m) if basis else None) for m in pmonths])
+            vals[pkey] = v
     return out, ytd_months, prev_fy_months
 
 
@@ -378,7 +448,7 @@ def _plant_techno_view(plant, period_dict_by_unit):
     return {(plant, u): d for u, d in period_dict_by_unit.items()}
 
 
-def _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months):
+def _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months, agg_periods=None):
     """({"prev_fy":v, <ytd_month>:v, ..., "ytd":v} for Coke Ash,
     same shape for Sinter Fe) — reusing page_key_parameters.py's
     plant-level (not per-furnace) resolution as a fallback for Sinter Fe —
@@ -442,10 +512,23 @@ def _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months):
         rm = period_months[p]
         period_kind = "month" if p not in ("prev_fy", "ytd") else "till_month"
         ash_out[p], fe_out[p] = _resolve(rm, period_kind)
+
+    # Quarter / half: the stored Apr->end-month cumulative for an
+    # April-anchored period, else the plain average of its monthly figures.
+    def _avg(d, months):
+        got = [d[m] for m in months if d.get(m) is not None]
+        return _round(sum(got) / len(got), 2) if got else None
+
+    for pkey, pmonths in (agg_periods or {}).items():
+        ash = fe = None
+        if pmonths[0] == ytd_months[0]:
+            ash, fe = _resolve(pmonths[-1], "till_month")
+        ash_out[pkey] = ash if ash is not None else _avg(ash_out, pmonths)
+        fe_out[pkey] = fe if fe is not None else _avg(fe_out, pmonths)
     return ash_out, fe_out
 
 
-def _avg_daily_rate(production_vals, report_month, ytd_months, prev_fy_months):
+def _avg_daily_rate(production_vals, report_month, ytd_months, prev_fy_months, agg_periods=None):
     out = {}
     month_days = _days_in_month(report_month)
     prev_fy_days = _days_in_fy(db.get_fy_for_month(prev_fy_months[0])) if prev_fy_months else 1
@@ -455,6 +538,9 @@ def _avg_daily_rate(production_vals, report_month, ytd_months, prev_fy_months):
     ytd_days = sum(_days_in_month(m) for m in ytd_months) or 1
     out["ytd"] = _round(production_vals.get("ytd") / ytd_days, 0) if production_vals.get("ytd") else None
     out["prev_fy"] = _round(production_vals.get("prev_fy") / prev_fy_days, 0) if production_vals.get("prev_fy") else None
+    for pkey, pmonths in (agg_periods or {}).items():
+        v = production_vals.get(pkey)
+        out[pkey] = _round(v / sum(_days_in_month(m) for m in pmonths), 0) if v else None
     return out
 
 
@@ -526,6 +612,13 @@ def _month_col_label(report_month: str) -> str:
     return f"{_MON_ABBR[m]}-{y % 100:02d}"
 
 
+def _agg_col_label(key: str, months: list) -> str:
+    """'Q1', ['2026-04',..,'2026-06'] -> "Q1<br/>Apr-Jun'26"."""
+    y1 = int(months[-1][:4])
+    return (f"{key}<br/>{_MON_ABBR[int(months[0][5:7])]}-"
+            f"{_MON_ABBR[int(months[-1][5:7])]}'{y1 % 100:02d}")
+
+
 def _ytd_col_label(ytd_months: list) -> str:
     """['2026-04',...,'2026-07'] -> 'Apr-Jul'26' (or just "Apr'26" for a
     single-month YTD) — mirrors page_key_parameters.py's period_label."""
@@ -547,12 +640,14 @@ def generate_bf_large_annexure(report_month: str) -> dict:
     sail_cols = []
     sail_values = {}   # {bf_label: {key: {period: value}}}
     ytd_months = [m for m in fy_months if m <= report_month]
-    periods = ["prev_fy", "abp"] + ytd_months + ["ytd"]
+    col_plan = _column_plan(report_month, fy_months)
+    agg_periods = {c["key"]: c["months"] for c in col_plan if c["kind"] == "agg"}
+    periods = ["prev_fy", "abp"] + ytd_months + list(agg_periods) + ["ytd"]
 
     for bf in SAIL_BFS:
         plant, unit, label = bf["plant"], bf["unit"], bf["label"]
         sail_cols.append({"label": label, "plant": plant, "unit": unit})
-        vals, ytd_months, prev_fy_months = _sail_bf_values(plant, unit, report_month)
+        vals, ytd_months, prev_fy_months = _sail_bf_values(plant, unit, report_month, agg_periods)
         abp = _sail_bf_abp(plant, unit, fy_label)
         # Fuel Rate is never entered directly as its own ABP target (same
         # rule as everywhere else in this app — bf_benchmark_registry.py's
@@ -574,7 +669,7 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         # _production_plan_annual_tonnes' docstring.
         vals["production"]["abp"] = _production_plan_annual_tonnes(plant, fy_months)
 
-        ash, fe = _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months)
+        ash, fe = _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months, agg_periods)
         vals["_coke_ash"] = {**ash, "abp": None}
         vals["_sinter_fe"] = {**fe, "abp": None}
         # Avg. Daily Rate's ABP = the same annual ABP Total HM Prod figure
@@ -583,7 +678,7 @@ def generate_bf_large_annexure(report_month: str) -> dict:
         # rule every other period on this row already uses.
         abp_production = vals["production"].get("abp")
         abp_avg_daily_rate = _round(abp_production / _days_in_fy(fy_label), 0) if abp_production else None
-        vals["_avg_daily_rate"] = {**_avg_daily_rate(vals["production"], report_month, ytd_months, prev_fy_months), "abp": abp_avg_daily_rate}
+        vals["_avg_daily_rate"] = {**_avg_daily_rate(vals["production"], report_month, ytd_months, prev_fy_months, agg_periods), "abp": abp_avg_daily_rate}
 
         sp, pl_ = vals["sinter_in_burden"], vals["pellet_in_burden"]
         tpb = {}
@@ -630,8 +725,10 @@ def generate_bf_large_annexure(report_month: str) -> dict:
 
     period_defs = [{"key": "prev_fy", "label": prev_fy_col_label, "kind": "prev_fy"},
                    {"key": "abp", "label": f"ABP Targets for<br/>{fy_label}", "kind": "abp"}]
-    for m in ytd_months:
-        period_defs.append({"key": m, "label": _month_col_label(m), "kind": "month"})
+    for c in col_plan:
+        label = (_month_col_label(c["key"]) if c["kind"] == "month"
+                 else _agg_col_label(c["key"], c["months"]))
+        period_defs.append({"key": c["key"], "label": label, "kind": c["kind"]})
     period_defs.append({"key": "ytd", "label": _ytd_col_label(ytd_months), "kind": "ytd"})
 
     return {
