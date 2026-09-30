@@ -2764,6 +2764,60 @@ def _calculate_burden_percentages(rows_out: list, report_month: str):
     calc_burden(rows_out, report_month, plant_name="BSL")
 
 
+_BF_PARAM_SHEET = "BF Parameter"
+_BF_PARAM_FURNACES = {"BF-I": "BF#1", "BF-II": "BF#2", "BF-III": "BF#3", "BF-IV": "BF#4", "BF-V": "BF#5"}
+
+
+def _extract_bf_parameter_production(wb, db_month: str) -> tuple:
+    """Furnace-wise Hot Metal from the DPR Mail workbook's 'BF Parameter'
+    sheet -> ([production_rows], [alerts]).
+
+    That sheet's "Hot Metal" block (column A label) lists BF-I..BF-V in
+    column B with the month-to-date ("Till Date") tonnage in column D; C1 is
+    the sheet's own "On date". Stored as BF#1..BF#5 ('000 T), the same
+    production_table items the BF Performance PDF path writes. A mid-month
+    file is projected to the full month (Till Date x days/day), exactly like
+    the DPR sheet's own items, so the furnaces stay consistent with the
+    plant's Hot Metal total. A furnace idle the whole month (0) is skipped.
+    Returns ([], []) when the workbook has no such sheet."""
+    if _BF_PARAM_SHEET not in wb.sheetnames:
+        return [], []
+    grid = [list(r) for r in wb[_BF_PARAM_SHEET].iter_rows(values_only=True)]
+    if not grid:
+        return [], []
+
+    on_date = grid[0][2] if len(grid[0]) > 2 else None
+    report_day, days_in_month, sheet_month = _dpr_report_day(on_date)
+    if sheet_month and db_month and sheet_month != db_month:
+        raise ValueError(
+            f"Month mismatch: the '{_BF_PARAM_SHEET}' sheet's On date (C1) shows "
+            f"{_fmt_month(sheet_month)}, but this report is for {_fmt_month(db_month)}. "
+            "Upload the matching DPR Mail workbook.")
+
+    rows, alerts, in_block = [], [], False
+    for r_idx, row in enumerate(grid[1:], start=2):
+        a = row[0] if row else None
+        if isinstance(a, str) and a.strip():
+            in_block = " ".join(a.upper().split()) == "HOT METAL"
+        if not in_block:
+            continue
+        furnace = " ".join(str(row[1] if len(row) > 1 else "").upper().split())
+        item = _BF_PARAM_FURNACES.get(furnace)
+        if not item:
+            continue
+        cum = clean_val(row[3] if len(row) > 3 else None)
+        val, basis, _ = _dpr_value_and_alert(None, cum, report_day, days_in_month, label=item)
+        ok = val is not None and val > 0
+        cell = f"{_BF_PARAM_SHEET}!D{r_idx}" + (f" x{days_in_month}/{report_day}" if basis == "projected" else "")
+        rows.append({"item_name": item, "value": round(val / 1000.0, 3) if ok else None,
+                     "unit": "'000T", "cell": cell, "pdf_label": f"D{r_idx}",
+                     "basis": basis, "status": "ok" if ok else "skip"})
+    if not rows:
+        alerts.append(f"'{_BF_PARAM_SHEET}' sheet has no 'Hot Metal' block with BF-I..BF-V rows "
+                      "— furnace-wise production not extracted.")
+    return rows, alerts
+
+
 def _extract_dpr_preview(wb, report_month: str) -> dict:
     """Preview BSL DPR Mail report (sheet 'DPR') — no DB writes."""
     ws = wb["DPR"]
@@ -2881,6 +2935,12 @@ def _extract_dpr_preview(wb, report_month: str) -> dict:
             "No values found at expected cell locations in DPR sheet. "
             "Verify this is a BSL DPR Mail file (sheet 'DPR', date in O1)."
         )
+
+    bf_rows, bf_alerts = _extract_bf_parameter_production(wb, db_month)
+    rows.extend(bf_rows)
+    alerts.extend(bf_alerts)
+    logger.info("BSL DPR BF Parameter: %d/%d furnaces ok for %s",
+                sum(1 for r in bf_rows if r["status"] == "ok"), len(bf_rows), db_month)
 
     stock_rows = _extract_delhi_report_stock(wb, db_month)
     stock_ok = sum(1 for r in stock_rows if r["status"] == "ok")
