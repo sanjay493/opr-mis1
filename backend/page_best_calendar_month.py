@@ -23,7 +23,18 @@ _MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 
-def _month_cell(rows: list, best_month: str):
+def _fy_start_of(ym: str) -> int:
+    y, m = int(ym[:4]), int(ym[5:7])
+    return y if m >= 4 else y - 1
+
+
+def _in_report_fy(ym: str, report_month: str) -> bool:
+    """True when month `ym` falls in the report month's FY, up to the report
+    month itself - those records are drawn in the report-FY colour."""
+    return _fy_start_of(ym) == _fy_start_of(report_month) and ym <= report_month
+
+
+def _month_cell(rows: list, best_month: str, report_month: str):
     """rows = grp['cal_months'][item][month_num] (already top-2, sorted
     desc — see page_records.py's _compute_group_records); best_month =
     grp['best_month'][item]['month'], the single all-time-best month
@@ -34,8 +45,10 @@ def _month_cell(rows: list, best_month: str):
     best, second = rows[0], rows[1] if len(rows) > 1 else None
     return {
         'best':   {'total': best['total'], 'year': best['month'][:4],
-                    'is_all_time_best': best['month'] == best_month},
-        'second': {'total': second['total'], 'year': second['month'][:4]} if second else None,
+                    'is_all_time_best': best['month'] == best_month,
+                    'in_report_fy': _in_report_fy(best['month'], report_month)},
+        'second': {'total': second['total'], 'year': second['month'][:4],
+                   'in_report_fy': _in_report_fy(second['month'], report_month)} if second else None,
     }
 
 
@@ -52,7 +65,7 @@ def generate_best_calendar_month(report_month: str) -> dict:
             cal = grp.get('cal_months', {}).get(item, {})
             best_month = grp.get('best_month', {}).get(item, {}).get('month')
             months = {
-                mnum: _month_cell(cal.get(mnum, []), best_month)
+                mnum: _month_cell(cal.get(mnum, []), best_month, report_month)
                 for mnum in range(1, 13)
             }
             rows.append({'label': HIGHLIGHT_LABELS.get(item, item), 'key': item, 'months': months})
@@ -62,6 +75,7 @@ def generate_best_calendar_month(report_month: str) -> dict:
         'type': 'best_calendar_month',
         'title': 'Production Highlights — Best Calendar Month (Best & 2nd Best)',
         'month_label': month_label,
+        'report_fy_label': f"{_fy_start_of(report_month)}-{(_fy_start_of(report_month) + 1) % 100:02d}",
         'unit': "'000 T",
         'month_names': _MONTH_NAMES,
         'groups': groups,

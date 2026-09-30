@@ -49,7 +49,21 @@ def _is_fresh(latest: str, rec) -> bool:
     return ago is not None and 0 <= ago <= 3
 
 
-def _period_records(grp: dict, key: str, latest_month: str) -> dict:
+def _fy_start_of(ym: str) -> int:
+    y, m = int(ym[:4]), int(ym[5:7])
+    return y if m >= 4 else y - 1
+
+
+def _in_report_fy(rec, report_month: str, pk: str) -> bool:
+    """Month/Quarter/Half/FY records whose period lies in the report month's
+    FY (each such period sits inside a single FY, so its end month decides).
+    Calendar years straddle two FYs and are never flagged."""
+    if not rec or pk == 'cy' or not rec.get('end'):
+        return False
+    return _fy_start_of(rec['end']) == _fy_start_of(report_month)
+
+
+def _period_records(grp: dict, key: str, latest_month: str, report_month: str) -> dict:
     """Best/2nd-best for one item across all 5 period types, each entry
     {total, period, fresh} or None — mirrors the frontend's recordRows
     useMemo in frontend/src/app/reports/highlights/page.js."""
@@ -96,6 +110,7 @@ def _period_records(grp: dict, key: str, latest_month: str) -> dict:
             rec = periods[pk][slot]
             if rec is not None:
                 rec['fresh'] = _is_fresh(latest_month, rec)
+                rec['in_report_fy'] = _in_report_fy(rec, report_month, pk)
                 if rec['total'] is not None:
                     rec['total'] *= scale
     return periods
@@ -115,7 +130,7 @@ def generate_best_ever_highlights(report_month: str) -> dict:
             {
                 'label': HIGHLIGHT_LABELS.get(item, item),
                 'key': item,
-                'periods': _period_records(grp, item, latest_month),
+                'periods': _period_records(grp, item, latest_month, report_month),
             }
             for item in items
         ]
@@ -126,6 +141,7 @@ def generate_best_ever_highlights(report_month: str) -> dict:
         'title': 'Production Highlights — Best-Ever Records',
         'month_label': month_label,
         'latest_month': latest_month,
+        'report_fy_label': f"{_fy_start_of(report_month)}-{(_fy_start_of(report_month) + 1) % 100:02d}",
         'unit_note': 'Unit: T, except Oven Pushing – Nos./day',
         'groups': groups,
     }

@@ -27,11 +27,11 @@
         {% set cell = row.months[mnum] %}
         <td style="text-align:center;vertical-align:top;padding:3px 2px;border-top:1px solid {{ colors.misc_accent_blue }};border-left:1px solid {{ colors.misc_accent_blue }};">
           {% if cell %}
-            <span style="font-size:10pt;font-weight:800;color:{{ colors.khv_assessment_red if cell.best.is_all_time_best else '#4682b4' }};">{{ '%.0f'|format(cell.best.total) }}{{ ' ★' if cell.best.is_all_time_best else '' }}</span>
-            <div style="font-size:10pt;font-style:italic;font-weight:700;color:{{ colors.text_secondary }};opacity:0.85;">[{{ cell.best.year }}]</div>
+            <span style="font-size:10pt;font-weight:800;color:{{ colors.khv_assessment_red if cell.best.is_all_time_best else (colors.highlight_report_fy_text if cell.best.in_report_fy else '#4682b4') }};">{{ '%.0f'|format(cell.best.total) }}{{ ' ★' if cell.best.is_all_time_best else '' }}</span>
+            <div style="font-size:10pt;font-style:italic;font-weight:700;color:{{ colors.highlight_report_fy_text if cell.best.in_report_fy else colors.text_secondary }};opacity:0.85;">[{{ cell.best.year }}]</div>
             {% if cell.second %}
-            <div style="margin-top:1px;padding-top:1px;border-top:1px dashed {{ colors.misc_accent_blue }};font-size:10pt;color:{{ colors.text_secondary }};">{{ '%.0f'|format(cell.second.total) }}</div>
-            <div style="font-size:10pt;font-style:italic;color:{{ colors.text_secondary }};">[{{ cell.second.year }}]</div>
+            <div style="margin-top:1px;padding-top:1px;border-top:1px dashed {{ colors.misc_accent_blue }};font-size:10pt;color:{{ colors.highlight_report_fy_text if cell.second.in_report_fy else colors.text_secondary }};{% if cell.second.in_report_fy %}font-weight:700;{% endif %}">{{ '%.0f'|format(cell.second.total) }}</div>
+            <div style="font-size:10pt;font-style:italic;color:{{ colors.highlight_report_fy_text if cell.second.in_report_fy else colors.text_secondary }};">[{{ cell.second.year }}]</div>
             {% endif %}
           {% else %}
           <span style="color:{{ colors.text_faint }};font-size:10pt;">—</span>
@@ -47,6 +47,7 @@
   <div style="margin-top:6px;font-size:6pt;color:{{ colors.text_secondary }};line-height:1.5;">
     Best and 2nd-best ever figure for every calendar month.
     <span style="color:{{ colors.khv_assessment_amber }};font-weight:800;">★</span> marks the single all-time-best month for that item (across all 12 calendar months).
+    <span style="color:{{ colors.highlight_report_fy_text }};font-weight:800;">Green</span> = record set in the report FY {{ page.report_fy_label }}.
     SAIL (5 Plants) = BSP, DSP, RSP, BSL, ISP; SAIL (8 Plants) adds ASP, SSP, VISL and is shown for Crude Steel, Finished Steel and Saleable Steel only.
   </div>
 </div>
