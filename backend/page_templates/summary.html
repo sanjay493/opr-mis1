@@ -36,7 +36,7 @@
                     {% for row in page.production_table %}
                     {% set vals = row.get('values') or [] %}
                     <tr>
-                        <td class="label-cell">{{ row.item }}</td>
+                        <td class="label-cell">{{ row.item }}{{ '*' if row.item == 'Finished Steel' else '' }}</td>
                         {% for i in [0,1,2,3,4,5,6,7,8,9,10,11] %}
                         <td style="text-align:right;font-weight:{{ '700' if i in [1,7] else '400' }}">{{ vals[i] if vals|length > i else '' }}</td>
                         {% endfor %}
@@ -52,8 +52,18 @@
             {% if page.highlights %}
             <p class="page3-section-heading">Highlights:</p>
             <div class="page3-highlights">
+                {# Item lines are "<item> :: <figures>"; the item name and the
+                   rest sit in separate grid columns so every "::" lines up. #}
                 {% for h in page.highlights %}
-                <div class="{{ 'page3-highlight-heading' if h.endswith(':-') else 'page3-highlight-item' }}">{{ h }}</div>
+                {% if h.endswith(':-') %}
+                <div class="page3-highlight-heading">{{ h }}</div>
+                {% elif ' :: ' in h %}
+                {% set parts = h.split(' :: ', 1) %}
+                <div class="page3-highlight-item page3-hl-name">{{ parts[0] }}</div>
+                <div class="page3-highlight-item page3-hl-rest">:: {{ parts[1] }}</div>
+                {% else %}
+                <div class="page3-highlight-item page3-hl-full">{{ h }}</div>
+                {% endif %}
                 {% endfor %}
             </div>
             {% endif %}

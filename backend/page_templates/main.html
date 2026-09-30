@@ -1174,10 +1174,16 @@
         .page3-highlights {
             font-size: 12pt;
             line-height: 1.4;
+            display: grid;
+            grid-template-columns: max-content 1fr;
         }
         .page3-highlight-heading {
             font-weight: 600;
+            grid-column: 1 / -1;
         }
+        .page3-hl-full { grid-column: 1 / -1; }
+        .page3-hl-name { white-space: nowrap; }
+        .page3-highlight-item.page3-hl-rest { padding-left: 0.3em; }
         .page3-highlight-item {
             font-weight: 500;
             color: #b45309;

@@ -150,7 +150,7 @@ def generate_page3_highlights(month: str) -> list:
                 tier, headline = _TIER_MONTH_SAME, f"SAIL achieved best {_MON_FULL[mon_num]} production for following"
             candidates.append({
                 'tier': tier, 'headline': headline,
-                'line': f"{display_of[item]} production at {_fmt_mt(this_row['total'])} MT "
+                'line': f"{display_of[item]} :: {_fmt_mt(this_row['total'])} MT "
                         f"(Previous best {_fmt_mt(prev['total'])} MT in {prev['period']})",
             })
 
@@ -180,7 +180,7 @@ def generate_page3_highlights(month: str) -> list:
                     continue
                 candidates.append({
                     'tier': tier, 'headline': headline,
-                    'line': f"{display_of[item]} production at {_fmt_mt(rows[0]['total'])} MT "
+                    'line': f"{display_of[item]} :: {_fmt_mt(rows[0]['total'])} MT "
                             f"(Previous best {_fmt_mt(rows[1]['total'])} MT in {prev_label_of(rows[1]['key'])})",
                 })
 
