@@ -88,7 +88,10 @@ export default function GlobalNavbar() {
       icon: '📄',
       submenu: [
         { label: 'OMI Generate', link: '/report', icon: '📈' },
-        { label: 'Production & Analysis Reports', link: '/reports/production-analysis', icon: '📊' },
+        { label: 'Production Reports', link: '/reports/production-analysis', icon: '📊' },
+        { label: 'Special Steel, IPT & BF Benchmarking', link: '/reports/special-steel-ipt', icon: '🔩' },
+        { label: 'Iron Ore Mines', link: '/reports/mines', icon: '⛏️' },
+        { label: 'Loss, Breakdown & Capital Repair', link: '/reports/loss-breakdown', icon: '🛠️' },
         { label: 'Techno Reports', link: '/reports/techno', icon: '⚙️' },
       ]
     },

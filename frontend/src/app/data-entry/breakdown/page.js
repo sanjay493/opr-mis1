@@ -595,7 +595,7 @@ function BreakdownDataEntryPageInner() {
               annual schedule), every breakdown here counts fully toward the Production Loss Analysis report.
             </span>
           </div>
-          <Link href="/reports/production-analysis?tab=breakdown-analysis" style={{
+          <Link href="/reports/loss-breakdown?tab=breakdown-analysis" style={{
             fontSize: 13, fontWeight: 600, color: '#1a73e8', textDecoration: 'none',
             border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: 6, padding: '8px 14px', whiteSpace: 'nowrap',
           }}>

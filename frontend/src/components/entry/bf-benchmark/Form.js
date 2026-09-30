@@ -245,7 +245,7 @@ function BFInner() {
         <p style={{ color: '#5f6368', marginBottom: '20px' }}>
           Manage non-SAIL large BFs and their per-FY figures (non-SAIL BFs only publish Financial Year totals,
           not monthly ones), plus Working Volume for any SAIL blast furnace.
-          See the comparison at <a href="/reports/production-analysis?tab=bf-benchmark">Large BF Benchmarking</a>.
+          See the comparison at <a href="/reports/special-steel-ipt?tab=bf-benchmark">Large BF Benchmarking</a>.
         </p>
 
         {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}

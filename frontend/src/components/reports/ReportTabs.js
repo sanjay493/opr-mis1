@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import { EmbeddedContext } from '@/components/EmbeddedContext';
-import { groupById } from './reportGroups';
+import { groupById, tabHref } from './reportGroups';
 import s from './ReportTabs.module.css';
 
 const loading = () => <div className={s.loading}>Loading…</div>;
@@ -50,6 +50,14 @@ export default function ReportTabs({ groupId }) {
 
   const requested = searchParams.get('tab');
   const active = group.tabs.some((t) => t.id === requested) ? requested : group.tabs[0].id;
+
+  // A ?tab= that now belongs to another group (a report moved to a different
+  // page, e.g. an old /reports/production-analysis?tab=ipt-fy bookmark) is
+  // sent on to that group's page.
+  const movedTo = requested && requested !== active && tabHref(requested) !== '/reports' ? tabHref(requested) : null;
+  useEffect(() => {
+    if (movedTo) router.replace(movedTo);
+  }, [movedTo, router]);
 
   // Tabs opened so far (kept mounted). Updated during render when a new tab
   // becomes active — React's "adjust state on prop change" pattern.
