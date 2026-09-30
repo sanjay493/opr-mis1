@@ -6,6 +6,7 @@ Supported plants (see _EXTRACTORS):
   BSP — MIS-2 and PPC MIS workbooks (auto-detected from file content)
   RSP — Daily Morning Report generated on the month-end date
   ISP — MORNING REPORT workbook generated on the month-end date
+  BSL — DPR Mail workbook, 'BF Parameter' sheet (Till Date column)
 
 Flow (mirrors /api/techno but with two extra safeguards):
   1. POST /preview     — extract + verify C1 report date against the selected
@@ -35,6 +36,7 @@ from dsp_mcr_techno_extractor import DspMcrTechnoExtractor, McrMonthMismatch  # 
 from bsp_monthend_techno_extractor import BspMonthendTechnoExtractor  # noqa: E402
 from rsp_monthend_techno_extractor import RspMonthendTechnoExtractor  # noqa: E402
 from isp_monthend_techno_extractor import IspMonthendTechnoExtractor  # noqa: E402
+from bsl_monthend_techno_extractor import BslMonthendTechnoExtractor  # noqa: E402
 from db import (  # noqa: E402
     init_db, merge_upsert_techno_data, get_techno_data,
     enrich_techno_records_with_db,
@@ -62,6 +64,7 @@ _EXTRACTORS = {
     "BSP": BspMonthendTechnoExtractor,  # auto-detects MIS-2 vs PPC MIS
     "RSP": RspMonthendTechnoExtractor,  # Daily Morning Report (month-end)
     "ISP": IspMonthendTechnoExtractor,  # MORNING REPORT (month-end)
+    "BSL": BslMonthendTechnoExtractor,  # DPR Mail, BF Parameter sheet (month-end)
 }
 
 

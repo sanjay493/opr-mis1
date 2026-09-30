@@ -1110,7 +1110,7 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
           <section className={t.section} aria-labelledby="tu-sec-title">
             <h2 id="tu-sec-title" className={t.sectionTitle}>
               BSL Techno Upload
-              <span className={t.sectionNote}>Upload Techno Excel and/or BF Performance PDF (both merged automatically).</span>
+              <span className={t.sectionNote}>Upload Techno Excel, BF Performance PDF and/or the month-end DPR Mail Excel (tentative) — all merged automatically.</span>
             </h2>
             <ExtractRow
               label="BSL Techno Excel (.xls/.xlsx)"
@@ -1120,6 +1120,17 @@ function TechnoDataPanel({ plant, reportMonth, apiBase }) {
               reportMonth={reportMonth}
               apiBase={apiBase}
               onSuccess={loadData}
+            />
+            <ExtractRow
+              label="BSL DPR Mail — BF Parameter sheet, month-end (tentative)"
+              previewEndpoint="/api/mcr-techno/preview"
+              insertEndpoint="/api/mcr-techno/insert"
+              cumulativeEndpoint="/api/mcr-techno/cumulative"
+              plant="BSL"
+              reportMonth={reportMonth}
+              apiBase={apiBase}
+              onSuccess={loadData}
+              accept=".xlsx"
             />
           </section>
 
@@ -1235,7 +1246,7 @@ function TechnoDataEntryInner() {
     BSP: 'Upload the BSP Flash Monthly PDF (one file: coke yield, SP-2/3, BF shop + per-furnace CDI/productivity, SMS-2/3, all mills, energy — month auto-detected from the cover), BSP-3-page-Tech.xlsx and/or OISCO Excel (final), or the month-end MIS-2 / PPC MIS Excel (tentative furnace & SMS data). All merged automatically.',
     ISP: 'Upload the multi-sheet ISP Technopara Excel (final — check "Backfill all months" to extract every month from April through the selected month out of one file, e.g. a later cumulative upload), or the month-end Morning Report (tentative furnace/SMS/energy data; month verified against the report date in J5/K5). Both merged automatically.',
     DSP: 'Upload the Monthly Report PDF (final) and/or the month-end MCR Excel (tentative for-the-month values; month is verified against the report date in C1).',
-    BSL: 'Upload Techno Excel and/or BF Performance PDF. Both merged automatically.',
+    BSL: 'Upload Techno Excel and/or BF Performance PDF (final), or the month-end DPR Mail Excel (tentative furnace-wise and BF shop coke rate, nut coke, CDI, productivity, sinter/pellet in burden, HBT, O2 enrichment and slag rate from the "BF Parameter" sheet, Till Date column; month verified against the sheet dates). All merged automatically.',
   }[plant] || `${plant} extraction coming soon.`;
 
   return (
