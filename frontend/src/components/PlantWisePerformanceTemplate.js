@@ -150,7 +150,18 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
                   backgroundColor: isHighlight ? plantBg : (row.bold ? '#f0f4f8' : 'transparent'),
                 }}
               >
-                {isFirst && (
+                {row.span_label && (
+                  <td colSpan={2} style={{ ...TD, ...rowEdge, textAlign: 'left', paddingLeft: '4px', fontWeight: '700' }}>
+                    <input
+                      type="text"
+                      className="editor-input"
+                      style={{ ...INPUT, textAlign: 'left', fontWeight: 'inherit' }}
+                      value={row.label || ''}
+                      onChange={(e) => handleLabelChange(rIdx, e.target.value)}
+                    />
+                  </td>
+                )}
+                {!row.span_label && isFirst && (
                   <td
                     rowSpan={size}
                     className="page5-6-plant-cell"
@@ -165,7 +176,7 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
                     {row.plant}
                   </td>
                 )}
-                <td style={{ ...TD, ...rowEdge, textAlign: 'left', paddingLeft: '4px', fontWeight: 'inherit' }}>
+                {!row.span_label && <td style={{ ...TD, ...rowEdge, textAlign: 'left', paddingLeft: '4px', fontWeight: 'inherit' }}>
                   <input
                     type="text"
                     className="editor-input"
@@ -173,7 +184,7 @@ export default function PlantWisePerformanceTemplate({ data, onCellChange, selec
                     value={row.label || ''}
                     onChange={(e) => handleLabelChange(rIdx, e.target.value)}
                   />
-                </td>
+                </td>}
                 {(row.values || []).map((val, vIdx) => (
                   <td
                     key={vIdx}

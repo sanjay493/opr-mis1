@@ -19,6 +19,11 @@ import db
 
 from constants import FIVE_PLANTS as _5P, FIVE_PLANTS_VISL as _5PV, ALL_PLANTS as _ALL
 
+# Saleable Steel Despatch: actual from the plant's own despatch item, Plan
+# (FY / month / cumulative) = its Saleable Steel plan — per instruction there
+# is no separate despatch plan, so %Ful reads despatch against that plan.
+_DESPATCH = ("PLAN_OF", "Saleable Steel Despatch", "Saleable Steel")
+
 PAGE5_PLANTS = [
     ("SAIL", [
         ("Oven Pushing (nos/day)", ("AGG_NOS", "Oven Pushing (nos/day)", _5P),  False, True),
@@ -56,11 +61,11 @@ PAGE5_PLANTS = [
                                      "ISP": "Saleable Semis",
                                      "ASP": ("SUB", "Saleable Steel", "Finished Steel"),
                                  }, _5P + ["ASP"]),                        False, False),
-        # Actual only: BSP/DSP/RSP/BSL/ISP have no despatch plan, so a SAIL plan
-        # summed from ASP/SSP/VISL alone would give a meaningless %Ful.
-        ("Saleable Steel Despatch", ("AGG_NOPLAN", "Saleable Steel Despatch", _ALL), False, False),
         ("HR Coils rolling(Tot)", ("AGG",     ["HSM-2 Total HR Coil","HSM Total HR Coil"], _ALL), False, False),
         ("Pig Iron",            ("AGG",     "Pig Iron",             _5PV), False, False),
+        # Plan = Saleable Steel plan (no separate despatch plan), per instruction.
+        ("Saleable Steel Despatch", ("PLAN_OF", ("AGG", "Saleable Steel Despatch", _ALL),
+                                     ("AGG", "Saleable Steel", _ALL)), False, False),
     ]),
     ("BSP", [
         ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
@@ -74,8 +79,8 @@ PAGE5_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", "Saleable Semis",        False, False),
-        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
+        ("Saleable Steel Despatch", _DESPATCH, False, False),
     ]),
     ("DSP", [
         ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
@@ -89,8 +94,8 @@ PAGE5_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", "Saleable Semis",        False, False),
-        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
+        ("Saleable Steel Despatch", _DESPATCH, False, False),
     ]),
     ("RSP", [
         ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
@@ -108,9 +113,9 @@ PAGE5_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", None,                    False, False),
-        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("HR Coils Rolling(Tot)", "HSM-2 Total HR Coil", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
+        ("Saleable Steel Despatch", _DESPATCH, False, False),
     ]),
 ]
 
@@ -125,9 +130,9 @@ PAGE6_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", "Saleable Semis",        False, False),
-        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("HSM rolling",         "HSM Total HR Coil",     False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
+        ("Saleable Steel Despatch", _DESPATCH, False, False),
     ]),
     ("ISP", [
         ("Oven Pushing (nos/day)", "Oven Pushing (nos/day)",   False, True),
@@ -137,8 +142,8 @@ PAGE6_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", "Saleable Semis",        False, False),
-        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
+        ("Saleable Steel Despatch", _DESPATCH, False, False),
     ]),
     ("ASP", [
         ("Ingot steel",         "Ingot Steel",           False, False),
@@ -149,22 +154,22 @@ PAGE6_PLANTS = [
         # ASP has no separate "Saleable Semis" item — semi-finished steel is
         # the portion of Saleable Steel that isn't yet Finished Steel.
         ("Semi-finished steel", ("SUB", "Saleable Steel", "Finished Steel"), False, False),
-        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
+        ("Saleable Steel Despatch", _DESPATCH, False, False),
     ]),
     ("SSP", [
         ("Crude Steel",         "Total Crude Steel",     True,  False),
         ("Saleable Steel",      "Saleable Steel",        True,  False),
-        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
+        ("Saleable Steel Despatch", _DESPATCH, False, False),
     ]),
     ("VISL", [
         ("Saleable Steel",           "Saleable Steel",           True,  False),
         ("Finished Steel",           "Finished Steel",           False, False),
-        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
+        ("Saleable Steel Despatch", _DESPATCH, False, False),
     ]),
     # SAIL-level Finished Steel by Conversion (plant_name 'SAIL', item
     # 'Conversion') — added into SAIL's Finished Steel on page 5.
-    ("SAIL", [
-        ("Fin. Steel by Conversion", ("AGG", "Conversion", ["SAIL"]), False, False),
+    ("CONV", [
+        ("Finished Steel by Conversion", ("AGG", "Conversion", ["SAIL"]), False, False),
     ]),
 ]
 
@@ -226,11 +231,6 @@ _PLAN_ALIASES = {
 _ITEM_ALT_NAMES = {
     ("DSP", "Bottom Pouring Ingot"): ["BOTTOM_POURING_INGOT"],
     ("ASP", "Total Caster"): ["Concast"],
-    # ASP/SSP/VISL despatch plans are stored as "Saleable Despatch" in some
-    # uploads (ASP has both names — fallback, never summed).
-    ("ASP", "Saleable Steel Despatch"): ["Saleable Despatch"],
-    ("SSP", "Saleable Steel Despatch"): ["Saleable Despatch"],
-    ("VISL", "Saleable Steel Despatch"): ["Saleable Despatch"],
 }
 
 # Some (plant, item) combos aren't tracked directly — derive them as
@@ -329,9 +329,10 @@ def _get(cur, table, plant, db_spec, month):
             va = _get_single(cur, table, plant, item_a, month)
             vb = _get_single(cur, table, plant, item_b, month)
             return (va - vb) if (va is not None and vb is not None) else None
-        if kind == "AGG_NOPLAN":
-            _, item, plants = db_spec
-            return _get_agg(cur, table, item, plants, month) if table == "act" else None
+        if kind == "PLAN_OF":
+            # (act_spec, plan_spec): actuals from one spec, plan from another.
+            _, act_spec, plan_spec = db_spec
+            return _get(cur, table, plant, act_spec if table == "act" else plan_spec, month)
         if kind == "AGG_DIFF":
             # Difference of two other db_specs (each may itself be an AGG).
             _, spec_a, spec_b = db_spec
@@ -477,6 +478,9 @@ def _build_rows(plant_defs, report_month):
                     "label": label,
                     "bold": is_bold,
                     "values": values,
+                    # CONV (Finished Steel by Conversion) has no plant: its
+                    # label spans the plant + item columns.
+                    "span_label": plant == "CONV",
                 })
     finally:
         conn.close()
