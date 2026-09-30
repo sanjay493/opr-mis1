@@ -41,7 +41,11 @@ PAGE5_PLANTS = [
                                  ),                                        False, False),
         ("Crude Steel(Tot)",    ("AGG",     "Total Crude Steel",    _ALL), True,  False),
         ("Saleable Steel",      ("AGG",     "Saleable Steel",       _ALL), True,  False),
-        ("Finished Steel",      ("AGG",     "Finished Steel",       _ALL), True,  False),
+        # SAIL Finished Steel includes the SAIL-level "Conversion" figure (the
+        # same rule as Page 3's "Finished Steel*"); Conversion also gets its own
+        # row after the VISL block on page 6.
+        ("Finished Steel (incl. Conv.)", ("AGG", {**{p: "Finished Steel" for p in _ALL}, "SAIL": "Conversion"},
+                                          _ALL + ["SAIL"]),                True,  False),
         # Five main plants' own "Saleable Semis" item, plus ASP's semi-finished
         # steel (which ASP doesn't track directly — derived as Saleable - Finished).
         ("Semi-finished steel", ("AGG",     {
@@ -52,6 +56,9 @@ PAGE5_PLANTS = [
                                      "ISP": "Saleable Semis",
                                      "ASP": ("SUB", "Saleable Steel", "Finished Steel"),
                                  }, _5P + ["ASP"]),                        False, False),
+        # Actual only: BSP/DSP/RSP/BSL/ISP have no despatch plan, so a SAIL plan
+        # summed from ASP/SSP/VISL alone would give a meaningless %Ful.
+        ("Saleable Steel Despatch", ("AGG_NOPLAN", "Saleable Steel Despatch", _ALL), False, False),
         ("HR Coils rolling(Tot)", ("AGG",     ["HSM-2 Total HR Coil","HSM Total HR Coil"], _ALL), False, False),
         ("Pig Iron",            ("AGG",     "Pig Iron",             _5PV), False, False),
     ]),
@@ -67,6 +74,7 @@ PAGE5_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", "Saleable Semis",        False, False),
+        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
     ("DSP", [
@@ -81,6 +89,7 @@ PAGE5_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", "Saleable Semis",        False, False),
+        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
     ("RSP", [
@@ -99,6 +108,7 @@ PAGE5_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", None,                    False, False),
+        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("HR Coils Rolling(Tot)", "HSM-2 Total HR Coil", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
@@ -115,6 +125,7 @@ PAGE6_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", "Saleable Semis",        False, False),
+        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("HSM rolling",         "HSM Total HR Coil",     False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
@@ -126,6 +137,7 @@ PAGE6_PLANTS = [
         ("Saleable Steel",      "Saleable Steel",        True,  False),
         ("Finished Steel",      "Finished Steel",        False, False),
         ("Semi-finished steel", "Saleable Semis",        False, False),
+        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
         ("Pig Iron",            "Pig Iron",              False, False),
     ]),
     ("ASP", [
@@ -137,14 +149,22 @@ PAGE6_PLANTS = [
         # ASP has no separate "Saleable Semis" item — semi-finished steel is
         # the portion of Saleable Steel that isn't yet Finished Steel.
         ("Semi-finished steel", ("SUB", "Saleable Steel", "Finished Steel"), False, False),
+        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
     ]),
     ("SSP", [
         ("Crude Steel",         "Total Crude Steel",     True,  False),
         ("Saleable Steel",      "Saleable Steel",        True,  False),
+        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
     ]),
     ("VISL", [
         ("Saleable Steel",           "Saleable Steel",           True,  False),
         ("Finished Steel",           "Finished Steel",           False, False),
+        ("Saleable Steel Despatch", "Saleable Steel Despatch", False, False),
+    ]),
+    # SAIL-level Finished Steel by Conversion (plant_name 'SAIL', item
+    # 'Conversion') — added into SAIL's Finished Steel on page 5.
+    ("SAIL", [
+        ("Fin. Steel by Conversion", ("AGG", "Conversion", ["SAIL"]), False, False),
     ]),
 ]
 
@@ -206,6 +226,11 @@ _PLAN_ALIASES = {
 _ITEM_ALT_NAMES = {
     ("DSP", "Bottom Pouring Ingot"): ["BOTTOM_POURING_INGOT"],
     ("ASP", "Total Caster"): ["Concast"],
+    # ASP/SSP/VISL despatch plans are stored as "Saleable Despatch" in some
+    # uploads (ASP has both names — fallback, never summed).
+    ("ASP", "Saleable Steel Despatch"): ["Saleable Despatch"],
+    ("SSP", "Saleable Steel Despatch"): ["Saleable Despatch"],
+    ("VISL", "Saleable Steel Despatch"): ["Saleable Despatch"],
 }
 
 # Some (plant, item) combos aren't tracked directly — derive them as
@@ -304,6 +329,9 @@ def _get(cur, table, plant, db_spec, month):
             va = _get_single(cur, table, plant, item_a, month)
             vb = _get_single(cur, table, plant, item_b, month)
             return (va - vb) if (va is not None and vb is not None) else None
+        if kind == "AGG_NOPLAN":
+            _, item, plants = db_spec
+            return _get_agg(cur, table, item, plants, month) if table == "act" else None
         if kind == "AGG_DIFF":
             # Difference of two other db_specs (each may itself be an AGG).
             _, spec_a, spec_b = db_spec
