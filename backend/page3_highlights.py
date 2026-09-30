@@ -103,8 +103,9 @@ def generate_page3_highlights(month: str) -> list:
             SELECT item_name, report_month, SUM(month_actual) AS total
             FROM production_table
             WHERE item_name IN ({ph_items}) AND plant_name IN ({ph_plants})
+              AND report_month <= ?
             GROUP BY item_name, report_month
-        """, item_names + ALL_PLANTS)
+        """, item_names + ALL_PLANTS + [month])
         monthly = {n: {} for n in item_names}
         for item, rm, total in cur.fetchall():
             if total is None or item not in monthly:
@@ -116,9 +117,9 @@ def generate_page3_highlights(month: str) -> list:
         cur.execute("""
             SELECT report_month, SUM(month_actual) AS total
             FROM production_table
-            WHERE item_name='Conversion' AND plant_name='SAIL'
+            WHERE item_name='Conversion' AND plant_name='SAIL' AND report_month <= ?
             GROUP BY report_month
-        """)
+        """, (month,))
         for rm, total in cur.fetchall():
             if total is None:
                 continue

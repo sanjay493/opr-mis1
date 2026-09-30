@@ -1318,7 +1318,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == MAJOR_UNIT_SEPARATOR_PAGE_ID:
                 page.update(generate_major_unit_separator())
             if pg in MAJOR_UNIT_ACTIVE_PAGES:
-                page.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg]))
+                page.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg], month))
             if pg == SAIL8_TREND_SEPARATOR_PAGE_ID:
                 page.update(generate_sail8_trend_separator())
             if pg == SAIL8_TREND_PAGE_ID:
@@ -1740,7 +1740,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == MAJOR_UNIT_SEPARATOR_PAGE_ID:
             p.update(generate_major_unit_separator())
         if pg in MAJOR_UNIT_ACTIVE_PAGES:
-            p.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg]))
+            p.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg], request.month))
         if pg == SAIL8_TREND_SEPARATOR_PAGE_ID:
             p.update(generate_sail8_trend_separator())
         if pg == SAIL8_TREND_PAGE_ID:

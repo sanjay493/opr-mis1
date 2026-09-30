@@ -218,14 +218,15 @@ def _days_in(report_month: str) -> int:
     return calendar.monthrange(y, m)[1]
 
 
-def best_for_unit(cur, plant: str, item_names: list, is_rate: bool) -> dict:
+def best_for_unit(cur, plant: str, item_names: list, is_rate: bool, upto_month: str = None) -> dict:
     """{'month_best': {'value','period'} | None, 'fy_best': {'value','period'} | None}
     for one registry unit — computed live from production_table, summing
     item_names per month (tonnage) or per-day-weighted-averaging them
     (rate items) across a complete FY (12 months present) for fy_best.
     month_best is just the single highest monthly value in the plant's
-    whole history. Returns Nones throughout for an unmapped unit
-    (item_names == [])."""
+    whole history (up to upto_month, when given — a report never shows a
+    record from a month after its own). Returns Nones throughout for an
+    unmapped unit (item_names == [])."""
     empty = {"month_best": None, "fy_best": None}
     if not item_names:
         return empty
@@ -235,8 +236,9 @@ def best_for_unit(cur, plant: str, item_names: list, is_rate: bool) -> dict:
         SELECT report_month, SUM(month_actual)
         FROM production_table
         WHERE plant_name = ? AND item_name IN ({ph})
+          AND (? IS NULL OR report_month <= ?)
         GROUP BY report_month
-    """, [plant] + item_names)
+    """, [plant] + item_names + [upto_month, upto_month])
     monthly = {rm: v for rm, v in cur.fetchall() if v is not None}
     if not monthly:
         return empty
@@ -394,23 +396,32 @@ def _row_class(item_names: list) -> str:
     return "mur-row-highlight" if tuple(item_names) in _HIGHLIGHT_ITEM_NAMES else ""
 
 
-def generate_major_unit_page(plant_code: str) -> dict:
+def generate_major_unit_page(plant_code: str, report_month: str = None) -> dict:
     """One plant's Annexure-3 page: Unit / Annual Best / Monthly Best /
     Daily Best. Annual/Monthly are computed live from production_table
     (best_for_unit); Daily is read from major_unit_daily_record. Each row
     carries both the raw figures (annual/monthly/daily) and pre-formatted
     display strings (annual_display/monthly_display/daily_display) — the
     template only renders strings, all number/period formatting happens
-    here, same division of labor as page_ready_reckoner.py's rows."""
+    here, same division of labor as page_ready_reckoner.py's rows.
+
+    report_month ('YYYY-MM'): records are as of that month — Annual/Monthly
+    ignore later months, and a stored Daily best dated after it is not
+    shown (only the current best-ever day is stored, so the best as of an
+    earlier month isn't known)."""
     conn = db.connect()
     cur = conn.cursor()
     try:
         daily_by_unit = db.get_major_unit_daily_records_all().get(plant_code, {})
         rows = []
         for unit in registry_for(plant_code):
-            live = best_for_unit(cur, plant_code, unit["item_names"], unit["unit"] == _RATE)
+            live = best_for_unit(cur, plant_code, unit["item_names"], unit["unit"] == _RATE,
+                                 upto_month=report_month)
             fy_best = _apply_annual_floor(plant_code, unit["label"], live["fy_best"])
             daily_row = daily_by_unit.get(unit["label"])
+            if (daily_row and report_month and daily_row.get("record_date")
+                    and daily_row["record_date"][:7] > report_month):
+                daily_row = None
             daily = ({"value": daily_row["value"], "date": daily_row["record_date"],
                       "remarks": daily_row["remarks"]}
                      if daily_row and (daily_row["value"] is not None or daily_row["remarks"])

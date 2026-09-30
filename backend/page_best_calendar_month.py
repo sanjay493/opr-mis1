@@ -53,7 +53,7 @@ def _month_cell(rows: list, best_month: str, report_month: str):
 
 
 def generate_best_calendar_month(report_month: str) -> dict:
-    data = generate_group_records(HIGHLIGHT_ITEMS)
+    data = generate_group_records(HIGHLIGHT_ITEMS, upto_month=report_month)
     month_label = _dt.datetime.strptime(report_month, "%Y-%m").strftime("%B %Y")
 
     groups = []

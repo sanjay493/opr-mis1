@@ -463,11 +463,17 @@ def generate_best_period(start_mon: int, end_mon: int, scope: str = 'sail5',
         conn.close()
 
 
-def generate_group_records(items: list = HIGHLIGHT_ITEMS) -> dict:
+def generate_group_records(items: list = HIGHLIGHT_ITEMS, upto_month: str = None) -> dict:
     """Like generate_records(), but only the two plant-group scopes
     (sail5/all8) and a caller-supplied item list — used by the Best-Ever
     Highlights and Best Calendar Month report pages, which don't need
-    generate_records()'s full per-plant/unit sweep."""
+    generate_records()'s full per-plant/unit sweep.
+
+    upto_month ('YYYY-MM'): ignore data after this month, so a report for
+    an earlier month never shows records from months after it (e.g. a May
+    report must not list Jul/Aug, nor a Q1/H1 that isn't complete yet —
+    quarters/halves only count once all their months are present).
+    latest_month is capped to it too."""
     conn = db.connect()
     cur  = conn.cursor()
     try:
@@ -476,9 +482,13 @@ def generate_group_records(items: list = HIGHLIGHT_ITEMS) -> dict:
             ph = _ph(plants)
             where = f"item_name IN ({_ph(items)}) AND plant_name IN ({ph})"
             args  = items + plants
+            if upto_month:
+                where += " AND report_month <= ?"
+                args = args + [upto_month]
             result[group_name] = _compute_group_records(cur, items, where, args)
 
-        result['latest_month'] = _latest_production_month(cur)
+        latest = _latest_production_month(cur)
+        result['latest_month'] = min(latest, upto_month) if (latest and upto_month) else (upto_month or latest)
         return result
     finally:
         conn.close()
