@@ -23,6 +23,19 @@ function fmt(v) {
   return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 });
 }
 
+const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// 'YYYY-MM' of calendar month `num` inside the FY containing `reportMonth`,
+// or null when that month is still after the report month.
+function fyMonthOf(num, reportMonth) {
+  if (!reportMonth) return null;
+  const ry = Number(reportMonth.slice(0, 4));
+  const rm = Number(reportMonth.slice(5, 7));
+  const fyStart = rm >= 4 ? ry : ry - 1;
+  const ym = `${num >= 4 ? fyStart : fyStart + 1}-${String(num).padStart(2, '0')}`;
+  return ym <= reportMonth ? ym : null;
+}
+
 function yearOf(month) {
   return month ? `[${month.slice(0, 4)}]` : '';
 }
@@ -32,6 +45,7 @@ const C = {
   bestBg: '#fffbeb', bestBorder: '#fde68a', bestText: '#92400e',
   topBg: '#d1fae5', topBorder: '#6ee7b7', topText: '#065f46',
   secondText: '#9aa0a6',
+  fyHeaderBg: '#0b4fb3', fyRing: '#1a73e8', fyBadgeBg: '#1a73e8',
   border: '#e8eaed',
   stickyColBg: '#f8f9fa',
 };
@@ -43,8 +57,6 @@ export default function RecordsMatrixPage() {
   const [plant, setPlant] = useState('BSP');
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
     fetch(`${API_BASE}/api/production-records`)
       .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
       .then((d) => { setData(d); setLoading(false); })
@@ -53,6 +65,12 @@ export default function RecordsMatrixPage() {
 
   const grp = data?.[plant];
   const items = grp?.items || [];
+  const reportMonth = data?.latest_month || null;
+  const reportFy = reportMonth
+    ? (Number(reportMonth.slice(5, 7)) >= 4 ? Number(reportMonth.slice(0, 4)) : Number(reportMonth.slice(0, 4)) - 1)
+    : null;
+  const fyLabel = reportFy != null ? `${reportFy}-${String((reportFy + 1) % 100).padStart(2, '0')}` : '';
+  const reportLabel = reportMonth ? `${MON_ABBR[Number(reportMonth.slice(5, 7)) - 1]}'${reportMonth.slice(2, 4)}` : '';
 
   const tabBtn = (active) => ({
     padding: '7px 16px',
@@ -101,7 +119,8 @@ export default function RecordsMatrixPage() {
             Best and 2nd-best ever figure for every calendar month, item-wise — grouped plant-wise,
             items listed in process order. The best-ever figure for each calendar month is
             highlighted; the single all-time-best month for an item (across all 12 months) is
-            marked <strong>★</strong>.
+            marked <strong>★</strong>. Months of the report FY{fyLabel ? ` ${fyLabel}` : ''} are shaded in the header, and
+            records set during that FY are outlined in blue.
           </p>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -127,6 +146,9 @@ export default function RecordsMatrixPage() {
               }}>
                 <span><span style={{ display: 'inline-block', width: 13, height: 13, borderRadius: 3, background: C.bestBg, border: `1.5px solid ${C.bestBorder}`, marginRight: 5, verticalAlign: 'middle' }} />Best of that calendar month</span>
                 <span><span style={{ display: 'inline-block', width: 13, height: 13, borderRadius: 3, background: C.topBg, border: `1.5px solid ${C.topBorder}`, marginRight: 5, verticalAlign: 'middle' }} />★ All-time best month for the item</span>
+                {reportMonth && (
+                  <span><span style={{ display: 'inline-block', width: 13, height: 13, borderRadius: 3, background: '#fff', boxShadow: `inset 0 0 0 2px ${C.fyRing}`, marginRight: 5, verticalAlign: 'middle' }} />Record set in report FY {fyLabel} (Apr – {reportLabel})</span>
+                )}
                 <span style={{ color: C.secondText }}>Small figure below = 2nd-best of that month</span>
               </div>
 
@@ -135,9 +157,19 @@ export default function RecordsMatrixPage() {
                   <thead>
                     <tr>
                       <th style={stickyItemHeaderCell}>Item</th>
-                      {CAL_MONTHS.map((m) => (
-                        <th key={m.num} style={stickyHeaderCell}>{m.name}</th>
-                      ))}
+                      {CAL_MONTHS.map((m) => {
+                        const fyYm = fyMonthOf(m.num, reportMonth);
+                        return (
+                          <th
+                            key={m.num}
+                            style={fyYm ? { ...stickyHeaderCell, background: C.fyHeaderBg, boxShadow: 'inset 0 -3px 0 #fbbc04' } : stickyHeaderCell}
+                            title={fyYm ? `${m.name}'${fyYm.slice(2, 4)} — in report FY ${fyLabel}` : undefined}
+                          >
+                            {m.name}
+                            {fyYm && <div style={{ fontSize: '7.5pt', fontWeight: 600, opacity: 0.85 }}>FY {fyLabel}</div>}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -156,6 +188,9 @@ export default function RecordsMatrixPage() {
                             const best = rows[0];
                             const second = rows[1];
                             const isAllTimeBest = best && bestMonth && best.month === bestMonth;
+                            const fyYm = fyMonthOf(m.num, reportMonth);
+                            const bestInFy = !!(fyYm && best && best.month === fyYm);
+                            const secondInFy = !!(fyYm && second && second.month === fyYm);
                             return (
                               <td
                                 key={m.num}
@@ -163,7 +198,9 @@ export default function RecordsMatrixPage() {
                                   padding: '6px 6px', textAlign: 'center', verticalAlign: 'top',
                                   borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${C.border}`,
                                   background: !best ? rowBg : isAllTimeBest ? C.topBg : C.bestBg,
+                                  boxShadow: bestInFy ? `inset 0 0 0 2px ${C.fyRing}` : undefined,
                                 }}
+                                title={bestInFy ? `Best-ever ${m.name} set in report FY ${fyLabel}` : secondInFy ? `2nd-best ${m.name} set in report FY ${fyLabel}` : undefined}
                               >
                                 {best ? (
                                   <>
@@ -173,11 +210,16 @@ export default function RecordsMatrixPage() {
                                     }}>
                                       {fmt(best.total)}{isAllTimeBest ? ' ★' : ''}
                                     </div>
+                                    {bestInFy && (
+                                      <div style={{ display: 'inline-block', margin: '2px 0 1px', padding: '0 5px', borderRadius: 8, background: C.fyBadgeBg, color: '#fff', fontSize: '6.5pt', fontWeight: 700 }}>
+                                        FY {fyLabel} BEST
+                                      </div>
+                                    )}
                                     <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: isAllTimeBest ? C.topText : C.bestText, opacity: 0.75 }}>
                                       {yearOf(best.month)}
                                     </div>
                                     {second && (
-                                      <div style={{ marginTop: 3, fontSize: '8pt', color: C.secondText }}>
+                                      <div style={{ marginTop: 3, fontSize: '8pt', color: secondInFy ? C.fyRing : C.secondText, fontWeight: secondInFy ? 700 : 400 }}>
                                         {fmt(second.total)} <span style={{ fontSize: '7pt', fontStyle: 'italic' }}>{yearOf(second.month)}</span>
                                       </div>
                                     )}
