@@ -32,6 +32,7 @@ const VIEWS = {
   'do-letter': dynamic(() => import('./do-letter/View'), { loading }),
   'jpc-report': dynamic(() => import('./jpc-report/View'), { loading }),
   'one-page-report': dynamic(() => import('./one-page-report/View'), { loading }),
+  'plant-performance-items': dynamic(() => import('./plant-performance-items/View'), { loading }),
   'pmix-fy': dynamic(() => import('./pmix-fy/View'), { loading }),
   'sefi': dynamic(() => import('./sefi/View'), { loading }),
   'steel-bulletin': dynamic(() => import('./steel-bulletin/View'), { loading }),

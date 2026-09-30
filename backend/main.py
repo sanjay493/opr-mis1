@@ -404,6 +404,7 @@ def _index_rows() -> list:
 from pdf import build_pdf_response, generate_pdf_bytes
 from layout_loader import load_layout_config
 from api_rsp_techno import router as rsp_techno_router
+from api_plant_performance import router as plant_performance_router
 from api_rsp_bf_glance import router as rsp_bf_glance_router
 from api_bsp_techno import router as bsp_techno_router
 from api_bsp_bf_techno import router as bsp_bf_techno_router
@@ -881,6 +882,7 @@ app.add_middleware(
 
 # Include RSP, BSP, ISP, and DSP Technopara routers
 app.include_router(rsp_techno_router)
+app.include_router(plant_performance_router)
 app.include_router(rsp_bf_glance_router)
 app.include_router(bsp_techno_router)
 app.include_router(bsp_bf_techno_router)

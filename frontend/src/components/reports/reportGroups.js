@@ -80,6 +80,7 @@ export const REPORT_GROUPS = [
       { id: 'do-letter', label: 'Monthly DO Letter', description: 'Monthly DO letter with Annexure remarks.' },
       { id: 'jpc-report', label: 'JPC Monthly Report', description: 'JPC monthly report export.' },
       { id: 'one-page-report', label: '1-Page Report', description: 'Single-page summary report.' },
+      { id: 'plant-performance-items', label: 'Plant Wise Performance (Excel)', description: 'Plant Wise Performance of Main Items, tonnage to 3 decimals, Excel download.' },
       { id: 'pmix-fy', label: 'Pmix Report (Year-wise)', description: 'Product-mix report, financial-year view.' },
       { id: 'sefi', label: 'SEFI Report', description: 'SEFI report.' },
       { id: 'steel-bulletin', label: 'Inputs for Steel Bulletin', description: 'Inputs feeding the Steel Bulletin.' },
