@@ -43,6 +43,30 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  // Sessions end after 30 min idle (backend/auth.py). Check once a minute and
+  // when the tab regains focus, so a lapsed session shows as logged out right
+  // away rather than on the next click. The X-Session-Check header tells the
+  // backend this poll isn't user activity, so it doesn't extend the session.
+  useEffect(() => {
+    if (!user) return undefined;
+    const check = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          credentials: 'include', headers: { 'X-Session-Check': '1' },
+        });
+        if (res.status === 401) setUser(null);
+      } catch {
+        // offline / backend restarting — leave the state alone
+      }
+    };
+    const timer = setInterval(check, 60_000);
+    window.addEventListener('focus', check);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', check);
+    };
+  }, [user]);
+
   const logout = useCallback(async () => {
     try {
       await fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });

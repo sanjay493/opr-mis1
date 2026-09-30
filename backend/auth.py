@@ -32,7 +32,15 @@ SMTP_EMAIL = os.environ.get("SMTP_EMAIL", "")
 SMTP_APP_PASSWORD = os.environ.get("SMTP_APP_PASSWORD", "")
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
 JWT_ALGO = "HS256"
-JWT_EXPIRE_HOURS = 24 * 7  # 1 week
+# Sessions end after SESSION_IDLE_MINUTES with no request (every API call
+# slides the expiry forward - see renew_session_token and main.py's
+# SessionRefreshMiddleware), and in any case SESSION_MAX_HOURS after sign-in.
+# The cookie itself has no expiry, so closing the browser also ends it.
+SESSION_IDLE_MINUTES = int(os.environ.get("SESSION_IDLE_MINUTES", "30"))
+SESSION_MAX_HOURS = int(os.environ.get("SESSION_MAX_HOURS", "12"))
+# A request carrying this header (the frontend's periodic "still logged in?"
+# check) is answered without extending the session - polling isn't activity.
+SESSION_CHECK_HEADER = "x-session-check"
 OTP_EXPIRE_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5         # wrong guesses before a code is burned
 OTP_RESEND_SECONDS = 60      # minimum gap between emailed codes per email+purpose
@@ -64,21 +72,49 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 # ── JWT sessions ──────────────────────────────────────────────────────────────
 
-def create_session_token(user_id: int, email: str, role: Optional[str]) -> str:
+# Session cookie: no max_age/expires, so the browser drops it on close.
+SESSION_COOKIE_KW = dict(httponly=True, samesite="lax", path="/")
+
+
+def create_session_token(user_id: int, email: str, role: Optional[str],
+                         login_at: Optional[int] = None) -> str:
+    """`login_at` (epoch seconds of the sign-in) is carried over on renewal
+    so the 12-hour cap counts from the real sign-in, not the last request."""
+    now = datetime.now(timezone.utc)
+    login_at = login_at or int(now.timestamp())
+    hard_end = datetime.fromtimestamp(login_at, timezone.utc) + timedelta(hours=SESSION_MAX_HOURS)
     payload = {
         "sub": str(user_id),
         "email": email,
         "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+        "login_at": login_at,
+        "exp": min(now + timedelta(minutes=SESSION_IDLE_MINUTES), hard_end),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
 
 
 def decode_session_token(token: str) -> Optional[dict]:
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
     except jwt.PyJWTError:
         return None
+    # Tokens from before idle timeouts existed (7-day, no login_at) are
+    # no longer honoured - those users simply sign in again.
+    return payload if payload.get("login_at") else None
+
+
+def renew_session_token(token: Optional[str]) -> Optional[str]:
+    """A fresh token with the idle window restarted, or None when there's
+    nothing to renew (no/invalid/expired token) or it was issued under a
+    minute ago (no point re-signing on every request of a page load)."""
+    payload = decode_session_token(token) if token else None
+    if not payload:
+        return None
+    remaining = payload["exp"] - datetime.now(timezone.utc).timestamp()
+    if remaining > SESSION_IDLE_MINUTES * 60 - 60:
+        return None
+    return create_session_token(int(payload["sub"]), payload.get("email", ""), payload.get("role"),
+                                login_at=int(payload["login_at"]))
 
 
 def create_login_challenge(user_id: int, email: str) -> str:

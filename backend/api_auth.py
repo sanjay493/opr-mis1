@@ -24,12 +24,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 PROFILE_PICS_DIR = os.path.join(os.path.dirname(__file__), "static", "profile_pics")
 os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
 
-_COOKIE_KW = dict(
-    httponly=True,
-    samesite="lax",
-    max_age=auth.JWT_EXPIRE_HOURS * 3600,
-    path="/",
-)
+_COOKIE_KW = auth.SESSION_COOKIE_KW
 
 
 class EmailOnly(BaseModel):

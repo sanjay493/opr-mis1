@@ -846,6 +846,29 @@ class EditorAdminGateMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(EditorAdminGateMiddleware)
 
+
+class SessionRefreshMiddleware(BaseHTTPMiddleware):
+    """Idle timeout: every /api request from a logged-in browser re-issues
+    the session cookie with the idle window restarted (auth.renew_session_token
+    caps it at SESSION_MAX_HOURS from sign-in). Skipped for the frontend's
+    periodic session check (so polling doesn't keep an idle session alive)
+    and for responses that set/clear the cookie themselves (login, logout)."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/") or request.headers.get(_auth.SESSION_CHECK_HEADER):
+            return response
+        cookie_prefix = f"{_auth.COOKIE_NAME}=".encode()
+        if any(k == b"set-cookie" and v.startswith(cookie_prefix) for k, v in response.raw_headers):
+            return response
+        fresh = _auth.renew_session_token(request.cookies.get(_auth.COOKIE_NAME))
+        if fresh:
+            response.set_cookie(_auth.COOKIE_NAME, fresh, **_auth.SESSION_COOKIE_KW)
+        return response
+
+
+app.add_middleware(SessionRefreshMiddleware)
+
 # Added last = outermost, so every response (including the gate's 401/403
 # short-circuits) passes through CORS on the way out. See NOTE above.
 app.add_middleware(
@@ -853,7 +876,7 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "X-Session-Check"],
 )
 
 # Include RSP, BSP, ISP, and DSP Technopara routers
