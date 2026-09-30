@@ -16,6 +16,7 @@ equipment rows (BAND-1/2/3), matching how BSP has two separate shops
 (SP-2, SP-3) but BSL has a single sinter plant with three machines.
 """
 import re
+from datetime import date, timedelta
 
 import db
 
@@ -231,19 +232,87 @@ def _month_label(ym: str) -> str:
     return f"{_MONTH_ABBR[int(m) - 1]}'{y[2:]}"
 
 
+def _plan_days_text(schedule_days) -> str:
+    """Free-text schedule ("9 days", "45*", "7 days/20 days") -> printable,
+    adding "days" when the plant gave a bare number ("10" -> "10 days")."""
+    s = (schedule_days or "").strip()
+    if s and "day" not in s.lower() and re.match(r"^[\d.+*/\s-]+$", s):
+        return f"{s} days"
+    return s
+
+
+def _plan_days_number(schedule_days):
+    """Scheduled days as a number for sizing the Plan bar: "9 days" -> 9,
+    "45*" -> 45, "1+10+2*" -> 13, "7 days/20 days" -> 7 (first figure).
+    None when there's no figure (the bar then fills the whole Period)."""
+    s = schedule_days or ""
+    nums = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", s)]
+    if not nums:
+        return None
+    n = round(sum(nums) if "+" in s else nums[0])
+    return n if n > 0 else None
+
+
+def _month_end(ym: str) -> date:
+    y, m = int(ym[:4]), int(ym[5:7])
+    return (date(y, m, 1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+
+def _month_segments(start: date, last: date) -> dict:
+    """Inclusive date range -> {'YYYY-MM': (from, to, days)}, from/to being
+    the fraction of that month the range covers (0..1), for drawing a bar
+    to scale: 7.6.26-7.8.26 -> {'2026-06': (0.2, 1.0, 24),
+    '2026-07': (0.0, 1.0, 31), '2026-08': (0.0, 0.226, 7)}."""
+    out = {}
+    d = start
+    while d <= last:
+        m_end = _month_end(d.strftime("%Y-%m"))
+        seg_end = min(last, m_end)
+        dim = m_end.day
+        out[d.strftime("%Y-%m")] = ((d.day - 1) / dim, seg_end.day / dim, (seg_end - d).days + 1)
+        d = seg_end + timedelta(days=1)
+    return out
+
+
+def _plan_range(first: str, last: str, days):
+    """Where the Plan bar goes: the Period gives only months, so `days`
+    scheduled days are centred in it (Sep'26 + 9 days -> 11.9-19.9;
+    May-Jun'26 + 45 days -> 9.5-22.6). No/too many days -> whole Period."""
+    p_start, p_end = date.fromisoformat(first + "-01"), _month_end(last)
+    total = (p_end - p_start).days + 1
+    if not days or days >= total:
+        return p_start, p_end
+    start = p_start + timedelta(days=(total - days) // 2)
+    return start, start + timedelta(days=days - 1)
+
+
 def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
     """One row per unit (shop/equipment), one column per FY month (Apr-Mar):
     which months it was Planned (from the free-text Period) vs actually
     under repair (from the structured/parsed Actual dates), for a Gantt-
     style plan-vs-actual calendar. A unit with more than one Capital Repair
     row in the FY (e.g. two separate CRs) has its plan/actual spans merged
-    into that one row — a Gantt row can show more than one bar."""
+    into that one row — a Gantt row can show more than one bar.
+
+    Each month cell also carries its day counts: plan_days = the scheduled
+    days, printed in the first month of the Period (a multi-month Period
+    gives no per-month split); actual_days = days actually under repair in
+    that month (an ongoing repair counts up to today). plan_bars /
+    actual_bars = [[from, to, tooltip], ...] - from/to are fractions of the
+    month for drawing the bars to scale: actual from the real dates, plan
+    from the scheduled days centred in the Period (see _plan_range).
+    Each repair (DB row) is "done", "ongoing", "deferred" (not started
+    though its planned Period began in an earlier month - as on the
+    monthly report, where a Period started by the report month and not
+    executed prints "Deferred") or "pending" (planned for this month or
+    later). summary counts repairs by state; a row's status is its most
+    pressing one: ongoing > deferred > done > "" (nothing started yet)."""
     conn = db.connect()
     cur = conn.cursor()
     try:
         cur.execute("""
             SELECT shop, equipment, activity, period, actual,
-                   actual_start, actual_end, actual_ongoing
+                   actual_start, actual_end, actual_ongoing, schedule_days
             FROM capital_repair_table
             WHERE plant=? AND fy=?
             ORDER BY sort_order ASC, id ASC
@@ -253,17 +322,19 @@ def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
         conn.close()
 
     months = _fy_months(fy)
-    fy_last = months[-1]
+    today = date.today()
 
     units = {}       # (shop, equipment) -> {"activities": set, "plan": set, "actual": set}
     unit_order = []
     shop_order = []
-    for shop, equipment, activity, period, actual, a_start, a_end, a_ongoing in rows:
+    for shop, equipment, activity, period, actual, a_start, a_end, a_ongoing, schedule_days in rows:
         shop = shop or ""
         equipment = equipment or ""
         key = (shop, equipment)
         if key not in units:
-            units[key] = {"activities": [], "plan": set(), "actual": set()}
+            units[key] = {"activities": [], "plan": set(), "actual": set(),
+                          "plan_days": {}, "actual_days": {},
+                          "plan_bars": {}, "actual_bars": {}, "states": []}
             unit_order.append(key)
             if shop not in shop_order:
                 shop_order.append(shop)
@@ -275,12 +346,30 @@ def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
         if span:
             first, last = span
             entry["plan"].update(m for m in months if first <= m <= last)
+            p_start, p_end = _plan_range(first, last, _plan_days_number(schedule_days))
+            tip = "Plan: " + " · ".join(x for x in ((period or "").strip(), _plan_days_text(schedule_days)) if x)
+            for m, (f, t, _n) in _month_segments(p_start, p_end).items():
+                entry["plan_bars"].setdefault(m, []).append([round(f, 4), round(t, 4), tip])
+        plan_days = _plan_days_text(schedule_days)
+        if span and plan_days:
+            entry["plan_days"].setdefault(span[0], []).append(plan_days)
 
         dates = _actual_dates(a_start, a_end, a_ongoing, actual)
         if dates:
             start, end = dates
-            start_m, end_m = start[:7], (end[:7] if end else fy_last)
-            entry["actual"].update(m for m in months if start_m <= m <= end_m)
+            d0 = date.fromisoformat(start)
+            d1 = date.fromisoformat(end) if end else max(d0, today)
+            total = (d1 - d0).days + 1
+            tip = (f"Actual: {_d_m_yy(start)} – {_d_m_yy(end)} ({total} day{'' if total == 1 else 's'})" if end
+                   else f"Actual: {_d_m_yy(start)} – in progress ({total} days so far)")
+            for m, (f, t, n) in _month_segments(d0, d1).items():
+                if m in months:
+                    entry["actual"].add(m)
+                    entry["actual_days"][m] = entry["actual_days"].get(m, 0) + n
+                    entry["actual_bars"].setdefault(m, []).append([round(f, 4), round(t, 4), tip])
+            entry["states"].append("done" if end else "ongoing")
+        else:
+            entry["states"].append("deferred" if span and span[0] < today.strftime("%Y-%m") else "pending")
 
     sections = []
     for shop in shop_order:
@@ -290,10 +379,19 @@ def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
             if s != shop:
                 continue
             entry = units[key]
+            states = entry["states"]
             unit_rows.append({
                 "unit": equipment,
+                "status": next((st for st in ("ongoing", "deferred", "done") if st in states), ""),
                 "activity": " / ".join(entry["activities"]),
-                "months": [{"plan": m in entry["plan"], "actual": m in entry["actual"]} for m in months],
+                "months": [{
+                    "plan": m in entry["plan"],
+                    "actual": m in entry["actual"],
+                    "plan_days": " + ".join(entry["plan_days"].get(m, [])),
+                    "actual_days": entry["actual_days"].get(m),
+                    "plan_bars": entry["plan_bars"].get(m, []),
+                    "actual_bars": entry["actual_bars"].get(m, []),
+                } for m in months],
             })
         sections.append({"shop": shop, "rows": unit_rows})
 
@@ -302,5 +400,14 @@ def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
         "plant_title": _PLANT_TITLE.get(plant, plant),
         "fy": fy,
         "month_labels": [_month_label(m) for m in months],
+        "months": months,
+        "today": today.isoformat(),
+        "summary": {
+            "repairs": sum(len(u["states"]) for u in units.values()),
+            "done": sum(u["states"].count("done") for u in units.values()),
+            "ongoing": sum(u["states"].count("ongoing") for u in units.values()),
+            "deferred": sum(u["states"].count("deferred") for u in units.values()),
+            "pending": sum(u["states"].count("pending") for u in units.values()),
+        },
         "sections": sections,
     }

@@ -1,6 +1,6 @@
 """
 Excel / PDF export for the Capital Repair Plan-vs-Actual calendar
-(frontend: /reports/production-analysis?tab=capital-repair-calendar).
+(frontend: /reports/loss-breakdown?tab=capital-repair-calendar).
 
 Source data: page_capital_repair.generate_capital_repair_calendar(plant, fy)
 -- one row per unit (shop/equipment), 12 FY months (Apr-Mar), each month
@@ -36,6 +36,15 @@ _PLAN_FILL = PatternFill("solid", fgColor="FCE8B2")
 _ACTUAL_FILL = PatternFill("solid", fgColor="CFE2FF")
 _THIN = Side(style="thin", color="DADCE0")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
+
+
+def _days_label(m: dict, key: str) -> str:
+    """A month cell's day count: plan_days is already text ("9 days"),
+    actual_days a number of days under repair in that month."""
+    if key == "plan":
+        return m.get("plan_days") or ""
+    n = m.get("actual_days")
+    return f"{n} day{'' if n == 1 else 's'}" if n else ""
 
 
 def build_excel_bytes(data: dict) -> bytes:
@@ -92,8 +101,10 @@ def build_excel_bytes(data: dict) -> bytes:
                 lc.font = Font(size=8, italic=True, color="5F6368")
                 lc.border = _BORDER
                 for ci, m in enumerate(r.get("months", []), start=4):
-                    cell = ws.cell(row=rw, column=ci)
+                    cell = ws.cell(row=rw, column=ci, value=_days_label(m, key) or None)
                     cell.border = _BORDER
+                    cell.font = Font(size=8, bold=True)
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                     if m.get(key):
                         cell.fill = fill
                 for c in (1, 2):
@@ -127,12 +138,14 @@ def build_pdf_html(data: dict) -> str:
             cells = [f'<td class="lbl">{esc(r.get("unit", ""))}</td>',
                      f'<td class="lbl txt">{esc(r.get("activity", ""))}</td>']
             for m in r.get("months", []):
-                plan_on = " on" if m.get("plan") else ""
-                actual_on = " on" if m.get("actual") else ""
-                cells.append(
-                    f'<td class="cal"><div class="half plan{plan_on}"></div>'
-                    f'<div class="half actual{actual_on}"></div></td>'
+                halves = "".join(
+                    f'<div class="half {key}">'
+                    + "".join(f'<i style="left:{f * 100:.1f}%;width:{(t - f) * 100:.1f}%"></i>'
+                              for f, t, *_ in m.get(f"{key}_bars") or [])
+                    + f'<span>{esc(_days_label(m, key))}</span></div>'
+                    for key in ("plan", "actual")
                 )
+                cells.append(f'<td class="cal">{halves}</td>')
             body_rows.append(f"<tr>{''.join(cells)}</tr>")
         sections_html.append(
             f'<div class="section-title">{esc(sec.get("shop", ""))}</div>'
@@ -150,8 +163,8 @@ def build_pdf_html(data: dict) -> str:
   .subtitle {{ font-size: 9pt; color: #5f6368; margin: 0 0 6px 0; }}
   .legend {{ font-size: 8.5pt; margin: 0 0 8px 0; }}
   .legend .swatch {{ display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 12px; vertical-align: middle; border: 1px solid #dadce0; }}
-  .legend .plan {{ background: #fce8b2; }}
-  .legend .actual {{ background: #cfe2ff; }}
+  .legend .plan {{ background: #f9d77e; }}
+  .legend .actual {{ background: #9ec5fe; }}
   .section-title {{ background: #1a73e8; color: #fff; font-weight: 700; font-size: 9.5pt;
     padding: 4px 6px; margin-top: 10px; page-break-after: avoid; }}
   table {{ width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 4px; table-layout: fixed; }}
@@ -163,9 +176,14 @@ def build_pdf_html(data: dict) -> str:
   td.lbl {{ font-weight: 600; }}
   td.txt {{ font-weight: 400; color: #5f6368; }}
   td.cal {{ padding: 0; }}
-  .half {{ height: 9px; background: #ffffff; }}
-  .half.plan.on {{ background: #fce8b2; }}
-  .half.actual.on {{ background: #cfe2ff; }}
+  .half {{ position: relative; height: 11px; line-height: 11px; font-size: 6.5pt; font-weight: 700;
+    white-space: nowrap; overflow: hidden; }}
+  .half i {{ position: absolute; top: 1px; bottom: 1px; min-width: 1.5px; border-radius: 1px; }}
+  .half span {{ position: relative; }}
+  .half.plan {{ color: #6b4f00; }}
+  .half.actual {{ color: #0b3d91; }}
+  .half.plan i {{ background: #f9d77e; }}
+  .half.actual i {{ background: #9ec5fe; }}
 </style>
 </head>
 <body>
