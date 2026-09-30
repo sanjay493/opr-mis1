@@ -43,6 +43,12 @@ _SERIES = [
     ("rebars_exw_donghua_china",   "Re-bars, Exw-Donghua, China HRB400E",       "finished_steel"),
 ]
 SERIES_CODES = [s for s, _, _ in _SERIES]
+
+# Series drawn without point markers, their value label centred on the line
+# itself (the white backdrop cuts the line) instead of floating above a dot.
+# Used for HRC FOB Rizhao, which runs close to HRC CFR West Coast India most
+# months: two dotted series with labels both above read as one cluster.
+_INLINE_LABEL_CODES = {"hrc_fob_rizhao_china"}
 SERIES_LABEL = {s: lbl for s, lbl, _ in _SERIES}
 SERIES_CATEGORY = {s: cat for s, _, cat in _SERIES}
 
@@ -241,12 +247,15 @@ def _line_chart_svg(title: str, chart: dict, label_below_lowest: bool = False) -
     # lowest-average series is excluded, keeping its own fixed "always
     # below" placement (see label_below_lowest above) instead.
     label_h = _POINT_VALUE_FONT_SIZE * 0.9 + 4
-    offset = {si: -10.0 for si in range(len(series))}
+    # Baseline offset that vertically centres an inline label on its point.
+    inline_off = _POINT_VALUE_FONT_SIZE * 0.35
+    inline = {si for si, s in enumerate(series) if s.get("code") in _INLINE_LABEL_CODES}
+    offset = {si: (inline_off if si in inline else -10.0) for si in range(len(series))}
     group = sorted((v, si) for v, si in avgs if si != bottom_idx)
     prev_label_py = None
     for avg_v, si in group:
         avg_py = y(avg_v)
-        ly = avg_py - 10
+        ly = avg_py + offset[si]
         if prev_label_py is not None and ly > prev_label_py - label_h:
             ly = prev_label_py - label_h
         offset[si] = ly - avg_py
@@ -267,6 +276,8 @@ def _line_chart_svg(title: str, chart: dict, label_below_lowest: bool = False) -
     # in the line right at the data point instead of the line running
     # straight up to (and visually fusing with) the marker's edge.
     for si, s in enumerate(series):
+        if si in inline:
+            continue
         color = _SERIES_COLORS[si % len(_SERIES_COLORS)]
         for i, v in enumerate(s["values"]):
             if v is None:
