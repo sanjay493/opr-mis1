@@ -161,6 +161,12 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
+const HOURS_SOURCE = { override: ' (entered)', text: ' (from cause text)', span: '' };
+
+function fmtHours(h) {
+  return h >= 48 ? `${Math.round(h / 24 * 10) / 10} days` : `${Math.round(h * 10) / 10} h`;
+}
+
 function unitLabel(ev) {
   if (!ev.sms_subtag) return ev.unit_name;
   return `${ev.unit_name} (${ev.sms_subtag.charAt(0)}${ev.sms_subtag.slice(1).toLowerCase()})`;
@@ -189,8 +195,16 @@ function crispEventText(ev) {
     return `${unit} under CR for ${detail} — not started`;
   }
   const detail = ev.cause_text || 'breakdown';
-  if (ev.days_this_month) {
-    return `${unit} under BD for ${detail} — ${ev.days_this_month} day(s)`;
+  if (ev.hours_this_month) {
+    const hrs = `${fmtHours(ev.hours_this_month)}${HOURS_SOURCE[ev.hours_source] || ''}`;
+    if (ev.unquantified) {
+      return `${unit} — ${detail} — whole-shop slowdown over ${ev.days_this_month} day(s) with no hours lost entered; not counted (enter Hours lost on the Breakdown page)`;
+    }
+    if (ev.duplicate_of_cr) return `${unit} — ${detail} — same outage as its Capital Repair row; counted there`;
+    if (ev.planned_shutdown) return `${unit} — ${detail} — planned shutdown (${hrs}), allowed for in the ABP — no loss`;
+    const part = ev.partial ? ` (${ev.partial} — ${ev.partial === 'one strand' ? '½' : '⅓'} of the mill)` : '';
+    const instead = ev.planned_days_in_text ? `; first ${ev.planned_days_in_text} days were planned` : '';
+    return `${unit} under BD for ${detail} — ${hrs} down${part}, ${fmt(ev.capacity_out_t)} T capacity out${instead}`;
   }
   return `${unit} under BD for ${detail} — ${ev.is_ongoing ? 'ongoing' : 'no overlap with this period'}`;
 }
@@ -206,6 +220,8 @@ function crispEventText(ev) {
 // window) is dropped and only counted.
 function eventCategory(ev, lossThisMonth) {
   if (lossThisMonth) return 'relevant';
+  if (ev.source === 'bd' && ev.unquantified) return 'planned';     // amber: needs hours entered
+  if (ev.source === 'bd' && ev.hours_this_month) return 'context';
   // Only CR rows for a unit that can affect this item get the planned /
   // context treatment — a Blast Furnace CR is noise in a Finished Steel run.
   if (ev.source === 'cr' && ev.cause_relevant) {
@@ -216,7 +232,8 @@ function eventCategory(ev, lossThisMonth) {
 }
 
 function dedupeEvents(monthly) {
-  const lossOf = ev => (ev.source === 'cr' ? !!ev.overrun_days_this_month : !!ev.days_this_month);
+  const lossOf = ev => (ev.source === 'cr' ? !!ev.overrun_days_this_month
+    : !!ev.hours_this_month && !ev.unquantified && !ev.duplicate_of_cr && !ev.planned_shutdown);
 
   // Keys that land a 'relevant' or 'planned' row somewhere — so a weaker
   // ('context'/'none') month-iteration of the same event is suppressed.
@@ -453,6 +470,8 @@ function ProductionLossAnalysisInner() {
       plan: sum(reported, 'plan'), actual: sum(reported, 'actual'),
       cr_overrun_loss_t: sum(reported, 'cr_overrun_loss_t'), breakdown_loss_t: sum(reported, 'breakdown_loss_t'),
       residual_t: sum(reported, 'residual_t'),
+      capacity_out_t: reported.reduce((t, m) => t + (m.capacity?.capacity_out_t || 0), 0),
+      absorbed_t: reported.reduce((t, m) => t + (m.capacity?.absorbed_t || 0), 0),
       reportedCount: reported.length, totalCount: all.length,
     };
   }, [report]);
@@ -479,10 +498,29 @@ function ProductionLossAnalysisInner() {
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
             Hot Metal / Crude Steel / Finished Steel vs. ABP, with the Capital Repair overrun and Breakdown
-            events that explain a shortfall. The ABP already accounts for on-schedule Capital Repair — only
-            the days a repair runs <em>beyond</em> its planned schedule count here, alongside the full span
-            of any breakdown.
+            events that explain a shortfall. A unit going down only costs production when the rest of the
+            plant can&apos;t cover the target — spare capacity absorbs the rest.
           </span>
+          <details style={{ marginTop: 8, fontSize: 12.5, color: '#5f6368', lineHeight: 1.55 }}>
+            <summary style={{ cursor: 'pointer', color: '#1a73e8', fontWeight: 600 }}>How the loss is worked out</summary>
+            <ul style={{ margin: '6px 0 0', paddingLeft: 20, maxWidth: 1100 }}>
+              <li><b>Stage capacity</b> (BFs for Hot Metal, SMS for Crude Steel, Mills for Finished Steel) = the higher of the
+                rated capacity and the plant&apos;s best month in the last 3 years, per day. It is split between units in
+                proportion to each unit&apos;s best-ever day.</li>
+              <li><b>Capacity out</b> = unit capacity × hours down. Hours come from <i>Hours lost</i> on the breakdown (how a
+                partial / restricted-regime outage is entered), else the start–end time, else “3 hrs” in the cause text.
+                One unit is never counted down more than 24 h a day.</li>
+              <li><b>Planned downtime is not loss</b>: an on-schedule Capital Repair, or a breakdown row marked “Planned”, is
+                already in the ABP — it only reduces the capacity available. A CR counts as loss only for the days it
+                runs past its planned days.</li>
+              <li><b>Spare units</b>: converters run 3 installed / 2 blowing, so one converter down costs nothing; one
+                reheating furnace (⅓ of the mill) or one strand (½) out doesn&apos;t stop a mill.</li>
+              <li><b>Loss</b> = the part of the capacity out that the month&apos;s headroom (capacity − target) couldn&apos;t absorb —
+                spare capacity on other days can make it up. For Crude Steel both the SMS and the BFs (via hot metal)
+                limit it.</li>
+              <li><b>Never more than the shortfall</b>: the explained loss is capped at Plan − Actual; nothing when the target was met.</li>
+            </ul>
+          </details>
         </div>
 
         <div style={{ ...S.card, display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 18 }}>
@@ -556,6 +594,10 @@ function ProductionLossAnalysisInner() {
               <StatTile label="CR Overrun Loss" value={totals.cr_overrun_loss_t} color={C.crOverrun} />
               <StatTile label="Breakdown Loss" value={totals.breakdown_loss_t} color={C.breakdown} />
               <StatTile label="Residual — net, unexplained" value={totals.residual_t} color="#6b6a64" />
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+              <StatTile label="Capacity out — CR overrun + breakdowns" value={totals.capacity_out_t} color="#5f6368" />
+              <StatTile label="Absorbed by spare capacity" value={totals.absorbed_t} color="#188038" />
             </div>
             <div style={{ fontSize: 11.5, color: '#9aa0a6', marginTop: -10, marginBottom: 18 }}>
               Shortfall vs Plan = CR Overrun Loss + Breakdown Loss + Residual. Residual is a{' '}

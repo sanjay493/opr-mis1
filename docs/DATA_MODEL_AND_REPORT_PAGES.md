@@ -131,17 +131,17 @@ already clubbed the same way into `/reports/techno` (its own tab pattern, see
 | `records-matrix` | `/reports/highlights-records` | `page_records.py` (`/api/records`) | `production_table` |
 | `pmix-fy` | `/reports/external` | `page_pmix_fy_report.py` | `production_table` |
 | `production-fy`, `production-query`; `major-production` (own tab) | `/reports/production-analysis`; `/reports/highlights-records` | `page_production_fy_export.py`, `page_production_query_export.py` | `production_table`, `production_plan_table` |
-| `special-steel-fy` | `/reports/production-analysis` | `page_special_steel_fy_export.py` | `special_steel_orders` |
+| `special-steel-fy` | `/reports/special-steel-ipt` | `page_special_steel_fy_export.py` | `special_steel_orders` |
 | `reports/techno-custom`, `reports/techno-verification`, `reports/techno-monthly`, `reports/techno-dashboard` | `/reports/techno` (clubbed separately, see above) | `page_techno_custom_export.py`, `page_techno_verification_export.py`, `page_techno.py` | `techno_data`, `techno_plan_fy` |
-| `bf-benchmark` | `/reports/production-analysis` | `api_bf_benchmark.py`, `page_bf_benchmark_export.py` | `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `techno_data` |
-| `production-loss-analysis` | `/reports/production-analysis` | `production_loss_analysis.py`, `api_production_loss.py` | `production_table`, `production_plan_table`, `capital_repair_table`, `breakdown_table` |
-| `capital-repair-calendar` | `/reports/production-analysis` | `page_capital_repair.py:generate_capital_repair_calendar` (`/api/capital-repair-calendar…`), `page_capital_repair_calendar_export.py` | `capital_repair_table` |
-| `breakdown-analysis` | `/reports/production-analysis` | frontend-only (recharts); client-side aggregation over `GET /api/breakdown` (`api_breakdown.py`) | `breakdown_table` |
-| `ipt-fy` | `/reports/production-analysis` | `page_ipt.py` | `ipt_table` |
+| `bf-benchmark` | `/reports/special-steel-ipt` | `api_bf_benchmark.py`, `page_bf_benchmark_export.py` | `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `techno_data` |
+| `production-loss-analysis` | `/reports/loss-breakdown` | `production_loss_analysis.py`, `api_production_loss.py` | `production_table`, `production_plan_table`, `capital_repair_table`, `breakdown_table`, `item_capacity_table`, `major_unit_daily_record` (capacities for the headroom model) |
+| `capital-repair-calendar` | `/reports/loss-breakdown` | `page_capital_repair.py:generate_capital_repair_calendar` (`/api/capital-repair-calendar…`), `page_capital_repair_calendar_export.py` | `capital_repair_table` |
+| `breakdown-analysis` | `/reports/loss-breakdown` | frontend-only (recharts); client-side aggregation over `GET /api/breakdown` (`api_breakdown.py`) | `breakdown_table` |
+| `ipt-fy` | `/reports/special-steel-ipt` | `page_ipt.py` | `ipt_table` |
 | `new-facilities` | `/reports/external` | (frontend-only / static) | — |
 | `highlights` | `/reports/highlights-records` | frontend-only | — |
 | `special-steel-physical` | `/reports/production-analysis` | `page_special_steel_physical.py` | `special_steel_phys_perf`, `special_steel_phys_meta`, `special_steel_phys_note` |
-| `iron-ore-mines` | `/reports/production-analysis` | `page_sail_mines.py` (mine-level) | `mines_production_monthly`, `mines_despatch_*`, `mines_booked_qty_*` |
+| `iron-ore-mines` | `/reports/mines` | `page_sail_mines.py` (mine-level) | `mines_production_monthly`, `mines_despatch_*`, `mines_booked_qty_*` |
 | `sefi`, `steel-bulletin` | `/reports/external` | frontend-only | `production_table` |
 
 ---
@@ -293,7 +293,7 @@ and `frontend/.../cost-trend/page.js:PRODUCTS` list all five.
 
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
-| `capital_repair_table` | annual CR plan rows per plant/FY (`shop`, `equipment`, `activity`, `schedule_days`, `period`, `actual` free-text) + structured cols (`unit_type`, `unit_name`, `actual_start/end`, `planned_days`) | `data-entry/capital-repair/page.js` → `/api/capital-repair-entry`; plan pre-seeded from `Report_format/CR.pdf`; `actual` display string built by `main.py:format_cr_actual` | `page_capital_repair.py` (CR pages 36–40); `production_loss_analysis.py`; `page_capital_repair.py:generate_capital_repair_calendar` (`reports/production-analysis?tab=capital-repair-calendar`, Plan-vs-Actual Gantt calendar) |
+| `capital_repair_table` | annual CR plan rows per plant/FY (`shop`, `equipment`, `activity`, `schedule_days`, `period`, `actual` free-text) + structured cols (`unit_type`, `unit_name`, `actual_start/end`, `planned_days`) | `data-entry/capital-repair/page.js` → `/api/capital-repair-entry`; plan pre-seeded from `Report_format/CR.pdf`; `actual` display string built by `main.py:format_cr_actual` | `page_capital_repair.py` (CR pages 36–40); `production_loss_analysis.py`; `page_capital_repair.py:generate_capital_repair_calendar` (`reports/loss-breakdown?tab=capital-repair-calendar`, Plan-vs-Actual Gantt calendar) |
 | `breakdown_table` | ad-hoc unplanned-downtime events (`plant`, `unit_type`, `unit_name`, `start_ts`, `end_ts`, `is_ongoing`, `cause`, `hours_lost_override`) | `data-entry/breakdown/page.js` → `/api/breakdown` (`api_breakdown.py`, full CRUD) | `production_loss_analysis.py` (explains HM/CS/FS shortfall vs ABP); `components/reports/breakdown-analysis/View.js` (read-only cross-plant filter/sort/charts, client-side over `GET /api/breakdown`) |
 
 ### 4.10 Annual capacity
@@ -310,7 +310,7 @@ mid-FY change history (`db.get_effective_capacity` = latest row ≤ month).
 `(report_month, item, from_plant, to_plant)` → `plan`, `actual`, `unit` (`Rake`/`T`),
 `plan_tonnage`, `actual_tonnage`, `sort_order`.
 - **Populated by:** `data-entry/ipt/page.js` → `/api/ipt-entry`, `/api/ipt-entries/bulk`, `/api/ipt-delete`.
-- **Read by:** `page_ipt.py` (page 26), `reports/production-analysis?tab=ipt-fy`.
+- **Read by:** `page_ipt.py` (page 26), `reports/special-steel-ipt?tab=ipt-fy`.
 
 ### 4.12 Narrative
 
@@ -324,7 +324,7 @@ mid-FY change history (`db.get_effective_capacity` = latest row ≤ month).
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
 | `bf_benchmark_sail_meta` | `(plant, unit)` → `working_volume_m3` (SAIL's 3 large BFs) | `frontend/src/components/entry/bf-benchmark/Form.js` → `PATCH /api/bf-benchmark/sail-meta` | `api_bf_benchmark.py`, `page_bf_large_annexure.py` |
-| `bf_benchmark_external_bf` | non-SAIL BF registry (`name`, `company`, `location`, `working_volume_m3`, `active`) | `frontend/src/components/entry/bf-benchmark/Form.js` → `POST/PATCH /api/bf-benchmark/external-bfs` | `api_bf_benchmark.py`, `reports/production-analysis?tab=bf-benchmark` |
+| `bf_benchmark_external_bf` | non-SAIL BF registry (`name`, `company`, `location`, `working_volume_m3`, `active`) | `frontend/src/components/entry/bf-benchmark/Form.js` → `POST/PATCH /api/bf-benchmark/external-bfs` | `api_bf_benchmark.py`, `reports/special-steel-ipt?tab=bf-benchmark` |
 | `bf_benchmark_external_data` | `(external_bf_id, report_month)` → `param_json` (`report_month` holds an **FY label** here, e.g. `2025-26`) | same page → `POST /api/bf-benchmark/external-bfs/{id}/entry` | `api_bf_benchmark.py` |
 
 Benchmark param registry: `backend/bf_benchmark_registry.py` (`BF_BENCHMARK_PARAMS`,
