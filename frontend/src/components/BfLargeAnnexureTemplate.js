@@ -19,6 +19,10 @@ const KIND_BG = {
   agg: '#eff6ff',
 };
 
+// Plant sub-header + data cells: quarter/half columns look like month
+// columns (only their period header keeps the agg tint).
+const SUB_BG = { ...KIND_BG, agg: undefined };
+
 const CELL = { padding: '1.5px 4px', border: '1px solid #94a3b8', lineHeight: 1.1 };
 const NUM = { ...CELL, textAlign: 'right' };
 const LBL = { ...CELL, textAlign: 'left', fontWeight: 600 };
@@ -55,7 +59,7 @@ export default function BfLargeAnnexureTemplate({ data }) {
             </tr>
             <tr>
               {periods.map((p) => sail_cols.map((bf) => (
-                <th key={`${p.key}-${bf.label}`} style={{ ...TH, lineHeight: 1.15, backgroundColor: KIND_BG[p.kind] }}>
+                <th key={`${p.key}-${bf.label}`} style={{ ...TH, lineHeight: 1.15, backgroundColor: SUB_BG[p.kind] }}>
                   {bf.plant}<br />{bf.unit}
                 </th>
               )))}
@@ -70,7 +74,7 @@ export default function BfLargeAnnexureTemplate({ data }) {
                   <td style={{ ...CELL, textAlign: 'center', fontStyle: 'italic', color: '#475569', backgroundColor: zebra }}>{row.unit}</td>
                   {periods.map((p) => sail_cols.map((bf) => {
                     const v = row.sail?.[bf.label]?.[p.key];
-                    const tint = KIND_BG[p.kind];
+                    const tint = SUB_BG[p.kind];
                     return (
                       <td key={`${p.key}-${bf.label}`} style={{ ...NUM, backgroundColor: tint ? `${tint}66` : zebra }}>
                         {v !== null && v !== undefined ? v : '—'}
