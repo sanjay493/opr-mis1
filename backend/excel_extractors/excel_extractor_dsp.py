@@ -59,6 +59,43 @@ def extract_and_save_excel(file_path: str, report_month: str = "", source_file_n
 # Extractor — DSP MCR-I (tab-separated text file, month-end daily report)
 # ---------------------------------------------------------------------------
 
+# Despatch items: (row label in the MCR-I "Despatch" table, production_table
+# item, legacy fixed row). Found by label inside the FIRST "Despatch" table
+# rather than by fixed row: current MCR-I files repeat the whole production
+# block (rows 41-77) before the Despatch table (row 78+), so the old fixed
+# rows 43/44/46 landed on RMHP Tippling / Blend Mix / B.Mix-Blender. The
+# fixed row is only a fallback for a file with no "Despatch" header.
+_MCR_DESPATCH_ITEMS = [
+    ("cc billets",           "BILLET for Sale",          43),
+    ("cc blooms/bcb",        "Blooms for Sale ",         44),
+    ("cc bloom/brc",         "BRC",                      46),
+    ("plant saleable steel", "Saleable Steel Despatch",  None),
+]
+
+
+def _mcr_despatch_specs(lines, col_e: int) -> list:
+    """[(row_1based, col_0based, item_name)] for the despatch items — see
+    _MCR_DESPATCH_ITEMS. The first Despatch table ends at its own
+    "Plant Saleable steel" row (a second, cumulative table follows)."""
+    labels = [(ln[0].strip().lower() if ln else "") for ln in lines]
+    start = next((i for i, lab in enumerate(labels) if lab == "despatch"), None)
+    specs = []
+    for label, item, legacy_row in _MCR_DESPATCH_ITEMS:
+        row = None
+        if start is not None:
+            for i in range(start + 1, len(labels)):
+                if labels[i] == label:
+                    row = i + 1
+                    break
+                if labels[i] == "plant saleable steel":
+                    break
+        if row is None and start is None:
+            row = legacy_row
+        if row is not None:
+            specs.append((row, col_e, item))
+    return specs
+
+
 def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int = 0) -> bool:
     """
     Extracts cumulative production data from DSP MCR-I report (tab-separated text).
@@ -95,9 +132,9 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
       Row 38: Saleable Semis       — tonnes → /1000
       Row 39: Finished Steel       — tonnes → /1000
       Row 40: Saleable Steel       — tonnes → /1000
-      Row 43: BILLET for Sale      — tonnes → /1000 (CC Billets despatch)
-      Row 44: Blooms for Sale      — tonnes → /1000 (CC Blooms/BCB despatch)
-      Row 46: BRC                  — tonnes → /1000 (CC Bloom/BRC despatch)
+      Despatch table (found by label, see _MCR_DESPATCH_ITEMS) — tonnes → /1000:
+        CC Billets → BILLET for Sale, CC Blooms/BCB → Blooms for Sale,
+        CC Bloom/BRC → BRC, Plant Saleable steel → Saleable Steel Despatch
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
@@ -161,10 +198,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
         (38, COL_E, "Saleable Semis"),
         (39, COL_E, "Finished Steel"),
         (40, COL_E, "Saleable Steel"),
-        (43, COL_E, "BILLET for Sale"),        # CC Billets despatch
-        (44, COL_E, "Blooms for Sale "),       # CC Blooms/BCB despatch
-        (46, COL_E, "BRC"),                    # CC Bloom/BRC despatch
-    ]
+    ] + _mcr_despatch_specs(lines, COL_E)      # CC Billets / Blooms/BCB / Bloom/BRC / Plant Saleable steel despatch
 
     conn = db.connect()
     cursor = conn.cursor()
@@ -262,10 +296,7 @@ def _mcr_preview(file_path: str, report_month: str, column_shift: int = 0) -> di
         (38, COL_E, "Saleable Semis"),
         (39, COL_E, "Finished Steel"),
         (40, COL_E, "Saleable Steel"),
-        (43, COL_E, "BILLET for Sale"),
-        (44, COL_E, "Blooms for Sale "),
-        (46, COL_E, "BRC"),
-    ]
+    ] + _mcr_despatch_specs(lines, COL_E)
 
     rows = []
     for row, col, item_name in row_specs:

@@ -59,6 +59,7 @@ _ITEM_ROWS = [
     ("BILLET for Sale",        "cc billets", "despatch", "monthly_rate"),
     ("Blooms for Sale ",       "cc blooms/bcb", "despatch", "monthly_rate"),
     ("BRC",                    "cc bloom/brc", "despatch", "monthly_rate"),
+    ("Saleable Steel Despatch", "plant saleable steel", "despatch", "monthly_rate"),
 ]
 
 _NUMERIC_RE = re.compile(r'^-?\d+(\.\d+)?a?$')
