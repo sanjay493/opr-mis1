@@ -22,7 +22,7 @@ _DEFAULTS: Dict[str, str] = {
     "highlight_target_band_bg":    "#fef9c3",
     "highlight_achieved_band_bg":  "#dcfce7",
     "highlight_shortfall_band_bg": "#fed7aa",
-    "highlight_info_band_bg":      "#e0f2fe",
+    "highlight_info_band_bg":      "#f0f9ff",
     "highlight_agg_sail_bg":       "#bbf7d0",
     "highlight_agg_5plants_bg":    "#fef08a",
     "highlight_qtr_col_bg":        "#dce8fa",

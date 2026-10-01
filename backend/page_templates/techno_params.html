@@ -148,7 +148,14 @@
                  doesn't read as another "Norm" highlight - reusing an
                  already-validated palette color instead of a new one. #}
               {% set _bold_bg = colors.highlight_info_band_bg if page.group == 'IRON_MAKING' else colors.highlight_bold_row_bg %}
-              {% set _row_bg = ('background:' ~ colors.highlight_achieved_band_bg ~ ';') if _sail else (('background:' ~ _bold_bg ~ ';') if row.bold else '') %}
+              {# Page 27's SAIL row uses the same light-blue info-band token
+                 as Iron Making's plant-shop rows (was light-green
+                 highlight_achieved_band_bg) - per direct instruction. Scoped
+                 to group MAJOR only so SAIL rows elsewhere (pages 28-30/34,
+                 where one can appear via a manually-entered techno_data SAIL
+                 value) keep their existing green. #}
+              {% set _sail_bg = colors.highlight_info_band_bg if page.group == 'MAJOR' else colors.highlight_achieved_band_bg %}
+              {% set _row_bg = ('background:' ~ _sail_bg ~ ';') if _sail else (('background:' ~ _bold_bg ~ ';') if row.bold else '') %}
               {# Page 27's SAIL row and Iron Making's plant-total rows get a
                  rust-brown accent instead of plain black-on-tint, matching
                  the same color already used for the trend section's Plan
