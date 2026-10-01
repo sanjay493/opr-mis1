@@ -56,13 +56,17 @@
   "techno_cat_environment_bg": "#cdf0ea",
   "techno_cat_blend_bg":       "#e5e0f5",
 
-  "_doc_techno_tep": "Techno-economic parameter tables, pages 27-35 (techno_params.html): 'Steel & Amber' print-economical palette. Header unfilled (set off by a heavier rule below it); warmth only on the Target/Norm column and the SAIL / plant-total rows, neutral steel-grey on the reporting-month and cumulative columns. Own tokens so the shared highlight_* colors other pages use are unaffected.",
+  "_doc_techno_tep": "Techno-economic parameter tables, pages 27-35 - current set 'SAIL Blue' (corporate blue actuals, saffron Target) (techno_params.html: Plant Wise Major TEPs through Mill Wise TEPs). One bg + text pair per highlight, applied identically on every page where that element appears: Target/Norm column, report-month column, Apr-to-report-month cumulative column, and the total rows (page 27 SAIL row, Iron Making plant rows, other bold plant-total rows). Header cells of a highlighted column use the same pair. Where a total row crosses a highlighted column, the column's pair wins so the column band stays unbroken. Kept light (print-economical); each text color is a dark shade of its own bg hue for contrast. Own tokens so the shared highlight_* colors other pages use are unaffected.",
 
   "techno_tep_header_text":     "#1f2937",
-  "techno_tep_target_bg":       "#fff7e3",
-  "techno_tep_report_col_bg":   "#f4f5f7",
-  "techno_tep_total_row_bg":    "#fcf1e8",
-  "techno_tep_total_row_text":  "#9a3412",
+  "techno_tep_target_bg":       "#fff4e5",
+  "techno_tep_target_text":     "#7a3e00",
+  "techno_tep_month_bg":        "#e5f0fa",
+  "techno_tep_month_text":      "#003a70",
+  "techno_tep_cum_bg":          "#f0f6fc",
+  "techno_tep_cum_text":        "#003a70",
+  "techno_tep_total_row_bg":    "#dcebf7",
+  "techno_tep_total_row_text":  "#002b55",
 
   "_doc_borders": "Border colors used across every table's cell/rule lines.",
 

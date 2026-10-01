@@ -31,10 +31,14 @@ _DEFAULTS: Dict[str, str] = {
     "highlight_plant_label_bg":    "#d1d5db",
 
     "techno_tep_header_text":      "#1f2937",
-    "techno_tep_target_bg":        "#fff7e3",
-    "techno_tep_report_col_bg":    "#f4f5f7",
-    "techno_tep_total_row_bg":     "#fcf1e8",
-    "techno_tep_total_row_text":   "#9a3412",
+    "techno_tep_target_bg":        "#fff4e5",
+    "techno_tep_target_text":      "#7a3e00",
+    "techno_tep_month_bg":         "#e5f0fa",
+    "techno_tep_month_text":       "#003a70",
+    "techno_tep_cum_bg":           "#f0f6fc",
+    "techno_tep_cum_text":         "#003a70",
+    "techno_tep_total_row_bg":     "#dcebf7",
+    "techno_tep_total_row_text":   "#002b55",
 
     "plant_color_bsp":  "#a9c5ec",
     "plant_color_dsp":  "#f1d0a1",
