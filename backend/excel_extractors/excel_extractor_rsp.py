@@ -709,6 +709,8 @@ MORNING_CELLS = {
     "SW Pipes":             ("E266", "D266"),
     "Saleable Steel":       ("E268", "D268"),
     "Finished Steel":       ("E268", "D268"),
+    # "LOADING" table, TOTAL row: H = CUM total (prime + IDA), I = M.RATE.
+    "Saleable Steel Despatch": ("I285", "H285"),
 }
 
 
