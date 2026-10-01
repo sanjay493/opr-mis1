@@ -104,6 +104,7 @@ def _morning_report_config():
         "Saleable 150 Billets": "E37",
         "200 Blooms":           "E38",
         "Saleable Steel":       "E39",
+        "Saleable Steel Despatch": "E46",   # " TOTAL S.STEEL DESPATCH"
     })
     derived = cfg.get("derived", [
         {"item": "Pig Iron",       "op": "add", "cells": ["E18", "E20"]},
@@ -138,6 +139,7 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
       E38:      200 Blooms          — tonnes → /1000
       E37+E38:  Saleable Semis      — derived sum, tonnes → /1000
       E39:      Saleable Steel      — tonnes → /1000
+      E46:      Saleable Steel Despatch (" TOTAL S.STEEL DESPATCH") — tonnes → /1000
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
