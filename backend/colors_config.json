@@ -56,6 +56,14 @@
   "techno_cat_environment_bg": "#cdf0ea",
   "techno_cat_blend_bg":       "#e5e0f5",
 
+  "_doc_techno_tep": "Techno-economic parameter tables, pages 27-35 (techno_params.html): 'Steel & Amber' print-economical palette. Header unfilled (set off by a heavier rule below it); warmth only on the Target/Norm column and the SAIL / plant-total rows, neutral steel-grey on the reporting-month and cumulative columns. Own tokens so the shared highlight_* colors other pages use are unaffected.",
+
+  "techno_tep_header_text":     "#1f2937",
+  "techno_tep_target_bg":       "#fff7e3",
+  "techno_tep_report_col_bg":   "#f4f5f7",
+  "techno_tep_total_row_bg":    "#fcf1e8",
+  "techno_tep_total_row_text":  "#9a3412",
+
   "_doc_borders": "Border colors used across every table's cell/rule lines.",
 
   "border_light":     "#cbd5e1",

@@ -30,6 +30,12 @@ _DEFAULTS: Dict[str, str] = {
     "highlight_total_col_bg":      "#eae1f5",
     "highlight_plant_label_bg":    "#d1d5db",
 
+    "techno_tep_header_text":      "#1f2937",
+    "techno_tep_target_bg":        "#fff7e3",
+    "techno_tep_report_col_bg":    "#f4f5f7",
+    "techno_tep_total_row_bg":     "#fcf1e8",
+    "techno_tep_total_row_text":   "#9a3412",
+
     "plant_color_bsp":  "#a9c5ec",
     "plant_color_dsp":  "#f1d0a1",
     "plant_color_rsp":  "#cbb5e6",

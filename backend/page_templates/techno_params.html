@@ -82,7 +82,10 @@
               <col/><col/>
               {% endif %}
             </colgroup>
-            <thead>
+            {# Steel & Amber palette (2026-10-01): header left unfilled to save
+               ink; a 1.5px rule on the thead row-group (honoured by
+               border-collapse) separates it from the body instead. #}
+            <thead style="color:{{ colors.techno_tep_header_text }};border-bottom:1.5px solid {{ colors.border_black }};">
               <tr>
                 {% if _is_major %}
                 <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};text-align:left;">Parameters</th>
@@ -99,10 +102,10 @@
                    carries its own "Actual" line, which was forcing that
                    header row to 2 lines' height for one column. #}
                 {% set _tgt_fy = page.target_label | replace('Target', '') | replace(' ', '') %}
-                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};background:{{ colors.highlight_target_band_bg }};white-space:nowrap;">Target<br/>{{ _tgt_fy }}</th>
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};background:{{ colors.techno_tep_target_bg }};white-space:nowrap;">Target<br/>{{ _tgt_fy }}</th>
                 <th colspan="{{ (page.month_labels | length) + 3 }}" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
                 {% else %}
-                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};background:{{ colors.highlight_target_band_bg }};">{{ page.target_label }}</th>
+                <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};background:{{ colors.techno_tep_target_bg }};">{{ page.target_label }}</th>
                 <th colspan="{{ page.month_labels | length }}" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
                 <th rowspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.cply_label }}<br/>Actual</th>
                 <th colspan="2" style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">Actual</th>
@@ -114,7 +117,7 @@
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};">{{ page.fy1_label }}</th>
                 {# Report month (last YTD month) and its A-<month> cumulative
                    column share one tint so the current period stands out. #}
-                {% set _rep_bg = 'background:' ~ colors.highlight_total_col_bg ~ ';' %}
+                {% set _rep_bg = 'background:' ~ colors.techno_tep_report_col_bg ~ ';' %}
                 {% for m in page.month_labels %}
                 <th style="padding:{{ _th_pad }};border:1px solid {{ colors.border_black }};{% if loop.last %}{{ _rep_bg }}{% endif %}">{{ m }}</th>
                 {% endfor %}
@@ -142,32 +145,14 @@
               {% set _bb = ('border-bottom:1px solid ' ~ colors.border_black ~ ';') if loop.last  else '' %}
               {% set _box = ('border-top:1px solid ' ~ colors.border_black ~ ';border-bottom:1px solid ' ~ colors.border_black ~ ';font-weight:700;') if _bold_row else (_bt ~ _bb) %}
               {% set _td = _v ~ _box %}
-              {# Iron Making's plant-shop rows get their own light-blue
-                 info-band token, kept distinct from the Target/Norm column's
-                 light-yellow (highlight_target_band_bg) so a plant total row
-                 doesn't read as another "Norm" highlight - reusing an
-                 already-validated palette color instead of a new one. #}
-              {% set _bold_bg = colors.highlight_info_band_bg if page.group == 'IRON_MAKING' else colors.highlight_bold_row_bg %}
-              {# Page 27's SAIL row uses the same light-blue info-band token
-                 as Iron Making's plant-shop rows (was light-green
-                 highlight_achieved_band_bg) - per direct instruction. Scoped
-                 to group MAJOR only so SAIL rows elsewhere (pages 28-30/34,
-                 where one can appear via a manually-entered techno_data SAIL
-                 value) keep their existing green. #}
-              {% set _sail_bg = colors.highlight_info_band_bg if page.group == 'MAJOR' else colors.highlight_achieved_band_bg %}
-              {% set _row_bg = ('background:' ~ _sail_bg ~ ';') if _sail else (('background:' ~ _bold_bg ~ ';') if row.bold else '') %}
-              {# Page 27's SAIL row and Iron Making's plant-total rows get a
-                 rust-brown accent instead of plain black-on-tint, matching
-                 the same color already used for the trend section's Plan
-                 row (production_trend.css) - a bold row reading as plain
-                 black on a light tint looked like an unstyled default next
-                 to the report's other emphasis rows, per direct
-                 instruction, 2026-09-19. Pages 28/30's own row.bold tint
-                 (highlight_bold_row_bg) is untouched - not in scope. Set on
-                 the <tr> (color inherits down to every <td>, none of which
-                 sets its own color) rather than repeated per cell. #}
-              {% set _accent_row = _sail or (row.bold and page.group == 'IRON_MAKING') %}
-              {% set _row_color = ('color:' ~ colors.text_rust_brown ~ ';') if _accent_row else '' %}
+              {# Steel & Amber palette (2026-10-01), every techno page: the SAIL
+                 row and every bold plant-total row share one light-amber
+                 band with dark-rust text (techno_tep_total_row_*), replacing
+                 the earlier mix of light-blue / green / grey-blue tints and
+                 the IRON_MAKING / MAJOR-only rust accent. Set on the <tr>
+                 (color inherits to every <td>, none sets its own). #}
+              {% set _row_bg = ('background:' ~ colors.techno_tep_total_row_bg ~ ';') if _bold_row else '' %}
+              {% set _row_color = ('color:' ~ colors.techno_tep_total_row_text ~ ';') if _bold_row else '' %}
               <tr style="{{ _row_bg }}{{ _row_color }}">
                 {% if loop.first %}
                 {% if _is_major %}
@@ -196,8 +181,8 @@
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy3 }}</td>
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy2 }}</td>
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;">{{ row.fy1 }}</td>
-                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;background:{{ colors.highlight_target_band_bg }};">{{ row.target }}</td>
-                {% set _rep_bg = 'background:' ~ colors.highlight_total_col_bg ~ ';' %}
+                <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;background:{{ colors.techno_tep_target_bg }};">{{ row.target }}</td>
+                {% set _rep_bg = 'background:' ~ colors.techno_tep_report_col_bg ~ ';' %}
                 {% for v in row.months %}
                 <td style="padding:{{ _td_pad }};{{ _td }}text-align:center;{% if loop.last %}{{ _rep_bg }}{% endif %}">{{ v }}</td>
                 {% endfor %}
