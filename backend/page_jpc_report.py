@@ -182,14 +182,19 @@ _BSP_ITEMS = [
     ("Plates",                "BSP", "PLATEMILL"),
     ("BBM Blooms",            "BSP", None),   # permanent blank placeholder — see note above
     ("BBM Billets",           "BSP", None),   # permanent blank placeholder — see note above
-    ("CC Billets",            "BSP", "CC BILLET"),
-    ("CC bloom",              "BSP", "CC BLOOM"),
-    ("CC slab",               "BSP", "CC SLAB"),
+    # CC BILLET/BLOOM/SLAB (direct-extractor naming) vs SEMIS BilletS/BLOOM/
+    # SLABS (the name main.py's normalize_item_name folds BSP's semis-
+    # breakdown onto for anything saved via the confirm-extraction path) —
+    # see the chat response this came from. Check both so a month isn't
+    # blank just because its upload went through confirm-extraction.
+    ("CC Billets",            "BSP", ("CC BILLET", "SEMIS BilletS")),
+    ("CC bloom",              "BSP", ("CC BLOOM", "SEMIS BLOOM")),
+    ("CC slab",               "BSP", ("CC SLAB", "SEMIS SLABS")),
     ("Semis Total",           "BSP", "Saleable Semis"),
     ("Saleable Steel",        "BSP", "Saleable Steel"),
 ]
 _DSP_ITEMS = [
-    ("Med Structurals (SM)",  "DSP", None),   # DB only has the combined MSM figure
+    ("Med Structurals (SM)",  "DSP", "SM"),   # Section Mill — see page_segment_wise.py's Med.Structurals = MSM+SM
     ("Med Structurals (MSM)", "DSP", "MSM"),
     ("Round & bars (MM)",     "DSP", "MM"),
     ("Wheel & Axle",          "DSP", "WAP"),
@@ -260,7 +265,7 @@ _SAIL_ROLLUP = [
     ("Round & Bars",      [("BSP", "TMT BARS(MM)"), ("BSP", "BARS&RODMILL"),
                             ("DSP", "MM"), ("ISP", "BARMILL")]),
     ("Lt. Structurals",   [("BSP", "LT STRS(MM)")]),
-    ("Med. Structurals",  [("DSP", "MSM")]),
+    ("Med. Structurals",  [("DSP", "MSM"), ("DSP", "SM")]),
     ("Hy. Structurals",   [("ISP", "USMILL")]),
     ("Rail",              [("BSP", "RSM_RAIL"), ("BSP", "URM_RAIL")]),
     ("Wheel & Axle",      [("DSP", "WAP")]),
@@ -298,7 +303,11 @@ def compute_pmix_rows(cur, month):
     for plant, items in _PLANT_BLOCKS:
         header(plant)
         for label, plant_code, item in items:
-            data(label, _one(cur, plant_code, item, month), bold=label.lower().startswith("saleable"))
+            if isinstance(item, tuple):
+                value = _one_of(cur, plant_code, item, month)
+            else:
+                value = _one(cur, plant_code, item, month)
+            data(label, value, bold=label.lower().startswith("saleable"))
 
     header("SAIL")
     for label, combos in _SAIL_ROLLUP:
