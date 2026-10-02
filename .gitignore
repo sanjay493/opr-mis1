@@ -8,6 +8,7 @@ backend/venv/
 
 # Report formats and DB backups (local only, not for git)
 Report_format/
+backend/backups/
 
 # Databases
 mis_reports.db
