@@ -448,6 +448,37 @@ function RspTechnoPreviewTable({ preview, title = 'RSP Technopara Preview' }) {
   );
 }
 
+// Drag-and-drop file picker. The real <input type="file"> is laid
+// transparently over the zone, so clicking browses and dropping a file onto
+// it sets the file natively; `file` is the currently chosen File (or null).
+function FileDrop({ id, accept, file, onFile, describedBy, label }) {
+  const [over, setOver] = useState(false);
+  const types = (accept || '').split(',').map(x => x.trim().replace('.', '').toUpperCase()).filter(Boolean).join(', ');
+  return (
+    <div>
+      <div className={`${styles.drop} ${over ? styles.dropOver : ''}`}
+           onDragEnter={() => setOver(true)} onDragLeave={() => setOver(false)} onDrop={() => setOver(false)}>
+        <input id={id} type="file" className={styles.dropInput} accept={accept}
+               aria-label={label} aria-describedby={describedBy} suppressHydrationWarning
+               onChange={(e) => onFile(e.target.files[0] || null)} />
+        <svg className={styles.dropIcon} width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+        <div className={styles.dropTitle}>Drop file here or <u>browse</u></div>
+        {types && <div className={styles.dropSub}>{types}</div>}
+      </div>
+      {file && (
+        <div className={styles.dropFile}>
+          <span aria-hidden="true">📄</span>
+          <span className={styles.dropFileName} title={file.name}>{file.name}</span>
+          <span className={styles.dropFileSize}>{(file.size / 1024).toFixed(0)} KB</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UploadPageInner() {
   const defaultDate = getDefaultDate();
   const [uploadMode, setUploadMode] = useState('preview'); // 'preview' | 'plan'
@@ -1527,12 +1558,9 @@ function UploadPageInner() {
                     : technoPlant === 'VISL' ? 'VISL Monthly Report PDF (e.g. VISLreportsMONYY.pdf)'
                     : 'RSP Excel File (.xlsx)'}
                 </label>
-                <input id="techno-file-input" type="file" className="form-control"
-                       accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx,.pdf' : technoPlant === 'BSP_BF' ? '.xls' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : technoPlant === 'ISP' ? '.xlsx,.png,.jpg,.jpeg' : '.xlsx'}
-                       style={{ padding: '4px', fontSize: '0.8rem' }}
-                       suppressHydrationWarning
-                       aria-describedby="techno-file-help"
-                       onChange={(e) => setTechnoFile(e.target.files[0])} />
+                <FileDrop id="techno-file-input" file={technoFile} onFile={setTechnoFile}
+                          describedBy="techno-file-help" label="Plant file"
+                          accept={technoPlant === 'DSP' ? '.pdf,.xls' : technoPlant === 'BSP' ? '.xls,.xlsx,.pdf' : technoPlant === 'BSP_BF' ? '.xls' : technoPlant === 'BSL' ? '.xls,.xlsx,.pdf' : technoPlant === 'ASP' ? '.xlsx,.pdf' : (technoPlant === 'SSP' || technoPlant === 'VISL') ? '.pdf' : technoPlant === 'ISP' ? '.xlsx,.png,.jpg,.jpeg' : '.xlsx'} />
                 <div id="techno-file-help" className={styles.helpText}>
                   {technoPlant === 'RSP_TECHNO'
                     ? 'RSP Technopara monthly Excel (e.g. technoparaMay2026.xlsx). Sheet must be named page1-8. Extracts BF, SMS, Sinter, Coke oven & General params unit-wise into techno_data table. Select the report month above first.'
@@ -1692,19 +1720,11 @@ function UploadPageInner() {
               </div>
               <div className="form-group" style={{ marginBottom: '15px' }}>
                 <label>{uploadPlanPlantName === 'ASP' ? 'ASP ABP Plan PDF' : 'ABP Excel File (.xlsx)'}</label>
-                <input id="plan-file-input" type="file" className="form-control"
-                       accept={uploadPlanPlantName === 'ASP' ? '.pdf' : '.xlsx'}
-                       style={{ padding: '4px', fontSize: '0.8rem' }}
-                       onChange={(e) => setUploadPlanFile(e.target.files[0])} />
+                <FileDrop id="plan-file-input" file={uploadPlanFile} onFile={setUploadPlanFile} label="ABP plan file"
+                          accept={uploadPlanPlantName === 'ASP' ? '.pdf' : '.xlsx'} />
               </div>
-              <button type="submit" className="btn btn-primary" disabled={isPlanBusy}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                               backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}>
-                {isPlanBusy ? 'Extracting...' : (
-                  <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                  </svg>Extract & Preview Plan</>
-                )}
+              <button type="submit" className={styles.btnPrimary} disabled={isPlanBusy} aria-busy={isPlanBusy}>
+                {isPlanBusy ? 'Extracting...' : 'Extract & Preview Plan'}
               </button>
             </form>
           )}
@@ -1714,17 +1734,12 @@ function UploadPageInner() {
                 <strong style={{ color: '#202124' }}>{planPreview.plant}</strong> · FY {planPreview.financial_year}
                 <span style={{ marginLeft: 8, color: '#5f6368' }}>({planPreview.plan_rows?.filter(r=>r.status==='ok').length} rows ready)</span>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                <button onClick={handlePlanInsert} disabled={isPlanBusy}
-                        style={{ flex: 1, padding: '7px 0', fontSize: '8.5pt', fontWeight: 700,
-                                 backgroundColor: '#10b981', border: 'none', color: '#fff',
-                                 borderRadius: 4, cursor: 'pointer' }}>
+              <div className={styles.btnRow}>
+                <button type="button" onClick={handlePlanInsert} disabled={isPlanBusy} className={styles.btnSuccess}>
                   {isPlanBusy ? 'Inserting...' : `Insert ${planPreview.plan_rows?.filter(r=>r.status==='ok').length} rows into DB`}
                 </button>
-                <button onClick={() => { setPlanPreview(null); setUploadPlanFile(null); const fi = document.getElementById('plan-file-input'); if (fi) fi.value = ''; }}
-                        disabled={isPlanBusy}
-                        style={{ padding: '7px 14px', fontSize: '8.5pt', background: 'none',
-                                 border: '1px solid #5f6368', color: '#5f6368', borderRadius: 4, cursor: 'pointer' }}>
+                <button type="button" onClick={() => { setPlanPreview(null); setUploadPlanFile(null); const fi = document.getElementById('plan-file-input'); if (fi) fi.value = ''; }}
+                        disabled={isPlanBusy} className={styles.btnSecondary}>
                   Discard
                 </button>
               </div>
@@ -1790,17 +1805,24 @@ function UploadPageInner() {
       </div>
 
       {/* Ingestion Console Screen */}
-      <div className="preview-area" style={{ padding: '30px', backgroundColor: '#ffffff', overflowY: 'auto' }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
+      <div className="preview-area" style={{ padding: '24px', alignItems: 'stretch' }}>
+        <div className={styles.main}>
+
           {/* Headline */}
-          <div>
-            <h1 style={{ fontSize: '20pt', fontWeight: '800', color: '#202124', margin: 0 }}>
-              Excel Data Extraction Control Room
-            </h1>
-            <p style={{ fontSize: '10pt', color: '#5f6368', marginTop: '4px', margin: 0 }}>
-              Ingest plant spreadsheets and PDFs, review the extracted production, techno-economic and special steel data, then insert it into the MIS database.
-            </p>
+          <div className={styles.head}>
+            <div>
+              <div className={styles.eyebrow}>Ingestion workbench</div>
+              <h1 className={styles.title}>Excel Data Extraction Control Room</h1>
+              <p className={styles.lead}>
+                Ingest plant spreadsheets and PDFs, review the extracted production, techno-economic and special steel data, then insert it into the MIS database.
+              </p>
+            </div>
+            <div className={styles.chips}>
+              <span className={styles.chip}>Mode <b>{uploadMode === 'plan' ? 'ABP Plan' : 'Preview & Insert'}</b></span>
+              <span className={styles.chip}>
+                {uploadMode === 'plan' ? <>FY <b>{uploadPlanFY}</b></> : <>Month <b>{technoMonthName} {technoYear}</b></>}
+              </span>
+            </div>
           </div>
 
           {/* Guidelines info card */}
@@ -2305,92 +2327,78 @@ function UploadPageInner() {
           )}
 
           {/* Terminal log window */}
-          <div style={{
-            fontFamily: '"JetBrains Mono", monospace',
-            fontSize: '9.5pt',
-            backgroundColor: '#020617',
-            border: '1px solid #30363d',
-            borderRadius: '6px',
-            padding: '20px',
-            minHeight: '280px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            color: '#e2e8f0',
-            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)'
-          }}>
-            <div style={{ color: '#8b949e', borderBottom: '1px solid #30363d', paddingBottom: '6px', marginBottom: '4px', fontSize: '8pt', display: 'flex', justifyContent: 'space-between' }}>
-              <span>EXTRACTION JOB OUTPUT LOGS</span>
-              <span>v1.0.0</span>
+          <div className={styles.console} role="log" aria-live="polite" aria-label="Extraction job log">
+            <div className={styles.consoleHead}>
+              <span><span className={styles.consoleDots} aria-hidden="true"><i /><i /><i /></span>EXTRACTION JOB OUTPUT LOG</span>
+              <span>{logs.length} line{logs.length === 1 ? '' : 's'}</span>
             </div>
-            
-            {logs.map((log, index) => {
-              let color = '#1a73e8';
-              let prefix = '[INFO]';
-              if (log.type === 'success') {
-                color = '#34d399';
-                prefix = '[SUCCESS]';
-              } else if (log.type === 'error') {
-                color = '#f87171';
-                prefix = '[ERROR]';
-              }
-              return (
-                <div key={index} style={{ display: 'flex', gap: '8px', lineHeight: '1.4' }}>
-                  <span style={{ color: '#8b949e' }}>{log.time || '--:--:--'}</span>
-                  <span style={{ color }}>{prefix}</span>
-                  <span style={{ color: log.type === 'error' ? '#f87171' : '#e2e8f0' }}>{log.text}</span>
-                </div>
-              );
-            })}
-            
+            <div className={styles.consoleBody}>
+              {logs.map((log, index) => {
+                const [tag, cls] = log.type === 'success' ? ['[SUCCESS]', styles.tagSuccess]
+                  : log.type === 'error' ? ['[ERROR]', styles.tagError] : ['[INFO]', styles.tagInfo];
+                return (
+                  <div key={index} className={styles.logLine}>
+                    <span className={styles.logTime}>{log.time || '--:--:--'}</span>
+                    <span className={`${styles.logTag} ${cls}`}>{tag}</span>
+                    <span className={log.type === 'error' ? styles.logErr : undefined}>{log.text}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Extraction Audit Log */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <h2 style={{ fontSize: '12pt', fontWeight: '700', color: '#202124', margin: 0 }}>
-                Extraction Audit Log
-              </h2>
-              <button
-                onClick={fetchExtractionLog}
-                style={{ background: 'none', border: '1px solid #dadce0', borderRadius: '4px', color: '#5f6368', fontSize: '8pt', padding: '4px 10px', cursor: 'pointer' }}
-              >
-                Refresh
-              </button>
+          <div className={styles.panel}>
+            <div className={styles.panelHead}>
+              <div>
+                <h2 className={styles.panelTitle}>Extraction Audit Log</h2>
+                <p className={styles.panelSub}>Every upload processed by the ingestion engine.</p>
+              </div>
+              <div className={styles.chips}>
+                {(() => {
+                  const today = new Date();
+                  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                  const todays = extractionLog.filter(e => (e.logged_at || '').startsWith(todayStr));
+                  const latestMonth = extractionLog.reduce((m, e) => (e.report_month > m ? e.report_month : m), '');
+                  const plants = new Set(extractionLog.filter(e => e.report_month === latestMonth).map(e => e.plant_name));
+                  return (
+                    <>
+                      <span className={styles.chip}>Uploads today <b>{todays.length}</b></span>
+                      {latestMonth && <span className={styles.chip}>Plants in {latestMonth} <b>{plants.size}</b></span>}
+                      <span className={styles.chip}>Items today <b>{todays.reduce((a, e) => a + (Number(e.items_extracted) || 0), 0)}</b></span>
+                    </>
+                  );
+                })()}
+                <button type="button" onClick={fetchExtractionLog} className={styles.btnSm}>⟳ Refresh</button>
+              </div>
             </div>
 
             {extractionLog.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#5f6368', fontSize: '9pt', backgroundColor: '#f8f9fa', border: '1px solid #dadce0', borderRadius: '6px' }}>
-                No extractions recorded yet.
-              </div>
+              <div className={styles.logEmpty}>No extractions recorded yet.</div>
             ) : (
-              <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: '6px', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table className={styles.logTable}>
                   <thead>
-                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                    <tr>
                       {['Timestamp', 'Plant', 'Month', 'Source Type', 'File Name', 'Sheet', 'Items'].map(h => (
-                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#5f6368', fontWeight: '600', borderBottom: '1px solid #dadce0', whiteSpace: 'nowrap' }}>{h}</th>
+                        <th key={h} style={h === 'Items' ? { textAlign: 'right' } : undefined}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {extractionLog.map((entry, idx) => (
-                      <tr key={entry.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #f8f9fa' }}>
-                        <td style={{ padding: '7px 12px', color: '#5f6368', whiteSpace: 'nowrap' }}>{entry.logged_at}</td>
-                        <td style={{ padding: '7px 12px', color: '#1a73e8', fontWeight: '600' }}>{entry.plant_name}</td>
-                        <td style={{ padding: '7px 12px', color: '#202124', whiteSpace: 'nowrap' }}>{entry.report_month}</td>
-                        <td style={{ padding: '7px 12px' }}>
-                          <span style={{
-                            padding: '2px 7px', borderRadius: '4px', fontSize: '7.5pt', fontWeight: '600',
-                            backgroundColor: entry.source_type?.includes('Monthly') ? 'rgba(16,185,129,0.15)' : entry.source_type?.includes('Morning') ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.15)',
-                            color: entry.source_type?.includes('Monthly') ? '#34d399' : entry.source_type?.includes('Morning') ? '#fbbf24' : '#a5b4fc',
-                          }}>
+                    {extractionLog.map((entry) => (
+                      <tr key={entry.id}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{entry.logged_at}</td>
+                        <td className={styles.logPlant}>{entry.plant_name}</td>
+                        <td style={{ whiteSpace: 'nowrap', color: 'var(--ui-text)' }}>{entry.report_month}</td>
+                        <td>
+                          <span className={`${styles.src} ${entry.source_type?.includes('Monthly') ? styles.srcMonthly : entry.source_type?.includes('Morning') ? styles.srcMorning : styles.srcOther}`}>
                             {entry.source_type}
                           </span>
                         </td>
-                        <td style={{ padding: '7px 12px', color: '#5f6368', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.file_name}>{entry.file_name}</td>
-                        <td style={{ padding: '7px 12px', color: '#5f6368', fontFamily: 'monospace' }}>{entry.sheet_name}</td>
-                        <td style={{ padding: '7px 12px', color: '#34d399', textAlign: 'right', fontWeight: '700' }}>{entry.items_extracted}</td>
+                        <td className={styles.logFile} title={entry.file_name}>{entry.file_name}</td>
+                        <td className={styles.logSheet}>{entry.sheet_name}</td>
+                        <td className={styles.logItems}>{entry.items_extracted}</td>
                       </tr>
                     ))}
                   </tbody>

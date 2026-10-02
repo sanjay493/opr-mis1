@@ -1,0 +1,89 @@
+/* Report Engine (/report) — "Viewer Workbench" from the Stitch redesign, on
+   the --ui-* tokens in globals.css. The page frame (.app-container, .sidebar,
+   .preview-area) stays global; this styles what sits inside it. */
+
+.card {
+  margin-bottom: 12px; padding: 12px 14px;
+  background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius);
+}
+.cardHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cardTitle { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-secondary); }
+.count { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--ui-primary-subtle); color: var(--ui-primary); }
+.label { display: block; margin-bottom: 4px; font-size: 11.5px; font-weight: 600; color: var(--ui-text-secondary); }
+.row { display: flex; gap: 6px; align-items: center; }
+.row + .row, .row + .label, .seg + .row { margin-top: 8px; }
+.control {
+  width: 100%; box-sizing: border-box; padding: 7px 9px;
+  font: 13px var(--ui-font); color: var(--ui-text);
+  background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 4px;
+}
+.control:focus { outline: none; border-color: var(--ui-primary); box-shadow: 0 0 0 1px var(--ui-primary); }
+.jump { width: 64px; text-align: center; }
+.jumpLabel { font-size: 12px; color: var(--ui-text-secondary); white-space: nowrap; }
+
+.btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 6px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap;
+  font: 600 12.5px var(--ui-font); color: var(--ui-text);
+  background: var(--ui-surface); border: 1px solid var(--ui-border);
+}
+.btn:hover:not(:disabled) { background: var(--ui-bg-subtle); }
+.btn:disabled { opacity: .5; cursor: default; }
+.linkBtn { border: 0; background: none; padding: 0; cursor: pointer; font: 600 12px var(--ui-font); color: var(--ui-primary); }
+.linkBtn:hover { text-decoration: underline; }
+
+.seg { display: flex; margin-top: 10px; padding: 2px; gap: 2px; border-radius: 6px; background: var(--ui-bg-subtle); border: 1px solid var(--ui-border-subtle); }
+.segBtn { flex: 1; padding: 5px 8px; border: 0; border-radius: 4px; background: none; cursor: pointer; font: 600 12px var(--ui-font); color: var(--ui-text-secondary); }
+.segBtn:disabled { cursor: default; opacity: .5; }
+.segActive { background: var(--ui-surface); color: var(--ui-primary); box-shadow: 0 1px 2px rgba(60,64,67,.2); }
+
+.filter { margin-bottom: 6px; }
+.checklist { max-height: 300px; overflow-y: auto; border: 1px solid var(--ui-border-subtle); border-radius: 6px; padding: 4px 0; }
+.check {
+  display: flex; align-items: flex-start; gap: 8px; padding: 4px 10px;
+  font-size: 12.5px; line-height: 1.35; cursor: pointer;
+}
+.check:hover { background: var(--ui-bg-subtle); }
+.check input { margin-top: 2px; accent-color: var(--ui-primary); flex-shrink: 0; }
+.checkActive { background: var(--ui-primary-subtle); color: var(--ui-primary); font-weight: 600; }
+.checkNum { min-width: 22px; color: var(--ui-text-tertiary); font-variant-numeric: tabular-nums; }
+.checkActive .checkNum { color: var(--ui-primary); }
+.checkNone { padding: 10px; font-size: 12px; color: var(--ui-text-tertiary); text-align: center; }
+
+.export {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 14px; border-radius: 4px; cursor: pointer;
+  font: 600 13.5px var(--ui-font); color: #fff; background: var(--ui-primary); border: 1px solid var(--ui-primary);
+}
+.export:hover:not(:disabled) { background: var(--ui-primary-hover); }
+.export:disabled { opacity: .7; cursor: default; }
+.exportNote { margin-top: 6px; font-size: 11.5px; color: var(--ui-text-secondary); text-align: center; }
+
+/* ── Main-area toolbar ─────────────────────────────────── */
+.toolbar {
+  position: sticky; top: -40px; z-index: 5; align-self: stretch;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: -40px -40px 24px; padding: 8px 20px;
+  background: rgba(255, 255, 255, .96); border-bottom: 1px solid var(--ui-border);
+  backdrop-filter: blur(4px);
+}
+.tbTitle { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--ui-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tbTitle span { margin-right: 8px; padding: 2px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 700; background: var(--ui-bg-subtle); color: var(--ui-text-secondary); }
+.tbGroup { display: inline-flex; align-items: center; border: 1px solid var(--ui-border); border-radius: 4px; overflow: hidden; }
+.tbBtn { padding: 5px 10px; border: 0; background: var(--ui-surface); cursor: pointer; font: 600 13px var(--ui-font); color: var(--ui-text); }
+.tbBtn + .tbBtn, .tbBtn + .tbVal, .tbVal + .tbBtn { border-left: 1px solid var(--ui-border); }
+.tbBtn:hover:not(:disabled) { background: var(--ui-bg-subtle); }
+.tbBtn:disabled { color: var(--ui-text-tertiary); cursor: default; }
+.tbVal { min-width: 52px; padding: 5px 8px; text-align: center; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--ui-surface); }
+
+.loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; flex: 1; font-size: 15px; font-weight: 500; color: var(--ui-text-secondary); }
+.spinner { width: 36px; height: 36px; border: 4px solid var(--ui-border); border-top-color: var(--ui-primary); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media print {
+  .toolbar { display: none; }
+}
+
+@media print {
+  .zoomWrap { zoom: 1 !important; }
+}

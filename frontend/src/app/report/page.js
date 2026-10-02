@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import PageRenderer from '../../components/PageRenderer';
 import { useReportData, useReportPage, useGeneratePDF } from '@/hooks/useReportAPI';
+import s from './report.module.css';
 
 // Edit these labels to change what appears in the Page Selector dropdown
 const PAGE_LABELS = {
@@ -509,6 +510,27 @@ export default function ReportPage() {
     );
   };
 
+  // Viewer controls: zoom of the on-screen preview, jump-to-page box and the
+  // export checklist filter.
+  const [zoom, setZoom] = useState(100);
+  const [jumpTo, setJumpTo] = useState('');
+  const [pageFilter, setPageFilter] = useState('');
+  const activeIdx = ALL_PAGE_NUMBERS.indexOf(activePageNum);
+  const goPrev = () => setActivePageNum(ALL_PAGE_NUMBERS[Math.max(0, activeIdx - 1)]);
+  const goNext = () => setActivePageNum(ALL_PAGE_NUMBERS[Math.min(ALL_PAGE_NUMBERS.length - 1, activeIdx + 1)]);
+  const handleJump = (e) => {
+    e.preventDefault();
+    const n = Number(jumpTo);
+    if (n >= 1 && n <= ALL_PAGE_NUMBERS.length) setActivePageNum(ALL_PAGE_NUMBERS[n - 1]);
+    setJumpTo('');
+  };
+  const visiblePageNumbers = useMemo(() => {
+    const q = pageFilter.trim().toLowerCase();
+    if (!q) return ALL_PAGE_NUMBERS;
+    return ALL_PAGE_NUMBERS.filter((n) =>
+      `${PAGE_DISPLAY_NUMBER[n]}. ${PAGE_LABELS[n] || ''}`.toLowerCase().includes(q));
+  }, [pageFilter]);
+
   return (
     <>
       {/* Global Navbar */}
@@ -546,181 +568,106 @@ export default function ReportPage() {
 
         {!sidebarCollapsed && (
         <>
-        {/* Report Selector */}
-        <div className="control-section">
-          <h2>Report Configuration</h2>
-          <div className="form-group">
-            <label>Reporting Month & Year</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <select
-                className="form-control"
-                style={{ flex: 2 }}
-                value={selectedMonthName}
-                onChange={(e) => setSelectedMonthName(e.target.value)}
-              >
-                {months.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-              <select
-                className="form-control"
-                style={{ flex: 1 }}
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-              >
-                {years.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Page Navigation */}
-        <div className="control-section">
-          <h2>Page Selector</h2>
-          <div className="form-group">
-            <label>Navigate Report Pages ({ALL_PAGE_NUMBERS.length} total)</label>
-            <select
-              className="form-control"
-              value={activePageNum}
-              onChange={(e) => setActivePageNum(Number(e.target.value))}
-            >
-              {ALL_PAGE_NUMBERS.map((pageNum) => (
-                <option key={pageNum} value={pageNum}>
-                  {PAGE_DISPLAY_NUMBER[pageNum]}. {PAGE_LABELS[pageNum] || 'Page ' + pageNum}
-                </option>
-              ))}
+        {/* Report configuration */}
+        <section className={s.card}>
+          <div className={s.cardHead}><h2 className={s.cardTitle}>Report configuration</h2></div>
+          <label className={s.label} htmlFor="report-month">Reporting month &amp; year</label>
+          <div className={s.row}>
+            <select id="report-month" className={s.control} style={{ flex: 2 }} value={selectedMonthName}
+                    onChange={(e) => setSelectedMonthName(e.target.value)}>
+              {months.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select className={s.control} style={{ flex: 1 }} value={selectedYear} aria-label="Reporting year"
+                    onChange={(e) => setSelectedYear(e.target.value)}>
+              {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
+        </section>
 
-          <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-            <button
-              className="btn btn-secondary"
-              style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => {
-                const idx = ALL_PAGE_NUMBERS.indexOf(prev);
-                return ALL_PAGE_NUMBERS[Math.max(0, idx - 1)];
-              })}
-              disabled={ALL_PAGE_NUMBERS.indexOf(activePageNum) <= 0}
-            >
-              Previous
-            </button>
-            <button
-              className="btn btn-secondary"
-              style={{ flex: 1, margin: 0 }}
-              onClick={() => setActivePageNum((prev) => {
-                const idx = ALL_PAGE_NUMBERS.indexOf(prev);
-                return ALL_PAGE_NUMBERS[Math.min(ALL_PAGE_NUMBERS.length - 1, idx + 1)];
-              })}
-              disabled={ALL_PAGE_NUMBERS.indexOf(activePageNum) === ALL_PAGE_NUMBERS.length - 1}
-            >
-              Next
-            </button>
+        {/* Page navigator */}
+        <section className={s.card}>
+          <div className={s.cardHead}>
+            <h2 className={s.cardTitle}>Page navigator</h2>
+            <span className={s.count}>{activeIdx + 1} / {ALL_PAGE_NUMBERS.length}</span>
           </div>
-
-          <div className="form-group" style={{ marginTop: '12px' }}>
-            <label>Page Orientation</label>
-            <select
-              className="form-control"
-              value={activePage?.orientation || 'portrait'}
-              onChange={(e) => {
-                if (!activePage) return;
-                const newOrientation = e.target.value;
-                handleCellChange({
-                  ...activePage,
-                  orientation: newOrientation
-                });
-              }}
-              disabled={!activePage}
-            >
-              <option value="portrait">Portrait</option>
-              <option value="landscape">Landscape</option>
-            </select>
-          </div>
-        </div>
-
-        {/* PDF Export — Page Selection */}
-        <div className="control-section">
-          <h2>PDF Export — Page Selection</h2>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ flex: 1, margin: 0 }}
-              onClick={selectAllPages}
-            >
-              Select All
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ flex: 1, margin: 0 }}
-              onClick={selectNoPages}
-            >
-              Select None
-            </button>
-          </div>
-          <div
-            style={{
-              maxHeight: '260px',
-              overflowY: 'auto',
-              border: '1px solid #dadce0',
-              borderRadius: '6px',
-              padding: '4px 8px',
-            }}
-          >
+          <select className={s.control} value={activePageNum} aria-label="Report page"
+                  onChange={(e) => setActivePageNum(Number(e.target.value))}>
             {ALL_PAGE_NUMBERS.map((pageNum) => (
-              <label
-                key={pageNum}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '0.8rem',
-                  padding: '4px 0',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedPages.has(pageNum)}
-                  onChange={() => togglePageSelection(pageNum)}
-                />
+              <option key={pageNum} value={pageNum}>
                 {PAGE_DISPLAY_NUMBER[pageNum]}. {PAGE_LABELS[pageNum] || 'Page ' + pageNum}
+              </option>
+            ))}
+          </select>
+          <div className={s.row}>
+            <button type="button" className={s.btn} onClick={goPrev} disabled={activeIdx <= 0}>‹ Prev</button>
+            <button type="button" className={s.btn} onClick={goNext} disabled={activeIdx >= ALL_PAGE_NUMBERS.length - 1}>Next ›</button>
+          </div>
+          <form className={s.row} onSubmit={handleJump}>
+            <label className={s.jumpLabel} htmlFor="report-jump">Jump to page</label>
+            <input id="report-jump" className={`${s.control} ${s.jump}`} type="number" min={1} max={ALL_PAGE_NUMBERS.length}
+                   value={jumpTo} onChange={(e) => setJumpTo(e.target.value)} placeholder={String(activeIdx + 1)} />
+            <button type="submit" className={s.btn} style={{ flex: 'none' }} disabled={!jumpTo}>Go</button>
+          </form>
+          <div className={s.seg} role="group" aria-label="Page orientation">
+            {['portrait', 'landscape'].map((o) => (
+              <button key={o} type="button" disabled={!activePage}
+                      className={`${s.segBtn} ${(activePage?.orientation || 'portrait') === o ? s.segActive : ''}`}
+                      aria-pressed={(activePage?.orientation || 'portrait') === o}
+                      onClick={() => activePage && handleCellChange({ ...activePage, orientation: o })}>
+                {o === 'portrait' ? '▯ Portrait' : '▭ Landscape'}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* PDF export */}
+        <section className={s.card}>
+          <div className={s.cardHead}>
+            <h2 className={s.cardTitle}>PDF export</h2>
+            <span className={s.count}>{selectedPages.size} of {ALL_PAGE_NUMBERS.length}</span>
+          </div>
+          <div className={s.row} style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+            <span>
+              <button type="button" className={s.linkBtn} onClick={selectAllPages}>Select all</button>
+              {' · '}
+              <button type="button" className={s.linkBtn} onClick={selectNoPages}>Select none</button>
+            </span>
+          </div>
+          <input type="search" className={`${s.control} ${s.filter}`} value={pageFilter}
+                 onChange={(e) => setPageFilter(e.target.value)} placeholder="Filter pages…" aria-label="Filter pages" />
+          <div className={s.checklist}>
+            {visiblePageNumbers.length === 0 && <div className={s.checkNone}>No pages match.</div>}
+            {visiblePageNumbers.map((pageNum) => (
+              <label key={pageNum} className={`${s.check} ${pageNum === activePageNum ? s.checkActive : ''}`}>
+                <input type="checkbox" checked={selectedPages.has(pageNum)} onChange={() => togglePageSelection(pageNum)} />
+                <span className={s.checkNum}>{PAGE_DISPLAY_NUMBER[pageNum]}.</span>
+                <span>{PAGE_LABELS[pageNum] || 'Page ' + pageNum}</span>
               </label>
             ))}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#5f6368', marginTop: '6px' }}>
-            {selectedPages.size} of {ALL_PAGE_NUMBERS.length} pages selected
-          </div>
-        </div>
+        </section>
 
-        {/* Export triggers */}
-        <div className="control-section">
-          <h2>Export Actions</h2>
-          <button
-            className="btn btn-secondary"
-            onClick={handleBackendExport}
-            disabled={isGeneratingPDF || isPreparingExport}
-            style={{ borderColor: 'var(--primary)', color: '#1a73e8' }}
-          >
+        {/* Export trigger */}
+        <section className={s.card}>
+          <button type="button" className={s.export} onClick={handleBackendExport}
+                  disabled={isGeneratingPDF || isPreparingExport} aria-busy={isGeneratingPDF || isPreparingExport}>
             {isGeneratingPDF ? (
-              `Compiling PDF Backend... (${String(Math.floor(pdfElapsedSec / 60)).padStart(1, '0')}:${String(pdfElapsedSec % 60).padStart(2, '0')})`
+              `Compiling PDF… (${Math.floor(pdfElapsedSec / 60)}:${String(pdfElapsedSec % 60).padStart(2, '0')})`
             ) : isPreparingExport ? (
               'Preparing export…'
             ) : (
               <>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Export PDF (Python API)
+                Generate PDF ({selectedPages.size} page{selectedPages.size === 1 ? '' : 's'})
               </>
             )}
           </button>
-        </div>
+          <div className={s.exportNote}>Rendered by the backend; a full report can take several minutes.</div>
+        </section>
 
         <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: '#5f6368', textAlign: 'center' }}>
           SAIL Informatics Report Portal • v1.0.0
@@ -731,26 +678,36 @@ export default function ReportPage() {
 
       {/* Main Preview Area */}
       <div className="preview-area">
+        <div className={`${s.toolbar} no-print`}>
+          <div className={s.tbTitle} title={PAGE_LABELS[activePageNum]}>
+            <span>Page {activeIdx + 1} of {ALL_PAGE_NUMBERS.length}</span>
+            {PAGE_LABELS[activePageNum] || 'Page ' + activePageNum}
+          </div>
+          <div className={s.tbGroup} role="group" aria-label="Zoom">
+            <button type="button" className={s.tbBtn} onClick={() => setZoom((z) => Math.max(50, z - 10))} disabled={zoom <= 50} aria-label="Zoom out">−</button>
+            <button type="button" className={s.tbVal} onClick={() => setZoom(100)} title="Reset zoom" style={{ border: 0, cursor: 'pointer' }}>{zoom}%</button>
+            <button type="button" className={s.tbBtn} onClick={() => setZoom((z) => Math.min(150, z + 10))} disabled={zoom >= 150} aria-label="Zoom in">+</button>
+          </div>
+          <div className={s.tbGroup} role="group" aria-label="Page">
+            <button type="button" className={s.tbBtn} onClick={goPrev} disabled={activeIdx <= 0} aria-label="Previous page">‹</button>
+            <button type="button" className={s.tbBtn} onClick={goNext} disabled={activeIdx >= ALL_PAGE_NUMBERS.length - 1} aria-label="Next page">›</button>
+          </div>
+        </div>
         {!activePage ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#5f6368', fontSize: '1.2rem', fontWeight: '500' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-              <style>{`
-                @keyframes spin {
-                  to { transform: rotate(360deg); }
-                }
-              `}</style>
-              <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid #dadce0', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-              {activePageError ? `Failed to load page ${PAGE_DISPLAY_NUMBER[activePageNum]}` : `Loading page ${PAGE_DISPLAY_NUMBER[activePageNum]}...`}
-            </div>
+          <div className={s.loading}>
+            <div className={s.spinner} />
+            {activePageError ? `Failed to load page ${PAGE_DISPLAY_NUMBER[activePageNum]}` : `Loading page ${PAGE_DISPLAY_NUMBER[activePageNum]}...`}
           </div>
         ) : (
-          <PageRenderer
-            pageData={activePage}
-            onCellChange={handleCellChange}
-            selectedMonth={selectedMonth}
-            totalPages={ALL_PAGE_NUMBERS.length}
-            displayPageNumber={PAGE_DISPLAY_NUMBER[activePageNum] - 2}
-          />
+          <div className={s.zoomWrap} style={{ zoom: zoom / 100 }}>
+            <PageRenderer
+              pageData={activePage}
+              onCellChange={handleCellChange}
+              selectedMonth={selectedMonth}
+              totalPages={ALL_PAGE_NUMBERS.length}
+              displayPageNumber={PAGE_DISPLAY_NUMBER[activePageNum] - 2}
+            />
+          </div>
         )}
       </div>
     </main>

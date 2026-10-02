@@ -208,3 +208,104 @@
     transition: none;
   }
 }
+
+/* ── Stitch "Ingestion Workbench" redesign ─────────────── */
+.btnSuccess {
+  width: 100%; min-height: 36px; padding: 8px 14px; font: 600 13px var(--ui-font);
+  color: #fff; background: var(--ui-success); border: 1px solid var(--ui-success);
+  border-radius: var(--ui-radius-sm); cursor: pointer;
+}
+.btnSuccess:hover:not(:disabled) { background: #146c2e; }
+.btnSuccess:disabled { opacity: .6; cursor: default; }
+.btnRow { display: flex; gap: 8px; margin-bottom: 6px; }
+.btnRow > .btnSecondary { width: auto; padding: 8px 14px; }
+
+/* Drag-and-drop file picker: the real <input type=file> covers the zone
+   (transparent), so clicking browses and dropping a file sets it natively. */
+.drop {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 16px 12px; text-align: center; cursor: pointer;
+  border: 1.5px dashed var(--ui-border); border-radius: var(--ui-radius);
+  background: var(--ui-bg-subtle); transition: border-color 150ms, background-color 150ms;
+}
+.drop:hover, .dropOver { border-color: var(--ui-primary); background: var(--ui-primary-subtle); }
+.dropInput { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.dropInput:focus-visible + .dropIcon { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: 50%; }
+.dropIcon { color: var(--ui-primary); }
+.dropTitle { font-size: 12.5px; font-weight: 600; color: var(--ui-text); }
+.dropTitle u { color: var(--ui-primary); text-decoration: none; }
+.dropSub { font-size: 11px; color: var(--ui-text-tertiary); }
+.dropFile {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 7px 10px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface);
+  font-size: 12px; text-align: left;
+}
+.dropFileName { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dropFileSize { color: var(--ui-text-tertiary); white-space: nowrap; }
+
+/* Main column */
+.main { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-primary); }
+.title { margin: 4px 0 0; font-size: 24px; font-weight: 800; letter-spacing: -0.01em; color: var(--ui-text); }
+.lead { margin: 4px 0 0; max-width: 680px; font-size: 13.5px; line-height: 1.5; color: var(--ui-text-secondary); }
+
+.console {
+  font-family: "JetBrains Mono", "Roboto Mono", monospace; font-size: 12.5px;
+  background: #0b1220; border: 1px solid #1e293b; border-radius: var(--ui-radius);
+  color: #e2e8f0; overflow: hidden;
+}
+.consoleHead {
+  display: flex; justify-content: space-between; align-items: center; padding: 8px 14px;
+  background: #111a2e; border-bottom: 1px solid #1e293b; font-size: 11px; letter-spacing: .05em; color: #94a3b8;
+}
+.consoleDots { display: inline-flex; gap: 5px; margin-right: 10px; }
+.consoleDots i { width: 9px; height: 9px; border-radius: 50%; background: #334155; }
+.consoleDots i:nth-child(1) { background: #f87171; }
+.consoleDots i:nth-child(2) { background: #fbbf24; }
+.consoleDots i:nth-child(3) { background: #34d399; }
+.consoleBody { display: flex; flex-direction: column; gap: 6px; min-height: 200px; max-height: 360px; overflow-y: auto; padding: 14px; }
+.logLine { display: flex; gap: 10px; line-height: 1.45; }
+.logTime { color: #64748b; flex-shrink: 0; }
+.logTag { flex-shrink: 0; font-weight: 600; }
+.tagInfo { color: #60a5fa; }
+.tagSuccess { color: #34d399; }
+.tagError { color: #f87171; }
+.logErr { color: #fca5a5; }
+
+.panel { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); overflow: hidden; }
+.panelHead {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid var(--ui-border-subtle);
+}
+.panelTitle { margin: 0; font-size: 15px; font-weight: 700; color: var(--ui-text); }
+.panelSub { margin: 2px 0 0; font-size: 12px; color: var(--ui-text-secondary); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; color: var(--ui-text-secondary);
+  background: var(--ui-bg-subtle); border: 1px solid var(--ui-border-subtle);
+}
+.chip b { color: var(--ui-text); }
+.btnSm {
+  padding: 5px 12px; font: 600 12px var(--ui-font); color: var(--ui-text);
+  background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 4px; cursor: pointer;
+}
+.btnSm:hover { background: var(--ui-bg-subtle); }
+.logTable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.logTable th {
+  padding: 8px 14px; text-align: left; white-space: nowrap;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ui-text-secondary); background: var(--ui-bg-subtle); border-bottom: 1px solid var(--ui-border);
+}
+.logTable td { padding: 8px 14px; border-bottom: 1px solid var(--ui-border-subtle); color: var(--ui-text-secondary); }
+.logTable tbody tr:hover td { background: #fafbfc; }
+.logPlant { color: var(--ui-primary) !important; font-weight: 700; }
+.logFile { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logSheet { font-family: "Roboto Mono", monospace; font-size: 11.5px; }
+.logItems { text-align: right; font-weight: 700; color: var(--ui-success) !important; }
+.src { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.srcMonthly { background: var(--ui-success-bg); color: var(--ui-success); }
+.srcMorning { background: var(--ui-warning-bg); color: var(--ui-warning); }
+.srcOther { background: var(--ui-primary-subtle); color: var(--ui-primary); }
+.logEmpty { padding: 28px; text-align: center; font-size: 13px; color: var(--ui-text-secondary); }

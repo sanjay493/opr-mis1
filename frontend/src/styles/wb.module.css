@@ -1,0 +1,135 @@
+/* Shared "workbench" primitives for the Stitch redesign (see the Production
+   Data Entry, Home and Login pages), on the --ui-* tokens in globals.css.
+   Pages import this for common building blocks and keep page-specific
+   layout in their own module. */
+
+/* ── Page frame ────────────────────────────────────────── */
+.shell { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.page {
+  flex: 1; min-height: 0; overflow: auto;
+  background: var(--ui-bg-subtle); font-family: var(--ui-font); color: var(--ui-text);
+}
+.inner { max-width: 1440px; margin: 0 auto; padding: 20px 24px 32px; box-sizing: border-box; }
+.innerNarrow { max-width: 1200px; }
+
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.title { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+.lead { margin: 4px 0 0; font-size: 13.5px; color: var(--ui-text-secondary); }
+.headActions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── Panels ────────────────────────────────────────────── */
+.panel { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
+.panelHead {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid var(--ui-border-subtle);
+}
+.panelTitle { margin: 0; font-size: 14.5px; font-weight: 700; }
+.panelSub { margin: 2px 0 0; font-size: 12px; color: var(--ui-text-secondary); }
+.panelBody { padding: 14px 16px 16px; }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-secondary);
+}
+
+/* ── Form fields ───────────────────────────────────────── */
+.label {
+  display: block; margin-bottom: 4px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ui-text-secondary);
+}
+.input, .select, .textarea {
+  width: 100%; box-sizing: border-box; padding: 8px 10px;
+  font: 13.5px var(--ui-font); color: var(--ui-text);
+  background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 4px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.select { cursor: pointer; }
+.textarea { resize: vertical; }
+.input::placeholder, .textarea::placeholder { color: var(--ui-text-tertiary); }
+.input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--ui-primary); box-shadow: 0 0 0 1px var(--ui-primary); }
+.field + .field { margin-top: 12px; }
+.fieldRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fieldRow + .field, .field + .fieldRow, .fieldRow + .fieldRow { margin-top: 12px; }
+
+/* ── Buttons ───────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 14px; border-radius: 4px; cursor: pointer; white-space: nowrap; text-decoration: none;
+  font: 600 13px var(--ui-font); border: 1px solid var(--ui-border);
+  background: var(--ui-surface); color: var(--ui-text); transition: background .15s, border-color .15s;
+}
+.btn:hover:not(:disabled) { background: var(--ui-bg-subtle); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btnPrimary { background: var(--ui-primary); border-color: var(--ui-primary); color: #fff; }
+.btnPrimary:hover:not(:disabled) { background: var(--ui-primary-hover); border-color: var(--ui-primary-hover); }
+.btnSuccess { background: var(--ui-success); border-color: var(--ui-success); color: #fff; }
+.btnSuccess:hover:not(:disabled) { background: #146c2e; }
+.btnDanger { color: var(--ui-danger); }
+.btnGhost { border-color: transparent; background: none; color: var(--ui-text-secondary); }
+.btnGhost:hover:not(:disabled) { background: var(--ui-bg-subtle); color: var(--ui-text); }
+.btnSm { padding: 4px 10px; font-size: 12px; }
+.btnBlock { width: 100%; }
+.iconBtn {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border: 0; border-radius: 4px; background: none; cursor: pointer; color: var(--ui-text-tertiary); font-size: 15px;
+}
+.iconBtn:hover { background: var(--ui-bg-subtle); color: var(--ui-danger); }
+
+/* ── Segmented toggle (view / filter) ──────────────────── */
+.seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 6px; background: var(--ui-bg-subtle); border: 1px solid var(--ui-border-subtle); }
+.segBtn {
+  padding: 5px 12px; border: 0; border-radius: 4px; background: none; cursor: pointer;
+  font: 600 12.5px var(--ui-font); color: var(--ui-text-secondary);
+}
+.segBtn:hover { color: var(--ui-text); }
+.segBtnActive { background: var(--ui-surface); color: var(--ui-primary); box-shadow: 0 1px 2px rgba(60,64,67,.2); }
+
+/* ── Chips, badges ─────────────────────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+  font: 600 12.5px var(--ui-font); color: var(--ui-text-secondary);
+  background: var(--ui-surface); border: 1px solid var(--ui-border); cursor: default;
+}
+button.chip { cursor: pointer; }
+.chipCount { min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; text-align: center; background: var(--ui-bg-subtle); color: var(--ui-text); }
+.chipActive { border-color: var(--ui-primary); background: var(--ui-primary-subtle); color: var(--ui-primary); }
+.chipDanger { border-color: #f6aea9; background: var(--ui-danger-bg); color: var(--ui-danger); }
+.chipSuccess { border-color: #a8dab5; background: var(--ui-success-bg); color: var(--ui-success); }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+  font-size: 11px; font-weight: 700;
+}
+.badgeBlue { background: var(--ui-primary-subtle); color: var(--ui-primary); }
+.badgeAmber { background: var(--ui-warning-bg); color: var(--ui-warning); }
+.badgeGreen { background: var(--ui-success-bg); color: var(--ui-success); }
+.badgeRed { background: var(--ui-danger-bg); color: var(--ui-danger); }
+.badgeGrey { background: var(--ui-bg-subtle); color: var(--ui-text-secondary); border: 1px solid var(--ui-border-subtle); }
+
+/* ── Messages ──────────────────────────────────────────── */
+.alert { margin: 0 0 14px; padding: 10px 14px; border-radius: 6px; font-size: 13px; line-height: 1.5; }
+.alertError { background: var(--ui-danger-bg); color: var(--ui-danger); }
+.alertSuccess { background: var(--ui-success-bg); color: var(--ui-success); }
+.alertInfo { background: var(--ui-primary-subtle); color: var(--ui-primary); }
+.empty {
+  padding: 40px 24px; text-align: center; font-size: 13.5px; color: var(--ui-text-secondary);
+  background: var(--ui-surface); border: 1px dashed var(--ui-border); border-radius: var(--ui-radius);
+}
+.muted { color: var(--ui-text-tertiary); }
+
+/* ── Tables ────────────────────────────────────────────── */
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th {
+  padding: 9px 12px; text-align: left; white-space: nowrap;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ui-text-secondary); background: var(--ui-bg-subtle); border-bottom: 1px solid var(--ui-border);
+}
+.table td { padding: 8px 12px; border-bottom: 1px solid var(--ui-border-subtle); }
+.table tbody tr:hover td { background: #fafbfc; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .inner { padding: 12px; }
+  .fieldRow { grid-template-columns: 1fr; }
+}
