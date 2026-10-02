@@ -6285,8 +6285,8 @@ async def api_rake_detention_extract_pdf(
     """Alternate, faster way to fill the month grid above: upload the same
     monthly "Average Plant Detention Report" PDF the Rail Movement Cell
     already emails out, get back a preview (matched against the current
-    Wagon Types registry, positionally — see page_rake_detention_pdf_
-    extractor.py's module docstring for why), and let the frontend prefill
+    Wagon Types registry by wagon type + commodity — see page_rake_detention_
+    pdf_extractor.py's module docstring), and let the frontend prefill
     the grid/summary editors from it for review before Save. Never writes
     to the DB itself — the existing grid/summary Save actions above still
     own that."""

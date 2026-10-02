@@ -20,21 +20,28 @@ source export, confirmed on real files — e.g. IISCO's "BOXN (IISD) *"
 label sits one line above its own numbers). Exact line-position matching
 between label and values is therefore unreliable.
 
-The approach instead never tries to recover the Commodity grouping from
-the PDF at all — rake_detention_master already IS that row registry,
-in the same top-to-bottom order this report has always been transcribed
-in. Per (plant, section), this module extracts two ordered sequences
-independently — wagon-type labels (by x-position column, walking the
-page top-to-bottom) and numeric row-tuples (freetime + however many
-consecutive FY months are populated, oldest first) — then zips them
-positionally: the Nth label pairs with the Nth tuple. A count mismatch
-against that section's existing master rows (a wagon type in the PDF the
-registry doesn't have yet, or vice versa) is reported as a clear
-mismatch in the preview rather than silently guessed at — matching this
-codebase's "stay silent rather than guess" rule (see e.g.
-coal_omi_extractor.py's ValueError-on-mismatch checks) — the actual fix
-for a real new wagon type is to add it via the Wagon Types registry
-first (see /data-entry/rake-detention), then re-extract.
+So each numeric row-tuple (freetime + however many consecutive FY months
+are populated, oldest first) gets its wagon-type label from the wagon
+column — a text-only label line is attached to the vertically nearest
+numeric row, which also reassembles wrapped labels — and is then matched
+to rake_detention_master (the row registry) by WAGON TYPE + COMMODITY
+(see _match_to_master): wagon type must agree, and among same-type
+registry rows the one whose commodity text sits closest to the PDF row
+wins. Matching is NOT positional: a report's row set and order can differ
+from today's registry (FY 2025-26 reports carry 9 BSP inward rows vs 15
+now; ISP lists BCME rows ahead of IISD ones) and a positional zip filed
+later rows under the wrong wagon type. A PDF row with no registry match,
+or a registry row the PDF lacks, is reported in the preview rather than
+silently guessed at — matching this codebase's "stay silent rather than
+guess" rule — the actual fix for a real new wagon type is to add it via
+the Wagon Types registry first (see /data-entry/rake-detention), then
+re-extract.
+
+The column header is found by its row of PLANT + COMMODITY + month
+columns (APR'26 ...), not by the first "COMMODITY" on the page — the
+report title ("COMMODITY WISE AVERAGE PLANT DETENTION ...") sits above it
+— and header words are matched letter-spacing-insensitively: some
+reports (Jun/Sep'26) render page 1's header as "W A G O N".
 
 Column x-positions are computed fresh per page from that page's own
 header row ("COMMODITY", "WAGON"/"TYPE", "FREETIME"), not hardcoded —
@@ -103,27 +110,59 @@ def _page_words_by_top(page):
     return [(top, sorted(by_top[top], key=lambda w: w["x0"])) for top in sorted(by_top.keys())]
 
 
-def _header_anchor_x(rows, *phrases):
-    """First word matching any of `phrases` (case-insensitive, exact) —> its
-    x0, scanning only the first ~15 rows (the header block always sits at
-    the top of a plant-detail page)."""
-    wanted = {p.upper() for p in phrases}
-    for _, row in rows[:15]:
-        for w in row:
-            if w["text"].upper() in wanted:
-                return w["x0"]
+def _find_in_row(row, phrase):
+    """x0 of the word where `phrase` starts in this row's text, matched
+    against the row's words concatenated WITHOUT spaces — so a header the
+    source export renders letter-spaced ("W A G O N", "FREE T I M E", seen
+    on the Jun/Sep'26 reports' page 1) is found the same as a whole word.
+    None if absent."""
+    phrase = phrase.upper().replace(" ", "")
+    joined, owner = "", []
+    for w in row:
+        t = w["text"].upper()
+        joined += t
+        owner.extend([w] * len(t))
+    i = joined.find(phrase)
+    return owner[i]["x0"] if i >= 0 else None
+
+
+_MONTH_COL_RE = re.compile(r"^(APR|MAY|JUNE?|JULY?|AUG|SEPT?|OCT|NOV|DEC|JAN|FEB|MAR)'\d\d")
+
+
+def _header_row_index(rows):
+    """Index of the column-header row ("PLANT  COMMODITY  APR'26  MAY'26 ..."),
+    within the page's first ~25 rows. Requires a month column token so the
+    report TITLE row ("COMMODITY WISE AVERAGE PLANT DETENTION AT STEEL
+    PLANTS ..."), which also contains PLANT and COMMODITY and sits above
+    the header, isn't mistaken for it — anchoring on the title put the
+    Wagon Type cutoff to the right of the wagon labels, dropping every
+    label."""
+    # The month tokens can sit ~1pt off the PLANT/COMMODITY words' own top,
+    # landing in a neighbouring rounded row, so look within a few points.
+    for i, (top, row) in enumerate(rows[:25]):
+        if _find_in_row(row, "PLANT") is None or _find_in_row(row, "COMMODITY") is None:
+            continue
+        near = [w for t, r in rows[max(0, i - 3):i + 4] if abs(t - top) <= 3 for w in r]
+        if any(_MONTH_COL_RE.match(w["text"].upper()) for w in near):
+            return i
     return None
 
 
 def _wagon_col_threshold(rows):
     """x0 cutoff separating the Commodity column's text from the Wagon
-    Type column's — derived per-page from the header row's own COMMODITY
-    and WAGON anchors (this report's page 2 starts ~110pt further left
-    than page 1's, so a fixed cutoff across pages would misfile columns).
-    Returns None if this page has no such header (i.e. not a plant-detail
-    page — the Improvement Summary / Trend pages have a different table)."""
-    commodity_x = _header_anchor_x(rows, "COMMODITY")
-    wagon_x = _header_anchor_x(rows, "WAGON")
+    Type column's — derived per-page from the column header's own
+    COMMODITY and WAGON anchors (this report's page 2 starts ~110pt further
+    left than page 1's, so a fixed cutoff across pages would misfile
+    columns). WAGON sits on its own line a few points above/below the
+    PLANT/COMMODITY header line. Returns None if this page has no such
+    header (i.e. not a plant-detail page — the Improvement Summary / Trend
+    pages have a different table)."""
+    hi = _header_row_index(rows)
+    if hi is None:
+        return None
+    commodity_x = _find_in_row(rows[hi][1], "COMMODITY")
+    wagon_x = next((x for _, row in rows[max(0, hi - 3):hi + 4]
+                    for x in [_find_in_row(row, "WAGON")] if x is not None), None)
     if commodity_x is None or wagon_x is None:
         return None
     return commodity_x + (wagon_x - commodity_x) * 0.6
@@ -150,19 +189,20 @@ def _extract_plant_page(rows, wagon_threshold: float):
     purely by position (see extract_rake_detention_pdf) — so a slightly
     garbled hint here (picking up a neighboring row's fragment) doesn't
     affect which master row a value lands on, only a cosmetic display
-    string. Any non-numeric wagon-zone text seen since the previous
-    numeric tuple is attached to the NEXT tuple; unclaimed trailing text
-    at the very end of a section (e.g. a wrapped continuation appearing
-    after the last row's own numbers) is instead appended to the PREVIOUS
-    tuple's hint, since that's the far more common real shape."""
+    string. A wagon-zone text line with no numbers of its own (a label
+    rendered a line off, or one half of a wrapped label) is attached to the
+    vertically NEAREST numeric row of the same section, ties going to the
+    row below — a wrapped label is printed around its own numbers ("BOXN
+    (NEW" / numbers / "PLANT) *"), so nearest-row, not previous-row, is
+    what reassembles it. Each row's label is its fragments in top order."""
     out = {}
     cur_plant = None
     cur_section = None
-    pending_prefix = []  # wagon-zone fragments seen since the last tuple
+    fragments = []  # (plant, section, top, text) text-only wagon-zone lines
     awaiting_total_numbers = None  # section whose "Total X"/"Overall Wagon" label
                                    # appeared with no numbers on its own line yet
 
-    for _, row in rows:
+    for top, row in rows:
         texts_upper = [w["text"].upper() for w in row]
         joined_upper = " ".join(texts_upper)
 
@@ -179,7 +219,6 @@ def _extract_plant_page(rows, wagon_threshold: float):
         if plant_hit:
             cur_plant, cur_section = plant_hit, "INWARD"
             out[cur_plant] = {s: {"rows": [], "total": None} for s in ("INWARD", "OUTWARD", "OVERALL")}
-            pending_prefix.clear()
 
         if cur_plant is None:
             continue  # header/cover rows before the first plant block
@@ -187,7 +226,6 @@ def _extract_plant_page(rows, wagon_threshold: float):
         total_hit = next((sec for phrase, sec in _SECTION_TOTAL_PHRASES.items()
                            if phrase in joined_upper), None)
         if total_hit:
-            pending_prefix.clear()
             nums = [_num(w["text"]) for w in row if _NUM_RE.match(w["text"])]
             nums = [n for n in nums if n is not None]
             # This report's own total rows have no freetime figure (blank
@@ -225,23 +263,107 @@ def _extract_plant_page(rows, wagon_threshold: float):
             continue
 
         if len(nums) >= 2:
-            hint = " ".join(pending_prefix + wagon_zone_text)
-            pending_prefix.clear()
-            out[cur_plant][cur_section]["rows"].append((hint, nums))
+            parts = [(top, " ".join(wagon_zone_text))] if wagon_zone_text else []
+            out[cur_plant][cur_section]["rows"].append([parts, nums, top])
         elif wagon_zone_text:
-            if out[cur_plant][cur_section]["rows"]:
-                # No numbers on this row — most often a wrapped label
-                # fragment trailing its own already-emitted row (see
-                # docstring), so attach it there rather than to whatever
-                # row comes next.
-                prev_hint, prev_nums = out[cur_plant][cur_section]["rows"][-1]
-                out[cur_plant][cur_section]["rows"][-1] = (
-                    (prev_hint + " " + " ".join(wagon_zone_text)).strip(), prev_nums,
-                )
-            else:
-                pending_prefix.extend(wagon_zone_text)
+            fragments.append((cur_plant, cur_section, top, " ".join(wagon_zone_text)))
 
+    for plant, section, ftop, text in fragments:
+        cands = out[plant][section]["rows"]
+        if not cands:
+            continue
+        best = min(cands, key=lambda r: (abs(r[2] - ftop), r[2] < ftop))
+        best[0].append((ftop, text))
+
+    for sections in out.values():
+        for blob in sections.values():
+            blob["rows"] = [(" ".join(txt for _, txt in sorted(parts)), nums, top)
+                            for parts, nums, top in blob["rows"]]
     return out
+
+
+def _commodity_lines(rows, hi, wagon_threshold):
+    """[(top, text), ...] — each line of Commodity-column text on this page
+    ("Ind.Coking Coal", "Outward" / "Despatch", "Over all" ...).
+
+    The Commodity column is a merged cell per commodity on some pages and
+    one cell per row on others, and its text sits near — not on — the
+    rows it labels: vertically centred in a merged cell, and sometimes a
+    full line off (BSP's "Boiler Coal" is drawn on the line above its own
+    row). So the text is used as positional evidence for matching (see
+    _match_to_master), never as a hard per-row key."""
+    header = rows[hi][1]
+    commodity_x = _find_in_row(header, "COMMODITY")
+    plant_x = _find_in_row(header, "PLANT")
+    if commodity_x is None or plant_x is None:
+        return []
+    lo_x = plant_x + (commodity_x - plant_x) * 0.5
+    out = []
+    for top, row in rows[hi + 1:]:
+        words = [w["text"] for w in row
+                 if lo_x <= w["x0"] < wagon_threshold and not _NUM_RE.match(w["text"])
+                 and w["text"].upper() not in PLANT_TOKENS and w["text"].upper() not in _BANNER_FILLER
+                 and w["text"].upper() not in _DIRECTION_TOKENS]
+        if words:
+            out.append((top, " ".join(words)))
+    return out
+
+
+_NO_TEXT_COST = 60.0   # commodity text not found near the row at all
+
+
+def _commodity_distance(row_top, commodity, lines):
+    """Vertical distance (pt) from a PDF row to the nearest line of text
+    belonging to `commodity` (normalized match, allowing a commodity split
+    across lines: "Outward" + "Despatch")."""
+    key = _norm(commodity)
+    if not key:
+        return 0.0
+    best = None
+    for top, text in lines:
+        k = _norm(text)
+        if k and (k == key or (len(k) >= 4 and (k in key or key in k))):
+            d = abs(top - row_top)
+            best = d if best is None else min(best, d)
+    return _NO_TEXT_COST if best is None else best
+
+
+def _match_to_master(extracted, sec_master):
+    """Match a section's PDF rows to its master registry rows ->
+    [(extracted_row, master_row | None)] in PDF order.
+
+    A pair needs the same wagon type (normalized). Among candidates, the
+    master row whose COMMODITY text sits closest to the PDF row wins —
+    globally, cheapest pair first — with registry order as a tie-break
+    (Overall-section rows have no commodity and rely on it). This doesn't
+    assume the PDF lists rows in registry order (ISP's report groups its
+    BCME rows ahead of the IISD ones; the registry groups by commodity) or
+    the same row set (older reports lack wagon types added since, e.g.
+    BSP's FY 2025-26 inward table has 9 rows vs 15 now) — a positional zip
+    silently filed later rows under the wrong wagon type."""
+    cands = []
+    for i, (label, _nums, top, lines) in enumerate(extracted):
+        w_key = _norm(label)
+        for j, mr in enumerate(sec_master):
+            if _norm(mr["row_label"]) != w_key:
+                continue
+            cost = _commodity_distance(top, mr.get("commodity"), lines) + 0.01 * abs(i - j)
+            cands.append((cost, i, j))
+    cands.sort()
+    row_to_master, taken = {}, set()
+    for cost, i, j in cands:
+        if i in row_to_master or j in taken:
+            continue
+        row_to_master[i] = j
+        taken.add(j)
+    return [(row, sec_master[row_to_master[i]] if i in row_to_master else None)
+            for i, row in enumerate(extracted)]
+
+
+def _norm(s):
+    """Uppercase letters/digits only — 'Ind. Coking Coal' == 'Ind.Coking Coal',
+    'LOHA-BRN' == 'LOHA BRN', 'BOXN (IISD) *' == 'BOXN (IISD)*'."""
+    return re.sub(r"[^A-Z0-9]", "", (s or "").upper())
 
 
 def _merge_plant_dicts(a: dict, b: dict) -> dict:
@@ -307,6 +429,13 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
             wagon_threshold = _wagon_col_threshold(rows)
             if wagon_threshold is not None:
                 page_blob = _extract_plant_page(rows, wagon_threshold)
+                # Each extracted row: (wagon label hint, numbers, its line's
+                # top, this page's Commodity-column text lines) — the lines
+                # are what _match_to_master measures commodity distance on.
+                lines = _commodity_lines(rows, _header_row_index(rows), wagon_threshold)
+                for sections in page_blob.values():
+                    for blob in sections.values():
+                        blob["rows"] = [(h, n, t, lines) for h, n, t in blob["rows"]]
                 plant_blob = _merge_plant_dicts(plant_blob, page_blob)
                 continue
             # No plant-detail header on this page. Only the page titled
@@ -338,20 +467,23 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
             total_master = next((r for r in master_rows
                                   if r["section"] == section and r["is_total"]), None)
 
+            # Match each PDF row to a master row by (commodity, wagon type),
+            # not by position: a report's row set differs from today's
+            # registry whenever a wagon type is added or dropped (e.g. the
+            # FY 2025-26 reports carry 9 BSP inward rows vs 15 now), and a
+            # positional zip then silently files every later row under the
+            # wrong wagon type. Wagon type alone isn't unique (BOXN appears
+            # under most commodities), hence the commodity from the merged
+            # Commodity cell. A master row with no commodity (the Overall
+            # section) matches on wagon type alone; duplicates of the same
+            # key are consumed in registry order.
+            pairs = _match_to_master(blob["rows"], sec_master)
+            used = {m["id"] for _, m in pairs if m is not None}
+
             out_rows = []
-            n = max(len(blob["rows"]), len(sec_master))
-            for i in range(n):
-                extracted = blob["rows"][i] if i < len(blob["rows"]) else None
-                master = sec_master[i] if i < len(sec_master) else None
-                if extracted is None:
-                    out_rows.append({
-                        "wagon_type": None, "freetime_hours": None, "monthly": {},
-                        "matched_master_id": master["id"] if master else None,
-                        "matched_row_label": master["row_label"] if master else None,
-                        "status": "missing_in_pdf",
-                    })
-                    continue
-                wagon_label, raw_nums = extracted
+            for extracted, master in pairs:
+                wagon_label, raw_nums, _top, _lines = extracted
+                commodity = master.get("commodity") if master else None
                 # Whether the row's first number is Freetime or already
                 # April's own value depends on the MASTER row's own
                 # freetime_hours (None there means this row's Freetime
@@ -365,7 +497,7 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
                 monthly_vals = raw_nums[1:] if has_freetime else raw_nums
                 if master is None:
                     out_rows.append({
-                        "wagon_type": wagon_label, "freetime_hours": freetime,
+                        "wagon_type": wagon_label, "commodity": commodity, "freetime_hours": freetime,
                         "monthly": dict(zip(months, monthly_vals)),
                         "matched_master_id": None, "matched_row_label": None,
                         "status": "new_wagon_type_not_in_registry",
@@ -378,11 +510,21 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
                     )
                     continue
                 out_rows.append({
-                    "wagon_type": wagon_label, "freetime_hours": freetime,
+                    "wagon_type": wagon_label, "commodity": commodity, "freetime_hours": freetime,
                     "monthly": dict(zip(months, monthly_vals)),
                     "matched_master_id": master["id"], "matched_row_label": master["row_label"],
                     "status": "ok",
                 })
+
+            # Registry rows this report doesn't carry (e.g. a wagon type
+            # added after the report's month): nothing extracted for them.
+            for m in sec_master:
+                if m["id"] not in used:
+                    out_rows.append({
+                        "wagon_type": None, "commodity": m.get("commodity"), "freetime_hours": None,
+                        "monthly": {}, "matched_master_id": m["id"],
+                        "matched_row_label": m["row_label"], "status": "missing_in_pdf",
+                    })
 
             total_out = None
             if blob["total"] is not None:
