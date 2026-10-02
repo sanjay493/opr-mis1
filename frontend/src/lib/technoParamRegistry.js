@@ -5,7 +5,7 @@
 export const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'SAIL'];
 
 // ── Unit → Area grouping ──────────────────────────────────────────────────────
-export const AREA_ORDER = ['Blast Furnace', 'SMS', 'Rolling Mills', 'Coke Ovens', 'Sinter Plant', 'General'];
+export const AREA_ORDER = ['Blast Furnace', 'SMS', 'Rolling Mills', 'Coke Ovens', 'Sinter Plant', 'Coal', 'General'];
 
 export const BF_UNITS   = new Set(['BF_Shop','BF-1','BF-2','BF-3','BF-4','BF-5','BF-6','BF-7','BF-8']);
 export const SMS_UNITS  = new Set(['SMS','SMS-1','SMS-2','SMS-3','SMS-I','SMS-II']);
@@ -15,6 +15,9 @@ export const MILL_UNITS = new Set([
 ]);
 export const COKE_UNITS = new Set(['COB','COB-old','COB-new','Coke Ovens']);
 export const SINT_UNITS = new Set(['SP','SP-1','SP-2','SP-3','Sinter']);
+// Written by the Coal OMI upload (backend/api_coal_omi_techno.py). Their own
+// area so they don't fall into General and pick up General's field list.
+export const COAL_UNITS = new Set(['Coal_Consumption','Coal_Receipt_Stock']);
 
 export function unitArea(u) {
   if (BF_UNITS.has(u))   return 'Blast Furnace';
@@ -22,6 +25,7 @@ export function unitArea(u) {
   if (MILL_UNITS.has(u)) return 'Rolling Mills';
   if (COKE_UNITS.has(u)) return 'Coke Ovens';
   if (SINT_UNITS.has(u)) return 'Sinter Plant';
+  if (COAL_UNITS.has(u)) return 'Coal';
   return 'General';
 }
 
@@ -102,16 +106,32 @@ export const PARAM_TEMPLATES = {
   // known mill has its own list there, since plants name the same concept
   // differently (yield / yield_total, heat_consumption / specific_heat ...).
   'Rolling Mills': ['yield','availability','utilisation','rolling_rate'],
+  // Only fields a report page reads. bof_slag_utilisation, water_consumption
+  // and cog/bfg/ldg_recovery were dropped (2026-10-02): no report reads
+  // them and no upload writes them (BSL's techno upload alone writes
+  // water_consumption), so they only ever showed as blank rows. Any stored
+  // value still appears below the list as an extra row.
   'General': [
     'specific_energy_consumption','sp_power_consumption',
-    'bof_slag_utilisation','coke_screen_loss',
+    'coke_screen_loss',
     'coal_to_hm',
-    'sp_water_consumption','water_consumption',
-    'sp_co2_emission',
+    'sp_co2_emission','sp_water_consumption','sp_pm_emission',
     // Key Parameters page (page 5) — no other source yet, filled here
     'hm_to_pcm_sandpit_drypit',
     'capex','labour_productivity','avg_rake_detention_time','rltifr',
-    'cog_recovery','bfg_recovery','ldg_recovery',
+  ],
+  // Per-unit, see COAL_TEMPLATES.
+  'Coal': [],
+};
+
+// Coal units' fields, in the "Consumption of Coking Coal and CDI Coal"
+// page's order (backend/page_coal_consumption.py). Coal_Receipt_Stock
+// (SAIL only) has no fixed list; it shows whatever the upload stored.
+export const COAL_TEMPLATES = {
+  Coal_Consumption: [
+    'pcc','pcc_pct','mcc','mcc_pct','indigenous_total','indigenous_total_pct',
+    'hard','hard_pct','soft','soft_pct','imported_total','imported_total_pct',
+    'total_coking_coal','cdi_coal',
   ],
 };
 
@@ -162,7 +182,8 @@ export const MILL_TEMPLATES = {
 // PLANT_PARAM_EXTRAS).
 export function templateFor(area, plant, unit) {
   const millList = area === 'Rolling Mills' && unit ? MILL_TEMPLATES[plant]?.[unit] : null;
-  const base   = millList || PARAM_TEMPLATES[area] || [];
+  const coalList = area === 'Coal' && unit ? (COAL_TEMPLATES[unit] || []) : null;
+  const base   = millList || coalList || PARAM_TEMPLATES[area] || [];
   const extras = (PLANT_PARAM_EXTRAS[plant] || {})[area] || [];
   return [...base, ...extras];
 }
@@ -176,10 +197,34 @@ export const KNOWN_UNITS = [
   'General','PM','RSM','MM','URM','WRM','BRM','HSM','HSM-1','HSM-2','NPM',
   'CRM','CRM 1&2','CRM 3','ERW','SSM','SWP','BM','USM','MSM',
   'Merchant Mill','Wheel Plant','Axle Plant',
+  'Coal_Consumption',
 ];
 
 // ── Label helpers ─────────────────────────────────────────────────────────────
 export const _LABEL_MAP = {
+  // Coal consumption (unit Coal_Consumption, '000 T and % of total coking coal)
+  pcc:                                  "Indigenous PCC ('000 T)",
+  pcc_pct:                              'Indigenous PCC (%)',
+  mcc:                                  "Indigenous MCC ('000 T)",
+  mcc_pct:                              'Indigenous MCC (%)',
+  indigenous_total:                     "Indigenous Total ('000 T)",
+  indigenous_total_pct:                 'Indigenous Total (%)',
+  hard:                                 "Imported Hard Coal ('000 T)",
+  hard_pct:                             'Imported Hard Coal (%)',
+  soft:                                 "Imported Soft Coal ('000 T)",
+  soft_pct:                             'Imported Soft Coal (%)',
+  imported_total:                       "Imported Total ('000 T)",
+  imported_total_pct:                   'Imported Total (%)',
+  total_coking_coal:                    "Total Coking Coal ('000 T)",
+  cdi_coal:                             "CDI Coal ('000 T)",
+  // Older General copies of the coal tonnages (see FIELD_SOURCES)
+  indigenous_pcc:                       "Indigenous PCC ('000 T)",
+  indigenous_mcc:                       "Indigenous MCC ('000 T)",
+  imported_hard_coal:                   "Imported Hard Coal ('000 T)",
+  imported_soft_coal:                   "Imported Soft Coal ('000 T)",
+  sp_pm_emission:                       'Sp. PM Emission (kg/tcs)',
+  specific_co2_emissions:               'Sp. CO₂ Emission (old field)',
+  specific_water_consumption:           'Sp. Water Consumption (old field)',
   // Coal / energy
   coal_to_hm:                           'Coal to Hot Metal',
   sp_water_consumption:                 'Sp. Water Consumption',
@@ -301,6 +346,45 @@ export const _LABEL_MAP = {
   bfg_recovery:                         'Recovery of BFG (Nm³/THM)',
   ldg_recovery:                         'Recovery of LDG (Nm³/TCS)',
 };
+
+// Where each General / Coal field's value comes from, shown as a small tag
+// in the manual-entry form so a pre-filled value isn't a mystery. kind:
+// "upload" = written by a file upload, "manual" = typed in on another
+// entry page, "old" = no longer written, kept only for older months.
+const _PLANT_TECHNO = { kind: 'upload', text: 'Plant techno upload' };
+const _KEY_PARAMS = { kind: 'manual', text: 'Key Parameters entry' };
+const _COAL_OMI = { kind: 'upload', text: 'Coal OMI upload' };
+const _OLD_COAL = { kind: 'old', text: 'Old copy · now in Coal tab' };
+export const FIELD_SOURCES = {
+  General: {
+    specific_energy_consumption: _PLANT_TECHNO,
+    sp_power_consumption:        _PLANT_TECHNO,
+    coke_screen_loss:            _PLANT_TECHNO,
+    coal_to_hm:                  _PLANT_TECHNO,
+    specific_heat_coke_ovens:    _PLANT_TECHNO,
+    sp_co2_emission:             { kind: 'upload', text: 'EMD EPI / plant techno upload' },
+    sp_water_consumption:        { kind: 'upload', text: 'EMD EPI / plant techno upload' },
+    sp_pm_emission:              { kind: 'upload', text: 'EMD EPI upload' },
+    water_consumption:           { kind: 'upload', text: 'BSL techno upload · not in any report' },
+    hm_to_pcm_sandpit_drypit:    _KEY_PARAMS,
+    capex:                       _KEY_PARAMS,
+    labour_productivity:         _KEY_PARAMS,
+    avg_rake_detention_time:     _KEY_PARAMS,
+    demurrage:                   _KEY_PARAMS,
+    rltifr:                      _KEY_PARAMS,
+    indigenous_pcc:              _OLD_COAL,
+    indigenous_mcc:              _OLD_COAL,
+    imported_hard_coal:          _OLD_COAL,
+    imported_soft_coal:          _OLD_COAL,
+    specific_co2_emissions:      { kind: 'old', text: 'Replaced by sp_co2_emission' },
+    specific_water_consumption:  { kind: 'old', text: 'Replaced by sp_water_consumption' },
+  },
+  Coal: { '*': _COAL_OMI },
+};
+export function sourceOf(unit, key) {
+  const area = FIELD_SOURCES[unitArea(unit)];
+  return area?.[key] || area?.['*'] || null;
+}
 
 export function labelOf(key) {
   if (_LABEL_MAP[key]) return _LABEL_MAP[key];

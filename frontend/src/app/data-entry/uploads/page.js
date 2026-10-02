@@ -400,9 +400,11 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
 // ── Coal OMI Excel extractor ─────────────────────────────────────────────────
 // The sole source of Coal Consumption data (Indigenous PCC/MCC, Imported
 // Hard/Soft coking coal) — read directly from the "Coal OMI - <Mon><YY>.xlsx"
-// workbook's decimal cells instead of a PDF table, plus till_month (computed
-// server-side by summing this FY's monthly values) and a new SAIL-only
-// Receipt/Consumption/Stock record. See backend/api_coal_omi_techno.py.
+// workbook's decimal cells, saved under unit="Coal_Consumption" only (no
+// longer duplicated into "General" since 2026-10-02), plus a SAIL-only
+// Receipt/Consumption/Stock record. The per-plant table below reviews what
+// the workbook says; it isn't saved itself. See
+// backend/api_coal_omi_techno.py.
 // (The CO2/Water/PM EPI card above used to also extract these same 4 keys
 // from some report formats' own Coal Consumption table, but that's been
 // removed — see coal_co2_epi_extractor.py's module docstring — so this is
@@ -514,9 +516,8 @@ function CoalOmiExtractRow({ reportMonth, apiBase, onSuccess }) {
       </div>
       <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
         The monthly "Coal OMI" workbook (2 sheets: coking coal consumption, and SAIL-level receipt/consumption/stock).
-        Till-month is computed as a running sum of April through {reportMonth} from what's already saved — the report's
-        own printed cumulative is shown only as a cross-check, flagged (⚠) if it disagrees. SAIL is computed as the sum
-        of the 5 plants, cross-checked against the report's own SAIL row the same way.
+        Month and till-month figures are the workbook&apos;s own. SAIL is computed as the sum of the 5 plants and flagged (⚠)
+        if it disagrees with the report&apos;s own SAIL row. Saved as each plant&apos;s Coal Consumption record.
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <input ref={inputRef} type="file" accept=".xlsx"

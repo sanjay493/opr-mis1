@@ -551,14 +551,19 @@ def _imported_coal_blend_pct(report_month: str):
     + Soft), summed across the 5 plants - a sum-of-quantities ratio, so
     plant-level quantities are summed first and the % taken once at the
     end (not averaged per-plant), matching how the source EPI report's own
-    SAIL blend % is derived."""
+    SAIL blend % is derived.
+
+    Reads each plant's unit="Coal_Consumption" row (hard/soft/pcc/mcc, the
+    Coal OMI upload's single stored copy); falls back to the older
+    unit="General" keys for months uploaded before 2026-10-02, when the
+    upload still wrote that duplicate (see api_coal_omi_techno.py)."""
     conn = db.connect()
     cur = conn.cursor()
     try:
         ph = ",".join("?" * len(_COAL_BLEND_PLANTS))
         cur.execute(
-            f"SELECT plant, techno_json FROM techno_data "
-            f"WHERE report_month=? AND unit='General' AND plant IN ({ph})",
+            f"SELECT plant, unit, techno_json FROM techno_data "
+            f"WHERE report_month=? AND unit IN ('Coal_Consumption','General') AND plant IN ({ph})",
             [report_month, *_COAL_BLEND_PLANTS],
         )
         rows = cur.fetchall()
@@ -566,19 +571,26 @@ def _imported_coal_blend_pct(report_month: str):
         conn.close()
 
     import json as _json
-    indigenous = imported = 0.0
-    found = False
-    for _plant, tj in rows:
+    by_plant = {}
+    for plant, unit, tj in rows:
         m = _json.loads(tj).get("month", {})
-        pcc, mcc = m.get("indigenous_pcc"), m.get("indigenous_mcc")
-        hard, soft = m.get("imported_hard_coal"), m.get("imported_soft_coal")
-        if None in (pcc, mcc, hard, soft):
+        if unit == "Coal_Consumption":
+            q = (m.get("pcc"), m.get("mcc"), m.get("hard"), m.get("soft"))
+        else:
+            q = (m.get("indigenous_pcc"), m.get("indigenous_mcc"),
+                 m.get("imported_hard_coal"), m.get("imported_soft_coal"))
+        if None in q:
             continue
-        found = True
+        # Coal_Consumption wins over General when a plant has both.
+        if unit == "Coal_Consumption" or plant not in by_plant:
+            by_plant[plant] = q
+
+    indigenous = imported = 0.0
+    for pcc, mcc, hard, soft in by_plant.values():
         indigenous += pcc + mcc
         imported += hard + soft
     total = indigenous + imported
-    return round(imported / total * 100, 1) if found and total > 0 else None
+    return round(imported / total * 100, 1) if by_plant and total > 0 else None
 
 
 def _imported_coal_blend_target(report_month: str):

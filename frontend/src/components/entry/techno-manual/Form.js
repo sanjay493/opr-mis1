@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import {
   PLANTS, AREA_ORDER, PARAM_TEMPLATES, PLANT_PARAM_EXTRAS, templateFor,
-  KNOWN_UNITS, unitArea, BF_ORDER, sortUnitsInArea, _LABEL_MAP, labelOf,
+  KNOWN_UNITS, unitArea, BF_ORDER, sortUnitsInArea, _LABEL_MAP, labelOf, sourceOf,
 } from '@/lib/technoParamRegistry';
 import ui from '@/styles/ui.module.css';
 import m from './manual.module.css';
@@ -166,10 +166,14 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy, selParam, on
   const area        = unitArea(unit);
   const templateKeys = templateFor(area, plant, unit);
 
+  // Numeric fields only: a unit can also store text/objects (Coal_Consumption's
+  // "label", Coal_Receipt_Stock's "stock_history") that a number box can't
+  // show. They stay in the saved record untouched; they just aren't listed.
+  const isNumeric = (v) => v === null || v === undefined || typeof v === 'number';
   const dbKeys = Array.from(new Set([
     ...Object.keys(data?.month      || {}),
     ...Object.keys(data?.till_month || {}),
-  ]));
+  ])).filter(k => isNumeric(data?.month?.[k]) && isNumeric(data?.till_month?.[k]));
 
   // Template params first (in order), then any extra DB keys not in template
   const allKeys = [
@@ -203,6 +207,7 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy, selParam, on
             const isTempl = templateKeys.includes(key);
             const isSel   = key === selParam;
             const label   = labelOf(key);
+            const src     = sourceOf(unit, key);
             return (
               <tr key={key} className={isSel ? m.rowSelected : undefined}>
                 <td>
@@ -214,6 +219,11 @@ function UnitForm({ unit, plant, data, initialData, onChange, busy, selParam, on
                     <span>
                       <span className={m.paramName}>{label}</span>
                       <span className={m.paramKey}>{key}</span>
+                      {src && (
+                        <span className={`${m.srcTag} ${src.kind === 'upload' ? m.srcUpload : src.kind === 'old' ? m.srcOld : ''}`}>
+                          {src.text}
+                        </span>
+                      )}
                     </span>
                   </button>
                 </td>

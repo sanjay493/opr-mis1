@@ -74,7 +74,36 @@ const cell = {
   whiteSpace: 'nowrap',
 };
 
-export default function TechnoExtractedParams({ title, description, paramRows, sumTillMonthKeys = [], renderExtra }) {
+// `overlay` (optional): {unit, keyMap: {generalKey: overlayKey}} — also
+// reads that unit and lets its non-null values win over the General ones,
+// under the General key names the rest of this viewer uses. Lets a viewer
+// move to a newer unit while months saved before it existed still show
+// their older General values (coal consumption: Coal_Consumption's
+// pcc/mcc/hard/soft over General's indigenous_pcc/... — see
+// backend/api_coal_omi_techno.py).
+function applyOverlay(general, extra, keyMap) {
+  const out = { month: { ...(general.month || {}) }, till_month: { ...(general.till_month || {}) } };
+  for (const period of ['month', 'till_month']) {
+    for (const [gKey, oKey] of Object.entries(keyMap)) {
+      const v = extra?.[period]?.[oKey];
+      if (v !== null && v !== undefined && v !== '') out[period][gKey] = v;
+    }
+  }
+  return out;
+}
+
+async function fetchUnit(plant, month, unit) {
+  try {
+    const r = await fetch(`${API_BASE_URL}/api/techno/data?plant=${plant}&report_month=${month}&unit=${encodeURIComponent(unit)}`);
+    if (!r.ok) return {};
+    const j = await r.json();
+    return j.data?.[unit] || {};
+  } catch {
+    return {};
+  }
+}
+
+export default function TechnoExtractedParams({ title, description, paramRows, sumTillMonthKeys = [], renderExtra, overlay }) {
   const def = getDefaultPeriod();
   const [monthName, setMonthName] = useState(def.monthName);
   const [year, setYear] = useState(def.year);
@@ -94,12 +123,13 @@ export default function TechnoExtractedParams({ title, description, paramRows, s
     setError(null);
     Promise.all(
       PLANTS.flatMap((p) =>
-        fyMonths.map((m) =>
-          fetch(`${API_BASE_URL}/api/techno/data?plant=${p}&report_month=${m}&unit=General`)
-            .then((r) => (r.ok ? r.json() : { data: {} }))
-            .then((j) => [p, m, j.data?.General || {}])
-            .catch(() => [p, m, {}])
-        )
+        fyMonths.map(async (m) => {
+          const [g, o] = await Promise.all([
+            fetchUnit(p, m, 'General'),
+            overlay ? fetchUnit(p, m, overlay.unit) : null,
+          ]);
+          return [p, m, o ? applyOverlay(g, o, overlay.keyMap) : g];
+        })
       )
     )
       .then((entries) => {

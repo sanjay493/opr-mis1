@@ -3,25 +3,32 @@ API endpoints for the "Coal OMI" Excel report — see
 techno_project/coal_omi_extractor.py for the parsing itself and its module
 docstring for the source workbook's layout.
 
-Higher-precision sibling to /api/coal-co2 (which reads the older PDF/docx
-EPI report): same 4 coal-consumption keys under techno_data (unit=
-"General"), but read directly from the workbook's decimal cell values
-instead of a PDF table, plus:
-  - till_month for those 4 keys, computed by summing this FY's monthly
-    values via techno_cumulative.py's "sum" rule (CUMULATIVE_RULES) — the
-    older extractor never populates till_month for these keys at all, which
-    is why page_key_parameters.py's coal-blend-% figures have been blank.
-  - a computed SAIL row (sum of the 5 plants) for those same keys, cross-
-    checked against the workbook's own printed SAIL row.
-  - a second, SAIL-only techno_data row (unit="Coal_Receipt_Stock") for
-    receipt plan/actual, consumption actual/average, and opening stock —
-    data this app has never captured before.
+Saves two kinds of techno_data rows:
+  - unit="Coal_Consumption", one per plant + SAIL: the full as-printed
+    OIS-1 row (hard/soft/pcc/mcc, CDI coal, totals and blend %), month and
+    till_month verbatim from the workbook. This is the single stored copy
+    of coal consumption.
+  - unit="Coal_Receipt_Stock", SAIL only: receipt plan/actual, consumption
+    actual/average, and opening stock (OIS-2).
+
+Until 2026-10-02 the upload also wrote the same 4 tonnages again under
+unit="General" (indigenous_pcc/indigenous_mcc/imported_hard_coal/
+imported_soft_coal), a duplicate of Coal_Consumption's pcc/mcc/hard/soft
+that confused the techno manual-entry form. It no longer does. Months
+saved before then still hold those General keys, so readers
+(page_key_parameters.py, page_at_a_glance.py, the /data-entry/coal-
+consumption viewer) prefer Coal_Consumption and fall back to General.
+
+The preview still returns per-plant + SAIL rows for those 4 keys
+("plants"/"sail") as a review table: month from the workbook, till_month
+the workbook's own printed cumulative, and a computed SAIL sum of the 5
+plants cross-checked against the printed SAIL row. They are display-only
+and never saved.
 
 Flow (mirrors /api/coal-co2's preview/insert/conflict pattern):
-  1. POST /preview — extract, compute till_month + SAIL sum, cross-check
-     both against the report's own printed cumulative/SAIL rows (flagged in
-     validation_warnings, not blocking), flag any existing techno_data
-     overlap.
+  1. POST /preview — extract, compute the SAIL sum, cross-check it against
+     the report's own printed SAIL row (flagged in validation_warnings, not
+     blocking), flag any existing techno_data overlap.
   2. POST /insert — MERGE the (optionally trimmed) records into techno_data.
      409s on conflicts unless confirm_replace=true.
 """
@@ -43,13 +50,11 @@ from coal_omi_extractor import (  # noqa: E402
 
 _COAL_CONSUMPTION_UNIT = "Coal_Consumption"
 from db import init_db, merge_upsert_techno_data, get_techno_data  # noqa: E402
-from techno_cumulative import compute_cumulative_preview  # noqa: E402
 from api_unified_techno import _validate_month  # noqa: E402
 
 router = APIRouter(prefix="/api/coal-omi", tags=["coal-omi"])
 
 _SAIL_TOLERANCE = 0.02          # '000 T — printed values are already rounded to 3dp
-_TILL_MONTH_TOLERANCE = 0.05    # '000 T — cumulative rounding compounds slightly
 
 
 def _existing_conflicts(report_month: str, records: list) -> list:
@@ -71,42 +76,25 @@ def _existing_conflicts(report_month: str, records: list) -> list:
 
 def _build_plant_records(ois1: dict, report_month: str):
     """-> (plant_records[5], sail_record, validation_warnings[])
-    plant_records/sail_record: {"plant","unit":"General","techno_json":{"month","till_month"}}
-    till_month for every plant + SAIL comes from compute_cumulative_preview
-    (April->report_month sum of DB-stored monthly values, with this
-    extraction's own report_month value substituted in via current_value)."""
+    Display-only review rows for the 4 coal keys (never saved - see the
+    module docstring): month from the workbook, till_month the workbook's
+    own printed cumulative. SAIL month is the computed sum of the 5 plants,
+    cross-checked against the printed SAIL row."""
     warnings = []
     plant_records = []
     sail_month_computed = {k: 0.0 for k in COAL_KEY_UNITS}
 
     for plant in PLANTS:
         month_vals = ois1[plant]["month"]
-        till_vals = {}
         for key, v in month_vals.items():
-            if v is None:
-                continue
-            sail_month_computed[key] += v
-            try:
-                result = compute_cumulative_preview(plant, "General", key, report_month, current_value=v)
-                till_vals[key] = round(result["result"], 3)
-            except ValueError as e:
-                warnings.append({"type": "till_month_unavailable", "plant": plant, "key": key, "detail": str(e)})
-                continue
-
-            reported_cum = ois1[plant]["report_cumulative"].get(key)
-            if reported_cum is not None and abs(till_vals[key] - reported_cum) > _TILL_MONTH_TOLERANCE:
-                warnings.append({
-                    "type": "till_month_mismatch", "plant": plant, "key": key,
-                    "computed": till_vals[key], "reported": reported_cum,
-                    "diff": round(till_vals[key] - reported_cum, 3),
-                })
-
+            if v is not None:
+                sail_month_computed[key] += v
+        till_vals = {k: v for k, v in ois1[plant]["report_cumulative"].items() if v is not None}
         plant_records.append({
             "plant": plant, "unit": "General",
             "techno_json": {"month": month_vals, "till_month": till_vals},
         })
 
-    # SAIL: computed sum of the 5 plants vs. the workbook's own printed SAIL row
     sail_reported_month = ois1.get("SAIL", {}).get("month", {})
     for key, computed in sail_month_computed.items():
         reported = sail_reported_month.get(key)
@@ -117,19 +105,12 @@ def _build_plant_records(ois1: dict, report_month: str):
                 "diff": round(computed - reported, 3),
             })
 
-    sail_till_vals = {}
-    for key, v in sail_month_computed.items():
-        try:
-            result = compute_cumulative_preview("SAIL", "General", key, report_month, current_value=round(v, 3))
-            sail_till_vals[key] = round(result["result"], 3)
-        except ValueError as e:
-            warnings.append({"type": "till_month_unavailable", "plant": "SAIL", "key": key, "detail": str(e)})
-
+    sail_till = {k: v for k, v in ois1.get("SAIL", {}).get("report_cumulative", {}).items() if v is not None}
     sail_record = {
         "plant": "SAIL", "unit": "General",
         "techno_json": {
             "month": {k: round(v, 3) for k, v in sail_month_computed.items()},
-            "till_month": sail_till_vals,
+            "till_month": sail_till,
         },
     }
 
@@ -200,11 +181,11 @@ async def preview_coal_omi(
         ois2_record = _build_ois2_record(blob["ois2"])
         detail_records = _build_ois1_detail_records(blob["ois1_detail"])
 
-        all_records = plant_records + [sail_record, ois2_record] + detail_records
-        conflicts = _existing_conflicts(report_month, all_records)
+        saved_records = [ois2_record] + detail_records
+        conflicts = _existing_conflicts(report_month, saved_records)
         total_params = sum(
             sum(1 for v in r["techno_json"]["month"].values() if v is not None)
-            for r in all_records
+            for r in saved_records
         )
 
         return {
@@ -235,22 +216,19 @@ async def preview_coal_omi(
 @router.post("/insert")
 async def insert_coal_omi(payload: dict):
     """
-    Body: { report_month, source_file, plants: [{plant,unit,techno_json}],
-            sail: {...}, ois2: {...}, detail: [{plant,unit,techno_json}],
-            confirm_replace: bool }
+    Body: { report_month, source_file, ois2: {...},
+            detail: [{plant,unit,techno_json}], confirm_replace: bool }
+    "plants"/"sail" from the preview may still be sent; they're display-only
+    and ignored here (see the module docstring).
     """
     report_month = payload.get("report_month", "")
     source_file = payload.get("source_file", "")
-    plant_records = payload.get("plants", [])
-    sail_record = payload.get("sail")
     ois2_record = payload.get("ois2")
     detail_records = payload.get("detail", [])
     confirm_replace = bool(payload.get("confirm_replace"))
 
     _validate_month(report_month)
-    all_records = list(plant_records)
-    if sail_record:
-        all_records.append(sail_record)
+    all_records = []
     if ois2_record:
         all_records.append(ois2_record)
     all_records.extend(detail_records)

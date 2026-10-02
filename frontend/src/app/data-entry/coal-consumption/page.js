@@ -19,6 +19,14 @@ const PARAM_ROWS = [
 // TechnoExtractedParams.js — it prefers the stored value when present).
 const SUM_TILL_MONTH_KEYS = PARAM_ROWS.map((p) => p.key);
 
+// The Coal OMI upload stores these only under unit="Coal_Consumption" (its
+// own key names) since 2026-10-02; earlier months still have them under
+// "General". Read Coal_Consumption first, General as the fallback.
+const COAL_OVERLAY = {
+  unit: 'Coal_Consumption',
+  keyMap: { indigenous_pcc: 'pcc', indigenous_mcc: 'mcc', imported_hard_coal: 'hard', imported_soft_coal: 'soft' },
+};
+
 const cell = { padding: '6px 10px', fontSize: '10.5pt', borderBottom: '1px solid #e8eaed' };
 
 function fmtNum(v) {
@@ -176,6 +184,7 @@ export default function CoalConsumptionPage() {
       description="Indigenous and imported coal consumption across all 5 plants."
       paramRows={PARAM_ROWS}
       sumTillMonthKeys={SUM_TILL_MONTH_KEYS}
+      overlay={COAL_OVERLAY}
       renderExtra={CoalReceiptStockSection}
     />
   );

@@ -269,6 +269,20 @@
 .paramExtra .paramName { font-weight: 400; color: var(--ui-text-secondary); }
 .paramKey { display: block; margin-top: 1px; font-size: 11px; font-family: var(--font-mono); color: var(--ui-text-secondary); }
 
+/* Where a field's value comes from (technoParamRegistry FIELD_SOURCES). */
+.srcTag {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 0 6px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--ui-text-secondary);
+}
+.srcUpload { background: var(--ui-success-bg); color: var(--ui-success); border-color: transparent; }
+.srcOld    { background: var(--ui-warning-bg); color: var(--ui-warning); border-color: transparent; }
+
 .cell {
   width: 100%;
   padding: 6px 10px;
