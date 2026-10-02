@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import GlobalNavbar from '@/components/GlobalNavbar';
 import { API_BASE_URL } from '@/providers/AuthProvider';
-import ui from '@/styles/ui.module.css';
+import { AuthPage, IconField, PasswordField, Alert, Icon, ICONS, authStyles as s } from '@/components/auth/AuthUI';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -64,80 +63,47 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <>
-      <GlobalNavbar />
-      <main className={ui.authShell}>
-        <div className={ui.authCard}>
-          <div className={ui.pageHeader}>
-            <h1 className={ui.pageTitle}>Reset Password</h1>
-            <p className={ui.pageLead}>
-              Every password change is verified by a passcode emailed to your account.
-            </p>
+    <AuthPage
+      icon={ICONS.key}
+      title={step === 'email' ? 'Reset your password' : 'Choose a new password'}
+      lead={step === 'email'
+        ? 'Every password change is verified by a passcode emailed to your account.'
+        : <>Step 2 of 2 — enter the passcode sent to <b>{email}</b>.</>}
+      footer={<>Remembered it?<Link href="/login" className={s.link}>Back to sign in</Link></>}
+    >
+      {step === 'email' ? (
+        <form className={s.form} onSubmit={requestOtp}>
+          <IconField id="reset-email" label="Email" icon={ICONS.mail} type="email" required
+                     placeholder="name@sail.in" autoComplete="email"
+                     value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Alert>{error}</Alert>
+          <button type="submit" className={`${s.btn} ${s.btnPrimary}`} disabled={submitting} aria-busy={submitting}>
+            {submitting ? 'Sending…' : <>Send Passcode <Icon d={ICONS.arrow} /></>}
+          </button>
+        </form>
+      ) : (
+        <form className={s.form} onSubmit={resetPassword}>
+          <Alert type="info">{info}</Alert>
+          <IconField id="reset-otp" label="Passcode" icon={ICONS.pin} type="text" inputMode="numeric"
+                     maxLength={6} required placeholder="6-digit code" autoComplete="one-time-code"
+                     value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} />
+          <PasswordField id="reset-password" label="New password" required minLength={8}
+                         placeholder="Choose a new password" autoComplete="new-password" hint="At least 8 characters."
+                         value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <PasswordField id="reset-confirm" label="Confirm new password" required minLength={8}
+                         placeholder="Re-enter the new password" autoComplete="new-password"
+                         value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+          <Alert>{error}</Alert>
+          <div className={s.btnGroup}>
+            <button type="submit" className={`${s.btn} ${s.btnPrimary}`} disabled={submitting} aria-busy={submitting}>
+              {submitting ? 'Resetting…' : <>Reset Password <Icon d={ICONS.arrow} /></>}
+            </button>
+            <button type="button" className={`${s.btn} ${s.btnSecondary}`} onClick={() => setStep('email')}>
+              Back
+            </button>
           </div>
-
-          {step === 'email' ? (
-            <form onSubmit={requestOtp}>
-              <div className={ui.field}>
-                <label htmlFor="reset-email" className={ui.label}>Email</label>
-                <input
-                  id="reset-email" type="email" className="form-control" required
-                  value={email} onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                />
-              </div>
-              {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
-              <button type="submit" className={`${ui.btn} ${ui.btnPrimary} ${ui.btnBlock}`}
-                      disabled={submitting} aria-busy={submitting}>
-                {submitting ? 'Sending…' : 'Send Passcode'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={resetPassword}>
-              {info && <p role="status" className={`${ui.alert} ${ui.alertSuccess}`}>{info}</p>}
-              <div className={ui.field}>
-                <label htmlFor="reset-otp" className={ui.label}>Passcode</label>
-                <input
-                  id="reset-otp" type="text" inputMode="numeric" maxLength={6} className="form-control" required
-                  value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                  autoComplete="one-time-code"
-                />
-              </div>
-              <div className={ui.field}>
-                <label htmlFor="reset-password" className={ui.label}>New password</label>
-                <input
-                  id="reset-password" type="password" className="form-control" required minLength={8}
-                  value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                  autoComplete="new-password" aria-describedby="reset-password-hint"
-                />
-                <p id="reset-password-hint" className={ui.hint}>At least 8 characters.</p>
-              </div>
-              <div className={ui.field}>
-                <label htmlFor="reset-confirm" className={ui.label}>Confirm new password</label>
-                <input
-                  id="reset-confirm" type="password" className="form-control" required minLength={8}
-                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
-              </div>
-              {error && <p role="alert" className={`${ui.alert} ${ui.alertError}`}>{error}</p>}
-              <div className={ui.actions} style={{ flexDirection: 'column' }}>
-                <button type="submit" className={`${ui.btn} ${ui.btnPrimary} ${ui.btnBlock}`}
-                        disabled={submitting} aria-busy={submitting}>
-                  {submitting ? 'Resetting…' : 'Reset Password'}
-                </button>
-                <button type="button" className={`${ui.btn} ${ui.btnSecondary} ${ui.btnBlock}`}
-                        onClick={() => setStep('email')}>
-                  Back
-                </button>
-              </div>
-            </form>
-          )}
-
-          <div className={ui.cardFooter}>
-            <Link href="/login">Back to login</Link>
-          </div>
-        </div>
-      </main>
-    </>
+        </form>
+      )}
+    </AuthPage>
   );
 }

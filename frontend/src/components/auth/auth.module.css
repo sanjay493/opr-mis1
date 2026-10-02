@@ -1,4 +1,4 @@
-/* Login page (/login) — "Secure Enterprise Login" layout from the Stitch
+/* Auth pages (/login, /register, /forgot-password) — "Secure Enterprise Login" layout from the Stitch
    redesign, on the --ui-* tokens in globals.css. */
 
 .shell {
