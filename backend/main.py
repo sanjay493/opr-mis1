@@ -3861,6 +3861,7 @@ PRODUCTION_ITEM_ORDER = [
     'Hot Metal to ASP',
     'Hot Metal to PCM',
     # 4. Crude steel (SMS / casters / ingot)
+    'SMS-1',
     'SMS-1 CCM-1',
     'SMS-2',
     'SMS-2 CCM-1&2',
@@ -3920,6 +3921,8 @@ PRODUCTION_ITEM_ORDER = [
     'URM_RAIL',
     'URMPRIME',
     'RSM_RAIL',
+    'RSM Rails (Fin)',
+    'RSM Strls (Fin)',
     'RSMPRIME',
     # 7. Secondary mills
     'CR(1&2) Total Saleable',
