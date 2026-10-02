@@ -223,8 +223,6 @@ export const _LABEL_MAP = {
   imported_hard_coal:                   "Imported Hard Coal ('000 T)",
   imported_soft_coal:                   "Imported Soft Coal ('000 T)",
   sp_pm_emission:                       'Sp. PM Emission (kg/tcs)',
-  specific_co2_emissions:               'Sp. CO₂ Emission (old field)',
-  specific_water_consumption:           'Sp. Water Consumption (old field)',
   // Coal / energy
   coal_to_hm:                           'Coal to Hot Metal',
   sp_water_consumption:                 'Sp. Water Consumption',
