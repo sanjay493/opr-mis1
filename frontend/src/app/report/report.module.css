@@ -84,6 +84,17 @@
   .toolbar { display: none; }
 }
 
+/* The zoom wrapper must itself be a column flex container: .a4-page relies
+   on being a flex item (of .preview-area originally) for its height to count
+   as definite — templates like the cover size their content with
+   height/min-height: 100%, which collapses to 0 inside a plain block. */
+.zoomWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 @media print {
   .zoomWrap { zoom: 1 !important; }
 }
