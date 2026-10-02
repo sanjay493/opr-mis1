@@ -27,7 +27,7 @@
   </thead>
   <tbody>
     {% for row in block.rows %}
-    <tr style="{% if row.plant == 'SAIL 5 ISPs' %}font-weight:700;background:{{ colors.highlight_bold_row_bg }};{% elif loop.index0 % 2 == 1 %}background:{{ colors.misc_highlights_box_bg }};{% endif %}">
+    <tr style="{% if row.plant == 'SAIL 5 ISPs' %}font-weight:700;background:{{ colors.techno_tep_total_row_bg }};color:{{ colors.techno_tep_total_row_text }};{% elif loop.index0 % 2 == 1 %}background:{{ colors.misc_highlights_box_bg }};{% endif %}">
       <td style="padding:3px 6px;border:1px solid {{ colors.border_medium }};text-align:left;font-weight:600;vertical-align:middle;">{{ row.plant }}</td>
       {% for period in page.periods %}<td style="padding:3px 6px;border:1px solid {{ colors.border_medium }};text-align:right;vertical-align:middle;{% if period.kind == 'till' %}background:{{ colors.highlight_cumulative_bg }}66;{% elif period.kind == 'annual' %}background:{{ colors.highlight_target_band_bg }}66;{% endif %}">{{ row.cells[period.key] if row.cells[period.key] is not none else '—' }}</td>{% endfor %}
     </tr>

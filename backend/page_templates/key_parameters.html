@@ -25,7 +25,7 @@
                 <td colspan="{{ 2 + page.plants|length }}" style="padding:0;height:3px;line-height:3px;font-size:1px;border:1px solid {{ colors.border_black }};background:{{ colors.misc_white }};">&nbsp;</td>
               </tr>
               {% else %}
-              <tr style="{{ 'background:' ~ colors.highlight_bold_row_bg ~ ';' if row.highlight else ('background:' ~ colors.highlight_default_row_bg ~ ';' if loop.index is even else '') }}">
+              <tr style="{{ 'background:' ~ colors.techno_tep_total_row_bg ~ ';color:' ~ colors.techno_tep_total_row_text ~ ';' if row.highlight else ('background:' ~ colors.highlight_default_row_bg ~ ';' if loop.index is even else '') }}">
                 {% if not row.continuation %}
                 <td {% if row.label_rowspan %}rowspan="{{ row.label_rowspan }}"{% endif %} style="padding:2px 6px;border:1px solid {{ colors.border_black }};text-align:left;">
                   {{ row.parameter }}
