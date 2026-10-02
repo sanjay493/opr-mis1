@@ -376,8 +376,6 @@ export const FIELD_SOURCES = {
     indigenous_mcc:              _OLD_COAL,
     imported_hard_coal:          _OLD_COAL,
     imported_soft_coal:          _OLD_COAL,
-    specific_co2_emissions:      { kind: 'old', text: 'Replaced by sp_co2_emission' },
-    specific_water_consumption:  { kind: 'old', text: 'Replaced by sp_water_consumption' },
   },
   Coal: { '*': _COAL_OMI },
 };
