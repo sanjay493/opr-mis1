@@ -10,8 +10,10 @@ const ITEM_SHORT = { 'Hot Metal': 'Hot Metal', 'Total Crude Steel': 'Crude Steel
 const ITEM_UNIT  = { 'Hot Metal': "'000 T", 'Total Crude Steel': "'000 T", 'Saleable Steel': "'000 T" };
 
 const CAL_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const FY_QUARTERS = ['Q1 (Apr-Jun)','Q2 (Jul-Sep)','Q3 (Oct-Dec)','Q4 (Jan-Mar)'];
-const FY_HALVES   = ['H1 (Apr-Sep)','H2 (Oct-Mar)'];
+// Keys of /api/production-records' fy_quarters / fy_halves (page_records.py
+// _Q_LABELS / _H_LABELS) — must match them exactly.
+const FY_QUARTERS = ['Q1','Q2','Q3','Q4'];
+const FY_HALVES   = ['H1','H2'];
 const SECTIONS    = ['Calendar Month','FY Quarter','FY Half','Top 5 Years'];
 
 // ── Colours ────────────────────────────────────────────────────────────────
@@ -64,6 +66,15 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
 
   const maxValue = Math.max(...chartData.map(d => d.total || 0), 1);
 
+  // The value labels are rotated -70deg, so a long one (e.g. a half-year
+  // total "10,451.781") rises well above its 18px box — reserve top padding
+  // for the longest label, or overflowX:auto clips it.
+  const longestLabel = Math.max(
+    ...chartData.flatMap(d => [d.total, d.second?.total]).filter(v => v != null).map(v => fmt(v).length),
+    0
+  );
+  const padTop = Math.max(20, Math.ceil(longestLabel * 4.5));
+
   // Get rank (1-based) for each data point when sorted by value
   const sortedByValue = [...data].sort((a, b) => (b.total || 0) - (a.total || 0));
   const getRankForValue = (val) => {
@@ -85,7 +96,7 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
       gridTemplateColumns: `repeat(${chartData.length}, minmax(100px, 1fr))`,
       gap: '24px',
       alignItems: 'flex-end',
-      padding: '20px',
+      padding: `${padTop}px 20px 20px`,
       backgroundColor: '#fff',
       borderRadius: '8px',
       minHeight: '320px',
@@ -136,7 +147,9 @@ function VerticalBarChart({ data, item, title, isMonthChart = false }) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginBottom: '20px',
+                      // rotated text hangs below its box by about as much
+                      // as it rises above it — keep it clear of the bar
+                      marginBottom: `${Math.max(20, Math.ceil(fmt(b.total).length * (b.isMain ? 4.5 : 3.5)))}px`,
                       transform: 'rotate(-70deg)',
                       transformOrigin: 'center',
                       whiteSpace: 'nowrap',
