@@ -3,7 +3,7 @@
 import RequireEditor from '@/components/RequireEditor';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '@/components/reports/ReportUI';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -154,23 +154,11 @@ function MissingDataInner() {
   }, [data, onlyMissing]);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f8f9fa' }}>
-      <GlobalNavbar />
-
-      <div style={{ flex: 1, overflow: 'auto', maxWidth: 1100, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
-
-        <div style={{ marginBottom: 18 }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
-            Missing Data Checklist — OMI Report
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            For the selected month, which monthly data sources behind the OMI Report (<code style={{ fontSize: 12 }}>/report</code>)
-            {' '}have and haven&apos;t been submitted yet — grouped by report page, broken down per plant/source where relevant,
-            with the exact data-entry or upload page to visit. Covers the recurring monthly sources only — annual targets/plans,
-            reference/master data, and a few pages not yet wired into the live report are intentionally left out (see the
-            checklist&apos;s own scope note in <code style={{ fontSize: 12 }}>backend/page_missing_data.py</code>).
-          </span>
-        </div>
+    <ReportPage
+      maxWidth={1100}
+      title={<>Missing Data Checklist — OMI Report</>}
+      description={<>For the selected month, which monthly data sources behind the OMI Report (<code style={{ fontSize: 12 }}>/report</code>) {' '}have and haven&apos;t been submitted yet — grouped by report page, broken down per plant/source where relevant, with the exact data-entry or upload page to visit. Covers the recurring monthly sources only — annual targets/plans, reference/master data, and a few pages not yet wired into the live report are intentionally left out (see the checklist&apos;s own scope note in <code style={{ fontSize: 12 }}>backend/page_missing_data.py</code>).</>}
+    >
 
         <div style={{
           display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
@@ -219,8 +207,7 @@ function MissingDataInner() {
         )}
 
         {!loading && visibleSections.map(s => <SectionCard key={s.id} section={s} />)}
-      </div>
-    </div>
+    </ReportPage>
   );
 }
 

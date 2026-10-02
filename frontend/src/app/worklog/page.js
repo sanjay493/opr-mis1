@@ -3,7 +3,7 @@
 import RequireEditor from '@/components/RequireEditor';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '@/components/reports/ReportUI';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -124,23 +124,16 @@ function WorklogPageInner() {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
-      <GlobalNavbar />
-      <main style={{
-        flex: 1, overflow: 'auto', padding: '32px', maxWidth: '1000px',
-        margin: '0 auto', width: '100%', boxSizing: 'border-box',
-      }}>
-        <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: '0 0 6px' }}>
-          📝 Daily Work Log
-        </h1>
-        <p style={{ fontSize: '11pt', color: '#5f6368', marginBottom: '20px' }}>
-          Record the work you completed each day, grouped date-wise.
-        </p>
+    <ReportPage
+      maxWidth={1000}
+      title={<>📝 Daily Work Log</>}
+      description={<>Record the work you completed each day, grouped date-wise.</>}
+    >
 
-        {/* Add-entry form */}
+{/* Add-entry form */}
         <form onSubmit={handleAdd} style={{
           border: '1px solid #dadce0', borderRadius: '8px', padding: '16px 18px',
-          marginBottom: '20px', backgroundColor: '#f8f9fa',
+          marginBottom: '20px', backgroundColor: '#ffffff',
         }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr auto', gap: '10px', alignItems: 'end' }}>
             <div>
@@ -264,8 +257,7 @@ function WorklogPageInner() {
             </div>
           </div>
         ))}
-      </main>
-    </div>
+    </ReportPage>
   );
 }
 

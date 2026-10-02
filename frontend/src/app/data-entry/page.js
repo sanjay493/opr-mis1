@@ -106,7 +106,7 @@ function DataEntryPageInner() {
     <>
       <GlobalNavbar />
 
-      <main className={ui.page} style={{ maxWidth: 1400 }}>
+      <main className={ui.page} style={{ '--page-max': '1400px' }}>
         <div className={ui.pageHeader}>
           <h1 className={ui.pageTitle}>Data Entry Hub</h1>
           <p className={ui.pageLead}>

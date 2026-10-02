@@ -1253,7 +1253,7 @@ function TechnoDataEntryInner() {
     <>
       <GlobalNavbar />
 
-      <main className={ui.page} style={{ maxWidth: 1400 }}>
+      <main className={ui.page} style={{ '--page-max': '1400px' }}>
 
         {/* ── Page title ── */}
         <div className={ui.pageHeader}>
