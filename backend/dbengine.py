@@ -128,6 +128,8 @@ class CursorWrapper:
 
     # -- execution ----------------------------------------------------------
     def execute(self, sql, params=()):
+        if _SESSION_STATE_RE.search(sql):
+            self._conn._poolable = False
         try:
             self._cur.execute(translate_sql(sql), tuple(params) or None)
         except Exception as e:  # noqa: BLE001 - re-raise as sqlite3 error
@@ -135,6 +137,8 @@ class CursorWrapper:
         return self
 
     def executemany(self, sql, seq_of_params):
+        if _SESSION_STATE_RE.search(sql):
+            self._conn._poolable = False
         try:
             self._cur.executemany(translate_sql(sql), [tuple(p) for p in seq_of_params])
         except Exception as e:  # noqa: BLE001
@@ -191,13 +195,19 @@ class CursorWrapper:
 
 class ConnWrapper:
     """PyMySQL connection with the sqlite3.Connection surface this codebase
-    uses: cursor(), execute(), commit(), rollback(), close(), row_factory."""
+    uses: cursor(), execute(), commit(), rollback(), close(), row_factory.
+
+    close() hands the raw connection back to the pool (see below) instead of
+    closing it, unless the connection picked up session state."""
 
     def __init__(self, conn):
         self._conn = conn
         self.row_factory = None
+        self._poolable = True
 
     def cursor(self):
+        if self._conn is None:
+            raise sqlite3.ProgrammingError("Cannot operate on a closed database.")
         return CursorWrapper(self._conn.cursor(), self)
 
     def execute(self, sql, params=()):
@@ -212,10 +222,84 @@ class ConnWrapper:
         self._conn.rollback()
 
     def close(self):
-        self._conn.close()
+        raw, self._conn = self._conn, None
+        if raw is not None:
+            _pool_release(raw, self._poolable)
 
 
-def _mysql_connect():
+# ── Connection reuse (MySQL) ────────────────────────────────────────────────
+# Callers were written for sqlite, where connect() is a cheap file open, and
+# open a fresh connection for nearly every query (db.py alone has ~110
+# connect() sites; one report page can make hundreds of calls). A new MySQL
+# connection costs ~3-4 ms (TCP + handshake + auth), which dominated slow
+# pages. So close() returns the raw PyMySQL connection to a small idle pool
+# and connect() reuses it. Semantics kept the same as a real close:
+#   - rolled back on return, so uncommitted work is discarded and the next
+#     user starts a new transaction (no stale REPEATABLE READ snapshot);
+#   - a fresh ConnWrapper per connect(), so row_factory starts at None;
+#   - connections that ran session-state SQL (GET_LOCK, SET ..., temporary
+#     tables) are closed for real, never reused;
+#   - an idle connection is pinged before reuse and replaced if dead.
+# DB_POOL=0 in backend/.env turns reuse off (every close() is a real close).
+import threading as _threading
+import time as _time
+
+_POOL_ENABLED = os.environ.get("DB_POOL", "1").strip() not in ("0", "false", "no", "off")
+_POOL_MAX_IDLE = 8
+_POOL_PING_AFTER = 30.0          # seconds idle before a liveness ping
+_pool_lock = _threading.Lock()
+_pool_idle = []                  # [(raw_conn, returned_at)], used LIFO
+_SESSION_STATE_RE = re.compile(r"\bGET_LOCK\s*\(|^\s*SET\s|\bTEMPORARY\s+TABLE\b", re.I)
+
+
+def _pool_clear():
+    """Close every idle pooled connection (tests / shutdown)."""
+    with _pool_lock:
+        idle = list(_pool_idle)
+        _pool_idle.clear()
+    for raw, _ in idle:
+        try:
+            raw.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _pool_acquire():
+    while True:
+        with _pool_lock:
+            if not _pool_idle:
+                return None
+            raw, returned_at = _pool_idle.pop()
+        if _time.monotonic() - returned_at <= _POOL_PING_AFTER:
+            return raw
+        try:
+            raw.ping(reconnect=False)
+            return raw
+        except Exception:  # noqa: BLE001 - dead connection, drop it and try the next
+            try:
+                raw.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _pool_release(raw, poolable):
+    if _POOL_ENABLED and poolable:
+        try:
+            raw.rollback()
+        except Exception:  # noqa: BLE001 - broken connection, don't reuse
+            poolable = False
+        else:
+            with _pool_lock:
+                if len(_pool_idle) < _POOL_MAX_IDLE:
+                    _pool_idle.append((raw, _time.monotonic()))
+                    return
+    try:
+        raw.close()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _open_raw():
     import pymysql
     from pymysql import converters
     conv = converters.conversions.copy()
@@ -226,7 +310,7 @@ def _mysql_connect():
                pymysql.constants.FIELD_TYPE.TIMESTAMP):
         conv[ft] = str
     try:
-        conn = pymysql.connect(
+        return pymysql.connect(
             host=_MYSQL_CFG["host"], port=_MYSQL_CFG["port"],
             user=_MYSQL_CFG["user"], password=_MYSQL_CFG["password"],
             database=_MYSQL_CFG["database"], charset="utf8mb4",
@@ -234,7 +318,11 @@ def _mysql_connect():
         )
     except Exception as e:  # noqa: BLE001
         raise _wrap_error(e) from e
-    return ConnWrapper(conn)
+
+
+def _mysql_connect():
+    raw = _pool_acquire() if _POOL_ENABLED else None
+    return ConnWrapper(raw if raw is not None else _open_raw())
 
 
 def connect(db_path):
