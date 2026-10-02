@@ -105,6 +105,11 @@
   background: var(--ui-warning-bg);
 }
 
+/* Lump in Burden showing its 100 − Total Prepared Burden default. */
+.cellDefault {
+  font-style: italic;
+}
+
 .computed {
   text-align: right;
   font-variant-numeric: tabular-nums;

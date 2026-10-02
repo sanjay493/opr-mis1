@@ -63,6 +63,7 @@ const DERIVED = {
 // Same per-page label override page_bf_large_annexure.py's _row_spec applies.
 const LABEL_OVERRIDES = { bf_productivity: 'BF Prodty-WV' };
 const BF_TEMPLATE = new Set(PARAM_TEMPLATES['Blast Furnace']);
+const LUMP_KEY = 'lump_in_burden';
 
 function errText(detail, fallback) {
   if (!detail) return fallback;
@@ -186,17 +187,36 @@ function BfLargeSnapshotInner() {
     return () => { cancelled = true; };
   }, [load]);
 
+  // Lump in Burden defaults to 100 − Total Prepared Burden (Sinter + Pellet
+  // in Burden) while its own cell is empty. It stays a directly-entered key
+  // (a furnace charging scrap has lump below that), so a typed value always
+  // wins; clearing the cell brings the default back. The default is saved
+  // like a typed value, so the report shows it too.
+  const lumpDefault = useCallback((id, period) => {
+    const d = values[id]?.[period] || {};
+    const sinter = num(d.sinter_in_burden), pellet = num(d.pellet_in_burden);
+    return sinter !== null && pellet !== null ? Math.round((100 - sinter - pellet) * 100) / 100 : null;
+  }, [values]);
+  const isLumpDefault = (id, period, key) =>
+    key === LUMP_KEY && num(values[id]?.[period]?.[key]) === null && lumpDefault(id, period) !== null;
+  // The value that will be saved: what's typed, else the Lump default.
+  const effective = useCallback((id, period, key) => {
+    const v = values[id]?.[period]?.[key] ?? null;
+    return v === null && key === LUMP_KEY ? lumpDefault(id, period) : v;
+  }, [values, lumpDefault]);
+
   const changes = useMemo(() => {
     const out = [];
     for (const [id, periods] of Object.entries(values)) {
       for (const { id: period } of PERIODS) {
-        for (const [key, v] of Object.entries(periods[period] || {})) {
-          if ((v ?? null) !== (initial[id]?.[period]?.[key] ?? null)) out.push({ id, period, key });
+        const keys = new Set([...Object.keys(periods[period] || {}), LUMP_KEY]);
+        for (const key of keys) {
+          if (effective(id, period, key) !== (initial[id]?.[period]?.[key] ?? null)) out.push({ id, period, key });
         }
       }
     }
     return out;
-  }, [values, initial]);
+  }, [values, initial, effective]);
   const dirty = changes.length > 0;
 
   useEffect(() => {
@@ -221,7 +241,7 @@ function BfLargeSnapshotInner() {
   };
 
   const isChanged = (id, period, key) =>
-    (values[id]?.[period]?.[key] ?? null) !== (initial[id]?.[period]?.[key] ?? null);
+    effective(id, period, key) !== (initial[id]?.[period]?.[key] ?? null);
 
   // Fuel Rate = Coke + Nut Coke + CDI — the backend recalculates and stores
   // it on every save (db._maybe_recompute_derived_params); shown live here.
@@ -250,7 +270,7 @@ function BfLargeSnapshotInner() {
         if (row.kind !== 'entry') continue;
         for (const { id: period } of PERIODS) {
           if (!isChanged(id, period, row.key)) continue;
-          const v = values[id][period][row.key];
+          const v = effective(id, period, row.key);
           const k = targetKey(id, period, row);
           if (v === null) (period === 'month' ? body.clear_month_keys : body.clear_till_keys).push(k);
           else (period === 'month' ? body.month_data : body.till_month_data)[k] = v;
@@ -416,6 +436,7 @@ function BfLargeSnapshotInner() {
                       <th scope="row" className={s.paramCol}>
                         {row.label}
                         {row.kind === 'computed' && <span className={s.aliasNote}>Auto: Coke + Nut Coke + CDI</span>}
+                        {row.key === LUMP_KEY && <span className={s.aliasNote}>Default: 100 − Total Prepared Burden</span>}
                       </th>
                       <td className={s.unitCol}>{row.unit}</td>
                       {bfs.flatMap((bf) => PERIODS.map((p) => {
@@ -426,12 +447,13 @@ function BfLargeSnapshotInner() {
                         }
                         const src = srcKeys[id]?.[p.id]?.[row.key];
                         const changed = isChanged(id, p.id, row.key);
+                        const isDefault = isLumpDefault(id, p.id, row.key);
                         return (
                           <td key={`${id}-${p.id}`}>
                             <input
                               type="number" step="any" inputMode="decimal"
-                              className={`${s.cell} ${changed ? s.cellChanged : ''}`}
-                              value={drafts[`${id}|${p.id}|${row.key}`] ?? fmt2(values[id]?.[p.id]?.[row.key], DISPLAY_DP[row.key])}
+                              className={`${s.cell} ${changed ? s.cellChanged : ''} ${isDefault ? s.cellDefault : ''}`}
+                              value={drafts[`${id}|${p.id}|${row.key}`] ?? fmt2(effective(id, p.id, row.key), DISPLAY_DP[row.key])}
                               onChange={(e) => setCell(id, p.id, row.key, e.target.value)}
                               onBlur={() => setDrafts((prev) => {
                                 const next = { ...prev };
@@ -440,7 +462,8 @@ function BfLargeSnapshotInner() {
                               })}
                               disabled={loading || saving}
                               aria-label={`${row.label}, ${bf.label}, ${p.label}`}
-                              title={src && src !== row.storeKey ? `Stored as "${src}"` : undefined}
+                              title={isDefault ? 'Default: 100 − Total Prepared Burden. Type a value to override.'
+                                : src && src !== row.storeKey ? `Stored as "${src}"` : undefined}
                             />
                           </td>
                         );
