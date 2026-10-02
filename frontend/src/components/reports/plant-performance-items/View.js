@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -98,19 +98,13 @@ export default function PlantPerformanceItemsView() {
   });
 
   return (
-    <>
-      <GlobalNavbar />
-      <main style={{ padding: '28px 32px', background: '#fff', minHeight: 'calc(100vh - 70px)' }}>
-        <div style={{ maxWidth: 1500, margin: '0 auto' }}>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: '#202124', margin: '0 0 6px' }}>
-            Plant Wise Performance of Main Items
-          </h1>
-          <p style={{ fontSize: 12.5, color: '#5f6368', margin: '0 0 18px', maxWidth: 820, lineHeight: 1.6 }}>
-            Same layout as the PDF report page, with actual tonnage to 3 decimal places (&apos;000 T; Oven Pushing in
-            nos/day). Percentages are whole numbers. Download it as an Excel file for external submission.
-          </p>
+    <ReportPage
+      maxWidth={1500}
+      title={<>Plant Wise Performance of Main Items</>}
+      description={<>Same layout as the PDF report page, with actual tonnage to 3 decimal places (&apos;000 T; Oven Pushing in nos/day). Percentages are whole numbers. Download it as an Excel file for external submission.</>}
+    >
 
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
             <label htmlFor="pp-month" style={{ fontSize: '10.5pt', fontWeight: 600, color: '#3c4043' }}>Report month</label>
             <input id="pp-month" type="month" value={month} onChange={(e) => changeMonth(e.target.value)}
                    style={{ padding: '6px 8px', fontSize: '10.5pt', border: '1px solid #dadce0', borderRadius: 6 }} />
@@ -186,8 +180,6 @@ export default function PlantPerformanceItemsView() {
               </div>
             </>
           )}
-        </div>
-      </main>
-    </>
+    </ReportPage>
   );
 }

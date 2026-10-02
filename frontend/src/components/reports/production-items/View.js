@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -144,29 +144,18 @@ export default function ProductionItemsReportPage() {
   });
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
-      <GlobalNavbar />
+    <ReportPage
+      fill
+      maxWidth={1400}
+      title={<>{item} — Month-wise, Plant-wise</>}
+      description={<>One row per month, one column per plant (plus the SAIL total), from production_table. Unit: {RATE_ITEMS.has(item) ? 'nos./day' : "‘000 T"}. Blank cells mean no figure recorded for that plant that month.</>}
+    >
 
-      <main style={{
-        flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        maxWidth: '1400px', margin: '0 auto', padding: '32px', width: '100%', boxSizing: 'border-box',
-      }}>
-        <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-            {item} — Month-wise, Plant-wise
-          </h1>
-          <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            One row per month, one column per plant (plus the SAIL total), from production_table.
-            Unit: {RATE_ITEMS.has(item) ? 'nos./day' : "‘000 T"}. Blank cells mean no figure
-            recorded for that plant that month.
-          </p>
-        </div>
-
-        {/* Controls */}
+{/* Controls */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap',
           padding: '16px 20px', border: '1px solid #dadce0', borderRadius: '8px',
-          backgroundColor: '#f8f9fa', marginBottom: '24px',
+          backgroundColor: '#ffffff', marginBottom: '24px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>Item</label>
@@ -273,7 +262,6 @@ export default function ProductionItemsReportPage() {
             </table>
           </div>
         )}
-      </main>
-    </div>
+    </ReportPage>
   );
 }

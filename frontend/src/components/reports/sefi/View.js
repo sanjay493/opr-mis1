@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -228,9 +228,12 @@ export default function SefiReportPage() {
   const labelStyle  = { fontSize: 13, fontWeight: 600, color: '#374151' };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <ReportPage
+      maxWidth={1240}
+      title={<>SEFI Report</>}
+      description={<>{scope?.label} · {periodRangeLabel}</>}
+    >
       <style>{`
-        html, body { overflow-y: auto; overflow-x: hidden; }
         @media print {
           @page { size: A4 landscape; margin: 10mm; }
           .sefi-table-wrap { overflow: visible !important; border: none !important; }
@@ -238,20 +241,7 @@ export default function SefiReportPage() {
         }
       `}</style>
 
-      <div className="no-print"><GlobalNavbar /></div>
-
-      <div style={{ maxWidth: 1240, margin: '0 auto', padding: '22px 20px' }}>
-
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            SEFI Report
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            {scope?.label} · {periodRangeLabel}
-          </span>
-        </div>
-
-        <div className="no-print" style={{
+<div className="no-print" style={{
           display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
           marginBottom: 18, border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px',
         }}>
@@ -360,7 +350,6 @@ export default function SefiReportPage() {
           Plant selector sums the member plants of the chosen group (&quot;SAIL (8 Plants)&quot; also adds Conversion to
           Finished Steel); months without data are skipped when summing.
         </div>
-      </div>
-    </div>
+    </ReportPage>
   );
 }

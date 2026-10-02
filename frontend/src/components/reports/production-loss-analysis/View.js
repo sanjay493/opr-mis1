@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 import {
   ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis,
   Tooltip, Legend, Bar, Line,
@@ -488,12 +488,12 @@ function ProductionLossAnalysisInner() {
   const itemLabel = ITEMS.find(i => i.code === item)?.label || item;
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
-      <GlobalNavbar />
-      <div style={{ flex: 1, overflow: 'auto', maxWidth: 1500, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
+    <ReportPage
+      maxWidth={1500}
+    >
 
         <div style={{ marginBottom: 18 }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#202124', margin: '0 0 4px' }}>
             Production Loss Analysis
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
@@ -659,8 +659,7 @@ function ProductionLossAnalysisInner() {
             </div>
           </>
         )}
-      </div>
-    </div>
+    </ReportPage>
   );
 }
 

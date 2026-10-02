@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -292,28 +292,19 @@ export default function NewFacilitiesPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <ReportPage
+      maxWidth={1700}
+      title={<>Annexure-III: Production Performance of New Facilities</>}
+      description={<>w.r.t. APP · Unit: '000 T</>}
+    >
       <style>{`
-        html, body { overflow-y: auto; overflow-x: hidden; }
         @media print {
           @page { size: A4 landscape; margin: 8mm; }
           .nf-table-wrap { overflow: visible !important; border: none !important; }
         }
       `}</style>
 
-      <div className="no-print"><GlobalNavbar /></div>
-
-      <div style={{ maxWidth: 1700, margin: '0 auto', padding: '22px 20px' }}>
-
-        {/* ── Title ── */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            Annexure-III: Production Performance of New Facilities
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>w.r.t. APP · Unit: '000 T</span>
-        </div>
-
-        {/* ── Controls ── */}
+{/* ── Controls ── */}
         <div className="no-print" style={{
           display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
           marginBottom: 18, border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px',
@@ -448,7 +439,6 @@ export default function NewFacilitiesPage() {
           ISP has a single blast furnace, so "ISP BF-5" reflects the plant's total Hot Metal. ISP SMS uses ISP's Total Crude
           Steel (its only SMS shop). Source: Annexure-III.pdf column layout, mapped to this application's production tables.
         </div>
-      </div>
-    </div>
+    </ReportPage>
   );
 }

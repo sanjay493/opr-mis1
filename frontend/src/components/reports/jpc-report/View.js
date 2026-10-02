@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -89,32 +89,17 @@ export default function JpcReportPage() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
-      <GlobalNavbar />
-
-      <main style={{
-        maxWidth: '900px',
-        margin: '0 auto',
-        padding: '32px',
-      }}>
-        <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-            JPC Monthly Report
-          </h1>
-          <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            Pick the reporting month — the workbook shows that month&#39;s Actual vs the CPLY
-            (same month, prior year) Actual, in the JPC report format (Pmix report, Special
-            Steel plants, Sinter, MoU report sheets).
-          </p>
-        </div>
+    <ReportPage
+      maxWidth={900}
+      title={<>JPC Monthly Report</>}
+      description={<>Pick the reporting month — the workbook shows that month&#39;s Actual vs the CPLY (same month, prior year) Actual, in the JPC report format (Pmix report, Special Steel plants, Sinter, MoU report sheets).</>}
+    >
 
         <div style={{
           padding: '20px 24px',
           border: '1px solid #dadce0',
           borderRadius: '8px',
-          backgroundColor: '#f8f9fa',
+          backgroundColor: '#ffffff',
           marginBottom: '24px',
           display: 'flex',
           alignItems: 'center',
@@ -181,7 +166,6 @@ export default function JpcReportPage() {
             ))}
           </ul>
         </div>
-      </main>
-    </div>
+    </ReportPage>
   );
 }

@@ -8,6 +8,8 @@ import TechnoDashboardView from '@/components/techno/TechnoDashboardView';
 import TechnoCustomView from '@/components/techno/TechnoCustomView';
 import TechnoVerificationView from '@/components/techno/TechnoVerificationView';
 import TechnoBfFurnaceView from '@/components/techno/TechnoBfFurnaceView';
+import s from '@/components/reports/ReportTabs.module.css';
+import wb from '@/styles/wb.module.css';
 
 // One page for every techno report. The old per-report URLs
 // (/reports/techno-monthly, -dashboard, -custom, -verification, -bf-furnace)
@@ -37,51 +39,46 @@ function TechnoReports() {
   };
 
   return (
-    <div style={{ maxWidth: '1500px', margin: '0 auto', padding: '24px 32px 32px' }}>
-      <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: '0 0 14px' }}>
-        Techno Reports
-      </h1>
-
-      <div role="tablist" aria-label="Techno reports" style={{
-        display: 'flex', gap: '4px', flexWrap: 'wrap',
-        borderBottom: '2px solid #dadce0', marginBottom: '20px',
-      }}>
-        {TECHNO_TABS.map((t) => {
-          const on = t.id === active;
-          return (
+    <>
+      <div className={s.header}>
+        <div className={s.titleRow}>
+          <h1 className={s.title}>Techno Reports</h1>
+          <p className={s.lead}>Techno-economic parameters — plant-wise monthly, trends, custom reports, verification and furnace-wise.</p>
+        </div>
+        <div className={s.tabs} role="tablist" aria-label="Techno reports">
+          {TECHNO_TABS.map((t) => (
             <button
               key={t.id}
+              type="button"
               role="tab"
-              aria-selected={on}
+              aria-selected={t.id === active}
+              className={s.tab}
               onClick={() => selectTab(t.id)}
-              style={{
-                padding: '10px 18px', fontSize: '11pt', fontWeight: on ? 800 : 600,
-                border: 'none', borderBottom: on ? '3px solid #1a73e8' : '3px solid transparent',
-                marginBottom: '-2px', background: 'none', cursor: 'pointer',
-                color: on ? '#1a73e8' : '#5f6368',
-              }}
             >
-              <span style={{ marginRight: 6 }}>{t.icon}</span>{t.label}
+              <span style={{ marginRight: 6 }} aria-hidden="true">{t.icon}</span>{t.label}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
-      {TECHNO_TABS.filter((t) => visited.has(t.id)).map(({ id, Component }) => (
-        <div key={id} role="tabpanel" hidden={id !== active}>
-          <Component />
+      <div className={wb.page}>
+        <div style={{ maxWidth: 1500, margin: '0 auto', padding: '18px 24px 32px' }}>
+          {TECHNO_TABS.filter((t) => visited.has(t.id)).map(({ id, Component }) => (
+            <div key={id} role="tabpanel" hidden={id !== active}>
+              <Component />
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+    </>
   );
 }
 
 export default function TechnoReportsPage() {
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
+    <div className={s.shell}>
       <GlobalNavbar />
-      <Suspense fallback={<div style={{ padding: 32, color: '#5f6368' }}>Loading…</div>}>
+      <Suspense fallback={<div className={s.loading}>Loading…</div>}>
         <TechnoReports />
       </Suspense>
     </div>

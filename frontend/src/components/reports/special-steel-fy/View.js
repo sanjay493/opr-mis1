@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -102,33 +102,13 @@ export default function SpecialSteelFYPage() {
   const plants = data?.plants || [];
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
-      <GlobalNavbar />
+    <ReportPage
+      maxWidth={1600}
+      title={<>Special Steel — Order &amp; Actual Despatch</>}
+      description={<>Month-wise, plant-wise Order Qty and Actual Despatch for the selected financial year (T)</>}
+    >
 
-      <main style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        maxWidth: '1600px',
-        margin: '0 auto',
-        padding: '32px',
-        width: '100%',
-        boxSizing: 'border-box',
-      }}>
-        {/* Header */}
-        <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-            Special Steel — Order &amp; Actual Despatch
-          </h1>
-          <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            Month-wise, plant-wise Order Qty and Actual Despatch for the selected financial year (T)
-          </p>
-        </div>
-
-        {/* Controls */}
+{/* Controls */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -137,7 +117,7 @@ export default function SpecialSteelFYPage() {
           padding: '16px 20px',
           border: '1px solid #dadce0',
           borderRadius: '8px',
-          backgroundColor: '#f8f9fa',
+          backgroundColor: '#ffffff',
           marginBottom: '24px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -349,7 +329,6 @@ export default function SpecialSteelFYPage() {
             </table>
           </div>
         )}
-      </main>
-    </div>
+    </ReportPage>
   );
 }

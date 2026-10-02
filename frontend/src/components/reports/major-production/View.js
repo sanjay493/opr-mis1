@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -206,9 +206,11 @@ export default function MajorProductionPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
-      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
+    <ReportPage
+      maxWidth={1500}
+      title={<>Major Production — Month &amp; Till Month</>}
+      description={<>Sinter · Hot Metal · Crude Steel · Saleable Steel · Pig Iron · Finished Steel</>}
+    >
       <style>{`
         @media print {
           @page { size: A4 landscape; margin: 10mm; }
@@ -216,21 +218,7 @@ export default function MajorProductionPage() {
         }
       `}</style>
 
-      <div className="no-print"><GlobalNavbar /></div>
-
-      <div style={{ maxWidth: 1500, margin: '0 auto', padding: '22px 20px' }}>
-
-        {/* ── Title ── */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            Major Production — Month &amp; Till Month
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Sinter · Hot Metal · Crude Steel · Saleable Steel · Pig Iron · Finished Steel
-          </span>
-        </div>
-
-        {/* ── Controls ── */}
+{/* ── Controls ── */}
         <div className="no-print" style={{
           display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
           marginBottom: 18, border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px',
@@ -372,7 +360,6 @@ export default function MajorProductionPage() {
           shows Conversion (SAIL) actuals under Finished Steel only, since Conversion agents only produce Finished Steel.
           Source: production_table (file uploads &amp; production entry).
         </div>
-      </div>
-    </div>
+    </ReportPage>
   );
 }

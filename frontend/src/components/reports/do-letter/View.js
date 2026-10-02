@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -136,26 +136,15 @@ export default function DoLetterPage() {
   });
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
-      <GlobalNavbar />
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px' }}>
-        <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-            Monthly D.O. Letter
-          </h1>
-          <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            &quot;Monthly performance of SAIL&quot; letter + Annexure A/B (Crude Steel &amp; Finished
-            Steel, plant-wise) and the companion Ministry &quot;Monthly DO Annexure&quot; workbook —
-            generated from data already in this app, in the exact format of the reference letter.
-            Pick the month being <strong>reported on</strong> (the letter itself goes out on the
-            1st of the following month).
-          </p>
-        </div>
+    <ReportPage
+      maxWidth={900}
+      title={<>Monthly D.O. Letter</>}
+      description={<>&quot;Monthly performance of SAIL&quot; letter + Annexure A/B (Crude Steel &amp; Finished Steel, plant-wise) and the companion Ministry &quot;Monthly DO Annexure&quot; workbook — generated from data already in this app, in the exact format of the reference letter. Pick the month being <strong>reported on</strong> (the letter itself goes out on the 1st of the following month).</>}
+    >
 
         <div style={{
           padding: '20px 24px', border: '1px solid #dadce0', borderRadius: '8px',
-          backgroundColor: '#f8f9fa', marginBottom: '24px',
+          backgroundColor: '#ffffff', marginBottom: '24px',
           display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
         }}>
           <label style={{ fontSize: '11pt', fontWeight: 600 }}>Report month</label>
@@ -226,7 +215,6 @@ export default function DoLetterPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </ReportPage>
   );
 }

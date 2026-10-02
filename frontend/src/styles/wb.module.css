@@ -133,3 +133,9 @@ button.chip { cursor: pointer; }
   .inner { padding: 12px; }
   .fieldRow { grid-template-columns: 1fr; }
 }
+
+/* Printing: let the full-height scroll frame grow so nothing is clipped */
+@media print {
+  .shell { height: auto; overflow: visible; }
+  .page { overflow: visible; background: #fff; }
+}

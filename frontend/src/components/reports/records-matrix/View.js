@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -108,22 +108,13 @@ export default function RecordsMatrixPage() {
   };
 
   return (
-    <>
-      <GlobalNavbar />
-      <main style={{ backgroundColor: '#ffffff', padding: '36px 32px', minHeight: 'calc(100vh - 70px)' }}>
-        <div style={{ maxWidth: 1600, margin: '0 auto' }}>
-          <h1 style={{ fontSize: '26px', fontWeight: 900, color: '#202124', margin: '0 0 8px' }}>
-            Monthly Records Matrix
-          </h1>
-          <p style={{ fontSize: '12.5px', color: '#5f6368', margin: '0 0 24px', lineHeight: 1.6, maxWidth: 780 }}>
-            Best and 2nd-best ever figure for every calendar month, item-wise — grouped plant-wise,
-            items listed in process order. The best-ever figure for each calendar month is
-            highlighted; the single all-time-best month for an item (across all 12 months) is
-            marked <strong>★</strong>. Months of the report FY{fyLabel ? ` ${fyLabel}` : ''} are shaded in the header, and
-            records set during that FY are outlined in blue.
-          </p>
+    <ReportPage
+      maxWidth={1600}
+      title={<>Monthly Records Matrix</>}
+      description={<>Best and 2nd-best ever figure for every calendar month, item-wise — grouped plant-wise, items listed in process order. The best-ever figure for each calendar month is highlighted; the single all-time-best month for an item (across all 12 months) is marked <strong>★</strong>. Months of the report FY{fyLabel ? ` ${fyLabel}` : ''} are shaded in the header, and records set during that FY are outlined in blue.</>}
+    >
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
             {TABS.map((p) => (
               <button key={p} onClick={() => setPlant(p)} style={tabBtn(plant === p)}>
                 {TAB_LABEL[p] || p}
@@ -238,10 +229,6 @@ export default function RecordsMatrixPage() {
               </div>
             </>
           )}
-        </div>
-      </main>
-
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
-    </>
+    </ReportPage>
   );
 }

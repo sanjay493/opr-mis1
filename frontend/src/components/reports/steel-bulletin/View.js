@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -222,9 +222,12 @@ export default function SteelBulletinPage() {
     : '';
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <ReportPage
+      maxWidth={1180}
+      title={<>Inputs for Steel Bulletin</>}
+      description={<>SAIL · {reportLabel}</>}
+    >
       <style>{`
-        html, body { overflow-y: auto; overflow-x: hidden; }
         @media print {
           @page { size: A4 landscape; margin: 12mm; }
           .sb-table-wrap { overflow: visible !important; border: none !important; }
@@ -232,17 +235,7 @@ export default function SteelBulletinPage() {
         }
       `}</style>
 
-      <div className="no-print"><GlobalNavbar /></div>
-
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '22px 20px' }}>
-
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            Inputs for Steel Bulletin
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>SAIL · {reportLabel}</span>
-        </div>
-        <div style={{ fontSize: 13, color: '#5f6368', marginBottom: 16 }}>
+<div style={{ fontSize: 13, color: '#5f6368', marginBottom: 16 }}>
           3. Steel Authority of India Limited (SAIL) — 3.1 Performance
         </div>
 
@@ -338,7 +331,6 @@ export default function SteelBulletinPage() {
           years, and the change over CPLY on the cumulative. Source: production_table via
           /api/production-fy. Months without data are skipped when summing.
         </div>
-      </div>
-    </div>
+    </ReportPage>
   );
 }

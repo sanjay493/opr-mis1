@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -506,9 +506,12 @@ export default function IronOreMinesPage() {
   const lbl = { fontSize: 13, fontWeight: 600, color: '#374151' };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <ReportPage
+      maxWidth={1500}
+      title={<>SAIL Iron Ore Mines — Month-wise</>}
+      description={<>{scopeLabel} · FY {data?.fy_label || ''} · Production &amp; Despatch (Lump, Fines, Dump Fines, Tailings, Pellets · Rail / Road)</>}
+    >
       <style>{`
-        html, body { overflow-y: auto; overflow-x: hidden; }
         @media print {
           @page { size: A4 landscape; margin: 9mm; }
           .no-print { display: none !important; }
@@ -519,19 +522,7 @@ export default function IronOreMinesPage() {
         }
       `}</style>
 
-      <div className="no-print"><GlobalNavbar /></div>
-
-      <div style={{ maxWidth: 1500, margin: '0 auto', padding: '22px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            SAIL Iron Ore Mines — Month-wise
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            {scopeLabel} · FY {data?.fy_label || ''} · Production &amp; Despatch (Lump, Fines, Dump Fines, Tailings, Pellets · Rail / Road)
-          </span>
-        </div>
-
-        <div className="no-print" style={{
+<div className="no-print" style={{
           display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
           marginBottom: 16, border: '1px solid #dadce0', borderRadius: 8, padding: '13px 16px',
         }}>
@@ -820,7 +811,6 @@ export default function IronOreMinesPage() {
           Values stored in &apos;000 tonnes (Tonnes view ×1000). Dimmed rows have no entry yet.
           &quot;% Ach&quot; = Actual ÷ Plan. FY Total sums the months that have data.
         </div>
-      </div>
-    </div>
+    </ReportPage>
   );
 }

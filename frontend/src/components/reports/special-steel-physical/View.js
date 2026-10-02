@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -53,17 +53,13 @@ export default function SpecialSteelPhysicalPage() {
   const sections = data?.sections || [];
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
-      <GlobalNavbar />
-      <main style={{ flex: 1, maxWidth: 1800, width: '100%', margin: '0 auto', padding: 32, boxSizing: 'border-box' }}>
-        <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-          {data?.title || 'Special Steel Plants Physical Performance'}
-        </h1>
-        <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: 6 }}>
-          Unit: {data?.unit || 'Tonnes'}
-        </p>
+    <ReportPage
+      maxWidth={1800}
+      title={<>{data?.title || 'Special Steel Plants Physical Performance'}</>}
+      description={<>Unit: {data?.unit || 'Tonnes'}</>}
+    >
 
-        {loading && <div style={{ padding: 40, color: '#5f6368' }}>Loading…</div>}
+{loading && <div style={{ padding: 40, color: '#5f6368' }}>Loading…</div>}
         {error && (
           <div style={{ padding: '14px 18px', border: '1px solid #f28b82', borderRadius: 8, backgroundColor: '#fce8e6', color: '#c5221f', fontSize: '11pt' }}>
             Failed to load: {error}
@@ -155,7 +151,6 @@ export default function SpecialSteelPhysicalPage() {
             )}
           </>
         )}
-      </main>
-    </div>
+    </ReportPage>
   );
 }

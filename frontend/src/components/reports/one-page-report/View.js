@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -30,7 +30,7 @@ const cardStyle = {
   padding: '20px 24px',
   border: '1px solid #dadce0',
   borderRadius: '8px',
-  backgroundColor: '#f8f9fa',
+  backgroundColor: '#ffffff',
   marginBottom: '24px',
 };
 
@@ -139,23 +139,13 @@ export default function OnePageReportPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
-      <GlobalNavbar />
-      <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px' }}>
-        <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-            SAIL 1-Page Report
-          </h1>
-          <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            Sales &amp; Stock (Tables A &amp; D) come from the external report you upload below;
-            Production &amp; Techno-Economic Parameters (Tables B &amp; C) are computed fresh from
-            data already in this app.
-          </p>
-        </div>
+    <ReportPage
+      maxWidth={1100}
+      title={<>SAIL 1-Page Report</>}
+      description={<>Sales &amp; Stock (Tables A &amp; D) come from the external report you upload below; Production &amp; Techno-Economic Parameters (Tables B &amp; C) are computed fresh from data already in this app.</>}
+    >
 
-        {/* Download combined report */}
+{/* Download combined report */}
         <div style={cardStyle}>
           <div style={{ fontSize: '11pt', fontWeight: 700, color: '#202124', marginBottom: '12px' }}>
             Download combined report
@@ -299,7 +289,6 @@ export default function OnePageReportPage() {
             </table>
           </div>
         )}
-      </main>
-    </div>
+    </ReportPage>
   );
 }

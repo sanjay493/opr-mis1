@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -236,22 +236,13 @@ export default function BFBenchmarkReportPage() {
   const periodFlat = periods.map((p) => ({ period: p, rows: flatRows(p) }));
 
   return (
-    <>
-      <GlobalNavbar />
-      <main style={{
-        maxWidth: '1400px', margin: '0 auto', padding: '32px 20px',
-        height: 'calc(100vh - 72px)', overflowY: 'auto',
-      }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>BF Benchmarking</h1>
-        <p style={{ color: '#5f6368', marginBottom: '20px' }}>
-          Compare any of SAIL&apos;s 16 blast furnaces against non-SAIL BFs, grouped Company → Location → Furnace.
-          Use the Working Volume buttons to jump straight to all Large, Medium or Small furnaces on both sides —
-          SAIL&apos;s 3 flagship furnaces (BSP BF-8, RSP BF-5, ISP BF-5) are the Large class.
-          Non-SAIL BFs show data for the same Financial Year(s) selected below (blank if that BF hasn&apos;t entered that year).
-          Add or edit furnace Working Volume / non-SAIL BF data at <a href="/data-entry/bf-benchmark">BF Benchmarking Entry</a>.
-        </p>
+    <ReportPage
+      maxWidth={1400}
+      title={<>BF Benchmarking</>}
+      description={<>Compare any of SAIL&apos;s 16 blast furnaces against non-SAIL BFs, grouped Company → Location → Furnace. Use the Working Volume buttons to jump straight to all Large, Medium or Small furnaces on both sides — SAIL&apos;s 3 flagship furnaces (BSP BF-8, RSP BF-5, ISP BF-5) are the Large class. Non-SAIL BFs show data for the same Financial Year(s) selected below (blank if that BF hasn&apos;t entered that year). Add or edit furnace Working Volume / non-SAIL BF data at <a href="/data-entry/bf-benchmark">BF Benchmarking Entry</a>.</>}
+    >
 
-        {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
+{error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
 
         <div style={{ border: '1px solid #dadce0', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
           <div style={{ marginBottom: '12px' }}>
@@ -467,7 +458,6 @@ export default function BFBenchmarkReportPage() {
             </table>
           </div>
         )}
-      </main>
-    </>
+    </ReportPage>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage, FilterBar, Field, Status, Toggle, Empty, entryStyles as es, reportStyles as rs, wb } from '../ReportUI';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -115,163 +115,43 @@ export default function ProductionFYPage() {
     .filter((p) => p.items.length > 0);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
-      <GlobalNavbar />
-
-      <main style={{
-        flex: 1,
-        minHeight: 0,
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        maxWidth: '1600px',
-        margin: '0 auto',
-        padding: '32px',
-        width: '100%',
-        boxSizing: 'border-box',
-      }}>
-        {/* Header */}
-        <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-            Month-wise Production {mode === 'actual' ? '(Actual)' : '(Plan)'}
-          </h1>
-          <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
-            All plants, all items — monthly {mode} figures for the selected financial year ('000 T unless stated)
-          </p>
-        </div>
-
-        {/* Controls */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '24px',
-          flexWrap: 'wrap',
-          padding: '16px 20px',
-          border: '1px solid #dadce0',
-          borderRadius: '8px',
-          backgroundColor: '#f8f9fa',
-          marginBottom: '24px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label style={{ fontSize: '11pt', fontWeight: 600, color: '#202124' }}>Financial Year</label>
-            <select
-              value={fyStart ?? ''}
-              onChange={(e) => setFyStart(parseInt(e.target.value, 10))}
-              style={{
-                padding: '8px 12px',
-                fontSize: '11pt',
-                border: '1px solid #dadce0',
-                borderRadius: '6px',
-                backgroundColor: '#ffffff',
-                color: '#202124',
-                cursor: 'pointer',
-                minWidth: '130px',
-              }}
-            >
+    <ReportPage
+      fill
+      maxWidth={1600}
+      title={`Month-wise Production ${mode === 'actual' ? '(Actual)' : '(Plan)'}`}
+      description={`All plants, all items — monthly ${mode} figures for the selected financial year ('000 T unless stated)`}
+    >
+        <FilterBar actions={<>
+          {loading && <span className={es.ctxNote}>Loading…</span>}
+          <button type="button" className={wb.btn} onClick={() => handleDownload('excel')} disabled={!fyStart || downloading !== null}>
+            {downloading === 'excel' ? 'Generating…' : '⬇ Excel'}
+          </button>
+          <button type="button" className={wb.btn} onClick={() => handleDownload('pdf')} disabled={!fyStart || downloading !== null}>
+            {downloading === 'pdf' ? 'Generating…' : '⬇ PDF'}
+          </button>
+        </>}>
+          <Field label="Financial year" htmlFor="pfy-fy">
+            <select id="pfy-fy" className={es.control} style={{ minWidth: 130 }} value={fyStart ?? ''} onChange={(e) => setFyStart(parseInt(e.target.value, 10))}>
               {fys.map((fy) => (
                 <option key={fy.fy_start} value={fy.fy_start}>{fy.label}</option>
               ))}
             </select>
-          </div>
+          </Field>
+          <Field label="Figures">
+            <Toggle label="Figures" value={mode} onChange={setMode}
+                    options={[{ id: 'actual', label: 'Actual' }, { id: 'plan', label: 'Plan' }]} />
+          </Field>
+        </FilterBar>
 
-          {/* Actual / Plan toggle */}
-          <div style={{
-            display: 'flex',
-            border: '1px solid #dadce0',
-            borderRadius: '6px',
-            overflow: 'hidden',
-            backgroundColor: '#ffffff',
-          }}>
-            {['actual', 'plan'].map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                style={{
-                  padding: '8px 22px',
-                  fontSize: '11pt',
-                  fontWeight: 600,
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: mode === m ? '#1a73e8' : 'transparent',
-                  color: mode === m ? '#ffffff' : '#5f6368',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {m === 'actual' ? 'Actual' : 'Plan'}
-              </button>
-            ))}
-          </div>
-
-          {/* Download buttons */}
-          <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
-            <button
-              onClick={() => handleDownload('excel')}
-              disabled={!fyStart || downloading !== null}
-              style={{
-                padding: '8px 18px',
-                fontSize: '10.5pt',
-                fontWeight: 700,
-                border: '1px solid #1a73e8',
-                borderRadius: '6px',
-                cursor: !fyStart || downloading !== null ? 'not-allowed' : 'pointer',
-                backgroundColor: '#ffffff',
-                color: downloading !== null ? '#9aa0a6' : '#1a73e8',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {downloading === 'excel' ? 'Generating…' : '⬇ Excel'}
-            </button>
-            <button
-              onClick={() => handleDownload('pdf')}
-              disabled={!fyStart || downloading !== null}
-              style={{
-                padding: '8px 18px',
-                fontSize: '10.5pt',
-                fontWeight: 700,
-                border: '1px solid #1a73e8',
-                borderRadius: '6px',
-                cursor: !fyStart || downloading !== null ? 'not-allowed' : 'pointer',
-                backgroundColor: '#ffffff',
-                color: downloading !== null ? '#9aa0a6' : '#1a73e8',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {downloading === 'pdf' ? 'Generating…' : '⬇ PDF'}
-            </button>
-          </div>
-
-          {loading && <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>Loading…</span>}
-        </div>
-
-        {error && (
-          <div style={{
-            padding: '14px 18px',
-            border: '1px solid #f28b82',
-            borderRadius: '8px',
-            backgroundColor: '#fce8e6',
-            color: '#c5221f',
-            fontSize: '11pt',
-            marginBottom: '24px',
-          }}>
-            {error}
-          </div>
-        )}
+        <Status status={error ? { type: 'error', text: error } : null} />
 
         {!loading && !error && data && visiblePlants.length === 0 && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#5f6368', fontSize: '12pt' }}>
-            No {mode} data available for FY {data.fy_label}.
-          </div>
+          <Empty>No {mode} data available for FY {data.fy_label}.</Empty>
         )}
 
         {/* Table */}
         {data && visiblePlants.length > 0 && (
-          <div style={{
-            border: '1px solid #dadce0',
-            borderRadius: '8px',
-            overflow: 'auto',
-            flex: 1,
-            minHeight: 0,
-          }}>
+          <div className={rs.grow}>
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
               <thead>
                 <tr>
@@ -388,7 +268,6 @@ export default function ProductionFYPage() {
             </table>
           </div>
         )}
-      </main>
-    </div>
+    </ReportPage>
   );
 }

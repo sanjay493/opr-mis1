@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { ReportPage } from '../ReportUI';
 import {
   API_BASE, CURRENT_FY_END_YEAR, selStyle, pillStyle, ErrorBox, TabIntro, ExportButtons, downloadFile,
 } from '@/components/techno/shared';
@@ -71,13 +71,11 @@ export default function CapitalRepairCalendarView() {
   const nCols = 1 + months.length;
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f8fafd' }}>
-      <GlobalNavbar />
+    <ReportPage
+      maxWidth={1600}
+      title={<>Capital Repair — Plan vs Actual</>}
+    >
 
-      <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '24px 32px 40px' }}>
-        <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: '0 0 8px' }}>
-          Capital Repair — Plan vs Actual
-        </h1>
         <TabIntro>
           One row per unit, Apr–Mar: when each repair was planned and when it actually ran, drawn
           to scale with the days in each month. Hover a bar for its dates.
@@ -254,8 +252,7 @@ export default function CapitalRepairCalendarView() {
             <style>{HOVER_CSS}</style>
           </div>
         )}
-      </div>
-    </div>
+    </ReportPage>
   );
 }
 
