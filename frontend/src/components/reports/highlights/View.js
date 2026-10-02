@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
+import css from './highlights.module.css';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -41,6 +42,23 @@ const RECORD_SCOPES = [
   { key: 'all8',  label: 'SAIL (8 Plants)', kind: 'Groups' },
   ...PLANTS_MAIN5.map(p => ({ key: p, label: p, kind: 'Plants' })),
   ...UNITS3.map(p => ({ key: p, label: p, kind: 'Units' })),
+];
+
+// Items summarised in the "output" card
+const KEY_ITEMS = [
+  { label: 'Hot Metal',      key: 'Hot Metal' },
+  { label: 'Crude Steel',    key: 'Total Crude Steel' },
+  { label: 'Saleable Steel', key: 'Saleable Steel' },
+];
+// Crude-steel share bar, largest plant first
+const SHARE_COLORS = ['#1a73e8', '#8ab4f8', '#34a853', '#fbbc04', '#9aa0a6', '#a142f4', '#f28b82', '#5f6368'];
+// Record period types, in table-column order (order = spotlight tie-break)
+const RECORD_KINDS = [
+  { id: 'month',   label: 'Monthly peak',        head: 'Best Month',          order: 0 },
+  { id: 'quarter', label: 'Quarterly peak',      head: 'Best Quarter',        order: 1 },
+  { id: 'half',    label: 'Half-year peak',      head: 'Best Half',           order: 2 },
+  { id: 'fy',      label: 'Financial-year peak', head: 'Best Financial Year', order: 3 },
+  { id: 'cy',      label: 'Calendar-year peak',  head: 'Best Calendar Year',  order: 4 },
 ];
 
 // ── Best-Period query (custom month window, top-5 FYs) ──────────────────────
@@ -86,15 +104,6 @@ const fyOfMonth = (m) => {
 };
 const shiftYear = (m, delta) => `${Number(m.slice(0, 4)) + delta}${m.slice(4)}`;
 const fyLabel = (y) => `${y}-${String(y + 1).slice(2)}`;
-
-const TH = {
-  padding: '8px 10px', border: '1px solid #cbd5e1', fontWeight: 700,
-  fontSize: 13, backgroundColor: '#1e3a5f', color: '#fff', whiteSpace: 'nowrap',
-};
-const TD = {
-  padding: '6px 10px', border: '1px solid #dadce0', fontSize: 13,
-  textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
-};
 
 export default function HighlightsPage() {
   const [fys, setFys]             = useState([]);
@@ -326,12 +335,9 @@ export default function HighlightsPage() {
   const fmt = (v) => {
     if (v == null) return '—';
     if (inTonnes) return Math.round(v * 1000).toLocaleString('en-IN');
-    return v.toFixed(3);
+    return v.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
   };
   const fmtPct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`);
-  const pctColor = (v, good = 100) =>
-    v == null ? '#6b7280' : v >= good ? '#188038' : v >= good - 5 ? '#b45309' : '#c5221f';
-  const growthColor = (v) => (v == null ? '#6b7280' : v >= 0 ? '#188038' : '#c5221f');
 
   // ── Items shown in the Records table for the selected scope ────────────────
   // Single-plant scopes report every unit/item of that plant (BF#1, SMS-2,
@@ -442,376 +448,454 @@ export default function HighlightsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const selectStyle = { padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 };
-  const labelStyle  = { fontSize: 13, fontWeight: 600, color: '#374151' };
-  const groupCols   = singleGroup ? 5 : 4;
+  // ── Summary cards ───────────────────────────────────────────────────────────
+  // Figures for the cards come from the single summary column, or the Total
+  // column in the plant/unit-wise views.
+  const sumIdx = Math.max(groups.findIndex(g => g.isTotal), 0);
+  const keyStats = KEY_ITEMS.map(({ label, key }) => ({ label, ...(rows[key]?.[sumIdx] || {}) }));
+
+  // Crude steel share of each plant in the selected period
+  const sharePlants = view === 'UNIT' ? UNITS3 : view === 'SAIL8' ? PLANTS_ALL8 : PLANTS_MAIN5;
+  const share = useMemo(() => {
+    const vals = sharePlants
+      .map(p => ({ plant: p, value: aggregate([p], 'Total Crude Steel', 'actual', periodMonthList, false) }))
+      .filter(x => x.value != null && x.value > 0);
+    const total = vals.reduce((a, x) => a + x.value, 0);
+    return { total, rows: vals.map(x => ({ ...x, pct: total ? (x.value / total) * 100 : 0 })).sort((a, b) => b.value - a.value) };
+  }, [sharePlants, aggregate, periodMonthList]);
+
+  // ── YTD (FY start → end of the selected month/quarter/half) ────────────────
+  const ytdMonthList = useMemo(() => {
+    if (fyStart == null || !['month', 'quarter', 'half'].includes(periodType)) return null;
+    const end = periodType === 'month' ? monthIdx : periodType === 'quarter' ? quarter * 3 - 1 : half * 6 - 1;
+    return fyMonths(fyStart).slice(0, end + 1);
+  }, [fyStart, periodType, monthIdx, quarter, half]);
+
+  const ytd = useMemo(() => {
+    if (!ytdMonthList || !singleGroup) return null;
+    const g = groups[0];
+    const cplyYtd = ytdMonthList.map(m => shiftYear(m, -1));
+    const out = {};
+    ITEMS.forEach(({ key }) => {
+      const plan   = aggregate(g.plants, key, 'plan',   ytdMonthList, g.conv);
+      const actual = aggregate(g.plants, key, 'actual', ytdMonthList, g.conv);
+      const cply   = aggregate(g.plants, key, 'actual', cplyYtd,      g.conv);
+      out[key] = {
+        plan, actual,
+        growth: cply != null && cply !== 0 && actual != null ? ((actual - cply) / cply) * 100 : null,
+      };
+    });
+    return out;
+  }, [ytdMonthList, singleGroup, groups, aggregate]);
+
+  // ── Records: just-set count and most recent records (spotlight) ────────────
+  const recordList = useMemo(() => {
+    if (!recordRows) return [];
+    const list = [];
+    scopeItems.forEach(({ label, key }) => {
+      RECORD_KINDS.forEach(({ id, label: kind, order }) => {
+        const rec = recordRows[key]?.[id];
+        if (rec?.best) list.push({ item: label, kind, order, best: rec.best, second: rec.second });
+      });
+    });
+    return list;
+  }, [recordRows, scopeItems]);
+  const freshRecords = recordList.filter(r => isFreshRecord(r.best));
+  const spotlight = [...recordList]
+    .sort((a, b) => (b.best.end || '').localeCompare(a.best.end || '') || a.order - b.order)
+    .slice(0, 4);
+
+  // ── Small render helpers ────────────────────────────────────────────────────
+  const pill = (v) => {
+    if (v == null) return <span className={`${css.pill} ${css.pillNone}`}>—</span>;
+    const cls = v >= 100 ? css.pillGood : v >= 95 ? css.pillMid : css.pillBad;
+    return <span className={`${css.pill} ${cls}`}>{fmtPct(v)}</span>;
+  };
+  const growth = (v) => (v == null
+    ? <span className={css.muted}>—</span>
+    : <span className={v >= 0 ? css.up : css.down}>{v >= 0 ? '↑' : '↓'} {v >= 0 ? '+' : ''}{v.toFixed(2)}%</span>);
+  const seg = (options, value, onChange, green) => (
+    <div className={`${css.segmented} ${green ? css.segGreen : ''}`}>
+      {options.map(o => (
+        <button key={o.id} type="button" onClick={() => onChange(o.id)}
+                className={`${css.segBtn} ${value === o.id ? css.segBtnActive : ''}`}>{o.label}</button>
+      ))}
+    </div>
+  );
+  const unitLabel = inTonnes ? 'T' : "'000 T";
+  const scopeLabel = RECORD_SCOPES.find(x => x.key === recordScope)?.label;
+  const groupCols = singleGroup ? 5 : 4;
+  const ytdCols = ytd ? 3 : 0;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
+    <div className={css.page}>
       <style>{`
         html, body { overflow-y: auto; overflow-x: hidden; }
-        @media print {
-          @page { size: A4 landscape; margin: 10mm; }
-          .hl-table-wrap { overflow: visible !important; border: none !important; }
-          .no-print { display: none !important; }
-        }
+        @media print { @page { size: A4 landscape; margin: 10mm; } }
       `}</style>
 
-      <div className="no-print"><GlobalNavbar /></div>
+      <div className={css.noPrint}><GlobalNavbar /></div>
 
-      <div style={{ maxWidth: 1500, margin: '0 auto', padding: '22px 20px' }}>
+      <div className={css.inner}>
 
         {/* ── Title ── */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            Production Highlights
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            {VIEWS.find(v => v.id === view).label} · {periodLabel}
-          </span>
+        <div className={css.titleRow}>
+          <h1 className={css.title}>Production Highlights</h1>
+          <span className={css.titleChip}>{VIEWS.find(v => v.id === view).label} · {periodLabel}</span>
         </div>
 
-        {/* ── Controls ── */}
-        <div className="no-print" style={{
-          display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
-          marginBottom: 18, border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px',
-        }}>
-          <label style={labelStyle}>View</label>
-          <div style={{ display: 'flex', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
-            {VIEWS.map(v => (
-              <button key={v.id} onClick={() => setView(v.id)} style={{
-                padding: '7px 14px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-                background: view === v.id ? '#1a73e8' : '#fff',
-                color: view === v.id ? '#fff' : '#374151',
-              }}>{v.label}</button>
-            ))}
-          </div>
-
-          <label style={{ ...labelStyle, marginLeft: 12 }}>Period</label>
-          <select value={periodType} onChange={e => setPeriodType(e.target.value)} style={selectStyle}>
+        {/* ── Toolbar ── */}
+        <div className={`${css.toolbar} ${css.noPrint}`}>
+          {seg(VIEWS, view, setView)}
+          <span className={css.toolLabel}>Period</span>
+          <select className={css.select} value={periodType} onChange={e => setPeriodType(e.target.value)}>
             {PERIOD_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
 
           {periodType === 'custom' ? (
             <>
-              <label style={labelStyle}>From</label>
-              <select value={customStart ?? ''} onChange={e => setCustomStart(e.target.value)} style={selectStyle}>
-                {allMonths.map(m => (
-                  <option key={m} value={m}>{MONTH_LABEL[m.slice(5)]} {m.slice(0, 4)}</option>
-                ))}
+              <span className={css.toolLabel}>From</span>
+              <select className={css.select} value={customStart ?? ''} onChange={e => setCustomStart(e.target.value)}>
+                {allMonths.map(m => <option key={m} value={m}>{MONTH_LABEL[m.slice(5)]} {m.slice(0, 4)}</option>)}
               </select>
-              <label style={labelStyle}>To</label>
-              <select value={customEnd ?? ''} onChange={e => setCustomEnd(e.target.value)} style={selectStyle}>
-                {allMonths.map(m => (
-                  <option key={m} value={m}>{MONTH_LABEL[m.slice(5)]} {m.slice(0, 4)}</option>
-                ))}
+              <span className={css.toolLabel}>To</span>
+              <select className={css.select} value={customEnd ?? ''} onChange={e => setCustomEnd(e.target.value)}>
+                {allMonths.map(m => <option key={m} value={m}>{MONTH_LABEL[m.slice(5)]} {m.slice(0, 4)}</option>)}
               </select>
             </>
           ) : periodType === 'cy' ? (
-            <select value={cyYear ?? ''} onChange={e => setCyYear(Number(e.target.value))} style={selectStyle}>
+            <select className={css.select} value={cyYear ?? ''} onChange={e => setCyYear(Number(e.target.value))}>
               {cyOptions.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           ) : (
             <>
-              <select value={fyStart ?? ''} onChange={e => setFyStart(Number(e.target.value))} style={selectStyle}>
+              <select className={css.select} value={fyStart ?? ''} onChange={e => setFyStart(Number(e.target.value))}>
                 {fys.map(f => <option key={f.fy_start} value={f.fy_start}>FY {f.label}</option>)}
               </select>
               {periodType === 'month' && (
-                <select value={monthIdx} onChange={e => setMonthIdx(Number(e.target.value))} style={selectStyle}>
+                <select className={css.select} value={monthIdx} onChange={e => setMonthIdx(Number(e.target.value))}>
                   {fyStart != null && fyMonths(fyStart).map((m, i) => (
                     <option key={m} value={i}>{MONTH_LABEL[m.slice(5)]} {m.slice(0, 4)}</option>
                   ))}
                 </select>
               )}
               {periodType === 'quarter' && (
-                <select value={quarter} onChange={e => setQuarter(Number(e.target.value))} style={selectStyle}>
+                <select className={css.select} value={quarter} onChange={e => setQuarter(Number(e.target.value))}>
                   {QUARTERS.map(q => <option key={q.id} value={q.id}>{q.label}</option>)}
                 </select>
               )}
               {periodType === 'half' && (
-                <select value={half} onChange={e => setHalf(Number(e.target.value))} style={selectStyle}>
+                <select className={css.select} value={half} onChange={e => setHalf(Number(e.target.value))}>
                   {HALVES.map(h => <option key={h.id} value={h.id}>{h.label}</option>)}
                 </select>
               )}
             </>
           )}
 
-          {/* Unit toggle */}
-          <div style={{ marginLeft: 12, display: 'flex', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
-            {[
-              { on: false, text: "'000 T" },
-              { on: true,  text: 'Tonnes' },
-            ].map(({ on, text }) => (
-              <button key={text} onClick={() => setInTonnes(on)} style={{
-                padding: '7px 14px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-                background: inTonnes === on ? '#1a73e8' : '#fff',
-                color: inTonnes === on ? '#fff' : '#374151',
-              }}>{text}</button>
-            ))}
-          </div>
+          <span className={css.toolLabel}>Unit</span>
+          {seg([{ id: false, label: "'000 T" }, { id: true, label: 'Tonnes' }], inTonnes, setInTonnes)}
 
-          <button onClick={handlePrint} disabled={loading || !hasAnyData} style={{
-            marginLeft: 12, padding: '7px 16px', fontSize: 13, fontWeight: 600, borderRadius: 6,
-            border: '1px solid #d1d5db', cursor: !loading && hasAnyData ? 'pointer' : 'not-allowed',
-            background: '#fff', color: '#374151', opacity: !loading && hasAnyData ? 1 : 0.5,
-          }}>🖨 Print</button>
-
-          <button onClick={handleDownloadExcel} disabled={loading || !hasAnyData} style={{
-            padding: '7px 16px', fontSize: 13, fontWeight: 600, borderRadius: 6,
-            border: '1px solid #188038', cursor: !loading && hasAnyData ? 'pointer' : 'not-allowed',
-            background: '#e6f4ea', color: '#188038', opacity: !loading && hasAnyData ? 1 : 0.5,
-          }}>⬇ Download Excel</button>
-
-          <span style={{ marginLeft: 'auto', fontSize: 13, color: '#5f6368' }}>
-            {loading && '⟳ loading…'}
+          <span className={css.toolEnd}>
+            {loading && <span className={css.loadingNote}>⟳ loading…</span>}
+            <button type="button" className={css.btn} onClick={handlePrint} disabled={loading || !hasAnyData}>🖨 Print</button>
+            <button type="button" className={`${css.btn} ${css.btnGreen}`} onClick={handleDownloadExcel} disabled={loading || !hasAnyData}>⬇ Excel</button>
           </span>
         </div>
 
-        {/* ── Error ── */}
-        {error && (
-          <div style={{ padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14, background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}>
-            {error}
-          </div>
-        )}
+        {error && <div className={css.error}>{error}</div>}
 
-        {/* ── Table ── */}
-        {!loading && !hasAnyData ? (
-          <div style={{ color: '#9ca3af', fontSize: 14, padding: '50px 0', textAlign: 'center', border: '2px dashed #dadce0', borderRadius: 8 }}>
-            No production data for {periodLabel}.
-          </div>
-        ) : (
-          <div className="hl-table-wrap" style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 8 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th rowSpan={2} style={{ ...TH, textAlign: 'left', verticalAlign: 'middle' }}>Item</th>
-                  {groups.map((g, idx) => (
-                    <th key={g.label} colSpan={groupCols} style={{
-                      ...TH, textAlign: 'center',
-                      backgroundColor: g.isTotal ? '#7c2d12' : TH.backgroundColor,
-                      borderLeft: idx > 0 ? '2px solid #64748b' : TH.border,
-                    }}>{g.label}</th>
-                  ))}
-                </tr>
-                <tr>
-                  {groups.map((g, idx) => (
-                    <React.Fragment key={g.label}>
-                      <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right', borderLeft: idx > 0 ? '2px solid #64748b' : TH.border }}>Plan</th>
-                      <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>Actual</th>
-                      <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>% Ach</th>
-                      {singleGroup && <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>CPLY</th>}
-                      <th style={{ ...TH, backgroundColor: '#3e6494', fontWeight: 500, fontSize: 11, textAlign: 'right' }}>Gr %</th>
-                    </React.Fragment>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ITEMS.map(({ label, key }, i) => (
-                  <tr key={key} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <td style={{ ...TD, textAlign: 'left', fontWeight: 600, color: '#202124' }}>{label}</td>
-                    {rows[key].map((c, idx) => (
-                      <React.Fragment key={groups[idx].label}>
-                        <td style={{ ...TD, color: '#6b7280', borderLeft: idx > 0 ? '2px solid #94a3b8' : TD.border, backgroundColor: groups[idx].isTotal ? '#fff7ed' : undefined }}>{fmt(c.plan)}</td>
-                        <td style={{ ...TD, fontWeight: 700, backgroundColor: groups[idx].isTotal ? '#fff7ed' : undefined }}>{fmt(c.actual)}</td>
-                        <td style={{ ...TD, fontWeight: 600, color: pctColor(c.ach), backgroundColor: groups[idx].isTotal ? '#fff7ed' : undefined }}>{fmtPct(c.ach)}</td>
-                        {singleGroup && <td style={{ ...TD, color: '#6b7280' }}>{fmt(c.cply)}</td>}
-                        <td style={{ ...TD, fontWeight: 600, color: growthColor(c.growth), backgroundColor: groups[idx].isTotal ? '#fff7ed' : undefined }}>{fmtPct(c.growth)}</td>
-                      </React.Fragment>
-                    ))}
-                  </tr>
+        {/* ── Summary cards ── */}
+        {!loading && hasAnyData && (
+          <div className={css.cards}>
+            <div className={css.card}>
+              <div className={css.cardHead}>
+                <div>
+                  <div className={css.eyebrow}>{periodLabel} · output</div>
+                  <h2 className={css.cardTitle}>{groups[sumIdx].label}</h2>
+                </div>
+                <span className={css.cardIcon}>🏭</span>
+              </div>
+              <div className={css.miniStats}>
+                {keyStats.map(k => (
+                  <div key={k.label}>
+                    <div className={css.miniLabel}>{k.label}</div>
+                    <div className={css.miniValue}>{fmt(k.actual)}</div>
+                    <div className={`${css.miniFoot} ${k.ach == null ? css.muted : k.ach >= 100 ? css.up : css.down}`}>
+                      {k.ach == null ? 'no plan' : `${k.ach.toFixed(1)}% of plan`}
+                    </div>
+                    <div className={`${css.miniFoot} ${k.growth == null ? css.muted : k.growth >= 0 ? css.up : css.down}`}>
+                      {k.growth == null ? 'no CPLY' : `${k.growth >= 0 ? '+' : ''}${k.growth.toFixed(1)}% vs CPLY`}
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            </div>
 
-        {/* ── Footer note ── */}
-        <div style={{ marginTop: 14, fontSize: 12, color: '#9ca3af' }}>
-          Values stored in '000 tonnes; the Tonnes view multiplies by 1000. Plan = AAP plan (production_plan_table);
-          Actual = uploaded/entered production (production_table); months without data are skipped when summing.
-          % Ach = Actual ÷ Plan. CPLY = actual of the corresponding period last year; Gr % = growth over CPLY.
-          "SAIL (5 Plants)" sums BSP, DSP, RSP, BSL, ISP; "Unit-wise" covers ASP, SSP, VISL; "SAIL (8 Plants)" sums all
-          eight plus Conversion (Finished Steel only). Quarters and halves follow the financial year (Q1 = Apr–Jun,
-          H1 = Apr–Sep); Calendar Year = Jan–Dec.
-        </div>
+            <div className={css.card}>
+              <div className={css.cardHead}>
+                <div>
+                  <div className={css.eyebrow}>Leading crude steel share</div>
+                  <h2 className={css.cardTitle}>{share.rows[0]?.plant ?? '—'}</h2>
+                </div>
+                <span className={`${css.cardIcon} ${css.iconGreen}`}>📊</span>
+              </div>
+              <div className={css.shareTop}>
+                <span>Crude steel share · {periodLabel}</span>
+                <span className={css.shareBig}>{share.rows[0] ? `${share.rows[0].pct.toFixed(1)}%` : '—'}</span>
+              </div>
+              <div className={css.shareBar}>
+                {share.rows.map((r, i) => (
+                  <span key={r.plant} title={`${r.plant}: ${fmt(r.value)} (${r.pct.toFixed(1)}%)`}
+                        style={{ width: `${r.pct}%`, background: SHARE_COLORS[i % SHARE_COLORS.length] }} />
+                ))}
+              </div>
+              <div className={css.shareLegend}>
+                {share.rows.map((r, i) => (
+                  <span key={r.plant}><i className={css.dot} style={{ background: SHARE_COLORS[i % SHARE_COLORS.length] }} />{r.plant} {r.pct.toFixed(1)}%</span>
+                ))}
+              </div>
+              <div className={css.cardFoot}>
+                <span>Total: <b>{fmt(share.total || null)}</b> {unitLabel}</span>
+                <span>{share.rows.length} {view === 'UNIT' ? 'units' : 'plants'}</span>
+              </div>
+            </div>
 
-        {/* ══ Records — best-ever performance (separate section) ══ */}
-        <div style={{ marginTop: 34, borderTop: '2px solid #e8eaed', paddingTop: 22 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-              🏆 Best-Ever Records
-            </h2>
-            <span style={{ fontSize: 13, color: '#5f6368' }}>
-              {RECORD_SCOPES.find(s => s.key === recordScope)?.label} · all-time highest production per period
-            </span>
-          </div>
-
-          {/* Scope selector: groups | plants | units */}
-          <div className="no-print" style={{
-            display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
-            marginBottom: 14, border: '1px solid #dadce0', borderRadius: 8, padding: '12px 18px',
-          }}>
-            {['Groups', 'Plants', 'Units'].map(kind => (
-              <div key={kind} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6368', textTransform: 'uppercase' }}>{kind}</span>
-                <div style={{ display: 'flex', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
-                  {RECORD_SCOPES.filter(s => s.kind === kind).map(s => (
-                    <button key={s.key} onClick={() => setRecordScope(s.key)} style={{
-                      padding: '6px 12px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-                      background: recordScope === s.key ? '#188038' : '#fff',
-                      color: recordScope === s.key ? '#fff' : '#374151',
-                    }}>{s.label}</button>
-                  ))}
+            <div className={css.card}>
+              <div className={css.cardHead}>
+                <div>
+                  <div className={css.eyebrow}>Records just set · {scopeLabel}</div>
+                  <h2 className={css.cardTitle}>{freshRecords.length} new record{freshRecords.length === 1 ? '' : 's'}</h2>
+                </div>
+                <span className={`${css.cardIcon} ${css.iconAmber}`}>🏆</span>
+              </div>
+              <div className={css.milestone}>
+                <span className={css.bigCount}>{freshRecords.length}</span>
+                <div className={css.milestoneText}>
+                  {freshRecords.length
+                    ? <>Latest: <b>{freshRecords[0].item}</b> — {freshRecords[0].kind.toLowerCase()} of <b>{fmt(freshRecords[0].best.total)}</b> in {freshRecords[0].best.period}.</>
+                    : 'No best-ever month, quarter, half or year was set in the last 3 months of data.'}
+                  <br />Records whose period ended in the last 3 months of data{records?.latest_month ? ` (latest ${records.latest_month})` : ''}.
                 </div>
               </div>
-            ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Highlights table ── */}
+        <section className={css.section}>
+          <div className={css.sectionHead}>
+            <div>
+              <h2 className={css.sectionTitle}>Production highlights: {VIEWS.find(v => v.id === view).label}</h2>
+              <p className={css.sectionSub}>Plan vs actual for {periodLabel}, with growth over the corresponding period last year{ytd ? ' and FY-to-date' : ''}</p>
+            </div>
+            <div className={css.legend}>
+              <span><i className={css.dot} style={{ background: 'var(--ui-success)' }} />≥100% of plan</span>
+              <span><i className={css.dot} style={{ background: 'var(--ui-warning)' }} />95–99%</span>
+              <span><i className={css.dot} style={{ background: 'var(--ui-danger)' }} />&lt;95%</span>
+            </div>
           </div>
 
-          {recordsError && (
-            <div style={{ padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14, background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}>
-              {recordsError}
-            </div>
-          )}
-
-          {!records && !recordsError ? (
-            <div style={{ color: '#9ca3af', fontSize: 14, padding: '30px 0', textAlign: 'center' }}>⟳ Loading records…</div>
-          ) : recordRows && !recordsHaveData ? (
-            <div style={{ color: '#9ca3af', fontSize: 14, padding: '40px 0', textAlign: 'center', border: '2px dashed #dadce0', borderRadius: 8 }}>
-              No production records for {RECORD_SCOPES.find(s => s.key === recordScope)?.label}.
-            </div>
-          ) : recordRows && (
-            <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 8 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          {!loading && !hasAnyData ? (
+            <div className={css.empty}>No production data for {periodLabel}.</div>
+          ) : (
+            <div className={css.tableWrap}>
+              <table className={css.table}>
                 <thead>
+                  {!singleGroup && (
+                    <tr>
+                      <th className={css.left} />
+                      {groups.map(g => (
+                        <th key={g.label} colSpan={groupCols} className={`${css.thGroup} ${g.isTotal ? css.thGroupTotal : ''}`}>{g.label}</th>
+                      ))}
+                    </tr>
+                  )}
                   <tr>
-                    <th style={{ ...TH, backgroundColor: '#14532d', textAlign: 'left' }}>Item</th>
-                    {['Best Month', 'Best Quarter', 'Best Half', 'Best Financial Year', 'Best Calendar Year'].map(h => (
-                      <th key={h} style={{ ...TH, backgroundColor: '#14532d', textAlign: 'center' }}>{h}</th>
+                    <th className={css.left}>Item</th>
+                    {groups.map((g, idx) => (
+                      <React.Fragment key={g.label}>
+                        <th className={idx > 0 ? css.groupStart : ''}>Plan<span className={css.thSub}>({unitLabel})</span></th>
+                        <th>Actual<span className={css.thSub}>{singleGroup ? periodLabel : `(${unitLabel})`}</span></th>
+                        <th className={css.center}>% Ach</th>
+                        {singleGroup && <th>CPLY<span className={css.thSub}>({unitLabel})</span></th>}
+                        <th>Gr %<span className={css.thSub}>over CPLY</span></th>
+                      </React.Fragment>
                     ))}
+                    {ytd && (
+                      <>
+                        <th className={css.groupStart}>YTD plan<span className={css.thSub}>({unitLabel})</span></th>
+                        <th>YTD actual<span className={css.thSub}>({unitLabel})</span></th>
+                        <th>YTD Gr %<span className={css.thSub}>YoY</span></th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {scopeItems.map(({ label, key }, i) => (
-                    <tr key={key} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                      <td style={{ ...TD, textAlign: 'left', fontWeight: 600, color: '#202124' }}>{label}</td>
-                      {['month', 'quarter', 'half', 'fy', 'cy'].map(k => {
-                        const rec = recordRows[key]?.[k];
-                        const best = rec?.best ?? null;
-                        const fresh = best != null && isFreshRecord(best);
+                  {ITEMS.map(({ label, key }) => (
+                    <tr key={key}>
+                      <td className={`${css.left} ${css.itemCell}`}><span className={css.itemDot}>•</span>{label}</td>
+                      {rows[key].map((c, idx) => {
+                        const tot = groups[idx].isTotal ? css.totalCol : '';
                         return (
-                          <td key={k} style={{
-                            ...TD, textAlign: 'center', verticalAlign: 'top',
-                            ...(fresh && {
-                              backgroundColor: '#fef3c7',
-                              boxShadow: 'inset 0 0 0 2px #f59e0b',
-                            }),
-                          }}>
-                            {best == null ? '—' : (
-                              <>
-                                {fresh && (
-                                  <span style={{
-                                    display: 'inline-block', marginRight: 6, padding: '0 6px',
-                                    borderRadius: 8, background: '#f59e0b', color: '#fff',
-                                    fontSize: 10, fontWeight: 800, verticalAlign: 'middle',
-                                  }}>★ NEW</span>
-                                )}
-                                <span style={{ fontWeight: 700, color: fresh ? '#92400e' : '#14532d' }}>{fmt(best.total)}</span>
-                                <br />
-                                <span style={{ fontSize: 11, color: fresh ? '#b45309' : '#5f6368' }}>{best.period}</span>
-                                {rec.second != null && (
-                                  <div style={{
-                                    marginTop: 4, paddingTop: 3,
-                                    borderTop: '1px dashed #d1d5db',
-                                    fontSize: 11, color: '#6b7280',
-                                  }}>
-                                    <span style={{ fontWeight: 700 }}>2nd · {fmt(rec.second.total)}</span>
-                                    <br />
-                                    <span style={{ fontSize: 10.5 }}>{rec.second.period}</span>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </td>
+                          <React.Fragment key={groups[idx].label}>
+                            <td className={`${css.plan} ${tot} ${idx > 0 ? css.groupStart : ''}`}>{fmt(c.plan)}</td>
+                            <td className={`${css.actualCell} ${tot}`}>{fmt(c.actual)}</td>
+                            <td className={`${css.center} ${tot}`}>{pill(c.ach)}</td>
+                            {singleGroup && <td className={css.plan}>{fmt(c.cply)}</td>}
+                            <td className={tot}>{growth(c.growth)}</td>
+                          </React.Fragment>
                         );
                       })}
+                      {ytd && (
+                        <>
+                          <td className={`${css.plan} ${css.groupStart}`}>{fmt(ytd[key].plan)}</td>
+                          <td className={css.actualCell}>{fmt(ytd[key].actual)}</td>
+                          <td>{growth(ytd[key].growth)}</td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+          <div className={css.note}>
+            Values stored in &apos;000 tonnes; the Tonnes view multiplies by 1000. Plan = AAP plan (production_plan_table);
+            Actual = uploaded/entered production (production_table); months without data are skipped when summing.
+            % Ach = Actual ÷ Plan. CPLY = actual of the corresponding period last year; Gr % = growth over CPLY.
+            YTD = from April of the financial year to the end of the selected month, quarter or half.
+            &quot;SAIL (5 Plants)&quot; sums BSP, DSP, RSP, BSL, ISP; &quot;Unit-wise&quot; covers ASP, SSP, VISL; &quot;SAIL (8 Plants)&quot; sums all
+            eight plus Conversion (Finished Steel only). Quarters and halves follow the financial year (Q1 = Apr–Jun,
+            H1 = Apr–Sep); Calendar Year = Jan–Dec.
+          </div>
+        </section>
 
-          <div style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
-            <span style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4, padding: '0 5px', color: '#92400e', fontWeight: 700 }}>★ NEW</span>{' '}
-            marks records just set — the record period ended within the last 3 months of available data.
+        {/* ── Best-ever records ── */}
+        <section className={css.section}>
+          <div className={css.sectionHead}>
+            <div>
+              <h2 className={css.sectionTitle}>🏆 Best-ever records spotlight</h2>
+              <p className={css.sectionSub}>{scopeLabel} · all-time highest production per period — most recent records first</p>
+            </div>
+          </div>
+          <div className={`${css.scopeBar} ${css.noPrint}`}>
+            {['Groups', 'Plants', 'Units'].map(kind => (
+              <React.Fragment key={kind}>
+                <span className={css.toolLabel}>{kind}</span>
+                {seg(RECORD_SCOPES.filter(x => x.kind === kind).map(x => ({ id: x.key, label: x.label })), recordScope, setRecordScope, true)}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {recordsError && <div className={css.warn}>{recordsError}</div>}
+
+          {!records && !recordsError ? (
+            <div className={css.empty}>⟳ Loading records…</div>
+          ) : recordRows && !recordsHaveData ? (
+            <div className={css.empty}>No production records for {scopeLabel}.</div>
+          ) : recordRows && (
+            <>
+              <div className={css.spotlight}>
+                {spotlight.map(r => {
+                  const fresh = isFreshRecord(r.best);
+                  return (
+                    <div key={`${r.item}-${r.kind}`} className={`${css.spot} ${fresh ? css.spotFresh : ''}`}>
+                      <span className={css.spotTag}>{fresh ? '★ New record' : 'All-time record'}</span>
+                      <span className={css.spotKind}>{r.kind}</span>
+                      <div className={css.spotItem}>{r.item}</div>
+                      <div className={css.spotBox}>
+                        <div className={css.miniLabel}>Record high achieved</div>
+                        <div className={css.spotValue}>{fmt(r.best.total)}<span className={css.spotUnit}>{unitLabel}</span></div>
+                        {r.second && r.second.total
+                          ? <div className={css.spotGain}>+{(((r.best.total - r.second.total) / r.second.total) * 100).toFixed(1)}% over previous best</div>
+                          : <div className={`${css.spotGain} ${css.muted}`}>first record of its kind</div>}
+                      </div>
+                      <div className={css.spotRows}>
+                        <span>Set in</span><b>{r.best.period}</b>
+                        <span>Previous best</span><b>{r.second ? `${fmt(r.second.total)} (${r.second.period})` : '—'}</b>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className={css.tableWrap}>
+                <table className={css.table}>
+                  <thead>
+                    <tr>
+                      <th className={css.left}>Item</th>
+                      {RECORD_KINDS.map(k => <th key={k.id} className={css.center}>{k.head}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scopeItems.map(({ label, key }) => (
+                      <tr key={key}>
+                        <td className={`${css.left} ${css.itemCell}`}>{label}</td>
+                        {RECORD_KINDS.map(({ id }) => {
+                          const rec = recordRows[key]?.[id];
+                          const best = rec?.best ?? null;
+                          const fresh = best != null && isFreshRecord(best);
+                          return (
+                            <td key={id} className={`${css.center} ${css.recCell} ${fresh ? css.recFresh : ''}`}>
+                              {best == null ? '—' : (
+                                <>
+                                  {fresh && <span className={css.newBadge}>★ NEW</span>}
+                                  <span className={css.recBest}>{fmt(best.total)}</span>
+                                  <span className={css.recPeriod}>{best.period}</span>
+                                  {rec.second != null && (
+                                    <span className={css.recSecond}>2nd · {fmt(rec.second.total)}<br />{rec.second.period}</span>
+                                  )}
+                                </>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          <div className={css.note}>
+            ★ NEW marks records just set — the record period ended within the last 3 months of available data.
             Each cell shows the all-time best and, below it, the 2nd best of that period type.
-            All-time records from production_table (since Apr 2000), in '000 tonnes (Tonnes view multiplies by 1000).
-            Quarters/halves/years count only complete periods (3, 6 or 12 months of data). Best Half/FY/CY show the
-            highest complete FY half, financial year and calendar year. Groups sum the member plants and show the
-            summary items; selecting a single plant/unit lists every item that plant reports (BF, SMS, mills …).
+            All-time records from production_table (since Apr 2000), in &apos;000 tonnes (Tonnes view multiplies by 1000).
+            Quarters/halves/years count only complete periods (3, 6 or 12 months of data). Groups sum the member plants and
+            show the summary items; selecting a single plant/unit lists every item that plant reports (BF, SMS, mills …).
             Conversion is not included.
           </div>
-        </div>
+        </section>
 
-        {/* ══ Best Periods — custom month window, top-5 financial years ══ */}
-        <div style={{ marginTop: 34, borderTop: '2px solid #e8eaed', paddingTop: 22 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-              🥇 Best Periods — {bpValid ? `${monLbl(bpFrom)}–${monLbl(bpTo)} window` : 'custom window'}
-            </h2>
-            <span style={{ fontSize: 13, color: '#5f6368' }}>
-              {bpValid
-                ? 'top 5 financial years by total production'
-                : 'pick a valid window'}
-            </span>
+        {/* ── Best periods: custom month window, top-5 financial years ── */}
+        <section className={css.section}>
+          <div className={css.sectionHead}>
+            <div>
+              <h2 className={css.sectionTitle}>🥇 Best periods — {bpValid ? `${monLbl(bpFrom)}–${monLbl(bpTo)} window` : 'custom window'}</h2>
+              <p className={css.sectionSub}>{bpValid ? 'Top 5 financial years by total production in the window' : 'Pick a valid window'}</p>
+            </div>
           </div>
-
-          <div className="no-print" style={{
-            display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
-            marginBottom: 14, border: '1px solid #dadce0', borderRadius: 8, padding: '12px 18px',
-          }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6368', textTransform: 'uppercase' }}>Scope</span>
-            <div style={{ display: 'flex', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
-              {BP_SCOPES.map(s => (
-                <button key={s.id} onClick={() => setBpScope(s.id)} style={{
-                  padding: '6px 12px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-                  background: bpScope === s.id ? '#188038' : '#fff',
-                  color: bpScope === s.id ? '#fff' : '#374151',
-                }}>{s.label}</button>
-              ))}
-            </div>
-
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6368', textTransform: 'uppercase', marginLeft: 8 }}>Items</span>
-            <div style={{ display: 'flex', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
-              {[{ id: 'major', label: 'Major' }, { id: 'all', label: 'All' }].map(o => (
-                <button key={o.id} onClick={() => setBpItems(o.id)} style={{
-                  padding: '6px 12px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-                  background: bpItems === o.id ? '#188038' : '#fff',
-                  color: bpItems === o.id ? '#fff' : '#374151',
-                }}>{o.label}</button>
-              ))}
-            </div>
-
-            <span style={{ ...labelStyle, marginLeft: 8 }}>From</span>
-            <select value={bpFrom} onChange={e => setBpFrom(Number(e.target.value))} style={selectStyle}>
+          <div className={`${css.scopeBar} ${css.noPrint}`}>
+            <span className={css.toolLabel}>Scope</span>
+            {seg(BP_SCOPES, bpScope, setBpScope, true)}
+            <span className={css.toolLabel}>Items</span>
+            {seg([{ id: 'major', label: 'Major' }, { id: 'all', label: 'All' }], bpItems, setBpItems, true)}
+            <span className={css.toolLabel}>From</span>
+            <select className={css.select} value={bpFrom} onChange={e => setBpFrom(Number(e.target.value))}>
               {FY_MONTH_ORDER.map(m => <option key={m} value={m}>{monLbl(m)}</option>)}
             </select>
-            <span style={labelStyle}>To</span>
-            <select value={bpTo} onChange={e => setBpTo(Number(e.target.value))} style={selectStyle}>
+            <span className={css.toolLabel}>To</span>
+            <select className={css.select} value={bpTo} onChange={e => setBpTo(Number(e.target.value))}>
               {FY_MONTH_ORDER.map(m => <option key={m} value={m}>{monLbl(m)}</option>)}
             </select>
-
-            <span style={{ marginLeft: 'auto', fontSize: 13, color: '#5f6368' }}>{bpLoading && '⟳ loading…'}</span>
+            {bpLoading && <span className={css.loadingNote}>⟳ loading…</span>}
           </div>
 
           {!bpValid && (
-            <div style={{ padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14, background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
+            <div className={css.warn}>
               The <b>To</b> month must not come before the <b>From</b> month within the financial year (order is Apr → Mar).
             </div>
           )}
-          {bpError && (
-            <div style={{ padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14, background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}>{bpError}</div>
-          )}
+          {bpError && <div className={css.warn}>{bpError}</div>}
 
           {bpValid && bpData && (() => {
             const cols = bpData.column_order || [];
@@ -819,47 +903,35 @@ export default function HighlightsPage() {
               Object.entries(bpData.results[col] || {}).map(([itemKey, ranks], i, arr) =>
                 ({ col, itemKey, ranks, first: i === 0, span: arr.length })));
             if (rowsFlat.length === 0) {
-              return (
-                <div style={{ color: '#9ca3af', fontSize: 14, padding: '40px 0', textAlign: 'center', border: '2px dashed #dadce0', borderRadius: 8 }}>
-                  No financial year has a complete {monLbl(bpFrom)}–{monLbl(bpTo)} window for this selection.
-                </div>
-              );
+              return <div className={css.empty}>No financial year has a complete {monLbl(bpFrom)}–{monLbl(bpTo)} window for this selection.</div>;
             }
             const showCol = bpScope === 'plants';
             return (
-              <div style={{ overflowX: 'auto', border: '1px solid #dadce0', borderRadius: 8 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className={css.tableWrap}>
+                <table className={css.table}>
                   <thead>
                     <tr>
-                      {showCol && <th style={{ ...TH, backgroundColor: '#14532d', textAlign: 'left' }}>Plant</th>}
-                      <th style={{ ...TH, backgroundColor: '#14532d', textAlign: 'left' }}>Item</th>
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <th key={n} style={{ ...TH, backgroundColor: '#14532d', textAlign: 'center' }}>#{n} best FY</th>
-                      ))}
+                      {showCol && <th className={css.left}>Plant</th>}
+                      <th className={css.left}>Item</th>
+                      {[1, 2, 3, 4, 5].map(n => <th key={n} className={css.center}>#{n} best FY</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {rowsFlat.map(({ col, itemKey, ranks, first, span }, i) => {
+                    {rowsFlat.map(({ col, itemKey, ranks, first, span }) => {
                       const label = ITEMS.find(x => x.key === itemKey)?.label || itemKey;
                       const val = (v) => (v == null ? '—'
                         : isRateKey(itemKey) ? Math.round(v).toLocaleString('en-IN') : fmt(v));
                       return (
-                        <tr key={`${col}-${itemKey}`} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                        <tr key={`${col}-${itemKey}`}>
                           {showCol && first && (
-                            <td rowSpan={span} style={{ ...TD, textAlign: 'left', fontWeight: 700, verticalAlign: 'top', background: '#ecfdf5', color: '#14532d' }}>{col}</td>
+                            <td rowSpan={span} className={`${css.left} ${css.itemCell}`} style={{ verticalAlign: 'top', background: 'var(--ui-success-bg)' }}>{col}</td>
                           )}
-                          <td style={{ ...TD, textAlign: 'left', fontWeight: 600, color: '#202124' }}>{label}</td>
+                          <td className={`${css.left} ${css.itemCell}`}>{label}</td>
                           {[0, 1, 2, 3, 4].map(k => {
                             const r = ranks[k];
                             return (
-                              <td key={k} style={{ ...TD, textAlign: 'center', verticalAlign: 'top' }}>
-                                {r ? (
-                                  <>
-                                    <span style={{ fontWeight: 700, color: k === 0 ? '#14532d' : '#334155' }}>{val(r.total)}</span>
-                                    <br />
-                                    <span style={{ fontSize: 11, color: '#5f6368' }}>{r.fy}</span>
-                                  </>
-                                ) : '—'}
+                              <td key={k} className={`${css.center} ${css.recCell}`}>
+                                {r ? <><span className={k === 0 ? css.rankFy : ''}>{val(r.total)}</span><span className={css.recPeriod}>{r.fy}</span></> : '—'}
                               </td>
                             );
                           })}
@@ -872,16 +944,16 @@ export default function HighlightsPage() {
             );
           })()}
 
-          <div style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
+          <div className={css.note}>
             Pick any month range in financial-year order (Apr → Mar — so e.g. Oct → Feb spans the year end).
             For every financial year with the <b>complete</b> window the top 5 FYs are listed. Tonnage items
-            are the sum of every member plant's window total; rate items (Oven Pushing, COB#*) are the sum of
-            each plant's own day-weighted average over the window — i.e. the SAIL nos/day, not a per-plant
-            mean. Scope aggregates the member plants; “Plant-wise” ranks each plant/unit on its own. “Major” =
-            Sinter, Hot Metal, Pig Iron, Crude Steel, Finished &amp; Saleable Steel, Oven Pushing; “All” =
-            every item the scope reports. Values in '000 tonnes (Tonnes view ×1000); Conversion not included.
+            are the sum of every member plant&apos;s window total; rate items (Oven Pushing, COB#*) are the sum of
+            each plant&apos;s own day-weighted average over the window — i.e. the SAIL nos/day, not a per-plant
+            mean. Scope aggregates the member plants; &ldquo;Plant-wise&rdquo; ranks each plant/unit on its own. &ldquo;Major&rdquo; =
+            Sinter, Hot Metal, Pig Iron, Crude Steel, Finished &amp; Saleable Steel, Oven Pushing; &ldquo;All&rdquo; =
+            every item the scope reports. Values in &apos;000 tonnes (Tonnes view ×1000); Conversion not included.
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
