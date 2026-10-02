@@ -3,7 +3,7 @@
 import RequireEditor from '@/components/RequireEditor';
 
 import React, { useState, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage } from '../EntryUI';
 import {
   PLANTS, AREA_ORDER, templateFor, KNOWN_UNITS, unitArea, sortUnitsInArea, labelOf,
 } from '@/lib/technoParamRegistry';
@@ -258,15 +258,11 @@ function TechnoCorrectionInner() {
   }
 
   return (
-    <>
-      <GlobalNavbar />
-
-      <main className={ui.page} style={{ maxWidth:1100 }}>
-
-        <div className={ui.pageHeader}>
-          <h1 className={ui.pageTitle}>Techno Data Correction</h1>
-          <p className={ui.pageLead}>Find one parameter across a month range and correct it inline.</p>
-        </div>
+    <EntryPage
+      maxWidth={1100}
+      title="Techno Data Correction"
+      description={<>Find one parameter across a month range and correct it inline.</>}
+    >
 
         {/* ── What to correct ── */}
         <div className={c.filters}>
@@ -397,8 +393,7 @@ function TechnoCorrectionInner() {
         <p className={ui.hint} style={{ marginTop:14 }}>
           Changed boxes are highlighted until saved. Clearing a box and saving removes that value.
         </p>
-      </main>
-    </>
+    </EntryPage>
   );
 }
 

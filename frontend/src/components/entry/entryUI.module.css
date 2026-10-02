@@ -1,0 +1,84 @@
+/* Shared look for the manual-entry forms (components/entry/<slug>/Form.js),
+   matching the Stitch "Data Workbench" redesign of Production Data Entry.
+   Generic pieces (buttons, chips, badges, inputs) come from
+   styles/wb.module.css; this file holds the entry-specific parts. */
+
+.inner { max-width: 1280px; margin: 0 auto; padding: 18px 24px 32px; box-sizing: border-box; }
+
+.intro { margin-bottom: 14px; }
+.title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; color: var(--ui-text); }
+.desc { margin: 4px 0 0; max-width: 980px; font-size: 13px; line-height: 1.55; color: var(--ui-text-secondary); }
+.desc a { color: var(--ui-primary); }
+
+/* ── Context bar (month / plant selectors + actions) ───── */
+.ctxBar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 18px; margin-bottom: 14px;
+  padding: 12px 16px; background: var(--ui-surface);
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius);
+}
+.ctxField { display: flex; flex-direction: column; gap: 4px; }
+.ctxLabel { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-tertiary); }
+.ctxRow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ctxEnd { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ctxNote { font-size: 12px; color: var(--ui-text-secondary); }
+
+/* Compact controls for the context bar and table cells */
+.control {
+  padding: 7px 10px; box-sizing: border-box;
+  font: 600 13.5px var(--ui-font); color: var(--ui-text);
+  background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 4px;
+}
+select.control { cursor: pointer; }
+.control:focus { outline: none; border-color: var(--ui-primary); box-shadow: 0 0 0 1px var(--ui-primary); }
+
+/* ── Section card ──────────────────────────────────────── */
+.section { margin-bottom: 16px; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); overflow: hidden; }
+.sectionHead {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 16px; border-bottom: 1px solid var(--ui-border-subtle);
+}
+.sectionTitle { margin: 0; font-size: 14px; font-weight: 700; color: var(--ui-text); }
+.sectionSub { margin: 2px 0 0; font-size: 12px; color: var(--ui-text-secondary); }
+.sectionBody { padding: 14px 16px; }
+
+/* ── Tables ────────────────────────────────────────────── */
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th {
+  padding: 8px 12px; text-align: left; white-space: nowrap;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ui-text-secondary); background: var(--ui-bg-subtle); border-bottom: 1px solid var(--ui-border);
+}
+.table td { padding: 6px 12px; border-bottom: 1px solid var(--ui-border-subtle); vertical-align: middle; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover td { background: #fafbfc; }
+.table .c { text-align: center; }
+.table .r { text-align: right; }
+.itemCell { font-weight: 600; color: var(--ui-text); white-space: nowrap; }
+.subRow td { background: var(--ui-bg-subtle); font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ui-text-secondary); }
+
+/* Number/text input inside a table cell; state classes mark edits */
+.cell {
+  width: 100px; padding: 6px 8px; box-sizing: border-box; text-align: right;
+  font: 500 13px var(--ui-font); font-variant-numeric: tabular-nums; color: var(--ui-text);
+  background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 4px;
+}
+.cell:focus { outline: none; border-color: var(--ui-primary); box-shadow: 0 0 0 1px var(--ui-primary); }
+.cellText { text-align: left; width: 100%; }
+.cellFilled { border-color: #aecbfa; }
+.cellChanged { border-color: #f9ab00; background: var(--ui-warning-bg); color: var(--ui-warning); font-weight: 700; }
+
+.textarea {
+  width: 100%; box-sizing: border-box; padding: 9px 11px; resize: vertical;
+  font: 13.5px/1.55 var(--ui-font); color: var(--ui-text);
+  background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 4px;
+}
+.textarea:focus { outline: none; border-color: var(--ui-primary); box-shadow: 0 0 0 1px var(--ui-primary); }
+
+.loading { padding: 32px 0; text-align: center; font-size: 13.5px; color: var(--ui-text-secondary); }
+.foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+@media (max-width: 640px) {
+  .inner { padding: 12px; }
+  .ctxEnd { margin-left: 0; }
+}

@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, cellClass, entryStyles as es } from '../EntryUI';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -92,15 +92,12 @@ function countChanges(generalMonth, generalTill, initGeneralMonth, initGeneralTi
   return n;
 }
 
-function ChangedInput({ value, onChange, changed, disabled }) {
+function ChangedInput({ value, onChange, changed, disabled, label }) {
   return (
     <input
-      type="number" step="any" disabled={disabled}
-      style={{
-        width: '110px', padding: '6px 8px', fontSize: '11pt', textAlign: 'right',
-        border: `1px solid ${changed ? '#f59e0b' : '#dadce0'}`, borderRadius: '4px',
-        background: disabled ? '#f9fafb' : changed ? '#fffbeb' : '#fff',
-      }}
+      type="number" step="any" disabled={disabled} aria-label={label}
+      className={cellClass({ changed, filled: value !== '' && value != null })}
+      style={{ width: 120 }}
       value={value}
       onChange={onChange}
     />
@@ -237,123 +234,92 @@ function KeyParametersManualInner() {
     }
   };
 
-  const selStyle = {
-    padding: '8px 12px', fontSize: '11pt', border: '1px solid #dadce0',
-    borderRadius: '6px', backgroundColor: '#ffffff', color: '#202124', cursor: 'pointer',
-  };
-  const cell = { padding: '8px 12px', fontSize: '10.5pt', borderBottom: '1px solid #e8eaed' };
-
   const renderRow = (key, label, unit, monthVal, tillVal, onMonth, onTill, i, monthChanged, tillChanged) => (
-    <tr key={key} style={{ backgroundColor: i % 2 === 1 ? '#f8f9fa' : '#fff' }}>
-      <td style={cell}>{label}</td>
-      <td style={{ ...cell, color: '#5f6368' }}>{unit}</td>
-      <td style={{ ...cell, textAlign: 'right' }}>
-        <ChangedInput value={monthVal ?? ''} disabled={saving} changed={monthChanged} onChange={onMonth} />
+    <tr key={key}>
+      <td className={es.itemCell}>{label}</td>
+      <td style={{ color: 'var(--ui-text-secondary)' }}>{unit}</td>
+      <td className={es.r}>
+        <ChangedInput value={monthVal ?? ''} disabled={saving} changed={monthChanged} onChange={onMonth} label={`${label} month`} />
       </td>
-      <td style={{ ...cell, textAlign: 'right' }}>
-        <ChangedInput value={tillVal ?? ''} disabled={saving} changed={tillChanged} onChange={onTill} />
+      <td className={es.r}>
+        <ChangedInput value={tillVal ?? ''} disabled={saving} changed={tillChanged} onChange={onTill} label={`${label} till month`} />
       </td>
     </tr>
   );
 
+  const saveLabel = totalChanges > 0 ? `Save (${totalChanges} change${totalChanges > 1 ? 's' : ''})` : 'Save';
+
   return (
-    // height:100vh + flex column, with the content area its own
-    // flex:1/overflow:auto scroll region below the sticky GlobalNavbar —
-    // same layout techno-manual/page.js uses, rather than an unbounded
-    // minHeight:100vh page that just keeps growing.
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
-      <GlobalNavbar />
-      <div style={{ flex: 1, overflow: 'auto', maxWidth: '760px', margin: '0 auto', padding: '32px', width: '100%', boxSizing: 'border-box' }}>
-        <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-          Key Parameters — Manual Entry
-        </h1>
-        <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px', marginBottom: '24px' }}>
-          Fields on the <a href="/report" style={{ color: '#1a73e8' }}>Key Parameters</a> report page with no
-          file-upload source — CAPEX, Labour Productivity, Avg Rake Detention Time, Demurrage, HM Sent to
-          PCM/Sand Pit/Dry Pit, RLTIFR, and Sinter Fe (a correction/override for RSP, whose own techno upload
-          already fills it each month; the only source for every other plant).
-        </p>
+    <EntryPage
+      maxWidth={860}
+      title="Key Parameters — Manual Entry"
+      description={<>
+        Fields on the <a href="/report">Key Parameters</a> report page with no
+        file-upload source — CAPEX, Labour Productivity, Avg Rake Detention Time, Demurrage, HM Sent to
+        PCM/Sand Pit/Dry Pit, RLTIFR, and Sinter Fe (a correction/override for RSP, whose own techno upload
+        already fills it each month; the only source for every other plant).
+      </>}
+    >
+      <ContextBar actions={<>
+        {loading && <span className={es.ctxNote}>Loading…</span>}
+        <SaveButton dirty={!loading && totalChanges > 0} saving={saving} onClick={handleSave}>{saveLabel}</SaveButton>
+      </>}>
+        <Field label="Plant" htmlFor="kp-plant">
+          <select id="kp-plant" className={es.control} value={plant} onChange={(e) => setPlant(e.target.value)}>
+            {PLANTS.map((p) => <option key={p}>{p}</option>)}
+          </select>
+        </Field>
+        <Field label="Month" htmlFor="kp-month">
+          <select id="kp-month" className={es.control} value={monthName} onChange={(e) => setMonthName(e.target.value)}>
+            {MONTHS.map((m) => <option key={m}>{m}</option>)}
+          </select>
+          <select className={es.control} value={year} onChange={(e) => setYear(e.target.value)} aria-label="Year">
+            {YEARS.map((y) => <option key={y}>{y}</option>)}
+          </select>
+        </Field>
+      </ContextBar>
 
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
-          padding: '16px 20px', border: '1px solid #dadce0', borderRadius: '8px',
-          backgroundColor: '#f8f9fa', marginBottom: '24px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label style={{ fontSize: '11pt', fontWeight: 600 }}>Plant</label>
-            <select value={plant} onChange={(e) => setPlant(e.target.value)} style={selStyle}>
-              {PLANTS.map((p) => <option key={p}>{p}</option>)}
-            </select>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label style={{ fontSize: '11pt', fontWeight: 600 }}>Month</label>
-            <select value={monthName} onChange={(e) => setMonthName(e.target.value)} style={selStyle}>
-              {MONTHS.map((m) => <option key={m}>{m}</option>)}
-            </select>
-            <select value={year} onChange={(e) => setYear(e.target.value)} style={selStyle}>
-              {YEARS.map((y) => <option key={y}>{y}</option>)}
-            </select>
-          </div>
-          {loading && <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>Loading…</span>}
-        </div>
+      <Status status={status} />
 
-        {status && (
-          <p style={{
-            marginBottom: '16px', fontSize: '11pt',
-            color: status.type === 'error' ? '#d93025' : '#188038',
-          }}>
-            {status.text}
-          </p>
-        )}
+      <Section title={`Key parameters — ${plant}, ${monthName} ${year}`} sub="Edited values are highlighted until saved.">
+        <table className={es.table}>
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Unit</th>
+              <th className={es.r}>{monthName} (Month)</th>
+              <th className={es.r}>Till Month</th>
+            </tr>
+          </thead>
+          <tbody>
+            {GENERAL_PARAMS.map((p, i) => renderRow(
+              p.key, p.label, p.unit,
+              generalMonth[p.key], generalTill[p.key],
+              (e) => setGeneralMonth((v) => ({ ...v, [p.key]: e.target.value })),
+              (e) => setGeneralTill((v) => ({ ...v, [p.key]: e.target.value })),
+              i,
+              (generalMonth[p.key] ?? '') !== (initGeneralMonth[p.key] ?? ''),
+              (generalTill[p.key] ?? '') !== (initGeneralTill[p.key] ?? ''),
+            ))}
+            {feUnits.map((unit, j) => renderRow(
+              `fe-${unit}`,
+              feUnits.length > 1 ? `Fe in Sinter (${unit})` : 'Fe in Sinter',
+              '%',
+              feMonth[unit], feTill[unit],
+              (e) => setFeMonth((v) => ({ ...v, [unit]: e.target.value })),
+              (e) => setFeTill((v) => ({ ...v, [unit]: e.target.value })),
+              GENERAL_PARAMS.length + j,
+              (feMonth[unit] ?? '') !== (initFeMonth[unit] ?? ''),
+              (feTill[unit] ?? '') !== (initFeTill[unit] ?? ''),
+            ))}
+          </tbody>
+        </table>
+      </Section>
 
-        <div style={{ border: '1px solid #dadce0', borderRadius: '8px', overflow: 'hidden', marginBottom: '20px' }}>
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#e8f0fe' }}>
-                <th style={{ ...cell, textAlign: 'left', fontWeight: 700, color: '#174ea6' }}>Parameter</th>
-                <th style={{ ...cell, textAlign: 'left', fontWeight: 700, color: '#174ea6' }}>Unit</th>
-                <th style={{ ...cell, textAlign: 'right', fontWeight: 700, color: '#174ea6' }}>{monthName} (Month)</th>
-                <th style={{ ...cell, textAlign: 'right', fontWeight: 700, color: '#174ea6' }}>Till Month</th>
-              </tr>
-            </thead>
-            <tbody>
-              {GENERAL_PARAMS.map((p, i) => renderRow(
-                p.key, p.label, p.unit,
-                generalMonth[p.key], generalTill[p.key],
-                (e) => setGeneralMonth((v) => ({ ...v, [p.key]: e.target.value })),
-                (e) => setGeneralTill((v) => ({ ...v, [p.key]: e.target.value })),
-                i,
-                (generalMonth[p.key] ?? '') !== (initGeneralMonth[p.key] ?? ''),
-                (generalTill[p.key] ?? '') !== (initGeneralTill[p.key] ?? ''),
-              ))}
-              {feUnits.map((unit, j) => renderRow(
-                `fe-${unit}`,
-                feUnits.length > 1 ? `Fe in Sinter (${unit})` : 'Fe in Sinter',
-                '%',
-                feMonth[unit], feTill[unit],
-                (e) => setFeMonth((v) => ({ ...v, [unit]: e.target.value })),
-                (e) => setFeTill((v) => ({ ...v, [unit]: e.target.value })),
-                GENERAL_PARAMS.length + j,
-                (feMonth[unit] ?? '') !== (initFeMonth[unit] ?? ''),
-                (feTill[unit] ?? '') !== (initFeTill[unit] ?? ''),
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <button
-          onClick={handleSave}
-          disabled={saving || loading || totalChanges === 0}
-          style={{
-            padding: '10px 24px', fontSize: '11pt', fontWeight: 700, border: 'none', borderRadius: '6px',
-            backgroundColor: saving ? '#9aa0a6' : totalChanges === 0 ? '#9aa0a6' : '#1a73e8', color: '#fff',
-            cursor: saving || loading || totalChanges === 0 ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {saving ? 'Saving…' : totalChanges > 0 ? `Save (${totalChanges} change${totalChanges > 1 ? 's' : ''})` : 'Save'}
-        </button>
+      <div className={es.foot}>
+        <SaveButton dirty={!loading && totalChanges > 0} saving={saving} onClick={handleSave}>{saveLabel}</SaveButton>
       </div>
-    </div>
+    </EntryPage>
   );
 }
 

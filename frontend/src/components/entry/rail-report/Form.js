@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, Loading, cellClass, entryStyles as es, wb } from '../EntryUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -20,23 +20,6 @@ function numOrNull(v) {
   const f = parseFloat(v);
   return Number.isNaN(f) ? null : f;
 }
-
-function Notice({ type, text }) {
-  if (!text) return null;
-  const ok = type === 'success';
-  return (
-    <div style={{
-      padding: '10px 16px', borderRadius: 6, margin: '14px 0', fontSize: 14,
-      background: ok ? '#f0fdf4' : '#fef2f2', color: ok ? '#166534' : '#991b1b',
-      border: `1px solid ${ok ? '#86efac' : '#fca5a5'}`,
-    }}>{text}</div>
-  );
-}
-
-const cellInput = {
-  width: 110, padding: '5px 6px', border: '1px solid #dadce0', borderRadius: 4,
-  textAlign: 'right', fontSize: 12.5,
-};
 
 function RailReportEntryInner() {
   const [fy, setFy] = useState(FY_LIST[FY_LIST.length - 3]);
@@ -86,89 +69,72 @@ function RailReportEntryInner() {
     }
   };
 
-  const TH = { padding: '8px 10px', fontSize: 12, fontWeight: 700, color: '#5f6368', background: '#f8f9fa', borderBottom: '1px solid #dadce0', textAlign: 'left' };
-  const TD = { padding: '6px 10px', borderBottom: '1px solid #f1f3f4' };
-
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
-      <GlobalNavbar />
-      <div style={{ flex: 1, maxWidth: 1100, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
-        <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
-          Rail Production &amp; Dispatch Entry (Page 18.5)
-        </h2>
-        <span style={{ fontSize: 13, color: '#5f6368' }}>
-          One financial year (Apr-Mar) at a time. For the FY that&rsquo;s currently open, enter the running
-          Apr-&lt;report month&gt; cumulative &mdash; it will show on the report as &ldquo;Till &lt;Mon&gt;&rsquo;YY&rdquo;, not a full-year figure.
-          R350HT Rails supplied can carry an optional note (e.g. &ldquo;9 Rakes&rdquo;).
-        </span>
-
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', margin: '18px 0', border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px' }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Financial Year</label>
-          <select value={fy} onChange={(e) => setFy(e.target.value)}
-            style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
+    <EntryPage
+      maxWidth={1100}
+      title="Rail Production & Dispatch Entry (Page 18.5)"
+      description={<>
+        One financial year (Apr-Mar) at a time. For the FY that&rsquo;s currently open, enter the running
+        Apr-&lt;report month&gt; cumulative &mdash; it will show on the report as &ldquo;Till &lt;Mon&gt;&rsquo;YY&rdquo;, not a full-year figure.
+        R350HT Rails supplied can carry an optional note (e.g. &ldquo;9 Rakes&rdquo;).
+      </>}
+    >
+      <ContextBar actions={<SaveButton dirty={!loading} saving={saving} onClick={save}>Save All</SaveButton>}>
+        <Field label="Financial year" htmlFor="rail-fy">
+          <select id="rail-fy" className={es.control} value={fy} onChange={(e) => setFy(e.target.value)}>
             {FY_LIST.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
-          <button onClick={save} disabled={saving || loading}
-            style={{ marginLeft: 'auto', padding: '8px 22px', fontSize: 14, fontWeight: 700, background: !loading ? '#10b981' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 6, cursor: !loading ? 'pointer' : 'not-allowed' }}>
-            {saving ? 'Saving…' : 'Save All'}
-          </button>
-        </div>
+        </Field>
+      </ContextBar>
 
-        <Notice type={status?.type} text={status?.text} />
+      <Status status={status} />
 
-        {loading && <div style={{ padding: 40, textAlign: 'center', color: '#5f6368' }}>Loading…</div>}
+      {loading && <Loading />}
 
-        {!loading && (
-          <>
-            <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th style={TH}>Metric</th>
-                    <th style={{ ...TH, textAlign: 'right' }}>Value ({fy})</th>
-                    <th style={TH}>Note</th>
+      {!loading && (
+        <>
+          <Section title={`Rail production & dispatch — FY ${fy}`}>
+            <table className={es.table}>
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th className={es.r}>Value ({fy})</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => (
+                  <tr key={r.metric}>
+                    <td className={es.itemCell}>{r.label}</td>
+                    <td className={es.r}>
+                      <input value={r.value} onChange={(e) => setRow(idx, { value: e.target.value })} aria-label={r.label}
+                             className={cellClass({ filled: r.value !== '' })} style={{ width: 120 }} />
+                    </td>
+                    <td>
+                      <input value={r.note} onChange={(e) => setRow(idx, { note: e.target.value })} aria-label={`${r.label} note`}
+                             placeholder={r.metric === 'r350ht_supplied' ? 'e.g. 9 Rakes' : ''}
+                             className={cellClass({ text: true })} style={{ width: 220 }} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, idx) => (
-                    <tr key={r.metric}>
-                      <td style={{ ...TD, fontWeight: 600 }}>{r.label}</td>
-                      <td style={{ ...TD, textAlign: 'right' }}>
-                        <input value={r.value} onChange={(e) => setRow(idx, { value: e.target.value })} style={cellInput} />
-                      </td>
-                      <td style={TD}>
-                        <input value={r.note} onChange={(e) => setRow(idx, { note: e.target.value })}
-                          placeholder={r.metric === 'r350ht_supplied' ? 'e.g. 9 Rakes' : ''}
-                          style={{ width: 200, padding: '5px 6px', border: '1px solid #dadce0', borderRadius: 4, fontSize: 12.5 }} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
+          </Section>
 
-            <div style={{ marginTop: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>Footer Remarks</div>
-              <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 8 }}>
-                Standing footnotes shown under the table on every report — not tied to the FY selected above.
+          <Section title="Footer Remarks" sub="Standing footnotes shown under the table on every report — not tied to the FY selected above." flush={false}>
+            {notes.map((t, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input value={t} aria-label={`Remark ${i + 1}`} className={wb.input}
+                       onChange={(e) => setNotes((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))} />
+                <button type="button" className={`${wb.btn} ${wb.btnDanger}`}
+                        onClick={() => setNotes((prev) => prev.filter((_, j) => j !== i))}>Delete</button>
               </div>
-              {notes.map((t, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                  <input value={t} onChange={(e) => setNotes((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}
-                    style={{ flex: 1, padding: '7px 10px', border: '1px solid #dadce0', borderRadius: 4, fontSize: 13 }} />
-                  <button onClick={() => setNotes((prev) => prev.filter((_, j) => j !== i))}
-                    style={{ padding: '5px 12px', border: 'none', borderRadius: 4, background: '#ef4444', color: '#fff', fontSize: 13, cursor: 'pointer' }}>Del</button>
-                </div>
-              ))}
-              <button onClick={() => setNotes((prev) => [...prev, ''])}
-                style={{ padding: '6px 16px', fontSize: 13, fontWeight: 600, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>+ Add Remark</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+            ))}
+            <button type="button" className={wb.btn} onClick={() => setNotes((prev) => [...prev, ''])}>+ Add Remark</button>
+          </Section>
+        </>
+      )}
+    </EntryPage>
   );
 }
 

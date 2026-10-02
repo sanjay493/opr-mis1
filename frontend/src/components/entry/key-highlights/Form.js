@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, SaveButton, entryStyles as es, wb } from '../EntryUI';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -104,154 +104,118 @@ function KeyHighlightsManualInner() {
     }
   };
 
-  const selStyle = {
-    padding: '8px 12px', fontSize: '11pt', border: '1px solid #dadce0',
-    borderRadius: '6px', backgroundColor: '#ffffff', color: '#202124', cursor: 'pointer',
-  };
-  const inputStyle = {
-    width: '100%', padding: '7px 10px', fontSize: '10.5pt',
-    border: '1px solid #dadce0', borderRadius: '4px', boxSizing: 'border-box',
-  };
-  const sectionCard = (borderColor) => ({
-    border: `1px solid ${borderColor}`, borderRadius: '8px', padding: '16px 18px', marginBottom: '20px',
-  });
-  const removeBtn = {
-    background: 'none', border: 'none', color: '#d93025', cursor: 'pointer',
-    fontSize: '10pt', padding: '2px 6px', flexShrink: 0,
-  };
-  const addBtn = {
-    padding: '6px 14px', fontSize: '10pt', fontWeight: 600, border: '1px solid #1a73e8',
-    borderRadius: '6px', background: '#fff', color: '#1a73e8', cursor: 'pointer',
-  };
+  const rowStyle = { display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10 };
+  const removeBtn = (onClick) => (
+    <button type="button" className={wb.iconBtn} onClick={onClick} title="Remove" aria-label="Remove">✕</button>
+  );
+  const accent = (color) => ({ borderTop: `3px solid ${color}` });
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
-      <GlobalNavbar />
-      <div style={{ maxWidth: '820px', margin: '0 auto', padding: '32px' }}>
-        <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-          Key Highlights &amp; Variances — Manual Entry
-        </h1>
-        <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px', marginBottom: '24px' }}>
-          Major Achievements, Major Shortfalls / Areas of Concern, and Focus Areas Going Forward for the{' '}
-          <a href="/report" style={{ color: '#1a73e8' }}>Key Highlights &amp; Variances</a> report page. These are a
-          written read of the month — nothing here is computed, so the report page shows exactly what&apos;s saved
-          here for the selected month, and stays blank until something is.
-        </p>
+    <EntryPage
+      maxWidth={900}
+      title="Key Highlights & Variances — Manual Entry"
+      description={<>
+        Major Achievements, Major Shortfalls / Areas of Concern, and Focus Areas Going Forward for the{' '}
+        <a href="/report">Key Highlights &amp; Variances</a>{' '}report page. These are a
+        written read of the month — nothing here is computed, so the report page shows exactly what&apos;s saved
+        here for the selected month, and stays blank until something is.
+      </>}
+    >
+      <ContextBar actions={<>
+        {loading && <span className={es.ctxNote}>Loading…</span>}
+        {meta && <span className={es.ctxNote}>Last saved by {meta.updated_by || 'unknown'} at {meta.updated_at}</span>}
+        <SaveButton saving={saving} dirty={!loading} onClick={handleSave} />
+      </>}>
+        <Field label="Report month" htmlFor="kh-month">
+          <select id="kh-month" className={es.control} value={monthName} onChange={(e) => setMonthName(e.target.value)}>
+            {MONTHS.map((m) => <option key={m}>{m}</option>)}
+          </select>
+          <select className={es.control} value={year} onChange={(e) => setYear(e.target.value)} aria-label="Year">
+            {YEARS.map((y) => <option key={y}>{y}</option>)}
+          </select>
+        </Field>
+      </ContextBar>
 
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
-          padding: '16px 20px', border: '1px solid #dadce0', borderRadius: '8px',
-          backgroundColor: '#f8f9fa', marginBottom: '24px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label style={{ fontSize: '11pt', fontWeight: 600 }}>Report Month</label>
-            <select value={monthName} onChange={(e) => setMonthName(e.target.value)} style={selStyle}>
-              {MONTHS.map((m) => <option key={m}>{m}</option>)}
-            </select>
-            <select value={year} onChange={(e) => setYear(e.target.value)} style={selStyle}>
-              {YEARS.map((y) => <option key={y}>{y}</option>)}
-            </select>
+      <Status status={status} />
+
+      {/* Major Achievements */}
+      <div style={accent('var(--ui-success)')} className={es.section}>
+        <div className={es.sectionHead}>
+          <div>
+            <h3 className={es.sectionTitle} style={{ color: 'var(--ui-success)' }}>Major Achievements</h3>
+            <p className={es.sectionSub}>One line per achievement. Optional sub-points (e.g. record breakdown) — one per line, indented under the achievement.</p>
           </div>
-          {loading && <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>Loading…</span>}
-          {meta && (
-            <span style={{ fontSize: '9.5pt', color: '#5f6368' }}>
-              Last saved by {meta.updated_by || 'unknown'} at {meta.updated_at}
-            </span>
-          )}
         </div>
-
-        {status && (
-          <p style={{
-            marginBottom: '16px', fontSize: '11pt',
-            color: status.type === 'error' ? '#d93025' : '#188038',
-          }}>
-            {status.text}
-          </p>
-        )}
-
-        {/* Major Achievements */}
-        <div style={sectionCard('#86efac')}>
-          <h2 style={{ fontSize: '13pt', fontWeight: 800, color: '#1e7e34', margin: '0 0 4px' }}>Major Achievements</h2>
-          <p style={{ fontSize: '9.5pt', color: '#5f6368', margin: '0 0 12px' }}>
-            One line per achievement. Optional sub-points (e.g. record breakdown) — one per line, indented under the achievement.
-          </p>
+        <div className={es.sectionBody}>
           {achievements.map((a, i) => (
-            <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '10px' }}>
+            <div key={i} style={rowStyle}>
               <div style={{ flex: 1 }}>
-                <input
-                  type="text" style={inputStyle} placeholder="Achievement"
-                  value={a.text}
-                  onChange={(e) => setAchievements((v) => v.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
-                />
-                <textarea
-                  style={{ ...inputStyle, marginTop: '6px', minHeight: '44px', resize: 'vertical' }}
-                  placeholder="Sub-points (optional, one per line)"
-                  value={a.subsText}
-                  onChange={(e) => setAchievements((v) => v.map((x, j) => (j === i ? { ...x, subsText: e.target.value } : x)))}
-                />
+                <input type="text" className={wb.input} placeholder="Achievement" aria-label={`Achievement ${i + 1}`}
+                       value={a.text}
+                       onChange={(e) => setAchievements((v) => v.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} />
+                <textarea className={wb.textarea} style={{ marginTop: 6, minHeight: 44 }}
+                          placeholder="Sub-points (optional, one per line)" aria-label={`Achievement ${i + 1} sub-points`}
+                          value={a.subsText}
+                          onChange={(e) => setAchievements((v) => v.map((x, j) => (j === i ? { ...x, subsText: e.target.value } : x)))} />
               </div>
-              <button style={removeBtn} onClick={() => setAchievements((v) => v.filter((_, j) => j !== i))}>✕</button>
+              {removeBtn(() => setAchievements((v) => v.filter((_, j) => j !== i)))}
             </div>
           ))}
-          <button style={addBtn} onClick={() => setAchievements((v) => [...v, emptyAchievement()])}>+ Add achievement</button>
+          <button type="button" className={wb.btn} onClick={() => setAchievements((v) => [...v, emptyAchievement()])}>+ Add achievement</button>
         </div>
-
-        {/* Major Shortfalls */}
-        <div style={sectionCard('#fca5a5')}>
-          <h2 style={{ fontSize: '13pt', fontWeight: 800, color: '#b91c1c', margin: '0 0 4px' }}>Major Shortfalls / Areas of Concern</h2>
-          <p style={{ fontSize: '9.5pt', color: '#5f6368', margin: '0 0 12px' }}>One line per shortfall/concern.</p>
-          {shortfalls.map((s, i) => (
-            <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-              <input
-                type="text" style={inputStyle} placeholder="Shortfall / area of concern"
-                value={s}
-                onChange={(e) => setShortfalls((v) => v.map((x, j) => (j === i ? e.target.value : x)))}
-              />
-              <button style={removeBtn} onClick={() => setShortfalls((v) => v.filter((_, j) => j !== i))}>✕</button>
-            </div>
-          ))}
-          <button style={addBtn} onClick={() => setShortfalls((v) => [...v, ''])}>+ Add shortfall</button>
-        </div>
-
-        {/* Focus Areas Going Forward */}
-        <div style={sectionCard('#93c5fd')}>
-          <h2 style={{ fontSize: '13pt', fontWeight: 800, color: '#0f2a5c', margin: '0 0 4px' }}>Focus Areas Going Forward</h2>
-          <p style={{ fontSize: '9.5pt', color: '#5f6368', margin: '0 0 12px' }}>Short title + one-line description for each focus area.</p>
-          {focusAreas.map((f, i) => (
-            <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '10px' }}>
-              <div style={{ flex: 1 }}>
-                <input
-                  type="text" style={inputStyle} placeholder="Title (e.g. Improve BF Productivity)"
-                  value={f.title}
-                  onChange={(e) => setFocusAreas((v) => v.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
-                />
-                <input
-                  type="text" style={{ ...inputStyle, marginTop: '6px' }} placeholder="Description"
-                  value={f.description}
-                  onChange={(e) => setFocusAreas((v) => v.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
-                />
-              </div>
-              <button style={removeBtn} onClick={() => setFocusAreas((v) => v.filter((_, j) => j !== i))}>✕</button>
-            </div>
-          ))}
-          <button style={addBtn} onClick={() => setFocusAreas((v) => [...v, emptyFocusArea()])}>+ Add focus area</button>
-        </div>
-
-        <button
-          onClick={handleSave}
-          disabled={saving || loading}
-          style={{
-            padding: '10px 24px', fontSize: '11pt', fontWeight: 700, border: 'none', borderRadius: '6px',
-            backgroundColor: saving ? '#9aa0a6' : '#1a73e8', color: '#fff',
-            cursor: saving || loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
       </div>
-    </div>
+
+      {/* Major Shortfalls */}
+      <div style={accent('var(--ui-danger)')} className={es.section}>
+        <div className={es.sectionHead}>
+          <div>
+            <h3 className={es.sectionTitle} style={{ color: 'var(--ui-danger)' }}>Major Shortfalls / Areas of Concern</h3>
+            <p className={es.sectionSub}>One line per shortfall/concern.</p>
+          </div>
+        </div>
+        <div className={es.sectionBody}>
+          {shortfalls.map((s, i) => (
+            <div key={i} style={{ ...rowStyle, alignItems: 'center' }}>
+              <input type="text" className={wb.input} placeholder="Shortfall / area of concern" aria-label={`Shortfall ${i + 1}`}
+                     value={s}
+                     onChange={(e) => setShortfalls((v) => v.map((x, j) => (j === i ? e.target.value : x)))} />
+              {removeBtn(() => setShortfalls((v) => v.filter((_, j) => j !== i)))}
+            </div>
+          ))}
+          <button type="button" className={wb.btn} onClick={() => setShortfalls((v) => [...v, ''])}>+ Add shortfall</button>
+        </div>
+      </div>
+
+      {/* Focus Areas Going Forward */}
+      <div style={accent('var(--ui-primary)')} className={es.section}>
+        <div className={es.sectionHead}>
+          <div>
+            <h3 className={es.sectionTitle} style={{ color: 'var(--ui-primary)' }}>Focus Areas Going Forward</h3>
+            <p className={es.sectionSub}>Short title + one-line description for each focus area.</p>
+          </div>
+        </div>
+        <div className={es.sectionBody}>
+          {focusAreas.map((f, i) => (
+            <div key={i} style={rowStyle}>
+              <div style={{ flex: 1 }}>
+                <input type="text" className={wb.input} placeholder="Title (e.g. Improve BF Productivity)" aria-label={`Focus area ${i + 1} title`}
+                       value={f.title}
+                       onChange={(e) => setFocusAreas((v) => v.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} />
+                <input type="text" className={wb.input} style={{ marginTop: 6 }} placeholder="Description" aria-label={`Focus area ${i + 1} description`}
+                       value={f.description}
+                       onChange={(e) => setFocusAreas((v) => v.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} />
+              </div>
+              {removeBtn(() => setFocusAreas((v) => v.filter((_, j) => j !== i)))}
+            </div>
+          ))}
+          <button type="button" className={wb.btn} onClick={() => setFocusAreas((v) => [...v, emptyFocusArea()])}>+ Add focus area</button>
+        </div>
+      </div>
+
+      <div className={es.foot}>
+        <SaveButton saving={saving} dirty={!loading} onClick={handleSave} />
+      </div>
+    </EntryPage>
   );
 }
 

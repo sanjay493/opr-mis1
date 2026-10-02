@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, Loading, cellClass, entryStyles as es } from '../EntryUI';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -132,136 +132,71 @@ function SailMinesPageInner() {
     }
   };
 
-  const inputStyle = (changed, hasValue) => ({
-    width: 90, padding: '5px 6px', fontSize: 13, textAlign: 'right', borderRadius: 4,
-    border: `1px solid ${changed ? '#fbbf24' : '#d1d5db'}`,
-    background: changed ? '#fffbeb' : hasValue ? '#f0fdf4' : '#fff',
-    color: changed ? '#92400e' : '#202124',
-  });
+  const dirty = hasChanges();
+  const cellInput = (section, item, field, value, changed) => (
+    <input type="number" step="any" value={value ?? ''} placeholder="–" aria-label={`${item} ${field}`}
+           onChange={(ev) => handleChange(section, item, field, ev.target.value)}
+           className={cellClass({ changed, filled: value !== '' && value != null })} />
+  );
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
-      <GlobalNavbar />
+    <EntryPage
+      title="SAIL Mines Entry — Page 4.5"
+      description={<>
+        Monthly Actual (and Plan, where the report shows an APP/%Fulfillment column) per item — Coal Mines Production,
+        Washery, Coal Despatch, Flux Production/Despatch. The report cumulates April-&lt;report month&gt;
+        from these monthly entries; Total and Yield rows are computed automatically. Iron Ore Production/Despatch now
+        has its own mine-level form under Data Entry → Iron Ore Mines Production &amp; Despatch.
+      </>}
+    >
+      <ContextBar actions={<SaveButton dirty={dirty} saving={saving} onClick={handleSave}>Save All</SaveButton>}>
+        <Field label="Report month" htmlFor="sail-mines-month">
+          <input id="sail-mines-month" type="month" className={es.control} value={reportMonth}
+                 onChange={(e) => setReportMonth(e.target.value)} />
+        </Field>
+      </ContextBar>
 
-      <div style={{ flex: 1, overflowY: 'auto', maxWidth: 1200, width: '100%', margin: '0 auto', padding: '22px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            SAIL Mines Entry — Page 4.5
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Monthly Actual (and Plan, where the report shows an APP/%Fulfillment column) per item — Coal Mines Production,
-            Washery, Coal Despatch, Flux Production/Despatch. The report cumulates April-&lt;report month&gt;
-            from these monthly entries; Total and Yield rows are computed automatically. Iron Ore Production/Despatch now
-            has its own mine-level form under Data Entry → Iron Ore Mines Production &amp; Despatch.
-          </span>
-        </div>
+      <Status status={status} />
 
-        <div style={{
-          display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
-          marginBottom: 18, border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px',
-        }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Report Month</label>
-          <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)}
-                 style={{ padding: '6px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }} />
+      {loading && <Loading />}
 
-          <button onClick={handleSave} disabled={saving || !hasChanges()} style={{
-            marginLeft: 'auto', padding: '8px 20px', fontSize: 13, fontWeight: 700, borderRadius: 6,
-            border: 'none', cursor: hasChanges() ? 'pointer' : 'default',
-            background: hasChanges() ? '#10b981' : '#9ca3af', color: '#fff',
-          }}>
-            {saving ? 'Saving...' : 'Save All'}
-          </button>
-        </div>
-
-        {status && (
-          <div style={{
-            padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14,
-            background: status.type === 'success' ? '#e6f4ea' : '#fef2f2',
-            color: status.type === 'success' ? '#188038' : '#991b1b',
-            border: `1px solid ${status.type === 'success' ? '#a8dab5' : '#fca5a5'}`,
-          }}>
-            {status.text}
-          </div>
-        )}
-
-        {loading && <div style={{ color: '#5f6368', fontSize: 14, padding: '30px 0', textAlign: 'center' }}>Loading…</div>}
-
-        {!loading && SECTIONS.filter((s) => !s.hidden).map(({ key: section, title, kind, items, despatchSection }) => {
-          const despatchDef = despatchSection ? SECTIONS.find((s) => s.key === despatchSection) : null;
-          const despatchIsProduction = despatchDef?.kind === 'production';
-          return (
-          <div key={section} style={{ marginBottom: 22 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{title}</div>
-            <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th style={{
-                      padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151',
-                      background: '#f8fafc', borderBottom: '1px solid #dadce0', borderRight: '1px solid #eef1f4',
-                      textAlign: 'left', whiteSpace: 'nowrap',
-                    }}>Item</th>
-                    <th style={{ padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc', borderBottom: '1px solid #dadce0', borderRight: (kind === 'production' || despatchSection) ? '1px solid #eef1f4' : 'none', textAlign: 'center' }}>Actual ({reportMonth})</th>
-                    {kind === 'production' && (
-                      <th style={{ padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc', borderBottom: '1px solid #dadce0', borderRight: despatchSection ? '1px solid #eef1f4' : 'none', textAlign: 'center' }}>Plan / APP ({reportMonth})</th>
-                    )}
-                    {despatchSection && (
-                      <th style={{ padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc', borderBottom: '1px solid #dadce0', borderRight: despatchIsProduction ? '1px solid #eef1f4' : 'none', textAlign: 'center' }}>Despatch Actual ({reportMonth})</th>
-                    )}
-                    {despatchSection && despatchIsProduction && (
-                      <th style={{ padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc', borderBottom: '1px solid #dadce0', textAlign: 'center' }}>Despatch Plan / APP ({reportMonth})</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const changed = isChanged(section, item);
-                    const e = edits[keyOf(section, item)] || {};
-                    const dChanged = despatchSection && isChanged(despatchSection, item);
-                    const dEdit = despatchSection ? (edits[keyOf(despatchSection, item)] || {}) : null;
-                    return (
-                      <tr key={item}>
-                        <td style={{
-                          padding: '8px 12px', fontSize: 13, fontWeight: 600, color: '#374151',
-                          borderRight: '1px solid #eef1f4', borderBottom: '1px solid #f1f3f4', whiteSpace: 'nowrap',
-                        }}>{item}</td>
-                        <td style={{ padding: '6px 8px', borderRight: (kind === 'production' || despatchSection) ? '1px solid #eef1f4' : 'none', borderBottom: '1px solid #f1f3f4', textAlign: 'center' }}>
-                          <input type="number" step="any" value={e.actual ?? ''} placeholder="–"
-                                 onChange={(ev) => handleChange(section, item, 'actual', ev.target.value)}
-                                 style={inputStyle(changed, e.actual)} />
-                        </td>
-                        {kind === 'production' && (
-                          <td style={{ padding: '6px 8px', borderRight: despatchSection ? '1px solid #eef1f4' : 'none', borderBottom: '1px solid #f1f3f4', textAlign: 'center' }}>
-                            <input type="number" step="any" value={e.plan ?? ''} placeholder="–"
-                                   onChange={(ev) => handleChange(section, item, 'plan', ev.target.value)}
-                                   style={inputStyle(changed, e.plan)} />
-                          </td>
-                        )}
-                        {despatchSection && (
-                          <td style={{ padding: '6px 8px', borderRight: despatchIsProduction ? '1px solid #eef1f4' : 'none', borderBottom: '1px solid #f1f3f4', textAlign: 'center' }}>
-                            <input type="number" step="any" value={dEdit.actual ?? ''} placeholder="–"
-                                   onChange={(ev) => handleChange(despatchSection, item, 'actual', ev.target.value)}
-                                   style={inputStyle(dChanged, dEdit.actual)} />
-                          </td>
-                        )}
-                        {despatchSection && despatchIsProduction && (
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f3f4', textAlign: 'center' }}>
-                            <input type="number" step="any" value={dEdit.plan ?? ''} placeholder="–"
-                                   onChange={(ev) => handleChange(despatchSection, item, 'plan', ev.target.value)}
-                                   style={inputStyle(dChanged, dEdit.plan)} />
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          );
-        })}
-      </div>
-    </div>
+      {!loading && SECTIONS.filter((s) => !s.hidden).map(({ key: section, title, kind, items, despatchSection }) => {
+        const despatchDef = despatchSection ? SECTIONS.find((s) => s.key === despatchSection) : null;
+        const despatchIsProduction = despatchDef?.kind === 'production';
+        return (
+          <Section key={section} title={title}>
+            <table className={es.table}>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th className={es.c}>Actual ({reportMonth})</th>
+                  {kind === 'production' && <th className={es.c}>Plan / APP ({reportMonth})</th>}
+                  {despatchSection && <th className={es.c}>Despatch Actual ({reportMonth})</th>}
+                  {despatchSection && despatchIsProduction && <th className={es.c}>Despatch Plan / APP ({reportMonth})</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const changed = isChanged(section, item);
+                  const e = edits[keyOf(section, item)] || {};
+                  const dChanged = despatchSection && isChanged(despatchSection, item);
+                  const dEdit = despatchSection ? (edits[keyOf(despatchSection, item)] || {}) : null;
+                  return (
+                    <tr key={item}>
+                      <td className={es.itemCell}>{item}</td>
+                      <td className={es.c}>{cellInput(section, item, 'actual', e.actual, changed)}</td>
+                      {kind === 'production' && <td className={es.c}>{cellInput(section, item, 'plan', e.plan, changed)}</td>}
+                      {despatchSection && <td className={es.c}>{cellInput(despatchSection, item, 'actual', dEdit.actual, dChanged)}</td>}
+                      {despatchSection && despatchIsProduction && <td className={es.c}>{cellInput(despatchSection, item, 'plan', dEdit.plan, dChanged)}</td>}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Section>
+        );
+      })}
+    </EntryPage>
   );
 }
 

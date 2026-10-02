@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, cellClass, entryStyles as es, wb } from '../EntryUI';
 
 const PLANTS = ['BSP', 'DSP', 'ISP', 'RSP', 'BSL', 'ASP', 'SSP', 'VISL'];
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -34,18 +34,6 @@ function getDefaultRange() {
   const fromDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
   const from = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}`;
   return { from, to };
-}
-
-function Notice({ type, text }) {
-  if (!text) return null;
-  const ok = type === 'success';
-  return (
-    <div style={{
-      padding: '12px 16px', borderRadius: 6, margin: '16px 0', fontSize: 13,
-      background: ok ? '#dcfce7' : '#fee2e2', color: ok ? '#166534' : '#991b1b',
-      border: `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`,
-    }}>{text}</div>
-  );
 }
 
 function ProductionRangeEntryInner() {
@@ -148,121 +136,92 @@ function ProductionRangeEntryInner() {
     }
   };
 
-  const label = { fontSize: 13, fontWeight: 600, color: '#5f6368', display: 'block', marginBottom: 6 };
-  const input = { padding: '9px 12px', fontSize: 13.5, width: '100%', borderRadius: 4, border: '1px solid #dadce0', boxSizing: 'border-box' };
+  const reset = () => setRows((prev) => prev.map((r) => ({ ...r, edit: r.value === null || r.value === undefined ? '' : String(r.value) })));
 
   return (
-    // Fixed-height shell with its own scrolling body: globals.css sets
-    // html/body overflow:hidden, so the page itself never scrolls.
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-      <GlobalNavbar />
-      <div style={{ flex: 1, overflow: 'auto', maxWidth: 900, margin: '0 auto', padding: '32px 24px', width: '100%', boxSizing: 'border-box' }}>
-        <h1 style={{ fontSize: '1.7rem', fontWeight: 800, color: '#202124', margin: '0 0 4px' }}>
-          📈 Production Data Entry — Month Range
-        </h1>
-        <p style={{ fontSize: 13.5, color: '#5f6368', margin: '0 0 20px' }}>
-          Enter or correct one plant/unit&apos;s actual production across several months at once — writes straight
-          to <code>production_table</code>, the same table every report page reads. For entering a whole month&apos;s
-          items at once, use <a href="/data-entry/production">Production Data Entry</a> instead.
-        </p>
+    <EntryPage
+      maxWidth={960}
+      title="Production Data Entry — Month Range"
+      description={<>
+        Enter or correct one plant/unit&apos;s actual production across several months at once — writes straight
+        to <code>production_table</code>, the same table every report page reads. For entering a whole month&apos;s
+        items at once, use <a href="/data-entry/production">Production Data Entry</a> instead.
+      </>}
+    >
+      <ContextBar actions={
+        <button type="button" className={`${wb.btn} ${wb.btnPrimary}`} onClick={handleLoad} disabled={loading}>
+          {loading ? 'Loading…' : `Load ${monthsWanted.length || ''} month(s)`}
+        </button>
+      }>
+        <Field label="Plant" htmlFor="pr-plant">
+          <select id="pr-plant" className={es.control} value={plant} onChange={(e) => { setPlant(e.target.value); setLoaded(false); setRows([]); }}>
+            {PLANTS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Field>
+        <Field label="Unit / Item" htmlFor="pr-item">
+          {/* Units are this plant's own item names in production_table
+              (via /api/item-mapping-suggestions), in process order. */}
+          <select id="pr-item" className={es.control} style={{ minWidth: 200 }}
+                  value={item}
+                  onChange={(e) => { setItem(e.target.value); setLoaded(false); setRows([]); }}
+                  disabled={knownItems.length === 0}>
+            {knownItems.length === 0 && <option value="">No units in production_table</option>}
+            {knownItems.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </Field>
+        <Field label="From" htmlFor="pr-from">
+          <input id="pr-from" type="month" className={es.control} value={from} onChange={(e) => { setFrom(e.target.value); setLoaded(false); setRows([]); }} />
+        </Field>
+        <Field label="To" htmlFor="pr-to">
+          <input id="pr-to" type="month" className={es.control} value={to} onChange={(e) => { setTo(e.target.value); setLoaded(false); setRows([]); }} />
+        </Field>
+      </ContextBar>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, border: '1px solid #dadce0', borderRadius: 8, padding: 18 }}>
-          <div>
-            <label style={label}>Plant</label>
-            <select value={plant} onChange={(e) => { setPlant(e.target.value); setLoaded(false); setRows([]); }} style={input}>
-              {PLANTS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
+      <Status status={status} />
+
+      {loaded && rows.length > 0 && (
+        <>
+          <Section title={`${plant} — ${item}`} sub="Actual production, one row per month. Edited rows are highlighted until saved.">
+            <table className={es.table}>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th className={es.r}>Actual Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => {
+                  const changed = r.edit !== (r.value === null || r.value === undefined ? '' : String(r.value));
+                  return (
+                    <tr key={r.report_month}>
+                      <td className={es.itemCell}>
+                        {monthLabel(r.report_month)} <span className={wb.muted} style={{ fontSize: 11.5, fontWeight: 500 }}>({r.report_month})</span>
+                      </td>
+                      <td className={es.r}>
+                        <input type="number" step="0.001" value={r.edit} aria-label={`${r.report_month} actual`}
+                               onChange={(e) => setEdit(idx, e.target.value)}
+                               className={cellClass({ changed, filled: r.edit !== '' })} style={{ width: 140 }} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Section>
+
+          <div className={es.foot}>
+            <button type="button" className={wb.btn} onClick={reset} disabled={!hasChanges}>Reset</button>
+            <SaveButton dirty={hasChanges} saving={saving} onClick={handleSave}>Save All</SaveButton>
           </div>
-          <div>
-            <label style={label}>Unit / Item</label>
-            {/* Units are this plant's own item names in production_table
-                (via /api/item-mapping-suggestions), in process order. */}
-            <select
-              value={item}
-              onChange={(e) => { setItem(e.target.value); setLoaded(false); setRows([]); }}
-              disabled={knownItems.length === 0} style={input}
-            >
-              {knownItems.length === 0 && <option value="">No units in production_table</option>}
-              {knownItems.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={label}>From</label>
-            <input type="month" value={from} onChange={(e) => { setFrom(e.target.value); setLoaded(false); setRows([]); }} style={input} />
-          </div>
-          <div>
-            <label style={label}>To</label>
-            <input type="month" value={to} onChange={(e) => { setTo(e.target.value); setLoaded(false); setRows([]); }} style={input} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <button
-              onClick={handleLoad} disabled={loading}
-              style={{ width: '100%', padding: '9px 14px', fontSize: 13.5, fontWeight: 700, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-            >
-              {loading ? 'Loading…' : `Load ${monthsWanted.length || ''} month(s)`}
-            </button>
-          </div>
+        </>
+      )}
+
+      {!loaded && !loading && (
+        <div className={wb.empty}>
+          Select a plant, a unit/item, and a month range, then click <strong>Load</strong>.
         </div>
-
-        <Notice type={status?.type} text={status?.text} />
-
-        {loaded && rows.length > 0 && (
-          <>
-            <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden', marginTop: 20 }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                <thead>
-                  <tr style={{ background: '#f8f9fa' }}>
-                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#5f6368', borderBottom: '1px solid #dadce0' }}>Month</th>
-                    <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#5f6368', borderBottom: '1px solid #dadce0' }}>Actual Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, idx) => {
-                    const changed = r.edit !== (r.value === null || r.value === undefined ? '' : String(r.value));
-                    return (
-                      <tr key={r.report_month} style={{ borderBottom: '1px solid #f1f3f4', background: changed ? '#fffbea' : 'transparent' }}>
-                        <td style={{ padding: '8px 14px', fontSize: 13.5, color: '#202124', fontWeight: 500 }}>
-                          {monthLabel(r.report_month)} <span style={{ color: '#9aa0a6', fontSize: 11.5 }}>({r.report_month})</span>
-                        </td>
-                        <td style={{ padding: '6px 14px', textAlign: 'right' }}>
-                          <input
-                            type="number" step="0.001" value={r.edit}
-                            onChange={(e) => setEdit(idx, e.target.value)}
-                            style={{ width: 140, padding: '7px 10px', border: '1px solid #dadce0', borderRadius: 4, textAlign: 'right', fontSize: 13 }}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button
-                onClick={() => setRows((prev) => prev.map((r) => ({ ...r, edit: r.value === null || r.value === undefined ? '' : String(r.value) })))}
-                disabled={!hasChanges}
-                style={{ padding: '10px 20px', borderRadius: 4, border: '1px solid #dadce0', background: '#fff', color: '#5f6368', fontSize: 13, fontWeight: 600, cursor: hasChanges ? 'pointer' : 'default' }}
-              >
-                Reset
-              </button>
-              <button
-                onClick={handleSave} disabled={saving || !hasChanges}
-                style={{ padding: '10px 20px', borderRadius: 4, border: 'none', background: hasChanges ? '#10b981' : '#9ca3af', color: '#fff', fontSize: 13, fontWeight: 700, cursor: hasChanges ? 'pointer' : 'default' }}
-              >
-                {saving ? 'Saving…' : 'Save All'}
-              </button>
-            </div>
-          </>
-        )}
-
-        {!loaded && !loading && (
-          <div style={{ padding: 50, textAlign: 'center', color: '#5f6368', fontSize: 13.5, marginTop: 20, border: '1px solid #dadce0', borderRadius: 8 }}>
-            Select a plant, a unit/item, and a month range, then click <strong>Load</strong>.
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </EntryPage>
   );
 }
 

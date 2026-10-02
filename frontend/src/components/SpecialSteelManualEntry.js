@@ -65,21 +65,25 @@ function defaultMonth() {
   return names[d.getMonth()];
 }
 
+// Styled to the shared workbench look (--ui-* tokens, see styles/wb.module.css)
 const SEL = {
-  padding: '6px 10px', border: '1px solid #cbd5e1',
-  borderRadius: 6, fontSize: '0.85rem', backgroundColor: '#fff',
+  padding: '7px 10px', border: '1px solid var(--ui-border)', borderRadius: 4,
+  font: '600 13.5px var(--ui-font)', color: 'var(--ui-text)', backgroundColor: 'var(--ui-surface)',
 };
 const INP = (extra = {}) => ({
-  width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1',
-  borderRadius: 4, fontSize: '8.5pt', ...extra,
+  width: '100%', boxSizing: 'border-box', padding: '6px 8px', border: '1px solid var(--ui-border)',
+  borderRadius: 4, font: '500 13px var(--ui-font)', ...extra,
 });
 const BTN = (bg, disabled) => ({
-  padding: '6px 18px', backgroundColor: disabled ? '#94a3b8' : bg,
-  color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700,
-  fontSize: '0.85rem', cursor: disabled ? 'default' : 'pointer',
+  padding: '8px 16px', backgroundColor: bg, opacity: disabled ? 0.55 : 1,
+  color: '#fff', border: `1px solid ${bg}`, borderRadius: 4, fontWeight: 600,
+  font: '600 13px var(--ui-font)', cursor: disabled ? 'default' : 'pointer',
 });
-const TH = { padding: '7px 8px', fontWeight: 600, fontSize: '8pt', color: '#fff', backgroundColor: '#1e3a5f', border: '1px solid #334155' };
-const TD = (bg = '#fff') => ({ padding: '3px 5px', borderBottom: '1px solid #e2e8f0', backgroundColor: bg });
+const TH = {
+  padding: '8px 10px', fontWeight: 700, fontSize: '10.5px', letterSpacing: '.05em', textTransform: 'uppercase',
+  color: 'var(--ui-text-secondary)', backgroundColor: 'var(--ui-bg-subtle)', borderBottom: '1px solid var(--ui-border)',
+};
+const TD = () => ({ padding: '5px 8px', borderBottom: '1px solid var(--ui-border-subtle)' });
 
 export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = 'RSP' }) {
   const [plant, setPlant]   = useState(defaultPlant);
@@ -190,18 +194,18 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
   const stText = { success: '#166534', error: '#991b1b', info: '#1e40af' }[status?.type] || '#374151';
 
   return (
-    <div style={{ marginBottom: 24, border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ marginBottom: 24, border: '1px solid var(--ui-border)', borderRadius: 'var(--ui-radius)', overflow: 'hidden', background: 'var(--ui-surface)', fontFamily: 'var(--ui-font)' }}>
 
       {/* ── header ─────────────────────────────────────────────────────── */}
-      <div style={{ padding: '12px 20px', backgroundColor: '#0f4c81', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--ui-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>Special Steel — Manual Entry / Update</div>
-          <div style={{ fontSize: '0.72rem', color: '#93c5fd', marginTop: 2 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ui-text)' }}>Special Steel — Manual Entry / Update</div>
+          <div style={{ fontSize: 12, color: 'var(--ui-text-secondary)', marginTop: 2 }}>
             Enter or revise order qty &amp; actual despatch by product and quality grade
           </div>
         </div>
         {dirty && (
-          <span style={{ fontSize: '0.7rem', backgroundColor: '#d97706', color: '#fff', padding: '2px 10px', borderRadius: 99, fontWeight: 700 }}>
+          <span style={{ fontSize: 11, backgroundColor: 'var(--ui-warning-bg)', color: 'var(--ui-warning)', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
             Unsaved changes
           </span>
         )}
@@ -229,11 +233,11 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
             )},
           ].map(({ label, comp }) => (
             <div key={label}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#374151', marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ui-text-tertiary)', marginBottom: 4 }}>{label}</div>
               {comp}
             </div>
           ))}
-          <button onClick={handleLoad} disabled={loading} style={BTN('#1e40af', loading)}>
+          <button onClick={handleLoad} disabled={loading} style={BTN('var(--ui-primary)', loading)}>
             {loading ? 'Loading…' : loaded ? 'Reload' : 'Load Data'}
           </button>
         </div>
@@ -263,7 +267,7 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
         {(loaded || rows.length > 0) ? (
           <>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <colgroup>
                   <col style={{ width: 30 }} />
                   <col style={{ width: '24%' }} />
@@ -353,7 +357,7 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, flexWrap: 'wrap', gap: 10 }}>
               {!isSsps && (
                 <button onClick={addRow}
-                  style={{ padding: '6px 16px', backgroundColor: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
+                  style={{ padding: '7px 14px', backgroundColor: 'var(--ui-surface)', color: 'var(--ui-primary)', border: '1px dashed var(--ui-primary)', borderRadius: 4, font: '600 13px var(--ui-font)', cursor: 'pointer' }}>
                   + Add Row
                 </button>
               )}
@@ -365,7 +369,7 @@ export default function SpecialSteelManualEntry({ apiBase = '', defaultPlant = '
                     : <>{rows.length} row(s) · Save replaces <em>all</em> existing data for {plant} {month} {year}</>}
                 </span>
                 {!isSsps && (
-                  <button onClick={handleSave} disabled={saving || !dirty} style={BTN('#10b981', saving || !dirty)}>
+                  <button onClick={handleSave} disabled={saving || !dirty} style={BTN('var(--ui-success)', saving || !dirty)}>
                     {saving ? 'Saving…' : 'Save All'}
                   </button>
                 )}

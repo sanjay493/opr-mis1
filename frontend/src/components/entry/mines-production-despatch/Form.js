@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, Loading, cellClass, entryStyles as es } from '../EntryUI';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -316,57 +316,37 @@ function MinesProductionDespatchPageInner() {
     }
   };
 
-  const inputStyle = (changed, hasValue) => ({
-    width: 80, padding: '5px 6px', fontSize: 12.5, textAlign: 'right', borderRadius: 4,
-    border: `1px solid ${changed ? '#fbbf24' : '#d1d5db'}`,
-    background: changed ? '#fffbeb' : hasValue ? '#f0fdf4' : '#fff',
-    color: changed ? '#92400e' : '#202124',
-  });
-
-  const thStyle = {
-    padding: '6px 8px', fontSize: 11.5, fontWeight: 600, color: '#374151',
-    background: '#f8fafc', borderBottom: '1px solid #dadce0', borderRight: '1px solid #eef1f4', textAlign: 'center',
-  };
-  const tdLabelStyle = {
-    padding: '7px 10px', fontSize: 12.5, fontWeight: 600, color: '#374151',
-    borderRight: '1px solid #eef1f4', borderBottom: '1px solid #f1f3f4', whiteSpace: 'nowrap',
-  };
-  const tdStyle = { padding: '5px 6px', borderRight: '1px solid #eef1f4', borderBottom: '1px solid #f1f3f4', textAlign: 'center' };
+  // Number input for a table cell; `changed` marks unsaved edits.
+  const numInput = (value, changed, onChange, label) => (
+    <input type="number" step="any" value={value ?? ''} placeholder="–" aria-label={label}
+           onChange={(ev) => onChange(ev.target.value)}
+           className={cellClass({ changed, filled: value !== '' && value != null })} style={{ width: 92 }} />
+  );
 
   if (mastersError) {
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <GlobalNavbar />
-        <div style={{ padding: 24, color: '#991b1b' }}>Failed to load mines master data: {mastersError}</div>
-      </div>
+      <EntryPage>
+        <Status status={{ type: 'error', text: `Failed to load mines master data: ${mastersError}` }} />
+      </EntryPage>
     );
   }
 
   const selectedMine = masters?.mines?.find((m) => m.mine_code === mineCode);
+  const dirty = hasChanges();
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" }}>
-      <GlobalNavbar />
-
-      <div style={{ flex: 1, overflowY: 'auto', maxWidth: 1300, width: '100%', margin: '0 auto', padding: '22px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: 0 }}>
-            Iron Ore Mines — Production &amp; Despatch Entry
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Monthly fresh Lump/Fines production, and despatch of every material (fresh + legacy Dump Fines/Pellets/Tailings) by
-            Rail/Road to Captive Plants, Sales, or Pellet Conversion Agents — per mine. Despatch Plan is one target per
-            material/end-use (no Rail/Road split); only Actual despatch is tracked by mode.
-          </span>
-        </div>
-
-        <div style={{
-          display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
-          marginBottom: 18, border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px',
-        }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Mine</label>
-          <select value={mineCode} onChange={(e) => setMineCode(e.target.value)}
-                  style={{ padding: '6px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4, minWidth: 200 }}>
+    <EntryPage
+      maxWidth={1300}
+      title="Iron Ore Mines — Production & Despatch Entry"
+      description={<>
+        Monthly fresh Lump/Fines production, and despatch of every material (fresh + legacy Dump Fines/Pellets/Tailings) by
+        Rail/Road to Captive Plants, Sales, or Pellet Conversion Agents — per mine. Despatch Plan is one target per
+        material/end-use (no Rail/Road split); only Actual despatch is tracked by mode.
+      </>}
+    >
+      <ContextBar actions={<SaveButton dirty={!!masters && dirty} saving={saving} onClick={handleSave}>Save All</SaveButton>}>
+        <Field label="Mine" htmlFor="mpd-mine">
+          <select id="mpd-mine" className={es.control} style={{ minWidth: 200 }} value={mineCode} onChange={(e) => setMineCode(e.target.value)}>
             {(masters?.groups || []).map((g) => (
               <optgroup key={g.group_code} label={g.group_name}>
                 {(masters.mines || []).filter((m) => m.group_code === g.group_code && m.is_active).map((m) => (
@@ -375,177 +355,132 @@ function MinesProductionDespatchPageInner() {
               </optgroup>
             ))}
           </select>
+        </Field>
+        <Field label="Report month" htmlFor="mpd-month">
+          <input id="mpd-month" type="month" className={es.control} value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} />
+        </Field>
+      </ContextBar>
 
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Report Month</label>
-          <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)}
-                 style={{ padding: '6px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }} />
+      <Status status={status} />
 
-          <button onClick={handleSave} disabled={saving || !masters || !hasChanges()} style={{
-            marginLeft: 'auto', padding: '8px 20px', fontSize: 13, fontWeight: 700, borderRadius: 6,
-            border: 'none', cursor: hasChanges() ? 'pointer' : 'default',
-            background: hasChanges() ? '#10b981' : '#9ca3af', color: '#fff',
-          }}>
-            {saving ? 'Saving...' : 'Save All'}
-          </button>
-        </div>
+      {(!masters || loading) && <Loading />}
 
-        {status && (
-          <div style={{
-            padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14,
-            background: status.type === 'success' ? '#e6f4ea' : '#fef2f2',
-            color: status.type === 'success' ? '#188038' : '#991b1b',
-            border: `1px solid ${status.type === 'success' ? '#a8dab5' : '#fca5a5'}`,
-          }}>
-            {status.text}
-          </div>
-        )}
+      {masters && !loading && (
+        <>
+          {totalProduction != null && (
+            <Status status={{ type: 'info', text: <>Total Production ({selectedMine?.mine_name}, {reportMonth}) = Fresh Lump+Fines production + all legacy despatch = <strong>{totalProduction.toLocaleString()}</strong></> }} />
+          )}
 
-        {(!masters || loading) && <div style={{ color: '#5f6368', fontSize: 14, padding: '30px 0', textAlign: 'center' }}>Loading…</div>}
-
-        {masters && !loading && (
-          <>
-            {totalProduction != null && (
-              <div style={{ fontSize: 13, color: '#174ea6', marginBottom: 16, padding: '8px 14px', background: '#e8f0fe', borderRadius: 6, display: 'inline-block' }}>
-                Total Production ({selectedMine?.mine_name}, {reportMonth}) = Fresh Lump+Fines production + all legacy despatch = <strong>{totalProduction.toLocaleString()}</strong>
-              </div>
-            )}
-
-            {/* Fresh production */}
-            <div style={{ marginBottom: 22 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Fresh Production</div>
-              <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%', maxWidth: 460 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...thStyle, textAlign: 'left' }}>Material</th>
-                      <th style={thStyle}>Actual ({reportMonth})</th>
-                      <th style={{ ...thStyle, borderRight: 'none' }}>Plan ({reportMonth})</th>
+          {/* Fresh production */}
+          <Section title="Fresh Production">
+            <table className={es.table}>
+              <thead>
+                <tr>
+                  <th>Material</th>
+                  <th className={es.c}>Actual ({reportMonth})</th>
+                  <th className={es.c}>Plan ({reportMonth})</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productionMaterials.map(({ material_code, material_name }) => {
+                  const changed = isProdChanged(material_code);
+                  const e = editsProd[material_code] || {};
+                  return (
+                    <tr key={material_code}>
+                      <td className={es.itemCell}>{material_name}</td>
+                      <td className={es.c}>{numInput(e.actual, changed, (v) => handleProdChange(material_code, 'actual', v), `${material_name} actual`)}</td>
+                      <td className={es.c}>{numInput(e.plan, changed, (v) => handleProdChange(material_code, 'plan', v), `${material_name} plan`)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {productionMaterials.map(({ material_code, material_name }) => {
-                      const changed = isProdChanged(material_code);
-                      const e = editsProd[material_code] || {};
-                      return (
-                        <tr key={material_code}>
-                          <td style={tdLabelStyle}>{material_name}</td>
-                          <td style={tdStyle}>
-                            <input type="number" step="any" value={e.actual ?? ''} placeholder="–"
-                                   onChange={(ev) => handleProdChange(material_code, 'actual', ev.target.value)}
-                                   style={inputStyle(changed, e.actual)} />
-                          </td>
-                          <td style={{ ...tdStyle, borderRight: 'none' }}>
-                            <input type="number" step="any" value={e.plan ?? ''} placeholder="–"
-                                   onChange={(ev) => handleProdChange(material_code, 'plan', ev.target.value)}
-                                   style={inputStyle(changed, e.plan)} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Section>
 
-            {/* Despatch, one table per end-use. Actual is per Rail/Road;
-                Plan is a single column (no mode split) per direct instruction. */}
-            {(masters.end_uses || []).map((eu) => (
-              <div key={eu.end_use_code} style={{ marginBottom: 22 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Despatch — {eu.end_use_name}</div>
-                <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflowX: 'auto' }}>
-                  <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 480 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Material</th>
-                        {(masters.transport_modes || []).map((mode) => (
-                          <th key={mode.mode_code} style={thStyle}>{mode.mode_name} Actual</th>
-                        ))}
-                        <th style={{ ...thStyle, borderRight: 'none' }}>Plan (Rail+Road)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(masters.materials || []).map(({ material_code, material_name }) => {
-                        const planChanged = isDespPlanChanged(material_code, eu.end_use_code);
-                        const planEdit = editsDespPlan[despatchPlanKey(material_code, eu.end_use_code)] || {};
-                        return (
-                          <tr key={material_code}>
-                            <td style={tdLabelStyle}>{material_name}</td>
-                            {(masters.transport_modes || []).map((mode) => {
-                              const changed = isDespChanged(material_code, mode.mode_code, eu.end_use_code);
-                              const e = editsDesp[despatchActualKey(material_code, mode.mode_code, eu.end_use_code)] || {};
-                              return (
-                                <td key={mode.mode_code} style={tdStyle}>
-                                  <input type="number" step="any" value={e.actual ?? ''} placeholder="–"
-                                         onChange={(ev) => handleDespActualChange(material_code, mode.mode_code, eu.end_use_code, ev.target.value)}
-                                         style={inputStyle(changed, e.actual)} />
-                                </td>
-                              );
-                            })}
-                            <td style={{ ...tdStyle, borderRight: 'none' }}>
-                              <input type="number" step="any" value={planEdit.plan ?? ''} placeholder="–"
-                                     onChange={(ev) => handleDespPlanChange(material_code, eu.end_use_code, ev.target.value)}
-                                     style={inputStyle(planChanged, planEdit.plan)} />
+          {/* Despatch, one table per end-use. Actual is per Rail/Road;
+              Plan is a single column (no mode split) per direct instruction. */}
+          {(masters.end_uses || []).map((eu) => (
+            <Section key={eu.end_use_code} title={`Despatch — ${eu.end_use_name}`}>
+              <table className={es.table}>
+                <thead>
+                  <tr>
+                    <th>Material</th>
+                    {(masters.transport_modes || []).map((mode) => (
+                      <th key={mode.mode_code} className={es.c}>{mode.mode_name} Actual</th>
+                    ))}
+                    <th className={es.c}>Plan (Rail+Road)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(masters.materials || []).map(({ material_code, material_name }) => {
+                    const planChanged = isDespPlanChanged(material_code, eu.end_use_code);
+                    const planEdit = editsDespPlan[despatchPlanKey(material_code, eu.end_use_code)] || {};
+                    return (
+                      <tr key={material_code}>
+                        <td className={es.itemCell}>{material_name}</td>
+                        {(masters.transport_modes || []).map((mode) => {
+                          const changed = isDespChanged(material_code, mode.mode_code, eu.end_use_code);
+                          const e = editsDesp[despatchActualKey(material_code, mode.mode_code, eu.end_use_code)] || {};
+                          return (
+                            <td key={mode.mode_code} className={es.c}>
+                              {numInput(e.actual, changed, (v) => handleDespActualChange(material_code, mode.mode_code, eu.end_use_code, v), `${material_name} ${mode.mode_name} actual`)}
                             </td>
-                          </tr>
+                          );
+                        })}
+                        <td className={es.c}>
+                          {numInput(planEdit.plan, planChanged, (v) => handleDespPlanChange(material_code, eu.end_use_code, v), `${material_name} plan`)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Section>
+          ))}
+
+          {/* Booked Quantity — Sales to 3rd Party. Implicitly SALES-only
+              (no end-use dimension — booking a sale does not apply to
+              Captive/Pellet Conversion), same Rail/Road Actual + single
+              Plan shape as the Despatch — Sales to 3rd Party table above. */}
+          <Section title="Booked Quantity — Sales to 3rd Party">
+            <table className={es.table}>
+              <thead>
+                <tr>
+                  <th>Material</th>
+                  {(masters.transport_modes || []).map((mode) => (
+                    <th key={mode.mode_code} className={es.c}>{mode.mode_name} Actual</th>
+                  ))}
+                  <th className={es.c}>Plan (Rail+Road)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(masters.materials || []).map(({ material_code, material_name }) => {
+                  const planChanged = isBookedQtyPlanChanged(material_code);
+                  const planEdit = editsBookedQtyPlan[material_code] || {};
+                  return (
+                    <tr key={material_code}>
+                      <td className={es.itemCell}>{material_name}</td>
+                      {(masters.transport_modes || []).map((mode) => {
+                        const changed = isBookedQtyChanged(material_code, mode.mode_code);
+                        const e = editsBookedQty[bookedQtyActualKey(material_code, mode.mode_code)] || {};
+                        return (
+                          <td key={mode.mode_code} className={es.c}>
+                            {numInput(e.actual, changed, (v) => handleBookedQtyActualChange(material_code, mode.mode_code, v), `${material_name} ${mode.mode_name} booked`)}
+                          </td>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-
-            {/* Booked Quantity — Sales to 3rd Party. Implicitly SALES-only
-                (no end-use dimension — booking a sale doesn't apply to
-                Captive/Pellet Conversion), same Rail/Road Actual + single
-                Plan shape as the Despatch — Sales to 3rd Party table above. */}
-            <div style={{ marginBottom: 22 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Booked Quantity — Sales to 3rd Party</div>
-              <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 480 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...thStyle, textAlign: 'left' }}>Material</th>
-                      {(masters.transport_modes || []).map((mode) => (
-                        <th key={mode.mode_code} style={thStyle}>{mode.mode_name} Actual</th>
-                      ))}
-                      <th style={{ ...thStyle, borderRight: 'none' }}>Plan (Rail+Road)</th>
+                      <td className={es.c}>
+                        {numInput(planEdit.plan, planChanged, (v) => handleBookedQtyPlanChange(material_code, v), `${material_name} booked plan`)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {(masters.materials || []).map(({ material_code, material_name }) => {
-                      const planChanged = isBookedQtyPlanChanged(material_code);
-                      const planEdit = editsBookedQtyPlan[material_code] || {};
-                      return (
-                        <tr key={material_code}>
-                          <td style={tdLabelStyle}>{material_name}</td>
-                          {(masters.transport_modes || []).map((mode) => {
-                            const changed = isBookedQtyChanged(material_code, mode.mode_code);
-                            const e = editsBookedQty[bookedQtyActualKey(material_code, mode.mode_code)] || {};
-                            return (
-                              <td key={mode.mode_code} style={tdStyle}>
-                                <input type="number" step="any" value={e.actual ?? ''} placeholder="–"
-                                       onChange={(ev) => handleBookedQtyActualChange(material_code, mode.mode_code, ev.target.value)}
-                                       style={inputStyle(changed, e.actual)} />
-                              </td>
-                            );
-                          })}
-                          <td style={{ ...tdStyle, borderRight: 'none' }}>
-                            <input type="number" step="any" value={planEdit.plan ?? ''} placeholder="–"
-                                   onChange={(ev) => handleBookedQtyPlanChange(material_code, ev.target.value)}
-                                   style={inputStyle(planChanged, planEdit.plan)} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Section>
+        </>
+      )}
+    </EntryPage>
   );
 }
 

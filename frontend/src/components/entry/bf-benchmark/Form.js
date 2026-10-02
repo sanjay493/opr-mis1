@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useState, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, Status, entryStyles as es, wb } from '../EntryUI';
 import RequireEditor from '@/components/RequireEditor';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
@@ -18,16 +18,18 @@ const FY_START_YEARS = Array.from(
 
 function fyLabelOf(y) { return `${y}-${String((y + 1) % 100).padStart(2, '0')}`; }
 
+// Styled to the shared workbench look (--ui-* tokens, see styles/wb.module.css)
 const inputStyle = {
-  padding: '7px 10px', fontSize: '10.5pt', border: '1px solid #dadce0',
-  borderRadius: '6px', width: '100%', boxSizing: 'border-box',
+  padding: '7px 10px', font: '13.5px var(--ui-font)', color: 'var(--ui-text)', border: '1px solid var(--ui-border)',
+  borderRadius: '4px', width: '100%', boxSizing: 'border-box', background: 'var(--ui-surface)',
 };
 const selStyle = { ...inputStyle, cursor: 'pointer' };
-const labelStyle = { display: 'block', fontSize: '9pt', color: '#5f6368', marginBottom: '3px' };
+const labelStyle = { display: 'block', fontSize: '10.5px', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--ui-text-secondary)', marginBottom: '4px' };
 const cardStyle = {
-  border: '1px solid #dadce0', borderRadius: '8px', padding: '16px', marginBottom: '16px',
-  backgroundColor: '#ffffff',
+  border: '1px solid var(--ui-border)', borderRadius: 'var(--ui-radius)', padding: '14px 16px', marginBottom: '16px',
+  backgroundColor: 'var(--ui-surface)',
 };
+const cardTitle = { margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ui-text)' };
 
 // Sentinel Furnace dropdown value that reveals a free-text input — plants
 // blow furnaces in/out of service over time, so SAIL_BF_UNITS_BY_PLANT will
@@ -238,30 +240,29 @@ function BFInner() {
   };
 
   return (
-    <>
-      <GlobalNavbar />
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 20px', height: 'calc(100vh - 72px)', overflowY: 'auto' }}>
-        <h1 style={{ fontSize: '20pt', marginBottom: '4px' }}>Large BF Benchmarking — Data Entry</h1>
-        <p style={{ color: '#5f6368', marginBottom: '20px' }}>
-          Manage non-SAIL large BFs and their per-FY figures (non-SAIL BFs only publish Financial Year totals,
-          not monthly ones), plus Working Volume for any SAIL blast furnace.
-          See the comparison at <a href="/reports/special-steel-ipt?tab=bf-benchmark">Large BF Benchmarking</a>.
-        </p>
-
-        {error && <p style={{ color: '#d93025', marginBottom: '12px' }}>{error}</p>}
-        {notice && <p style={{ color: '#188038', marginBottom: '12px' }}>{notice}</p>}
-        {loading ? <p>Loading…</p> : (
+    <EntryPage
+      maxWidth={960}
+      title="Large BF Benchmarking — Data Entry"
+      description={<>
+        Manage non-SAIL large BFs and their per-FY figures (non-SAIL BFs only publish Financial Year totals,
+        not monthly ones), plus Working Volume for any SAIL blast furnace.
+        See the comparison at <a href="/reports/special-steel-ipt?tab=bf-benchmark">Large BF Benchmarking</a>.
+      </>}
+    >
+        <Status status={error ? { type: 'error', text: error } : null} />
+        <Status status={notice ? { type: 'success', text: notice } : null} />
+        {loading ? <p className={wb.muted}>Loading…</p> : (
           <>
             {/* SAIL BF Meta (Working Volume) — every SAIL furnace, not just
                 the 3 flagship ones used in the comparison below. */}
             <div style={cardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ marginTop: 0, fontSize: '12pt' }}>SAIL BF Meta — Working Volume</h3>
+                <h3 style={cardTitle}>SAIL BF Meta — Working Volume</h3>
                 {!showAddSailForm && (
-                  <button className="btn btn-primary" onClick={() => setShowAddSailForm(true)}>+ Add Furnace</button>
+                  <button className={`${wb.btn} ${wb.btnPrimary}`} onClick={() => setShowAddSailForm(true)}>+ Add Furnace</button>
                 )}
               </div>
-              <p style={{ color: '#5f6368', fontSize: '9pt', marginTop: '-6px', marginBottom: '12px' }}>
+              <p style={{ color: 'var(--ui-text-secondary)', fontSize: '12px', margin: '4px 0 12px' }}>
                 Every furnace here can be selected on the comparison report — Working Volume also groups them into
                 Large / Medium / Small there ({sailBfs.map((b) => b.label).join(', ')} are the Large class).
               </p>
@@ -307,9 +308,9 @@ function BFInner() {
                       value={newSailWv} onChange={(e) => setNewSailWv(e.target.value)} placeholder="m³"
                     />
                   </div>
-                  <button className="btn btn-primary" onClick={addSailMeta}>Save</button>
+                  <button className={`${wb.btn} ${wb.btnPrimary}`} onClick={addSailMeta}>Save</button>
                   <button
-                    className="btn btn-secondary"
+                    className={wb.btn}
                     onClick={() => {
                       setShowAddSailForm(false);
                       setNewSailPlant(''); setNewSailUnit(''); setNewSailUnitCustom(''); setNewSailWv('');
@@ -319,23 +320,23 @@ function BFInner() {
                   </button>
                 </div>
               )}
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className={es.tableWrap} style={{ border: '1px solid var(--ui-border-subtle)', borderRadius: 6 }}><table className={es.table}>
                 <thead>
-                  <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
-                    <th style={{ padding: '6px 8px' }}>Plant</th>
-                    <th style={{ padding: '6px 8px' }}>Furnace</th>
-                    <th style={{ padding: '6px 8px' }}>Working Volume</th>
-                    <th style={{ padding: '6px 8px' }}></th>
+                  <tr>
+                    <th>Plant</th>
+                    <th>Furnace</th>
+                    <th>Working Volume</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {sailMetaRows.map((r) => {
                     const key = `${r.plant}:${r.unit}`;
                     return (
-                      <tr key={key} style={{ borderBottom: '1px solid #e8eaed' }}>
-                        <td style={{ padding: '6px 8px' }}>{r.plant}</td>
-                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{r.unit}</td>
-                        <td style={{ padding: '6px 8px' }}>
+                      <tr key={key}>
+                        <td>{r.plant}</td>
+                        <td className={es.itemCell}>{r.unit}</td>
+                        <td>
                           {editingSailKey === key ? (
                             <input
                               type="number" style={{ ...inputStyle, width: '140px', display: 'inline-block' }}
@@ -346,32 +347,32 @@ function BFInner() {
                             <span>{r.working_volume_m3 ?? '—'} {r.working_volume_m3 != null ? 'm³' : ''}</span>
                           )}
                         </td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <td className={es.r}>
                           {editingSailKey === key ? (
                             <>
-                              <button className="btn btn-primary" style={{ marginRight: '6px' }} onClick={() => saveSailWv(r.plant, r.unit)}>Save</button>
-                              <button className="btn btn-secondary" onClick={() => setEditingSailKey(null)}>Cancel</button>
+                              <button className={`${wb.btn} ${wb.btnPrimary}`} style={{ marginRight: '6px' }} onClick={() => saveSailWv(r.plant, r.unit)}>Save</button>
+                              <button className={wb.btn} onClick={() => setEditingSailKey(null)}>Cancel</button>
                             </>
                           ) : (
-                            <button className="btn btn-secondary" onClick={() => { setEditingSailKey(key); setSailWvDraft(r.working_volume_m3 ?? ''); }}>Edit</button>
+                            <button className={wb.btn} onClick={() => { setEditingSailKey(key); setSailWvDraft(r.working_volume_m3 ?? ''); }}>Edit</button>
                           )}
                         </td>
                       </tr>
                     );
                   })}
                   {sailMetaRows.length === 0 && (
-                    <tr><td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>No SAIL BF meta recorded yet.</td></tr>
+                    <tr><td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: 'var(--ui-text-secondary)' }}>No SAIL BF meta recorded yet.</td></tr>
                   )}
                 </tbody>
-              </table>
+              </table></div>
             </div>
 
             {/* Non-SAIL BF registry */}
             <div style={cardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ marginTop: 0, fontSize: '12pt' }}>Non-SAIL Large BFs</h3>
+                <h3 style={cardTitle}>Non-SAIL Large BFs</h3>
                 {!showAddForm && (
-                  <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>+ Add BF</button>
+                  <button className={`${wb.btn} ${wb.btnPrimary}`} onClick={() => setShowAddForm(true)}>+ Add BF</button>
                 )}
               </div>
               {showAddForm && (
@@ -388,36 +389,36 @@ function BFInner() {
                     <label style={labelStyle}>Location</label>
                     <input style={inputStyle} value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="e.g. Vijaynagar" />
                   </div>
-                  <button className="btn btn-primary" onClick={addBf}>Save</button>
-                  <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setNewName(''); setNewCompany(''); setNewLocation(''); }}>Cancel</button>
+                  <button className={`${wb.btn} ${wb.btnPrimary}`} onClick={addBf}>Save</button>
+                  <button className={wb.btn} onClick={() => { setShowAddForm(false); setNewName(''); setNewCompany(''); setNewLocation(''); }}>Cancel</button>
                 </div>
               )}
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className={es.tableWrap} style={{ border: '1px solid var(--ui-border-subtle)', borderRadius: 6 }}><table className={es.table}>
                 <thead>
-                  <tr style={{ textAlign: 'left', borderBottom: '2px solid #dadce0' }}>
-                    <th style={{ padding: '6px 8px' }}>Furnace</th>
-                    <th style={{ padding: '6px 8px' }}>Company</th>
-                    <th style={{ padding: '6px 8px' }}>Location</th>
-                    <th style={{ padding: '6px 8px' }}>Working Volume</th>
-                    <th style={{ padding: '6px 8px' }}>Status</th>
-                    <th style={{ padding: '6px 8px' }}></th>
+                  <tr>
+                    <th>Furnace</th>
+                    <th>Company</th>
+                    <th>Location</th>
+                    <th>Working Volume</th>
+                    <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {externalBfs.map((bf) => (
                     <Fragment key={bf.id}>
-                      <tr style={{ borderBottom: '1px solid #e8eaed' }}>
-                        <td style={{ padding: '6px 8px' }}>{bf.name}</td>
-                        <td style={{ padding: '6px 8px' }}>{bf.company || '—'}</td>
-                        <td style={{ padding: '6px 8px' }}>{bf.location || '—'}</td>
-                        <td style={{ padding: '6px 8px' }}>{bf.working_volume_m3 != null ? `${bf.working_volume_m3} m³` : '—'}</td>
-                        <td style={{ padding: '6px 8px' }}>{bf.active ? 'Active' : 'Inactive'}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                          <button className="btn btn-secondary" onClick={() => openEditBf(bf)}>Edit</button>
+                      <tr>
+                        <td>{bf.name}</td>
+                        <td>{bf.company || '—'}</td>
+                        <td>{bf.location || '—'}</td>
+                        <td>{bf.working_volume_m3 != null ? `${bf.working_volume_m3} m³` : '—'}</td>
+                        <td>{bf.active ? 'Active' : 'Inactive'}</td>
+                        <td className={es.r}>
+                          <button className={wb.btn} onClick={() => openEditBf(bf)}>Edit</button>
                         </td>
                       </tr>
                       {editingBfId === bf.id && (
-                        <tr style={{ borderBottom: '1px solid #e8eaed', background: '#f8f9fa' }}>
+                        <tr style={{ background: 'var(--ui-bg-subtle)' }}>
                           <td colSpan={6} style={{ padding: '12px' }}>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                               <div>
@@ -440,8 +441,8 @@ function BFInner() {
                                 <input type="checkbox" checked={editForm.active} onChange={(e) => setEditForm((f) => ({ ...f, active: e.target.checked }))} />
                                 Active
                               </label>
-                              <button className="btn btn-primary" onClick={() => saveBf(bf.id)}>Save</button>
-                              <button className="btn btn-secondary" onClick={() => setEditingBfId(null)}>Cancel</button>
+                              <button className={`${wb.btn} ${wb.btnPrimary}`} onClick={() => saveBf(bf.id)}>Save</button>
+                              <button className={wb.btn} onClick={() => setEditingBfId(null)}>Cancel</button>
                             </div>
                           </td>
                         </tr>
@@ -449,15 +450,15 @@ function BFInner() {
                     </Fragment>
                   ))}
                   {externalBfs.length === 0 && (
-                    <tr><td colSpan={6} style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>No non-SAIL BFs added yet.</td></tr>
+                    <tr><td colSpan={6} style={{ padding: '16px', textAlign: 'center', color: 'var(--ui-text-secondary)' }}>No non-SAIL BFs added yet.</td></tr>
                   )}
                 </tbody>
-              </table>
+              </table></div>
             </div>
 
             {/* FY entry */}
             <div style={cardStyle}>
-              <h3 style={{ marginTop: 0, fontSize: '12pt' }}>Financial Year Entry</h3>
+              <h3 style={{ ...cardTitle, marginBottom: 12 }}>Financial Year Entry</h3>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                 <div style={{ flex: 2 }}>
                   <label style={labelStyle}>Non-SAIL BF</label>
@@ -495,24 +496,23 @@ function BFInner() {
                       <div key={p.key}>
                         <label style={labelStyle}>{p.label} ({p.unit}) — auto-calculated</label>
                         <input
-                          type="text" disabled style={{ ...inputStyle, backgroundColor: '#f1f3f4', color: '#5f6368' }}
+                          type="text" disabled style={{ ...inputStyle, backgroundColor: 'var(--ui-bg-subtle)', color: 'var(--ui-text-secondary)' }}
                           value={p.key === 'fuel_rate' ? (computeFuelRate() ?? '—') : '—'}
                         />
                       </div>
                     ))}
                   </div>
-                  <button className="btn btn-primary" disabled={saving} onClick={saveEntry}>
+                  <button className={`${wb.btn} ${wb.btnSuccess}`} disabled={saving} onClick={saveEntry}>
                     {saving ? 'Saving…' : `Save FY ${fy}`}
                   </button>
                 </>
               ) : (
-                <p style={{ color: '#5f6368' }}>Select a non-SAIL BF above to enter its FY data.</p>
+                <p className={wb.muted}>Select a non-SAIL BF above to enter its FY data.</p>
               )}
             </div>
           </>
         )}
-      </main>
-    </>
+    </EntryPage>
   );
 }
 

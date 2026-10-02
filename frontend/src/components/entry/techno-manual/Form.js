@@ -3,7 +3,7 @@
 import RequireEditor from '@/components/RequireEditor';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage } from '../EntryUI';
 import {
   PLANTS, AREA_ORDER, PARAM_TEMPLATES, PLANT_PARAM_EXTRAS, templateFor,
   KNOWN_UNITS, unitArea, BF_ORDER, sortUnitsInArea, _LABEL_MAP, labelOf, sourceOf,
@@ -751,8 +751,11 @@ function TechnoManualPageInner() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <>
-      <GlobalNavbar />
+    <EntryPage
+      maxWidth={1500}
+      title="Techno Parameters — Universal Entry"
+      description={<>Insert legacy data · revise uploaded values · manual corrections</>}
+    >
 
       {showAddUnit && (
         <AddUnitModal
@@ -770,13 +773,7 @@ function TechnoManualPageInner() {
         />
       )}
 
-      <main className={ui.page} style={{ maxWidth:1500 }}>
-
         {/* ── Page title ── */}
-        <div className={ui.pageHeader}>
-          <h1 className={ui.pageTitle}>Techno Parameters — Universal Entry</h1>
-          <p className={ui.pageLead}>Insert legacy data · revise uploaded values · manual corrections</p>
-        </div>
 
         {/* ── Controls bar ── */}
         <div className={m.toolbar}>
@@ -1000,8 +997,7 @@ function TechnoManualPageInner() {
           <span>Amber cells = unsaved changes vs last-loaded values. Select a parameter, then &quot;Calculate Cumulative&quot; computes that field&apos;s YTD from Apr→current monthly values — BF rates are HM-production weighted (BF productivity: harmonic mean), per-TCS params are crude-steel weighted; shop units (BF_Shop/SMS) weight by plant production, other units by their own monthly production. Every step is shown before you apply; applied values stay editable.</span>
           <span>Clearing a box and saving removes that value. File-uploaded and manual data coexist — last write wins per parameter.</span>
         </div>
-      </main>
-    </>
+    </EntryPage>
   );
 }
 

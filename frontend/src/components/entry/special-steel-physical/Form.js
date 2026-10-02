@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, Loading, cellClass, entryStyles as es, wb } from '../EntryUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 const FY_LIST = ['2025-26', '2026-27', '2027-28', '2028-29'];
@@ -12,23 +12,6 @@ function numOrNull(v) {
   return Number.isNaN(f) ? null : f;
 }
 const s = (v) => (v === null || v === undefined ? '' : String(v));
-
-function Notice({ type, text }) {
-  if (!text) return null;
-  const ok = type === 'success';
-  return (
-    <div style={{
-      padding: '10px 16px', borderRadius: 6, margin: '14px 0', fontSize: 14,
-      background: ok ? '#f0fdf4' : '#fef2f2', color: ok ? '#166534' : '#991b1b',
-      border: `1px solid ${ok ? '#86efac' : '#fca5a5'}`,
-    }}>{text}</div>
-  );
-}
-
-const cellInput = {
-  width: 78, padding: '5px 6px', border: '1px solid #dadce0', borderRadius: 4,
-  textAlign: 'right', fontSize: 12.5,
-};
 
 function SpecialSteelPhysicalEntryInner() {
   const [fy, setFy] = useState('2026-27');
@@ -101,93 +84,83 @@ function SpecialSteelPhysicalEntryInner() {
     }
   };
 
-  const TH = { padding: '6px 6px', fontSize: 11, fontWeight: 700, color: '#5f6368', background: '#f8f9fa', borderBottom: '1px solid #dadce0', borderRight: '1px solid #eef1f4', textAlign: 'center', whiteSpace: 'nowrap' };
-  const TD = { padding: '3px 4px', borderRight: '1px solid #eef1f4', borderBottom: '1px solid #f1f3f4', textAlign: 'center' };
+  const num = cellClass();
+  const numW = { width: 88 };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-      <GlobalNavbar />
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', maxWidth: 1700, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
-        <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
-          Special Steel Plants — Physical Performance Entry
-        </h2>
-        <span style={{ fontSize: 13, color: '#5f6368' }}>
-          Multi-year history grid (ASP / SSP / VISP), values in ’000 T. Seeded from the source workbook —
-          edit to correct or extend. “APP / Actual” are for the previous FY, “ABP” for the selected FY.
-        </span>
-
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', margin: '18px 0', border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px' }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Financial Year</label>
-          <select value={fy} onChange={(e) => setFy(e.target.value)}
-            style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
+    <EntryPage
+      maxWidth={1700}
+      title="Special Steel Plants — Physical Performance Entry"
+      description={<>
+        Multi-year history grid (ASP / SSP / VISP), values in ’000 T. Seeded from the source workbook —
+        edit to correct or extend. “APP / Actual” are for the previous FY, “ABP” for the selected FY.
+      </>}
+    >
+      <ContextBar actions={<SaveButton dirty={!!meta} saving={saving} onClick={save}>Save All</SaveButton>}>
+        <Field label="Financial year" htmlFor="ssp-phys-fy">
+          <select id="ssp-phys-fy" className={es.control} value={fy} onChange={(e) => setFy(e.target.value)}>
             {FY_LIST.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
-          <button onClick={save} disabled={saving || !meta}
-            style={{ marginLeft: 'auto', padding: '8px 22px', fontSize: 14, fontWeight: 700, background: meta ? '#10b981' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 6, cursor: meta ? 'pointer' : 'not-allowed' }}>
-            {saving ? 'Saving…' : 'Save All'}
-          </button>
-        </div>
+        </Field>
+      </ContextBar>
 
-        <Notice type={status?.type} text={status?.text} />
+      <Status status={status} />
 
-        {loading && <div style={{ padding: 40, textAlign: 'center', color: '#5f6368' }}>Loading…</div>}
+      {loading && <Loading />}
 
-        {meta && !loading && (
-          <>
-            <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...TH, textAlign: 'left' }}>Plant</th>
-                    <th style={{ ...TH, textAlign: 'left' }}>Item</th>
-                    <th style={TH}>Capacity</th>
-                    <th style={TH}>Best Actual</th>
-                    <th style={TH}>Best Year</th>
-                    {meta.history_fys.map((f) => <th key={f} style={TH}>{f}</th>)}
-                    <th style={TH}>{meta.prev_fy} APP</th>
-                    <th style={TH}>{meta.prev_fy} Actual</th>
-                    <th style={TH}>{fy} ABP</th>
-                    <th style={{ ...TH, textAlign: 'left' }}>Remark</th>
+      {meta && !loading && (
+        <>
+          <Section title={`Physical performance — FY ${fy}`} sub="Values in ’000 T">
+            <table className={es.table}>
+              <thead>
+                <tr>
+                  <th>Plant</th>
+                  <th>Item</th>
+                  <th className={es.c}>Capacity</th>
+                  <th className={es.c}>Best Actual</th>
+                  <th className={es.c}>Best Year</th>
+                  {meta.history_fys.map((f) => <th key={f} className={es.c}>{f}</th>)}
+                  <th className={es.c}>{meta.prev_fy} APP</th>
+                  <th className={es.c}>{meta.prev_fy} Actual</th>
+                  <th className={es.c}>{fy} ABP</th>
+                  <th>Remark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => (
+                  <tr key={`${r.plant}-${r.series}`}>
+                    <td className={es.itemCell}>{r.plant}</td>
+                    <td className={es.itemCell}>{r.series_label}</td>
+                    <td className={es.c}><input value={r.capacity_kt} onChange={(e) => set(idx, { capacity_kt: e.target.value })} className={num} style={numW} /></td>
+                    <td className={es.c}><input value={r.best_actual_kt} onChange={(e) => set(idx, { best_actual_kt: e.target.value })} className={num} style={numW} /></td>
+                    <td className={es.c}><input value={r.best_year} onChange={(e) => set(idx, { best_year: e.target.value })} className={num} style={{ width: 84, textAlign: 'center' }} /></td>
+                    {meta.history_fys.map((f) => (
+                      <td key={f} className={es.c}><input value={r.history[f]} onChange={(e) => setHist(idx, f, e.target.value)} className={num} style={numW} /></td>
+                    ))}
+                    <td className={es.c}><input value={r.prev_app_kt} onChange={(e) => set(idx, { prev_app_kt: e.target.value })} className={num} style={numW} /></td>
+                    <td className={es.c}><input value={r.prev_actual_kt} onChange={(e) => set(idx, { prev_actual_kt: e.target.value })} className={num} style={numW} /></td>
+                    <td className={es.c}><input value={r.abp_kt} onChange={(e) => set(idx, { abp_kt: e.target.value })} className={num} style={numW} /></td>
+                    <td><input value={r.remark} onChange={(e) => set(idx, { remark: e.target.value })} className={cellClass({ text: true })} style={{ minWidth: 200 }} /></td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, idx) => (
-                    <tr key={`${r.plant}-${r.series}`}>
-                      <td style={{ ...TD, fontWeight: 700, textAlign: 'left' }}>{r.plant}</td>
-                      <td style={{ ...TD, textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{r.series_label}</td>
-                      <td style={TD}><input value={r.capacity_kt} onChange={(e) => set(idx, { capacity_kt: e.target.value })} style={cellInput} /></td>
-                      <td style={TD}><input value={r.best_actual_kt} onChange={(e) => set(idx, { best_actual_kt: e.target.value })} style={cellInput} /></td>
-                      <td style={TD}><input value={r.best_year} onChange={(e) => set(idx, { best_year: e.target.value })} style={{ ...cellInput, width: 60, textAlign: 'center' }} /></td>
-                      {meta.history_fys.map((f) => (
-                        <td key={f} style={TD}><input value={r.history[f]} onChange={(e) => setHist(idx, f, e.target.value)} style={cellInput} /></td>
-                      ))}
-                      <td style={TD}><input value={r.prev_app_kt} onChange={(e) => set(idx, { prev_app_kt: e.target.value })} style={cellInput} /></td>
-                      <td style={TD}><input value={r.prev_actual_kt} onChange={(e) => set(idx, { prev_actual_kt: e.target.value })} style={cellInput} /></td>
-                      <td style={TD}><input value={r.abp_kt} onChange={(e) => set(idx, { abp_kt: e.target.value })} style={cellInput} /></td>
-                      <td style={TD}><input value={r.remark} onChange={(e) => set(idx, { remark: e.target.value })} style={{ ...cellInput, width: 200, textAlign: 'left' }} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
+          </Section>
 
-            <div style={{ marginTop: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Footnotes ({fy})</div>
-              {notes.map((t, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                  <input value={t} onChange={(e) => setNotes((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}
-                    style={{ flex: 1, padding: '7px 10px', border: '1px solid #dadce0', borderRadius: 4, fontSize: 13 }} />
-                  <button onClick={() => setNotes((prev) => prev.filter((_, j) => j !== i))}
-                    style={{ padding: '5px 12px', border: 'none', borderRadius: 4, background: '#ef4444', color: '#fff', fontSize: 13, cursor: 'pointer' }}>Del</button>
-                </div>
-              ))}
-              <button onClick={() => setNotes((prev) => [...prev, ''])}
-                style={{ padding: '6px 16px', fontSize: 13, fontWeight: 600, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>+ Add Note</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+          <Section title={`Footnotes (${fy})`} flush={false}>
+            {notes.map((t, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input value={t} aria-label={`Footnote ${i + 1}`} className={wb.input}
+                       onChange={(e) => setNotes((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))} />
+                <button type="button" className={`${wb.btn} ${wb.btnDanger}`}
+                        onClick={() => setNotes((prev) => prev.filter((_, j) => j !== i))}>Delete</button>
+              </div>
+            ))}
+            <button type="button" className={wb.btn} onClick={() => setNotes((prev) => [...prev, ''])}>+ Add Note</button>
+          </Section>
+        </>
+      )}
+    </EntryPage>
   );
 }
 

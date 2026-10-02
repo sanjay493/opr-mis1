@@ -3,7 +3,7 @@
 import RequireEditor from '@/components/RequireEditor';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, entryStyles as es, wb } from '../EntryUI';
 import { API_BASE_URL } from '@/providers/AuthProvider';
 
 // Structured data-entry form for the two "Ready Reckoner" tables (Unit-wise
@@ -23,48 +23,47 @@ import { API_BASE_URL } from '@/providers/AuthProvider';
 
 function Notice({ type, text }) {
   if (!text) return null;
-  const ok = type === 'success';
   return (
-    <div style={{
-      padding: '10px 16px', borderRadius: 6, marginBottom: 14, fontSize: 14,
-      background: ok ? '#f0fdf4' : '#fef2f2',
-      color: ok ? '#166534' : '#991b1b',
-      border: `1px solid ${ok ? '#86efac' : '#fca5a5'}`,
-    }}>
+    <div role={type === 'success' ? 'status' : 'alert'}
+         className={`${wb.alert} ${type === 'success' ? wb.alertSuccess : wb.alertError}`}>
       {text}
     </div>
   );
 }
 
+// Styled to the shared workbench look (--ui-* tokens, see styles/wb.module.css)
 const S = {
   input: {
-    width: '100%', border: '1px solid #dadce0', borderRadius: 4, padding: '5px 7px',
-    fontSize: 12.5, fontFamily: 'inherit', boxSizing: 'border-box',
+    width: '100%', border: '1px solid var(--ui-border)', borderRadius: 4, padding: '6px 8px',
+    font: '13px var(--ui-font)', color: 'var(--ui-text)', boxSizing: 'border-box',
   },
   textarea: {
-    width: '100%', border: '1px solid #dadce0', borderRadius: 4, padding: '5px 7px',
-    fontSize: 12.5, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical', minHeight: 44,
+    width: '100%', border: '1px solid var(--ui-border)', borderRadius: 4, padding: '6px 8px',
+    font: '13px var(--ui-font)', color: 'var(--ui-text)', boxSizing: 'border-box', resize: 'vertical', minHeight: 44,
   },
-  th: { padding: '6px 8px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #dadce0' },
-  td: { padding: '6px 8px', verticalAlign: 'top', borderBottom: '1px solid #f0f4f8' },
+  th: {
+    padding: '8px 10px', textAlign: 'left', fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase',
+    color: 'var(--ui-text-secondary)', background: 'var(--ui-bg-subtle)', borderBottom: '1px solid var(--ui-border)',
+  },
+  td: { padding: '6px 10px', verticalAlign: 'top', borderBottom: '1px solid var(--ui-border-subtle)' },
   addBtn: {
-    padding: '6px 14px', fontSize: 12.5, fontWeight: 600,
-    background: '#eef2ff', color: '#3730a3', border: 'none', borderRadius: 4, cursor: 'pointer',
+    padding: '7px 14px', font: '600 13px var(--ui-font)',
+    background: 'var(--ui-surface)', color: 'var(--ui-primary)', border: '1px dashed var(--ui-primary)', borderRadius: 4, cursor: 'pointer',
   },
   delBtn: {
-    width: 26, height: 26, lineHeight: '24px', textAlign: 'center', padding: 0, fontSize: 14, fontWeight: 700,
-    background: '#fef2f2', color: '#991b1b', border: 'none', borderRadius: 4, cursor: 'pointer',
+    width: 28, height: 28, lineHeight: '26px', textAlign: 'center', padding: 0, fontSize: 14, fontWeight: 700,
+    background: 'none', color: 'var(--ui-text-tertiary)', border: 'none', borderRadius: 4, cursor: 'pointer',
   },
   saveBtn: (saving) => ({
-    padding: '6px 16px', fontSize: 13, fontWeight: 600,
-    background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 4,
-    cursor: saving ? 'not-allowed' : 'pointer',
+    padding: '8px 16px', font: '600 13px var(--ui-font)',
+    background: 'var(--ui-success)', color: '#fff', border: '1px solid var(--ui-success)', borderRadius: 4,
+    opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer',
   }),
   panelHeader: {
-    padding: '12px 16px', backgroundColor: '#f8f9fa',
+    padding: '10px 16px', borderBottom: '1px solid var(--ui-border-subtle)',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
   },
-  panel: { backgroundColor: '#fff', border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' },
+  panel: { backgroundColor: 'var(--ui-surface)', border: '1px solid var(--ui-border)', borderRadius: 'var(--ui-radius)', overflow: 'hidden' },
 };
 
 // Native HTML5 drag-and-drop row reordering (no extra dependency) — drag
@@ -123,7 +122,7 @@ function useRowDrag(setItems) {
 
 function DragHandleCell({ dragHandleProps }) {
   return (
-    <td style={{ padding: '6px 4px', verticalAlign: 'top', borderBottom: '1px solid #f0f4f8', textAlign: 'center', width: 22, cursor: 'grab', color: '#9aa0a6', fontSize: 14 }}
+    <td style={{ padding: '6px 4px', verticalAlign: 'top', borderBottom: '1px solid var(--ui-border-subtle)', textAlign: 'center', width: 22, cursor: 'grab', color: 'var(--ui-text-tertiary)', fontSize: 14 }}
       {...dragHandleProps} title="Drag to reorder">
       ⠿
     </td>
@@ -133,7 +132,7 @@ function DragHandleCell({ dragHandleProps }) {
 function SavedLabel({ savedAt, updatedBy, updatedAt }) {
   if (!savedAt && !updatedAt) return null;
   return (
-    <span style={{ fontSize: 11.5, color: '#5f6368' }}>
+    <span style={{ fontSize: 12, color: 'var(--ui-text-secondary)' }}>
       {savedAt ? `Saved ${savedAt.toLocaleTimeString()}` : `Last updated ${updatedAt}${updatedBy ? ` by ${updatedBy}` : ''}`}
     </span>
   );
@@ -389,32 +388,20 @@ function ReadyReckonerDataEntryPageInner() {
   const current = rows.find(r => r.plant_code === selectedPlant);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
-      <GlobalNavbar />
-
-      <div style={{ flex: 1, overflow: 'auto', maxWidth: 1200, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
-
-        <div style={{ marginBottom: 18 }}>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
-            Ready Reckoner — Unit-wise Capacity &amp; Product Mix
-          </h2>
-          <span style={{ fontSize: 13, color: '#5f6368' }}>
-            Edit the &ldquo;Unit-wise Capacity&rdquo; and &ldquo;Product Mix&rdquo; reference tables shown on each plant&apos;s Ready
-            Reckoner pages at the end of the report. Plain fields only — coloring and bold totals in the report
-            are applied automatically, not typed in here. Not month-scoped &mdash; content here applies to every
-            report until changed again. To replace a plant&apos;s process-flow diagram, use the &ldquo;Replace
-            diagram&rdquo; control on that page in the report preview instead.
-          </span>
-        </div>
-
-        <div style={{
-          display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
-          marginBottom: 18, background: '#fff', border: '1px solid #dadce0',
-          borderRadius: 8, padding: '14px 18px',
-        }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Plant</label>
-          <select value={selectedPlant} onChange={e => setSelectedPlant(e.target.value)}
-            style={{ padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }}>
+    <EntryPage
+      maxWidth={1200}
+      title="Ready Reckoner — Unit-wise Capacity & Product Mix"
+      description={<>
+        Edit the &ldquo;Unit-wise Capacity&rdquo; and &ldquo;Product Mix&rdquo; reference tables shown on each plant&apos;s Ready
+        Reckoner pages at the end of the report. Plain fields only — coloring and bold totals in the report
+        are applied automatically, not typed in here. Not month-scoped &mdash; content here applies to every
+        report until changed again. To replace a plant&apos;s process-flow diagram, use the &ldquo;Replace
+        diagram&rdquo; control on that page in the report preview instead.
+      </>}
+    >
+      <ContextBar actions={loading ? <span className={es.ctxNote}>Loading… ⟳</span> : null}>
+        <Field label="Plant" htmlFor="rr-plant">
+          <select id="rr-plant" className={es.control} value={selectedPlant} onChange={e => setSelectedPlant(e.target.value)}>
             {ispRows.length > 0 && (
               <optgroup label="Integrated Steel Plants">
                 {ispRows.map(r => <option key={r.plant_code} value={r.plant_code}>{r.plant_name}</option>)}
@@ -426,40 +413,32 @@ function ReadyReckonerDataEntryPageInner() {
               </optgroup>
             )}
           </select>
+        </Field>
+      </ContextBar>
 
-          <span style={{ marginLeft: 'auto', fontSize: 13, color: '#5f6368' }}>
-            {loading && 'Loading… ⟳'}
-          </span>
+      <Notice type={status?.type} text={status?.text} />
+
+      {current && (
+        <div key={current.plant_code} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <CapacityEditor
+            plantCode={current.plant_code}
+            initialRows={current.capacity_rows}
+            updatedBy={current.updated_by}
+            updatedAt={current.updated_at}
+          />
+          <ProductMixEditor
+            plantCode={current.plant_code}
+            initialHeaders={current.product_mix_headers}
+            initialRows={current.product_mix_rows}
+            initialCaption={current.product_mix_caption}
+            updatedBy={current.updated_by}
+            updatedAt={current.updated_at}
+          />
         </div>
+      )}
 
-        <Notice type={status?.type} text={status?.text} />
-
-        {current && (
-          <div key={current.plant_code} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <CapacityEditor
-              plantCode={current.plant_code}
-              initialRows={current.capacity_rows}
-              updatedBy={current.updated_by}
-              updatedAt={current.updated_at}
-            />
-            <ProductMixEditor
-              plantCode={current.plant_code}
-              initialHeaders={current.product_mix_headers}
-              initialRows={current.product_mix_rows}
-              initialCaption={current.product_mix_caption}
-              updatedBy={current.updated_by}
-              updatedAt={current.updated_at}
-            />
-          </div>
-        )}
-
-        {!loading && !current && (
-          <div style={{ padding: 40, textAlign: 'center', color: '#5f6368', fontSize: 14 }}>
-            No plants found.
-          </div>
-        )}
-      </div>
-    </div>
+      {!loading && !current && <div className={wb.empty}>No plants found.</div>}
+    </EntryPage>
   );
 }
 

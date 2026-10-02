@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, Loading, cellClass, entryStyles as es } from '../EntryUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -14,24 +14,6 @@ function numOrNull(v) {
   return Number.isNaN(f) ? null : f;
 }
 
-function Notice({ type, text }) {
-  if (!text) return null;
-  const ok = type === 'success';
-  return (
-    <div style={{
-      padding: '10px 16px', borderRadius: 6, margin: '14px 0', fontSize: 14,
-      background: ok ? '#f0fdf4' : '#fef2f2', color: ok ? '#166534' : '#991b1b',
-      border: `1px solid ${ok ? '#86efac' : '#fca5a5'}`,
-    }}>{text}</div>
-  );
-}
-
-const cellInput = {
-  width: 110, padding: '5px 6px', border: '1px solid #dadce0', borderRadius: 4,
-  textAlign: 'right', fontSize: 12.5,
-};
-const TH = { padding: '8px 10px', fontSize: 12, fontWeight: 700, color: '#5f6368', background: '#f8f9fa', borderBottom: '1px solid #dadce0', textAlign: 'left' };
-const TD = { padding: '6px 10px', borderBottom: '1px solid #f1f3f4' };
 const CATEGORY_LABEL = { raw_materials: 'Raw Materials', finished_steel: 'Finished Steel' };
 
 function MarketIntelEntryInner() {
@@ -88,102 +70,84 @@ function MarketIntelEntryInner() {
   let lastCategory = null;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-      {/* html/body are overflow:hidden app-wide (globals.css); let this page scroll while it's mounted. */}
-      <style>{`html, body { overflow-y: auto; overflow-x: hidden; }`}</style>
-      <GlobalNavbar />
-      <div style={{ flex: 1, maxWidth: 1100, margin: '0 auto', padding: '22px 20px', width: '100%', boxSizing: 'border-box' }}>
-        <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
-          Market Intelligence Entry (Pages 2.41 / 2.42)
-        </h2>
-        <span style={{ fontSize: 13, color: '#5f6368' }}>
-          One month at a time — this month&rsquo;s BigMint price series (USD/T) and India macro-economic figures.
-          The report itself shows a rolling 12-month window for prices and a 13-month window (lagged one month,
-          matching how these government/industry stats are published) for the macro table.
-        </span>
+    <EntryPage
+      maxWidth={1100}
+      title="Market Intelligence Entry (Pages 2.41 / 2.42)"
+      description={<>
+        One month at a time — this month&rsquo;s BigMint price series (USD/T) and India macro-economic figures.
+        The report itself shows a rolling 12-month window for prices and a 13-month window (lagged one month,
+        matching how these government/industry stats are published) for the macro table.
+      </>}
+    >
+      <ContextBar actions={<SaveButton dirty={!loading} saving={saving} onClick={save}>Save All</SaveButton>}>
+        <Field label="Report month" htmlFor="mi-month">
+          <input id="mi-month" type="month" className={es.control} value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} />
+        </Field>
+      </ContextBar>
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', margin: '18px 0', border: '1px solid #dadce0', borderRadius: 8, padding: '14px 18px' }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Report Month</label>
-          <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)}
-                 style={{ padding: '6px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 }} />
-          <button onClick={save} disabled={saving || loading}
-            style={{ marginLeft: 'auto', padding: '8px 22px', fontSize: 14, fontWeight: 700, background: !loading ? '#10b981' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 6, cursor: !loading ? 'pointer' : 'not-allowed' }}>
-            {saving ? 'Saving…' : 'Save All'}
-          </button>
-        </div>
+      <Status status={status} />
 
-        <Notice type={status?.type} text={status?.text} />
+      {loading && <Loading />}
 
-        {loading && <div style={{ padding: 40, textAlign: 'center', color: '#5f6368' }}>Loading…</div>}
+      {!loading && (
+        <>
+          <Section title="Movement of Key Prices - International (USD/T)">
+            <table className={es.table}>
+              <thead>
+                <tr>
+                  <th>Series</th>
+                  <th className={es.r}>Value ({reportMonth})</th>
+                </tr>
+              </thead>
+              <tbody>
+                {priceRows.map((r, idx) => {
+                  const showHeader = r.category !== lastCategory;
+                  lastCategory = r.category;
+                  return (
+                    <React.Fragment key={r.series_code}>
+                      {showHeader && (
+                        <tr className={es.subRow}><td colSpan={2}>{CATEGORY_LABEL[r.category] || r.category}</td></tr>
+                      )}
+                      <tr>
+                        <td className={es.itemCell}>{r.label}</td>
+                        <td className={es.r}>
+                          <input value={r.value} onChange={(e) => setPriceRow(idx, { value: e.target.value })} aria-label={r.label}
+                                 className={cellClass({ filled: r.value !== '' })} style={{ width: 120 }} />
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Section>
 
-        {!loading && (
-          <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', margin: '18px 0 8px' }}>
-              Movement of Key Prices - International (USD/T)
-            </div>
-            <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th style={TH}>Series</th>
-                    <th style={{ ...TH, textAlign: 'right' }}>Value ({reportMonth})</th>
+          <Section title="India Macro Economic Indicators">
+            <table className={es.table}>
+              <thead>
+                <tr>
+                  <th>Key Parameter</th>
+                  <th>Unit</th>
+                  <th className={es.r}>Value ({reportMonth})</th>
+                </tr>
+              </thead>
+              <tbody>
+                {macroRows.map((r, idx) => (
+                  <tr key={r.metric_code}>
+                    <td className={es.itemCell}>{r.label}</td>
+                    <td style={{ fontStyle: 'italic', color: 'var(--ui-text-secondary)', fontSize: 12 }}>{r.unit}</td>
+                    <td className={es.r}>
+                      <input value={r.value} onChange={(e) => setMacroRow(idx, { value: e.target.value })} aria-label={r.label}
+                             className={cellClass({ filled: r.value !== '' })} style={{ width: 120 }} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {priceRows.map((r, idx) => {
-                    const showHeader = r.category !== lastCategory;
-                    lastCategory = r.category;
-                    return (
-                      <React.Fragment key={r.series_code}>
-                        {showHeader && (
-                          <tr>
-                            <td colSpan={2} style={{ ...TD, background: '#eff6ff', fontWeight: 700, fontSize: 12 }}>
-                              {CATEGORY_LABEL[r.category] || r.category}
-                            </td>
-                          </tr>
-                        )}
-                        <tr>
-                          <td style={{ ...TD, fontWeight: 600 }}>{r.label}</td>
-                          <td style={{ ...TD, textAlign: 'right' }}>
-                            <input value={r.value} onChange={(e) => setPriceRow(idx, { value: e.target.value })} style={cellInput} />
-                          </td>
-                        </tr>
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', margin: '26px 0 8px' }}>
-              India Macro Economic Indicators
-            </div>
-            <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th style={TH}>Key Parameter</th>
-                    <th style={TH}>Unit</th>
-                    <th style={{ ...TH, textAlign: 'right' }}>Value ({reportMonth})</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {macroRows.map((r, idx) => (
-                    <tr key={r.metric_code}>
-                      <td style={{ ...TD, fontWeight: 600 }}>{r.label}</td>
-                      <td style={{ ...TD, fontStyle: 'italic', color: '#5f6368', fontSize: 12 }}>{r.unit}</td>
-                      <td style={{ ...TD, textAlign: 'right' }}>
-                        <input value={r.value} onChange={(e) => setMacroRow(idx, { value: e.target.value })} style={cellInput} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+                ))}
+              </tbody>
+            </table>
+          </Section>
+        </>
+      )}
+    </EntryPage>
   );
 }
 

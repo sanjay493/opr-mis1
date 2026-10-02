@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage } from '../EntryUI';
 import RequireEditor from '@/components/RequireEditor';
 import { API_BASE_URL } from '@/providers/AuthProvider';
 import { PARAM_TEMPLATES } from '@/lib/technoParamRegistry';
@@ -342,17 +342,11 @@ function BfLargeSnapshotInner() {
   const alertClass = { success: ui.alertSuccess, error: ui.alertError, warning: ui.alertWarning, info: ui.alertWarning };
 
   return (
-    <>
-      <GlobalNavbar />
-      <main className={`${ui.page} ${ui.pageWide}`} style={{ maxWidth: 1320 }}>
-        <div className={ui.pageHeader}>
-          <h1 className={ui.pageTitle}>SAIL Large BFs — Performance Snapshot</h1>
-          <p className={ui.pageLead}>
-            Month and Till Month figures for BSP BF-8, RSP BF-5 and ISP BF-5, in report order. Saves into the
-            same techno data as <Link href="/data-entry/techno-manual">Techno Manual Entry</Link>, so a value
-            entered on either page appears on both, and in the report.
-          </p>
-        </div>
+    <EntryPage
+      maxWidth={1320}
+      title="SAIL Large BFs — Performance Snapshot"
+      description={<>Month and Till Month figures for BSP BF-8, RSP BF-5 and ISP BF-5, in report order. Saves into the same techno data as <Link href="/data-entry/techno-manual">Techno Manual Entry</Link>, so a value entered on either page appears on both, and in the report.</>}
+    >
 
         <div className={s.toolbar}>
           <div className={ui.field} style={{ marginBottom: 0 }}>
@@ -481,8 +475,7 @@ function BfLargeSnapshotInner() {
           <span><span className={`${s.swatch} ${s.swatchDerived}`} />Not entered here — filled automatically from the source shown</span>
           <span>Clearing a box and saving removes that value.</span>
         </div>
-      </main>
-    </>
+    </EntryPage>
   );
 }
 

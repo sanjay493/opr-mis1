@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import { useState, useEffect, useCallback } from 'react';
-import GlobalNavbar from '@/components/GlobalNavbar';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, cellClass, entryStyles as es } from '../EntryUI';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 // SAIL included — techno_data plant="SAIL" unit="General" already exists
@@ -65,15 +65,12 @@ function countChanges(monthVals, tillVals, initMonthVals, initTillVals) {
   return n;
 }
 
-function ChangedInput({ value, onChange, changed, disabled }) {
+function ChangedInput({ value, onChange, changed, disabled, label }) {
   return (
     <input
-      type="number" step="any" disabled={disabled}
-      style={{
-        width: '110px', padding: '6px 8px', fontSize: '11pt', textAlign: 'right',
-        border: `1px solid ${changed ? '#f59e0b' : '#dadce0'}`, borderRadius: '4px',
-        background: disabled ? '#f9fafb' : changed ? '#fffbeb' : '#fff',
-      }}
+      type="number" step="any" disabled={disabled} aria-label={label}
+      className={cellClass({ changed, filled: value !== '' && value != null })}
+      style={{ width: 120 }}
       value={value}
       onChange={onChange}
     />
@@ -147,110 +144,81 @@ function Co2WaterPmManualInner() {
     }
   };
 
-  const selStyle = {
-    padding: '8px 12px', fontSize: '11pt', border: '1px solid #dadce0',
-    borderRadius: '6px', backgroundColor: '#ffffff', color: '#202124', cursor: 'pointer',
-  };
-  const cell = { padding: '8px 12px', fontSize: '10.5pt', borderBottom: '1px solid #e8eaed' };
+  const saveLabel = totalChanges > 0 ? `Save (${totalChanges} change${totalChanges > 1 ? 's' : ''})` : 'Save';
 
   return (
-    // height:100vh + flex column, with the content area its own
-    // flex:1/overflow:auto scroll region below the sticky GlobalNavbar —
-    // same layout techno-manual/page.js uses, rather than an unbounded
-    // minHeight:100vh page that just keeps growing.
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
-      <GlobalNavbar />
-      <div style={{ flex: 1, overflow: 'auto', maxWidth: '760px', margin: '0 auto', padding: '32px', width: '100%', boxSizing: 'border-box' }}>
-        <h1 style={{ fontSize: '20pt', fontWeight: 900, color: '#202124', margin: 0 }}>
-          CO2 / Water / PM — Manual Entry
-        </h1>
-        <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px', marginBottom: '24px' }}>
-          Enter these directly when no EPI report is available yet, or to correct a value — same fields the
-          Coal OMI/EPI report uploads on <a href="/data-entry/techno" style={{ color: '#1a73e8' }}>Techno Upload</a> write to.
-        </p>
+    <EntryPage
+      maxWidth={860}
+      title="CO2 / Water / PM — Manual Entry"
+      description={<>
+        Enter these directly when no EPI report is available yet, or to correct a value — same fields the
+        Coal OMI/EPI report uploads on <a href="/data-entry/techno">Techno Upload</a> write to.
+      </>}
+    >
+      <ContextBar actions={<>
+        {loading && <span className={es.ctxNote}>Loading…</span>}
+        <SaveButton dirty={!loading && totalChanges > 0} saving={saving} onClick={handleSave}>{saveLabel}</SaveButton>
+      </>}>
+        <Field label="Plant" htmlFor="co2-plant">
+          <select id="co2-plant" className={es.control} value={plant} onChange={(e) => setPlant(e.target.value)}>
+            {PLANTS.map((p) => <option key={p}>{p}</option>)}
+          </select>
+        </Field>
+        <Field label="Month" htmlFor="co2-month">
+          <select id="co2-month" className={es.control} value={monthName} onChange={(e) => setMonthName(e.target.value)}>
+            {MONTHS.map((m) => <option key={m}>{m}</option>)}
+          </select>
+          <select className={es.control} value={year} onChange={(e) => setYear(e.target.value)} aria-label="Year">
+            {YEARS.map((y) => <option key={y}>{y}</option>)}
+          </select>
+        </Field>
+      </ContextBar>
 
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
-          padding: '16px 20px', border: '1px solid #dadce0', borderRadius: '8px',
-          backgroundColor: '#f8f9fa', marginBottom: '24px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label style={{ fontSize: '11pt', fontWeight: 600 }}>Plant</label>
-            <select value={plant} onChange={(e) => setPlant(e.target.value)} style={selStyle}>
-              {PLANTS.map((p) => <option key={p}>{p}</option>)}
-            </select>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label style={{ fontSize: '11pt', fontWeight: 600 }}>Month</label>
-            <select value={monthName} onChange={(e) => setMonthName(e.target.value)} style={selStyle}>
-              {MONTHS.map((m) => <option key={m}>{m}</option>)}
-            </select>
-            <select value={year} onChange={(e) => setYear(e.target.value)} style={selStyle}>
-              {YEARS.map((y) => <option key={y}>{y}</option>)}
-            </select>
-          </div>
-          {loading && <span style={{ fontSize: '10.5pt', color: '#5f6368' }}>Loading…</span>}
-        </div>
+      <Status status={status} />
 
-        {status && (
-          <p style={{
-            marginBottom: '16px', fontSize: '11pt',
-            color: status.type === 'error' ? '#d93025' : '#188038',
-          }}>
-            {status.text}
-          </p>
-        )}
-
-        <div style={{ border: '1px solid #dadce0', borderRadius: '8px', overflow: 'hidden', marginBottom: '20px' }}>
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#e8f0fe' }}>
-                <th style={{ ...cell, textAlign: 'left', fontWeight: 700, color: '#174ea6' }}>Parameter</th>
-                <th style={{ ...cell, textAlign: 'left', fontWeight: 700, color: '#174ea6' }}>Unit</th>
-                <th style={{ ...cell, textAlign: 'right', fontWeight: 700, color: '#174ea6' }}>{monthName} (Month)</th>
-                <th style={{ ...cell, textAlign: 'right', fontWeight: 700, color: '#174ea6' }}>Till Month</th>
+      <Section title={`CO2 / Water / PM — ${plant}, ${monthName} ${year}`} sub="Edited values are highlighted until saved.">
+        <table className={es.table}>
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Unit</th>
+              <th className={es.r}>{monthName} (Month)</th>
+              <th className={es.r}>Till Month</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PARAMS.map((p) => (
+              <tr key={p.key}>
+                <td className={es.itemCell}>{p.label}</td>
+                <td style={{ color: 'var(--ui-text-secondary)' }}>{p.unit}</td>
+                <td className={es.r}>
+                  <ChangedInput
+                    value={monthVals[p.key] ?? ''}
+                    disabled={saving}
+                    label={`${p.label} month`}
+                    changed={(monthVals[p.key] ?? '') !== (initMonthVals[p.key] ?? '')}
+                    onChange={(e) => setMonthVals((v) => ({ ...v, [p.key]: e.target.value }))}
+                  />
+                </td>
+                <td className={es.r}>
+                  <ChangedInput
+                    value={tillVals[p.key] ?? ''}
+                    disabled={saving}
+                    label={`${p.label} till month`}
+                    changed={(tillVals[p.key] ?? '') !== (initTillVals[p.key] ?? '')}
+                    onChange={(e) => setTillVals((v) => ({ ...v, [p.key]: e.target.value }))}
+                  />
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {PARAMS.map((p, i) => (
-                <tr key={p.key} style={{ backgroundColor: i % 2 === 1 ? '#f8f9fa' : '#fff' }}>
-                  <td style={cell}>{p.label}</td>
-                  <td style={{ ...cell, color: '#5f6368' }}>{p.unit}</td>
-                  <td style={{ ...cell, textAlign: 'right' }}>
-                    <ChangedInput
-                      value={monthVals[p.key] ?? ''}
-                      disabled={saving}
-                      changed={(monthVals[p.key] ?? '') !== (initMonthVals[p.key] ?? '')}
-                      onChange={(e) => setMonthVals((v) => ({ ...v, [p.key]: e.target.value }))}
-                    />
-                  </td>
-                  <td style={{ ...cell, textAlign: 'right' }}>
-                    <ChangedInput
-                      value={tillVals[p.key] ?? ''}
-                      disabled={saving}
-                      changed={(tillVals[p.key] ?? '') !== (initTillVals[p.key] ?? '')}
-                      onChange={(e) => setTillVals((v) => ({ ...v, [p.key]: e.target.value }))}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
+      </Section>
 
-        <button
-          onClick={handleSave}
-          disabled={saving || loading || totalChanges === 0}
-          style={{
-            padding: '10px 24px', fontSize: '11pt', fontWeight: 700, border: 'none', borderRadius: '6px',
-            backgroundColor: saving ? '#9aa0a6' : totalChanges === 0 ? '#9aa0a6' : '#1a73e8', color: '#fff',
-            cursor: saving || loading || totalChanges === 0 ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {saving ? 'Saving…' : totalChanges > 0 ? `Save (${totalChanges} change${totalChanges > 1 ? 's' : ''})` : 'Save'}
-        </button>
+      <div className={es.foot}>
+        <SaveButton dirty={!loading && totalChanges > 0} saving={saving} onClick={handleSave}>{saveLabel}</SaveButton>
       </div>
-    </div>
+    </EntryPage>
   );
 }
 
