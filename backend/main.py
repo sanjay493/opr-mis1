@@ -4475,6 +4475,47 @@ async def list_production_fys():
     }
 
 
+# Items whose SAIL row on the Month-wise Production report is the sum of the
+# 8 plants, matching the PDF trend pages (page7_13 TREND_PAGES 9/10/12 sum
+# _SAIL_8 via _agg_months; plants that never report an item, e.g. ASP/SSP/
+# VISL for Hot Metal, just contribute nothing).
+_SAIL_SUM_ITEMS = ("Hot Metal", "Total Crude Steel", "Saleable Steel")
+
+
+def _fill_sail_sum_rows(data: dict, months: list) -> None:
+    """Set data['SAIL'][item] (actual and plan) for _SAIL_SUM_ITEMS to the
+    live sum of the 8 plants for every month any of them reported. The
+    separately stored 'SAIL' production rows only exist for a few months and
+    go stale once a plant's figure is revised, so they are used only for
+    months where no plant reported at all. Mutates `data` in place."""
+    for item in _SAIL_SUM_ITEMS:
+        stored = data.get("SAIL", {}).get(item, {"actual": {}, "plan": {}})
+        merged = {"actual": {}, "plan": {}}
+        for kind in ("actual", "plan"):
+            for m in months:
+                vals = [data.get(p, {}).get(item, {}).get(kind, {}).get(m) for p in _FS_SAIL_8]
+                if any(v is not None for v in vals):
+                    merged[kind][m] = sum(v for v in vals if v is not None)
+                elif stored[kind].get(m) is not None:
+                    merged[kind][m] = stored[kind][m]
+        if merged["actual"] or merged["plan"]:
+            data.setdefault("SAIL", {})[item] = merged
+
+
+def _fill_sail_fs_plan(data: dict, months: list) -> None:
+    """Finished Steel's SAIL plan: live sum of the 8 plants for months where
+    all of them have a plan figure, else the stored SAIL plan — the same rule
+    the Finished Steel actual already follows (see _production_fy_data)."""
+    live = {}
+    for m in months:
+        vals = [data.get(p, {}).get("Finished Steel", {}).get("plan", {}).get(m) for p in _FS_SAIL_8]
+        if all(v is not None for v in vals):
+            live[m] = sum(vals)
+    if live:
+        fs = data.setdefault("SAIL", {}).setdefault("Finished Steel", {"actual": {}, "plan": {}})
+        fs["plan"].update(live)
+
+
 def _production_fy_data(fy_start: int) -> dict:
     """Month-wise production for a financial year: all plants, all items,
     actual and plan side by side. Shared by the JSON endpoint and the
@@ -4516,6 +4557,11 @@ def _production_fy_data(fy_start: int) -> dict:
     if "SAIL" in data or _fs_live:
         sail_fs = data.setdefault("SAIL", {}).setdefault("Finished Steel", {"actual": {}, "plan": {}})
         sail_fs["actual"].update(_fs_live)
+
+    _fill_sail_fs_plan(data, months)
+
+    # Hot Metal / Crude Steel / Saleable Steel: SAIL = sum of the 8 plants.
+    _fill_sail_sum_rows(data, months)
 
     def plant_key(p):
         try:
