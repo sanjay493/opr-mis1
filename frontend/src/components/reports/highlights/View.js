@@ -105,6 +105,85 @@ const fyOfMonth = (m) => {
 const shiftYear = (m, delta) => `${Number(m.slice(0, 4)) + delta}${m.slice(4)}`;
 const fyLabel = (y) => `${y}-${String(y + 1).slice(2)}`;
 
+// ── Records helpers ─────────────────────────────────────────────────────────
+// Items reported for a records scope. Single-plant scopes report every
+// unit/item of that plant (BF#1, SMS-2, URM …); group scopes carry only the
+// summary items. Friendly labels are used where an item matches the summary
+// list, raw names otherwise.
+const recordItems = (records, scopeKey) => {
+  const names = records?.[scopeKey]?.items;
+  if (!names || !names.length) return ITEMS;
+  return names.map(name => ITEMS.find(i => i.key === name) || { label: name, key: name });
+};
+
+// Best-ever records for a scope:
+// rows[itemKey] = { month, quarter, half, fy, cy }, each
+// { best, second } where best/second = {period, total, end} | null —
+// end = last month of the record period, used to flag fresh records.
+// The per-period top-2 sets from the API always contain the global #1 and
+// #2 (the global #2 is either the same period's runner-up or another
+// period's #1), so sorting their union gives both.
+const buildRecordRows = (records, scopeKey, items) => {
+  const scope = records?.[scopeKey];
+  if (!scope) return null;
+  const qEnd = (fy, q) => (q === 4 ? `${fy + 1}-03` : `${fy}-${String(q * 3 + 3).padStart(2, '0')}`);
+  const top2 = (arr) => {
+    const sorted = [...arr].sort((a, b) => (b.total ?? -Infinity) - (a.total ?? -Infinity));
+    return { best: sorted[0] ?? null, second: sorted[1] ?? null };
+  };
+  const out = {};
+  items.forEach(({ key }) => {
+    const monFlat = Object.values(scope.cal_months?.[key] || {}).flat()
+      .filter(r => r.total != null)
+      .map(r => ({ period: r.period, total: r.total, end: r.month }));
+
+    const qFlat = Object.entries(scope.fy_quarters?.[key] || {}).flatMap(([label, rows]) =>
+      (rows || []).filter(r => r.total != null).map(r => ({
+        period: `${r.period} ${label}`,
+        total: r.total,
+        end: qEnd(r.fy_start, Number(label[1])),
+      })));
+
+    const hFlat = Object.entries(scope.fy_halves?.[key] || {}).flatMap(([label, rows]) =>
+      (rows || []).filter(r => r.total != null).map(r => ({
+        period: `${label} ${r.period}`,
+        total: r.total,
+        end: label.startsWith('H1') ? `${r.fy_start}-09` : `${r.fy_start + 1}-03`,
+      })));
+
+    const fyRows = (scope.top5_fy?.[key] || [])
+      .map(r => ({ ...r, end: `${parseInt(r.period, 10) + 1}-03` }));
+    const cyRows = (scope.top5_cy?.[key] || [])
+      .map(r => ({ ...r, end: `${r.period}-12` }));
+
+    out[key] = {
+      month:   top2(monFlat),
+      quarter: top2(qFlat),
+      half:    top2(hFlat),
+      fy:      { best: fyRows[0] ?? null, second: fyRows[1] ?? null },
+      cy:      { best: cyRows[0] ?? null, second: cyRows[1] ?? null },
+    };
+  });
+  return out;
+};
+
+// Flat list of best-ever records (one per item × period kind)
+const buildRecordList = (rows, items) => {
+  if (!rows) return [];
+  const list = [];
+  items.forEach(({ label, key }) => {
+    RECORD_KINDS.forEach(({ id, label: kind, order }) => {
+      const rec = rows[key]?.[id];
+      if (rec?.best) list.push({ item: label, kind, order, best: rec.best, second: rec.second });
+    });
+  });
+  return list;
+};
+
+// Records scope that matches the top View selector (no 3-unit group exists
+// in the records API, so Unit-wise falls back to all 8 plants).
+const VIEW_RECORD_SCOPE = { SAIL5: 'sail5', SAIL8: 'all8', PLANT: 'sail5', UNIT: 'all8' };
+
 export default function HighlightsPage() {
   const [fys, setFys]             = useState([]);
   const [view, setView]           = useState('SAIL5');
@@ -339,66 +418,9 @@ export default function HighlightsPage() {
   };
   const fmtPct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`);
 
-  // ── Items shown in the Records table for the selected scope ────────────────
-  // Single-plant scopes report every unit/item of that plant (BF#1, SMS-2,
-  // URM …); group scopes carry only the summary items. Friendly labels are
-  // used where an item matches the summary list, raw names otherwise.
-  const scopeItems = useMemo(() => {
-    const names = records?.[recordScope]?.items;
-    if (!names || !names.length) return ITEMS;
-    return names.map(name => ITEMS.find(i => i.key === name) || { label: name, key: name });
-  }, [records, recordScope]);
-
-  // ── Best-ever records for the selected scope ────────────────────────────────
-  // recordRows[itemKey] = { month, quarter, half, fy, cy }, each
-  // { best, second } where best/second = {period, total, end} | null —
-  // end = last month of the record period, used to flag fresh records.
-  // The per-period top-2 sets from the API always contain the global #1 and
-  // #2 (the global #2 is either the same period's runner-up or another
-  // period's #1), so sorting their union gives both.
-  const recordRows = useMemo(() => {
-    const scope = records?.[recordScope];
-    if (!scope) return null;
-    const qEnd = (fy, q) => (q === 4 ? `${fy + 1}-03` : `${fy}-${String(q * 3 + 3).padStart(2, '0')}`);
-    const top2 = (arr) => {
-      const sorted = [...arr].sort((a, b) => (b.total ?? -Infinity) - (a.total ?? -Infinity));
-      return { best: sorted[0] ?? null, second: sorted[1] ?? null };
-    };
-    const out = {};
-    scopeItems.forEach(({ key }) => {
-      const monFlat = Object.values(scope.cal_months?.[key] || {}).flat()
-        .filter(r => r.total != null)
-        .map(r => ({ period: r.period, total: r.total, end: r.month }));
-
-      const qFlat = Object.entries(scope.fy_quarters?.[key] || {}).flatMap(([label, rows]) =>
-        (rows || []).filter(r => r.total != null).map(r => ({
-          period: `${r.period} ${label}`,
-          total: r.total,
-          end: qEnd(r.fy_start, Number(label[1])),
-        })));
-
-      const hFlat = Object.entries(scope.fy_halves?.[key] || {}).flatMap(([label, rows]) =>
-        (rows || []).filter(r => r.total != null).map(r => ({
-          period: `${label} ${r.period}`,
-          total: r.total,
-          end: label.startsWith('H1') ? `${r.fy_start}-09` : `${r.fy_start + 1}-03`,
-        })));
-
-      const fyRows = (scope.top5_fy?.[key] || [])
-        .map(r => ({ ...r, end: `${parseInt(r.period, 10) + 1}-03` }));
-      const cyRows = (scope.top5_cy?.[key] || [])
-        .map(r => ({ ...r, end: `${r.period}-12` }));
-
-      out[key] = {
-        month:   top2(monFlat),
-        quarter: top2(qFlat),
-        half:    top2(hFlat),
-        fy:      { best: fyRows[0] ?? null, second: fyRows[1] ?? null },
-        cy:      { best: cyRows[0] ?? null, second: cyRows[1] ?? null },
-      };
-    });
-    return out;
-  }, [records, recordScope, scopeItems]);
+  // ── Records for the spotlight's scope ───────────────────────────────────────
+  const scopeItems = useMemo(() => recordItems(records, recordScope), [records, recordScope]);
+  const recordRows = useMemo(() => buildRecordRows(records, recordScope, scopeItems), [records, recordScope, scopeItems]);
 
   // Months between the record period's end and the newest data month;
   // a record is "just set" when its period ended within the last 3 months.
@@ -489,18 +511,14 @@ export default function HighlightsPage() {
   }, [ytdMonthList, singleGroup, groups, aggregate]);
 
   // ── Records: just-set count and most recent records (spotlight) ────────────
-  const recordList = useMemo(() => {
-    if (!recordRows) return [];
-    const list = [];
-    scopeItems.forEach(({ label, key }) => {
-      RECORD_KINDS.forEach(({ id, label: kind, order }) => {
-        const rec = recordRows[key]?.[id];
-        if (rec?.best) list.push({ item: label, kind, order, best: rec.best, second: rec.second });
-      });
-    });
-    return list;
-  }, [recordRows, scopeItems]);
-  const freshRecords = recordList.filter(r => isFreshRecord(r.best));
+  const recordList = useMemo(() => buildRecordList(recordRows, scopeItems), [recordRows, scopeItems]);
+  // The "Records just set" card follows the top View selector, not the spotlight's scope.
+  const tileScope = VIEW_RECORD_SCOPE[view];
+  const tileRecordList = useMemo(() => {
+    const items = recordItems(records, tileScope);
+    return buildRecordList(buildRecordRows(records, tileScope, items), items);
+  }, [records, tileScope]);
+  const freshRecords = tileRecordList.filter(r => isFreshRecord(r.best));
   const spotlight = [...recordList]
     .sort((a, b) => (b.best.end || '').localeCompare(a.best.end || '') || a.order - b.order)
     .slice(0, 4);
@@ -524,6 +542,8 @@ export default function HighlightsPage() {
   );
   const unitLabel = inTonnes ? 'T' : "'000 T";
   const scopeLabel = RECORD_SCOPES.find(x => x.key === recordScope)?.label;
+  const tileScopeLabel = RECORD_SCOPES.find(x => x.key === tileScope)?.label;
+  const changeView = (v) => { setView(v); setRecordScope(VIEW_RECORD_SCOPE[v]); };
   const groupCols = singleGroup ? 5 : 4;
   const ytdCols = ytd ? 3 : 0;
 
@@ -546,7 +566,7 @@ export default function HighlightsPage() {
 
         {/* ── Toolbar ── */}
         <div className={`${css.toolbar} ${css.noPrint}`}>
-          {seg(VIEWS, view, setView)}
+          {seg(VIEWS, view, changeView)}
           <span className={css.toolLabel}>Period</span>
           <select className={css.select} value={periodType} onChange={e => setPeriodType(e.target.value)}>
             {PERIOD_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -663,7 +683,7 @@ export default function HighlightsPage() {
             <div className={css.card}>
               <div className={css.cardHead}>
                 <div>
-                  <div className={css.eyebrow}>Records just set · {scopeLabel}</div>
+                  <div className={css.eyebrow}>Records just set · {tileScopeLabel}</div>
                   <h2 className={css.cardTitle}>{freshRecords.length} new record{freshRecords.length === 1 ? '' : 's'}</h2>
                 </div>
                 <span className={`${css.cardIcon} ${css.iconAmber}`}>🏆</span>
