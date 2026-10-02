@@ -33,44 +33,91 @@ const statusOf = (p) => (p == null ? null
   : p >= 95 ? { text: 'Near plan', dot: s.dotA, color: '#f9ab00' }
   : { text: 'Behind plan', dot: s.dotR, color: 'var(--ui-danger)' });
 
-// Tiny trend line for a KPI tile
-function Sparkline({ values }) {
-  const pts = values.filter(v => v != null);
-  if (pts.length < 2) return null;
-  const W = 110, H = 32, min = Math.min(...pts), max = Math.max(...pts), span = max - min || 1;
-  const step = W / (values.length - 1);
-  const d = values.map((v, i) => (v == null ? null : `${(i * step).toFixed(1)},${(H - 3 - ((v - min) / span) * (H - 6)).toFixed(1)}`))
-    .filter(Boolean).join(' ');
-  const up = pts[pts.length - 1] >= pts[pts.length - 2];
+// 12-month trend for a KPI tile, from production_table / production_plan_table
+// (SAIL-5 totals via /api/production-fy): actual as a solid line, AAP plan
+// dashed on the same scale, the selected month marked. Hovering a month
+// shows its actual and plan. Months without a complete SAIL-5 figure are gaps.
+function TrendChart({ points, label }) {
+  const W = 220, H = 56, PADX = 4, TOP = 6, BOT = 14;
+  const vals = points.flatMap(p => [p.actual, p.plan]).filter(v => v != null);
+  if (points.filter(p => p.actual != null).length < 2) {
+    return <div className={s.trendEmpty}>Not enough monthly data for a trend</div>;
+  }
+  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  const step = (W - PADX * 2) / Math.max(points.length - 1, 1);
+  const x = (i) => PADX + i * step;
+  const y = (v) => TOP + (1 - (v - min) / span) * (H - TOP - BOT);
+  // polyline segments, broken at missing months
+  const segs = (key) => {
+    const out = [];
+    let cur = [];
+    points.forEach((p, i) => {
+      if (p[key] == null) { if (cur.length) out.push(cur); cur = []; return; }
+      cur.push(`${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`);
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  };
+  const last = points.length - 1;
+  const sel = points[last];
   return (
-    <svg className={s.spark} width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
-      <polyline points={d} fill="none" stroke={up ? '#188038' : '#1a73e8'} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    <svg className={s.trend} viewBox={`0 0 ${W} ${H}`} role="img"
+         aria-label={`${label}: monthly actual vs AAP, ${points[0].month} to ${sel.month}`}>
+      {segs('plan').map((sg, i) => (
+        <polyline key={`p${i}`} points={sg.join(' ')} fill="none" stroke="#9aa0a6" strokeWidth="1.2" strokeDasharray="3 3" />
+      ))}
+      {segs('actual').map((sg, i) => (
+        sg.length > 1
+          ? <polyline key={`a${i}`} points={sg.join(' ')} fill="none" stroke="#1a73e8" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          : <circle key={`a${i}`} cx={sg[0].split(',')[0]} cy={sg[0].split(',')[1]} r="1.6" fill="#1a73e8" />
+      ))}
+      {sel.actual != null && <circle cx={x(last)} cy={y(sel.actual)} r="3.2" fill="#1a73e8" stroke="#fff" strokeWidth="1.5" />}
+      <text x={PADX} y={H - 2} className={s.trendLbl}>{points[0].short}</text>
+      <text x={W - PADX} y={H - 2} textAnchor="end" className={s.trendLbl}>{sel.short}</text>
+      {points.map((p, i) => (
+        <rect key={p.month} x={x(i) - step / 2} y="0" width={step} height={H - BOT} fill="transparent">
+          <title>{`${p.short}: actual ${fmt(p.actual)}${p.plan != null ? ` · AAP ${fmt(p.plan)}` : ''} ('000 T)`}</title>
+        </rect>
+      ))}
     </svg>
   );
 }
 
 export default function HomePage() {
-  const [fyData, setFyData] = useState({});   // fy_start -> /api/production-fy response
+  const [fys, setFys] = useState([]);         // [{fy_start, label}], newest first
+  const [fy, setFy] = useState(null);         // selected financial year (fy_start)
+  const [fyData, setFyData] = useState({});   // fy_start -> /api/production-fy response (cache)
   const [error, setError] = useState(null);
-  const [month, setMonth] = useState(null);   // selected YYYY-MM (default: latest complete month)
+  const [month, setMonth] = useState(null);   // selected YYYY-MM (default: latest complete month of the FY)
 
-  // Current and previous FY (previous one gives MoM for April and a 12-month trend)
   useEffect(() => {
     (async () => {
       try {
-        const fys = (await (await fetch(`${API}/api/production-fys`)).json()).fys || [];
-        if (!fys.length) throw new Error('no financial years with data');
-        const latest = fys[0].fy_start;
-        const loaded = await Promise.all([latest, latest - 1].map(async fy => {
-          const r = await fetch(`${API}/api/production-fy?fy_start=${fy}`);
-          return [fy, r.ok ? await r.json() : null];
-        }));
-        setFyData(Object.fromEntries(loaded));
+        const list = (await (await fetch(`${API}/api/production-fys`)).json()).fys || [];
+        if (!list.length) throw new Error('no financial years with data');
+        setFys(list);
+        setFy(list[0].fy_start);
       } catch (e) {
         setError(`Could not load production data: ${e.message}`);
       }
     })();
   }, []);
+
+  // The selected FY and the one before it: the previous FY gives MoM for
+  // April and fills the 12-month trend for early-FY months. Cached per FY.
+  useEffect(() => {
+    if (fy == null) return;
+    const need = [fy, fy - 1].filter(y => !(y in fyData) && fys.some(f => f.fy_start === y));
+    if (!need.length) return;
+    let cancelled = false;
+    Promise.all(need.map(async y => {
+      const r = await fetch(`${API}/api/production-fy?fy_start=${y}`);
+      return [y, r.ok ? await r.json() : null];
+    }))
+      .then(loaded => { if (!cancelled) setFyData(prev => ({ ...prev, ...Object.fromEntries(loaded) })); })
+      .catch(e => { if (!cancelled) setError(`Could not load production data: ${e.message}`); });
+    return () => { cancelled = true; };
+  }, [fy, fys, fyData]);
 
   // value(plant, item, kind, month) from the loaded FY datasets
   const value = useMemo(() => (plant, item, kind, m) => {
@@ -84,15 +131,18 @@ export default function HomePage() {
     return vals.some(v => v == null) ? null : vals.reduce((a, v) => a + v, 0);
   }, [value]);
 
-  // Months (both FYs, oldest first) where all 5 plants reported hot metal
-  const months = useMemo(() => Object.keys(fyData).map(Number).sort()
-    .flatMap(fy => fyData[fy]?.months || [])
-    .filter(m => sail5('Hot Metal', 'actual', m) != null), [fyData, sail5]);
+  // Selectable months: the chosen FY's months where all 5 plants reported hot metal
+  const months = useMemo(() => (fy == null ? [] : (fyData[fy]?.months || [])
+    .filter(m => sail5('Hot Metal', 'actual', m) != null)), [fy, fyData, sail5]);
 
   const sel = month && months.includes(month) ? month : months[months.length - 1];
-  const selIdx = months.indexOf(sel);
-  const prev = selIdx > 0 ? months[selIdx - 1] : null;
-  const trend = months.slice(Math.max(0, selIdx - 11), selIdx + 1);
+  // Calendar months: the one before `sel`, and the 12 ending at `sel`
+  const shift = (m, n) => {
+    const d = new Date(Number(m.slice(0, 4)), Number(m.slice(5)) - 1 + n, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const prev = sel ? shift(sel, -1) : null;
+  const trend = sel ? Array.from({ length: 12 }, (_, i) => shift(sel, i - 11)) : [];
 
   const tiles = sel ? TILES.map(t => {
     const actual = sail5(t.key, 'actual', sel);
@@ -102,7 +152,7 @@ export default function HomePage() {
       ...t, actual,
       ach: actual != null && plan ? (actual / plan) * 100 : null,
       mom: actual != null && last ? ((actual - last) / last) * 100 : null,
-      trend: trend.map(m => sail5(t.key, 'actual', m)),
+      trend: trend.map(m => ({ month: m, short: shortMonth(m), actual: sail5(t.key, 'actual', m), plan: sail5(t.key, 'plan', m) })),
     };
   }) : [];
 
@@ -126,7 +176,7 @@ export default function HomePage() {
   const totHm = tot('hm'), totHmPlan = tot('hmPlan'), totCs = tot('cs');
   const totAch = totHmPlan ? (totHm / totHmPlan) * 100 : null;
 
-  const loading = !error && !Object.keys(fyData).length;
+  const loading = !error && (fy == null || !(fy in fyData));
 
   return (
     <main className={s.main}>
@@ -154,15 +204,25 @@ export default function HomePage() {
           <span><i className={s.statusDot} />Showing <span className={s.statusStrong}>{sel ? monthName(sel) : '—'}</span>{sel && ` · FY ${fyLabel(fyOf(sel))}`}</span>
           <span className={s.statusSep} />
           <span>Scope: 5 integrated steel plants (BSP, DSP, RSP, BSL, ISP)</span>
-          {months.length > 0 && (
+          {fys.length > 0 && (
             <>
               <span className={s.statusSep} />
-              <label>Month{' '}
-                <select className={s.select} value={sel} onChange={e => setMonth(e.target.value)}>
-                  {[...months].reverse().map(m => <option key={m} value={m}>{monthName(m)}</option>)}
+              <label>FY{' '}
+                <select className={s.select} value={fy ?? ''} onChange={e => { setFy(Number(e.target.value)); setMonth(null); }}>
+                  {fys.map(f => <option key={f.fy_start} value={f.fy_start}>{f.label}</option>)}
                 </select>
               </label>
             </>
+          )}
+          {months.length > 0 && (
+            <label>Month{' '}
+              <select className={s.select} value={sel} onChange={e => setMonth(e.target.value)}>
+                {[...months].reverse().map(m => <option key={m} value={m}>{monthName(m)}</option>)}
+              </select>
+            </label>
+          )}
+          {!loading && fy != null && fy in fyData && months.length === 0 && (
+            <span className={s.muted}>No complete month in FY {fyLabel(fy)}</span>
           )}
         </div>
 
@@ -184,8 +244,9 @@ export default function HomePage() {
                     {t.mom == null
                       ? <span className={`${s.delta} ${s.muted}`}>no previous month</span>
                       : <span className={`${s.delta} ${t.mom >= 0 ? s.up : s.down}`}>{t.mom >= 0 ? '↗ +' : '↘ '}{t.mom.toFixed(1)}% MoM</span>}
-                    <Sparkline values={t.trend} />
+                    <span className={s.trendKey}><i className={s.keyActual} />Actual <i className={s.keyPlan} />AAP</span>
                   </div>
+                  <TrendChart points={t.trend} label={t.label} />
                 </div>
               ))}
             </section>
