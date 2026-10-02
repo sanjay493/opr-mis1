@@ -166,6 +166,7 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
         'fy_halves':    {i: {} for i in items},
         'top5_fy':      {i: [] for i in items},
         'top5_cy':      {i: [] for i in items},
+        'top5_months':  {i: [] for i in items},
         'best_month':   {},
         'best_quarter': {},
     }
@@ -182,6 +183,7 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
         GROUP BY item_name, report_month
         ORDER BY item_name, mon_num, total DESC
     """, args)
+    all_months = {}
     for item, mon_num, rm, total in cur.fetchall():
         cal = grp['cal_months'].get(item)
         if cal is None or total is None:
@@ -190,6 +192,17 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
         if len(rows) < 2:
             rows.append({'period': _mon_label(rm), 'month': rm,
                          'total': round(total, 3)})
+        all_months.setdefault(item, []).append((total, rm))
+
+    # Top 5 single months ever (any calendar month) — the /records page's
+    # all-time podium. Not derivable from cal_months' top-2-per-month set:
+    # a month name can hold more than two of the overall top 5.
+    for item, rows in all_months.items():
+        rows.sort(reverse=True)
+        grp['top5_months'][item] = [
+            {'period': _mon_label(rm), 'month': rm, 'total': round(t, 3)}
+            for t, rm in rows[:5]
+        ]
 
     # ── FY quarter / half / top-5 FY / top-5 CY. Tonnage items are a
     # plain sum; rate items (Oven Pushing, COB#*) are the sum of each
