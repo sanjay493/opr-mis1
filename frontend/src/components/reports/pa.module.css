@@ -1,0 +1,69 @@
+/* Shared pieces for the Production Reports tabs (Stitch redesign):
+   KPI cards, chart cards, small deltas, plant chips, data tables. */
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.kpi {
+  padding: 14px 16px; background: var(--ui-surface);
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius);
+}
+.kpiHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.kpiLabel { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-secondary); }
+.kpiValue { margin-top: 6px; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ui-text); }
+.kpiUnit { margin-left: 4px; font-size: 12px; font-weight: 600; color: var(--ui-text-tertiary); }
+.kpiFoot { margin-top: 4px; font-size: 12px; color: var(--ui-text-secondary); }
+.kpiBar { height: 4px; margin-top: 10px; border-radius: 2px; background: var(--ui-border-subtle); overflow: hidden; }
+.kpiBar span { display: block; height: 100%; border-radius: 2px; }
+
+.card {
+  margin-bottom: 16px; background: var(--ui-surface);
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius); overflow: hidden;
+}
+.cardHead {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid var(--ui-border-subtle);
+}
+.cardTitle { margin: 0; font-size: 14px; font-weight: 700; color: var(--ui-text); }
+.cardSub { margin: 2px 0 0; font-size: 12px; color: var(--ui-text-secondary); }
+.cardBody { padding: 12px 16px 14px; }
+.chart { width: 100%; height: 300px; }
+.note { padding: 8px 16px 12px; font-size: 11.5px; color: var(--ui-text-tertiary); }
+
+.pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.pillUp { background: var(--ui-success-bg); color: var(--ui-success); }
+.pillDown { background: var(--ui-danger-bg); color: var(--ui-danger); }
+.pillFlat { background: var(--ui-bg-subtle); color: var(--ui-text-secondary); }
+.delta { display: block; font-size: 10.5px; font-weight: 600; }
+.up { color: var(--ui-success); }
+.down { color: var(--ui-danger); }
+.muted { color: var(--ui-text-tertiary); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+.chipsLabel { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-tertiary); margin-right: 4px; }
+.chip {
+  padding: 4px 11px; border-radius: 999px; cursor: pointer;
+  font: 600 12px var(--ui-font); color: var(--ui-text-secondary);
+  background: var(--ui-surface); border: 1px solid var(--ui-border);
+}
+.chip:hover { border-color: var(--ui-primary); color: var(--ui-primary); }
+.chipOn { background: var(--ui-primary); border-color: var(--ui-primary); color: #fff; }
+.chipOn:hover { color: #fff; }
+
+/* Dense data table with sticky header + first column */
+.tableScroll { overflow: auto; max-height: calc(100vh - 300px); }
+.table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.table th {
+  position: sticky; top: 0; z-index: 2; padding: 8px 12px; text-align: right; white-space: nowrap;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ui-text-secondary); background: var(--ui-bg-subtle); border-bottom: 1px solid var(--ui-border);
+}
+.table td { padding: 7px 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--ui-border-subtle); }
+.table th:first-child, .table td:first-child {
+  position: sticky; left: 0; text-align: left; background: var(--ui-surface); border-right: 1px solid var(--ui-border-subtle);
+}
+.table th:first-child { z-index: 3; background: var(--ui-bg-subtle); }
+.table tbody tr:hover td { background: #fafbfc; }
+.rowHi td, .rowHi td:first-child { background: var(--ui-primary-subtle); }
+.colTotal { font-weight: 700; color: var(--ui-primary); background: #f6f9fe; }
+.table th.colTotal { color: var(--ui-primary); background: #eef3fd; }
+.empty { color: #c4c7c5; }
+.ytdTag { margin-left: 6px; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; background: var(--ui-warning-bg); color: var(--ui-warning); }

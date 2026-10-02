@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ReportPage, FilterBar, Field, Status, Toggle, Empty, entryStyles as es, reportStyles as rs, wb } from '../ReportUI';
+import pa from '../pa.module.css';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -38,6 +39,19 @@ const cellBase = {
   borderBottom: '1px solid #e8eaed',
   whiteSpace: 'nowrap',
 };
+const HEAD_CELL = {
+  position: 'sticky', top: 0, zIndex: 2, backgroundColor: '#f8f9fa', textAlign: 'right',
+  fontSize: '10.5px', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#5f6368',
+  borderBottom: '1px solid #dadce0',
+};
+
+// Actual as a % of the AAP plan, shown under a value when "% of plan" is on
+function PctOfPlan({ actual, plan }) {
+  if (actual == null || !plan) return null;
+  const p = (actual / plan) * 100;
+  const color = p >= 100 ? '#188038' : p >= 95 ? '#b06000' : '#d93025';
+  return <span style={{ display: 'block', fontSize: '10px', fontWeight: 600, color }}>{p.toFixed(1)}%</span>;
+}
 
 export default function ProductionFYPage() {
   const [fys, setFys] = useState([]);
@@ -47,6 +61,25 @@ export default function ProductionFYPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(null); // 'excel' | 'pdf' | null
+  const [showPct, setShowPct] = useState(false);         // "% of plan" under actuals
+  const [collapsed, setCollapsed] = useState(() => new Set()); // collapsed plant sections
+  const scrollRef = useRef(null);
+
+  const toggle = (plant) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    if (next.has(plant)) next.delete(plant); else next.add(plant);
+    return next;
+  });
+  // Scroll the table so a plant's section header sits just below the sticky column header
+  const jumpTo = (plant) => {
+    setCollapsed((prev) => { const next = new Set(prev); next.delete(plant); return next; });
+    setTimeout(() => {   // after the expand re-render
+      const box = scrollRef.current;
+      const row = document.getElementById(`pfy-${plant}`);
+      const head = box?.querySelector('thead');
+      if (box && row) box.scrollTo({ top: row.offsetTop - (head?.offsetHeight || 0) });
+    }, 0);
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/api/production-fys`)
@@ -141,6 +174,12 @@ export default function ProductionFYPage() {
             <Toggle label="Figures" value={mode} onChange={setMode}
                     options={[{ id: 'actual', label: 'Actual' }, { id: 'plan', label: 'Plan' }]} />
           </Field>
+          {mode === 'actual' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--ui-text-secondary)', paddingBottom: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={showPct} onChange={(e) => setShowPct(e.target.checked)} style={{ accentColor: 'var(--ui-primary)' }} />
+              Show % of plan
+            </label>
+          )}
         </FilterBar>
 
         <Status status={error ? { type: 'error', text: error } : null} />
@@ -151,122 +190,88 @@ export default function ProductionFYPage() {
 
         {/* Table */}
         {data && visiblePlants.length > 0 && (
-          <div className={rs.grow}>
-            <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
-              <thead>
-                <tr>
-                  <th style={{
-                    ...cellBase,
-                    position: 'sticky',
-                    top: 0,
-                    left: 0,
-                    zIndex: 3,
-                    backgroundColor: '#e8f0fe',
-                    textAlign: 'left',
-                    fontWeight: 700,
-                    color: '#174ea6',
-                    minWidth: '200px',
-                    borderRight: '1px solid #dadce0',
-                  }}>
-                    Item
-                  </th>
-                  {months.map((m) => (
-                    <th key={m} style={{
-                      ...cellBase,
-                      position: 'sticky',
-                      top: 0,
-                      zIndex: 2,
-                      backgroundColor: '#e8f0fe',
-                      textAlign: 'right',
-                      fontWeight: 700,
-                      color: '#174ea6',
-                      minWidth: '76px',
-                    }}>
-                      {monthLabel(m)}
+          <>
+            <div className={pa.chips}>
+              <span className={pa.chipsLabel}>Jump to</span>
+              {visiblePlants.map((p) => (
+                <button key={p.plant} type="button" className={pa.chip} onClick={() => jumpTo(p.plant)}>{p.plant}</button>
+              ))}
+              <button type="button" className={pa.chip} style={{ marginLeft: 'auto' }}
+                      onClick={() => setCollapsed(collapsed.size ? new Set() : new Set(visiblePlants.map((p) => p.plant)))}>
+                {collapsed.size ? 'Expand all' : 'Collapse all'}
+              </button>
+            </div>
+            <div className={rs.grow} ref={scrollRef}>
+              <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...cellBase, ...HEAD_CELL, left: 0, zIndex: 3, textAlign: 'left', minWidth: '200px', borderRight: '1px solid #dadce0' }}>
+                      Item
                     </th>
-                  ))}
-                  <th style={{
-                    ...cellBase,
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 2,
-                    backgroundColor: '#e8f0fe',
-                    textAlign: 'right',
-                    fontWeight: 700,
-                    color: '#174ea6',
-                    minWidth: '90px',
-                    borderLeft: '1px solid #dadce0',
-                  }}>
-                    Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visiblePlants.map((plant) => (
-                  <React.Fragment key={plant.plant}>
-                    {/* Plant section header */}
-                    <tr>
-                      <td colSpan={months.length + 2} style={{
-                        ...cellBase,
-                        position: 'sticky',
-                        left: 0,
-                        backgroundColor: '#1a73e8',
-                        color: '#ffffff',
-                        fontWeight: 800,
-                        fontSize: '11pt',
-                        letterSpacing: '0.03em',
-                      }}>
-                        {plant.plant}
-                      </td>
-                    </tr>
-                    {plant.items.map((item, idx) => {
-                      const values = item[mode];
-                      const total = rowTotal(item.item_name, values, months);
-                      const zebra = idx % 2 === 1 ? '#f8f9fa' : '#ffffff';
-                      return (
-                        <tr key={item.item_name}>
-                          <td style={{
-                            ...cellBase,
-                            position: 'sticky',
-                            left: 0,
-                            zIndex: 1,
-                            backgroundColor: zebra,
-                            fontWeight: 600,
-                            color: '#202124',
-                            borderRight: '1px solid #dadce0',
-                          }}>
-                            {item.item_name}
-                          </td>
-                          {months.map((m) => (
-                            <td key={m} style={{
-                              ...cellBase,
-                              textAlign: 'right',
-                              backgroundColor: zebra,
-                              color: values[m] == null ? '#bdc1c6' : '#202124',
-                              fontVariantNumeric: 'tabular-nums',
-                            }}>
-                              {fmt(values[m])}
-                            </td>
-                          ))}
-                          <td style={{
-                            ...cellBase,
-                            textAlign: 'right',
-                            backgroundColor: zebra,
-                            fontWeight: 700,
-                            color: total == null ? '#bdc1c6' : '#174ea6',
-                            fontVariantNumeric: 'tabular-nums',
-                            borderLeft: '1px solid #dadce0',
-                          }}>
-                            {fmt(total)}{total != null && isRateItem(item.item_name) ? ' (avg)' : ''}
+                    {months.map((m) => (
+                      <th key={m} style={{ ...cellBase, ...HEAD_CELL, minWidth: '76px' }}>{monthLabel(m)}</th>
+                    ))}
+                    <th style={{ ...cellBase, ...HEAD_CELL, minWidth: '90px', borderLeft: '1px solid #dadce0', color: '#174ea6' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visiblePlants.map((plant) => {
+                    const isCollapsed = collapsed.has(plant.plant);
+                    return (
+                      <React.Fragment key={plant.plant}>
+                        {/* Plant section header — click to collapse / expand */}
+                        <tr id={`pfy-${plant.plant}`}>
+                          <td colSpan={months.length + 2} style={{ ...cellBase, padding: 0, position: 'sticky', left: 0, backgroundColor: '#1a73e8' }}>
+                            <button type="button" onClick={() => toggle(plant.plant)} aria-expanded={!isCollapsed}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 12px',
+                                      border: 0, background: 'none', cursor: 'pointer', color: '#fff', textAlign: 'left',
+                                      font: '800 13px var(--ui-font)', letterSpacing: '0.03em',
+                                    }}>
+                              <span style={{ display: 'inline-block', width: 12, transform: isCollapsed ? 'none' : 'rotate(90deg)', transition: 'transform .15s' }}>▸</span>
+                              {plant.plant}
+                              <span style={{ fontWeight: 500, fontSize: 11.5, opacity: 0.85, letterSpacing: 0 }}>
+                                {plant.items.length} item{plant.items.length === 1 ? '' : 's'}{isCollapsed ? ' · collapsed' : ''}
+                              </span>
+                            </button>
                           </td>
                         </tr>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        {!isCollapsed && plant.items.map((item, idx) => {
+                          const values = item[mode];
+                          const total = rowTotal(item.item_name, values, months);
+                          const planTotal = rowTotal(item.item_name, item.plan, months.filter((m) => values[m] != null));
+                          const zebra = idx % 2 === 1 ? '#f8f9fa' : '#ffffff';
+                          const showPctRow = mode === 'actual' && showPct;
+                          return (
+                            <tr key={item.item_name}>
+                              <td style={{ ...cellBase, position: 'sticky', left: 0, zIndex: 1, backgroundColor: zebra, fontWeight: 600, color: '#202124', borderRight: '1px solid #dadce0' }}>
+                                {item.item_name}
+                              </td>
+                              {months.map((m) => (
+                                <td key={m} style={{ ...cellBase, textAlign: 'right', backgroundColor: zebra, color: values[m] == null ? '#bdc1c6' : '#202124', fontVariantNumeric: 'tabular-nums' }}>
+                                  {fmt(values[m])}
+                                  {showPctRow && <PctOfPlan actual={values[m]} plan={item.plan?.[m]} />}
+                                </td>
+                              ))}
+                              <td style={{ ...cellBase, textAlign: 'right', backgroundColor: zebra, fontWeight: 700, color: total == null ? '#bdc1c6' : '#174ea6', fontVariantNumeric: 'tabular-nums', borderLeft: '1px solid #dadce0' }}>
+                                {fmt(total)}{total != null && isRateItem(item.item_name) ? ' (avg)' : ''}
+                                {showPctRow && <PctOfPlan actual={total} plan={planTotal} />}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {mode === 'actual' && showPct && (
+              <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--ui-text-tertiary)' }}>
+                % of plan = actual ÷ AAP plan for that month (Total: over the months with an actual). Green ≥ 100%, amber 95–99%, red &lt; 95%.
+              </div>
+            )}
+          </>
         )}
     </ReportPage>
   );

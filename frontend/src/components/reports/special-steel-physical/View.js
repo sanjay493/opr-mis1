@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ReportPage } from '../ReportUI';
+import { ReportPage, Status, Loading } from '../ReportUI';
+import pa from '../pa.module.css';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -32,6 +33,10 @@ const abpHead = { backgroundColor: '#fde3aa' };
 const ytdBg = { backgroundColor: '#e7f4ea' };
 const ytdHead = { backgroundColor: '#cbe8d2' };
 
+const PLANT_NAMES = { ASP: 'Alloy Steels Plant', SSP: 'Salem Steel Plant', VISP: 'Visvesvaraya Iron & Steel Plant', VISL: 'Visvesvaraya Iron & Steel Plant' };
+const toNum = (s) => (s == null || s === '' ? null : Number(String(s).replace(/,/g, '')));
+const barColor = (p) => (p == null ? 'var(--ui-border)' : p >= 100 ? 'var(--ui-success)' : p >= 90 ? '#f9ab00' : 'var(--ui-danger)');
+
 export default function SpecialSteelPhysicalPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -59,16 +64,49 @@ export default function SpecialSteelPhysicalPage() {
       description={<>Unit: {data?.unit || 'Tonnes'}</>}
     >
 
-{loading && <div style={{ padding: 40, color: '#5f6368' }}>Loading…</div>}
-        {error && (
-          <div style={{ padding: '14px 18px', border: '1px solid #f28b82', borderRadius: 8, backgroundColor: '#fce8e6', color: '#c5221f', fontSize: '11pt' }}>
-            Failed to load: {error}
-          </div>
-        )}
+        {loading && <Loading />}
+        <Status status={error ? { type: 'error', text: `Failed to load: ${error}` } : null} />
 
         {data && !loading && (
           <>
-            <div style={{ border: '1px solid #dadce0', borderRadius: 8, overflow: 'auto', marginTop: 16 }}>
+            {/* Per-plant Apr-to-date achievement vs APP (figures from the table below) */}
+            <div className={pa.kpis}>
+              {sections.map((sec) => (
+                <div key={sec.plant} className={pa.kpi}>
+                  <div className={pa.kpiHead}>
+                    <span className={pa.kpiLabel}>{sec.plant} · {PLANT_NAMES[sec.plant] || ''}</span>
+                  </div>
+                  {sec.rows.map((r) => {
+                    const ff = toNum(r.ytd_pct_ful);
+                    return (
+                      <div key={r.series_label} style={{ marginTop: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12.5 }}>
+                          <span style={{ fontWeight: 600 }}>{r.series_label}</span>
+                          <span className={`${pa.pill} ${ff == null ? pa.pillFlat : ff >= 100 ? pa.pillUp : ff >= 90 ? pa.pillFlat : pa.pillDown}`}>
+                            {ff == null ? '—' : `${ff}% of APP`}
+                          </span>
+                        </div>
+                        <div className={pa.kpiFoot}>
+                          {data.ytd_label}: <b>{r.ytd_actual || '—'}</b> / APP {r.ytd_app || '—'} T · ABP {data.cur_fy} {r.cur_abp || '—'}
+                        </div>
+                        <div className={pa.kpiBar}>
+                          <span style={{ width: `${Math.min(ff ?? 0, 100)}%`, background: barColor(ff) }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            <section className={pa.card}>
+              <div className={pa.cardHead}>
+                <div>
+                  <h3 className={pa.cardTitle}>Multi-year physical performance</h3>
+                  <p className={pa.cardSub}>Capacity, best achieved, year-wise actuals, {data.prev_fy} actual, {data.cur_fy} ABP and {data.ytd_label} (Tonnes)</p>
+                </div>
+              </div>
+            <div style={{ overflow: 'auto' }}>
               <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
                 <thead>
                   <tr>
@@ -116,17 +154,19 @@ export default function SpecialSteelPhysicalPage() {
                 </tbody>
               </table>
             </div>
-
             {(data.notes || []).length > 0 && (
-              <ul style={{ marginTop: 14, fontSize: '10.5pt', color: '#3c4043' }}>
-                {data.notes.map((n, i) => <li key={i} style={{ marginBottom: 4 }}>{n}</li>)}
+              <ul style={{ margin: 0, padding: '10px 16px 12px 32px', fontSize: 12, color: 'var(--ui-text-secondary)', borderTop: '1px solid var(--ui-border-subtle)' }}>
+                {data.notes.map((n, i) => <li key={i} style={{ marginBottom: 3 }}>{n}</li>)}
               </ul>
             )}
+            </section>
 
             {(data.ipt_rows || []).length > 0 && (
-              <div style={{ marginTop: 28 }}>
-                <h2 style={{ fontSize: '13pt', fontWeight: 800, color: '#202124' }}>{data.ipt_title}</h2>
-                <table style={{ borderCollapse: 'collapse', fontSize: '10.5pt', marginTop: 8 }}>
+              <section className={pa.card} style={{ maxWidth: 640 }}>
+                <div className={pa.cardHead}>
+                  <h3 className={pa.cardTitle}>{data.ipt_title}</h3>
+                </div>
+                <table style={{ borderCollapse: 'collapse', fontSize: 12.5, width: '100%' }}>
                   <thead>
                     <tr>
                       {['Item (‘000 T)', 'From', 'To', 'Plan'].map((h) => (
@@ -138,16 +178,16 @@ export default function SpecialSteelPhysicalPage() {
                     {data.ipt_rows.map((r, i) => (
                       <tr key={i}>
                         {r.item_rowspan > 0 && (
-                          <td rowSpan={r.item_rowspan} style={{ padding: '6px 14px', border: '1px solid #dadce0', fontWeight: 600 }}>{r.item}</td>
+                          <td rowSpan={r.item_rowspan} style={{ padding: '6px 14px', borderBottom: '1px solid var(--ui-border-subtle)', fontWeight: 600 }}>{r.item}</td>
                         )}
-                        <td style={{ padding: '6px 14px', border: '1px solid #dadce0', textAlign: 'center' }}>{r.from}</td>
-                        <td style={{ padding: '6px 14px', border: '1px solid #dadce0', textAlign: 'center' }}>{r.to}</td>
-                        <td style={{ padding: '6px 14px', border: '1px solid #dadce0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.plan}</td>
+                        <td style={{ padding: '6px 14px', borderBottom: '1px solid var(--ui-border-subtle)', textAlign: 'center' }}>{r.from}</td>
+                        <td style={{ padding: '6px 14px', borderBottom: '1px solid var(--ui-border-subtle)', textAlign: 'center' }}>{r.to}</td>
+                        <td style={{ padding: '6px 14px', borderBottom: '1px solid var(--ui-border-subtle)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.plan}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </section>
             )}
           </>
         )}

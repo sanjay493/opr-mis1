@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ReportPage } from '../ReportUI';
+import { ReportPage, Status, wb } from '../ReportUI';
+import pa from '../pa.module.css';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -304,14 +305,16 @@ export default function ProductionQueryPage() {
       description={<>Pick plants, units and a range — view month-wise, quarter-wise or year-wise APP &amp; Actual with cumulative, and download as Excel or PDF (&#39;000 T unless stated)</>}
     >
 
-{/* Controls */}
-        <div style={{
-          padding: '16px 20px',
-          border: '1px solid #dadce0',
-          borderRadius: '8px',
-          backgroundColor: '#ffffff',
-          marginBottom: '24px',
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) minmax(0, 1fr)', gap: 16, alignItems: 'start' }}>
+        {/* Query configuration */}
+        <aside style={{
+          position: 'sticky', top: 0,
+          padding: '14px 16px',
+          border: '1px solid var(--ui-border)',
+          borderRadius: 'var(--ui-radius)',
+          backgroundColor: 'var(--ui-surface)',
         }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Query configuration</div>
           {/* Plants */}
           <div style={{ marginBottom: '14px' }}>
             <div style={{ fontSize: '11pt', fontWeight: 600, color: '#202124', marginBottom: '8px' }}>Plants</div>
@@ -557,58 +560,45 @@ export default function ProductionQueryPage() {
                 {selectedUnits.length} unit{selectedUnits.length > 1 ? 's' : ''} selected
               </span>
             )}
-            {data && series.length > 0 && (
-              <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
-                <button
-                  onClick={() => handleDownload('excel')}
-                  disabled={downloading !== null}
-                  style={{
-                    padding: '8px 18px',
-                    fontSize: '10.5pt',
-                    fontWeight: 700,
-                    border: '1px solid #1a73e8',
-                    borderRadius: '6px',
-                    cursor: downloading !== null ? 'not-allowed' : 'pointer',
-                    backgroundColor: '#ffffff',
-                    color: downloading !== null ? '#9aa0a6' : '#1a73e8',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
+          </div>
+        </aside>
+
+        {/* Results */}
+        <div style={{ minWidth: 0 }}>
+        <Status status={error ? { type: 'error', text: error } : null} />
+
+        {!data && (
+          <div className={pa.card} style={{ padding: '48px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: 30 }} aria-hidden="true">📊</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 8 }}>Build a production query</div>
+            <p style={{ margin: '6px auto 0', maxWidth: 440, fontSize: 13, color: 'var(--ui-text-secondary)', lineHeight: 1.55 }}>
+              Pick one or more plants, tick the units you want, choose month-, quarter- or year-wise and a range,
+              then click <b>Get Data</b>. APP and Actual for each unit appear here with a cumulative row, ready to
+              download as Excel or PDF.
+            </p>
+          </div>
+        )}
+
+        {data && series.length > 0 && (
+          <div className={pa.card} style={{ marginBottom: 12 }}>
+            <div className={pa.cardHead}>
+              <div>
+                <h3 className={pa.cardTitle}>
+                  {series.length} unit{series.length === 1 ? '' : 's'} · {[...new Set(series.map((s) => s.plant))].join(', ')}
+                </h3>
+                <p className={pa.cardSub}>
+                  {{ month: 'Month-wise', quarter: 'Quarter-wise', year: 'Year-wise' }[viewMode]} · APP vs Actual with cumulative
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className={wb.btn} onClick={() => handleDownload('excel')} disabled={downloading !== null}>
                   {downloading === 'excel' ? 'Generating…' : '⬇ Excel'}
                 </button>
-                <button
-                  onClick={() => handleDownload('pdf')}
-                  disabled={downloading !== null}
-                  style={{
-                    padding: '8px 18px',
-                    fontSize: '10.5pt',
-                    fontWeight: 700,
-                    border: '1px solid #1a73e8',
-                    borderRadius: '6px',
-                    cursor: downloading !== null ? 'not-allowed' : 'pointer',
-                    backgroundColor: '#ffffff',
-                    color: downloading !== null ? '#9aa0a6' : '#1a73e8',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
+                <button type="button" className={wb.btn} onClick={() => handleDownload('pdf')} disabled={downloading !== null}>
                   {downloading === 'pdf' ? 'Generating…' : '⬇ PDF'}
                 </button>
               </div>
-            )}
-          </div>
-        </div>
-
-        {error && (
-          <div style={{
-            padding: '14px 18px',
-            border: '1px solid #f28b82',
-            borderRadius: '8px',
-            backgroundColor: '#fce8e6',
-            color: '#c5221f',
-            fontSize: '11pt',
-            marginBottom: '24px',
-          }}>
-            {error}
+            </div>
           </div>
         )}
 
@@ -778,10 +768,10 @@ export default function ProductionQueryPage() {
         )}
 
         {data && series.length === 0 && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#5f6368', fontSize: '12pt' }}>
-            No units in the query — select at least one unit and click Get Data.
-          </div>
+          <div className={wb.empty}>No units in the query — select at least one unit and click Get Data.</div>
         )}
+        </div>
+        </div>
     </ReportPage>
   );
 }
