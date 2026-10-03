@@ -19,8 +19,11 @@
     .cover-editorial-edition-k { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: .2em;
         text-transform: uppercase; color: #64748b; }
     .cover-editorial-edition-v { margin-top: 2px; font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
-    .cover-editorial-frame { margin-top: 24px; padding: 6px; border: 1px solid #000c48; }
-    .cover-editorial-frame img { display: block; width: 100%; height: 390px; object-fit: cover; }
+    /* Arched (dome-topped) photo window inside a matching thin-rule frame. */
+    .cover-editorial-frame { margin-top: 24px; padding: 7px; border: 1px solid #000c48;
+        border-radius: 50% 50% 4px 4px / 150px 150px 4px 4px; }
+    .cover-editorial-frame img { display: block; width: 100%; height: 390px; object-fit: cover;
+        border-radius: 50% 50% 0 0 / 143px 143px 0 0; }
     .cover-editorial-caption { display: flex; justify-content: space-between; padding: 7px 12px; background: #000c48; color: #ffffff;
         font-size: 10px; letter-spacing: .06em; }
     .cover-editorial-caption span:last-child { color: #fb923c; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }

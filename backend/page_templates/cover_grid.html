@@ -22,9 +22,15 @@
         text-transform: uppercase; color: #0047c8; }
     .cover-grid-month-v { margin-top: 6px; font-size: 32px; font-weight: 700; line-height: 1; text-transform: uppercase; }
     .cover-grid-month-r { margin-top: 12px; width: 40px; height: 3px; background: #e8380d; }
-    .cover-grid-photo { position: relative; flex: none; height: 350px; border-bottom: 1px solid #000c48; }
-    .cover-grid-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
-    .cover-grid-photo span { position: absolute; left: 0; bottom: 0; padding: 8px 40px; background: #000c48; color: #ffffff;
+    /* Inset "leaf" photo: two opposite corners swept round, with a thin
+       offset outline of the same shape behind it. */
+    .cover-grid-photo { position: relative; flex: none; height: 350px; padding: 24px 40px; border-bottom: 1px solid #000c48; }
+    .cover-grid-leaf { position: relative; height: 100%; }
+    .cover-grid-leaf::before { content: ""; position: absolute; inset: 0; transform: translate(10px, 10px);
+        border: 1.5px solid #e8380d; border-radius: 0 150px 0 150px; }
+    .cover-grid-leaf img { position: relative; display: block; width: 100%; height: 100%; object-fit: cover;
+        border-radius: 0 150px 0 150px; }
+    .cover-grid-photo span { position: absolute; left: 40px; top: 24px; padding: 8px 16px; background: #000c48; color: #ffffff;
         font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
     .cover-grid-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 24px 40px 18px; }
     .cover-grid-heading { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 10px; }
@@ -69,7 +75,7 @@
         </div>
     </div>
     <div class="cover-grid-photo">
-        <img src="{{ page.photo_data_uri }}" alt=""/>
+        <div class="cover-grid-leaf"><img src="{{ page.photo_data_uri }}" alt=""/></div>
         <span>SAIL plant operations &middot; {{ page.month_short }}</span>
     </div>
     <div class="cover-grid-body">

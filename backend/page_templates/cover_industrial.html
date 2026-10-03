@@ -14,13 +14,19 @@
         border-bottom: 1px solid rgba(255, 255, 255, .12); }
     .cover-industrial-logo { height: 48px; width: auto; padding: 4px; background: #ffffff; border-radius: 3px; }
     .cover-industrial-org { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #93c5fd; }
-    .cover-industrial-hero { position: relative; flex: none; height: 360px; background: #000826;
-        clip-path: polygon(0 0, 100% 0, 100% 86%, 0 100%); }
-    .cover-industrial-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    .cover-industrial-hero::after { content: ""; position: absolute; inset: 0;
+    /* Photo panel ends in a sweeping S-curve with an orange rim. The page box
+       is a fixed 794 px wide, so the curves are absolute path() coordinates. */
+    .cover-industrial-hero { position: relative; flex: none; height: 360px; }
+    .cover-industrial-rim, .cover-industrial-shape { position: absolute; inset: 0; }
+    .cover-industrial-rim { background: #e8380d;
+        clip-path: path('M0 0H794V250C640 336 520 236 380 300C240 364 120 360 0 318Z'); }
+    .cover-industrial-shape { overflow: hidden; background: #000826;
+        clip-path: path('M0 0H794V242C640 328 520 228 380 292C240 356 120 352 0 310Z'); }
+    .cover-industrial-shape img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-industrial-shape::after { content: ""; position: absolute; inset: 0;
         background: linear-gradient(0deg, #000c48 0%, rgba(0, 12, 72, .35) 45%, rgba(0, 12, 72, 0) 100%),
                     linear-gradient(90deg, rgba(0, 12, 72, .75) 0%, rgba(0, 12, 72, 0) 50%, rgba(0, 12, 72, .5) 100%); }
-    .cover-industrial-plaque { position: absolute; z-index: 1; left: 40px; bottom: 70px; padding: 8px 16px; background: #000c48;
+    .cover-industrial-plaque { position: absolute; z-index: 1; left: 40px; bottom: 96px; padding: 8px 16px; background: #000c48;
         border: 1px solid rgba(255, 255, 255, .15); border-left: 4px solid #e8380d; font-size: 10px; font-weight: 700;
         letter-spacing: .14em; text-transform: uppercase; color: #cbd5e1; }
     .cover-industrial-titlebar { margin: 0 40px; padding-bottom: 20px; display: flex; align-items: flex-end; justify-content: space-between;
@@ -69,7 +75,8 @@
         <div class="cover-industrial-org">Steel Authority of India Limited</div>
     </div>
     <div class="cover-industrial-hero">
-        <img src="{{ page.photo_data_uri }}" alt=""/>
+        <div class="cover-industrial-rim"></div>
+        <div class="cover-industrial-shape"><img src="{{ page.photo_data_uri }}" alt=""/></div>
         <div class="cover-industrial-plaque">SAIL plant operations &middot; {{ page.month_short }}</div>
     </div>
     <div class="cover-industrial-titlebar">

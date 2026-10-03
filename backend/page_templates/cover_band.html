@@ -5,13 +5,19 @@
 <style>
     .cover-band { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
         background: #ffffff; color: #000c48; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
-    .cover-band-hero { position: relative; height: 470px; flex: none; overflow: hidden; background: #000c48; color: #ffffff; }
-    .cover-band-hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    .cover-band-hero::before { content: ""; position: absolute; inset: 0;
+    /* The photo band ends in a wave (SVG mask), edged by a blue wave behind it. */
+    .cover-band-hero { position: relative; height: 490px; flex: none; color: #ffffff; }
+    .cover-band-rim, .cover-band-shape { position: absolute; left: 0; right: 0; top: 0;
+        -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M0 0H100V82C82 96 66 70 46 84S12 98 0 88Z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M0 0H100V82C82 96 66 70 46 84S12 98 0 88Z'/%3E%3C/svg%3E");
+        -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
+    .cover-band-rim { bottom: -12px; background: #0047c8; }
+    .cover-band-shape { bottom: 0; overflow: hidden; background: #000c48; }
+    .cover-band-shape img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-band-shape::before { content: ""; position: absolute; inset: 0;
         background: linear-gradient(0deg, #000c48 0%, rgba(0, 12, 72, .6) 45%, rgba(0, 12, 72, .78) 100%); }
-    .cover-band-hero::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px;
+    .cover-band-shape::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px;
         background: linear-gradient(90deg, #e8380d, #b4530a, #0047c8); }
-    .cover-band-in { position: relative; z-index: 1; height: 100%; box-sizing: border-box; padding: 32px; display: flex;
+    .cover-band-in { position: relative; z-index: 1; height: 100%; box-sizing: border-box; padding: 32px 32px 92px; display: flex;
         flex-direction: column; justify-content: space-between; }
     .cover-band-id { align-self: flex-start; display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px;
         background: rgba(0, 12, 72, .9); border: 1px solid rgba(255, 255, 255, .2); border-radius: 4px; }
@@ -25,9 +31,8 @@
         background: linear-gradient(90deg, #000c48, #0047c8, #000c48); border: 1px solid rgba(255, 255, 255, .2); border-radius: 4px; }
     .cover-band-month-k { font-size: 12px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: #cbd5e1; }
     .cover-band-month-v { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 28px; font-weight: 700; }
-    .cover-band-edge { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; background: #0047c8; z-index: 1; }
 
-    .cover-band-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 30px 32px 22px; }
+    .cover-band-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 32px 22px; }
     .cover-band-heading { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px;
         border-bottom: 2px solid #f1f5f9; }
     .cover-band-heading h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; text-transform: uppercase; }
@@ -60,7 +65,8 @@
 </style>
 <div class="cover-band">
     <div class="cover-band-hero">
-        <img src="{{ page.photo_data_uri }}" alt=""/>
+        <div class="cover-band-rim"></div>
+        <div class="cover-band-shape"><img src="{{ page.photo_data_uri }}" alt=""/></div>
         <div class="cover-band-in">
             <div class="cover-band-id">
                 {% if page.logo_data_uri %}<img class="cover-band-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
@@ -75,7 +81,6 @@
                 <span class="cover-band-month-v">{{ page.month_display }}</span>
             </div>
         </div>
-        <div class="cover-band-edge"></div>
     </div>
     <div class="cover-band-body">
         <div class="cover-band-heading">

@@ -11,17 +11,21 @@
     .cover-split-accent span:nth-child(3) { width: 15%; background: #e8380d; }
     .cover-split-main { flex: 1; display: flex; min-height: 0; }
 
-    .cover-split-photo { position: relative; width: 39%; flex: none; overflow: hidden; background: #000c48; }
-    .cover-split-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    .cover-split-photo::after { content: ""; position: absolute; inset: 0;
+    /* Photo column ends in a curved arc (half-ellipse) with an orange rim. */
+    .cover-split-photo { position: relative; width: 41%; flex: none; }
+    .cover-split-rim, .cover-split-shape { position: absolute; inset: 0; }
+    .cover-split-rim { background: #e8380d; clip-path: ellipse(100% 74% at 0% 50%); }
+    .cover-split-shape { overflow: hidden; background: #000c48; clip-path: ellipse(97% 72% at 0% 50%); }
+    .cover-split-shape img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-split-shape::after { content: ""; position: absolute; inset: 0;
         background: linear-gradient(0deg, rgba(0, 12, 72, .92) 0%, rgba(0, 12, 72, 0) 38%, rgba(0, 12, 72, 0) 70%, rgba(0, 12, 72, .4) 100%); }
-    .cover-split-plaque { position: absolute; z-index: 1; left: 20px; right: 20px; bottom: 20px; padding: 14px 16px;
+    .cover-split-plaque { position: absolute; z-index: 1; left: 20px; right: 70px; bottom: 20px; padding: 14px 16px;
         background: rgba(0, 12, 72, .95); border-left: 4px solid #e8380d; color: #ffffff; }
     .cover-split-plaque-k { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 10px; font-weight: 700;
         letter-spacing: .14em; text-transform: uppercase; color: #cbd5e1; }
     .cover-split-plaque-v { margin-top: 4px; font-size: 15px; font-weight: 600; }
 
-    .cover-split-body { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 26px 30px 18px; }
+    .cover-split-body { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 26px 30px 18px 14px; }
     .cover-split-id { display: flex; align-items: center; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid #e2e8f0; }
     .cover-split-logo { height: 52px; width: auto; }
     .cover-split-org { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 11px; font-weight: 700;
@@ -67,7 +71,8 @@
     <div class="cover-split-accent"><span></span><span></span><span></span></div>
     <div class="cover-split-main">
         <div class="cover-split-photo">
-            <img src="{{ page.photo_data_uri }}" alt=""/>
+            <div class="cover-split-rim"></div>
+            <div class="cover-split-shape"><img src="{{ page.photo_data_uri }}" alt=""/></div>
             <div class="cover-split-plaque">
                 <div class="cover-split-plaque-k">Operations Monthly Informatics</div>
                 <div class="cover-split-plaque-v">{{ page.month_display }}</div>
