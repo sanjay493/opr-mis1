@@ -1,5 +1,7 @@
 'use client';
 
+import { coverHtmlUrl } from './cover/coverApi';
+
 // Mirrors backend/page_templates/cover.html (and its .page1-* CSS in
 // main.html) — see page_cover.py for what's dynamic (Report Month, the 6
 // KPI figures) vs. the static background artwork. The background is the
@@ -80,6 +82,18 @@ const HEX_POS = [
 ];
 
 export default function CoverTemplate({ data }) {
+  // Photo designs (cover_<design>.html) are rendered by the backend, the same
+  // template the PDF uses — shown here as the cover document itself.
+  if (data?.design && data.design !== 'classic' && data.report_month) {
+    return (
+      <iframe
+        title={`Report cover (${data.design})`}
+        src={coverHtmlUrl(data.report_month, data.design, data.photo_id)}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, display: 'block', background: '#fff' }}
+      />
+    );
+  }
+
   const {
     bg_data_uri = '', month_display = '', month_short = '', kpis = [],
   } = data || {};
