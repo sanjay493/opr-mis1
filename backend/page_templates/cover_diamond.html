@@ -1,0 +1,64 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Diamond" cover (Canva DAHW9r4ybzs, recast to A4 portrait): faint low-poly
+   facets on white, the photo in a slanted band across the top, an
+   uppercase title, and KPIs on diamond tiles (navy / orange / red). The
+   diamond is a rotated ::before, so the figures stay upright.
+   794 x 1121 px box. #}
+<style>
+    .cover-diamond { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #f8fafc; color: #12235a; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-diamond-facets { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .cover-diamond-band { position: absolute; left: 0; top: 0; width: 794px; height: 470px; overflow: hidden; background: #1e293b;
+        clip-path: polygon(0 22%, 100% 0, 100% 62%, 0 100%); }
+    .cover-diamond-band img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-diamond-stripe { position: absolute; left: 0; top: 0; width: 794px; height: 500px; background: #12235a;
+        clip-path: polygon(0 94%, 100% 58.4%, 100% 61%, 0 96.6%); }
+    .cover-diamond > :not(.cover-diamond-facets):not(.cover-diamond-band):not(.cover-diamond-stripe) { position: relative; }
+    .cover-diamond-mast { flex: none; padding: 22px 44px 0; display: flex; align-items: center; gap: 12px; }
+    .cover-diamond-logo { height: 46px; width: auto; }
+    .cover-diamond-org { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #12235a; }
+    .cover-diamond-title { margin-top: 420px; text-align: center; }
+    .cover-diamond-title h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: .02em; text-transform: uppercase; }
+    .cover-diamond-month { margin-top: 8px; font-size: 18px; font-weight: 500; color: #475569; }
+    .cover-diamond-kpis { margin: 50px auto 0; width: 690px; display: grid; grid-template-columns: repeat(3, 1fr); row-gap: 34px; }
+    .cover-diamond-kpi { position: relative; z-index: 0; height: 196px; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; text-align: center; color: #ffffff; }
+    .cover-diamond-kpi::before { content: ""; position: absolute; z-index: -1; left: 50%; top: 50%; width: 138px; height: 138px;
+        margin: -69px 0 0 -69px; transform: rotate(45deg); border-radius: 10px; background: #12235a;
+        box-shadow: 0 8px 18px rgba(18, 35, 90, .25); }
+    .cover-diamond-kpi:nth-child(3n+2)::before { background: #f28c28; }
+    .cover-diamond-kpi:nth-child(3n)::before { background: #c8102e; }
+    .cover-diamond-kpi-head, .cover-diamond-kpi-body { display: flex; flex-direction: column; align-items: center; }
+    .cover-diamond-kpi-label { max-width: 110px; font-size: 9px; font-weight: 700; letter-spacing: .05em; line-height: 1.2; }
+    .cover-diamond-kpi-app { margin-top: 1px; font-size: 9px; opacity: .85; }
+    .cover-diamond-kpi-value { margin-top: 2px; font-size: 22px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+    .cover-diamond-kpi-unit { margin-left: 2px; font-size: 9px; font-weight: 600; opacity: .85; }
+    .cover-diamond-kpi-growth { padding: 0 4px; font-size: 10px; font-weight: 700; background: #ffffff; border-radius: 2px; }
+    .cover-diamond-up { color: #188038; }
+    .cover-diamond-down { color: #c5221f; }
+    .cover-diamond-prepared { margin: auto 0 18px; text-align: center; font-size: 13px; color: #475569; }
+    .cover-diamond-prepared span { color: #94a3b8; }
+    .cover-diamond-footer { flex: none; height: 30px; padding: 0 44px; display: flex; align-items: center; justify-content: space-between;
+        background: #12235a; color: #ffffff; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+    .cover-diamond-footer-end { color: #fdba74; }
+</style>
+<div class="cover-diamond">
+    <svg class="cover-diamond-facets" viewBox="0 0 794 1121" preserveAspectRatio="none">
+        <path d="M0 520L180 640L0 820Z" fill="#eef2f7"/><path d="M180 640L360 560L300 820Z" fill="#f1f5f9"/>
+        <path d="M794 380L640 600L794 700Z" fill="#e9eef5"/><path d="M640 600L794 700L700 900Z" fill="#f1f5f9"/>
+        <path d="M0 820L300 820L120 1091Z" fill="#edf1f6"/><path d="M500 900L794 760L794 1091Z" fill="#eef2f7"/>
+        <path d="M300 820L500 900L380 1091Z" fill="#f3f6fa"/></svg>
+    <div class="cover-diamond-stripe"></div>
+    <div class="cover-diamond-band"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+    <div class="cover-diamond-mast">
+        {% if page.logo_data_uri %}<img class="cover-diamond-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+        <div class="cover-diamond-org">Steel Authority of India Limited<br/>Operations Directorate</div>
+    </div>
+    <div class="cover-diamond-title">
+        <h1>Operations Monthly Informatics</h1>
+        <div class="cover-diamond-month">{{ page.month_display }} &middot; SAIL Performance at a Glance (Million Tonnes)</div>
+    </div>
+    <div class="cover-diamond-kpis">{{ kpi_cards(page.kpis, 'cover-diamond') }}</div>
+    <div class="cover-diamond-prepared">Prepared By: <b>MIS Group</b></div>
+    {{ footer_strip(page, 'cover-diamond') }}
+</div>

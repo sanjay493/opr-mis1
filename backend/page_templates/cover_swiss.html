@@ -1,0 +1,66 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Swiss blue" cover (Canva DAHW9unrX4c): white page, an oversized SAIL-blue
+   title, organic blue shapes at the edges, a black-and-white photo and a
+   large light-weight month. 794 x 1121 px box. #}
+<style>
+    .cover-swiss { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #ffffff; color: #0f172a; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-swiss-blob { position: absolute; fill: #0047c8; }
+    .cover-swiss-blob--a { left: 0; top: 0; width: 230px; height: 120px; }
+    .cover-swiss-blob--b { right: 0; top: 300px; width: 190px; height: 400px; }
+    .cover-swiss > :not(.cover-swiss-blob) { position: relative; }
+    .cover-swiss-mast { flex: none; padding: 34px 44px 0 260px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+    .cover-swiss-logo { height: 46px; width: auto; }
+    .cover-swiss-org { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #0047c8; text-align: right; }
+    .cover-swiss-eyebrow { margin: 66px 44px 0; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #334155; }
+    .cover-swiss h1 { margin: 12px 200px 0 40px; font-size: 76px; font-weight: 400; line-height: .98; letter-spacing: -.03em; color: #0047c8; }
+    .cover-swiss-sub { margin: 22px 220px 0 44px; font-size: 14px; color: #334155; }
+    .cover-swiss-kpihead { margin: 26px 220px 0 44px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #0047c8; }
+    .cover-swiss-kpis { margin: 12px 220px 0 44px; display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 18px; row-gap: 18px; }
+    .cover-swiss-kpi { padding-top: 8px; border-top: 2px solid #0047c8; }
+    .cover-swiss-kpi--ore { border-top-color: #0f172a; }
+    .cover-swiss-kpi-head { display: flex; flex-direction: column; }
+    .cover-swiss-kpi-label { min-height: 26px; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; color: #334155; }
+    .cover-swiss-kpi-app { font-size: 10px; color: #64748b; }
+    .cover-swiss-kpi-body { margin-top: 2px; display: flex; align-items: baseline; gap: 6px; }
+    .cover-swiss-kpi-value { font-size: 28px; font-weight: 500; color: #0047c8; font-variant-numeric: tabular-nums; }
+    .cover-swiss-kpi-unit { margin-left: 3px; font-size: 10px; color: #64748b; }
+    .cover-swiss-kpi-growth { font-size: 10.5px; font-weight: 700; }
+    .cover-swiss-up { color: #047857; }
+    .cover-swiss-down { color: #b91c1c; }
+    .cover-swiss-foot { flex: 1; min-height: 0; margin-top: 30px; display: flex; }
+    .cover-swiss-photo { position: relative; width: 46%; flex: none; overflow: hidden; background: #1e293b; }
+    .cover-swiss-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.1); }
+    .cover-swiss-meta { flex: 1; min-width: 0; padding: 18px 44px 22px 30px; display: flex; flex-direction: column; }
+    .cover-swiss-month { padding-bottom: 14px; font-size: 60px; font-weight: 300; line-height: 1; letter-spacing: -.02em; color: #0f172a;
+        border-bottom: 1px solid #0f172a; }
+    .cover-swiss-meta-k { margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #0047c8; }
+    .cover-swiss-prepared { margin-top: auto; font-size: 13px; color: #334155; }
+    .cover-swiss-footer { flex: none; height: 30px; padding: 0 44px; display: flex; align-items: center; justify-content: space-between;
+        background: #0047c8; color: #ffffff; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+    .cover-swiss-footer-end { color: #dbeafe; }
+</style>
+<div class="cover-swiss">
+    <svg class="cover-swiss-blob cover-swiss-blob--a" viewBox="0 0 230 120" preserveAspectRatio="none">
+        <path d="M0 0H140C150 30 120 50 92 46C64 42 40 60 36 86C32 108 14 120 0 116Z"/><path d="M168 0H230V14C214 26 186 22 168 0Z"/></svg>
+    <svg class="cover-swiss-blob cover-swiss-blob--b" viewBox="0 0 190 400" preserveAspectRatio="none">
+        <path d="M190 0V400C150 396 112 376 104 334C96 290 132 262 120 222C108 182 44 188 22 146C0 104 34 54 82 40C122 28 150 8 190 0Z"/></svg>
+    <div class="cover-swiss-mast">
+        <div class="cover-swiss-org">Steel Authority of India Limited<br/>Operations Directorate</div>
+        {% if page.logo_data_uri %}<img class="cover-swiss-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+    </div>
+    <div class="cover-swiss-eyebrow">Monthly operations update</div>
+    <h1>Operations Monthly Informatics</h1>
+    <div class="cover-swiss-sub">Steel Authority of India Limited &middot; Operations Directorate, {{ page.month_display }}</div>
+    <div class="cover-swiss-kpihead">SAIL performance at a glance &middot; Million Tonnes</div>
+    <div class="cover-swiss-kpis">{{ kpi_cards(page.kpis, 'cover-swiss') }}</div>
+    <div class="cover-swiss-foot">
+        <div class="cover-swiss-photo"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+        <div class="cover-swiss-meta">
+            <div class="cover-swiss-month">{{ page.month_display }}</div>
+            <div class="cover-swiss-meta-k">Report month</div>
+            <div class="cover-swiss-prepared">Prepared By: <b>MIS Group</b></div>
+        </div>
+    </div>
+    {{ footer_strip(page, 'cover-swiss') }}
+</div>

@@ -1,0 +1,81 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Corporate" cover (Canva DAHW9vC1Yaw, recast to A4 portrait): a navy title
+   block on the left overlapped by a photo panel on the right, joined by a
+   round month badge; solid blue / slate / orange KPI tiles below.
+   794 x 1121 px box. #}
+<style>
+    .cover-corporate { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #ffffff; color: #000c48; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-corporate-hero { position: relative; flex: none; height: 650px; }
+    .cover-corporate-photo { position: absolute; right: 0; top: 80px; width: 400px; height: 540px; overflow: hidden; background: #dbe3ef; }
+    .cover-corporate-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-corporate-block { position: absolute; left: 0; top: 0; width: 470px; height: 590px; padding: 44px 44px 40px; display: flex;
+        flex-direction: column; background: #000c48; color: #ffffff; }
+    .cover-corporate-id { display: flex; align-items: center; gap: 12px; }
+    .cover-corporate-logo { height: 46px; width: auto; padding: 4px; background: #ffffff; border-radius: 3px; }
+    .cover-corporate-org { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; line-height: 1.4; }
+    .cover-corporate-dir { margin-top: 110px; font-size: 12px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: #93b4ec; }
+    .cover-corporate-block h1 { margin: 10px 0 0; font-size: 52px; font-weight: 700; line-height: 1.04; letter-spacing: -.015em; }
+    .cover-corporate-rule { margin-top: 26px; width: 120px; height: 5px; background: #f5b400; }
+    .cover-corporate-by { margin-top: auto; font-size: 13px; color: #cbd5e1; }
+    .cover-corporate-by b { color: #ffffff; }
+    .cover-corporate-badge { position: absolute; left: 400px; top: 470px; width: 140px; height: 140px; border-radius: 50%;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+        background: #0ea5e9; color: #ffffff; border: 6px solid #ffffff; }
+    .cover-corporate-badge-k { font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    .cover-corporate-badge-v { margin-top: 2px; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 23px; font-weight: 700; }
+
+    .cover-corporate-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 44px 22px; }
+    .cover-corporate-heading { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 10px;
+        border-bottom: 2px solid #0047c8; }
+    .cover-corporate-heading h2 { margin: 0; font-size: 18px; font-weight: 600; color: #0047c8; }
+    .cover-corporate-heading span { font-size: 11px; font-weight: 600; color: #64748b; }
+    .cover-corporate-kpis { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .cover-corporate-kpi { display: grid; grid-template-columns: 1fr auto; align-items: center;
+        grid-template-areas: "label label" "value value" "app growth"; padding: 18px 16px 16px; color: #ffffff; background: #0047c8; }
+    .cover-corporate-kpi:nth-child(2), .cover-corporate-kpi:nth-child(5) { background: #5b6b7f; }
+    .cover-corporate-kpi--ore { background: #ea7a1a !important; }
+    .cover-corporate-kpi-head, .cover-corporate-kpi-body { display: contents; }
+    .cover-corporate-kpi-label { grid-area: label; min-height: 28px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; }
+    .cover-corporate-kpi-value { grid-area: value; margin: 8px 0 12px; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 34px;
+        font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cover-corporate-kpi-unit { margin-left: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; opacity: .8; }
+    .cover-corporate-kpi-app { grid-area: app; justify-self: start; padding: 1px 7px; font-size: 10.5px; font-weight: 700;
+        background: rgba(255, 255, 255, .2); }
+    .cover-corporate-kpi-growth { grid-area: growth; padding: 1px 6px; font-size: 11px; font-weight: 700; background: #ffffff; }
+    .cover-corporate-up { color: #188038; }
+    .cover-corporate-down { color: #c5221f; }
+    .cover-corporate-prepared { margin-top: auto; padding-top: 14px; display: flex; align-items: center; justify-content: space-between;
+        border-top: 1px solid #e2e8f0; font-size: 12px; color: #475569; }
+    .cover-corporate-footer { flex: none; height: 30px; padding: 0 44px; display: flex; align-items: center; justify-content: space-between;
+        background: #000c48; color: #ffffff; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+    .cover-corporate-footer-end { color: #f5b400; }
+</style>
+<div class="cover-corporate">
+    <div class="cover-corporate-hero">
+        <div class="cover-corporate-photo"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+        <div class="cover-corporate-block">
+            <div class="cover-corporate-id">
+                {% if page.logo_data_uri %}<img class="cover-corporate-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+                <div class="cover-corporate-org">Steel Authority of India Limited</div>
+            </div>
+            <div class="cover-corporate-dir">Operations Directorate</div>
+            <h1>Operations Monthly Informatics</h1>
+            <div class="cover-corporate-rule"></div>
+            <div class="cover-corporate-by">Prepared by <b>MIS Group</b></div>
+        </div>
+        <div class="cover-corporate-badge">
+            <div class="cover-corporate-badge-k">Report month</div>
+            <div class="cover-corporate-badge-v">{{ page.month_display }}</div>
+        </div>
+    </div>
+    <div class="cover-corporate-body">
+        <div class="cover-corporate-heading">
+            <h2>SAIL Performance at a Glance ({{ page.month_short }})</h2>
+            <span>Million Tonnes (MT)</span>
+        </div>
+        <div class="cover-corporate-kpis">{{ kpi_cards(page.kpis, 'cover-corporate') }}</div>
+        <div class="cover-corporate-prepared"><span>Growth arrows compare with CPLY</span><span>Prepared By: <b>MIS Group</b></span></div>
+    </div>
+    {{ footer_strip(page, 'cover-corporate') }}
+</div>

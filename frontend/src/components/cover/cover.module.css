@@ -1,4 +1,4 @@
-.designs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+.designs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; max-height: 380px; overflow-y: auto; padding-right: 2px; }
 .design { padding: 0; border: 2px solid transparent; border-radius: 6px; background: none; cursor: pointer; text-align: center; font: inherit; }
 .design img { display: block; width: 100%; aspect-ratio: 210 / 297; object-fit: cover; border-radius: 4px; border: 1px solid var(--ui-border); }
 .design span { display: block; margin-top: 3px; font-size: 11px; color: var(--ui-text-secondary); }

@@ -1,0 +1,84 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Blueprint" cover (Canva DAHW9gU9ea0, recast to A4 portrait): SAIL-blue
+   page with a faint drafting grid and a navy diagonal panel; a framed photo
+   with an orange month tag, and light-weight KPI figures in ruled columns.
+   794 x 1121 px box. #}
+<style>
+    .cover-blueprint { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        color: #ffffff; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35;
+        background-color: #0047c8;
+        background-image: linear-gradient(rgba(255, 255, 255, .07) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255, 255, 255, .07) 1px, transparent 1px);
+        background-size: 32px 32px; }
+    .cover-blueprint::before { content: ""; position: absolute; inset: 0; background: #000c48;
+        clip-path: polygon(0 0, 62% 0, 30% 100%, 0 100%); }
+    .cover-blueprint > * { position: relative; }
+    .cover-blueprint-mast { flex: none; padding: 32px 44px 0; display: flex; align-items: center; gap: 12px; }
+    .cover-blueprint-logo { height: 44px; width: auto; padding: 4px; background: #ffffff; border-radius: 3px; }
+    .cover-blueprint-org { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; line-height: 1.5; color: #cbd5e1; }
+    .cover-blueprint-org b { display: block; color: #ffffff; }
+    .cover-blueprint-hero { flex: none; height: 600px; position: relative; }
+    .cover-blueprint-text { position: absolute; left: 44px; top: 96px; width: 340px; }
+    .cover-blueprint-text h1 { margin: 0; font-size: 50px; font-weight: 600; line-height: 1.06; letter-spacing: -.015em; }
+    .cover-blueprint-sub { margin-top: 18px; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #fb923c; }
+    .cover-blueprint-sub::before { content: ""; width: 26px; height: 2px; background: #fb923c; }
+    .cover-blueprint-frame { position: absolute; right: 44px; top: 130px; width: 350px; height: 430px; padding: 8px;
+        border: 1px solid rgba(255, 255, 255, .5); }
+    .cover-blueprint-frame-in { position: relative; width: 100%; height: 100%; overflow: hidden; background: #1e293b; }
+    .cover-blueprint-frame-in img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-blueprint-tag { position: absolute; right: -14px; top: -22px; z-index: 1; padding: 10px 14px; text-align: center;
+        background: #e8380d; box-shadow: 0 6px 18px rgba(0, 0, 0, .3); }
+    .cover-blueprint-tag-k { font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #ffe4d6; }
+    .cover-blueprint-tag-v { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 22px; font-weight: 700; line-height: 1.1; }
+    .cover-blueprint-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 44px 20px; }
+    .cover-blueprint-heading { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, .5); }
+    .cover-blueprint-heading h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .cover-blueprint-heading span { font-size: 11px; color: #bfdbfe; }
+    .cover-blueprint-kpis { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .cover-blueprint-kpi { padding: 20px 16px 18px; border-right: 1px solid rgba(255, 255, 255, .3); border-bottom: 1px solid rgba(255, 255, 255, .3);
+        background: rgba(0, 12, 72, .35); }
+    .cover-blueprint-kpi:nth-child(3n) { border-right: 0; }
+    .cover-blueprint-kpi-head, .cover-blueprint-kpi-body { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+    .cover-blueprint-kpi-label { min-height: 28px; font-size: 10px; font-weight: 600; letter-spacing: .08em; color: #dbeafe; }
+    .cover-blueprint-kpi--ore .cover-blueprint-kpi-label { color: #fdba74; }
+    .cover-blueprint-kpi-app { font-size: 10px; font-weight: 700; white-space: nowrap; color: #bfdbfe; }
+    .cover-blueprint-kpi-value { font-size: 36px; font-weight: 300; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+    .cover-blueprint-kpi-unit { margin-left: 4px; font-size: 11px; font-weight: 600; color: #bfdbfe; }
+    .cover-blueprint-kpi-growth { font-size: 11px; font-weight: 700; }
+    .cover-blueprint-up { color: #86efac; }
+    .cover-blueprint-down { color: #fca5a5; }
+    .cover-blueprint-prepared { margin-top: auto; font-size: 12px; color: #dbeafe; }
+    .cover-blueprint-prepared b { color: #ffffff; }
+    .cover-blueprint-footer { flex: none; height: 30px; padding: 0 44px; display: flex; align-items: center; justify-content: space-between;
+        background: #000c48; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+    .cover-blueprint-footer-end { color: #fb923c; }
+</style>
+<div class="cover-blueprint">
+    <div class="cover-blueprint-mast">
+        {% if page.logo_data_uri %}<img class="cover-blueprint-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+        <div class="cover-blueprint-org"><b>Steel Authority of India Limited</b>Operations Directorate</div>
+    </div>
+    <div class="cover-blueprint-hero">
+        <div class="cover-blueprint-text">
+            <h1>Operations Monthly Informatics</h1>
+            <div class="cover-blueprint-sub">SAIL Performance at a Glance</div>
+        </div>
+        <div class="cover-blueprint-frame">
+            <div class="cover-blueprint-tag">
+                <div class="cover-blueprint-tag-k">Month</div>
+                <div class="cover-blueprint-tag-v">{{ page.month_display }}</div>
+            </div>
+            <div class="cover-blueprint-frame-in"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+        </div>
+    </div>
+    <div class="cover-blueprint-body">
+        <div class="cover-blueprint-heading">
+            <h2>Key figures ({{ page.month_short }})</h2>
+            <span>Million Tonnes</span>
+        </div>
+        <div class="cover-blueprint-kpis">{{ kpi_cards(page.kpis, 'cover-blueprint') }}</div>
+        <div class="cover-blueprint-prepared">Prepared By: <b>MIS Group</b></div>
+    </div>
+    {{ footer_strip(page, 'cover-blueprint') }}
+</div>

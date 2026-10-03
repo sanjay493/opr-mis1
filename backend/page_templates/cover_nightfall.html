@@ -1,0 +1,58 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Nightfall" cover (Canva DAHW9u7yL_0, recast to A4 portrait): the photo
+   as a navy duotone filling the page, a centred light-weight title with an
+   orange hairline, and outlined KPI boxes. 794 x 1121 px box. #}
+<style>
+    .cover-nightfall { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #0a1638; color: #ffffff; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-nightfall-bg { position: absolute; inset: 0; }
+    .cover-nightfall-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.15); opacity: .5; }
+    .cover-nightfall-bg::after { content: ""; position: absolute; inset: 0;
+        background: linear-gradient(180deg, rgba(10, 22, 56, .55) 0%, rgba(10, 22, 56, .35) 40%, rgba(10, 22, 56, .92) 66%, #0a1638 100%); }
+    .cover-nightfall > :not(.cover-nightfall-bg) { position: relative; }
+    .cover-nightfall-mast { flex: none; padding: 34px 44px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+    .cover-nightfall-logo { height: 52px; width: auto; padding: 5px; background: #ffffff; border-radius: 50%; }
+    .cover-nightfall-org { font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: #cbd5e1; }
+    .cover-nightfall-title { margin-top: 290px; text-align: center; }
+    .cover-nightfall-title h1 { margin: 0; font-size: 60px; font-weight: 300; line-height: 1.08; letter-spacing: -.01em; }
+    .cover-nightfall-by { margin-top: 14px; font-size: 13px; color: #cbd5e1; }
+    .cover-nightfall-by b { color: #ffffff; }
+    .cover-nightfall-line { margin: 34px 44px 0; display: flex; align-items: center; gap: 16px; }
+    .cover-nightfall-line::before, .cover-nightfall-line::after { content: ""; flex: 1; height: 1px; background: #e8380d; }
+    .cover-nightfall-line span { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: .06em; }
+    .cover-nightfall-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 34px 64px 20px; }
+    .cover-nightfall-heading { text-align: center; font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: #93b4ec; }
+    .cover-nightfall-kpis { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .cover-nightfall-kpi { padding: 20px 12px 16px; text-align: center; border: 1px solid rgba(147, 180, 236, .55); }
+    .cover-nightfall-kpi--ore { border-color: rgba(251, 146, 60, .6); }
+    .cover-nightfall-kpi-head, .cover-nightfall-kpi-body { display: flex; flex-direction: column; align-items: center; }
+    .cover-nightfall-kpi-label { font-size: 10px; font-weight: 600; letter-spacing: .1em; color: #cbd5e1; }
+    .cover-nightfall-kpi-app { display: none; }
+    .cover-nightfall-kpi-value { margin-top: 10px; font-size: 36px; font-weight: 300; font-variant-numeric: tabular-nums; }
+    .cover-nightfall-kpi-unit { margin-left: 4px; font-size: 11px; color: #93b4ec; }
+    .cover-nightfall-kpi-growth { margin-top: 4px; font-size: 11px; font-weight: 600; }
+    .cover-nightfall-up { color: #4ade80; }
+    .cover-nightfall-down { color: #f87171; }
+    .cover-nightfall-apps { margin-top: 10px; text-align: center; font-size: 10px; color: #64748b; }
+    .cover-nightfall-footer { flex: none; height: 30px; padding: 0 44px; display: flex; align-items: center; justify-content: space-between;
+        font-size: 10px; font-weight: 600; letter-spacing: .16em; color: #93b4ec; background: rgba(0, 0, 0, .25); }
+    .cover-nightfall-footer-end { color: #fb923c; }
+</style>
+<div class="cover-nightfall">
+    <div class="cover-nightfall-bg"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+    <div class="cover-nightfall-mast">
+        {% if page.logo_data_uri %}<img class="cover-nightfall-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+        <div class="cover-nightfall-org">Steel Authority of India Limited &middot; Operations Directorate</div>
+    </div>
+    <div class="cover-nightfall-title">
+        <h1>Operations Monthly<br/>Informatics</h1>
+        <div class="cover-nightfall-by">Prepared By: <b>MIS Group</b></div>
+    </div>
+    <div class="cover-nightfall-line"><span>{{ page.month_display }}</span></div>
+    <div class="cover-nightfall-body">
+        <div class="cover-nightfall-heading">SAIL Performance at a Glance &middot; Million Tonnes</div>
+        <div class="cover-nightfall-kpis">{{ kpi_cards(page.kpis, 'cover-nightfall') }}</div>
+        <div class="cover-nightfall-apps">APP:{% for k in page.kpis %} {{ k.label|title }} {{ k.pct_ful }}%{% if not loop.last %} &middot;{% endif %}{% endfor %}</div>
+    </div>
+    {{ footer_strip(page, 'cover-nightfall') }}
+</div>

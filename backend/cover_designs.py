@@ -10,6 +10,18 @@ DESIGNS = [
     {"id": "editorial", "label": "Editorial"},
     {"id": "industrial", "label": "Industrial"},
     {"id": "grid", "label": "Minimal grid"},
+    {"id": "corporate", "label": "Corporate"},
+    {"id": "mosaic", "label": "Mosaic"},
+    {"id": "spotlight", "label": "Spotlight"},
+    {"id": "blueprint", "label": "Blueprint"},
+    {"id": "cinematic", "label": "Cinematic"},
+    {"id": "nightfall", "label": "Nightfall"},
+    {"id": "horizon", "label": "Horizon"},
+    {"id": "triptych", "label": "Triptych"},
+    {"id": "swiss", "label": "Swiss blue"},
+    {"id": "diagonal", "label": "Diagonal"},
+    {"id": "cornercut", "label": "Corner cut"},
+    {"id": "diamond", "label": "Diamond"},
 ]
 DESIGN_IDS = tuple(d["id"] for d in DESIGNS)
 PHOTO_DESIGN_IDS = tuple(i for i in DESIGN_IDS if i != "classic")

@@ -21,7 +21,7 @@ def _upload(data, name="p.jpg"):
 def test_designs_classic_first():
     ds = api_cover.list_designs()
     assert ds[0]["id"] == "classic" and ds[0]["thumb_url"] == "/cover/designs/classic.png"
-    assert len(ds) == 6
+    assert len(ds) == 18
 
 
 def test_settings_default_is_unsaved_classic(store):

@@ -1,0 +1,82 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Diagonal" cover (Canva DAHW9rG5BUA, recast to A4 portrait): the photo is
+   cut into diagonal strips by navy and orange bars from the top-left corner,
+   echoed small at the bottom-right; KPI tiles are slanted plates. Every
+   strip layer covers the same box, so the photo lines up across the cuts.
+   794 x 1121 px box. #}
+<style>
+    .cover-diagonal { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #ffffff; color: #0f1d3d; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-diagonal-cut { position: absolute; left: 0; top: 0; width: 794px; height: 560px; overflow: hidden; }
+    .cover-diagonal-cut img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-diagonal-cut--p1 { clip-path: polygon(0 0, 36% 0, 0 62%); }
+    .cover-diagonal-cut--o1 { clip-path: polygon(38% 0, 42% 0, 0 72%, 0 65%); background: #e8380d; }
+    .cover-diagonal-cut--p2 { clip-path: polygon(44% 0, 51% 0, 0 88%, 0 76%); }
+    .cover-diagonal-cut--n1 { clip-path: polygon(53% 0, 56% 0, 0 97%, 0 92%); background: #0f1d3d; }
+    .cover-diagonal-end { position: absolute; right: 0; bottom: 30px; width: 300px; height: 210px; overflow: hidden; }
+    .cover-diagonal-end > div { position: absolute; inset: 0; }
+    .cover-diagonal-end img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-diagonal-end-n { background: #0f1d3d; clip-path: polygon(100% 0, 100% 12%, 14% 100%, 2% 100%); }
+    .cover-diagonal-end-o { background: #e8380d; clip-path: polygon(100% 22%, 100% 32%, 34% 100%, 22% 100%); }
+    .cover-diagonal-end-p { clip-path: polygon(100% 40%, 100% 100%, 42% 100%); }
+    .cover-diagonal > :not(.cover-diagonal-cut):not(.cover-diagonal-end) { position: relative; }
+    .cover-diagonal-mast { flex: none; padding: 34px 44px 0; display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+    .cover-diagonal-logo { height: 46px; width: auto; }
+    .cover-diagonal-org { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; text-align: right; color: #475569; }
+    .cover-diagonal-title { margin: 120px 44px 0 auto; width: 400px; text-align: right; }
+    .cover-diagonal-title h1 { margin: 0; font-size: 50px; font-weight: 700; line-height: 1.04; letter-spacing: -.02em; }
+    .cover-diagonal-sub { margin-top: 14px; font-size: 13px; color: #475569; }
+    .cover-diagonal-month { margin-top: 18px; display: inline-block; padding: 8px 20px; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 24px;
+        font-weight: 700; color: #ffffff; background: #0f1d3d; transform: skewX(-14deg); }
+    .cover-diagonal-month span { display: inline-block; transform: skewX(14deg); }
+    .cover-diagonal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 130px 56px 20px; }
+    .cover-diagonal-heading { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 8px; border-bottom: 2px solid #0f1d3d; }
+    .cover-diagonal-heading h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .cover-diagonal-heading span { font-size: 11px; color: #64748b; }
+    .cover-diagonal-kpis { margin-top: 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 22px; }
+    .cover-diagonal-kpi { position: relative; padding: 18px 18px 16px; color: #ffffff; }
+    .cover-diagonal-kpi::before { content: ""; position: absolute; inset: 0; z-index: -1; transform: skewX(-12deg); background: #4a6286; }
+    .cover-diagonal-kpi:nth-child(3n+2)::before { background: #e8380d; }
+    .cover-diagonal-kpi:nth-child(3n)::before { background: #f28c28; }
+    .cover-diagonal-kpi { z-index: 0; }
+    .cover-diagonal-kpi-head, .cover-diagonal-kpi-body { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+    .cover-diagonal-kpi-label { min-height: 26px; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+    .cover-diagonal-kpi-app { font-size: 10px; font-weight: 600; white-space: nowrap; opacity: .9; }
+    .cover-diagonal-kpi-value { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cover-diagonal-kpi-unit { margin-left: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; opacity: .85; }
+    .cover-diagonal-kpi-growth { padding: 0 5px; font-size: 11px; font-weight: 700; background: #ffffff; }
+    .cover-diagonal-up { color: #188038; }
+    .cover-diagonal-down { color: #c5221f; }
+    .cover-diagonal-prepared { margin-top: auto; font-size: 13px; color: #475569; }
+    .cover-diagonal-footer { flex: none; height: 30px; padding: 0 44px; display: flex; align-items: center; justify-content: space-between;
+        background: #0f1d3d; color: #ffffff; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+    .cover-diagonal-footer-end { color: #fb923c; }
+</style>
+<div class="cover-diagonal">
+    <div class="cover-diagonal-cut cover-diagonal-cut--p1"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+    <div class="cover-diagonal-cut cover-diagonal-cut--o1"></div>
+    <div class="cover-diagonal-cut cover-diagonal-cut--p2"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+    <div class="cover-diagonal-cut cover-diagonal-cut--n1"></div>
+    <div class="cover-diagonal-end">
+        <div class="cover-diagonal-end-n"></div><div class="cover-diagonal-end-o"></div>
+        <div class="cover-diagonal-end-p"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+    </div>
+    <div class="cover-diagonal-mast">
+        <div class="cover-diagonal-org">Steel Authority of India Limited<br/>Operations Directorate</div>
+        {% if page.logo_data_uri %}<img class="cover-diagonal-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+    </div>
+    <div class="cover-diagonal-title">
+        <h1>Operations Monthly Informatics</h1>
+        <div class="cover-diagonal-sub">Steel Authority of India Limited &middot; Operations Directorate</div>
+        <div class="cover-diagonal-month"><span>{{ page.month_display }}</span></div>
+    </div>
+    <div class="cover-diagonal-body">
+        <div class="cover-diagonal-heading">
+            <h2>SAIL Performance at a Glance ({{ page.month_short }})</h2>
+            <span>Million Tonnes</span>
+        </div>
+        <div class="cover-diagonal-kpis">{{ kpi_cards(page.kpis, 'cover-diagonal') }}</div>
+        <div class="cover-diagonal-prepared">Prepared By: <b>MIS Group</b></div>
+    </div>
+    {{ footer_strip(page, 'cover-diagonal') }}
+</div>

@@ -1,0 +1,67 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Triptych" cover (Canva DAHW9su2mKg): a navy header with a large title,
+   then three full-height colour columns (orange / charcoal / slate), each
+   with a crop of the photo and two KPIs - steel left and right, iron ore in
+   the middle, in page.kpis order. 794 x 1121 px box. #}
+<style>
+    .cover-triptych { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #000c48; color: #ffffff; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-triptych-head { flex: none; padding: 30px 40px 24px; }
+    .cover-triptych-id { display: flex; align-items: center; gap: 12px; }
+    .cover-triptych-logo { height: 42px; width: auto; padding: 4px; background: #ffffff; border-radius: 3px; }
+    .cover-triptych-org { font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: #cbd5e1; }
+    .cover-triptych-head h1 { margin: 34px 0 0; font-size: 58px; font-weight: 400; line-height: 1.04; letter-spacing: -.02em; }
+    .cover-triptych-rule { margin-top: 24px; padding-top: 12px; display: flex; justify-content: space-between; align-items: baseline;
+        border-top: 1px solid rgba(255, 255, 255, .6); }
+    .cover-triptych-dir { font-size: 13px; font-weight: 600; }
+    .cover-triptych-month { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 22px; font-weight: 600; }
+    .cover-triptych-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+    .cover-triptych-col { display: flex; flex-direction: column; padding: 22px 20px 18px; min-width: 0; }
+    .cover-triptych-col:nth-child(1) { background: #e8380d; }
+    .cover-triptych-col:nth-child(2) { background: #23272f; }
+    .cover-triptych-col:nth-child(3) { background: #4b5563; }
+    .cover-triptych-photo { position: relative; flex: none; height: 230px; overflow: hidden; background: #111827; }
+    .cover-triptych-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-triptych-col:nth-child(1) .cover-triptych-photo img { object-position: 0% 50%; }
+    .cover-triptych-col:nth-child(3) .cover-triptych-photo img { object-position: 100% 50%; }
+    .cover-triptych-col:nth-child(2) .cover-triptych-photo { margin-top: 60px; }
+    .cover-triptych-cap { margin-top: 12px; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .8; }
+    .cover-triptych-kpi { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .45); }
+    .cover-triptych-kpi-head { display: flex; flex-direction: column; gap: 2px; }
+    .cover-triptych-kpi-label { min-height: 28px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; }
+    .cover-triptych-kpi-app { font-size: 10px; font-weight: 600; opacity: .8; }
+    .cover-triptych-kpi-body { margin-top: 4px; display: flex; align-items: baseline; justify-content: space-between; gap: 4px; }
+    .cover-triptych-kpi-value { font-size: 34px; font-weight: 400; line-height: 1.1; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+    .cover-triptych-kpi-unit { margin-left: 3px; font-size: 11px; font-weight: 600; opacity: .8; }
+    .cover-triptych-kpi-growth { padding: 1px 5px; font-size: 11px; font-weight: 700; background: #ffffff; }
+    .cover-triptych-up { color: #188038; }
+    .cover-triptych-down { color: #c5221f; }
+    .cover-triptych-prepared { margin-top: auto; font-size: 11px; opacity: .85; }
+    .cover-triptych-footer { flex: none; height: 30px; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;
+        background: #000c48; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+    .cover-triptych-footer-end { color: #fb923c; }
+</style>
+<div class="cover-triptych">
+    <div class="cover-triptych-head">
+        <div class="cover-triptych-id">
+            {% if page.logo_data_uri %}<img class="cover-triptych-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+            <div class="cover-triptych-org">Steel Authority of India Limited</div>
+        </div>
+        <h1>Operations Monthly<br/>Informatics</h1>
+        <div class="cover-triptych-rule">
+            <span class="cover-triptych-dir">Operations Directorate &middot; SAIL Performance at a Glance (Million Tonnes)</span>
+            <span class="cover-triptych-month">{{ page.month_display }}</span>
+        </div>
+    </div>
+    <div class="cover-triptych-cols">
+        {% for cap, part in [('Iron making', page.kpis[0:2]), ('Iron ore mines', page.kpis[2:4]), ('Steel output', page.kpis[4:6])] %}
+        <div class="cover-triptych-col">
+            <div class="cover-triptych-photo"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+            <div class="cover-triptych-cap">{{ cap }}</div>
+            {{ kpi_cards(part, 'cover-triptych') }}
+            {% if loop.last %}<div class="cover-triptych-prepared">Prepared By: <b>MIS Group</b></div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {{ footer_strip(page, 'cover-triptych') }}
+</div>

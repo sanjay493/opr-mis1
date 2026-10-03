@@ -1,0 +1,71 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Spotlight" cover (Canva DAHW9s4ykDA, recast to A4 portrait): navy page,
+   large white title beside a photo with one sweeping rounded corner, and a
+   full-width orange KPI band. 794 x 1121 px box. #}
+<style>
+    .cover-spotlight { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #0b1f4a; color: #ffffff; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-spotlight-mast { flex: none; padding: 30px 44px 0; display: flex; align-items: center; gap: 12px; }
+    .cover-spotlight-logo { height: 44px; width: auto; padding: 4px; background: #ffffff; border-radius: 3px; }
+    .cover-spotlight-org { font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: #cbd5e1; }
+    .cover-spotlight-hero { position: relative; flex: none; height: 520px; }
+    .cover-spotlight-photo { position: absolute; right: 0; top: 34px; width: 440px; height: 460px; overflow: hidden;
+        border-top-left-radius: 220px; background: #1e293b; }
+    .cover-spotlight-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-spotlight-text { position: absolute; left: 44px; top: 110px; width: 330px; }
+    .cover-spotlight-dir { font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: #fb7a4b; }
+    .cover-spotlight-text h1 { margin: 12px 0 0; font-size: 54px; font-weight: 600; line-height: 1.02; letter-spacing: -.02em; }
+    .cover-spotlight-dot { margin-top: 24px; width: 12px; height: 12px; border-radius: 50%; background: #e8380d; }
+    .cover-spotlight-band { flex: none; padding: 26px 44px 30px; background: #e8380d; }
+    .cover-spotlight-heading { display: flex; align-items: baseline; justify-content: space-between; }
+    .cover-spotlight-heading h2 { margin: 0; font-size: 19px; font-weight: 600; }
+    .cover-spotlight-heading span { font-size: 11px; font-weight: 600; color: #ffe4d6; }
+    .cover-spotlight-kpis { margin-top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); row-gap: 22px; }
+    .cover-spotlight-kpi { padding: 2px 16px; border-left: 1px solid rgba(255, 255, 255, .45); }
+    .cover-spotlight-kpi:nth-child(3n+1) { padding-left: 0; border-left: 0; }
+    .cover-spotlight-kpi-head, .cover-spotlight-kpi-body { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+    .cover-spotlight-kpi-label { min-height: 28px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; }
+    .cover-spotlight-kpi-app { font-size: 10px; font-weight: 700; white-space: nowrap; color: #ffe4d6; }
+    .cover-spotlight-kpi-value { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cover-spotlight-kpi-unit { margin-left: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; color: #ffe4d6; }
+    .cover-spotlight-kpi-growth { padding: 1px 6px; font-size: 11px; font-weight: 700; background: #ffffff; border-radius: 2px; }
+    .cover-spotlight-up { color: #188038; }
+    .cover-spotlight-down { color: #c5221f; }
+    .cover-spotlight-body { flex: 1; min-height: 0; padding: 26px 44px 22px; display: flex; align-items: flex-end; justify-content: space-between; }
+    .cover-spotlight-month-k { font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #93b4ec; }
+    .cover-spotlight-month-v { margin-top: 4px; font-size: 48px; font-weight: 300; line-height: 1; }
+    .cover-spotlight-prepared { font-size: 13px; color: #cbd5e1; }
+    .cover-spotlight-prepared b { color: #ffffff; }
+    .cover-spotlight-footer { flex: none; height: 30px; padding: 0 44px; display: flex; align-items: center; justify-content: space-between;
+        background: #000c48; font-size: 10px; font-weight: 600; letter-spacing: .16em; border-top: 1px solid rgba(255, 255, 255, .12); }
+    .cover-spotlight-footer-end { color: #fb7a4b; }
+</style>
+<div class="cover-spotlight">
+    <div class="cover-spotlight-mast">
+        {% if page.logo_data_uri %}<img class="cover-spotlight-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+        <div class="cover-spotlight-org">Steel Authority of India Limited</div>
+    </div>
+    <div class="cover-spotlight-hero">
+        <div class="cover-spotlight-photo"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+        <div class="cover-spotlight-text">
+            <div class="cover-spotlight-dir">Operations Directorate</div>
+            <h1>Operations Monthly Informatics</h1>
+            <div class="cover-spotlight-dot"></div>
+        </div>
+    </div>
+    <div class="cover-spotlight-band">
+        <div class="cover-spotlight-heading">
+            <h2>SAIL Performance at a Glance ({{ page.month_short }})</h2>
+            <span>Million Tonnes</span>
+        </div>
+        <div class="cover-spotlight-kpis">{{ kpi_cards(page.kpis, 'cover-spotlight') }}</div>
+    </div>
+    <div class="cover-spotlight-body">
+        <div>
+            <div class="cover-spotlight-month-k">Report month</div>
+            <div class="cover-spotlight-month-v">{{ page.month_display }}</div>
+        </div>
+        <div class="cover-spotlight-prepared">Prepared By: <b>MIS Group</b></div>
+    </div>
+    {{ footer_strip(page, 'cover-spotlight') }}
+</div>

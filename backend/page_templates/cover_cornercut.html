@@ -1,0 +1,63 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Corner cut" cover (Canva DAHW9hVUhSs, recast to A4 portrait): white page
+   with the photo in a large triangle at the top-left and a solid orange
+   triangle at the bottom-right; title right-aligned between them and KPIs
+   in hairline-ruled columns. 794 x 1121 px box. #}
+<style>
+    .cover-cornercut { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #ffffff; color: #1e2a44; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-cornercut-photo { position: absolute; left: 0; top: 0; width: 794px; height: 560px; overflow: hidden; background: #1e293b;
+        clip-path: polygon(0 0, 58% 0, 0 100%); }
+    .cover-cornercut-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-cornercut-edge { position: absolute; left: 0; top: 0; width: 794px; height: 560px; background: #1e2a44;
+        clip-path: polygon(58% 0, 59.4% 0, 0 101.8%, 0 100%); }
+    .cover-cornercut-tri { position: absolute; right: 0; bottom: 30px; width: 480px; height: 230px; background: #f28c28;
+        clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+    .cover-cornercut > :not(.cover-cornercut-photo):not(.cover-cornercut-edge):not(.cover-cornercut-tri) { position: relative; }
+    .cover-cornercut-mast { flex: none; padding: 34px 44px 0; display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+    .cover-cornercut-logo { height: 46px; width: auto; }
+    .cover-cornercut-org { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; text-align: right; color: #64748b; }
+    .cover-cornercut-title { margin: 130px 44px 0 auto; width: 400px; text-align: right; }
+    .cover-cornercut-title h1 { margin: 0; font-size: 50px; font-weight: 600; line-height: 1.06; letter-spacing: -.015em; }
+    .cover-cornercut-sub { margin-top: 12px; font-size: 13px; font-weight: 500; color: #475569; }
+    .cover-cornercut-month { margin-top: 16px; font-size: 32px; font-weight: 300; color: #64748b; }
+    .cover-cornercut-body { margin-top: 150px; padding: 0 44px; }
+    .cover-cornercut-heading { text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #1e2a44; }
+    .cover-cornercut-heading span { color: #94a3b8; font-weight: 500; }
+    .cover-cornercut-kpis { margin-top: 16px; display: grid; grid-template-columns: repeat(3, 1fr); row-gap: 26px; }
+    .cover-cornercut-kpi { padding: 4px 18px; text-align: center; border-left: 1px solid #cbd5e1; }
+    .cover-cornercut-kpi:nth-child(3n+1) { border-left: 0; }
+    .cover-cornercut-kpi-head, .cover-cornercut-kpi-body { display: flex; flex-direction: column; align-items: center; }
+    .cover-cornercut-kpi-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: #475569; }
+    .cover-cornercut-kpi--ore .cover-cornercut-kpi-label { color: #c2410c; }
+    .cover-cornercut-kpi-app { font-size: 10px; color: #94a3b8; }
+    .cover-cornercut-kpi-value { margin-top: 6px; font-size: 36px; font-weight: 400; font-variant-numeric: tabular-nums; }
+    .cover-cornercut-kpi-unit { margin-left: 3px; font-size: 11px; color: #64748b; }
+    .cover-cornercut-kpi-growth { font-size: 11px; font-weight: 700; }
+    .cover-cornercut-up { color: #047857; }
+    .cover-cornercut-down { color: #b91c1c; }
+    .cover-cornercut-prepared { margin: auto 44px 22px; font-size: 13px; color: #475569; }
+    .cover-cornercut-footer { flex: none; height: 30px; padding: 0 44px; display: flex; align-items: center; justify-content: space-between;
+        background: #1e2a44; color: #ffffff; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+    .cover-cornercut-footer-end { color: #fdba74; }
+</style>
+<div class="cover-cornercut">
+    <div class="cover-cornercut-photo"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+    <div class="cover-cornercut-edge"></div>
+    <div class="cover-cornercut-tri"></div>
+    <div class="cover-cornercut-mast">
+        <div class="cover-cornercut-org">Steel Authority of India Limited<br/>Operations Directorate</div>
+        {% if page.logo_data_uri %}<img class="cover-cornercut-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+    </div>
+    <div class="cover-cornercut-title">
+        <h1>Operations Monthly Informatics</h1>
+        <div class="cover-cornercut-sub">Steel Authority of India Limited &middot; Operations Directorate</div>
+        <div class="cover-cornercut-month">{{ page.month_display }}</div>
+    </div>
+    <div class="cover-cornercut-body">
+        <div class="cover-cornercut-heading">SAIL Performance at a Glance ({{ page.month_short }}) <span>&middot; Million Tonnes</span></div>
+        <div class="cover-cornercut-kpis">{{ kpi_cards(page.kpis, 'cover-cornercut') }}</div>
+    </div>
+    <div class="cover-cornercut-prepared">Prepared By: <b>MIS Group</b></div>
+    {{ footer_strip(page, 'cover-cornercut') }}
+</div>
