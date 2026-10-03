@@ -1,71 +1,70 @@
 {% from 'cover_macros.html' import kpi_cards, footer_strip %}
-{# "Industrial" cover (Stitch screen 1703a045): dark navy page with a faint
-   blueprint grid, an angled photo panel under the masthead, an uppercase
-   title with a month badge, and light outlined KPI tiles. 794 x 1121 px box. #}
+{# "Industrial" cover (Stitch screen 1703a045, light variant): near-white
+   page with a faint blueprint grid, a photo panel under the masthead ending
+   in an S-curve, an uppercase title with a navy month badge, and outlined
+   KPI tiles. 794 x 1121 px box. #}
 <style>
     .cover-industrial { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
-        color: #ffffff; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35;
-        background-color: #000c48;
-        background-image: linear-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px),
-                          linear-gradient(90deg, rgba(255, 255, 255, .035) 1px, transparent 1px);
+        color: #000c48; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35;
+        background-color: #f7f9fc;
+        background-image: linear-gradient(rgba(0, 71, 200, .06) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(0, 71, 200, .06) 1px, transparent 1px);
         background-size: 24px 24px; }
     .cover-industrial-accent { flex: none; height: 6px; background: linear-gradient(90deg, #e8380d, #b4530a 35%, #0047c8); }
-    .cover-industrial-mast { flex: none; padding: 26px 40px 18px; display: flex; align-items: center; gap: 14px;
-        border-bottom: 1px solid rgba(255, 255, 255, .12); }
-    .cover-industrial-logo { height: 48px; width: auto; padding: 4px; background: #ffffff; border-radius: 3px; }
-    .cover-industrial-org { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #93c5fd; }
+    .cover-industrial-mast { flex: none; padding: 24px 40px 16px; display: flex; align-items: center; gap: 14px;
+        background: #ffffff; border-bottom: 1px solid #dbe3ef; }
+    .cover-industrial-logo { height: 50px; width: auto; }
+    .cover-industrial-org { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #0047c8; }
     /* Photo panel ends in a sweeping S-curve with an orange rim. The page box
        is a fixed 794 px wide, so the curves are absolute path() coordinates. */
     .cover-industrial-hero { position: relative; flex: none; height: 360px; }
     .cover-industrial-rim, .cover-industrial-shape { position: absolute; inset: 0; }
     .cover-industrial-rim { background: #e8380d;
         clip-path: path('M0 0H794V250C640 336 520 236 380 300C240 364 120 360 0 318Z'); }
-    .cover-industrial-shape { overflow: hidden; background: #000826;
+    .cover-industrial-shape { overflow: hidden; background: #dbe3ef;
         clip-path: path('M0 0H794V242C640 328 520 228 380 292C240 356 120 352 0 310Z'); }
     .cover-industrial-shape img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .cover-industrial-shape::after { content: ""; position: absolute; inset: 0;
-        background: linear-gradient(0deg, #000c48 0%, rgba(0, 12, 72, .35) 45%, rgba(0, 12, 72, 0) 100%),
-                    linear-gradient(90deg, rgba(0, 12, 72, .75) 0%, rgba(0, 12, 72, 0) 50%, rgba(0, 12, 72, .5) 100%); }
+        background: linear-gradient(180deg, rgba(0, 12, 72, .18) 0%, rgba(0, 12, 72, 0) 30%); }
     .cover-industrial-plaque { position: absolute; z-index: 1; left: 40px; bottom: 96px; padding: 8px 16px; background: #000c48;
-        border: 1px solid rgba(255, 255, 255, .15); border-left: 4px solid #e8380d; font-size: 10px; font-weight: 700;
-        letter-spacing: .14em; text-transform: uppercase; color: #cbd5e1; }
+        border-left: 4px solid #e8380d; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #ffffff; }
     .cover-industrial-titlebar { margin: 0 40px; padding-bottom: 20px; display: flex; align-items: flex-end; justify-content: space-between;
-        gap: 20px; border-bottom: 1px solid rgba(255, 255, 255, .2); }
+        gap: 20px; border-bottom: 1px solid #cbd5e1; }
     .cover-industrial-dir { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .25em;
-        text-transform: uppercase; color: #93c5fd; }
-    .cover-industrial-dir::before { content: ""; width: 24px; height: 6px; background: #0047c8; }
+        text-transform: uppercase; color: #0047c8; }
+    .cover-industrial-dir::before { content: ""; width: 24px; height: 6px; background: #e8380d; }
     .cover-industrial-titlebar h1 { margin: 8px 0 0; font-size: 34px; font-weight: 700; line-height: 1.02; text-transform: uppercase; letter-spacing: -.01em; }
-    .cover-industrial-month { flex: none; padding: 10px 18px; text-align: center; background: #0047c8; border: 1px solid rgba(255, 255, 255, .25); }
-    .cover-industrial-month-k { font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #dbeafe; }
+    .cover-industrial-month { flex: none; padding: 10px 18px; text-align: center; background: #000c48; color: #ffffff; border-bottom: 4px solid #e8380d; }
+    .cover-industrial-month-k { font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #bfdbfe; }
     .cover-industrial-month-v { margin-top: 2px; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 30px; font-weight: 700; line-height: 1.05; }
     .cover-industrial-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 22px 40px 18px; }
     .cover-industrial-heading { display: flex; align-items: center; justify-content: space-between; }
     .cover-industrial-heading h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700;
         letter-spacing: .06em; text-transform: uppercase; }
     .cover-industrial-heading h2::before { content: ""; width: 4px; height: 18px; background: #e8380d; }
-    .cover-industrial-heading span { padding: 3px 10px; font-size: 10px; color: #cbd5e1; border: 1px solid rgba(255, 255, 255, .2); }
+    .cover-industrial-heading span { padding: 3px 10px; font-size: 10px; color: #475569; background: #ffffff; border: 1px solid #cbd5e1; }
     .cover-industrial-kpis { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
     .cover-industrial-kpi { display: grid; grid-template-columns: 1fr auto; align-items: center;
         grid-template-areas: "label label" "value value" "app growth"; padding: 14px 14px 12px;
-        background: rgba(255, 255, 255, .05); border: 1px solid rgba(147, 197, 253, .35); }
-    .cover-industrial-kpi--ore { border-color: rgba(251, 146, 60, .45); }
+        background: #ffffff; border: 1px solid #93b4ec; border-top: 3px solid #0047c8; }
+    .cover-industrial-kpi--ore { border-color: #f0b98f; border-top-color: #b4530a; }
     .cover-industrial-kpi-head, .cover-industrial-kpi-body { display: contents; }
-    .cover-industrial-kpi-label { grid-area: label; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; color: #93c5fd; }
-    .cover-industrial-kpi--ore .cover-industrial-kpi-label { color: #fdba74; }
+    .cover-industrial-kpi-label { grid-area: label; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; color: #0047c8; }
+    .cover-industrial-kpi--ore .cover-industrial-kpi-label { color: #b4530a; }
     .cover-industrial-kpi-value { grid-area: value; margin: 6px 0 10px; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 28px;
         font-weight: 700; font-variant-numeric: tabular-nums; }
-    .cover-industrial-kpi-unit { margin-left: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; color: #cbd5e1; }
+    .cover-industrial-kpi-unit { margin-left: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; color: #64748b; }
     .cover-industrial-kpi-app { grid-area: app; justify-self: start; padding: 2px 7px; font-size: 10.5px; font-weight: 700; color: #ffffff;
         background: #0047c8; }
     .cover-industrial-kpi--ore .cover-industrial-kpi-app { background: #b4530a; }
     .cover-industrial-kpi-growth { grid-area: growth; font-size: 11px; font-weight: 700; }
-    .cover-industrial-up { color: #4ade80; }
-    .cover-industrial-down { color: #f87171; }
+    .cover-industrial-up { color: #188038; }
+    .cover-industrial-down { color: #c5221f; }
     .cover-industrial-prepared { margin-top: auto; padding: 14px 18px; display: flex; align-items: center; gap: 12px;
-        background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .15); font-size: 13px; }
-    .cover-industrial-mis { padding: 6px 8px; background: #0047c8; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+        background: #ffffff; border: 1px solid #cbd5e1; font-size: 13px; }
+    .cover-industrial-mis { padding: 6px 8px; background: #000c48; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
     .cover-industrial-footer { flex: none; height: 30px; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;
-        background: #00082e; border-top: 1px solid rgba(255, 255, 255, .12); font-size: 10px; font-weight: 600; letter-spacing: .18em; color: #cbd5e1; }
+        background: #000c48; font-size: 10px; font-weight: 600; letter-spacing: .18em; color: #ffffff; }
     .cover-industrial-footer-end { color: #fb923c; }
 </style>
 <div class="cover-industrial">
