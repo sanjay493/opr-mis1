@@ -432,6 +432,7 @@ from api_key_highlights import router as key_highlights_router
 from api_steel_sales_highlights import router as steel_sales_highlights_router
 from api_capacity import router as capacity_router
 from api_cost_trend_extract import router as cost_trend_extract_router
+from api_cover import router as cover_router
 
 db.init_db()
 
@@ -910,6 +911,7 @@ app.include_router(key_highlights_router)
 app.include_router(steel_sales_highlights_router)
 app.include_router(capacity_router)
 app.include_router(cost_trend_extract_router)
+app.include_router(cover_router)
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(_STATIC_DIR, "profile_pics"), exist_ok=True)
