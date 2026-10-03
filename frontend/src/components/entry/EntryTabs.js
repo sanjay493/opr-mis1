@@ -33,6 +33,7 @@ const FORMS = {
   'rail-report': dynamic(() => import('./rail-report/Form'), { loading }),
   'ready-reckoner': dynamic(() => import('./ready-reckoner/Form'), { loading }),
   'major-unit-daily': dynamic(() => import('./major-unit-daily/Form'), { loading }),
+  'cover-photos': dynamic(() => import('./cover-photos/Form'), { loading }),
 };
 
 /**

@@ -64,13 +64,14 @@ export const ENTRY_GROUPS = [
     id: 'reference',
     route: '/data-entry/reference',
     title: 'Reference & Records',
-    description: 'BF benchmarking, rail, ready reckoner and major-unit daily records.',
+    description: 'BF benchmarking, rail, ready reckoner, major-unit daily records and cover photos.',
     icon: '📋',
     tabs: [
       { id: 'bf-benchmark', label: 'Large BF Benchmarking', description: 'Non-SAIL large BFs and their per-FY figures, plus SAIL BF working volume.' },
       { id: 'rail-report', label: 'Rail Production & Dispatch (Page 18.5)', description: 'One financial year at a time; running Apr-to-date cumulative for the open FY.' },
       { id: 'ready-reckoner', label: 'Ready Reckoner', description: 'Unit-wise capacity and product-mix reference tables.' },
       { id: 'major-unit-daily', label: '5 ISPs Major Units Daily Records', description: 'Best-ever daily production figures for major units (Annexure-3).' },
+      { id: 'cover-photos', label: 'Cover Photos', description: 'Photo library for the report cover designs: upload, browse, remove.' },
     ],
   },
 ];
