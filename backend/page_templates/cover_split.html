@@ -1,0 +1,47 @@
+{% from 'cover_macros.html' import kpi_cards %}
+<style>
+    .cover-split { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex;
+        background: #ffffff; color: #000c48; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif;
+        font-size: 10pt; line-height: 1.3; }
+    .cover-split-photo { position: relative; width: 84mm; height: 100%; flex: none; overflow: hidden; }
+    .cover-split-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .cover-split-photo::after { content: ""; position: absolute; inset: 0;
+        background: linear-gradient(180deg, rgba(0, 12, 72, 0) 55%, rgba(0, 12, 72, .55) 100%); }
+    .cover-split-body { flex: 1; display: flex; flex-direction: column; padding: 18mm 14mm 9mm 14mm; }
+    .cover-split-logo { height: 18mm; width: auto; align-self: flex-start; }
+    .cover-split-title { margin-top: 14mm; font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
+        font-size: 30pt; font-weight: 700; line-height: 1.05; }
+    .cover-split-dir { margin-top: 3mm; font-size: 12pt; font-weight: 600; color: #0047c8;
+        letter-spacing: .04em; text-transform: uppercase; }
+    .cover-split-month { margin-top: 12mm; font-size: 40pt; font-weight: 700; line-height: 1; color: #e8380d; }
+    .cover-split-heading { margin-top: 12mm; padding-bottom: 2mm; border-bottom: .5mm solid #0047c8;
+        font-size: 10pt; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+    .cover-split-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 5mm; }
+    .cover-split-kpi { border-left: 1mm solid #0047c8; padding: 2mm 3mm; background: #f3f6fb; }
+    .cover-split-kpi--ore { border-left-color: #b4530a; }
+    .cover-split-kpi-label { font-size: 7.5pt; font-weight: 700; color: #4a5568; letter-spacing: .03em; }
+    .cover-split-kpi-value { font-size: 17pt; font-weight: 700; }
+    .cover-split-kpi-unit { margin-left: 1mm; font-size: 8pt; font-weight: 600; }
+    .cover-split-kpi-sub { font-size: 8pt; color: #4a5568; }
+    .cover-split-up { color: #064e3b; font-weight: 700; }
+    .cover-split-down { color: #9a3412; font-weight: 700; }
+    .cover-split-prepared { margin-top: auto; padding-bottom: 5mm; font-size: 10pt; }
+    .cover-split-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 9mm; display: flex;
+        align-items: center; justify-content: center; gap: 3mm; background: #000c48; color: #ffffff;
+        font-size: 7.5pt; letter-spacing: .08em; }
+</style>
+<div class="cover-split">
+    <div class="cover-split-photo"><img src="{{ page.photo_data_uri }}" alt=""/></div>
+    <div class="cover-split-body">
+        {% if page.logo_data_uri %}<img class="cover-split-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+        <div class="cover-split-title">Operations Monthly Informatics</div>
+        <div class="cover-split-dir">Operations Directorate</div>
+        <div class="cover-split-month">{{ page.month_display }}</div>
+        <div class="cover-split-heading">SAIL Performance at a Glance ({{ page.month_short }})</div>
+        <div class="cover-split-kpis">{{ kpi_cards(page.kpis, 'cover-split') }}</div>
+        <div class="cover-split-prepared">Prepared By: <b>MIS Group</b></div>
+    </div>
+    <div class="cover-split-bar">
+        <span>MIS OPERATIONS</span><span>|</span><span>OMI &ndash; {{ page.month_short }}</span><span>|</span><span>FOR INTERNAL CIRCULATION ONLY</span>
+    </div>
+</div>

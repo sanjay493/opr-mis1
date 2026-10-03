@@ -25,10 +25,17 @@ watermark in its lower-left, where there's nothing else printed):
     entry tables — same source as page 4.5). All Million-T with
     %-of-plan and %-growth-vs-CPLY.
   - a thin admin line in the bottom wave band
+
+Photo designs (cover_designs.PHOTO_DESIGN_IDS) are chosen per month in
+report_cover_settings (cover_store.py); they render
+page_templates/cover_<design>.html via cover.html, with the photo and the
+SAIL logo embedded as data URIs for the same offline reason.
 """
 import base64
 import os
 
+import cover_designs
+import cover_store
 import db
 from report_utils import compute_item_row
 
@@ -43,7 +50,10 @@ _DB_ITEM = {"Crude Steel": "Total Crude Steel"}
 _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+_LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "sail_logo.png")
+
 _bg_cache = None
+_logo_cache = None
 
 
 def _file_data_uri(path: str, mime: str) -> str:
@@ -63,6 +73,13 @@ def _bg_data_uri() -> str:
     if _bg_cache is None:
         _bg_cache = _file_data_uri(_BG_PATH, "image/jpeg")
     return _bg_cache
+
+
+def _logo_data_uri() -> str:
+    global _logo_cache
+    if _logo_cache is None:
+        _logo_cache = _file_data_uri(_LOGO_PATH, "image/png")
+    return _logo_cache
 
 
 def _norm_growth(growth) -> int | None:
@@ -127,9 +144,23 @@ def _mines_kpi_row(report_month: str, label: str, kind: str) -> dict:
     }
 
 
-def generate_cover(report_month: str) -> dict:
+def _saved_setting(report_month: str):
+    """The month's saved cover choice, or None. Never fails the cover: if the
+    settings table is missing (migration not applied) or the DB errors, the
+    month simply keeps the Classic cover."""
+    try:
+        return cover_store.get_setting(report_month)
+    except Exception as e:
+        print(f"[cover] cover setting unavailable for {report_month} ({type(e).__name__}: {e}) - using Classic")
+        return None
+
+
+def generate_cover(report_month: str, design: str | None = None, photo_id: int | None = None) -> dict:
+    """Page-1 data. `design`/`photo_id` override the saved choice (the /report
+    preview of an unsaved pick); otherwise the month's saved setting is used,
+    and a month with none keeps the Classic cover with exactly today's keys."""
     y, m = int(report_month[:4]), int(report_month[5:7])
-    return {
+    page = {
         "type": "cover",
         "bg_data_uri": _bg_data_uri(),
         "month_display": f"{_MON_ABBR[m]}-{y}",
@@ -146,3 +177,20 @@ def generate_cover(report_month: str) -> dict:
             _kpi_row(report_month, "Saleable Steel"),
         ],
     }
+    setting = _saved_setting(report_month)
+    if design is None:
+        design = setting["design"] if setting else "classic"
+        photo_id = setting["photo_id"] if setting else None
+    elif photo_id is None and setting:
+        photo_id = setting["photo_id"]
+    if design not in cover_designs.PHOTO_DESIGN_IDS:
+        return page
+    photo, path = cover_store.resolve_photo(photo_id)
+    page.update({
+        "design": design,
+        "report_month": report_month,
+        "photo_id": photo["id"] if photo else None,
+        "photo_data_uri": _file_data_uri(path, "image/jpeg"),
+        "logo_data_uri": _logo_data_uri(),
+    })
+    return page

@@ -1,0 +1,12 @@
+{# KPI cards shared by every photo cover design. `p` is the design's class
+   prefix (e.g. 'cover-split'), so each design styles its own cards without
+   any class shared across designs. #}
+{% macro kpi_cards(kpis, p) -%}
+{% for k in kpis %}
+<div class="{{ p }}-kpi {{ p }}-kpi--{{ k.kind }}">
+    <div class="{{ p }}-kpi-label">{{ k.label }}</div>
+    <div class="{{ p }}-kpi-value">{{ k.mt }}<span class="{{ p }}-kpi-unit">MT</span></div>
+    <div class="{{ p }}-kpi-sub">APP {{ k.pct_ful }}%{% if k.growth_good == true %} &middot; <span class="{{ p }}-up">&#9650;{{ k.growth_abs }}%</span>{% elif k.growth_good == false %} &middot; <span class="{{ p }}-down">&#9660;{{ k.growth_abs }}%</span>{% endif %}</div>
+</div>
+{% endfor %}
+{%- endmacro %}
