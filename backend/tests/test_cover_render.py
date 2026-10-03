@@ -14,7 +14,7 @@ import cover_render
 import cover_store
 import page_cover
 
-RENDERED_DESIGNS = ["split"]   # Task 5 replaces this with cover_designs.PHOTO_DESIGN_IDS
+RENDERED_DESIGNS = list(cover_designs.PHOTO_DESIGN_IDS)
 
 
 def _photo_uri(size):
@@ -47,9 +47,10 @@ def test_design_renders_exactly_one_page(browser, design, photo_size):
     reader = _pdf(browser, cover_render.render_cover_html(
         cover_render.sample_page(design, photo_uri=_photo_uri(photo_size))))
     assert len(reader.pages) == 1
-    text = " ".join(reader.pages[0].extract_text().split())   # designs may wrap the title
+    # designs may wrap the title or set it in capitals
+    text = " ".join(reader.pages[0].extract_text().split()).casefold()
     for needle in ("Sep-2026", "1.723", "Operations Monthly Informatics", "MIS Group"):
-        assert needle in text, needle
+        assert needle.casefold() in text, needle
 
 
 @pytest.mark.parametrize("design", RENDERED_DESIGNS)
@@ -57,6 +58,32 @@ def test_month_without_figures_still_one_page(browser, design):
     reader = _pdf(browser, cover_render.render_cover_html(cover_render.sample_page(design, blank=True)))
     assert len(reader.pages) == 1
     assert "—" in reader.pages[0].extract_text()
+
+
+_CLIPPED_JS = """() => {
+    const root = document.querySelector('body > div');
+    const box = root.getBoundingClientRect();
+    const out = [];
+    for (const el of root.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect();
+        if (r.width && r.height && (r.bottom > box.bottom + 0.5 || r.right > box.right + 0.5)) {
+            out.push(el.className + ' ' + Math.round(r.bottom - box.bottom) + 'px');
+        }
+    }
+    return out;
+}"""
+
+
+@pytest.mark.parametrize("design", RENDERED_DESIGNS)
+@pytest.mark.parametrize("blank", [False, True])
+def test_nothing_is_cut_off_at_the_page_edge(browser, design, blank):
+    """The design box hides overflow (so it can never spill onto a second
+    page) - this catches content that would silently be cut off instead."""
+    page = browser.new_page(viewport={"width": 794, "height": 1123})
+    page.set_content(cover_render.render_cover_html(cover_render.sample_page(design, blank=blank)), wait_until="load")
+    clipped = page.evaluate(_CLIPPED_JS)
+    page.close()
+    assert clipped == []
 
 
 def _stub_kpis(monkeypatch):

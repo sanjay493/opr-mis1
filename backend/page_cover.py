@@ -50,7 +50,7 @@ _DB_ITEM = {"Crude Steel": "Total Crude Steel"}
 _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-_LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "sail_logo.png")
+_LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "cover", "sail_logo_cover.png")
 
 _bg_cache = None
 _logo_cache = None

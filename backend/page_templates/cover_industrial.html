@@ -1,0 +1,94 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Industrial" cover (Stitch screen 1703a045): dark navy page with a faint
+   blueprint grid, an angled photo panel under the masthead, an uppercase
+   title with a month badge, and light outlined KPI tiles. 794 x 1121 px box. #}
+<style>
+    .cover-industrial { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        color: #ffffff; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35;
+        background-color: #000c48;
+        background-image: linear-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255, 255, 255, .035) 1px, transparent 1px);
+        background-size: 24px 24px; }
+    .cover-industrial-accent { flex: none; height: 6px; background: linear-gradient(90deg, #e8380d, #b4530a 35%, #0047c8); }
+    .cover-industrial-mast { flex: none; padding: 26px 40px 18px; display: flex; align-items: center; gap: 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, .12); }
+    .cover-industrial-logo { height: 48px; width: auto; padding: 4px; background: #ffffff; border-radius: 3px; }
+    .cover-industrial-org { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #93c5fd; }
+    .cover-industrial-hero { position: relative; flex: none; height: 360px; background: #000826;
+        clip-path: polygon(0 0, 100% 0, 100% 86%, 0 100%); }
+    .cover-industrial-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-industrial-hero::after { content: ""; position: absolute; inset: 0;
+        background: linear-gradient(0deg, #000c48 0%, rgba(0, 12, 72, .35) 45%, rgba(0, 12, 72, 0) 100%),
+                    linear-gradient(90deg, rgba(0, 12, 72, .75) 0%, rgba(0, 12, 72, 0) 50%, rgba(0, 12, 72, .5) 100%); }
+    .cover-industrial-plaque { position: absolute; z-index: 1; left: 40px; bottom: 70px; padding: 8px 16px; background: #000c48;
+        border: 1px solid rgba(255, 255, 255, .15); border-left: 4px solid #e8380d; font-size: 10px; font-weight: 700;
+        letter-spacing: .14em; text-transform: uppercase; color: #cbd5e1; }
+    .cover-industrial-titlebar { margin: 0 40px; padding-bottom: 20px; display: flex; align-items: flex-end; justify-content: space-between;
+        gap: 20px; border-bottom: 1px solid rgba(255, 255, 255, .2); }
+    .cover-industrial-dir { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .25em;
+        text-transform: uppercase; color: #93c5fd; }
+    .cover-industrial-dir::before { content: ""; width: 24px; height: 6px; background: #0047c8; }
+    .cover-industrial-titlebar h1 { margin: 8px 0 0; font-size: 34px; font-weight: 700; line-height: 1.02; text-transform: uppercase; letter-spacing: -.01em; }
+    .cover-industrial-month { flex: none; padding: 10px 18px; text-align: center; background: #0047c8; border: 1px solid rgba(255, 255, 255, .25); }
+    .cover-industrial-month-k { font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #dbeafe; }
+    .cover-industrial-month-v { margin-top: 2px; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 30px; font-weight: 700; line-height: 1.05; }
+    .cover-industrial-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 22px 40px 18px; }
+    .cover-industrial-heading { display: flex; align-items: center; justify-content: space-between; }
+    .cover-industrial-heading h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700;
+        letter-spacing: .06em; text-transform: uppercase; }
+    .cover-industrial-heading h2::before { content: ""; width: 4px; height: 18px; background: #e8380d; }
+    .cover-industrial-heading span { padding: 3px 10px; font-size: 10px; color: #cbd5e1; border: 1px solid rgba(255, 255, 255, .2); }
+    .cover-industrial-kpis { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .cover-industrial-kpi { display: grid; grid-template-columns: 1fr auto; align-items: center;
+        grid-template-areas: "label label" "value value" "app growth"; padding: 14px 14px 12px;
+        background: rgba(255, 255, 255, .05); border: 1px solid rgba(147, 197, 253, .35); }
+    .cover-industrial-kpi--ore { border-color: rgba(251, 146, 60, .45); }
+    .cover-industrial-kpi-head, .cover-industrial-kpi-body { display: contents; }
+    .cover-industrial-kpi-label { grid-area: label; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; color: #93c5fd; }
+    .cover-industrial-kpi--ore .cover-industrial-kpi-label { color: #fdba74; }
+    .cover-industrial-kpi-value { grid-area: value; margin: 6px 0 10px; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 28px;
+        font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cover-industrial-kpi-unit { margin-left: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; color: #cbd5e1; }
+    .cover-industrial-kpi-app { grid-area: app; justify-self: start; padding: 2px 7px; font-size: 10.5px; font-weight: 700; color: #ffffff;
+        background: #0047c8; }
+    .cover-industrial-kpi--ore .cover-industrial-kpi-app { background: #b4530a; }
+    .cover-industrial-kpi-growth { grid-area: growth; font-size: 11px; font-weight: 700; }
+    .cover-industrial-up { color: #4ade80; }
+    .cover-industrial-down { color: #f87171; }
+    .cover-industrial-prepared { margin-top: auto; padding: 14px 18px; display: flex; align-items: center; gap: 12px;
+        background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .15); font-size: 13px; }
+    .cover-industrial-mis { padding: 6px 8px; background: #0047c8; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+    .cover-industrial-footer { flex: none; height: 30px; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;
+        background: #00082e; border-top: 1px solid rgba(255, 255, 255, .12); font-size: 10px; font-weight: 600; letter-spacing: .18em; color: #cbd5e1; }
+    .cover-industrial-footer-end { color: #fb923c; }
+</style>
+<div class="cover-industrial">
+    <div class="cover-industrial-accent"></div>
+    <div class="cover-industrial-mast">
+        {% if page.logo_data_uri %}<img class="cover-industrial-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+        <div class="cover-industrial-org">Steel Authority of India Limited</div>
+    </div>
+    <div class="cover-industrial-hero">
+        <img src="{{ page.photo_data_uri }}" alt=""/>
+        <div class="cover-industrial-plaque">SAIL plant operations &middot; {{ page.month_short }}</div>
+    </div>
+    <div class="cover-industrial-titlebar">
+        <div>
+            <div class="cover-industrial-dir">Operations Directorate</div>
+            <h1>Operations Monthly<br/>Informatics</h1>
+        </div>
+        <div class="cover-industrial-month">
+            <div class="cover-industrial-month-k">Report period</div>
+            <div class="cover-industrial-month-v">{{ page.month_display }}</div>
+        </div>
+    </div>
+    <div class="cover-industrial-body">
+        <div class="cover-industrial-heading">
+            <h2>SAIL Performance at a Glance ({{ page.month_short }})</h2>
+            <span>Million Tonnes (MT)</span>
+        </div>
+        <div class="cover-industrial-kpis">{{ kpi_cards(page.kpis, 'cover-industrial') }}</div>
+        <div class="cover-industrial-prepared"><span class="cover-industrial-mis">MIS</span><span>Prepared By: <b>MIS Group</b></span></div>
+    </div>
+    {{ footer_strip(page, 'cover-industrial') }}
+</div>

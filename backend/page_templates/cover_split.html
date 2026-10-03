@@ -1,47 +1,99 @@
-{% from 'cover_macros.html' import kpi_cards %}
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Split" cover (Stitch screen 3dcabba2): full-height photo column on the
+   left, white editorial column on the right. px = CSS px (1/96 in); the box
+   is 210mm x 296.5mm = 794 x 1121 px. #}
 <style>
-    .cover-split { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex;
-        background: #ffffff; color: #000c48; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif;
-        font-size: 10pt; line-height: 1.3; }
-    .cover-split-photo { position: relative; width: 84mm; height: 100%; flex: none; overflow: hidden; }
-    .cover-split-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .cover-split { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
+        background: #ffffff; color: #000c48; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-split-accent { display: flex; height: 8px; flex: none; }
+    .cover-split-accent span:nth-child(1) { width: 40%; background: #000c48; }
+    .cover-split-accent span:nth-child(2) { width: 45%; background: #0047c8; }
+    .cover-split-accent span:nth-child(3) { width: 15%; background: #e8380d; }
+    .cover-split-main { flex: 1; display: flex; min-height: 0; }
+
+    .cover-split-photo { position: relative; width: 39%; flex: none; overflow: hidden; background: #000c48; }
+    .cover-split-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .cover-split-photo::after { content: ""; position: absolute; inset: 0;
-        background: linear-gradient(180deg, rgba(0, 12, 72, 0) 55%, rgba(0, 12, 72, .55) 100%); }
-    .cover-split-body { flex: 1; display: flex; flex-direction: column; padding: 18mm 14mm 9mm 14mm; }
-    .cover-split-logo { height: 18mm; width: auto; align-self: flex-start; }
-    .cover-split-title { margin-top: 14mm; font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
-        font-size: 30pt; font-weight: 700; line-height: 1.05; }
-    .cover-split-dir { margin-top: 3mm; font-size: 12pt; font-weight: 600; color: #0047c8;
-        letter-spacing: .04em; text-transform: uppercase; }
-    .cover-split-month { margin-top: 12mm; font-size: 40pt; font-weight: 700; line-height: 1; color: #e8380d; }
-    .cover-split-heading { margin-top: 12mm; padding-bottom: 2mm; border-bottom: .5mm solid #0047c8;
-        font-size: 10pt; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
-    .cover-split-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 5mm; }
-    .cover-split-kpi { border-left: 1mm solid #0047c8; padding: 2mm 3mm; background: #f3f6fb; }
-    .cover-split-kpi--ore { border-left-color: #b4530a; }
-    .cover-split-kpi-label { font-size: 7.5pt; font-weight: 700; color: #4a5568; letter-spacing: .03em; }
-    .cover-split-kpi-value { font-size: 17pt; font-weight: 700; }
-    .cover-split-kpi-unit { margin-left: 1mm; font-size: 8pt; font-weight: 600; }
-    .cover-split-kpi-sub { font-size: 8pt; color: #4a5568; }
-    .cover-split-up { color: #064e3b; font-weight: 700; }
-    .cover-split-down { color: #9a3412; font-weight: 700; }
-    .cover-split-prepared { margin-top: auto; padding-bottom: 5mm; font-size: 10pt; }
-    .cover-split-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 9mm; display: flex;
-        align-items: center; justify-content: center; gap: 3mm; background: #000c48; color: #ffffff;
-        font-size: 7.5pt; letter-spacing: .08em; }
+        background: linear-gradient(0deg, rgba(0, 12, 72, .92) 0%, rgba(0, 12, 72, 0) 38%, rgba(0, 12, 72, 0) 70%, rgba(0, 12, 72, .4) 100%); }
+    .cover-split-plaque { position: absolute; z-index: 1; left: 20px; right: 20px; bottom: 20px; padding: 14px 16px;
+        background: rgba(0, 12, 72, .95); border-left: 4px solid #e8380d; color: #ffffff; }
+    .cover-split-plaque-k { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 10px; font-weight: 700;
+        letter-spacing: .14em; text-transform: uppercase; color: #cbd5e1; }
+    .cover-split-plaque-v { margin-top: 4px; font-size: 15px; font-weight: 600; }
+
+    .cover-split-body { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 26px 30px 18px; }
+    .cover-split-id { display: flex; align-items: center; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid #e2e8f0; }
+    .cover-split-logo { height: 52px; width: auto; }
+    .cover-split-org { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 11px; font-weight: 700;
+        letter-spacing: .1em; text-transform: uppercase; color: #64748b; }
+    .cover-split-eyebrow { margin-top: 26px; display: flex; align-items: center; gap: 8px; font-family: 'IBM Plex Sans Condensed', sans-serif;
+        font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #0047c8; }
+    .cover-split-eyebrow::before { content: ""; width: 14px; height: 2px; background: #0047c8; }
+    .cover-split-title { margin: 6px 0 0; font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: -.01em; }
+    .cover-split-month { margin-top: 22px; padding: 14px 18px; display: flex; align-items: flex-end; justify-content: space-between;
+        background: linear-gradient(90deg, #000c48, #00227a); border-left: 4px solid #0047c8; color: #ffffff; }
+    .cover-split-month-k { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 10px; font-weight: 700;
+        letter-spacing: .14em; text-transform: uppercase; color: #cbd5e1; }
+    .cover-split-month-v { margin-top: 4px; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 34px; font-weight: 700; line-height: 1; }
+    .cover-split-month-s { font-size: 11px; color: #e2e8f0; }
+    .cover-split-heading { margin-top: 26px; padding-bottom: 8px; display: flex; align-items: center; justify-content: space-between;
+        border-bottom: 2px solid rgba(0, 12, 72, .15); }
+    .cover-split-heading h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; text-transform: uppercase; }
+    .cover-split-heading h2::before { content: ""; width: 10px; height: 10px; background: #e8380d; }
+    .cover-split-heading span { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 11px; font-weight: 600; color: #64748b; }
+    .cover-split-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .cover-split-kpi { padding: 10px 11px; border: 1px solid #e2e8f0; background: #f8fafc; }
+    .cover-split-kpi--ore { border-left: 3px solid #b4530a; }
+    .cover-split-kpi-head, .cover-split-kpi-body { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .cover-split-kpi-body { margin-top: 6px; align-items: baseline; }
+    .cover-split-kpi-label { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 11px; font-weight: 700;
+        letter-spacing: .04em; color: #475569; }
+    .cover-split-kpi--ore .cover-split-kpi-label { color: #b4530a; }
+    .cover-split-kpi-app { padding: 1px 6px; font-size: 10px; font-weight: 600; white-space: nowrap; color: #0047c8;
+        background: #eff6ff; border: 1px solid #bfdbfe; }
+    .cover-split-kpi-value { font-size: 22px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+    .cover-split-kpi-unit { margin-left: 4px; font-size: 12px; font-weight: 500; color: #64748b; }
+    .cover-split-kpi-growth { padding: 1px 5px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .cover-split-up { color: #047857; background: #ecfdf5; }
+    .cover-split-down { color: #b91c1c; background: #fef2f2; }
+    .cover-split-prepared { margin-top: auto; padding-top: 14px; display: flex; align-items: center; gap: 10px;
+        border-top: 1px solid #e2e8f0; font-size: 13px; }
+    .cover-split-mis { padding: 5px 7px; background: #000c48; color: #ffffff; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+    .cover-split-footer { flex: none; height: 30px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
+        background: #000c48; color: #ffffff; font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: .12em; }
+    .cover-split-footer-end { color: #fb923c; }
 </style>
 <div class="cover-split">
-    <div class="cover-split-photo"><img src="{{ page.photo_data_uri }}" alt=""/></div>
-    <div class="cover-split-body">
-        {% if page.logo_data_uri %}<img class="cover-split-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
-        <div class="cover-split-title">Operations Monthly Informatics</div>
-        <div class="cover-split-dir">Operations Directorate</div>
-        <div class="cover-split-month">{{ page.month_display }}</div>
-        <div class="cover-split-heading">SAIL Performance at a Glance ({{ page.month_short }})</div>
-        <div class="cover-split-kpis">{{ kpi_cards(page.kpis, 'cover-split') }}</div>
-        <div class="cover-split-prepared">Prepared By: <b>MIS Group</b></div>
+    <div class="cover-split-accent"><span></span><span></span><span></span></div>
+    <div class="cover-split-main">
+        <div class="cover-split-photo">
+            <img src="{{ page.photo_data_uri }}" alt=""/>
+            <div class="cover-split-plaque">
+                <div class="cover-split-plaque-k">Operations Monthly Informatics</div>
+                <div class="cover-split-plaque-v">{{ page.month_display }}</div>
+            </div>
+        </div>
+        <div class="cover-split-body">
+            <div class="cover-split-id">
+                {% if page.logo_data_uri %}<img class="cover-split-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+                <div class="cover-split-org">Steel Authority of India Limited</div>
+            </div>
+            <div class="cover-split-eyebrow">Operations Directorate</div>
+            <h1 class="cover-split-title">Operations Monthly Informatics</h1>
+            <div class="cover-split-month">
+                <div>
+                    <div class="cover-split-month-k">Reporting period</div>
+                    <div class="cover-split-month-v">{{ page.month_display }}</div>
+                </div>
+                <div class="cover-split-month-s">Monthly report</div>
+            </div>
+            <div class="cover-split-heading">
+                <h2>SAIL Performance at a Glance ({{ page.month_short }})</h2>
+                <span>Million Tonnes</span>
+            </div>
+            <div class="cover-split-kpis">{{ kpi_cards(page.kpis, 'cover-split') }}</div>
+            <div class="cover-split-prepared"><span class="cover-split-mis">MIS</span><span>Prepared By: <b>MIS Group</b></span></div>
+        </div>
     </div>
-    <div class="cover-split-bar">
-        <span>MIS OPERATIONS</span><span>|</span><span>OMI &ndash; {{ page.month_short }}</span><span>|</span><span>FOR INTERNAL CIRCULATION ONLY</span>
-    </div>
+    {{ footer_strip(page, 'cover-split') }}
 </div>

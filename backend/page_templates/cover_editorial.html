@@ -1,0 +1,82 @@
+{% from 'cover_macros.html' import kpi_cards, footer_strip %}
+{# "Editorial" cover (Stitch screen de566cbb): magazine masthead with a large
+   typographic month, an inset photo framed by a thin rule, then the KPIs.
+   The photo is taller than in the Stitch draft so the page is filled.
+   794 x 1121 px box. #}
+<style>
+    .cover-editorial { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; box-sizing: border-box; display: flex;
+        flex-direction: column; padding: 0 40px 22px; background: #ffffff; color: #000c48;
+        font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
+    .cover-editorial-accent { flex: none; height: 6px; margin: 0 -40px; background: linear-gradient(90deg, #000c48 0 40%, #0047c8 40% 85%, #e8380d 85%); }
+    .cover-editorial-id { margin-top: 26px; display: flex; align-items: center; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid #000c48; }
+    .cover-editorial-logo { height: 46px; width: auto; }
+    .cover-editorial-org { font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .cover-editorial-mast { margin-top: 26px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+    .cover-editorial-dir { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .2em;
+        text-transform: uppercase; color: #0047c8; }
+    .cover-editorial-mast h1 { margin: 6px 0 0; font-size: 36px; font-weight: 700; line-height: 1.08; letter-spacing: -.015em; }
+    .cover-editorial-edition { flex: none; padding-left: 20px; border-left: 3px solid #e8380d; text-align: right; }
+    .cover-editorial-edition-k { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: .2em;
+        text-transform: uppercase; color: #64748b; }
+    .cover-editorial-edition-v { margin-top: 2px; font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+    .cover-editorial-frame { margin-top: 24px; padding: 6px; border: 1px solid #000c48; }
+    .cover-editorial-frame img { display: block; width: 100%; height: 390px; object-fit: cover; }
+    .cover-editorial-caption { display: flex; justify-content: space-between; padding: 7px 12px; background: #000c48; color: #ffffff;
+        font-size: 10px; letter-spacing: .06em; }
+    .cover-editorial-caption span:last-child { color: #fb923c; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+    .cover-editorial-heading { margin-top: 24px; display: flex; align-items: center; gap: 12px; }
+    .cover-editorial-heading h2 { margin: 0; flex: none; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700;
+        letter-spacing: .06em; text-transform: uppercase; }
+    .cover-editorial-heading h2::before { content: ""; width: 9px; height: 9px; background: #e8380d; }
+    .cover-editorial-heading span { flex: 1; padding-left: 12px; border-left: 1px solid #cbd5e1; font-size: 11px; color: #64748b; }
+    .cover-editorial-kpis { margin-top: 12px; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 2px solid #000c48;
+        border-left: 1px solid #e2e8f0; }
+    .cover-editorial-kpi { display: grid; grid-template-columns: 1fr auto; align-items: center;
+        grid-template-areas: "label label" "value value" "app growth"; padding: 12px 14px;
+        border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+    .cover-editorial-kpi-head, .cover-editorial-kpi-body { display: contents; }
+    .cover-editorial-kpi-label { grid-area: label; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: #475569; }
+    .cover-editorial-kpi--ore .cover-editorial-kpi-label { color: #b4530a; }
+    .cover-editorial-kpi-value { grid-area: value; margin: 4px 0 8px; font-size: 26px; font-weight: 700; letter-spacing: -.01em;
+        font-variant-numeric: tabular-nums; }
+    .cover-editorial-kpi-unit { margin-left: 4px; font-size: 11px; font-weight: 600; color: #64748b; }
+    .cover-editorial-kpi-app { grid-area: app; font-size: 11px; font-weight: 700; color: #0047c8; }
+    .cover-editorial-kpi-growth { grid-area: growth; font-size: 11px; font-weight: 700; }
+    .cover-editorial-up { color: #188038; }
+    .cover-editorial-down { color: #c5221f; }
+    .cover-editorial-prepared { margin-top: auto; padding: 14px 0; display: flex; justify-content: space-between; align-items: baseline;
+        border-top: 1px solid #cbd5e1; font-size: 13px; }
+    .cover-editorial-prepared span:first-child { font-family: 'IBM Plex Sans Condensed', sans-serif; font-size: 10px; font-weight: 700;
+        letter-spacing: .2em; text-transform: uppercase; color: #64748b; }
+    .cover-editorial-footer { height: 30px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between;
+        background: #000c48; color: #ffffff; font-size: 10px; font-weight: 700; letter-spacing: .14em; }
+    .cover-editorial-footer-end { color: #fb923c; }
+</style>
+<div class="cover-editorial">
+    <div class="cover-editorial-accent"></div>
+    <div class="cover-editorial-id">
+        {% if page.logo_data_uri %}<img class="cover-editorial-logo" src="{{ page.logo_data_uri }}" alt="SAIL"/>{% endif %}
+        <div class="cover-editorial-org">Steel Authority of India Limited</div>
+    </div>
+    <div class="cover-editorial-mast">
+        <div>
+            <div class="cover-editorial-dir">Operations Directorate</div>
+            <h1>Operations Monthly<br/>Informatics</h1>
+        </div>
+        <div class="cover-editorial-edition">
+            <div class="cover-editorial-edition-k">Report month</div>
+            <div class="cover-editorial-edition-v">{{ page.month_display }}</div>
+        </div>
+    </div>
+    <div class="cover-editorial-frame">
+        <img src="{{ page.photo_data_uri }}" alt=""/>
+        <div class="cover-editorial-caption"><span>SAIL plant operations</span><span>OMI {{ page.month_short }}</span></div>
+    </div>
+    <div class="cover-editorial-heading">
+        <h2>SAIL Performance at a Glance ({{ page.month_short }})</h2>
+        <span>Unit: Million Tonnes (MT)</span>
+    </div>
+    <div class="cover-editorial-kpis">{{ kpi_cards(page.kpis, 'cover-editorial') }}</div>
+    <div class="cover-editorial-prepared"><span>Compiled by</span><span>Prepared By: <b>MIS Group</b></span></div>
+    {{ footer_strip(page, 'cover-editorial') }}
+</div>
