@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import PageRenderer from '../../components/PageRenderer';
 import { useReportData, useReportPage, useGeneratePDF } from '@/hooks/useReportAPI';
+import CoverCard from '@/components/cover/CoverCard';
+import { useAuth } from '@/providers/AuthProvider';
 import s from './report.module.css';
 
 // Edit these labels to change what appears in the Page Selector dropdown
@@ -331,6 +333,11 @@ export default function ReportPage() {
   const [selectedPages, setSelectedPages] = useState(new Set(ALL_PAGE_NUMBERS));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isPreparingExport, setIsPreparingExport] = useState(false);
+  const { user } = useAuth();
+  const canEditCover = user?.role === 'editor' || user?.role === 'admin';
+  // Cover card's current choice ({design, photo_id, report_month}), shown on
+  // page 1 of the month it was made for (see activePage).
+  const [coverPreview, setCoverPreview] = useState(null);
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
   // Guards the async export flow below against a month change landing mid-
@@ -410,10 +417,18 @@ export default function ReportPage() {
     });
   }, [activePageRaw, selectedMonthName, selectedYear]);
 
-  const activePage = useMemo(
-    () => pagesData.find((p) => p.page === activePageNum),
-    [pagesData, activePageNum]
-  );
+  const activePage = useMemo(() => {
+    const page = pagesData.find((p) => p.page === activePageNum);
+    // Page 1 shows the Cover card's current (possibly unsaved) choice.
+    return page && page.page === 1 && coverPreview?.report_month === selectedMonth
+      ? { ...page, ...coverPreview }
+      : page;
+  }, [pagesData, activePageNum, coverPreview, selectedMonth]);
+
+  const handleCoverPreview = (preview) => {
+    setCoverPreview(preview);
+    setActivePageNum(1);
+  };
 
   const togglePageSelection = (pageNum) => {
     setSelectedPages((prev) => {
@@ -619,6 +634,9 @@ export default function ReportPage() {
             ))}
           </div>
         </section>
+
+        {/* Cover design + photo */}
+        <CoverCard month={selectedMonth} canEdit={canEditCover} onPreview={handleCoverPreview} />
 
         {/* PDF export */}
         <section className={s.card}>
