@@ -336,7 +336,9 @@ export default function ReportPage() {
   const { user } = useAuth();
   const canEditCover = user?.role === 'editor' || user?.role === 'admin';
   // Cover card's current choice ({design, photo_id, report_month}), shown on
-  // page 1 of the month it was made for (see activePage).
+  // page 1 of the month it was made for (see activePage). Cleared when the
+  // month changes, so coming back shows the saved cover again; the card is
+  // keyed by month, so it never carries one month's draft into another.
   const [coverPreview, setCoverPreview] = useState(null);
 
   const selectedMonth = `${selectedYear}-${MONTH_NUM[selectedMonthName]}`;
@@ -589,11 +591,11 @@ export default function ReportPage() {
           <label className={s.label} htmlFor="report-month">Reporting month &amp; year</label>
           <div className={s.row}>
             <select id="report-month" className={s.control} style={{ flex: 2 }} value={selectedMonthName}
-                    onChange={(e) => setSelectedMonthName(e.target.value)}>
+                    onChange={(e) => { setSelectedMonthName(e.target.value); setCoverPreview(null); }}>
               {months.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
             <select className={s.control} style={{ flex: 1 }} value={selectedYear} aria-label="Reporting year"
-                    onChange={(e) => setSelectedYear(e.target.value)}>
+                    onChange={(e) => { setSelectedYear(e.target.value); setCoverPreview(null); }}>
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
@@ -636,7 +638,7 @@ export default function ReportPage() {
         </section>
 
         {/* Cover design + photo */}
-        <CoverCard month={selectedMonth} canEdit={canEditCover} onPreview={handleCoverPreview} />
+        <CoverCard key={selectedMonth} month={selectedMonth} canEdit={canEditCover} onPreview={handleCoverPreview} />
 
         {/* PDF export */}
         <section className={s.card}>

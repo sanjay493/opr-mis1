@@ -173,21 +173,57 @@ def test_shuffle_classic_is_rejected(store):
 
 def test_resolve_saved_photo(store):
     a, b = _add(store, 2)
-    photo, path = store.resolve_photo(b["id"])
+    photo, path = store.resolve_photo(b["id"], "2026-09")
     assert photo["id"] == b["id"] and path == store.photo_path(b)
 
 
-def test_resolve_falls_back_from_removed_or_missing_photo(store):
+def test_removed_photo_still_shown_on_months_that_used_it(store):
+    """"Remove" only takes a photo out of the library: a month that already
+    has it keeps it (the Remove dialog promises this)."""
     a, b = _add(store, 2)
+    store.save_setting("2026-08", "split", "library", a["id"], "x")
     store.deactivate_photo(a["id"])
-    assert store.resolve_photo(a["id"])[0]["id"] == b["id"]
-    os.remove(store.photo_path(b))
-    photo, path = store.resolve_photo(b["id"])
-    assert photo is None and path == store.BUNDLED_PHOTO
+    photo, path = store.resolve_photo(a["id"], "2026-08")
+    assert photo["id"] == a["id"] and path == store.photo_path(a)
+
+
+def test_missing_file_falls_back_to_bundled_when_library_empty(store):
+    (a,) = _add(store, 1)
+    os.remove(store.photo_path(a))
+    assert store.resolve_photo(a["id"], "2026-09") == (None, store.BUNDLED_PHOTO)
+
+
+def test_fallback_photo_is_stable_per_month(store):
+    """No usable saved photo -> the stand-in must be the same on every render
+    of that month (preview == export)."""
+    _add(store, 5)
+    picks = {store.resolve_photo(None, "2026-09")[0]["id"] for _ in range(20)}
+    assert len(picks) == 1
+    gone = store.resolve_photo(999, "2026-09")[0]["id"]
+    assert gone in {p["id"] for p in store.list_photos()}
+    assert store.resolve_photo(999, "2026-09")[0]["id"] == gone
+
+
+def test_multi_picture_phone_jpeg_is_accepted(store):
+    """Ultra HDR / MPO JPEGs from phones open in Pillow as format 'MPO'."""
+    buf = io.BytesIO()
+    first = Image.new("RGB", (1200, 900), (200, 80, 20))
+    first.save(buf, "MPO", save_all=True, append_images=[Image.new("RGB", (300, 225), (0, 0, 0))])
+    p = store.add_photo(buf.getvalue(), "pixel.jpg", "a@sail.in")
+    assert (p["width"], p["height"]) == (1200, 900)
+
+
+def test_huge_pixel_count_is_rejected_before_decoding(store):
+    buf = io.BytesIO()
+    Image.new("1", (9000, 9000)).save(buf, "PNG")         # tiny file, 81 MP
+    assert len(buf.getvalue()) < store.MAX_UPLOAD_BYTES
+    with pytest.raises(store.CoverError, match="too large"):
+        store.add_photo(buf.getvalue(), "huge.png", "a@sail.in")
+    assert store.list_photos() == []
 
 
 def test_resolve_with_empty_library_uses_bundled_photo(store):
-    assert store.resolve_photo(None) == (None, store.BUNDLED_PHOTO)
+    assert store.resolve_photo(None, "2026-09") == (None, store.BUNDLED_PHOTO)
     assert os.path.exists(store.BUNDLED_PHOTO)
 
 

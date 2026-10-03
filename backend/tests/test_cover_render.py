@@ -112,7 +112,7 @@ def test_settings_table_error_falls_back_to_classic(monkeypatch):
 def test_saved_photo_design_adds_photo_fields(monkeypatch):
     _stub_kpis(monkeypatch)
     monkeypatch.setattr(cover_store, "get_setting", lambda m: {"design": "split", "photo_mode": "random", "photo_id": 7})
-    monkeypatch.setattr(cover_store, "resolve_photo", lambda pid: (None, cover_store.BUNDLED_PHOTO))
+    monkeypatch.setattr(cover_store, "resolve_photo", lambda pid, month="": (None, cover_store.BUNDLED_PHOTO))
     page = page_cover.generate_cover("2026-09")
     assert page["design"] == "split" and page["report_month"] == "2026-09"
     assert page["photo_data_uri"].startswith("data:image/jpeg;base64,")
@@ -125,13 +125,39 @@ def test_preview_override_beats_saved_setting(monkeypatch):
     monkeypatch.setattr(cover_store, "get_setting", lambda m: {"design": "split", "photo_mode": "random", "photo_id": 7})
     seen = {}
 
-    def fake_resolve(pid):
+    def fake_resolve(pid, month=""):
         seen["pid"] = pid
         return None, cover_store.BUNDLED_PHOTO
     monkeypatch.setattr(cover_store, "resolve_photo", fake_resolve)
     page = page_cover.generate_cover("2026-09", design="split", photo_id=3)
     assert seen["pid"] == 3 and page["design"] == "split"
     assert "design" not in page_cover.generate_cover("2026-09", design="classic")
+
+
+def test_photo_lookup_error_uses_bundled_photo(monkeypatch):
+    """A DB error while resolving the photo must not fail the report."""
+    _stub_kpis(monkeypatch)
+    monkeypatch.setattr(cover_store, "get_setting", lambda m: {"design": "split", "photo_mode": "random", "photo_id": 7})
+
+    def boom(pid, month=""):
+        raise RuntimeError("Lost connection to MySQL server")
+    monkeypatch.setattr(cover_store, "resolve_photo", boom)
+    page = page_cover.generate_cover("2026-09")
+    assert page["design"] == "split" and page["photo_id"] is None
+    assert page["photo_data_uri"] == page_cover._file_data_uri(cover_store.BUNDLED_PHOTO, "image/jpeg")
+
+
+def test_resolve_photo_gets_the_month(monkeypatch):
+    _stub_kpis(monkeypatch)
+    monkeypatch.setattr(cover_store, "get_setting", lambda m: {"design": "split", "photo_mode": "random", "photo_id": None})
+    seen = {}
+
+    def fake_resolve(pid, month=""):
+        seen["month"] = month
+        return None, cover_store.BUNDLED_PHOTO
+    monkeypatch.setattr(cover_store, "resolve_photo", fake_resolve)
+    page_cover.generate_cover("2026-09")
+    assert seen["month"] == "2026-09"
 
 
 def test_unknown_saved_design_renders_classic(monkeypatch):

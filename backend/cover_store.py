@@ -18,6 +18,7 @@ import os
 import random
 import re
 import uuid
+import zlib
 from datetime import datetime
 
 from PIL import Image, ImageOps
@@ -33,6 +34,9 @@ BUNDLED_PHOTO = os.path.join(_BACKEND_DIR, "..", "frontend", "public", "cover", 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 FULL_LONG_SIDE = 1600
 THUMB_LONG_SIDE = 400
+# Pixel cap checked from the header before decoding: a tiny file can still
+# hold an enormous image (decompression bomb / memory spike).
+MAX_PIXELS = 50_000_000
 _FULL_QUALITY = 82
 _THUMB_QUALITY = 78
 
@@ -117,15 +121,23 @@ def _process_image(data: bytes):
     try:
         im = Image.open(io.BytesIO(data))
         fmt = im.format
+    except Exception:
+        raise CoverError("Not a readable image. Upload a JPEG or PNG photo.")
+    # MPO = a JPEG carrying extra pictures (phone Ultra HDR / multi-picture
+    # JPEGs); its first frame is the ordinary photo.
+    if fmt not in ("JPEG", "MPO", "PNG"):
+        raise CoverError(f"{fmt} images aren't supported. Upload a JPEG or PNG photo.")
+    if im.width * im.height > MAX_PIXELS:
+        raise CoverError(f"Photo is too large ({im.width} x {im.height} pixels). Use one under 50 megapixels.")
+    try:
+        if fmt in ("JPEG", "MPO"):
+            im.draft("RGB", (FULL_LONG_SIDE, FULL_LONG_SIDE))   # decode at reduced scale
         im.load()
     except Exception:
         raise CoverError("Not a readable image. Upload a JPEG or PNG photo.")
-    if fmt not in ("JPEG", "PNG"):
-        raise CoverError(f"{fmt} images aren't supported. Upload a JPEG or PNG photo.")
-    im = ImageOps.exif_transpose(im).convert("RGB")
-    full = im.copy()
+    full = ImageOps.exif_transpose(im).convert("RGB")
     full.thumbnail((FULL_LONG_SIDE, FULL_LONG_SIDE), Image.LANCZOS)
-    thumb = im.copy()
+    thumb = full.copy()
     thumb.thumbnail((THUMB_LONG_SIDE, THUMB_LONG_SIDE), Image.LANCZOS)
     return _jpeg(full, _FULL_QUALITY), _jpeg(thumb, _THUMB_QUALITY), full.width, full.height
 
@@ -252,16 +264,21 @@ def shuffle(month: str, updated_by: str = "", design=None) -> dict:
     return save_setting(month, design, "random", photo_id, updated_by)
 
 
-def resolve_photo(photo_id):
-    """-> (photo dict or None, file path) for rendering. A removed or missing
-    saved photo falls back to a random active one, then to the bundled photo."""
-    if _usable(photo_id):
-        p = get_photo(int(photo_id))
-        return p, photo_path(p)
+def resolve_photo(photo_id, month: str = ""):
+    """-> (photo dict or None, file path) for rendering `month`'s cover.
+
+    The saved photo is used while its file exists, even after "Remove" (which
+    only takes it out of the library; months that used it keep it). With no
+    usable saved photo, a stand-in is picked from the active library -
+    deterministically per month, so every preview and export of that month
+    shows the same one - and with an empty library, the bundled photo."""
     if photo_id is not None:
-        print(f"[cover] photo {photo_id} is removed or missing on disk - using another photo")
-    ids = _active_photo_ids()
+        p = get_photo(int(photo_id))
+        if p and os.path.exists(photo_path(p)):
+            return p, photo_path(p)
+        print(f"[cover] photo {photo_id} is missing - using a stand-in for {month or 'this month'}")
+    ids = sorted(_active_photo_ids())
     if ids:
-        p = get_photo(random.choice(ids))
+        p = get_photo(ids[zlib.crc32(month.encode("utf-8")) % len(ids)])
         return p, photo_path(p)
     return None, BUNDLED_PHOTO

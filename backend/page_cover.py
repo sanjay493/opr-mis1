@@ -185,7 +185,11 @@ def generate_cover(report_month: str, design: str | None = None, photo_id: int |
         photo_id = setting["photo_id"]
     if design not in cover_designs.PHOTO_DESIGN_IDS:
         return page
-    photo, path = cover_store.resolve_photo(photo_id)
+    try:
+        photo, path = cover_store.resolve_photo(photo_id, report_month)
+    except Exception as e:   # never fail the report over the cover photo
+        print(f"[cover] photo lookup failed for {report_month} ({type(e).__name__}: {e}) - using the bundled photo")
+        photo, path = None, cover_store.BUNDLED_PHOTO
     page.update({
         "design": design,
         "report_month": report_month,
