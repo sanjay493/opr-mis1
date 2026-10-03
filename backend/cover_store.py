@@ -1,0 +1,183 @@
+"""
+Cover-photo library and the per-month cover choice behind the selectable
+report covers (docs/superpowers/specs/2026-10-03-selectable-cover-pages-
+design.md).
+
+Photos are stored as processed JPEGs in backend/cover_photos/ (gitignored,
+served only through api_cover.py), one row each in cover_photos. "Remove"
+only clears is_active, so a month that already used a photo keeps its file.
+The month's cover (design + photo) lives in report_cover_settings; a month
+with no row keeps the Classic cover (page_cover.py).
+
+All SQL is sqlite-dialect through db.connect() (dbengine translates it for
+MySQL). _connect and PHOTO_DIR are module attributes so tests can point
+them at a temp SQLite file / folder.
+"""
+import io
+import os
+import random
+import re
+import uuid
+from datetime import datetime
+
+from PIL import Image, ImageOps
+
+import db
+
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+PHOTO_DIR = os.path.join(_BACKEND_DIR, "cover_photos")
+# Shown when the library is empty (or every saved photo has gone missing).
+BUNDLED_PHOTO = os.path.join(_BACKEND_DIR, "..", "frontend", "public", "cover", "hotmetal_bg.jpg")
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+FULL_LONG_SIDE = 1600
+THUMB_LONG_SIDE = 400
+_FULL_QUALITY = 82
+_THUMB_QUALITY = 78
+
+SQLITE_DDL = [
+    """CREATE TABLE IF NOT EXISTS cover_photos (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename       TEXT    NOT NULL,
+        thumb_filename TEXT    NOT NULL,
+        original_name  TEXT    NOT NULL,
+        width          INTEGER,
+        height         INTEGER,
+        uploaded_by    TEXT,
+        uploaded_at    TEXT,
+        is_active      INTEGER NOT NULL DEFAULT 1
+    )""",
+    """CREATE TABLE IF NOT EXISTS report_cover_settings (
+        report_month TEXT PRIMARY KEY,
+        design       TEXT NOT NULL,
+        photo_mode   TEXT NOT NULL DEFAULT 'random',
+        photo_id     INTEGER,
+        updated_by   TEXT,
+        updated_at   TEXT
+    )""",
+]
+
+_PHOTO_COLS = ("id", "filename", "thumb_filename", "original_name", "width", "height",
+               "uploaded_by", "uploaded_at", "is_active")
+
+
+class CoverError(ValueError):
+    """A user-facing problem with an upload or a cover choice (HTTP 400)."""
+
+
+def _connect():
+    db.init_db()
+    return db.connect()
+
+
+def _query(sql: str, args=()) -> list:
+    conn = _connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, args)
+        return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def _execute(sql: str, args=()):
+    conn = _connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, args)
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def _now() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _photo_dict(row) -> dict:
+    d = dict(zip(_PHOTO_COLS, row))
+    d["id"] = int(d["id"])
+    d["is_active"] = int(d["is_active"])
+    return d
+
+
+# ── Photo library ────────────────────────────────────────────────────────────
+def _jpeg(im: Image.Image, quality: int) -> bytes:
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=quality, optimize=True, progressive=True)
+    return buf.getvalue()
+
+
+def _process_image(data: bytes):
+    """-> (full_jpeg, thumb_jpeg, width, height). Raises CoverError."""
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise CoverError("Photo is larger than 10 MB.")
+    try:
+        im = Image.open(io.BytesIO(data))
+        fmt = im.format
+        im.load()
+    except Exception:
+        raise CoverError("Not a readable image. Upload a JPEG or PNG photo.")
+    if fmt not in ("JPEG", "PNG"):
+        raise CoverError(f"{fmt} images aren't supported. Upload a JPEG or PNG photo.")
+    im = ImageOps.exif_transpose(im).convert("RGB")
+    full = im.copy()
+    full.thumbnail((FULL_LONG_SIDE, FULL_LONG_SIDE), Image.LANCZOS)
+    thumb = im.copy()
+    thumb.thumbnail((THUMB_LONG_SIDE, THUMB_LONG_SIDE), Image.LANCZOS)
+    return _jpeg(full, _FULL_QUALITY), _jpeg(thumb, _THUMB_QUALITY), full.width, full.height
+
+
+def add_photo(data: bytes, original_name: str, uploaded_by: str) -> dict:
+    full, thumb, width, height = _process_image(data)
+    os.makedirs(PHOTO_DIR, exist_ok=True)
+    stem = f"cp_{uuid.uuid4().hex[:16]}"
+    fname, tname = f"{stem}.jpg", f"{stem}_thumb.jpg"
+    paths = [os.path.join(PHOTO_DIR, fname), os.path.join(PHOTO_DIR, tname)]
+    for path, content in zip(paths, (full, thumb)):
+        with open(path, "wb") as f:
+            f.write(content)
+    name = os.path.basename((original_name or "").replace("\\", "/")) or "photo.jpg"
+    try:
+        new_id = _execute(
+            "INSERT INTO cover_photos (filename, thumb_filename, original_name, width, height,"
+            " uploaded_by, uploaded_at, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+            (fname, tname, name[:255], width, height, uploaded_by, _now()),
+        )
+    except Exception:
+        for path in paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        raise
+    return get_photo(new_id)
+
+
+def get_photo(photo_id: int):
+    rows = _query(f"SELECT {', '.join(_PHOTO_COLS)} FROM cover_photos WHERE id = ?", (int(photo_id),))
+    return _photo_dict(rows[0]) if rows else None
+
+
+def list_photos() -> list:
+    rows = _query(f"SELECT {', '.join(_PHOTO_COLS)} FROM cover_photos WHERE is_active = 1 ORDER BY id DESC")
+    usage = {int(pid): int(n) for pid, n in _query(
+        "SELECT photo_id, COUNT(*) FROM report_cover_settings WHERE photo_id IS NOT NULL GROUP BY photo_id")}
+    out = []
+    for row in rows:
+        d = _photo_dict(row)
+        d["used_by"] = usage.get(d["id"], 0)
+        out.append(d)
+    return out
+
+
+def deactivate_photo(photo_id: int) -> bool:
+    if get_photo(photo_id) is None:
+        return False
+    _execute("UPDATE cover_photos SET is_active = 0 WHERE id = ?", (int(photo_id),))
+    return True
+
+
+def photo_path(photo: dict, size: str = "full") -> str:
+    return os.path.join(PHOTO_DIR, photo["thumb_filename"] if size == "thumb" else photo["filename"])

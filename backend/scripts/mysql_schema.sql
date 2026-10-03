@@ -785,3 +785,25 @@ CREATE TABLE IF NOT EXISTS major_unit_daily_record (
     updated_at      VARCHAR(32),
     PRIMARY KEY (plant_code, unit_label)
 ) ENGINE=InnoDB;
+
+-- Selectable report covers (cover_store.py); see scripts/migrate_add_cover_pages.sql.
+CREATE TABLE IF NOT EXISTS cover_photos (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    filename       VARCHAR(64)  NOT NULL,
+    thumb_filename VARCHAR(64)  NOT NULL,
+    original_name  VARCHAR(255) NOT NULL,
+    width          INT,
+    height         INT,
+    uploaded_by    VARCHAR(255),
+    uploaded_at    CHAR(19),
+    is_active      TINYINT(1)   NOT NULL DEFAULT 1
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS report_cover_settings (
+    report_month CHAR(7)     NOT NULL PRIMARY KEY,
+    design       VARCHAR(24) NOT NULL,
+    photo_mode   VARCHAR(8)  NOT NULL DEFAULT 'random',
+    photo_id     INT         NULL,
+    updated_by   VARCHAR(255),
+    updated_at   CHAR(19)
+) ENGINE=InnoDB;

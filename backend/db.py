@@ -1102,6 +1102,12 @@ def init_db():
         )
     """)
 
+    # Selectable report covers — DDL owned by cover_store (SQLite flavour
+    # here; MySQL in scripts/mysql_schema.sql + migrate_add_cover_pages.sql).
+    import cover_store
+    for _ddl in cover_store.SQLITE_DDL:
+        cursor.execute(_ddl)
+
     conn.commit()
     conn.close()
 
