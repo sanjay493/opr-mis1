@@ -22,6 +22,7 @@ from datetime import datetime
 
 from PIL import Image, ImageOps
 
+import cover_designs
 import db
 
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -181,3 +182,86 @@ def deactivate_photo(photo_id: int) -> bool:
 
 def photo_path(photo: dict, size: str = "full") -> str:
     return os.path.join(PHOTO_DIR, photo["thumb_filename"] if size == "thumb" else photo["filename"])
+
+
+# ── Per-month cover choice ───────────────────────────────────────────────────
+PHOTO_MODES = ("library", "random")
+_SETTING_COLS = ("report_month", "design", "photo_mode", "photo_id", "updated_by", "updated_at")
+_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def check_month(month: str) -> str:
+    if not isinstance(month, str) or not _MONTH_RE.match(month):
+        raise CoverError("Month must look like YYYY-MM.")
+    return month
+
+
+def _active_photo_ids() -> list:
+    """Active photos whose file is still on disk."""
+    rows = _query(f"SELECT {', '.join(_PHOTO_COLS)} FROM cover_photos WHERE is_active = 1")
+    return [p["id"] for p in map(_photo_dict, rows) if os.path.exists(photo_path(p))]
+
+
+def _usable(photo_id) -> bool:
+    if photo_id is None:
+        return False
+    p = get_photo(int(photo_id))
+    return bool(p and p["is_active"] and os.path.exists(photo_path(p)))
+
+
+def get_setting(month: str):
+    rows = _query(f"SELECT {', '.join(_SETTING_COLS)} FROM report_cover_settings WHERE report_month = ?",
+                  (check_month(month),))
+    if not rows:
+        return None
+    d = dict(zip(_SETTING_COLS, rows[0]))
+    d["photo_id"] = int(d["photo_id"]) if d["photo_id"] is not None else None
+    return d
+
+
+def save_setting(month: str, design: str, photo_mode: str = "random", photo_id=None, updated_by: str = "") -> dict:
+    check_month(month)
+    if design not in cover_designs.DESIGN_IDS:
+        raise CoverError(f"Unknown cover design '{design}'.")
+    if photo_mode not in PHOTO_MODES:
+        raise CoverError("Photo choice must be 'library' or 'random'.")
+    if photo_mode == "library":
+        if not _usable(photo_id):
+            raise CoverError("Choose a photo from the library.")
+    elif not _usable(photo_id):
+        ids = _active_photo_ids()
+        photo_id = random.choice(ids) if ids else None
+    _execute(
+        "INSERT OR REPLACE INTO report_cover_settings"
+        " (report_month, design, photo_mode, photo_id, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (month, design, photo_mode, int(photo_id) if photo_id is not None else None, updated_by, _now()),
+    )
+    return get_setting(month)
+
+
+def shuffle(month: str, updated_by: str = "", design=None) -> dict:
+    """Pick a different random photo (when there is more than one) and save
+    it in 'random' mode — with `design` if given, else the saved design."""
+    current = get_setting(month)
+    design = design or (current["design"] if current else "classic")
+    if design == "classic":
+        raise CoverError("The Classic cover has no photo to shuffle.")
+    current_id = current["photo_id"] if current else None
+    others = [i for i in _active_photo_ids() if i != current_id]
+    photo_id = random.choice(others) if others else current_id
+    return save_setting(month, design, "random", photo_id, updated_by)
+
+
+def resolve_photo(photo_id):
+    """-> (photo dict or None, file path) for rendering. A removed or missing
+    saved photo falls back to a random active one, then to the bundled photo."""
+    if _usable(photo_id):
+        p = get_photo(int(photo_id))
+        return p, photo_path(p)
+    if photo_id is not None:
+        print(f"[cover] photo {photo_id} is removed or missing on disk - using another photo")
+    ids = _active_photo_ids()
+    if ids:
+        p = get_photo(random.choice(ids))
+        return p, photo_path(p)
+    return None, BUNDLED_PHOTO

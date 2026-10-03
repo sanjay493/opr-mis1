@@ -93,3 +93,106 @@ def test_deactivate_hides_photo_but_keeps_file(store):
     assert store.get_photo(p["id"])["is_active"] == 0
     assert os.path.exists(store.photo_path(p))
     assert store.deactivate_photo(999) is False
+
+
+def _add(store, n=1):
+    return [store.add_photo(img_bytes(color=(10 * i, 80, 20)), f"p{i}.jpg", "a@sail.in") for i in range(n)]
+
+
+def test_month_without_setting_has_none(store):
+    assert store.get_setting("2026-09") is None
+
+
+def test_random_picks_an_active_photo_and_keeps_it(store):
+    photos = _add(store, 3)
+    s = store.save_setting("2026-09", "split", "random", None, "a@sail.in")
+    assert s["design"] == "split" and s["photo_mode"] == "random"
+    assert s["photo_id"] in {p["id"] for p in photos}
+    for _ in range(5):
+        assert store.get_setting("2026-09")["photo_id"] == s["photo_id"]
+
+
+def test_random_with_given_photo_keeps_that_photo(store):
+    a, b = _add(store, 2)
+    assert store.save_setting("2026-09", "band", "random", b["id"], "x")["photo_id"] == b["id"]
+
+
+def test_library_requires_an_active_photo(store):
+    (a,) = _add(store, 1)
+    assert store.save_setting("2026-09", "grid", "library", a["id"], "x")["photo_id"] == a["id"]
+    store.deactivate_photo(a["id"])
+    with pytest.raises(store.CoverError, match="photo"):
+        store.save_setting("2026-10", "grid", "library", a["id"], "x")
+    with pytest.raises(store.CoverError, match="photo"):
+        store.save_setting("2026-10", "grid", "library", None, "x")
+
+
+@pytest.mark.parametrize("month,design,mode", [
+    ("2026-9", "split", "random"),
+    ("2026-13", "split", "random"),
+    ("2026-09", "nope", "random"),
+    ("2026-09", "split", "sometimes"),
+])
+def test_invalid_choice_is_rejected(store, month, design, mode):
+    with pytest.raises(store.CoverError):
+        store.save_setting(month, design, mode, None, "x")
+
+
+def test_saving_again_replaces_the_row(store):
+    _add(store, 1)
+    store.save_setting("2026-09", "split", "random", None, "x")
+    store.save_setting("2026-09", "classic", "random", None, "y")
+    s = store.get_setting("2026-09")
+    assert s["design"] == "classic" and s["updated_by"] == "y"
+
+
+def test_shuffle_changes_photo_when_possible(store):
+    _add(store, 2)
+    first = store.save_setting("2026-09", "split", "random", None, "x")["photo_id"]
+    second = store.shuffle("2026-09", "x")["photo_id"]
+    assert second != first
+    assert store.get_setting("2026-09")["photo_id"] == second
+
+
+def test_shuffle_with_one_photo_keeps_it(store):
+    (a,) = _add(store, 1)
+    store.save_setting("2026-09", "split", "random", None, "x")
+    assert store.shuffle("2026-09", "x")["photo_id"] == a["id"]
+
+
+def test_shuffle_with_design_saves_design_too(store):
+    _add(store, 2)
+    s = store.shuffle("2026-11", "x", design="editorial")
+    assert s["design"] == "editorial" and s["photo_mode"] == "random" and s["photo_id"] is not None
+
+
+def test_shuffle_classic_is_rejected(store):
+    with pytest.raises(store.CoverError):
+        store.shuffle("2026-09", "x")          # no setting -> classic
+
+
+def test_resolve_saved_photo(store):
+    a, b = _add(store, 2)
+    photo, path = store.resolve_photo(b["id"])
+    assert photo["id"] == b["id"] and path == store.photo_path(b)
+
+
+def test_resolve_falls_back_from_removed_or_missing_photo(store):
+    a, b = _add(store, 2)
+    store.deactivate_photo(a["id"])
+    assert store.resolve_photo(a["id"])[0]["id"] == b["id"]
+    os.remove(store.photo_path(b))
+    photo, path = store.resolve_photo(b["id"])
+    assert photo is None and path == store.BUNDLED_PHOTO
+
+
+def test_resolve_with_empty_library_uses_bundled_photo(store):
+    assert store.resolve_photo(None) == (None, store.BUNDLED_PHOTO)
+    assert os.path.exists(store.BUNDLED_PHOTO)
+
+
+def test_used_by_counts_months(store):
+    (a,) = _add(store, 1)
+    store.save_setting("2026-08", "split", "library", a["id"], "x")
+    store.save_setting("2026-09", "band", "library", a["id"], "x")
+    assert store.list_photos()[0]["used_by"] == 2
