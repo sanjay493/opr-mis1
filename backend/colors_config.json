@@ -38,24 +38,6 @@
   "perf_act_text":   "#006100",
   "perf_gr_bg":      "#e2e8f0",
 
-  "_doc_trend": "Pages 7-13 (10 Years Month Wise Production trend) only: 5 Plants row/label (trend_5p_*), graded slate Q/H/Total column bands (trend_qtr/hh/total_bg), one best-ever record colour per column group - month / quarter / half-year / annual (trend_rec_*), and the best-for-that-period underline (trend_best_month_line). The Plan and SAIL rows reuse perf_app_* / perf_act_*.",
-
-  "trend_5p_bg":           "#FBE5D6",
-  "trend_5p_text":         "#843C0C",
-  "trend_5p_label_bg":     "#F8CBAD",
-  "trend_qtr_bg":          "#f1f5f9",
-  "trend_hh_bg":           "#e2e8f0",
-  "trend_total_bg":        "#cbd5e1",
-  "trend_rec_month_bg":    "#FFD966",
-  "trend_rec_month_text":  "#000000",
-  "trend_rec_qtr_bg":      "#9DC3E6",
-  "trend_rec_qtr_text":    "#1F3864",
-  "trend_rec_hh_bg":       "#B4A7D6",
-  "trend_rec_hh_text":     "#3F2A70",
-  "trend_rec_total_bg":    "#2F5597",
-  "trend_rec_total_text":  "#ffffff",
-  "trend_best_month_line": "#475569",
-
   "_doc_plant_colors": "Pages 7-13 (10 Years Month Wise Production Trend): one fixed background per individual plant's stacked-letter label column, kept the same everywhere that plant appears across every trend page (SAIL/'5 Plants' aggregates keep their own highlight_agg_* colors above instead).",
 
   "plant_color_bsp":  "#a9c5ec",
