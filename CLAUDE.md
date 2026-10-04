@@ -45,7 +45,7 @@ The report layout is tuned to the millimetre. Before touching CSS, templates, `p
 
 - Every PDF colour is a named key in `backend/colors_config.json`, used as `{{ colors.<key> }}`. Never hard-code a hex value in a template. Edits apply on the next render.
 - `colors_loader.py` `_DEFAULTS` mirrors every JSON key (same values) as a fallback. Add a new key to both files.
-- `perf_*` keys are the table colours shared by pages 4, 5-6 and Concast. Plan column: gold `perf_app_*`. Actual columns: green `perf_act_*`. %Gr columns: `perf_gr_bg`. Page 4's Ann. Cap. column: `perf_cap_*`. Don't retint the shared `highlight_*` keys for one page; other pages use them too.
+- `perf_*` keys are the table colours shared by pages 4, 5-6, Concast, Cat-wise and Segment-wise. Plan column: gold `perf_app_*`. Actual columns: green `perf_act_*`. %Gr columns: `perf_gr_bg`. Page 4's Ann. Cap. column: `perf_cap_*`. Don't retint the shared `highlight_*` keys for one page; other pages use them too.
 - The frontend preview templates (`frontend/src/components/*Template.js`) keep their own copies of these hex values, so a colour change does not reach the browser preview automatically.
 
 ## Verifying changes
