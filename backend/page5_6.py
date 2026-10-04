@@ -594,23 +594,18 @@ def _compute_ratio_series(report_month: str):
     return x_labels, len(hist_fys), ratio3
 
 
-# Sequential blue ramp (light -> dark) — see dataviz skill's references/
-# palette.md. Heatmap cells snap to the nearest step rather than
-# interpolating freehand, per that palette's "documented steps only" rule.
-#
-# Capped at step 500 (`#256abf`) rather than the full 100->700 range: this
-# report is print-only (rendered straight to PDF, never viewed on screen —
-# see generate_page6_trend_charts_html), and the dropped steps 550-700 are
-# the ramp's heaviest-ink tones (near-navy, close to full toner coverage per
-# cell). The palette doc calls print out explicitly as a case to economize
-# ink for; since every cell here already prints its numeric value, the
-# lighter capped ramp keeps the "darker = higher" read intact (still one
-# hue, still monotonic, still the same documented steps) while every cell —
-# including the hottest ones — stays well short of solid dark fill.
-_SEQ_BLUE_STEPS = [
-    "#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec",
-    "#5598e7", "#3987e5", "#2a78d6", "#256abf",
-]
+# Sequential slate ramp (light -> dark), built around the %Gr columns' own
+# fill (colors_config.json perf_gr_bg, #e2e8f0) so this heatmap reads as the
+# same family as the "Plant Wise Item Wise Production" table above it, per
+# direct instruction: lower ratios lighter than that fill, higher ratios
+# darker. Cells snap to the nearest step rather than interpolating freehand.
+# Stops at #475569 (not near-black) to keep ink coverage down on this
+# print-only page; every cell prints its value anyway, so the darkest step
+# only needs to read as "highest", not as solid fill.
+def _seq_steps():
+    from colors_loader import load_colors_config
+    return ["#f8fafc", "#f1f5f9", load_colors_config()["perf_gr_bg"],
+            "#cbd5e1", "#94a3b8", "#64748b", "#475569"]
 
 
 def _contrast_text(hex_color: str) -> str:
@@ -623,15 +618,16 @@ def _contrast_text(hex_color: str) -> str:
 def _heatmap_cell_color(v, lo, hi):
     if v is None:
         return None
+    steps = _seq_steps()
     span = (hi - lo) or 1.0
     frac = max(0.0, min(1.0, (v - lo) / span))
-    idx = round(frac * (len(_SEQ_BLUE_STEPS) - 1))
-    return _SEQ_BLUE_STEPS[idx]
+    idx = round(frac * (len(steps) - 1))
+    return steps[idx]
 
 
 def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title: str) -> str:
     """Plants (rows) x periods (columns) grid, one cell per ratio value,
-    shaded on a single sequential blue ramp (light = lower ratio, dark =
+    shaded on a single sequential slate ramp (light = lower ratio, dark =
     higher) with the value itself printed in the cell — a heatmap reads a
     5-plant x ~15-period grid far more legibly than 5 overlapping lines
     fighting for the same label space (see dataviz skill: magnitude over a
@@ -647,10 +643,10 @@ def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title
     # Grid border lightened to a hairline gray (dataviz palette's gridline
     # role, #e1e0d9) — a solid #cbd5e1 border on every one of the ~90 cell
     # edges in this grid adds up; the lighter hairline still separates cells
-    # without itself being a meaningful ink cost. Row cells get more
-    # vertical padding (taller, easier-to-scan rows) than before; that space
-    # is paid for below by trimming the block's own margins/caption rather
-    # than growing the block's total footprint on the page.
+    # without itself being a meaningful ink cost. Body cells' vertical
+    # padding is 8.5px (was 3.5px): +10px per row takes the measured row
+    # pitch from 20px to 30px, 1.5x, per direct instruction - page 6 has the
+    # spare height below this block.
     _GRID_BORDER = "#e1e0d9"
 
     head_cells = "".join(
@@ -670,12 +666,12 @@ def _ratio_heatmap_html(x_labels: list, fy_point_count: int, series: dict, title
             text = f"{v:.3f}" if v is not None else "—"
             sep = "border-left:1px solid #1e293b;" if i == fy_point_count else ""
             cells.append(
-                f'<td style="padding:3.5px 4px;border:1px solid {_GRID_BORDER};{sep}'
+                f'<td style="padding:8.5px 4px;border:1px solid {_GRID_BORDER};{sep}'
                 f'background:{bg};color:{fg};text-align:center;font-size:7px;'
                 f'font-weight:600;">{text}</td>'
             )
         body_rows.append(
-            f'<tr><td style="padding:3.5px 4px;border:1px solid {_GRID_BORDER};'
+            f'<tr><td style="padding:8.5px 4px;border:1px solid {_GRID_BORDER};'
             f'background:#eef2f6;font-weight:bold;font-size:7.5px;">{plant}</td>'
             + "".join(cells) + '</tr>'
         )
