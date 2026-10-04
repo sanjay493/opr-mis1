@@ -1530,18 +1530,14 @@
         /* Growth ("%Gr. <report month>") column — same light/dark pairing
            idea as col-ann: a light slate bg (perf_gr_bg - its own token, a
            step stronger than the highlight_pct_row_bg the Cat-wise/Segment-
-           wise % rows use, so it reads clearly here) with its right wall in
-           border_dark, a deepened shade of that same neutral gray, instead
-           of the unrelated navy used for the plant-group box lines. 2px,
-           not 1.3px - same per-row redraw/rounding fix as col-ann above. */
+           wise % rows use, so it reads clearly here) with its right wall
+           1px black - the monthly-vs-cumulative divider, same weight and
+           colour as every other wall, plant separator and the outer frame
+           on this table (and page4's). */
         .page5-6-table td.col-mgr-wall,
         .page5-6-table thead th.col-mgr-wall {
             background-color: {{ colors.perf_gr_bg }} !important;
-            /* 2.4px, not 2px: Chromium floors zoomed border widths, and
-               _fit_pages_for_print zooms page 5 to ~97% - a plain 2px
-               became 1.94px and printed as 1px there. 2.4px prints as 2px
-               at any zoom down to ~84%. */
-            border-right: 2.4px solid {{ colors.border_dark }};
+            border-right: 1px solid {{ colors.border_black }};
         }
 
         /* Cumulative growth ("%Gr. Apr-<mon>'<yy>", the last column) — same
